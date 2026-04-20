@@ -6,9 +6,12 @@ Create a new backend bounded context named `$ARGUMENTS`.
 
 1. Read `src/ServerScriptService/Contexts/` to verify naming and existing context patterns before creating files.
 2. Read `.claude/documents/architecture/backend/ERROR_HANDLING.md` to align with Result + WrapContext context-boundary rules.
-3. Scaffold the folder structure below using the exact naming shown.
-4. Create only the boilerplate files listed below; do not create command/query/domain/infrastructure implementation files yet.
-5. After creation, report every file and folder created.
+3. Read persistence event contracts:
+   - `src/ReplicatedStorage/Events/GameEvents/Misc/Persistence.lua`
+   - `src/ServerScriptService/Persistence/PlayerLifecycleManager.lua`
+4. Scaffold the folder structure below using the exact naming shown.
+5. Create only the boilerplate files listed below; do not create command/query/domain/infrastructure implementation files yet.
+6. After creation, report every file and folder created.
 
 ## Folder structure to create
 
@@ -98,6 +101,13 @@ return table.freeze(<ContextName>Types)
 - Do not create `Application/Services/` (deprecated). Use `Application/Commands/` and `Application/Queries/`.
 - Do not create `Config/DebugLogger.lua`.
 - Context file is a pass-through bridge only; no business logic.
+- Persistence lifecycle integration rule for future context behavior:
+  - On context startup, register as a loader via `PlayerLifecycleManager:RegisterLoader("<ContextName>")`.
+  - Hydrate context state on `GameEvents.Events.Persistence.ProfileLoaded`.
+  - Flush context state on `GameEvents.Events.Persistence.ProfileSaving`.
+  - After hydration, call `PlayerLifecycleManager:NotifyLoaded(player, "<ContextName>")`.
+  - Do not use `Players.PlayerAdded/PlayerRemoving` directly for profile hydration/flush responsibilities.
+  - Place context sync services (atom read/write orchestration) under `Infrastructure/Persistence`, not `Infrastructure/Services`.
 - Centralized types rule:
   - Create and keep shared types in `src/ReplicatedStorage/Contexts/<ContextName>/Types/<ContextName>Types.lua`.
   - Service/query/policy modules should import from that single file for context-wide data shapes.

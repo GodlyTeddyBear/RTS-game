@@ -34,6 +34,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 
 ### "I'm reviewing or fixing code"
 → Use `/review <path>` for a structured review against all architecture rules
+→ Use `/reconcile-context <ContextName> [--apply]` to audit a full backend context for completeness (layers, wiring, persistence lifecycle, sync placement)
 → Use `/improve-ui <path>` to analyze a UI screen/component and get separation-focused refactor suggestions
 → Use `/lint <path>` to run Selene and surface linter errors
 → Or invoke the `context-reviewer` agent for a deep per-context DDD review
@@ -46,6 +47,11 @@ A map of this project's knowledge base. Read this first to know where to look.
 ### "Something isn't syncing to clients"
 → Read [architecture/backend/STATE_SYNC.md](architecture/backend/STATE_SYNC.md)
 → Check: getters must deep clone; mutations must go through sync service; nested tables need targeted cloning
+
+### "I need to wire context load/save with persistence"
+→ Read [architecture/backend/SYSTEMS.md](architecture/backend/SYSTEMS.md) for ProfileStore + persistence event flow
+→ Read `src/ReplicatedStorage/Events/GameEvents/Misc/Persistence.lua` for canonical event names
+→ Read `src/ServerScriptService/Persistence/PlayerLifecycleManager.lua` for loader readiness contract (`RegisterLoader` / `NotifyLoaded`)
 
 ### "I need to understand coding conventions"
 → [coding-style/CODING_STYLE.md](coding-style/CODING_STYLE.md) — naming, type annotations, file structure
@@ -117,6 +123,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 | `/implement-feature <request>` | Implement a feature end-to-end with required pre-reads of relevant docs and context files |
 | `/plan-mode2 <feature request>` | Generate a strict, execution-ready Roblox implementation plan using a structured output schema (no code) |
 | `/review <path>` | Review code against DDD, error handling, state sync, and style rules |
+| `/reconcile-context <ContextName> [--apply]` | Reconcile a backend context against architecture completeness rules; optionally apply safe fixes |
 | `/lint <path>` | Run Selene linter and summarize findings |
 | `/improve-ui <path>` | Analyze UI files and suggest refactors for screen/controller/view separation |
 | `/analyze-patterns <path> ["target"]` | Extract patterns from a folder; add a quoted target for full migration analysis |

@@ -11,11 +11,14 @@ Add a new backend module to an existing bounded context.
 1. Read `src/ServerScriptService/Contexts/<ContextName>/` and `<ContextName>Context.lua` before creating anything.
 2. Read `src/ServerScriptService/Contexts/<ContextName>/Errors.lua` and reuse existing error constants.
 3. Read `src/ReplicatedStorage/Contexts/<ContextName>/Types/<ContextName>Types.lua` and reuse existing context-shared types.
-4. Read `.claude/documents/architecture/backend/ERROR_HANDLING.md` and follow its Result contract for the selected layer.
-5. Create exactly one module at the target path for the selected `<Kind>`.
-6. If a new context-shared shape is needed, add it to `src/ReplicatedStorage/Contexts/<ContextName>/Types/<ContextName>Types.lua` instead of defining it locally across multiple files.
-7. Wire it in `'<ContextName>Context.lua'` when required (require + registry register + cached reference if used).
-8. Report what was created and what wiring was added.
+4. Read persistence lifecycle contracts:
+   - `src/ReplicatedStorage/Events/GameEvents/Misc/Persistence.lua`
+   - `src/ServerScriptService/Persistence/PlayerLifecycleManager.lua`
+5. Read `.claude/documents/architecture/backend/ERROR_HANDLING.md` and follow its Result contract for the selected layer.
+6. Create exactly one module at the target path for the selected `<Kind>`.
+7. If a new context-shared shape is needed, add it to `src/ReplicatedStorage/Contexts/<ContextName>/Types/<ContextName>Types.lua` instead of defining it locally across multiple files.
+8. Wire it in `'<ContextName>Context.lua'` when required (require + registry register + cached reference if used).
+9. Report what was created and what wiring was added.
 
 ## Paths by kind
 
@@ -28,6 +31,7 @@ Add a new backend module to an existing bounded context.
 - `InfrastructureService` -> `src/ServerScriptService/Contexts/<ContextName>/Infrastructure/Services/<Name>.lua`
 - `InfrastructurePersistence` -> `src/ServerScriptService/Contexts/<ContextName>/Infrastructure/Persistence/<Name>.lua`
 - `InfrastructureECS` -> `src/ServerScriptService/Contexts/<ContextName>/Infrastructure/ECS/<Name>.lua`
+- **Any `*SyncService` must use `InfrastructurePersistence` and live under `Infrastructure/Persistence/` (never `Infrastructure/Services/`).**
 
 ## Boilerplate by kind
 
@@ -44,6 +48,13 @@ Add a new backend module to an existing bounded context.
 - Context-shared data shapes must live in `src/ReplicatedStorage/Contexts/<ContextName>/Types/<ContextName>Types.lua`.
 - New modules should import that file (for example: `local <ContextName>Types = require(ReplicatedStorage.Contexts.<ContextName>.Types.<ContextName>Types)`), then alias needed types locally.
 - Keep module-private helper types local only when they are truly internal implementation details.
+
+### Persistence Event Contract
+
+- Context persistence behavior is driven by `GameEvents.Events.Persistence` (`ProfileLoaded`, `ProfileSaving`, `PlayerReady`).
+- `InfrastructurePersistence` modules should expose explicit load/save methods that context handlers call from those event hooks.
+- Do not implement profile hydration/save flows by directly binding persistence logic to `Players.PlayerAdded/PlayerRemoving` inside feature modules.
+- Sync services that own atom mutation/read APIs are persistence infrastructure and must be placed in `Infrastructure/Persistence`.
 
 ### ApplicationCommand
 

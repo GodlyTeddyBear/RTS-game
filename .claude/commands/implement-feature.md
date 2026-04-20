@@ -14,6 +14,10 @@ Deliver working code, not just a plan. Ensure required architecture/context file
    - Backend scope: read `.claude/documents/architecture/backend/DDD.md`, `CQRS.md`, `ERROR_HANDLING.md`, and `STATE_SYNC.md`.
    - Frontend scope: read `.claude/documents/architecture/frontend/FRONTEND.md`, `LAYERS.md`, `HOOKS.md`, `COMPONENTS.md`, and `DEPENDENCY_RULES.md`.
    - Mixed scope: read both backend and frontend sets above.
+   - If backend touches profile lifecycle, also read:
+     - `src/ReplicatedStorage/Events/GameEvents/Misc/Persistence.lua`
+     - `src/ServerScriptService/Persistence/SessionManager.lua`
+     - `src/ServerScriptService/Persistence/PlayerLifecycleManager.lua`
 4. Read target code before changing it (no speculation):
    - Existing context entry: `src/ServerScriptService/Contexts/<ContextName>/<ContextName>Context.lua` when backend is involved.
    - Existing errors/types when backend is involved:
@@ -36,7 +40,41 @@ Deliver working code, not just a plan. Ensure required architecture/context file
 4. Reuse `Errors.lua` constants (no inline error strings).
 5. Keep context-shared backend types centralized in `<ContextName>Types.lua`.
 6. Keep DDD/CQRS boundaries intact (queries read-only, commands mutate through infrastructure).
-7. Update registration/wiring where needed (`Context.lua`, registries, presentation indices, etc.).
+7. For backend context persistence, wire hydration/save through `GameEvents.Events.Persistence` (`ProfileLoaded`, `ProfileSaving`) and readiness through `PlayerLifecycleManager` (`RegisterLoader`/`NotifyLoaded`).
+8. Update registration/wiring where needed (`Context.lua`, registries, presentation indices, etc.).
+
+## Required completion checklist (must be explicit in final response)
+
+Use markdown checkboxes (`- [x]` / `- [ ]`) and include this section in the final response.
+
+### Pre-read checklist
+- [ ] Read required architecture docs for the task scope.
+- [ ] Read target files before editing.
+- [ ] Read persistence lifecycle files when backend profile lifecycle is touched.
+
+### Backend enforcement checklist (when backend context work is involved)
+- [ ] Context entry (`<ContextName>Context.lua`) updated/wired correctly.
+- [ ] Application layer covered (`Application/Commands` and/or `Application/Queries`) for the requested behavior.
+- [ ] Domain layer covered when business rules/validation are involved (`Domain/Services`, `Domain/Specs`, `Domain/Policies`, `Domain/ValueObjects` as needed).
+- [ ] Infrastructure layer covered for runtime effects (`Infrastructure/Persistence`, `Infrastructure/Services`, `Infrastructure/ECS` as needed).
+- [ ] Sync services are placed in `Infrastructure/Persistence` (not `Infrastructure/Services`).
+- [ ] Errors reuse `Errors.lua` constants; no inline error strings.
+- [ ] Context-shared shapes use `<ContextName>Types.lua`.
+- [ ] Result/WrapContext boundary rules are respected.
+
+### Frontend enforcement checklist (when frontend work is involved)
+- [ ] Layer boundaries respected (`Infrastructure` -> `Application` -> `Presentation`).
+- [ ] Read/write hook separation preserved.
+- [ ] ViewModel + screen wiring updated for shipped behavior.
+
+### Validation checklist
+- [ ] Targeted lint/build checks were run, or explicitly marked as not run with reason.
+- [ ] Any incomplete items are listed with concrete blockers.
+
+## Completion gate
+
+Do not claim the feature is complete if any required checklist item is unchecked.
+If an item is intentionally out of scope, mark it unchecked and provide a one-line reason.
 
 ## Validation requirements
 
@@ -50,4 +88,5 @@ Deliver working code, not just a plan. Ensure required architecture/context file
 1. What was implemented.
 2. Files changed and why.
 3. Validation run and outcomes.
-4. Any follow-up risks or TODOs that remain.
+4. Required completion checklist (with checkboxes).
+5. Any follow-up risks or TODOs that remain.

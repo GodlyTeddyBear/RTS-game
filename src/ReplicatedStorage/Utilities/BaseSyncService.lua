@@ -50,12 +50,17 @@ function BaseSyncService:Init(registry: any, _name: string)
 
 	self.Syncer = CharmSync.server({
 		atoms = { [atomKey] = self.Atom },
-		interval = 0.33,
+		interval = self.SyncInterval or 0.33,
 		preserveHistory = false,
 		autoSerialize = false,
 	})
 
-	self.Cleanup = self.Syncer:connect(function(player: Player, _: any)
+	self.Cleanup = self.Syncer:connect(function(player: Player, payload: any)
+		if self.UseRawPayload then
+			self.BlinkServer[blinkEventName].Fire(player, payload)
+			return
+		end
+
 		local userId = player.UserId
 		local allState = self.Atom()
 		local playerState = allState[userId]

@@ -46,6 +46,7 @@ selene src/         # Run linter
 - `/implement-feature <request>` — Implement a feature end-to-end with mandatory architecture/context pre-reads
 - `/plan-mode2 <feature request>` — Generate a strict, execution-ready Roblox implementation plan (no code)
 - `/review <path>` — Review code against architecture and style rules
+- `/reconcile-context <ContextName> [--apply]` — Audit a full backend context for completeness and optionally apply safe wiring/structure fixes
 - `/lint <path>` — Run Selene and summarize findings
 - `/improve-ui <path>` — Analyze UI structure and suggest separation-focused refactors
 - `/analyze-patterns <path> ["target pattern"]` — Extract patterns from a folder; add a target pattern for full migration analysis

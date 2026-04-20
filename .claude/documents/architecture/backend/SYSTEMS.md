@@ -2,7 +2,7 @@
 
 ## JECS (Entity-Component-System)
 
-Game entities (characters, items, NPCs, etc.) are managed by a JECS world. Services that create or manage entities belong in the **Infrastructure layer** and must respect DDD boundaries — Domain and Application layers do not interact with JECS directly.
+Game entities (characters, items, NPCs, etc.) are managed by a JECS world. Services that create or manage entities belong in the **Infrastructure layer** and must respect DDD boundaries - Domain and Application layers do not interact with JECS directly.
 
 ---
 
@@ -10,27 +10,42 @@ Game entities (characters, items, NPCs, etc.) are managed by a JECS world. Servi
 
 Player data is persisted server-side using ProfileStore.
 
-**Flow:**
-1. Player joins → `DataInit.server.lua` starts a ProfileStore session
-2. Profile stored at `DataManager.Profiles[player]`
-3. Player leaves → session ends and profile is cleaned up
+**Runtime ownership:**
+- `src/ServerScriptService/Persistence/ProfileInit.server.lua` creates the ProfileStore and boots SessionManager.
+- `src/ServerScriptService/Persistence/SessionManager.lua` owns session start/end and emits persistence lifecycle events.
+- `src/ServerScriptService/Persistence/ProfileManager.lua` is the active profile repository (`GetData`, `WaitForData`, etc.).
+- `src/ServerScriptService/Persistence/PlayerLifecycleManager.lua` tracks context loader readiness and emits `PlayerReady`.
+- `src/ReplicatedStorage/Events/GameEvents/Misc/Persistence.lua` defines canonical persistence event names and schemas.
 
-**Key pattern:**
+**Session + event flow:**
+1. Player joins -> SessionManager starts ProfileStore session (`StartSessionAsync`), calls `AddUserId` and `Reconcile`.
+2. SessionManager registers profile in ProfileManager and initializes lifecycle tracking.
+3. SessionManager emits `Persistence.ProfileLoaded` through `GameEvents.Bus`.
+4. Context loaders hydrate from profile data, then call `PlayerLifecycleManager:NotifyLoaded(player, contextName)`.
+5. When all registered loaders are done, PlayerLifecycleManager emits `Persistence.PlayerReady`.
+6. Player leaves -> SessionManager emits `Persistence.ProfileSaving` so contexts flush state into `profile.Data`, then calls `EndSession`.
+
+**Key pattern (session start):**
 ```lua
-local profile = PStore:StartSessionAsync("Player_" .. player.UserId, {
+local profile = profileStore:StartSessionAsync("Player_" .. player.UserId, {
     Cancel = function()
-        return player.Parent ~= Players  -- Cancel if player already left
+        return player.Parent ~= Players
     end,
 })
 
 profile:AddUserId(player.UserId)
-profile:Reconcile()  -- Fill missing fields from data template
+profile:Reconcile()
 
-DManager.Profiles[player] = profile
+ProfileManager:Register(player, profile)
+PlayerLifecycleManager:InitPlayer(player)
+GameEvents.Bus:Emit(GameEvents.Events.Persistence.ProfileLoaded, player)
 ```
 
-- `profile.Data` — the actual player data table
-- `profile:Reconcile()` — merges any missing keys from `Template.lua` into existing data
+- `profile.Data` - the actual player data table
+- `profile:Reconcile()` - merges any missing keys from `Template.lua` into existing data
+- `ProfileLoaded` - contexts should hydrate runtime state from profile data
+- `ProfileSaving` - contexts should write runtime state back into profile data
+- `PlayerReady` - contexts can treat player as fully initialized across all registered loaders
 
 ---
 
@@ -80,19 +95,19 @@ end
 |---|---|---|
 | Knit | 1.7.0 | Service-oriented architecture |
 | JECS | 0.9.0 | Entity-Component-System |
-| Promise | — | Async/await patterns |
-| Charm | — | State management (atoms) |
-| Charm-sync | — | State replication server → client |
-| ProfileStore | — | Player data persistence |
-| Janitor / Trove | — | Resource cleanup |
-| Jest / Testez | — | Testing frameworks |
-| Selene | — | Lua linting |
+| Promise | - | Async/await patterns |
+| Charm | - | State management (atoms) |
+| Charm-sync | - | State replication server -> client |
+| ProfileStore | - | Player data persistence |
+| Janitor / Trove | - | Resource cleanup |
+| Jest / Testez | - | Testing frameworks |
+| Selene | - | Lua linting |
 
 ---
 
 ## Tool Management
 
-- **Aftman** (`aftman.toml`) — auto-installs Rojo
-- **Rokit** (`rokit.toml`) — auto-installs Wally and Rojo
+- **Aftman** (`aftman.toml`) - auto-installs Rojo
+- **Rokit** (`rokit.toml`) - auto-installs Wally and Rojo
 
-Both are optional — install tools manually if preferred.
+Both are optional - install tools manually if preferred.

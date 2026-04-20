@@ -7,6 +7,7 @@ State is managed via **Charm** atoms on the server and replicated to clients via
 ## Rule 1: All Mutations Go Through the Sync Service
 
 The sync service is the **only** place that modifies atoms. Application services never touch atoms directly.
+Sync service modules must live in `src/ServerScriptService/Contexts/<ContextName>/Infrastructure/Persistence/`.
 
 ```
 ✅ Correct:

@@ -1,0 +1,11 @@
+option ServerOutput = "Generated/RunSyncServer.luau"
+option ClientOutput = "Generated/RunSyncClient.luau"
+
+option RemoteScope = "RUN_SYNC"
+
+event SyncRunState {
+    from: Server,
+    type: Reliable,
+    call: SingleAsync,
+    data: buffer,
+}

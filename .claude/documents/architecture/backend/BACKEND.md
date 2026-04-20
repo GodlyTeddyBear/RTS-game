@@ -6,6 +6,11 @@ This is the root document for backend architecture. Read this first, then follow
 
 The backend follows **Domain-Driven Design (DDD)** with three distinct layers per bounded context, orchestrated by the **Knit** service framework. Game entities are managed via **JECS** (Entity-Component-System), player data is persisted with **ProfileStore**, and state is replicated to clients via **Charm-sync**.
 
+Persistence lifecycle is event-driven via `GameEvents.Events.Persistence`:
+- `Persistence.ProfileLoaded` -> contexts hydrate runtime state from profile data
+- `Persistence.ProfileSaving` -> contexts flush runtime state into `profile.Data`
+- `Persistence.PlayerReady` -> player is fully initialized across all registered context loaders
+
 ## Documents
 
 - [DDD.md](DDD.md) - DDD layers, bounded contexts, constructor injection, immutable domain services
@@ -34,21 +39,25 @@ Layer               (JECS world, entity storage, data persistence)
 src/
 ├── ServerScriptService/
 │   ├── Runtime.server.lua              # Server entry point - starts Knit services
-│   ├── Data/                           # Data persistence
-│   │   ├── DataInit.server.lua         # Data initialization on player join
-│   │   ├── DataManager.lua             # Manages player profiles/data
-│   │   ├── Template.lua                # Data template schema
-│   │   └── Services/
-│   │       └── PlayerDataLoader.lua    # Loads/processes player data
+│   ├── Persistence/                    # Profile persistence + player lifecycle orchestration
+│   │   ├── ProfileInit.server.lua      # Boots ProfileStore + SessionManager
+│   │   ├── SessionManager.lua          # Session lifecycle; emits persistence game events
+│   │   ├── ProfileManager.lua          # Active profile repository/accessor
+│   │   ├── PlayerLifecycleManager.lua  # Context loader readiness + PlayerReady emit
+│   │   └── Template.lua                # Profile schema/defaults
 │   │
 │   └── Contexts/
 │       └── [ContextName]/              # Feature/domain context (bounded context)
 │           ├── [ContextName]Context.lua # Main Knit service
-│           ├── Application/Services/    # Orchestration layer
+│           ├── Application/
+│           │   ├── Commands/            # Write operations
+│           │   └── Queries/             # Read operations
 │           ├── [ContextName]Domain/    # Domain logic
 │           │   ├── Services/            # Domain validators, calculators
 │           │   └── ValueObjects/        # Domain value objects
-│           ├── Infrastructure/Services/ # Entity/component creation
+│           ├── Infrastructure/
+│           │   ├── Persistence/         # ProfileStore + context SyncService modules (atom sync)
+│           │   └── Services/            # Non-persistence runtime services
 │           ├── Config/                  # Context configuration files
 │           ├── Errors.lua               # Error message constants
 │           └── Config/DebugLogger.lua   # (Optional) Debug logging utility
@@ -69,6 +78,8 @@ src/
 
 - Domain layer has **no side effects** and **no framework dependencies**
 - All state mutations go through the **Infrastructure sync service** — never directly to atoms
+- Context `*SyncService` modules belong in **Infrastructure/Persistence/**, not **Infrastructure/Services/**
 - All error-prone operations return `(success: boolean, data/error)`
 - Errors are logged **once** at the Application layer — never at the Context layer
 - Getters that return atom state **must return a deep clone**
+- Context hydration/save should run from `GameEvents.Events.Persistence` (`ProfileLoaded`, `ProfileSaving`), not ad-hoc player join/leave handlers
