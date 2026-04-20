@@ -24,28 +24,6 @@ Knit.Start()
 			return player.UserId == DEVELOPER_USER_ID
 		end)
 
-		-- Register all JECS worlds for entity/component inspection
-		local WorkerContext = Knit.GetService("WorkerContext")
-		Jabby.register({
-			name = "WorkerWorld",
-			applet = Jabby.applets.world,
-			configuration = { world = WorkerContext.World },
-		})
-
-		local LotContext = Knit.GetService("LotContext")
-		Jabby.register({
-			name = "LotWorld",
-			applet = Jabby.applets.world,
-			configuration = { world = LotContext.World },
-		})
-
-		local NPCContext = Knit.GetService("NPCContext")
-		Jabby.register({
-			name = "CombatWorld",
-			applet = Jabby.applets.world,
-			configuration = { world = NPCContext.World },
-		})
-
 		PlayerCollisionService:Initialize()
 		ServerScheduler:Initialize()
 		print("Server started with Planck scheduler")

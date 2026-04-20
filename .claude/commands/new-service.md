@@ -10,9 +10,12 @@ Add a new backend module to an existing bounded context.
 
 1. Read `src/ServerScriptService/Contexts/<ContextName>/` and `<ContextName>Context.lua` before creating anything.
 2. Read `src/ServerScriptService/Contexts/<ContextName>/Errors.lua` and reuse existing error constants.
-3. Create exactly one module at the target path for the selected `<Kind>`.
-4. Wire it in `'<ContextName>Context.lua'` when required (require + registry register + cached reference if used).
-5. Report what was created and what wiring was added.
+3. Read `src/ReplicatedStorage/Contexts/<ContextName>/Types/<ContextName>Types.lua` and reuse existing context-shared types.
+4. Read `.claude/documents/architecture/backend/ERROR_HANDLING.md` and follow its Result contract for the selected layer.
+5. Create exactly one module at the target path for the selected `<Kind>`.
+6. If a new context-shared shape is needed, add it to `src/ReplicatedStorage/Contexts/<ContextName>/Types/<ContextName>Types.lua` instead of defining it locally across multiple files.
+7. Wire it in `'<ContextName>Context.lua'` when required (require + registry register + cached reference if used).
+8. Report what was created and what wiring was added.
 
 ## Paths by kind
 
@@ -28,6 +31,20 @@ Add a new backend module to an existing bounded context.
 
 ## Boilerplate by kind
 
+### Result Contract By Kind
+
+- `ApplicationCommand`: must require `Result`, return `Result.Result<T>` from `Execute`, and use `Ensure` + `Try` for guard/propagation.
+- `ApplicationQuery`: must require `Result`, return `Result.Result<T>` from `Execute`, and use inline `Ensure` guards. Queries never require Domain.
+- `DomainPolicy`: must require `Result`, return `Result.Result<T>` from `Check`, and use `Try(spec:IsSatisfiedBy(candidate))` for command-invoked policy checks.
+- `DomainService`: default to Result-returning shape (`Result.Result<T>`) so validators can use `TryAll` and callers can use `Try`.
+- `InfrastructureService` / `InfrastructurePersistence` / `InfrastructureECS`: use `Result` for genuinely fallible runtime boundaries (`fromPcall`, `fromNilable`); use plain Lua returns for safe in-memory reads where `nil` is valid.
+
+### Type Contract
+
+- Context-shared data shapes must live in `src/ReplicatedStorage/Contexts/<ContextName>/Types/<ContextName>Types.lua`.
+- New modules should import that file (for example: `local <ContextName>Types = require(ReplicatedStorage.Contexts.<ContextName>.Types.<ContextName>Types)`), then alias needed types locally.
+- Keep module-private helper types local only when they are truly internal implementation details.
+
 ### ApplicationCommand
 
 ```lua
@@ -35,7 +52,8 @@ Add a new backend module to an existing bounded context.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
-local Ok = Result.Ok
+local Ok, Try, Ensure = Result.Ok, Result.Try, Result.Ensure
+local <ContextName>Types = require(ReplicatedStorage.Contexts.<ContextName>.Types.<ContextName>Types)
 
 local <Name> = {}
 <Name>.__index = <Name>
@@ -59,8 +77,15 @@ end
 
 function <Name>:Execute(...: any): Result.Result<any>
     -- 1) Validate/guard inputs
+    Ensure(true, "NotImplemented", "Replace with real guard condition")
+
     -- 2) Domain policy/service checks
+    -- local policyData = Try(self.SomePolicy:Check(...))
+    -- local request: <ContextName>Types.SomeRequest = ...
+
     -- 3) Infrastructure mutation/persist/sync
+    -- Try(self.SomePersistenceService:Save(...))
+
     return Ok(table.freeze({}))
 end
 
@@ -74,7 +99,8 @@ return <Name>
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
-local Ok = Result.Ok
+local Ok, Try, Ensure = Result.Ok, Result.Try, Result.Ensure
+local <ContextName>Types = require(ReplicatedStorage.Contexts.<ContextName>.Types.<ContextName>Types)
 
 local <Name> = {}
 <Name>.__index = <Name>
@@ -96,7 +122,13 @@ function <Name>:Init(registry: any, _name: string)
 end
 
 function <Name>:Execute(...: any): Result.Result<any>
-    -- Inline guard checks, then read-only infrastructure calls
+    -- Inline structural guards (queries do not use Domain validators)
+    Ensure(true, "NotImplemented", "Replace with real guard condition")
+
+    -- Read-only infrastructure calls
+    -- local data = Try(self.SomeReadService:Get(...)) -- if read can fail
+    -- local response: <ContextName>Types.SomeResponse = ...
+
     return Ok(table.freeze({}))
 end
 
@@ -111,6 +143,7 @@ return <Name>
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
 local Ok, Try = Result.Ok, Result.Try
+local <ContextName>Types = require(ReplicatedStorage.Contexts.<ContextName>.Types.<ContextName>Types)
 
 local <ContextName>Specs = require(script.Parent.Parent.Specs.<ContextName>Specs)
 
@@ -153,6 +186,10 @@ return <Name>
 ```lua
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Result = require(ReplicatedStorage.Utilities.Result)
+local Ok = Result.Ok
+
 local <Name> = {}
 <Name>.__index = <Name>
 
@@ -163,11 +200,12 @@ function <Name>.new(): T<Name>
     return self
 end
 
-function <Name>:Execute(input: any): any
+function <Name>:Execute(input: any): Result.Result<any>
     -- Pure domain logic, no side effects, no framework deps
-    return table.freeze({
+    -- For validators, prefer composing checks with TryAll(...)
+    return Ok(table.freeze({
         Input = input,
-    })
+    }))
 end
 
 return <Name>
@@ -237,6 +275,10 @@ return <Name>
 ```lua
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Result = require(ReplicatedStorage.Utilities.Result)
+local Ok, Try, fromNilable, fromPcall = Result.Ok, Result.Try, Result.fromNilable, Result.fromPcall
+
 local <Name> = {}
 <Name>.__index = <Name>
 
@@ -254,6 +296,14 @@ end
 
 function <Name>:Init(registry: any, _name: string)
     -- Optional registry wiring
+end
+
+-- Use Result for runtime-boundary failures.
+-- Use plain Lua returns for safe in-memory reads where nil is valid.
+function <Name>:Load(...: any): Result.Result<any>
+    -- return fromPcall("ExternalCallFailed", SomeApi.Call, SomeApi, ...)
+    -- local data = Try(fromNilable(value, "MissingData", "Expected data was nil"))
+    return Ok(table.freeze({}))
 end
 
 return <Name>
@@ -277,4 +327,6 @@ return <Name>
 - Reuse `Errors.lua` constants; do not add inline error strings.
 - Use constructor + `Init(registry, _name)` pattern for registry-managed services.
 - Keep context methods as pass-through bridges; no business logic in `'<ContextName>Context.lua'`.
+- Treat Result usage as mandatory by layer (see Result contract section above), not optional style.
+- Keep context-shared type definitions centralized in `<ContextName>Types.lua`; do not duplicate the same shape in multiple modules.
 
