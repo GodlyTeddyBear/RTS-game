@@ -236,10 +236,24 @@ function NPCContext:GetWorld(): Result<any>
 end
 ```
 
-Callers in `KnitStart` (not inside a Catch) unwrap with `.value`:
+Callers in `KnitStart` (not inside a Catch) should still handle Result explicitly:
 ```lua
-registry:Register("World", NPCContext:GetWorld().value)
+local worldResult = NPCContext:GetWorld()
+if not worldResult.success then
+    error(worldResult)
+end
+registry:Register("World", worldResult.value)
 ```
+
+### Public context methods — propagate `Result`, do not unwrap
+Public server-to-server context methods should return `Result<T>` so upstream callers can compose with `Try()` and preserve typed failures.
+
+`result:unwrapOr(default)` is for terminal boundaries only:
+- Private event/tick callbacks that intentionally swallow failures
+- Non-critical fallback reads where defaulting is explicitly desired
+- Client/UI edge handling
+
+Avoid `unwrapOr` in public context APIs because it converts failures into silent defaults and breaks propagation.
 
 ### Context `.Client` methods — own a `Catch` only when calling `Execute` directly
 `.Client` methods are server methods — they run on the server and return to the client via Knit's remote transport. `WrapContext` wraps them and rejects the client promise on `Err`.
@@ -407,6 +421,7 @@ return table.freeze({
 - [ ] Own a `Catch(fn, "Context:Method")` (or return `Ok(value)` directly for simple getters)
 - [ ] `Catch` logs automatically via the label — no manual `warn()` needed
 - [ ] Callers detect propagation via `not result.success` on the returned `Result`
+- [ ] Public server-to-server methods return `Result<T>` (no `unwrapOr` fallback in method return path)
 
 **Context `.Client` Methods:**
 - [ ] Call `Execute` directly → wrap in `Catch(fn, "Context.Client:Method")`

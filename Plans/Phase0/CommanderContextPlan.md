@@ -18,6 +18,27 @@ Build a server-authoritative `CommanderContext` that owns:
 
 ---
 
+## Reconciliation Corrections (Phase 0)
+
+This plan is reconciled against `.claude/commands/reconcile-context.md` and backend DDD/CQRS rules.
+
+- Context layering remains strict: `CommanderContext` is pass-through only; all behavior lives in Application services.
+- Atom sync modules must live in `Infrastructure/Persistence`, not `Infrastructure/Services`.
+- Query modules are Infrastructure-read only. They must not execute Domain mutation logic.
+- Domain services are calculation/validation only; mutation stays in Application -> Infrastructure.
+- `Errors.lua` remains the only source of error strings.
+
+Reconciliation matrix:
+- [x] `Application/Commands` present
+- [x] `Application/Queries` present
+- [x] `CommanderDomain/` present
+- [x] `Infrastructure/Persistence` present for sync
+- [x] `Infrastructure/Services` present for non-sync runtime work
+- [x] `CommanderContext.lua` is pass-through boundary with `WrapContext`
+- [x] `Errors.lua` centralized
+
+---
+
 ## Short Action Flow
 
 ```
@@ -44,8 +65,7 @@ Build a server-authoritative `CommanderContext` that owns:
       → CooldownService:IsReady(userId, slotKey)
       → AbilityService:CanAffordAbility(userId, slotKey) [stub: true]
       → AbilityService:ExecuteStub(userId, slotKey) [no-op]
-      → CooldownService:StartCooldown(userId, slotKey, duration)
-      → SyncService:SetCooldown(userId, slotKey, duration)
+      → CommanderSyncService:SetCooldown(userId, slotKey, duration)
   → Charm patch → client atom → UI updates slot cooldown display
 
 [Run ends — external signal]
@@ -116,8 +136,10 @@ src/ServerScriptService/Contexts/Commander/
     ValueObjects/
       AbilitySlot.lua              ← Immutable slot record (key, name, cost, cooldown)
   Infrastructure/
+    Persistence/
+      CommanderSyncService.lua     <- Atom mutations (HP, cooldown state)
     Services/
-      CommanderSyncService.lua     ← Atom mutations (HP, cooldown state)
+      CommanderRuntimeService.lua  <- Optional non-sync runtime orchestration (create only if needed)
 ```
 
 ### Create (Client)
@@ -221,7 +243,7 @@ src/StarterPlayerScripts/Contexts/Commander/
 
 **Objective:** Owns the Charm atom. The only place that writes commander state. Provides deep-clone getters.
 
-**File:** `src/ServerScriptService/Contexts/Commander/Infrastructure/Services/CommanderSyncService.lua`
+**File:** `src/ServerScriptService/Contexts/Commander/Infrastructure/Persistence/CommanderSyncService.lua`
 
 Inherits from `BaseSyncService` (`src/ReplicatedStorage/Utilities/BaseSyncService.lua`).
 
@@ -244,7 +266,7 @@ Inherits from `BaseSyncService` (`src/ReplicatedStorage/Utilities/BaseSyncServic
 
 ### Step 7 — CooldownService (domain service)
 
-**Objective:** Pure cooldown logic — reads state and computes readiness; delegates writes to SyncService.
+**Objective:** Pure cooldown logic — reads state and computes readiness only.
 
 **File:** `src/ServerScriptService/Contexts/Commander/CommanderDomain/Services/CooldownService.lua`
 
@@ -256,12 +278,10 @@ Inherits from `BaseSyncService` (`src/ReplicatedStorage/Utilities/BaseSyncServic
   - Returns true if `cooldowns[slotKey]` is nil OR `os.clock() - startedAt >= duration`
 - `GetRemainingTime(userId: number, slotKey: string): number`
   - Returns seconds remaining (clamped to 0 if ready)
-- `StartCooldown(userId: number, slotKey: string, duration: number)`
-  - Calls `self._sync:SetCooldown(userId, slotKey, duration)`
 
-**Data:** Reads state via SyncService deep clone; writes via SyncService.
+**Data:** Reads state via SyncService deep clone; no writes.
 
-**Exit criteria:** `IsReady` returns true for fresh state; returns false immediately after `StartCooldown`; returns true once duration elapses.
+**Exit criteria:** `IsReady` returns true for fresh state; returns false immediately after sync cooldown is written; returns true once duration elapses.
 
 ---
 
@@ -295,16 +315,17 @@ Inherits from `BaseSyncService` (`src/ReplicatedStorage/Utilities/BaseSyncServic
 - `Init(registry, _name)`:
   - `self._abilityService = registry:Get("AbilityService")`
   - `self._cooldownService = registry:Get("CooldownService")`
+  - `self._syncService = registry:Get("CommanderSyncService")`
 - `Execute(player: Player, slotKey: string): Result`
-  1. `Result.Ensure(self._abilityService:GetSlot(slotKey), "InvalidSlot", Errors.INVALID_SLOT)` — validate slotKey
+  1. `local slot = Result.Ensure(self._abilityService:GetSlot(slotKey), "InvalidSlot", Errors.INVALID_SLOT)` — validate slotKey
   2. `Result.Ensure(self._cooldownService:IsReady(player.UserId, slotKey), "OnCooldown", Errors.ABILITY_ON_COOLDOWN)`
   3. `Result.Ensure(self._abilityService:CanAffordAbility(player.UserId, slotKey), "InsufficientEnergy", Errors.INSUFFICIENT_ENERGY)`
   4. Later integration: spend Energy through `EconomyContext:SpendEnergy(player, slot.EnergyCost)` before execution; Phase 1 stub can keep affordability true until EconomyContext exists
   5. `self._abilityService:ExecuteStub(player.UserId, slotKey)` — stub execution
-  6. `self._cooldownService:StartCooldown(player.UserId, slotKey, slot.CooldownDuration)`
+  6. `self._syncService:SetCooldown(player.UserId, slotKey, slot.CooldownDuration)`
   7. Return `Result.Ok({ slotKey = slotKey })`
 
-**Guards:** All validation before any mutation. Steps 1–3 are pure checks; step 5 is the only write.
+**Guards:** All validation before any mutation. Steps 1–3 are pure checks; steps 5–6 are writes.
 
 **Exit criteria:** Command rejects invalid slot; rejects during active cooldown; calls stub and writes cooldown on success.
 
@@ -456,7 +477,7 @@ Inherits from `BaseSyncService` (`src/ReplicatedStorage/Utilities/BaseSyncServic
 | `src/ReplicatedStorage/Contexts/Commander/Sync/SharedAtoms.lua` | Create |
 | `src/ServerScriptService/Contexts/Commander/Errors.lua` | Create |
 | `src/ServerScriptService/Contexts/Commander/CommanderDomain/ValueObjects/AbilitySlot.lua` | Create |
-| `src/ServerScriptService/Contexts/Commander/Infrastructure/Services/CommanderSyncService.lua` | Create |
+| `src/ServerScriptService/Contexts/Commander/Infrastructure/Persistence/CommanderSyncService.lua` | Create |
 | `src/ServerScriptService/Contexts/Commander/CommanderDomain/Services/CooldownService.lua` | Create |
 | `src/ServerScriptService/Contexts/Commander/CommanderDomain/Services/AbilityService.lua` | Create |
 | `src/ServerScriptService/Contexts/Commander/Application/Commands/UseAbilityCommand.lua` | Create |
@@ -489,3 +510,6 @@ Then **Steps 7 + 8** (CooldownService + AbilityService) — depend on SyncServic
 Then **Steps 9 + 10** (UseAbilityCommand + Queries) — depend on domain services.
 Then **Step 11** (CommanderContext) — wires everything together.
 Then **Steps 12 + 13** (client side) — depend on SharedAtoms only; can be written earlier but tested after server is up.
+
+
+

@@ -115,6 +115,8 @@ return table.freeze(<ContextName>Types)
 - Result boundary rule for future methods in `<ContextName>Context.lua`:
   - Require `ReplicatedStorage.Utilities.Result` and use `Catch` for context method boundaries (or `Ok(value)` for simple getters).
   - Require `ReplicatedStorage.Utilities.WrapContext` and call `WrapContext(<ContextName>Context, "<ContextName>")` at the end of the file before returning.
+  - Public server-to-server context methods should return `Result.Result<T>` and preserve propagation by return value.
+  - Use `result:unwrapOr(default)` only in terminal/private boundaries where default fallback is intentional.
   - `.Client` methods that call `Execute` directly should own a `Catch`; `.Client` methods that delegate to `self.Server:Method()` should not add another `Catch`.
 - `Errors.lua` uses `table.freeze()` and SCREAMING_SNAKE_CASE keys.
 - All created Luau files start with `--!strict`.

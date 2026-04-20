@@ -29,6 +29,28 @@ Build a server-authoritative `EnemyContext` that:
 
 ---
 
+## Reconciliation Corrections (Phase 0)
+
+This plan is reconciled against `.claude/commands/reconcile-context.md` and backend DDD/CQRS rules.
+
+- `EnemyContext.lua` should remain a pass-through boundary; orchestration is moved into Application commands/queries.
+- Add explicit Application Queries for read-only server API (`alive`, `goalReached`, `count`).
+- Add explicit `ApplyDamageEnemy` command so death handling is Application-layer behavior, not context logic.
+- Keep Domain Specs/Policies for business rule evaluation and fetched state handoff.
+- Include `Infrastructure/Persistence` folder for future hydration/checkpoint hooks; keep runtime services in `Infrastructure/Services` and ECS in `Infrastructure/ECS`.
+
+Reconciliation matrix:
+- [x] `Application/Commands` present
+- [x] `Application/Queries` present
+- [x] `EnemyDomain/` present
+- [x] `Infrastructure/ECS` present
+- [x] `Infrastructure/Persistence` present
+- [x] `Infrastructure/Services` present
+- [x] `EnemyContext.lua` pass-through + wrapped boundary
+- [x] `Errors.lua` centralized
+
+---
+
 ## Short Action Flow
 
 ```
@@ -127,8 +149,13 @@ src/ServerScriptService/Contexts/Enemy/
   Errors.lua
   Application/
     Commands/
-      SpawnEnemy.lua           ← validate → create entity with wave/target metadata → create model → register sync
-      DespawnEnemy.lua         ← cancel path, destroy model, delete entity
+      SpawnEnemy.lua           <- validate -> create entity with wave/target metadata -> create model -> register sync
+      ApplyDamageEnemy.lua     <- apply damage, emit EnemyDied facts, delegate despawn when dead
+      DespawnEnemy.lua         <- cancel path, destroy model, delete entity
+    Queries/
+      GetAliveEnemiesQuery.lua
+      GetGoalReachedEnemiesQuery.lua
+      GetEnemyCountQuery.lua
   EnemyDomain/
     Policies/
       EnemySpawnPolicy.lua
@@ -143,6 +170,8 @@ src/ServerScriptService/Contexts/Enemy/
       EnemyModelFactory.lua
       EnemyMovementSystem.lua
       EnemySyncService.lua
+    Persistence/
+      EnemySnapshotService.lua      <- Optional checkpoint/hydration adapter (create if needed)
 ```
 
 ---
@@ -359,12 +388,13 @@ src/ServerScriptService/Contexts/Enemy/
 
 ---
 
-### Step 10 — SpawnEnemy + DespawnEnemy Commands
+### Step 10 — SpawnEnemy + ApplyDamageEnemy + DespawnEnemy Commands
 
 **Objective:** Application-layer orchestration for entity + model lifecycle.
 
 **Files:**
 - `src/ServerScriptService/Contexts/Enemy/Application/Commands/SpawnEnemy.lua`
+- `src/ServerScriptService/Contexts/Enemy/Application/Commands/ApplyDamageEnemy.lua`
 - `src/ServerScriptService/Contexts/Enemy/Application/Commands/DespawnEnemy.lua`
 
 **SpawnEnemy tasks:**
@@ -514,6 +544,26 @@ Every enemy follows the same path. Spawn CFrame is passed separately (from World
 
 ---
 
+## Applied Reconcile Delta (Authoritative)
+
+When this section conflicts with earlier step text, this section wins.
+
+- Add `Application/Queries/` modules:
+  - `GetAliveEnemiesQuery.lua`
+  - `GetGoalReachedEnemiesQuery.lua`
+  - `GetEnemyCountQuery.lua`
+- Keep `EnemyContext.lua` pass-through:
+  - `ApplyDamage` delegates to `ApplyDamageEnemy` command.
+  - Read APIs delegate to the query modules above.
+- Register in `KnitInit` as `"Application"`:
+  - `ApplyDamageEnemy`
+  - `GetAliveEnemiesQuery`
+  - `GetGoalReachedEnemiesQuery`
+  - `GetEnemyCountQuery`
+- Treat `Infrastructure/Persistence/EnemySnapshotService.lua` as intentionally pending unless hydration/checkpointing is implemented in Phase 0.
+
+---
+
 ## Validation Checklist
 
 ### Functional
@@ -565,7 +615,11 @@ Every enemy follows the same path. Spawn CFrame is passed separately (from World
 | `src/ServerScriptService/Contexts/Enemy/EnemyDomain/Specs/EnemySpecs.lua` | Create |
 | `src/ServerScriptService/Contexts/Enemy/EnemyDomain/Policies/EnemySpawnPolicy.lua` | Create |
 | `src/ServerScriptService/Contexts/Enemy/Application/Commands/SpawnEnemy.lua` | Create |
+| `src/ServerScriptService/Contexts/Enemy/Application/Commands/ApplyDamageEnemy.lua` | Create |
 | `src/ServerScriptService/Contexts/Enemy/Application/Commands/DespawnEnemy.lua` | Create |
+| `src/ServerScriptService/Contexts/Enemy/Application/Queries/GetAliveEnemiesQuery.lua` | Create |
+| `src/ServerScriptService/Contexts/Enemy/Application/Queries/GetGoalReachedEnemiesQuery.lua` | Create |
+| `src/ServerScriptService/Contexts/Enemy/Application/Queries/GetEnemyCountQuery.lua` | Create |
 | `src/ServerScriptService/Contexts/Enemy/EnemyContext.lua` | Create |
 
 ---
@@ -580,6 +634,8 @@ Every enemy follows the same path. Spawn CFrame is passed separately (from World
 **Step 6** (ModelFactory) — depends on Step 1 (EnemyConfig for collision group name).
 **Step 7** (SyncService) — depends on Steps 5 + 6.
 **Step 8** (Specs + Policy) — depends on Step 1 only.
-**Step 10** (SpawnEnemy + DespawnEnemy) — depends on Steps 5, 6, 7, 8.
+**Step 10** (SpawnEnemy + ApplyDamageEnemy + DespawnEnemy) — depends on Steps 5, 6, 7, 8.
+**Step 10b** (Enemy read queries) — depends on Step 5.
 **Step 11** (MovementSystem) — depends on Steps 2, 5.
 **Step 12** (EnemyContext) — depends on all above; wires everything together.
+

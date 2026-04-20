@@ -330,6 +330,8 @@ return <Name>
 - Commands may depend on Domain + Infrastructure.
 - Domain services are pure and must not require Knit, JECS, ProfileStore, Charm, or Roblox instance APIs for side effects.
 - Infrastructure is the only layer that mutates sync state.
+- If wiring a new public server-to-server method in `<ContextName>Context.lua`, return `Result.Result<T>` from the method boundary and preserve propagation.
+- Reserve `result:unwrapOr(default)` for terminal/private boundaries where fallback behavior is explicitly required.
 
 ## Rules
 

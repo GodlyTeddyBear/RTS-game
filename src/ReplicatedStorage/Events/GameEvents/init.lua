@@ -11,10 +11,10 @@
 		local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
 		-- Producer:
-		GameEvents.Bus:Emit(GameEvents.Events.Worker.WorkerHired, userId, workerId, workerType)
+		GameEvents.Bus:Emit(GameEvents.Events.Run.WaveStarted, waveNumber, isEndless)
 
 		-- Consumer:
-		GameEvents.Bus:On(GameEvents.Events.Worker.WorkerHired, function(userId, workerId, workerType)
+		GameEvents.Bus:On(GameEvents.Events.Wave.SpawnEnemy, function(role, spawnCFrame, waveNumber)
 			-- handle
 		end)
 
@@ -38,28 +38,14 @@ local EventValidator = require(script.Parent.EventValidator)
 
 local domainModules = {
 	-- Context-owned events
-	Combat = require(script.Contexts.Combat),
-	Building = require(script.Contexts.Building),
-	Chapter = require(script.Contexts.Chapter),
-	Dungeon = require(script.Contexts.Dungeon),
-	Worker = require(script.Contexts.Worker),
-	Inventory = require(script.Contexts.Inventory),
-	Crafting = require(script.Contexts.Crafting),
-	Commission = require(script.Contexts.Commission),
-	Equipment = require(script.Contexts.Equipment),
-	Quest = require(script.Contexts.Quest),
-	Lot = require(script.Contexts.Lot),
-
-	-- Dialogue-driven events
-	Guide = require(script.Dialogue.Guide),
-	Dialogue = require(script.Dialogue.Flags),
+	Run = require(script.Contexts.Run),
+	Wave = require(script.Contexts.Wave),
 
 	-- Cross-cutting events
-	UI = require(script.Misc.UI),
 	Persistence = require(script.Misc.Persistence),
 }
 
--- Merge all domain events into a grouped structure (e.g., Events.Worker.WorkerHired)
+-- Merge all domain events into a grouped structure (e.g., Events.Run.WaveStarted)
 local eventsRaw = {}
 -- Collect all validation schemas from domains for the validator
 local schemasRaw: { [string]: { string } } = {}
@@ -83,7 +69,7 @@ local Bus = EventBus.new({ validator, logger })
 --[=[
 	@prop Events { [string]: { [string]: string } }
 	@within GameEvents
-	Grouped event name constants, organized by domain (e.g., `Events.Worker.WorkerHired`).
+	Grouped event name constants, organized by domain (e.g., `Events.Run.WaveStarted`).
 ]=]
 
 --[=[

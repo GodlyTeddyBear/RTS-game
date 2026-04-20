@@ -196,7 +196,7 @@ See [ERROR_HANDLING.md](ERROR_HANDLING.md) for why logging belongs only in the A
 
 ## Cross-Context Communication
 
-Cross-context calls (calling another context's public method) behave differently from intra-context calls.
+Cross-context calls (calling another context's public method) follow the same Result contract as intra-context calls.
 
 **Intra-context** — calling your own Application services inside a `Catch` block:
 ```lua
@@ -209,18 +209,15 @@ end, handler)
 
 **Cross-context** — calling another context's method:
 ```lua
--- Other contexts have already handled their own error boundary (Catch + WrapContext).
--- They return raw values or nil on failure — nil-check, never Try().
+-- Other contexts expose Result-returning public methods.
+-- Use Try() to propagate failures across context boundaries.
 return Catch(function()
-    local claimResult = self.WorldContext:ClaimLotArea(player)
-    if not claimResult then
-        error(Result.Err("ClaimFailed", "No available lot areas"))
-    end
+    local claimResult = Try(self.WorldContext:ClaimLotArea(player))
     local lotId = Try(self.SpawnLotService:Execute(player, claimResult.CFrame))
     return Result.Ok({ LotId = lotId })
 end, handler)
 ```
 
-**Why the difference:** `WrapContext` is the error boundary for every public context method. By the time a cross-context call returns, the other context has already caught and logged any error — you receive a plain value or `nil`, not a `Result`. Passing that to `Try()` is wrong because `Try()` checks `.success`, which a plain data table does not have.
+**Why this works:** each context method owns a `Catch` and returns `Result<T>`. Callers can compose context operations with `Try()` and keep typed `Err` propagation end-to-end.
 
-**Rule: `Try()` is only for Application service `Execute()` calls inside your own `Catch` boundary. Cross-context calls are nil-checked.**
+**Rule: inside a `Catch` boundary, use `Try()` for both Application `Execute()` calls and cross-context public method calls that return `Result<T>`.**

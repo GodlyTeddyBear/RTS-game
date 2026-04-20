@@ -32,6 +32,27 @@ Build a server-authoritative `PlacementContext` Knit service that:
 
 ---
 
+## Reconciliation Corrections (Phase 0)
+
+This plan is reconciled against `.claude/commands/reconcile-context.md` and backend DDD/CQRS rules.
+
+- `PlacementContext.lua` stays a pass-through boundary for public methods; orchestration lives in Application commands/queries.
+- Sync service must be moved to `Infrastructure/Persistence/PlacementSyncService.lua`.
+- Business rule evaluation should be represented as Domain Specs + a Placement policy consumed by the command.
+- Queries stay read-only and call Infrastructure only.
+- Error strings come from `Errors.lua` constants only.
+
+Reconciliation matrix:
+- [x] `Application/Commands` present
+- [x] `Application/Queries` present
+- [x] `PlacementDomain/` present
+- [x] `Infrastructure/Persistence` present for atom sync
+- [x] `Infrastructure/Services` present for model spawn/destroy work
+- [x] `PlacementContext.lua` pass-through + wrapped context boundary
+- [x] `Errors.lua` centralized
+
+---
+
 ## Short Action Flow
 
 ```
@@ -121,12 +142,17 @@ src/ServerScriptService/Contexts/Placement/
     Queries/
       GetPlacedStructuresQuery.lua  ← Returns active StructureRecords
   PlacementDomain/
+    Specs/
+      PlacementSpecs.lua            <- Tile/rule predicates
+    Policies/
+      PlaceStructurePolicy.lua      <- Fetch state + evaluate specs
     Services/
-      PlacementValidator.lua        ← Pure: ValidateRunState, ValidateStructureType, ValidateTile, ValidateCapacity
+      PlacementValidator.lua        <- Input validation helpers
   Infrastructure/
+    Persistence/
+      PlacementSyncService.lua      <- Owns PlacementAtom; Charm + CharmSync + Blink
     Services/
-      PlacementService.lua          ← Spawns/destroys Model instances in Workspace
-      PlacementSyncService.lua      ← Owns PlacementAtom; Charm + CharmSync + Blink
+      PlacementService.lua          <- Spawns/destroys Model instances in Workspace
 ```
 
 ### Client
@@ -267,6 +293,22 @@ Run `blink` CLI → generate all four files into `src/Network/Generated/`.
 
 ---
 
+### Step 6b — PlacementSpecs + PlaceStructurePolicy (domain layer)
+
+**Objective:** Separate business rule evaluation from command orchestration.
+
+**Files:**
+- `src/ServerScriptService/Contexts/Placement/PlacementDomain/Specs/PlacementSpecs.lua`
+- `src/ServerScriptService/Contexts/Placement/PlacementDomain/Policies/PlaceStructurePolicy.lua`
+
+**Tasks:**
+- `PlacementSpecs` exports composable predicates for prep-state, structure availability, tile compatibility, and capacity checks.
+- `PlaceStructurePolicy:Check(...)` fetches required state and returns a `Result` containing resolved command context (`tile`, `cost`, `resourceType`) for `PlaceStructureCommand`.
+
+**Exit criteria:** `PlaceStructureCommand` calls policy first and does not duplicate rule resolution logic.
+
+---
+
 ### Step 7 — PlacementService (server infrastructure)
 
 **Objective:** Spawns and destroys structure Model instances in Workspace. Owns the Placements folder and instanceId counter.
@@ -307,7 +349,7 @@ Run `blink` CLI → generate all four files into `src/Network/Generated/`.
 
 **Objective:** Owns the global PlacementAtom. Handles CharmSync + Blink replication and player hydration.
 
-**File:** `src/ServerScriptService/Contexts/Placement/Infrastructure/Services/PlacementSyncService.lua`
+**File:** `src/ServerScriptService/Contexts/Placement/Infrastructure/Persistence/PlacementSyncService.lua`
 
 **Note:** Direct implementation (not BaseSyncService subclass — atom is global, not per-player).
 
@@ -506,9 +548,11 @@ end)
 | `src/ReplicatedStorage/Contexts/Placement/Types/PlacementTypes.lua` | Create |
 | `src/ReplicatedStorage/Contexts/Placement/Sync/SharedAtoms.lua` | Create |
 | `src/ServerScriptService/Contexts/Placement/Errors.lua` | Create |
+| `src/ServerScriptService/Contexts/Placement/PlacementDomain/Specs/PlacementSpecs.lua` | Create |
+| `src/ServerScriptService/Contexts/Placement/PlacementDomain/Policies/PlaceStructurePolicy.lua` | Create |
 | `src/ServerScriptService/Contexts/Placement/PlacementDomain/Services/PlacementValidator.lua` | Create |
 | `src/ServerScriptService/Contexts/Placement/Infrastructure/Services/PlacementService.lua` | Create |
-| `src/ServerScriptService/Contexts/Placement/Infrastructure/Services/PlacementSyncService.lua` | Create |
+| `src/ServerScriptService/Contexts/Placement/Infrastructure/Persistence/PlacementSyncService.lua` | Create |
 | `src/ServerScriptService/Contexts/Placement/Application/Commands/PlaceStructureCommand.lua` | Create |
 | `src/ServerScriptService/Contexts/Placement/Application/Queries/GetPlacedStructuresQuery.lua` | Create |
 | `src/ServerScriptService/Contexts/Placement/PlacementContext.lua` | Create |
@@ -527,12 +571,28 @@ end)
 
 ---
 
+## Applied Reconcile Delta (Authoritative)
+
+When this section conflicts with earlier step text, this section wins.
+
+- `PlacementSyncService` location is authoritative:
+  - `src/ServerScriptService/Contexts/Placement/Infrastructure/Persistence/PlacementSyncService.lua`
+- Domain completeness is required for placement behavior:
+  - `PlacementDomain/Specs/PlacementSpecs.lua`
+  - `PlacementDomain/Policies/PlaceStructurePolicy.lua`
+- `PlaceStructureCommand` executes policy check first, then spend/spawn/mutate on success.
+- `PlacementContext.lua` remains pass-through for public API and ends with `WrapContext(PlacementContext, "PlacementContext")`.
+
+---
+
 ## Recommended First Build Step
 
 **Step 1** (blink files + generate) — unblocked; establishes both network contracts.
 Then **Steps 2 + 3 + 4 + 5** (config + types + atoms + errors) — all unblocked, no dependencies between them.
 Then **Step 6** (PlacementValidator) — pure domain, no dependencies.
+Then **Step 6b** (PlacementSpecs + PlaceStructurePolicy) — depends on config/types; no infrastructure mutation.
 Then **Steps 7 + 8** (PlacementService + PlacementSyncService) — parallel, no dependency on each other.
 Then **Steps 9 + 10** (command + query) — depend on validator + services.
 Then **Step 11** (PlacementContext) — wires everything; depends on all prior steps.
 Then **Step 12** (PlacementSyncClient) — client side, needs generated Blink client module.
+

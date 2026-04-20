@@ -78,82 +78,76 @@ end
 	Returns the tile at a grid coordinate, or nil when the coordinate is invalid or out of bounds.
 	@within WorldContext
 	@param coord GridCoord -- Grid coordinate to resolve.
-	@return Tile? -- The resolved tile, or nil when the lookup fails.
+	@return Result.Result<Tile?> -- The resolved tile wrapped in `Result`.
 ]=]
-function WorldContext:GetTile(coord: GridCoord): Tile?
-	local result = Catch(function()
+function WorldContext:GetTile(coord: GridCoord): Result.Result<Tile?>
+	return Catch(function()
 		Ensure(coord, "InvalidCoord", Errors.INVALID_COORD)
 		return Ok(self._queries.GetTile:Execute(coord))
 	end, "World:GetTile")
-	return result:unwrapOr(nil)
 end
 
 --[=[
 	Returns all configured spawn points for enemy wave entry.
 	@within WorldContext
-	@return { CFrame } -- The configured spawn points.
+	@return Result.Result<{ CFrame }> -- Spawn points wrapped in `Result`.
 ]=]
-function WorldContext:GetSpawnPoints()
-	local result = Catch(function()
+function WorldContext:GetSpawnPoints(): Result.Result<{ CFrame }>
+	return Catch(function()
 		return Ok(self._queries.GetSpawnPoints:Execute())
 	end, "World:GetSpawnPoints")
-	return result:unwrapOr({})
 end
 
 --[=[
 	Returns the goal point that enemies path toward.
 	@within WorldContext
-	@return CFrame -- The commander goal point.
+	@return Result.Result<CFrame?> -- Goal point wrapped in `Result`.
 ]=]
-function WorldContext:GetGoalPoint()
-	local result = Catch(function()
+function WorldContext:GetGoalPoint(): Result.Result<CFrame?>
+	return Catch(function()
 		return Ok(self._queries.GetGoalPoint:Execute())
 	end, "World:GetGoalPoint")
-	return result:unwrapOr(nil)
 end
 
 --[=[
 	Returns all currently buildable tiles that are not blocked or occupied.
 	@within WorldContext
-	@return { Tile } -- The buildable tile list.
+	@return Result.Result<{ Tile }> -- Buildable tile list wrapped in `Result`.
 ]=]
-function WorldContext:GetBuildableTiles()
-	local result = Catch(function()
+function WorldContext:GetBuildableTiles(): Result.Result<{ Tile }>
+	return Catch(function()
 		return Ok(self._queries.GetBuildableTiles:Execute())
 	end, "World:GetBuildableTiles")
-	return result:unwrapOr({})
 end
 
 --[=[
 	Returns all extraction tiles that carry a resource type.
 	@within WorldContext
-	@return { Tile } -- The extraction tile list.
+	@return Result.Result<{ Tile }> -- Extraction tile list wrapped in `Result`.
 ]=]
-function WorldContext:GetExtractionTiles()
-	local result = Catch(function()
+function WorldContext:GetExtractionTiles(): Result.Result<{ Tile }>
+	return Catch(function()
 		return Ok(self._queries.GetExtractionTiles:Execute())
 	end, "World:GetExtractionTiles")
-	return result:unwrapOr({})
 end
 
 --[=[
 	Returns all lane tiles used for enemy path construction.
 	@within WorldContext
-	@return { Tile } -- The lane tile list.
+	@return Result.Result<{ Tile }> -- Lane tile list wrapped in `Result`.
 ]=]
-function WorldContext:GetLaneTiles()
-	local result = Catch(function()
+function WorldContext:GetLaneTiles(): Result.Result<{ Tile }>
+	return Catch(function()
 		return Ok(self._queries.GetLaneTiles:Execute())
 	end, "World:GetLaneTiles")
-	return result:unwrapOr({})
 end
 
 --[=[
 	Returns buildable tiles under the older placement-zone name.
 	@within WorldContext
-	@return { Tile } -- The buildable tile list.
+	@return Result.Result<{ Tile }> -- Buildable tile list wrapped in `Result`.
 ]=]
-function WorldContext:GetPlacementZones()
+function WorldContext:GetPlacementZones(): Result.Result<{ Tile }>
 	return self:GetBuildableTiles()
 end
 
@@ -162,14 +156,13 @@ end
 	@within WorldContext
 	@param coord GridCoord -- Grid coordinate to update.
 	@param occupied boolean -- Whether the tile should be marked occupied.
-	@return boolean -- Whether the tile was found and updated.
+	@return Result.Result<boolean> -- Whether the tile was found and updated, wrapped in `Result`.
 ]=]
-function WorldContext:SetTileOccupied(coord: GridCoord, occupied: boolean): boolean
-	local result = Catch(function()
+function WorldContext:SetTileOccupied(coord: GridCoord, occupied: boolean): Result.Result<boolean>
+	return Catch(function()
 		Ensure(coord, "InvalidCoord", Errors.INVALID_COORD)
 		return Ok(self._worldGridService:SetOccupied(coord, occupied))
 	end, "World:SetTileOccupied")
-	return result:unwrapOr(false)
 end
 
 WrapContext(WorldContext, "World")

@@ -9,6 +9,7 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 local RunConfig = require(ReplicatedStorage.Contexts.Run.Config.RunConfig)
+local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
 local BlinkServer = require(ReplicatedStorage.Network.Generated.RunSyncServer)
 
@@ -140,79 +141,67 @@ end
 --[=[
 	Returns the current authoritative run state.
 	@within RunContext
-	@return RunState -- The current state.
+	@return Result.Result<RunState> -- The current state wrapped in `Result`.
 ]=]
-function RunContext:GetState(): RunState
-	local result = Catch(function()
+function RunContext:GetState(): Result.Result<RunState>
+	return Catch(function()
 		return Ok(self._getRunStateQuery:Execute())
 	end, "Run:GetState")
-
-	return result:unwrapOr("Idle")
 end
 
 --[=[
 	Returns the current authoritative wave number.
 	@within RunContext
-	@return number -- The current wave number.
+	@return Result.Result<number> -- The current wave number wrapped in `Result`.
 ]=]
-function RunContext:GetWaveNumber(): number
-	local result = Catch(function()
+function RunContext:GetWaveNumber(): Result.Result<number>
+	return Catch(function()
 		return Ok(self._getWaveNumberQuery:Execute())
 	end, "Run:GetWaveNumber")
-
-	return result:unwrapOr(0)
 end
 
 --[=[
 	Starts the run from `Idle` and arms the prep countdown.
 	@within RunContext
-	@return boolean -- Whether the run successfully started.
+	@return Result.Result<boolean> -- Whether the run successfully started.
 ]=]
-function RunContext:StartRun(): boolean
-	local result = Catch(function()
+function RunContext:StartRun(): Result.Result<boolean>
+	return Catch(function()
 		return self._startRunCommand:Execute(self._onPrepTimeout)
 	end, "Run:StartRun")
-
-	return result:unwrapOr(false)
 end
 
 --[=[
 	Advances from `Wave` to `Resolution` when the wave ends early.
 	@within RunContext
-	@return boolean -- Whether the wave was successfully cleared.
+	@return Result.Result<boolean> -- Whether the wave was successfully cleared.
 ]=]
-function RunContext:NotifyWaveCleared(): boolean
-	local result = Catch(function()
+function RunContext:NotifyWaveCleared(): Result.Result<boolean>
+	return Catch(function()
 		return self._notifyWaveClearedCommand:Execute(self._onResolutionTimeout)
 	end, "Run:NotifyWaveCleared")
-
-	return result:unwrapOr(false)
 end
 
 --[=[
 	Completes the climax and enters the endless loop.
 	@within RunContext
-	@return boolean -- Whether the climax completion was accepted.
+	@return Result.Result<boolean> -- Whether the climax completion was accepted.
 ]=]
-function RunContext:NotifyClimaxComplete(): boolean
-	local result = Catch(function()
+function RunContext:NotifyClimaxComplete(): Result.Result<boolean>
+	return Catch(function()
 		return self._notifyClimaxCompleteCommand:Execute(self._onWaveTimeout)
 	end, "Run:NotifyClimaxComplete")
-
-	return result:unwrapOr(false)
 end
 
 --[=[
 	Ends the run when the commander dies or the server otherwise aborts the run.
 	@within RunContext
-	@return boolean -- Whether the run was transitioned into `RunEnd`.
+	@return Result.Result<boolean> -- Whether the run was transitioned into `RunEnd`.
 ]=]
-function RunContext:NotifyCommanderDeath(): boolean
-	local result = Catch(function()
+function RunContext:NotifyCommanderDeath(): Result.Result<boolean>
+	return Catch(function()
 		return self._notifyCommanderDeathCommand:Execute()
 	end, "Run:NotifyCommanderDeath")
-
-	return result:unwrapOr(false)
 end
 
 -- Pushes the new run snapshot to sync, then emits milestone logs for lifecycle transitions.
@@ -240,6 +229,15 @@ function RunContext:_OnStateChanged(newState: RunState, previousState: RunState)
 		Result.MentionEvent("RunContext:RunEnd", "Run ended; lifecycle cleanup hook", {
 			WaveNumber = self._machine:GetWaveNumber(),
 		})
+	end
+
+	-- Emit run lifecycle events after the sync snapshot is updated so downstream listeners read the latest state.
+	if newState == "Wave" then
+		GameEvents.Bus:Emit(GameEvents.Events.Run.WaveStarted, self._machine:GetWaveNumber(), false)
+	elseif newState == "Endless" then
+		GameEvents.Bus:Emit(GameEvents.Events.Run.WaveStarted, self._machine:GetWaveNumber(), true)
+	elseif newState == "RunEnd" then
+		GameEvents.Bus:Emit(GameEvents.Events.Run.RunEnded)
 	end
 end
 

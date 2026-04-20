@@ -36,6 +36,27 @@ Build a server-authoritative `EconomyContext` Knit service that:
 
 ---
 
+## Reconciliation Corrections (Phase 0)
+
+This plan is reconciled against `.claude/commands/reconcile-context.md` and backend DDD/CQRS rules.
+
+- Keep `EconomyContext.lua` as a pass-through boundary only; no inline business logic.
+- Register Domain + Application modules through `Registry` and `Init(registry, name)` (not ad-hoc wiring) for consistent dependency flow.
+- Keep atom mutation exclusively inside `Infrastructure/Persistence/ResourceSyncService.lua`.
+- Queries must only read from Infrastructure and return read data without mutation.
+- Error strings remain centralized in `Errors.lua`.
+
+Reconciliation matrix:
+- [x] `Application/Commands` present
+- [x] `Application/Queries` present
+- [x] `EconomyDomain/` present
+- [x] `Infrastructure/Persistence` present for sync
+- [x] `Infrastructure/Services` optional/not required for current scope
+- [x] `EconomyContext.lua` pass-through + wrapped boundary
+- [x] `Errors.lua` centralized
+
+---
+
 ## Short Action Flow
 
 ```
@@ -306,7 +327,11 @@ src/StarterPlayerScripts/Contexts/Economy/
 
 **File:** `src/ServerScriptService/Contexts/Economy/Application/Commands/AddResourceCommand.lua`
 
-**Constructor:** `AddResourceCommand.new(validator: ResourceValidator, syncService: ResourceSyncService)`
+**Constructor:** `AddResourceCommand.new()`
+
+**Init:** `Init(registry, _name)` resolves:
+- `self._validator = registry:Get("ResourceValidator")`
+- `self._syncService = registry:Get("ResourceSyncService")`
 
 **Method:** `Execute(userId: number, resourceType: string, amount: number): Result`
 1. `self._validator:ValidateEarn(resourceType, amount)` → if Err, return early (no mutation)
@@ -326,7 +351,11 @@ src/StarterPlayerScripts/Contexts/Economy/
 
 **File:** `src/ServerScriptService/Contexts/Economy/Application/Commands/SpendResourceCommand.lua`
 
-**Constructor:** `SpendResourceCommand.new(validator: ResourceValidator, syncService: ResourceSyncService)`
+**Constructor:** `SpendResourceCommand.new()`
+
+**Init:** `Init(registry, _name)` resolves:
+- `self._validator = registry:Get("ResourceValidator")`
+- `self._syncService = registry:Get("ResourceSyncService")`
 
 **Method:** `Execute(userId: number, resourceType: string, cost: number): Result`
 1. `currentBalance = self._syncService:GetBalance(userId, resourceType)` → if nil, return `Result.Err(Errors.PLAYER_NOT_INITIALIZED)`
@@ -347,7 +376,9 @@ src/StarterPlayerScripts/Contexts/Economy/
 
 **Files:** `src/ServerScriptService/Contexts/Economy/Application/Queries/GetResourceBalanceQuery.lua`, `GetResourceWalletQuery.lua`
 
-**Constructor:** `GetResourceBalanceQuery.new(syncService: ResourceSyncService)`, `GetResourceWalletQuery.new(syncService: ResourceSyncService)`
+**Constructor:** `GetResourceBalanceQuery.new()`, `GetResourceWalletQuery.new()`
+
+**Init:** each query resolves `self._syncService = registry:Get("ResourceSyncService")`
 
 **Methods:**
 - `GetResourceBalanceQuery:Execute(userId: number, resourceType: string): number?`
@@ -368,14 +399,18 @@ src/StarterPlayerScripts/Contexts/Economy/
 **`KnitInit()`:**
 - `Registry.new("Economy")`
 - `registry:Register("BlinkServer", BlinkResourceSyncServer)`
+- `registry:Register("ResourceValidator", ResourceValidator.new(), "Domain")`
 - `registry:Register("ResourceSyncService", ResourceSyncService.new(), "Infrastructure")`
+- `registry:Register("AddResourceCommand", AddResourceCommand.new(), "Application")`
+- `registry:Register("SpendResourceCommand", SpendResourceCommand.new(), "Application")`
+- `registry:Register("GetResourceBalanceQuery", GetResourceBalanceQuery.new(), "Application")`
+- `registry:Register("GetResourceWalletQuery", GetResourceWalletQuery.new(), "Application")`
 - `registry:InitAll()`
 - Store ref: `self._sync = registry:Get("ResourceSyncService")`
-- Instantiate: `self._validator = ResourceValidator.new()`
-- Instantiate: `self._addResourceCmd = AddResourceCommand.new(self._validator, self._sync)`
-- Instantiate: `self._spendResourceCmd = SpendResourceCommand.new(self._validator, self._sync)`
-- Instantiate: `self._getBalanceQuery = GetResourceBalanceQuery.new(self._sync)`
-- Instantiate: `self._getWalletQuery = GetResourceWalletQuery.new(self._sync)`
+- Store ref: `self._addResourceCmd = registry:Get("AddResourceCommand")`
+- Store ref: `self._spendResourceCmd = registry:Get("SpendResourceCommand")`
+- Store ref: `self._getBalanceQuery = registry:Get("GetResourceBalanceQuery")`
+- Store ref: `self._getWalletQuery = registry:Get("GetResourceWalletQuery")`
 
 **`KnitStart()`:**
 - `Players.PlayerAdded:Connect(player → self._sync:HydratePlayer(player))`
@@ -390,7 +425,7 @@ src/StarterPlayerScripts/Contexts/Economy/
           end
       elseif newState == "Resolution" then
           for _, player in Players:GetPlayers() do
-              self._earnCmd:Execute(player.UserId, EconomyConfig.WAVE_CLEAR_BONUS)
+              self._addResourceCmd:Execute(player.UserId, "Energy", EconomyConfig.WAVE_CLEAR_BONUS)
           end
       elseif newState == "RunEnd" then
           for _, player in Players:GetPlayers() do
@@ -410,6 +445,7 @@ src/StarterPlayerScripts/Contexts/Economy/
 - `EconomyContext:AddPickupGrant(player: Player, grant: { resourceType: string, amount: number }): Result` → testing hook for future pickup/drop integration
 
 **No Client remotes** — replication is via Charm-sync/Blink only
+**Bottom of file:** `WrapContext(EconomyContext, "EconomyContext")`
 **Exit criteria:** On RunStart → each player initialized with STARTING_WALLET; wave clear → Energy bonus added; zone resources can be added/spent by resource type; `SpendEnergy` remains available as a convenience wrapper; client atom updates within CharmSync interval
 
 ---
@@ -510,3 +546,6 @@ Then **Step 7** (ResourceSyncService) — needs SharedAtoms + BaseSyncService.
 Then **Steps 8 + 9 + 10** (commands + query) — need validator + sync service; can be written in parallel.
 Then **Step 11** (EconomyContext) — wires everything; depends on all prior steps.
 Then **Step 12** (ResourceSyncClient) — client side, needs generated Blink client.
+
+
+
