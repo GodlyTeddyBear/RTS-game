@@ -179,3 +179,4 @@ All detailed documentation is in `.claude/documents/`.
 | [.claude/documents/patterns/NEGATIVE_SPACE.md](.claude/documents/patterns/NEGATIVE_SPACE.md) | Failure handling by layer |
 | [.claude/documents/patterns/DEBUG_LOGGING.md](.claude/documents/patterns/DEBUG_LOGGING.md) | DebugLogger usage and milestones |
 | [.claude/documents/patterns/PROGRAMMING_PATTERNS.md](.claude/documents/patterns/PROGRAMMING_PATTERNS.md) | GoF design patterns adapted for Lua/Roblox DDD |
+| [.claude/documents/HARNESS_PRINCIPLES.md](.claude/documents/HARNESS_PRINCIPLES.md) | 8 principles + anti-pattern reference + evaluation checklist for improving the agent harness |

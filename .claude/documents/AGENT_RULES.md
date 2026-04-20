@@ -118,3 +118,23 @@ Whenever a new `.md` file is added anywhere under `.claude/documents/`, **immedi
 - Don't restate what the user said
 - If it can be said in one sentence, use one sentence
 - Code and tool output are exempt — be complete there
+
+---
+
+## Output Control by Interaction Mode
+
+Match response format to the interaction mode. Never default to prose when a structured format is correct.
+
+| Mode | Trigger signals | Required output |
+|------|----------------|-----------------|
+| **Question** | "what does X do?", "why is Y?" | Direct answer. Table or flow chart if clearer than prose. Reasoning only if requested. No preamble. |
+| **Reverse prompt** | "reverse prompt this", "restate as a prohibition" | Options via `AskUserQuestion` only — never plain text. |
+| **Execute — game/context feature** | "implement X", "add Y to the game" | Ask whether to use a slash command before proceeding. |
+| **Execute — `.md` file** | "write this doc", "apply this to the harness" | Execute silently, then output a compact summary of what changed. |
+| **Plan / design** | "plan how we'd do X", "design the approach" | `AskUserQuestion` for clarifications first → write plan file → `ExitPlanMode`. |
+| **Comparison** | "which is better, A or B?", "compare these" | Compact table vs. key criteria + one-sentence recommendation with main tradeoff. |
+
+**Hard constraints:**
+- Never produce unstructured prose when a table, flow chart, or `AskUserQuestion` is the correct format
+- Never execute a game feature or context without first asking whether a slash command should be used
+- Never present a reverse-prompt draft as plain text — always route through `AskUserQuestion`
