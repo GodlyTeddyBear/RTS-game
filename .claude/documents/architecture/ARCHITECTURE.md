@@ -30,5 +30,7 @@ Client-side architecture: React, Charm atoms, feature slices, Atomic Design, hoo
 - [frontend/LAYERS.md](frontend/LAYERS.md) - Infrastructure, Application, Presentation layers
 - [frontend/COMPONENTS.md](frontend/COMPONENTS.md) - Atomic Design: Atoms, Molecules, Organisms, Templates
 - [frontend/HOOKS.md](frontend/HOOKS.md) - Read/write hook separation, ViewModels, Selectors
+- [frontend/DESIGN.md](frontend/DESIGN.md) - Visual style creation, cards/panels, hierarchy, chrome, and interaction states
+- [frontend/UDIM_LAYOUT_RULES.md](frontend/UDIM_LAYOUT_RULES.md) - Use scale for layout; reserve offset for decorative pixel details
 - [frontend/DEPENDENCY_RULES.md](frontend/DEPENDENCY_RULES.md) - Allowed and prohibited import directions
 - [frontend/ANTI_PATTERNS.md](frontend/ANTI_PATTERNS.md) - Common mistakes and correct alternatives

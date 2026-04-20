@@ -14,6 +14,8 @@ A map of this project's knowledge base. Read this first to know where to look.
 ### "I need to understand the frontend architecture"
 → Start with [architecture/frontend/FRONTEND.md](architecture/frontend/FRONTEND.md)
 → Then [architecture/frontend/HOOKS.md](architecture/frontend/HOOKS.md) for read/write hook separation
+→ Then [architecture/frontend/DESIGN.md](architecture/frontend/DESIGN.md) for visual style, cards/panels, hierarchy, and interaction states
+→ Then [architecture/frontend/UDIM_LAYOUT_RULES.md](architecture/frontend/UDIM_LAYOUT_RULES.md) for scale-vs-offset UI layout rules
 → Then [architecture/frontend/DEPENDENCY_RULES.md](architecture/frontend/DEPENDENCY_RULES.md) for what can import what
 
 ### "I'm adding a new feature to the backend"
@@ -72,6 +74,8 @@ A map of this project's knowledge base. Read this first to know where to look.
 | [architecture/frontend/LAYERS.md](architecture/frontend/LAYERS.md) | Infrastructure, Application, Presentation layers |
 | [architecture/frontend/COMPONENTS.md](architecture/frontend/COMPONENTS.md) | Atomic Design hierarchy and extraction rules |
 | [architecture/frontend/HOOKS.md](architecture/frontend/HOOKS.md) | Read/write hook separation, ViewModels, Selectors |
+| [architecture/frontend/DESIGN.md](architecture/frontend/DESIGN.md) | Visual style creation, cards/panels, hierarchy, chrome, and interaction states |
+| [architecture/frontend/UDIM_LAYOUT_RULES.md](architecture/frontend/UDIM_LAYOUT_RULES.md) | Scale-first layout rules and offset-only decorative exceptions |
 | [architecture/frontend/DEPENDENCY_RULES.md](architecture/frontend/DEPENDENCY_RULES.md) | Allowed and prohibited import directions |
 | [architecture/frontend/ANTI_PATTERNS.md](architecture/frontend/ANTI_PATTERNS.md) | Common mistakes and correct alternatives |
 

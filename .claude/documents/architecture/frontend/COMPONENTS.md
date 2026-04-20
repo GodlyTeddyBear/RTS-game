@@ -29,7 +29,7 @@ local function Button(props)
 
     return React.createElement("TextButton", {
         Text = props.Text or "Button",
-        Size = props.Size or UDim2.fromOffset(100, 40),
+        Size = props.Size or UDim2.fromScale(0.25, 0.12),
         BackgroundColor3 = if isHovered
             then Color3.fromRGB(100, 100, 100)
             else Color3.fromRGB(60, 60, 60),
@@ -126,10 +126,11 @@ end
 
 ## Sizing and Positioning Conventions
 
-- **Use `UDim2.fromScale`** for sizes and positions wherever the element should stretch with its parent.
-- **Use `UDim2.fromOffset`** only for fixed-pixel elements (e.g. icons, close buttons) that must never stretch.
-- **`AnchorPoint` should always be `Vector2.new(0.5, 0.5)`** — center the element on its position point. Avoid `(0, 0)` or `(1, 0.5)` anchors which make layout math fragile.
-- **Position via scale**, not pixel offset, unless the parent has a fixed pixel size.
+- Follow `UDIM_LAYOUT_RULES.md` for the source of truth on scale-vs-offset layout.
+- Use `UDim2.fromScale` for structural sizes and positions.
+- Reserve offset values for decorative pixel details such as `UICorner`, `UIStroke`, small polish values, or explicitly approved asset details.
+- Prefer `AnchorPoint = Vector2.new(0.5, 0.5)` for centered structural elements. Use other anchor points only when the component's alignment contract requires it.
+- Position via scale, not pixel offset.
 
 ```lua
 -- Correct: centered popup panel
@@ -139,11 +140,11 @@ Panel = e("Frame", {
     AnchorPoint = Vector2.new(0.5, 0.5),
 })
 
--- Correct: fixed-size close button anchored to top-right of parent
+-- Correct: close region remains scale-based; icon art may use decorative pixel details internally
 CloseButton = e("TextButton", {
-    Size = UDim2.fromOffset(28, 20),
-    Position = UDim2.fromScale(1, 0.5),
-    AnchorPoint = Vector2.new(1, 0.5),
+    Size = UDim2.fromScale(0.08, 0.5),
+    Position = UDim2.fromScale(0.96, 0.5),
+    AnchorPoint = Vector2.new(0.5, 0.5),
 })
 ```
 

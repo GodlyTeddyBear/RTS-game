@@ -135,8 +135,10 @@ All detailed documentation is in `.claude/documents/`.
 | Writing to or reading from atoms | `architecture/backend/STATE_SYNC.md` |
 | Creating a new context or service | `architecture/backend/KNIT.md` |
 | Adding/modifying a frontend feature | `architecture/frontend/FRONTEND.md` |
+| Designing frontend UI appearance | `architecture/frontend/DESIGN.md` |
 | Working with hooks or ViewModels | `architecture/frontend/HOOKS.md` |
 | Adding or extracting a component | `architecture/frontend/COMPONENTS.md` |
+| Unsure about scale vs offset UI layout | `architecture/frontend/UDIM_LAYOUT_RULES.md` |
 | Unsure if an import is allowed | `architecture/frontend/DEPENDENCY_RULES.md` |
 | Unsure about frontend layer dependencies | `architecture/frontend/LAYERS.md` |
 | Reviewing any code | `architecture/backend/` + relevant frontend docs |
@@ -163,6 +165,8 @@ All detailed documentation is in `.claude/documents/`.
 | [.claude/documents/architecture/frontend/LAYERS.md](.claude/documents/architecture/frontend/LAYERS.md) | Frontend layer dependency rules — flow direction |
 | [.claude/documents/architecture/frontend/HOOKS.md](.claude/documents/architecture/frontend/HOOKS.md) | Read/write separation, ViewModels, Selectors |
 | [.claude/documents/architecture/frontend/COMPONENTS.md](.claude/documents/architecture/frontend/COMPONENTS.md) | Atomic Design, extraction rule |
+| [.claude/documents/architecture/frontend/DESIGN.md](.claude/documents/architecture/frontend/DESIGN.md) | Visual style creation, cards/panels, hierarchy, chrome, interaction states |
+| [.claude/documents/architecture/frontend/UDIM_LAYOUT_RULES.md](.claude/documents/architecture/frontend/UDIM_LAYOUT_RULES.md) | Scale-first layout rules and offset-only decorative exceptions |
 | [.claude/documents/architecture/frontend/DEPENDENCY_RULES.md](.claude/documents/architecture/frontend/DEPENDENCY_RULES.md) | Allowed and prohibited imports |
 | [.claude/documents/architecture/frontend/ANTI_PATTERNS.md](.claude/documents/architecture/frontend/ANTI_PATTERNS.md) | Common mistakes and correct alternatives |
 | [.claude/documents/coding-style/CODING_STYLE.md](.claude/documents/coding-style/CODING_STYLE.md) | Naming conventions, --!strict, type annotations |

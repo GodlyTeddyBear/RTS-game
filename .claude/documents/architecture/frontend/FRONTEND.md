@@ -11,8 +11,10 @@ The frontend uses **React** (via ReactRoblox) for UI rendering, **Charm** atoms 
 - [LAYERS.md](LAYERS.md) - 3-layer architecture: Infrastructure, Application, Presentation
 - [COMPONENTS.md](COMPONENTS.md) - Atomic Design hierarchy: Atoms, Molecules, Organisms, Templates
 - [HOOKS.md](HOOKS.md) - Read/write hook separation, ViewModels, Selectors
+- [DESIGN.md](DESIGN.md) - Visual style creation, cards/panels, hierarchy, chrome, and interaction states
 - [SCREEN_TEMPLATES.md](SCREEN_TEMPLATES.md) - Screen composition pattern and controller-hook split
 - [ANIMATION_PATTERN.md](ANIMATION_PATTERN.md) - Animated component wrapper/controller/view split
+- [UDIM_LAYOUT_RULES.md](UDIM_LAYOUT_RULES.md) - Use scale for layout; reserve offset for decorative pixel details
 - [DEPENDENCY_RULES.md](DEPENDENCY_RULES.md) - Allowed and prohibited import directions
 - [ANTI_PATTERNS.md](ANTI_PATTERNS.md) - Common mistakes and correct alternatives
 
@@ -64,6 +66,7 @@ StarterPlayerScripts/
 - **One feature = one feature slice** (Counter, Party, Inventory, Combat, etc.)
 - **Read hooks ≠ Write hooks** — never mix state subscription with mutation in the same hook
 - **No business logic in components** — ViewModels handle all data transformation
+- **Design concept before UI implementation** — define visual role, hierarchy, surfaces, and interaction model before building screens
 - **Screens stay composition-first** — use `use[Screen]Controller` hooks for orchestration
 - **Screens/templates do not orchestrate animation primitives directly** — use shared animation hooks and controller hooks
 - **Templates are always feature-local** — never shared between features

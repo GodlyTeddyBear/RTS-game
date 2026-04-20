@@ -4,13 +4,13 @@
 **Platform:** Roblox  
 **Status:** Pre-production — design spine locked; systems TBD  
 **Owner:** (you)  
-**Last updated:** 2026-04-19  
+**Last updated:** 2026-04-20  
 
 ---
 
 ## 1. Elevator pitch
 
-A **sci-fi hybrid RTS wave-defense** game: you are a **summoner commander** on a **single lane**, spending **one resource** to place defenses, deploy summons, and survive escalating waves. **If the commander dies, the run ends.** After the main scripted climax, the run enters **endless waves with escalating mutators** while you chase **score** until you eventually fall.
+A **sci-fi hybrid RTS wave-defense** game: you are a **summoner commander** on a **single lane**, spending **resources** to place defenses, craft stronger buildings, deploy summons, and survive escalating waves. **If the commander dies, the run ends.** After the main scripted climax, the run enters **endless waves with escalating mutators** while you chase **score** until you eventually fall.
 
 ---
 
@@ -85,19 +85,98 @@ High level:
 
 ---
 
+## 6.1 Commander Kit (v0)
+
+All numeric values are v0 placeholders — balance pass required after EconomyContext income rates are established.
+
+| SlotKey | Ability | Energy Cost | Cooldown | What it does |
+|---|---|---|---|---|
+| Mobility | **Blink Step** | 15 | 10s | Instant teleport up to 18 studs. No damage. Offensive reposition or defensive escape. |
+| SummonA | **Swarm Drones** | 20 | 18s | Deploy 5 fast low-HP drones that chase the nearest enemy. Despawn after 20s. Strong vs groups, weak vs armor. |
+| SummonB | **Elite Guardian** | 45 | 25s | Summon one stationary high-HP guardian that holds position and attacks in melee range. Despawn after 30s. |
+| Control | **Gravity Pulse** | 25 | 14s | Short-range pulse (~10 studs) knocks all nearby enemies back 8 studs and slows them 1.5s. No damage. |
+| Ultimate | **Overcharge Field** | 70 | 55s | 1s channel (interruptible by damage), then 25-stud burst: stuns enemies 3s + moderate damage + allied structures/summons gain +50% attack speed for 8s. |
+
+### Counterplay matrix
+
+| Ability | Strong against | Weak against | Mutator counter |
+|---|---|---|---|
+| Blink Step | Breakthrough enemies | — (pure utility) | "Rooted" — disables teleport |
+| Swarm Drones | Swarm / low-HP groups | Armored / tank roles | "Drone Scrambler" — 50% damage |
+| Elite Guardian | Mid-wave choke creation | Disruptor / ranged kiting | "Taunt Immunity" — summons ignored |
+| Gravity Pulse | Dense groups, lane resets | Fast / spread formations | "Heavy" — knockback resisted |
+| Overcharge Field | Clustered waves + structure synergy | Spread formations | "EMP Shielded" — stun immunity |
+
+### Open questions
+
+1. Is the Overcharge Field channel interruptible by damage? **Recommendation:** Yes — reinforces fragility.
+2. Can Blink Step be used while channeling? **Recommendation:** No — channel locks movement.
+3. Do Swarm Drones target nearest or lowest-HP enemy? **Recommendation:** Nearest for v1.
+4. Does Elite Guardian block enemy pathing or pass-through? **Recommendation:** Pass-through for Phase 0; revisit in Phase 1.
+
+---
+
 ## 7. Economy
 
-**v1 rule:** **One primary resource** (working name: **Energy**).
+**Multiple resource types.** Energy is the primary action resource; zone resources are the crafting/building economy.
 
-**Design goals:**
+### Resource types
 
-- Every spend is a visible tradeoff: **defense vs tempo vs commander safety**.
-- Sinks must stay legible: structures, summon charges, repairs, key upgrades — not five parallel currencies.
+- **Energy** — primary action resource. Spent on ability use, summon charges, placing structures, and repairs.
+- **Zone resources** (names TBD — e.g. Metal, Crystals) — produced passively by extraction buildings placed on side-pocket tiles. Each zone type produces a distinct resource. Spent on crafting new building types and upgrading existing buildings.
 
-**Open questions:**
+### Income sources
 
-- Income sources: wave clear bonus, passive extractor, last-hits, combo rewards?
-- Anti-snowball: what prevents perfect turtling from trivializing endless?
+1. **Passive extraction** — resource buildings placed on side-pocket tiles generate their zone resource over time.
+2. **Enemy drops** — enemies drop resource pickups on death; nearby buildings or the commander collect them.
+3. **Wave clear bonus** — TBD; maps to Efficiency score pillar.
+
+### Sinks
+
+| Sink | Resource |
+|---|---|
+| Place new structure | Energy |
+| Ability use / summon charge | Energy |
+| Repair structure | Energy |
+| Craft new building type | Zone resource(s) |
+| Upgrade existing building | Zone resource(s) |
+
+### Design goals
+
+- Every spend is a visible tradeoff: **action economy (Energy) vs build economy (zone resources) vs tempo (upgrade now vs hold)**.
+- Sinks must stay legible — player always knows what they are spending and why.
+- Resource buildings on zone tiles are high-value targets; enemy roles that attack buildings create genuine comeback tension when a resource building is lost.
+
+### Anti-snowball
+
+- Soft resource cap with overflow waste (prevents stockpile turtling).
+- Resource buildings destroyed by enemies drop a portion of stored resources as pickups — recovery tension, not hard loss.
+- Mutators can target resource buildings specifically (e.g. "Extractor Disruption" — buildings produce 50% for one wave).
+
+### Open questions
+
+- Resource type names — resolve before Structure roster section.
+- How many distinct zone resource types in v1? Recommendation: 2–3 max.
+- Do enemy drops produce zone-specific resources or a universal scrap? Recommendation: universal scrap convertible at a small tax.
+- Is there a per-resource inventory cap or a shared total cap?
+
+---
+
+## 7.1 Crafting
+
+**Crafting is Prep-phase only.** No placement or crafting during Wave phase.
+
+### Two crafting operations
+
+1. **Unlock + place new building type** — spend zone resources from inventory during Prep; building becomes available in the placement palette; commander places it on a valid tile.
+2. **Upgrade existing placed building** — select a placed building during Prep; spend zone resources to upgrade it to a stronger tier in place; maximum 3 tiers (v1 placeholder).
+
+### Design constraints
+
+- Crafting menu is always fully readable — no hidden recipes. Player always sees what is available and what resources are missing (Tactical clarity pillar).
+- Building roster and recipe table are TBD — drafted in §X "Structure roster".
+- Higher tiers should change behavior, not only increase stats, where possible (Escalating adaptation pillar).
+- All crafting locked during Wave phase — decisions must be made during Prep.
 
 ---
 
@@ -120,7 +199,17 @@ Because the run continues into endless, **score** is the primary long-term goal.
 
 ## 9. Map and encounter space
 
-**v1:** **Single lane** with optional **side pockets / pads** for placement depth (not multi-lane macro).
+**v1:** **Single lane** with **zone-typed tiles** — side pockets are resource extraction points, not just placement pads.
+
+### Zone types
+
+| Zone | Purpose | Resource |
+|---|---|---|
+| `lane` | Combat space — enemies travel here | None |
+| `side_pocket` | Off-lane placement pad — each has an assigned resource type | Zone-specific (e.g. Metal, Crystal) |
+| `blocked` | Impassable — no placement | None |
+
+**Map position is meaningful:** which side pockets you control determines which resources you can extract and therefore which buildings you can craft. Losing a side pocket to a building-targeting enemy role cuts off that crafting branch.
 
 **Intent:** Maximum tactical density; minimal “where do I look?” fatigue.
 
@@ -250,3 +339,8 @@ Do not propose implementation code; constraints only.
 | Date | Change |
 |------|--------|
 | 2026-04-19 | Initial spine from design conversation. |
+| 2026-04-20 | Added §6.1 Commander Kit (v0) with 5 abilities and counterplay matrix. |
+| 2026-04-20 | Revised §7 Economy — multiple resource types, zone extraction, enemy drops, crafting sinks. |
+| 2026-04-20 | Added §7.1 Crafting — Prep-phase only, unlock+place and upgrade operations. |
+| 2026-04-20 | Revised §9 Map — zone types now carry resource type; side pockets are extraction points. |
+| 2026-04-20 | Revised §1 elevator pitch to reflect multi-resource economy. |
