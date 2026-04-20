@@ -1,0 +1,51 @@
+option ServerOutput = "Generated/GuildSyncServer.luau"
+option ClientOutput = "Generated/GuildSyncClient.luau"
+
+option RemoteScope = "GUILD_SYNC"
+
+struct EquipmentSlot {
+    ItemId: string,
+    SlotType: string,
+}
+
+struct AdventurerEquipment {
+    Weapon: EquipmentSlot?,
+    Armor: EquipmentSlot?,
+    Accessory: EquipmentSlot?,
+}
+
+struct AdventurerData {
+    Id: string,
+    Type: string,
+    BaseHP: u32,
+    BaseATK: u32,
+    BaseDEF: u32,
+    Equipment: AdventurerEquipment,
+    HiredAt: f64,
+}
+
+map AdventurerMap = { [string]: AdventurerData }
+
+struct InitPayload {
+    adventurers: AdventurerMap?,
+}
+
+struct PatchPayload {
+    adventurers: AdventurerMap?,
+}
+
+enum SyncPayload = "type" {
+    init {
+        data: InitPayload?,
+    },
+    patch {
+        data: PatchPayload?,
+    },
+}
+
+event SyncAdventurers {
+    from: Server,
+    type: Reliable,
+    call: SingleAsync,
+    data: SyncPayload,
+}

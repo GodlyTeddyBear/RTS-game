@@ -1,0 +1,39 @@
+option ServerOutput = "Generated/LogSyncServer.luau"
+option ClientOutput = "Generated/LogSyncClient.luau"
+
+option RemoteScope = "LOG_SYNC"
+
+struct LogEntry {
+	id: u32,
+	timestamp: f64,
+	level: string,
+	category: string,
+	context: string,
+	service: string,
+	milestone: string?,
+	message: string,
+	errType: string?,
+	traceback: string?,
+	data: string?,
+}
+
+struct ClearSignal {
+	context: string?,
+	category: string?,
+}
+
+enum LogEvent = "type" {
+	entry {
+		data: LogEntry,
+	},
+	clear {
+		data: ClearSignal,
+	},
+}
+
+event SyncLog {
+	from: Server,
+	type: Reliable,
+	call: SingleAsync,
+	data: LogEvent,
+}

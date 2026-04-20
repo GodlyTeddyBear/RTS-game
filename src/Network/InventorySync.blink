@@ -1,0 +1,48 @@
+option ServerOutput = "Generated/InventorySyncServer.luau"
+option ClientOutput = "Generated/InventorySyncClient.luau"
+
+option RemoteScope = "INVENTORY_SYNC"
+
+struct InventorySlot {
+	SlotIndex: u32,
+	ItemId: string,
+	Quantity: u32,
+	Category: string,
+}
+
+map InventorySlots = { [u32]: InventorySlot }
+
+struct InventoryMetadata {
+	TotalSlots: u32,
+	UsedSlots: u32,
+	LastModified: u32,
+}
+
+struct InventoryState {
+	Slots: InventorySlots,
+	Metadata: InventoryMetadata,
+}
+
+struct InitPayload {
+	inventories: InventoryState?,
+}
+
+struct PatchPayload {
+	inventories: InventoryState?,
+}
+
+enum SyncPayload = "type" {
+	init {
+		data: InitPayload?,
+	},
+	patch {
+		data: PatchPayload?,
+	},
+}
+
+event SyncInventory {
+	from: Server,
+	type: Reliable,
+	call: SingleAsync,
+	data: SyncPayload,
+}

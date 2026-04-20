@@ -1,0 +1,18 @@
+# Blink Configuration
+# https://1axen.github.io/blink/
+
+project = "Incremental"
+
+# Source directory containing .blink files
+[[source]]
+path = "src/Network"
+
+# Server output directory
+[[output]]
+path = "src/Network/Generated"
+style = "snake_case"
+
+# Client output directory
+[[output.client]]
+path = "src/Network/Generated"
+style = "snake_case"

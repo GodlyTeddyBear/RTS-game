@@ -1,0 +1,20 @@
+if not game:IsLoaded() then
+	game.Loaded:Wait()
+end
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Knit = require(ReplicatedStorage.Packages.Knit)
+
+local Contexts: Folder = script.Parent.Contexts
+
+for _, context in ipairs(Contexts:GetChildren()) do
+	if context:FindFirstChildOfClass("ModuleScript") then
+		Knit.AddControllers(context)
+	end
+end
+
+Knit.Start():catch(warn)
+
+local StarterGui = game:GetService("StarterGui")
+StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, false)
+StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)

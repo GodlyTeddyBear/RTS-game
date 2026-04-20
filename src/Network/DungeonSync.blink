@@ -1,0 +1,35 @@
+option ServerOutput = "Generated/DungeonSyncServer.luau"
+option ClientOutput = "Generated/DungeonSyncClient.luau"
+
+option RemoteScope = "DUNGEON_SYNC"
+
+struct DungeonStateData {
+    ZoneId: string,
+    CurrentWave: u32,
+    TotalWaves: u32,
+    Status: string,
+}
+
+struct InitPayload {
+    dungeonState: DungeonStateData?,
+}
+
+struct PatchPayload {
+    dungeonState: DungeonStateData?,
+}
+
+enum SyncPayload = "type" {
+    init {
+        data: InitPayload?,
+    },
+    patch {
+        data: PatchPayload?,
+    },
+}
+
+event SyncDungeonState {
+    from: Server,
+    type: Reliable,
+    call: SingleAsync,
+    data: SyncPayload,
+}

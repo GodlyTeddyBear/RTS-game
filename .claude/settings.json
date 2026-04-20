@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:create.roblox.com)",
+      "Bash(selene src/StarterPlayerScripts/Contexts/App/Presentation/)",
+      "Bash(~/.aftman/bin/selene src/StarterPlayerScripts/Contexts/App/Presentation/)",
+      "Read(//c/Users/Alex/.rokit/bin/**)",
+      "Bash(xargs wc -l)",
+      "Bash(xargs grep -l \"useStyle\\\\|StyleSheet\\\\|StyleRule\")",
+      "Bash(selene src/StarterPlayerScripts/Contexts/App/Presentation/Atoms/IconButton.lua src/StarterPlayerScripts/Contexts/App/Presentation/Molecules/TopBar.lua src/StarterPlayerScripts/Contexts/App/Presentation/Molecules/PlayerProfile.lua src/StarterPlayerScripts/Contexts/App/Presentation/Molecules/MenuList.lua src/StarterPlayerScripts/Contexts/App/Presentation/Organisms/SidePanel.lua)",
+      "Read(//c/Users/Alex/.aftman/bin/**)"
+    ]
+  }
+}

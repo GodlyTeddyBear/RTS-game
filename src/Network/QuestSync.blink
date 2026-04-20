@@ -1,0 +1,55 @@
+option ServerOutput = "Generated/QuestSyncServer.luau"
+option ClientOutput = "Generated/QuestSyncClient.luau"
+
+option RemoteScope = "QUEST_SYNC"
+
+struct PartyMember {
+    AdventurerId: string,
+    AdventurerType: string,
+}
+
+struct LootEntry {
+    ItemId: string,
+    Quantity: u32,
+}
+
+struct ExpeditionData {
+    ExpeditionId: string,
+    ZoneId: string,
+    Status: string,
+    Party: PartyMember[],
+    StartedAt: f64,
+    CompletedAt: f64?,
+    Loot: LootEntry[]?,
+    GoldEarned: u32?,
+    DeadAdventurerIds: string[]?,
+}
+
+struct QuestStateData {
+    ActiveExpedition: ExpeditionData?,
+    CompletedCount: u32,
+}
+
+struct InitPayload {
+    questState: QuestStateData?,
+}
+
+struct PatchPayload {
+    questState: QuestStateData?,
+}
+
+enum SyncPayload = "type" {
+    init {
+        data: InitPayload?,
+    },
+    patch {
+        data: PatchPayload?,
+    },
+}
+
+event SyncQuestState {
+    from: Server,
+    type: Reliable,
+    call: SingleAsync,
+    data: SyncPayload,
+}

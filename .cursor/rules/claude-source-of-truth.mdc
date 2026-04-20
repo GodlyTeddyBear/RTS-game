@@ -1,0 +1,11 @@
+---
+description: Route Cursor agents to .claude project guidance
+alwaysApply: true
+---
+
+# Use `.claude` Guidance First
+
+- Treat `.claude/` as the primary source of project architecture, style, and workflow guidance.
+- Before planning or editing code, read the relevant docs under `.claude/documents/`.
+- If root-level docs conflict with `.claude` docs, follow `.claude`.
+- Keep changes aligned with documented conventions instead of inventing new ones.

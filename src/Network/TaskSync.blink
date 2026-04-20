@@ -1,0 +1,45 @@
+option ServerOutput = "Generated/TaskSyncServer.luau"
+option ClientOutput = "Generated/TaskSyncClient.luau"
+
+option RemoteScope = "TASK_SYNC"
+
+struct TaskObjectiveProgress {
+    Amount: u32,
+}
+
+struct PlayerTaskProgress {
+    TaskId: string,
+    Status: string,
+    Objectives: map { [string]: TaskObjectiveProgress },
+    StartedAt: f64,
+    ClaimableAt: f64?,
+    ClaimedAt: f64?,
+}
+
+struct TaskData {
+    Tasks: map { [string]: PlayerTaskProgress }?,
+}
+
+struct InitPayload {
+    tasks: TaskData?,
+}
+
+struct PatchPayload {
+    tasks: TaskData?,
+}
+
+enum SyncPayload = "type" {
+    init {
+        data: InitPayload?,
+    },
+    patch {
+        data: PatchPayload?,
+    },
+}
+
+event SyncTasks {
+    from: Server,
+    type: Reliable,
+    call: SingleAsync,
+    data: SyncPayload,
+}

@@ -1,0 +1,37 @@
+option ServerOutput = "Generated/BuildingSyncServer.luau"
+option ClientOutput = "Generated/BuildingSyncClient.luau"
+
+option RemoteScope = "BUILDING_SYNC"
+
+struct BuildingSlot {
+	BuildingType: string,
+	Level: u8,
+}
+
+map ZoneSlots = { [u8]: BuildingSlot }
+
+map BuildingsMap = { [string]: ZoneSlots }
+
+struct InitPayload {
+	buildings: BuildingsMap?,
+}
+
+struct PatchPayload {
+	buildings: BuildingsMap?,
+}
+
+enum SyncPayload = "type" {
+	init {
+		data: InitPayload?,
+	},
+	patch {
+		data: PatchPayload?,
+	},
+}
+
+event SyncBuildings {
+	from: Server,
+	type: Reliable,
+	call: SingleAsync,
+	data: SyncPayload,
+}

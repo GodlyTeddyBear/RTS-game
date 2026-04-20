@@ -1,0 +1,32 @@
+option ServerOutput = "Generated/UpgradeSyncServer.luau"
+option ClientOutput = "Generated/UpgradeSyncClient.luau"
+
+option RemoteScope = "UPGRADE_SYNC"
+
+struct UpgradeData {
+    levels: map { [string]: u32 }?,
+}
+
+struct InitPayload {
+    upgrades: UpgradeData?,
+}
+
+struct PatchPayload {
+    upgrades: UpgradeData?,
+}
+
+enum SyncPayload = "type" {
+    init {
+        data: InitPayload?,
+    },
+    patch {
+        data: PatchPayload?,
+    },
+}
+
+event SyncUpgrades {
+    from: Server,
+    type: Reliable,
+    call: SingleAsync,
+    data: SyncPayload,
+}

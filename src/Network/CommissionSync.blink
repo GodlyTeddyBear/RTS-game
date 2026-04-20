@@ -1,0 +1,76 @@
+option ServerOutput = "Generated/CommissionSyncServer.luau"
+option ClientOutput = "Generated/CommissionSyncClient.luau"
+
+option RemoteScope = "COMMISSION_SYNC"
+
+struct CommissionRequirement {
+    ItemId: string,
+    Quantity: u32,
+}
+
+struct RewardItem {
+    ItemId: string,
+    Quantity: u32,
+}
+
+struct CommissionReward {
+    Gold: u32,
+    Tokens: u32,
+    Items: RewardItem[]?,
+}
+
+struct BoardCommission {
+    Id: string,
+    PoolId: string,
+    Tier: u8,
+    Requirement: CommissionRequirement,
+    Reward: CommissionReward,
+    ExpiresAt: f64,
+    Source: string?,
+    VillagerId: string?,
+    TargetUserId: f64?,
+}
+
+struct ActiveCommission {
+    Id: string,
+    PoolId: string,
+    Tier: u8,
+    Requirement: CommissionRequirement,
+    Reward: CommissionReward,
+    AcceptedAt: f64,
+    Source: string?,
+    VillagerId: string?,
+    TargetUserId: f64?,
+}
+
+struct CommissionData {
+    Board: BoardCommission[]?,
+    Active: ActiveCommission[]?,
+    Tokens: u32?,
+    CurrentTier: u8?,
+    LastRefreshTime: f64?,
+}
+
+struct InitPayload {
+    commissions: CommissionData?,
+}
+
+struct PatchPayload {
+    commissions: CommissionData?,
+}
+
+enum SyncPayload = "type" {
+    init {
+        data: InitPayload?,
+    },
+    patch {
+        data: PatchPayload?,
+    },
+}
+
+event SyncCommissions {
+    from: Server,
+    type: Reliable,
+    call: SingleAsync,
+    data: SyncPayload,
+}

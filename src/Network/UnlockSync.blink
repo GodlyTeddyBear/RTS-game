@@ -1,0 +1,32 @@
+option ServerOutput = "Generated/UnlockSyncServer.luau"
+option ClientOutput = "Generated/UnlockSyncClient.luau"
+
+option RemoteScope = "UNLOCK_SYNC"
+
+struct UnlockData {
+    unlocks: map { [string]: boolean }?,
+}
+
+struct InitPayload {
+    unlocks: UnlockData?,
+}
+
+struct PatchPayload {
+    unlocks: UnlockData?,
+}
+
+enum SyncPayload = "type" {
+    init {
+        data: InitPayload?,
+    },
+    patch {
+        data: PatchPayload?,
+    },
+}
+
+event SyncUnlocks {
+    from: Server,
+    type: Reliable,
+    call: SingleAsync,
+    data: SyncPayload,
+}

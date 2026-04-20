@@ -1,0 +1,28 @@
+option ServerOutput = "Generated/GoldSyncServer.luau"
+option ClientOutput = "Generated/GoldSyncClient.luau"
+
+option RemoteScope = "GOLD_SYNC"
+
+struct InitPayload {
+    gold: u32?,
+}
+
+struct PatchPayload {
+    gold: u32?,
+}
+
+enum SyncPayload = "type" {
+    init {
+        data: InitPayload?,
+    },
+    patch {
+        data: PatchPayload?,
+    },
+}
+
+event SyncGold {
+    from: Server,
+    type: Reliable,
+    call: SingleAsync,
+    data: SyncPayload,
+}

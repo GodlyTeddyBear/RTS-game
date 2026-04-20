@@ -1,0 +1,2 @@
+std = "roblox+testez"
+exclude = ["external/*", "*.spec.lua"]

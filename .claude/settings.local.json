@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:devforum.roblox.com)",
+      "Bash(find C:/Users/Alex/OneDrive/Desktop/RobloxProjects/Incremental/src/StarterPlayerScripts/Contexts/CombatNPC -type f -name *.lua)",
+      "Bash(selene:*)",
+      "Bash(where selene:*)",
+      "Bash(ls ~/.aftman/bin/selene*)",
+      "Bash(ls ./node_modules/.bin/selene*)",
+      "Bash(npx selene:*)",
+      "Bash(ls *.exe)",
+      "Bash(~/.aftman/bin/selene src/ServerScriptService/Contexts/Combat/CombatDomain/Services/FlockingCalculator.lua src/ServerScriptService/Contexts/Combat/Infrastructure/Services/FlowfieldService.lua src/ServerScriptService/Contexts/Combat/Executors/Helpers/FlockingHelper.lua src/ServerScriptService/Contexts/Combat/Executors/MoveToPositionExecutor.lua src/ServerScriptService/Contexts/Combat/Config/FlockingConfig.lua)",
+      "Bash(\"/c/Users/Alex/AppData/Roaming/Code/User/globalStorage/kampfkarren.selene-vscode/selene.exe\" src/ServerScriptService/Contexts/Combat/CombatDomain/Services/FlockingCalculator.lua src/ServerScriptService/Contexts/Combat/Infrastructure/Services/FlowfieldService.lua src/ServerScriptService/Contexts/Combat/Executors/Helpers/FlockingHelper.lua src/ServerScriptService/Contexts/Combat/Executors/MoveToPositionExecutor.lua src/ServerScriptService/Contexts/Combat/Config/FlockingConfig.lua src/ServerScriptService/Contexts/Combat/Application/Services/ProcessCombatTick.lua src/ServerScriptService/Contexts/Combat/Application/Services/EndCombat.lua src/ServerScriptService/Contexts/Combat/CombatContext.lua src/ServerScriptService/Contexts/PlayerCommand/Application/Services/ProcessPlayerCommand.lua)",
+      "Bash(find /c/Users/Alex/OneDrive/Desktop/RobloxProjects/Incremental/src -type d -name *Equip* -o -type d -name *Inventory* -o -type d -name *Guild*)",
+      "Bash(mkdir -p \"C:\\\\Users\\\\Alex\\\\OneDrive\\\\Desktop\\\\RobloxProjects\\\\Incremental\\\\src\\\\ReplicatedStorage\\\\Contexts\\\\VFX\\\\Config\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\Alex\\\\OneDrive\\\\Desktop\\\\RobloxProjects\\\\Incremental\\\\src\\\\ServerScriptService\\\\Contexts\\\\VFX\\\\Infrastructure\\\\Services\")",
+      "Bash(find C:/Users/Alex/OneDrive/Desktop/RobloxProjects/Incremental -name *.lua -path *Hitbox* -o -name *.luau -path *Hitbox*)",
+      "Bash(find C:/Users/Alex/OneDrive/Desktop/RobloxProjects/Incremental -name MuchachoHitbox*)",
+      "Bash(find C:/Users/Alex/OneDrive/Desktop/RobloxProjects/Incremental -iname *keybind* -o -iname *omrez* -o -iname *input*action*)",
+      "Bash(xargs grep:*)",
+      "Bash(grep:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:tenebrisnoctua.github.io)",
+      "WebSearch",
+      "Bash(cd /c/Users/Alex/OneDrive/Desktop/RobloxProjects/Incremental/src/ServerScriptService/Contexts __NEW_LINE_0a1a962ebae1e901__ echo \"=== Files in Commands/ ===\" find . -path \"*/Application/Commands/*.lua\")",
+      "Bash(while read:*)",
+      "Bash(do if:*)",
+      "Bash(then echo:*)",
+      "Bash(find /c/Users/Alex/OneDrive/Desktop/RobloxProjects/Incremental/src/ReplicatedStorage/Contexts/Dungeon -type f -name *.lua)",
+      "Bash(find C:/Users/Alex/OneDrive/Desktop/RobloxProjects/Incremental/src/StarterPlayerScripts/Contexts/Forge -type f -name *.lua)"
+    ]
+  }
+}

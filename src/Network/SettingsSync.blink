@@ -1,0 +1,41 @@
+option ServerOutput = "Generated/SettingsSyncServer.luau"
+option ClientOutput = "Generated/SettingsSyncClient.luau"
+
+option RemoteScope = "SETTINGS_SYNC"
+
+struct SoundSettingsData {
+	MasterVolume: f64,
+	MusicVolume: f64,
+	SfxVolume: f64,
+	UiVolume: f64,
+	AmbientVolume: f64,
+	Enabled: boolean,
+}
+
+struct SettingsData {
+	Sound: SoundSettingsData,
+}
+
+struct InitPayload {
+	settings: SettingsData?,
+}
+
+struct PatchPayload {
+	settings: SettingsData?,
+}
+
+enum SyncPayload = "type" {
+	init {
+		data: InitPayload?,
+	},
+	patch {
+		data: PatchPayload?,
+	},
+}
+
+event SyncSettingsState {
+	from: Server,
+	type: Reliable,
+	call: SingleAsync,
+	data: SyncPayload,
+}

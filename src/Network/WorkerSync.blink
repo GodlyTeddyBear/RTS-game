@@ -1,0 +1,40 @@
+option ServerOutput = "Generated/WorkerSyncServer.luau"
+option ClientOutput = "Generated/WorkerSyncClient.luau"
+
+option RemoteScope = "WORKER_SYNC"
+
+struct WorkerData {
+    Id: string,
+    Rank: string,
+    Level: u32,
+    Experience: u32,
+    AssignedTo: string?,
+    TaskTarget: string?,
+    LastProductionTick: f64,
+}
+
+map WorkerMap = { [string]: WorkerData }
+
+struct InitPayload {
+    workers: WorkerMap?,
+}
+
+struct PatchPayload {
+    workers: WorkerMap?,
+}
+
+enum SyncPayload = "type" {
+    init {
+        data: InitPayload?,
+    },
+    patch {
+        data: PatchPayload?,
+    },
+}
+
+event SyncWorkers {
+    from: Server,
+    type: Reliable,
+    call: SingleAsync,
+    data: SyncPayload,
+}

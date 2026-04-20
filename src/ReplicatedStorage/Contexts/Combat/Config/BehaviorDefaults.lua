@@ -1,0 +1,218 @@
+--!strict
+
+--[[
+    BehaviorDefaults - Per-NPC-type behavioral configuration defaults.
+
+    These values populate BehaviorConfigComponent on entity spawn.
+    Override per-type by adding an entry; unspecified types use DEFAULT.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CombatComponentTypes = require(ReplicatedStorage.Contexts.NPC.Types.CombatComponentTypes)
+
+export type TBehaviorConfig = CombatComponentTypes.TBehaviorConfigComponent
+
+local DEFAULT: TBehaviorConfig = {
+	AttackEnterRange = 5,
+	AttackExitRange = 7,
+	ChaseEnterRadius = 30,
+	ChaseExitRadius = 35,
+	MinAttackRange = nil,
+	MaxAttackRange = nil,
+	IsRanged = false,
+	FleeHPThreshold = 0.2,
+	FleeEnabled = false,
+	WanderRadius = 10,
+	WanderInterval = 3,
+	MoveSpeed = 16,
+	FleeDistance = 15,
+	ChaseRecomputeThreshold = 5,
+	FleeRecomputeThreshold = 5,
+}
+
+return table.freeze({
+	DEFAULT = table.freeze(DEFAULT),
+
+	-- Enemy types
+	Goblin = table.freeze({
+		AttackEnterRange = 5,
+		AttackExitRange = 7,
+		ChaseEnterRadius = 30,
+		ChaseExitRadius = 35,
+		MinAttackRange = nil,
+		MaxAttackRange = nil,
+		IsRanged = false,
+		FleeHPThreshold = 0.3,
+		FleeEnabled = false,
+		WanderRadius = 8,
+		WanderInterval = 3,
+		MoveSpeed = 16,
+		FleeDistance = 15,
+		ChaseRecomputeThreshold = 5,
+		FleeRecomputeThreshold = 5,
+	}),
+
+	Orc = table.freeze({
+		AttackEnterRange = 6,
+		AttackExitRange = 8,
+		ChaseEnterRadius = 35,
+		ChaseExitRadius = 40,
+		MinAttackRange = nil,
+		MaxAttackRange = nil,
+		IsRanged = false,
+		FleeHPThreshold = 0.15,
+		FleeEnabled = false,
+		WanderRadius = 10,
+		WanderInterval = 4,
+		MoveSpeed = 14,
+		FleeDistance = 15,
+		ChaseRecomputeThreshold = 5,
+		FleeRecomputeThreshold = 5,
+	}),
+
+	Troll = table.freeze({
+		AttackEnterRange = 7,
+		AttackExitRange = 9,
+		ChaseEnterRadius = 25,
+		ChaseExitRadius = 30,
+		MinAttackRange = nil,
+		MaxAttackRange = nil,
+		IsRanged = false,
+		FleeHPThreshold = 0.1,
+		FleeEnabled = false,
+		WanderRadius = 6,
+		WanderInterval = 5,
+		MoveSpeed = 12,
+		FleeDistance = 15,
+		ChaseRecomputeThreshold = 5,
+		FleeRecomputeThreshold = 5,
+	}),
+
+	BossGoblinKing = table.freeze({
+		AttackEnterRange = 6,
+		AttackExitRange = 8,
+		ChaseEnterRadius = 50,
+		ChaseExitRadius = 55,
+		MinAttackRange = nil,
+		MaxAttackRange = nil,
+		IsRanged = false,
+		FleeHPThreshold = 0,
+		FleeEnabled = false,
+		WanderRadius = 12,
+		WanderInterval = 2,
+		MoveSpeed = 18,
+		FleeDistance = 15,
+		ChaseRecomputeThreshold = 5,
+		FleeRecomputeThreshold = 5,
+	}),
+
+	-- Enemy types (ranged)
+	GoblinArcher = table.freeze({
+		AttackEnterRange = 15,
+		AttackExitRange = 18,
+		ChaseEnterRadius = 40,
+		ChaseExitRadius = 45,
+		MinAttackRange = 8,
+		MaxAttackRange = 20,
+		IsRanged = true,
+		FleeHPThreshold = 0.3,
+		FleeEnabled = true,
+		WanderRadius = 8,
+		WanderInterval = 3,
+		MoveSpeed = 14,
+		FleeDistance = 15,
+		ChaseRecomputeThreshold = 5,
+		FleeRecomputeThreshold = 5,
+	}),
+
+	SkeletonMage = table.freeze({
+		AttackEnterRange = 20,
+		AttackExitRange = 24,
+		ChaseEnterRadius = 45,
+		ChaseExitRadius = 50,
+		MinAttackRange = 10,
+		MaxAttackRange = 25,
+		IsRanged = true,
+		FleeHPThreshold = 0.4,
+		FleeEnabled = true,
+		WanderRadius = 6,
+		WanderInterval = 4,
+		MoveSpeed = 12,
+		FleeDistance = 15,
+		ChaseRecomputeThreshold = 5,
+		FleeRecomputeThreshold = 5,
+	}),
+
+	-- Adventurer types (all use same defaults for now)
+	Warrior = table.freeze({
+		AttackEnterRange = 5,
+		AttackExitRange = 7,
+		ChaseEnterRadius = 30,
+		ChaseExitRadius = 35,
+		MinAttackRange = nil,
+		MaxAttackRange = nil,
+		IsRanged = false,
+		FleeHPThreshold = 0,
+		FleeEnabled = false,
+		WanderRadius = 8,
+		WanderInterval = 3,
+		MoveSpeed = 16,
+		FleeDistance = 15,
+		ChaseRecomputeThreshold = 5,
+		FleeRecomputeThreshold = 5,
+	}),
+
+	Scout = table.freeze({
+		AttackEnterRange = 5,
+		AttackExitRange = 7,
+		ChaseEnterRadius = 35,
+		ChaseExitRadius = 40,
+		MinAttackRange = nil,
+		MaxAttackRange = nil,
+		IsRanged = false,
+		FleeHPThreshold = 0,
+		FleeEnabled = false,
+		WanderRadius = 12,
+		WanderInterval = 2,
+		MoveSpeed = 20,
+		FleeDistance = 15,
+		ChaseRecomputeThreshold = 5,
+		FleeRecomputeThreshold = 5,
+	}),
+
+	Guardian = table.freeze({
+		AttackEnterRange = 5,
+		AttackExitRange = 7,
+		ChaseEnterRadius = 25,
+		ChaseExitRadius = 30,
+		MinAttackRange = nil,
+		MaxAttackRange = nil,
+		IsRanged = false,
+		FleeHPThreshold = 0,
+		FleeEnabled = false,
+		WanderRadius = 6,
+		WanderInterval = 4,
+		MoveSpeed = 14,
+		FleeDistance = 15,
+		ChaseRecomputeThreshold = 5,
+		FleeRecomputeThreshold = 5,
+	}),
+
+	Berserker = table.freeze({
+		AttackEnterRange = 6,
+		AttackExitRange = 8,
+		ChaseEnterRadius = 40,
+		ChaseExitRadius = 45,
+		MinAttackRange = nil,
+		MaxAttackRange = nil,
+		IsRanged = false,
+		FleeHPThreshold = 0,
+		FleeEnabled = false,
+		WanderRadius = 10,
+		WanderInterval = 2,
+		MoveSpeed = 18,
+		FleeDistance = 15,
+		ChaseRecomputeThreshold = 5,
+		FleeRecomputeThreshold = 5,
+	}),
+})
