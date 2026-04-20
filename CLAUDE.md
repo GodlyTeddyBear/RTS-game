@@ -43,6 +43,7 @@ selene src/         # Run linter
 - `/new-context <Name>` — Scaffold a full DDD bounded context
 - `/new-service <Context> <Layer> <Name>` — Add a service to an existing context
 - `/new-feature <Name>` — Scaffold a frontend feature slice
+- `/implement-feature <request>` — Implement a feature end-to-end with mandatory architecture/context pre-reads
 - `/plan-mode2 <feature request>` — Generate a strict, execution-ready Roblox implementation plan (no code)
 - `/review <path>` — Review code against architecture and style rules
 - `/lint <path>` — Run Selene and summarize findings

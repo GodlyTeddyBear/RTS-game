@@ -23,6 +23,11 @@ A map of this project's knowledge base. Read this first to know where to look.
 → Use `/new-service` to add a single service inside an existing context
 → Reference [architecture/backend/DDD.md](architecture/backend/DDD.md) for which layer the service belongs to
 
+### "I want Codex to implement a feature end-to-end"
+→ Use `/implement-feature <request>`
+→ It requires pre-reading relevant architecture docs and context files before edits
+→ Use `/plan-mode2` first if you want a plan before implementation
+
 ### "I'm adding a new frontend feature"
 → Use `/new-feature` to scaffold a full feature slice
 → Reference [architecture/frontend/LAYERS.md](architecture/frontend/LAYERS.md) for layer responsibilities
@@ -109,6 +114,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 | `/new-context <Name>` | Scaffold a full bounded context (Context.lua, Errors.lua, DebugLogger, folder structure) |
 | `/new-service <Context> <Layer> <Name>` | Add a single Application, Domain, or Infrastructure service to an existing context |
 | `/new-feature <Name>` | Scaffold a full frontend feature slice (atom, hooks, ViewModel, screen, index) |
+| `/implement-feature <request>` | Implement a feature end-to-end with required pre-reads of relevant docs and context files |
 | `/plan-mode2 <feature request>` | Generate a strict, execution-ready Roblox implementation plan using a structured output schema (no code) |
 | `/review <path>` | Review code against DDD, error handling, state sync, and style rules |
 | `/lint <path>` | Run Selene linter and summarize findings |
