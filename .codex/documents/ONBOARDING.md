@@ -11,12 +11,30 @@ A map of this project's knowledge base. Read this first to know where to look.
 → Then [architecture/backend/DDD.md](architecture/backend/DDD.md) for layer rules and constructor injection
 → Then [architecture/backend/ERROR_HANDLING.md](architecture/backend/ERROR_HANDLING.md) for the success/error pattern
 
+### "I need low-level backend method contracts"
+→ Start with [methods/METHODS_INDEX.md](methods/METHODS_INDEX.md)
+→ Then [methods/backend/CONTEXT_BOUNDARIES.md](methods/backend/CONTEXT_BOUNDARIES.md) for context boundary ownership and pass-through rules
+→ Then [methods/backend/APPLICATION_CONTRACTS.md](methods/backend/APPLICATION_CONTRACTS.md) for Command/Query execution flow and dependency contracts
+→ Then [methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md](methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md) for Policy/Spec contracts and restore-path requirements
+→ Then [methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md](methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md) for runtime/persistence method boundaries
+
+
+### "I need to create or improve planning quality"
+→ Start with [methods/PLAN_DEVELOPMENT.md](methods/PLAN_DEVELOPMENT.md)
+→ Then use `.codex/commands/plan-development.md` for GDD + implementation planning output
+→ Use `roblox-plan` skill; default to the plan-development format, and use `plan-mode2` only for explicit legacy requests
 ### "I need to understand the frontend architecture"
 → Start with [architecture/frontend/FRONTEND.md](architecture/frontend/FRONTEND.md)
 → Then [architecture/frontend/HOOKS.md](architecture/frontend/HOOKS.md) for read/write hook separation
 → Then [architecture/frontend/DESIGN.md](architecture/frontend/DESIGN.md) for visual style, cards/panels, hierarchy, and interaction states
 → Then [architecture/frontend/UDIM_LAYOUT_RULES.md](architecture/frontend/UDIM_LAYOUT_RULES.md) for scale-vs-offset UI layout rules
 → Then [architecture/frontend/DEPENDENCY_RULES.md](architecture/frontend/DEPENDENCY_RULES.md) for what can import what
+
+### "I need low-level frontend method contracts"
+→ Start with [methods/METHODS_INDEX.md](methods/METHODS_INDEX.md)
+→ Then [methods/frontend/HOOK_VIEWMODEL_CONTRACTS.md](methods/frontend/HOOK_VIEWMODEL_CONTRACTS.md) for hook and ViewModel boundaries
+→ Then [methods/frontend/TEMPLATE_ORGANISM_CONTRACTS.md](methods/frontend/TEMPLATE_ORGANISM_CONTRACTS.md) for template/organism composition contracts
+→ Then [methods/frontend/CONTROLLER_INFRA_CONTRACTS.md](methods/frontend/CONTROLLER_INFRA_CONTRACTS.md) for side-effect ownership and infrastructure boundaries
 
 ### "I'm adding a new feature to the backend"
 → Use the `roblox-implement-feature` skill with the `new-context` reference to scaffold a full bounded context
@@ -106,6 +124,20 @@ A map of this project's knowledge base. Read this first to know where to look.
 | [patterns/DEBUG_LOGGING.md](patterns/DEBUG_LOGGING.md) | DebugLogger setup and milestone logging |
 | [patterns/PROGRAMMING_PATTERNS.md](patterns/PROGRAMMING_PATTERNS.md) | GoF design patterns — applicability, Lua idioms, codebase examples |
 
+### Methods Contracts
+| File | Purpose |
+|------|---------|
+| [methods/METHODS_INDEX.md](methods/METHODS_INDEX.md) | Index of low-level method contracts for implementation work |
+| [methods/PLAN_DEVELOPMENT.md](methods/PLAN_DEVELOPMENT.md) | Standard output contract and rubric gates for GDD + implementation planning |
+| [methods/backend/CONTEXT_BOUNDARIES.md](methods/backend/CONTEXT_BOUNDARIES.md) | Context boundary categories, Catch ownership, and bridge-only prohibitions |
+| [methods/backend/APPLICATION_CONTRACTS.md](methods/backend/APPLICATION_CONTRACTS.md) | Command/Query flow, Result return contracts, and dependency prohibitions |
+| [methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md](methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md) | Policy/spec contracts, candidate ownership, and restore-path rules |
+| [methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md](methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md) | Infrastructure Result boundaries, lifecycle ownership, and sync placement rules |
+| [methods/frontend/HOOK_VIEWMODEL_CONTRACTS.md](methods/frontend/HOOK_VIEWMODEL_CONTRACTS.md) | Read/write hook separation and ViewModel contracts for frontend methods |
+| [methods/frontend/TEMPLATE_ORGANISM_CONTRACTS.md](methods/frontend/TEMPLATE_ORGANISM_CONTRACTS.md) | Template/organism composition contracts and animation guardrails |
+| [methods/frontend/CONTROLLER_INFRA_CONTRACTS.md](methods/frontend/CONTROLLER_INFRA_CONTRACTS.md) | Controller side-effect ownership and frontend infrastructure boundaries |
+
+
 ### Agent Rules
 | File | Purpose |
 |------|---------|
@@ -130,3 +162,6 @@ A map of this project's knowledge base. Read this first to know where to look.
 |-------|-------------|
 | `.codex/commands/` | Prompt template archive. Codex does not automatically expose these as slash commands. Prefer matching skills when available. |
 | `.codex/agents/` | Legacy agent prompt archive kept for migration reference. |
+
+
+
