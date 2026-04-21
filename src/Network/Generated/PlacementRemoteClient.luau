@@ -7,14 +7,14 @@
 -- This file is not meant to be edited
 
 _G._BLINK = _G._BLINK or {}
-if _G._BLINK["RUN_SYNC"] then
-	error("[Blink]: An instance of blink is already running with the remote scope \"RUN_SYNC\". Change the remote scope of either instance to avoid conflicts.")
+if _G._BLINK["PLACEMENT_REMOTE"] then
+	error("[Blink]: An instance of blink is already running with the remote scope \"PLACEMENT_REMOTE\". Change the remote scope of either instance to avoid conflicts.")
 end
-_G._BLINK["RUN_SYNC"] = true
+_G._BLINK["PLACEMENT_REMOTE"] = true
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local BASE_EVENT_NAME = "RUN_SYNC_BLINK"
+local BASE_EVENT_NAME = "PLACEMENT_REMOTE_BLINK"
 local Invocations = 0
 
 local SendSize = 64
@@ -158,69 +158,40 @@ local Queue: any = {
 local SerdesEvent = "?"
 local SerdesThread: thread?
 Queue.Reliable[0] = table.create(256)
-export type RunSnapshotPayload = { state: string?, waveNumber: number? }
-export type InitPayload = { runState: { state: string?, waveNumber: number? }? }
-export type PatchPayload = { runState: { state: string?, waveNumber: number? }? }
-export type SyncPayload = { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }
-local function ReadEVENT_SyncRunState(): ({ type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? })
-	-- Read BLOCK: 1 bytes
-	local BLOCK_START = Read(1)
-	local Tag = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-	local Value = true :: any
-	if Tag == 0 then
-		-- Read BLOCK: 1 bytes
-		local BLOCK_START = Read(1)
-		Value = {} :: any
-		if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
-			-- Read BLOCK: 1 bytes
-			local BLOCK_START = Read(1)
-			Value.data = {} :: any
-			if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
-				-- Read BLOCK: 2 bytes
-				local BLOCK_START = Read(2)
-				Value.data.runState = {} :: any
-				if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
-					-- Read BLOCK: 2 bytes
-					local BLOCK_START = Read(2)
-					local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
-					Value.data.runState.state = buffer.readstring(RecieveBuffer, Read(Length), Length)
-				end
-				if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
-					-- Read BLOCK: 8 bytes
-					local BLOCK_START = Read(8)
-					Value.data.runState.waveNumber = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
-				end
-			end
-		end
-		Value.type = "init"
-	elseif Tag == 1 then
-		-- Read BLOCK: 1 bytes
-		local BLOCK_START = Read(1)
-		Value = {} :: any
-		if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
-			-- Read BLOCK: 1 bytes
-			local BLOCK_START = Read(1)
-			Value.data = {} :: any
-			if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
-				-- Read BLOCK: 2 bytes
-				local BLOCK_START = Read(2)
-				Value.data.runState = {} :: any
-				if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
-					-- Read BLOCK: 2 bytes
-					local BLOCK_START = Read(2)
-					local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
-					Value.data.runState.state = buffer.readstring(RecieveBuffer, Read(Length), Length)
-				end
-				if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
-					-- Read BLOCK: 8 bytes
-					local BLOCK_START = Read(8)
-					Value.data.runState.waveNumber = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
-				end
-			end
-		end
-		Value.type = "patch"
-	else
-		error(`Unexpected variant: {Tag}`)
+export type PlaceRequest = { ["coord_row"]: number, ["coord_col"]: number, structureType: string }
+export type PlaceResponse = { success: boolean, errorMessage: string?, instanceId: number? }
+local function WriteFUNCTION_DATA_PlaceStructure(Value: { ["coord_row"]: number, ["coord_col"]: number, structureType: string }, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 6 bytes
+	local BLOCK_START = Allocate(6)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value["coord_row"])
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value["coord_col"])
+	local Length = #Value.structureType
+	buffer.writeu16(SendBuffer, BLOCK_START + 4, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value.structureType, Length)
+end
+
+local function ReadFUNCTION_RETURN_PlaceStructure(): ({ success: boolean, errorMessage: string?, instanceId: number? })
+	-- Read BLOCK: 4 bytes
+	local BLOCK_START = Read(4)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = {} :: any
+	Value.success = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
+	if buffer.readu8(RecieveBuffer, BLOCK_START + 2) == 1 then
+		-- Read BLOCK: 2 bytes
+		local BLOCK_START = Read(2)
+		local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+		Value.errorMessage = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	end
+	if buffer.readu8(RecieveBuffer, BLOCK_START + 3) == 1 then
+		-- Read BLOCK: 4 bytes
+		local BLOCK_START = Read(4)
+		Value.instanceId = buffer.readu32(RecieveBuffer, BLOCK_START + 0)
 	end
 	return Value
 end
@@ -228,8 +199,8 @@ end
 if not RunService:IsRunning() then
 	local NOOP = function() end
 	local Returns = table.freeze({
-	SyncRunState = {
-		On = NOOP
+	PlaceStructure = {
+		Invoke = NOOP
 	},
 	})
 	return Returns :: BLINK_EVENTS_SYMBOL
@@ -274,14 +245,15 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
 		if Index == 0 then
-			local Value: { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? } = ReadEVENT_SyncRunState()
-			if Events.Reliable[0] ~= nil then
-				task.spawn(Events.Reliable[0], Value)
-			else
-				if #Queue.Reliable[0] > 256 then
-					warn("[Blink]: Event queue of \"SyncRunState\" exceeded 256, did you forget to implement a listener?")
-				end
-				table.insert(Queue.Reliable[0], {Value} :: {any})
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return ReadFUNCTION_RETURN_PlaceStructure()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
 			end
 		end
 	end
@@ -308,18 +280,20 @@ end)
 local Returns = table.freeze({
 	StepReplication = StepReplication,
 
-	SyncRunState = {
-		On = function(Listener: (Value: { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }) -> ()): () -> ()
-			Events.Reliable[0] = Listener
-			for Index, Arguments in Queue.Reliable[0] do
-				task.spawn(Listener, table.unpack(Arguments))
+	PlaceStructure = {
+		Invoke = function(Value: { ["coord_row"]: number, ["coord_col"]: number, structureType: string }): ({ success: boolean, errorMessage: string?, instanceId: number? })
+			local InvocationIdentifier = Invoke()
+			if Calls[InvocationIdentifier] ~= nil then
+				Invocations -= 1
+				error("More than 256 calls are awaiting a response, this packet has been dropped.")
 			end
-			Queue.Reliable[0] = {}
-			return function (): ()
-				if Events.Reliable[0] == Listener then
-					Events.Reliable[0] = nil
-				end
+			WriteFUNCTION_DATA_PlaceStructure(Value, InvocationIdentifier)
+			Calls[InvocationIdentifier] = coroutine.running()
+			local Success, ReturnValue: { success: boolean, errorMessage: string?, instanceId: number? } = coroutine.yield()
+			if Success ~= true then
+				error("There was an exception while processing \"PlaceStructure\".")
 			end
+			return ReturnValue
 		end
 	},
 })

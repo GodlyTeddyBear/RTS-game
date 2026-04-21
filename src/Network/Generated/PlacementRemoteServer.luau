@@ -7,15 +7,15 @@
 -- This file is not meant to be edited
 
 _G._BLINK = _G._BLINK or {}
-if _G._BLINK["RUN_SYNC"] then
-	error("[Blink]: An instance of blink is already running with the remote scope \"RUN_SYNC\". Change the remote scope of either instance to avoid conflicts.")
+if _G._BLINK["PLACEMENT_REMOTE"] then
+	error("[Blink]: An instance of blink is already running with the remote scope \"PLACEMENT_REMOTE\". Change the remote scope of either instance to avoid conflicts.")
 end
-_G._BLINK["RUN_SYNC"] = true
+_G._BLINK["PLACEMENT_REMOTE"] = true
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local BASE_EVENT_NAME = "RUN_SYNC_BLINK"
+local BASE_EVENT_NAME = "PLACEMENT_REMOTE_BLINK"
 local Invocations = 0
 
 local SendSize = 64
@@ -158,85 +158,49 @@ local Queue: any = {
 
 local SerdesEvent = "?"
 local SerdesThread: thread?
-export type RunSnapshotPayload = { state: string?, waveNumber: number? }
-export type InitPayload = { runState: { state: string?, waveNumber: number? }? }
-export type PatchPayload = { runState: { state: string?, waveNumber: number? }? }
-export type SyncPayload = { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }
-local function WriteEVENT_SyncRunState(Value: { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }): ()
-	-- Allocate BLOCK: 2 bytes
-	local BLOCK_START = Allocate(2)
+Queue.Reliable[0] = table.create(256)
+export type PlaceRequest = { ["coord_row"]: number, ["coord_col"]: number, structureType: string }
+export type PlaceResponse = { success: boolean, errorMessage: string?, instanceId: number? }
+local function ReadFUNCTION_DATA_PlaceStructure(): ({ ["coord_row"]: number, ["coord_col"]: number, structureType: string })
+	-- Read BLOCK: 4 bytes
+	local BLOCK_START = Read(4)
+	local Value = {} :: any
+	Value["coord_row"] = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	Value["coord_col"] = buffer.readu8(RecieveBuffer, BLOCK_START + 1)
+	local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 2)
+	Value.structureType = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	return Value
+end
+
+local function WriteFUNCTION_RETURN_PlaceStructure(Value: { success: boolean, errorMessage: string?, instanceId: number? }, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 6 bytes
+	local BLOCK_START = Allocate(6)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
-	if Value.type == "init" then
-		buffer.writeu8(SendBuffer, BLOCK_START + 1, 0)
-		-- Allocate BLOCK: 1 bytes
-		local BLOCK_START = Allocate(1)
-		buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data ~= nil and 1 or 0)
-		if Value.data ~= nil then
-			-- Allocate BLOCK: 1 bytes
-			local BLOCK_START = Allocate(1)
-			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.runState ~= nil and 1 or 0)
-			if Value.data.runState ~= nil then
-				-- Allocate BLOCK: 2 bytes
-				local BLOCK_START = Allocate(2)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.runState.state ~= nil and 1 or 0)
-				if Value.data.runState.state ~= nil then
-					-- Allocate BLOCK: 2 bytes
-					local BLOCK_START = Allocate(2)
-					local Length = #Value.data.runState.state
-					buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
-					Allocate(Length)
-					buffer.writestring(SendBuffer, SendOffset, Value.data.runState.state, Length)
-				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.runState.waveNumber ~= nil and 1 or 0)
-				if Value.data.runState.waveNumber ~= nil then
-					-- Allocate BLOCK: 8 bytes
-					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.runState.waveNumber)
-				end
-			end
-		end
-	elseif Value.type == "patch" then
-		buffer.writeu8(SendBuffer, BLOCK_START + 1, 1)
-		-- Allocate BLOCK: 1 bytes
-		local BLOCK_START = Allocate(1)
-		buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data ~= nil and 1 or 0)
-		if Value.data ~= nil then
-			-- Allocate BLOCK: 1 bytes
-			local BLOCK_START = Allocate(1)
-			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.runState ~= nil and 1 or 0)
-			if Value.data.runState ~= nil then
-				-- Allocate BLOCK: 2 bytes
-				local BLOCK_START = Allocate(2)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.runState.state ~= nil and 1 or 0)
-				if Value.data.runState.state ~= nil then
-					-- Allocate BLOCK: 2 bytes
-					local BLOCK_START = Allocate(2)
-					local Length = #Value.data.runState.state
-					buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
-					Allocate(Length)
-					buffer.writestring(SendBuffer, SendOffset, Value.data.runState.state, Length)
-				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.runState.waveNumber ~= nil and 1 or 0)
-				if Value.data.runState.waveNumber ~= nil then
-					-- Allocate BLOCK: 8 bytes
-					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.runState.waveNumber)
-				end
-			end
-		end
-	else
-		error(`Unexpected variant: {Value.type}`)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.success and 1 or 0)
+	buffer.writeu8(SendBuffer, BLOCK_START + 4, Value.errorMessage ~= nil and 1 or 0)
+	if Value.errorMessage ~= nil then
+		-- Allocate BLOCK: 2 bytes
+		local BLOCK_START = Allocate(2)
+		local Length = #Value.errorMessage
+		buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+		Allocate(Length)
+		buffer.writestring(SendBuffer, SendOffset, Value.errorMessage, Length)
+	end
+	buffer.writeu8(SendBuffer, BLOCK_START + 5, Value.instanceId ~= nil and 1 or 0)
+	if Value.instanceId ~= nil then
+		-- Allocate BLOCK: 4 bytes
+		local BLOCK_START = Allocate(4)
+		buffer.writeu32(SendBuffer, BLOCK_START + 0, Value.instanceId)
 	end
 end
 
 if not RunService:IsRunning() then
 	local NOOP = function() end
 	local Returns = table.freeze({
-	SyncRunState = {
-		Fire = NOOP,
-		FireAll = NOOP,
-		FireList = NOOP,
-		FireExcept = NOOP
+	PlaceStructure = {
+		On = NOOP
 	},
 	})
 	return Returns :: BLINK_EVENTS_SYMBOL
@@ -300,6 +264,20 @@ Reliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instance
 		-- Read BLOCK: 1 bytes
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+		if Index == 0 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: { ["coord_row"]: number, ["coord_col"]: number, structureType: string } = ReadFUNCTION_DATA_PlaceStructure()
+			if Events.Reliable[0] ~= nil then
+				task.spawn(Events.Reliable[0], Player, Value, InvocationIdentifier)
+			else
+				if #Queue.Reliable[0] > 256 then
+					warn("[Blink]: Event queue of \"PlaceStructure\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[0], {Player, Value, InvocationIdentifier} :: {any})
+			end
+		end
 	end
 end)
 Unreliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instances: {Instance})
@@ -324,51 +302,33 @@ end)
 local Returns = table.freeze({
 	StepReplication = StepReplication,
 
-	SyncRunState = {
-		Fire = function(Player: Player, Value: { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }): ()
-			Load(PlayersMap[Player])
-			WriteEVENT_SyncRunState(Value)
-			PlayersMap[Player] = Save()
-		end,
-		FireAll = function(Value: { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }): ()
-			Load()
-			WriteEVENT_SyncRunState(Value)
-			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
-			for _, Player in Players:GetPlayers() do
+	PlaceStructure = {
+		On = function(Listener: (Player, { ["coord_row"]: number, ["coord_col"]: number, structureType: string }) -> ({ success: boolean, errorMessage: string?, instanceId: number? })): ()
+			Events.Reliable[0] = function(Player: Player, Value: { ["coord_row"]: number, ["coord_col"]: number, structureType: string }, InvocationIdentifier: number): ()
+				local ReturnValue: { success: boolean, errorMessage: string?, instanceId: number? };
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
 				Load(PlayersMap[Player])
-				local Position = Allocate(Size)
-				buffer.copy(SendBuffer, Position, Buffer, 0, Size)
-				table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
-				PlayersMap[Player] = Save()
-			end
-		end,
-		FireList = function(List: {Player}, Value: { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }): ()
-			Load()
-			WriteEVENT_SyncRunState(Value)
-			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
-			for _, Player in List do
-				Load(PlayersMap[Player])
-				local Position = Allocate(Size)
-				buffer.copy(SendBuffer, Position, Buffer, 0, Size)
-				table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
-				PlayersMap[Player] = Save()
-			end
-		end,
-		FireExcept = function(Except: Player, Value: { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }): ()
-			Load()
-			WriteEVENT_SyncRunState(Value)
-			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
-			for _, Player in Players:GetPlayers() do
-				if Player == Except then
-					continue
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 0)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"PlaceStructure" encountered an error, {Error}`)
+				else
+					WriteFUNCTION_RETURN_PlaceStructure(ReturnValue, InvocationIdentifier)
 				end
-				Load(PlayersMap[Player])
-				local Position = Allocate(Size)
-				buffer.copy(SendBuffer, Position, Buffer, 0, Size)
-				table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
 				PlayersMap[Player] = Save()
 			end
-		end,
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[0] or {}
+				Queue.Reliable[0] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[0](table.unpack(Arguments))
+				end
+			end)
+		end
 	},
 })
 type BLINK_EVENTS_SYMBOL = typeof(Returns)

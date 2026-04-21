@@ -3,9 +3,31 @@ option ClientOutput = "Generated/RunSyncClient.luau"
 
 option RemoteScope = "RUN_SYNC"
 
+struct RunSnapshotPayload {
+    state: string?,
+    waveNumber: f64?,
+}
+
+struct InitPayload {
+    runState: RunSnapshotPayload?,
+}
+
+struct PatchPayload {
+    runState: RunSnapshotPayload?,
+}
+
+enum SyncPayload = "type" {
+    init {
+        data: InitPayload?,
+    },
+    patch {
+        data: PatchPayload?,
+    },
+}
+
 event SyncRunState {
     from: Server,
     type: Reliable,
     call: SingleAsync,
-    data: buffer,
+    data: SyncPayload,
 }

@@ -1,0 +1,22 @@
+option ServerOutput = "Generated/PlacementRemoteServer.luau"
+option ClientOutput = "Generated/PlacementRemoteClient.luau"
+
+option RemoteScope = "PLACEMENT_REMOTE"
+
+struct PlaceRequest {
+	coord_row: u8,
+	coord_col: u8,
+	structureType: string,
+}
+
+struct PlaceResponse {
+	success: boolean,
+	errorMessage: string?,
+	instanceId: u32?,
+}
+
+function PlaceStructure {
+	Yield: Coroutine,
+	Data: PlaceRequest,
+	Return: PlaceResponse,
+}

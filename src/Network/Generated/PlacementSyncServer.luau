@@ -7,15 +7,15 @@
 -- This file is not meant to be edited
 
 _G._BLINK = _G._BLINK or {}
-if _G._BLINK["RUN_SYNC"] then
-	error("[Blink]: An instance of blink is already running with the remote scope \"RUN_SYNC\". Change the remote scope of either instance to avoid conflicts.")
+if _G._BLINK["PLACEMENT_SYNC"] then
+	error("[Blink]: An instance of blink is already running with the remote scope \"PLACEMENT_SYNC\". Change the remote scope of either instance to avoid conflicts.")
 end
-_G._BLINK["RUN_SYNC"] = true
+_G._BLINK["PLACEMENT_SYNC"] = true
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local BASE_EVENT_NAME = "RUN_SYNC_BLINK"
+local BASE_EVENT_NAME = "PLACEMENT_SYNC_BLINK"
 local Invocations = 0
 
 local SendSize = 64
@@ -158,81 +158,20 @@ local Queue: any = {
 
 local SerdesEvent = "?"
 local SerdesThread: thread?
-export type RunSnapshotPayload = { state: string?, waveNumber: number? }
-export type InitPayload = { runState: { state: string?, waveNumber: number? }? }
-export type PatchPayload = { runState: { state: string?, waveNumber: number? }? }
-export type SyncPayload = { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }
-local function WriteEVENT_SyncRunState(Value: { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }): ()
-	-- Allocate BLOCK: 2 bytes
-	local BLOCK_START = Allocate(2)
+local function WriteEVENT_SyncPlacements(Value: buffer): ()
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
-	if Value.type == "init" then
-		buffer.writeu8(SendBuffer, BLOCK_START + 1, 0)
-		-- Allocate BLOCK: 1 bytes
-		local BLOCK_START = Allocate(1)
-		buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data ~= nil and 1 or 0)
-		if Value.data ~= nil then
-			-- Allocate BLOCK: 1 bytes
-			local BLOCK_START = Allocate(1)
-			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.runState ~= nil and 1 or 0)
-			if Value.data.runState ~= nil then
-				-- Allocate BLOCK: 2 bytes
-				local BLOCK_START = Allocate(2)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.runState.state ~= nil and 1 or 0)
-				if Value.data.runState.state ~= nil then
-					-- Allocate BLOCK: 2 bytes
-					local BLOCK_START = Allocate(2)
-					local Length = #Value.data.runState.state
-					buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
-					Allocate(Length)
-					buffer.writestring(SendBuffer, SendOffset, Value.data.runState.state, Length)
-				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.runState.waveNumber ~= nil and 1 or 0)
-				if Value.data.runState.waveNumber ~= nil then
-					-- Allocate BLOCK: 8 bytes
-					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.runState.waveNumber)
-				end
-			end
-		end
-	elseif Value.type == "patch" then
-		buffer.writeu8(SendBuffer, BLOCK_START + 1, 1)
-		-- Allocate BLOCK: 1 bytes
-		local BLOCK_START = Allocate(1)
-		buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data ~= nil and 1 or 0)
-		if Value.data ~= nil then
-			-- Allocate BLOCK: 1 bytes
-			local BLOCK_START = Allocate(1)
-			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.runState ~= nil and 1 or 0)
-			if Value.data.runState ~= nil then
-				-- Allocate BLOCK: 2 bytes
-				local BLOCK_START = Allocate(2)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.runState.state ~= nil and 1 or 0)
-				if Value.data.runState.state ~= nil then
-					-- Allocate BLOCK: 2 bytes
-					local BLOCK_START = Allocate(2)
-					local Length = #Value.data.runState.state
-					buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
-					Allocate(Length)
-					buffer.writestring(SendBuffer, SendOffset, Value.data.runState.state, Length)
-				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.runState.waveNumber ~= nil and 1 or 0)
-				if Value.data.runState.waveNumber ~= nil then
-					-- Allocate BLOCK: 8 bytes
-					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.runState.waveNumber)
-				end
-			end
-		end
-	else
-		error(`Unexpected variant: {Value.type}`)
-	end
+	local Length = buffer.len(Value)
+	buffer.writeu16(SendBuffer, BLOCK_START + 1, Length)
+	Allocate(Length)
+	buffer.copy(SendBuffer, SendOffset, Value, 0, Length)
 end
 
 if not RunService:IsRunning() then
 	local NOOP = function() end
 	local Returns = table.freeze({
-	SyncRunState = {
+	SyncPlacements = {
 		Fire = NOOP,
 		FireAll = NOOP,
 		FireList = NOOP,
@@ -324,15 +263,15 @@ end)
 local Returns = table.freeze({
 	StepReplication = StepReplication,
 
-	SyncRunState = {
-		Fire = function(Player: Player, Value: { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }): ()
+	SyncPlacements = {
+		Fire = function(Player: Player, Value: buffer): ()
 			Load(PlayersMap[Player])
-			WriteEVENT_SyncRunState(Value)
+			WriteEVENT_SyncPlacements(Value)
 			PlayersMap[Player] = Save()
 		end,
-		FireAll = function(Value: { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }): ()
+		FireAll = function(Value: buffer): ()
 			Load()
-			WriteEVENT_SyncRunState(Value)
+			WriteEVENT_SyncPlacements(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
 			for _, Player in Players:GetPlayers() do
 				Load(PlayersMap[Player])
@@ -342,9 +281,9 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireList = function(List: {Player}, Value: { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }): ()
+		FireList = function(List: {Player}, Value: buffer): ()
 			Load()
-			WriteEVENT_SyncRunState(Value)
+			WriteEVENT_SyncPlacements(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
 			for _, Player in List do
 				Load(PlayersMap[Player])
@@ -354,9 +293,9 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireExcept = function(Except: Player, Value: { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }): ()
+		FireExcept = function(Except: Player, Value: buffer): ()
 			Load()
-			WriteEVENT_SyncRunState(Value)
+			WriteEVENT_SyncPlacements(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
 			for _, Player in Players:GetPlayers() do
 				if Player == Except then

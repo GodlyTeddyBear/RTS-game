@@ -1,0 +1,11 @@
+option ServerOutput = "Generated/PlacementSyncServer.luau"
+option ClientOutput = "Generated/PlacementSyncClient.luau"
+
+option RemoteScope = "PLACEMENT_SYNC"
+
+event SyncPlacements {
+	from: Server,
+	type: Reliable,
+	call: SingleAsync,
+	data: buffer,
+}
