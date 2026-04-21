@@ -13,13 +13,24 @@ local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local ServerScheduler = require(ServerScriptService.Scheduler.ServerScheduler)
 
 local CombatLoopService = require(script.Parent.Infrastructure.Services.CombatLoopService)
-local CombatMovementService = require(script.Parent.Infrastructure.Services.CombatMovementService)
+local BehaviorTreeFactory = require(script.Parent.Infrastructure.Services.BehaviorTreeFactory)
+local ExecutorRegistry = require(script.Parent.Executors.Base.ExecutorRegistry)
+local LaneAdvanceExecutor = require(script.Parent.Executors.LaneAdvanceExecutor)
+local IdleExecutor = require(script.Parent.Executors.IdleExecutor)
+local BehaviorTreeTickPolicy = require(script.Parent.CombatDomain.Policies.BehaviorTreeTickPolicy)
+local WaveCompletionPolicy = require(script.Parent.CombatDomain.Policies.WaveCompletionPolicy)
+local CombatPerceptionService = require(script.Parent.CombatDomain.Services.CombatPerceptionService)
 
 local StartCombat = require(script.Parent.Application.Commands.StartCombat)
 local ProcessCombatTick = require(script.Parent.Application.Commands.ProcessCombatTick)
 local EndCombat = require(script.Parent.Application.Commands.EndCombat)
 local HandleGoalReached = require(script.Parent.Application.Commands.HandleGoalReached)
 
+--[=[
+	@class CombatContext
+	Coordinates combat start, tick, cleanup, and enemy goal resolution for the lane-defense run.
+	@server
+]=]
 local CombatContext = Knit.CreateService({
 	Name = "CombatContext",
 	Client = {},
@@ -29,11 +40,13 @@ local Catch = Result.Catch
 local Ok = Result.Ok
 local Try = Result.Try
 
+-- Unwraps a required context dependency and raises immediately if the registry returned a failure.
 local function _unwrapResult(result: any, label: string)
 	assert(result.success, string.format("%s failed: %s", label, result.message))
 	return result.value
 end
 
+-- Sorts lane tiles so the generated waypoint list follows the lane from start to goal.
 local function _sortLaneTiles(laneTiles: { any }): { any }
 	local cloned = table.clone(laneTiles)
 	table.sort(cloned, function(a, b)
@@ -47,19 +60,23 @@ local function _sortLaneTiles(laneTiles: { any }): { any }
 	return cloned
 end
 
+-- Registers combat infrastructure, policies, and commands before the rest of the server starts ticking.
 function CombatContext:KnitInit()
 	local registry = Registry.new("Server")
 	registry:Register("CombatLoopService", CombatLoopService.new(), "Infrastructure")
-	registry:Register("CombatMovementService", CombatMovementService.new(), "Infrastructure")
+	registry:Register("BehaviorTreeFactory", BehaviorTreeFactory.new(), "Infrastructure")
+	registry:Register("ExecutorRegistry", ExecutorRegistry.new(), "Infrastructure")
+	registry:Register("BehaviorTreeTickPolicy", BehaviorTreeTickPolicy.new(), "Domain")
+	registry:Register("WaveCompletionPolicy", WaveCompletionPolicy.new(), "Domain")
+	registry:Register("CombatPerceptionService", CombatPerceptionService.new(), "Domain")
 	registry:Register("StartCombat", StartCombat.new(), "Application")
 	registry:Register("ProcessCombatTick", ProcessCombatTick.new(), "Application")
 	registry:Register("EndCombat", EndCombat.new(), "Application")
 	registry:Register("HandleGoalReached", HandleGoalReached.new(), "Application")
-	registry:InitAll()
 
 	self._registry = registry
 	self._combatLoopService = registry:Get("CombatLoopService")
-	self._movementService = registry:Get("CombatMovementService")
+	self._executorRegistry = registry:Get("ExecutorRegistry")
 	self._startCombatCommand = registry:Get("StartCombat")
 	self._processCombatTickCommand = registry:Get("ProcessCombatTick")
 	self._endCombatCommand = registry:Get("EndCombat")
@@ -80,6 +97,7 @@ function CombatContext:KnitInit()
 	self._playerRemovingConnection = nil :: any
 end
 
+-- Resolves dependent contexts, wires event handlers, and registers the heartbeat systems.
 function CombatContext:KnitStart()
 	local enemyContext = Knit.GetService("EnemyContext")
 	local worldContext = Knit.GetService("WorldContext")
@@ -104,20 +122,33 @@ function CombatContext:KnitStart()
 	self._registry:Register("World", enemyWorld)
 	self._registry:Register("Components", enemyComponents)
 
-	self._registry:StartOrdered({ "Infrastructure", "Application" })
+	self._registry:InitAll()
 
-	self._movementService:SetGoalReachedHandler(function(entity: any)
-		self:_OnGoalReached(entity)
-	end)
+	-- Register the executor singletons before the first wave can enqueue actions.
+	local laneAdvanceExecutor = LaneAdvanceExecutor.new()
+	local idleExecutor = IdleExecutor.new()
+	self._executorRegistry:Register("LaneAdvance", laneAdvanceExecutor)
+	self._executorRegistry:Register("Idle", idleExecutor)
 
+	self._registry:StartOrdered({ "Infrastructure", "Domain", "Application" })
+
+	-- Cache lane waypoints once so spawn handlers only need to copy the path.
 	self:_CacheLaneWaypoints()
 
+	-- Lane movement sync still runs independently from combat AI ticks.
 	ServerScheduler:RegisterSystem(function()
 		self._enemyGameObjectSyncService:PollPositions()
 	end, "EnemyPositionPoll")
 
+	-- Drive BT evaluation and executor updates for every active combat session.
 	ServerScheduler:RegisterSystem(function()
-		self._processCombatTickCommand:Execute()
+		local dt = ServerScheduler:GetDeltaTime()
+		for userId, activeCombat in pairs(self._combatLoopService:GetActiveCombats()) do
+			if activeCombat.IsPaused then
+				continue
+			end
+			self._processCombatTickCommand:Execute(userId, dt)
+		end
 	end, "CombatTick")
 
 	self._runWaveStartedConnection = GameEvents.Bus:On(GameEvents.Events.Run.WaveStarted, function(waveNumber: number, isEndless: boolean)
@@ -144,6 +175,7 @@ function CombatContext:KnitStart()
 	end)
 end
 
+-- Builds the cached waypoint list used by both startup and mid-wave enemy spawns.
 function CombatContext:_CacheLaneWaypoints()
 	local laneTilesResult = self._worldContext:GetLaneTiles()
 	local goalPointResult = self._worldContext:GetGoalPoint()
@@ -179,6 +211,7 @@ function CombatContext:_CacheLaneWaypoints()
 	self._laneWaypoints = waypoints
 end
 
+-- Starts combat for the active run wave and assigns behavior trees to existing enemies.
 function CombatContext:_OnRunWaveStarted(waveNumber: number, isEndless: boolean)
 	Catch(function()
 		Try(self._startCombatCommand:Execute(waveNumber, isEndless))
@@ -186,6 +219,7 @@ function CombatContext:_OnRunWaveStarted(waveNumber: number, isEndless: boolean)
 	end, "Combat:OnRunWaveStarted")
 end
 
+-- Stops combat when the run ends so no executors keep running after the lifecycle boundary.
 function CombatContext:_OnRunEnded()
 	Catch(function()
 		Try(self._endCombatCommand:Execute())
@@ -193,6 +227,7 @@ function CombatContext:_OnRunEnded()
 	end, "Combat:OnRunEnded")
 end
 
+-- Ends combat cleanup for a wave and clears the enemy context after the last enemy is resolved.
 function CombatContext:_OnRunWaveEnded(_waveNumber: number)
 	Catch(function()
 		Try(self._endCombatCommand:Execute())
@@ -201,43 +236,39 @@ function CombatContext:_OnRunWaveEnded(_waveNumber: number)
 	end, "Combat:OnRunWaveEnded")
 end
 
+-- Assigns lane waypoints to spawned enemies and backfills their behavior tree state if combat is already active.
 function CombatContext:_OnEnemySpawned(entity: number, _role: string, _waveNumber: number)
-	if #self._laneWaypoints == 0 then
-		return
+	if #self._laneWaypoints > 0 then
+		local success, err = pcall(function()
+			self._enemyEntityFactory:SetWaypoints(entity, self._laneWaypoints)
+		end)
+		if not success then
+			Result.MentionError("Combat:OnEnemySpawned", "Failed to assign lane waypoints", {
+				EnemyEntity = entity,
+				CauseMessage = err,
+			}, "WaypointAssignmentFailed")
+			return
+		end
 	end
 
-	local success, err = pcall(function()
-		self._enemyEntityFactory:SetWaypoints(entity, self._laneWaypoints)
+	pcall(function()
+		self._startCombatCommand:_AssignBehaviorTree(entity)
 	end)
-	if not success then
-		Result.MentionError("Combat:OnEnemySpawned", "Failed to assign lane waypoints", {
-			EnemyEntity = entity,
-			CauseMessage = err,
-		}, "WaypointAssignmentFailed")
-	end
 end
 
-function CombatContext:_OnGoalReached(entity: any)
-	local result = self._handleGoalReachedCommand:Execute(entity)
-	if not result.success then
-		Result.MentionError("Combat:OnGoalReached", "Failed to resolve goal reached", {
-			EnemyEntity = entity,
-			CauseType = result.type,
-			CauseMessage = result.message,
-		}, result.type)
-	end
-end
-
+-- Mirrors the run shutdown path when the last player leaves the server.
 function CombatContext:_OnPlayerRemoving(_player: Player)
 	if #Players:GetPlayers() <= 1 then
 		self:_OnRunEnded()
 	end
 end
 
+-- Exposes the active combat loop service for other contexts that need to query or control it.
 function CombatContext:GetCombatLoopService(): Result.Result<any>
 	return Ok(self._combatLoopService)
 end
 
+-- Disconnects listeners and stops combat so server shutdown leaves no active tick work behind.
 function CombatContext:Destroy()
 	Catch(function()
 		Try(self._endCombatCommand:Execute())

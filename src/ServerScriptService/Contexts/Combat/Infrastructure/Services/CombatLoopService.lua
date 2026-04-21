@@ -8,63 +8,102 @@ type CombatSession = CombatTypes.CombatSession
 
 --[=[
 	@class CombatLoopService
-	Tracks the current lane combat session.
+	Tracks active combat sessions by user id.
+	@server
+]=]
+--[=[
+	@class CombatLoopService
+	Tracks active combat sessions by user id.
 	@server
 ]=]
 local CombatLoopService = {}
 CombatLoopService.__index = CombatLoopService
 
+-- Creates a new combat loop service with an empty active-session map.
 function CombatLoopService.new()
 	local self = setmetatable({}, CombatLoopService)
-	self._session = {
-		isActive = false,
-		currentWaveNumber = 0,
-		isEndless = false,
-	} :: CombatSession
+	self.ActiveCombats = {} :: { [number]: CombatSession }
 	return self
 end
 
+-- Initializes registry dependencies for the combat loop service.
 function CombatLoopService:Init(_registry: any, _name: string)
 end
 
-function CombatLoopService:StartCombat(waveNumber: number, isEndless: boolean)
-	self._session = {
-		isActive = true,
-		currentWaveNumber = waveNumber,
-		isEndless = isEndless,
-	} :: CombatSession
+-- Starts or replaces the active combat session for one user.
+function CombatLoopService:StartCombat(userId: number, waveNumber: number, isEndless: boolean)
+	self.ActiveCombats[userId] = {
+		WaveNumber = waveNumber,
+		IsEndless = isEndless,
+		IsPaused = false,
+	}
 end
 
-function CombatLoopService:StopCombat()
-	self._session = {
-		isActive = false,
-		currentWaveNumber = 0,
-		isEndless = false,
-	} :: CombatSession
+-- Stops the active combat session for one user.
+function CombatLoopService:StopCombat(userId: number)
+	self.ActiveCombats[userId] = nil
 end
 
-function CombatLoopService:SetCurrentWaveNumber(waveNumber: number)
-	if not self._session.isActive then
+-- Marks the active combat session as paused without clearing its wave metadata.
+function CombatLoopService:PauseCombat(userId: number)
+	local activeCombat = self.ActiveCombats[userId]
+	if not activeCombat then
 		return
 	end
-
-	self._session = {
-		isActive = true,
-		currentWaveNumber = waveNumber,
-		isEndless = self._session.isEndless,
-	} :: CombatSession
+	self.ActiveCombats[userId] = {
+		WaveNumber = activeCombat.WaveNumber,
+		IsEndless = activeCombat.IsEndless,
+		IsPaused = true,
+	}
 end
 
-function CombatLoopService:IsActive(): boolean
-	return self._session.isActive
+-- Resumes a paused combat session for one user.
+function CombatLoopService:ResumeCombat(userId: number)
+	local activeCombat = self.ActiveCombats[userId]
+	if not activeCombat then
+		return
+	end
+	self.ActiveCombats[userId] = {
+		WaveNumber = activeCombat.WaveNumber,
+		IsEndless = activeCombat.IsEndless,
+		IsPaused = false,
+	}
 end
 
-function CombatLoopService:GetCurrentWaveNumber(): number
-	return self._session.currentWaveNumber
+-- Updates the current wave number for an active combat session.
+function CombatLoopService:SetCurrentWaveNumber(userId: number, waveNumber: number)
+	local activeCombat = self.ActiveCombats[userId]
+	if not activeCombat then
+		return
+	end
+	self.ActiveCombats[userId] = {
+		WaveNumber = waveNumber,
+		IsEndless = activeCombat.IsEndless,
+		IsPaused = activeCombat.IsPaused,
+	}
 end
 
-function CombatLoopService:GetSession(): CombatSession
-	return table.clone(self._session) :: CombatSession
+-- Returns whether the given user currently has an active combat session.
+function CombatLoopService:IsActive(userId: number): boolean
+	return self.ActiveCombats[userId] ~= nil
+end
+
+-- Returns a cloned snapshot of one active combat session.
+function CombatLoopService:GetActiveCombat(userId: number): CombatSession?
+	local activeCombat = self.ActiveCombats[userId]
+	if not activeCombat then
+		return nil
+	end
+	return table.clone(activeCombat) :: CombatSession
+end
+
+-- Returns a cloned snapshot of all active combat sessions.
+function CombatLoopService:GetActiveCombats(): { [number]: CombatSession }
+	local cloned = {}
+	for userId, activeCombat in pairs(self.ActiveCombats) do
+		cloned[userId] = table.clone(activeCombat)
+	end
+	return cloned
 end
 
 return CombatLoopService

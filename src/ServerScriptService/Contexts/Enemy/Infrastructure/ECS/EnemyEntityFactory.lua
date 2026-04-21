@@ -3,6 +3,17 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 
+type TCombatActionState = "None" | "Running" | "Committed"
+
+type TCombatAction = {
+	CurrentActionId: string?,
+	ActionState: TCombatActionState,
+	ActionData: any?,
+	PendingActionId: string?,
+	PendingActionData: any?,
+	ActionStartedAt: number?,
+}
+
 --[=[
 	@class EnemyEntityFactory
 	Creates and mutates enemy entities in the EnemyContext ECS world.
@@ -13,6 +24,17 @@ EnemyEntityFactory.__index = EnemyEntityFactory
 
 function EnemyEntityFactory.new()
 	return setmetatable({}, EnemyEntityFactory)
+end
+
+local function _buildDefaultAction(): TCombatAction
+	return {
+		CurrentActionId = nil,
+		ActionState = "None",
+		ActionData = nil,
+		PendingActionId = nil,
+		PendingActionData = nil,
+		ActionStartedAt = nil,
+	}
 end
 
 function EnemyEntityFactory:Init(registry: any, _name: string)
@@ -47,6 +69,14 @@ function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFra
 		enemyId = enemyId,
 		role = role,
 		waveNumber = waveNumber,
+	})
+	self._world:set(entity, self._components.CombatAction, _buildDefaultAction())
+	self._world:set(entity, self._components.AttackCooldown, {
+		Cooldown = 0,
+		LastAttackTime = 0,
+	})
+	self._world:set(entity, self._components.BehaviorConfig, {
+		TickInterval = 0.15,
 	})
 	self._world:add(entity, self._components.AliveTag)
 
@@ -95,6 +125,109 @@ function EnemyEntityFactory:SetWaypointIndex(entity: number, waypointIndex: numb
 		waypoints = state.waypoints,
 		isMoving = state.isMoving,
 	})
+end
+
+function EnemyEntityFactory:SetBehaviorTree(entity: number, treeInstance: any, tickInterval: number)
+	self._world:set(entity, self._components.BehaviorTree, {
+		TreeInstance = treeInstance,
+		TickInterval = tickInterval,
+		LastTickTime = 0,
+	})
+end
+
+function EnemyEntityFactory:GetBehaviorTree(entity: number)
+	return self._world:get(entity, self._components.BehaviorTree)
+end
+
+function EnemyEntityFactory:UpdateBTLastTickTime(entity: number, currentTime: number)
+	local behaviorTree = self:GetBehaviorTree(entity)
+	if behaviorTree == nil then
+		return
+	end
+
+	self._world:set(entity, self._components.BehaviorTree, {
+		TreeInstance = behaviorTree.TreeInstance,
+		TickInterval = behaviorTree.TickInterval,
+		LastTickTime = currentTime,
+	})
+end
+
+function EnemyEntityFactory:GetCombatAction(entity: number)
+	return self._world:get(entity, self._components.CombatAction)
+end
+
+function EnemyEntityFactory:SetPendingAction(entity: number, actionId: string, actionData: any?)
+	local action = self:GetCombatAction(entity) or _buildDefaultAction()
+	self._world:set(entity, self._components.CombatAction, {
+		CurrentActionId = action.CurrentActionId,
+		ActionState = action.ActionState,
+		ActionData = action.ActionData,
+		PendingActionId = actionId,
+		PendingActionData = actionData,
+		ActionStartedAt = action.ActionStartedAt,
+	})
+end
+
+function EnemyEntityFactory:ClearPendingAction(entity: number)
+	local action = self:GetCombatAction(entity) or _buildDefaultAction()
+	self._world:set(entity, self._components.CombatAction, {
+		CurrentActionId = action.CurrentActionId,
+		ActionState = action.ActionState,
+		ActionData = action.ActionData,
+		PendingActionId = nil,
+		PendingActionData = nil,
+		ActionStartedAt = action.ActionStartedAt,
+	})
+end
+
+function EnemyEntityFactory:StartAction(entity: number, actionId: string, actionData: any?, currentTime: number)
+	self._world:set(entity, self._components.CombatAction, {
+		CurrentActionId = actionId,
+		ActionState = "Running",
+		ActionData = actionData,
+		PendingActionId = nil,
+		PendingActionData = nil,
+		ActionStartedAt = currentTime,
+	})
+end
+
+function EnemyEntityFactory:ClearAction(entity: number)
+	self._world:set(entity, self._components.CombatAction, _buildDefaultAction())
+end
+
+function EnemyEntityFactory:ResetActionState(entity: number)
+	local action = self:GetCombatAction(entity)
+	if action == nil then
+		return
+	end
+
+	self._world:set(entity, self._components.CombatAction, {
+		CurrentActionId = action.CurrentActionId,
+		ActionState = "None",
+		ActionData = action.ActionData,
+		PendingActionId = nil,
+		PendingActionData = nil,
+		ActionStartedAt = action.ActionStartedAt,
+	})
+end
+
+function EnemyEntityFactory:GetBehaviorConfig(entity: number)
+	return self._world:get(entity, self._components.BehaviorConfig)
+end
+
+function EnemyEntityFactory:SetBehaviorConfig(entity: number, config: { TickInterval: number })
+	self._world:set(entity, self._components.BehaviorConfig, {
+		TickInterval = config.TickInterval,
+	})
+
+	local behaviorTree = self:GetBehaviorTree(entity)
+	if behaviorTree ~= nil then
+		self._world:set(entity, self._components.BehaviorTree, {
+			TreeInstance = behaviorTree.TreeInstance,
+			TickInterval = config.TickInterval,
+			LastTickTime = behaviorTree.LastTickTime,
+		})
+	end
 end
 
 function EnemyEntityFactory:MarkGoalReached(entity: number)

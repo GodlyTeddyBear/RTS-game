@@ -20,38 +20,44 @@ local Try = Result.Try
 local HandleGoalReached = {}
 HandleGoalReached.__index = HandleGoalReached
 
+-- Creates a new goal-resolution command.
 function HandleGoalReached.new()
 	return setmetatable({}, HandleGoalReached)
 end
 
+-- Resolves the enemy and commander dependencies needed for goal cleanup.
 function HandleGoalReached:Init(registry: any, _name: string)
 	self.Registry = registry
-	self._movementService = registry:Get("CombatMovementService")
 end
 
+-- Caches the enemy and commander contexts after the registry is fully initialized.
 function HandleGoalReached:Start()
 	self._enemyContext = self.Registry:Get("EnemyContext")
 	self._entityFactory = self.Registry:Get("EnemyEntityFactory")
 	self._commanderContext = self.Registry:Get("CommanderContext")
 end
 
+-- Marks the enemy as resolved, emits wave death events, and applies commander damage.
 function HandleGoalReached:Execute(entity: any): Result.Result<boolean>
 	return Result.Catch(function()
+		-- Validate the enemy entity before reading its state.
 		Ensure(entity ~= nil, "InvalidEnemyEntity", Errors.INVALID_ENEMY_ENTITY)
 
 		local identity = self._entityFactory:GetIdentity(entity)
 		Ensure(identity ~= nil, "InvalidEnemyEntity", Errors.INVALID_ENEMY_ENTITY)
 
+		-- Read the enemy role so the commander damage can use the configured role tuning.
 		local roleConfig = EnemyConfig.ROLES[identity.role]
 		Ensure(roleConfig ~= nil, "InvalidRole", Errors.INVALID_ROLE)
 
+		-- Emit the death event before despawning so downstream listeners can capture the final position.
 		local deathCFrame = self._entityFactory:GetDeathCFrame(entity) or CFrame.new()
-		self._movementService:Cancel(entity)
 		self._entityFactory:MarkGoalReached(entity)
 		GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.role, identity.waveNumber, deathCFrame)
 
 		Try(self._enemyContext:DespawnEnemy(entity))
 
+		-- Damage the active commander if one exists in the current session.
 		local players = Players:GetPlayers()
 		local primaryPlayer = players[1]
 		if primaryPlayer then

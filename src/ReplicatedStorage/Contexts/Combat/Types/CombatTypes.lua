@@ -6,12 +6,22 @@
 ]=]
 local CombatTypes = {}
 
+--[=[
+	@type CombatSession
+	@within CombatTypes
+	Active combat session metadata keyed by user id.
+]=]
 export type CombatSession = {
-	isActive: boolean,
-	currentWaveNumber: number,
-	isEndless: boolean,
+	WaveNumber: number,
+	IsEndless: boolean,
+	IsPaused: boolean,
 }
 
+--[=[
+	@type GoalResolution
+	@within CombatTypes
+	Resolved data describing an enemy that reached the goal.
+]=]
 export type GoalResolution = {
 	enemyEntity: number,
 	role: string,

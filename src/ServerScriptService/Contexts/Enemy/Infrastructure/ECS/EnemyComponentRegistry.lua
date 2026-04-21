@@ -30,6 +30,10 @@ function EnemyComponentRegistry:Init(registry: any, _name: string)
 	local pathState = world:component()
 	local modelRef = world:component()
 	local identity = world:component()
+	local behaviorTree = world:component()
+	local combatAction = world:component()
+	local attackCooldown = world:component()
+	local behaviorConfig = world:component()
 	local aliveTag = world:entity()
 	local dirtyTag = world:entity()
 	local goalReachedTag = world:entity()
@@ -40,6 +44,10 @@ function EnemyComponentRegistry:Init(registry: any, _name: string)
 	_nameComponent(world, pathState, "Enemy.PathState")
 	_nameComponent(world, modelRef, "Enemy.ModelRef")
 	_nameComponent(world, identity, "Enemy.Identity")
+	_nameComponent(world, behaviorTree, "Enemy.BehaviorTree")
+	_nameComponent(world, combatAction, "Enemy.CombatAction")
+	_nameComponent(world, attackCooldown, "Enemy.AttackCooldown")
+	_nameComponent(world, behaviorConfig, "Enemy.BehaviorConfig")
 	_nameComponent(world, aliveTag, "Enemy.Alive")
 	_nameComponent(world, dirtyTag, "Enemy.Dirty")
 	_nameComponent(world, goalReachedTag, "Enemy.GoalReached")
@@ -51,6 +59,10 @@ function EnemyComponentRegistry:Init(registry: any, _name: string)
 		PathState = pathState,
 		ModelRef = modelRef,
 		Identity = identity,
+		BehaviorTree = behaviorTree,
+		CombatAction = combatAction,
+		AttackCooldown = attackCooldown,
+		BehaviorConfig = behaviorConfig,
 		AliveTag = aliveTag,
 		DirtyTag = dirtyTag,
 		GoalReachedTag = goalReachedTag,
