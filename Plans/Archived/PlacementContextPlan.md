@@ -34,7 +34,7 @@ Build a server-authoritative `PlacementContext` Knit service that:
 
 ## Reconciliation Corrections (Phase 0)
 
-This plan is reconciled against `.claude/commands/reconcile-context.md` and backend DDD/CQRS rules.
+This plan is reconciled against `.codex/commands/reconcile-context.md` and backend DDD/CQRS rules.
 
 - `PlacementContext.lua` stays a pass-through boundary for public methods; orchestration lives in Application commands/queries.
 - Sync service must be moved to `Infrastructure/Persistence/PlacementSyncService.lua`.

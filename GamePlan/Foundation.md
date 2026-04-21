@@ -20,4 +20,4 @@ Sci-fi **hybrid RTS wave defense**: summoner commander, **single lane**, **one r
 
 ## Engineering alignment
 
-Implementation follows project architecture in [CLAUDE.md](../CLAUDE.md) (Knit, bounded contexts, feature slices). This file does not duplicate coding standards.
+Implementation follows project architecture in [AGENTS.md](../AGENTS.md) (Knit, bounded contexts, feature slices). This file does not duplicate coding standards.

@@ -20,7 +20,7 @@ Build a server-authoritative `CommanderContext` that owns:
 
 ## Reconciliation Corrections (Phase 0)
 
-This plan is reconciled against `.claude/commands/reconcile-context.md` and backend DDD/CQRS rules.
+This plan is reconciled against `.codex/commands/reconcile-context.md` and backend DDD/CQRS rules.
 
 - Context layering remains strict: `CommanderContext` is pass-through only; all behavior lives in Application services.
 - Atom sync modules must live in `Infrastructure/Persistence`, not `Infrastructure/Services`.

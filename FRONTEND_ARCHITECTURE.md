@@ -500,5 +500,4 @@ This is the template to copy for all future features.
 
 ## See Also
 
-- [CLAUDE.md](CLAUDE.md) - Backend architecture and project conventions
-- [Plan File](C:\Users\Alex\.claude\plans\calm-purring-walrus.md) - Detailed architecture decisions and tradeoff analysis
+- [AGENTS.md](AGENTS.md) - Backend architecture and project conventions

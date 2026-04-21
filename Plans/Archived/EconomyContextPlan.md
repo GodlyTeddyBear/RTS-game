@@ -38,7 +38,7 @@ Build a server-authoritative `EconomyContext` Knit service that:
 
 ## Reconciliation Corrections (Phase 0)
 
-This plan is reconciled against `.claude/commands/reconcile-context.md` and backend DDD/CQRS rules.
+This plan is reconciled against `.codex/commands/reconcile-context.md` and backend DDD/CQRS rules.
 
 - Keep `EconomyContext.lua` as a pass-through boundary only; no inline business logic.
 - Register Domain + Application modules through `Registry` and `Init(registry, name)` (not ad-hoc wiring) for consistent dependency flow.

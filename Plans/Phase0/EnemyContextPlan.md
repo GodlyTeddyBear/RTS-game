@@ -31,7 +31,7 @@ Build a server-authoritative `EnemyContext` that:
 
 ## Reconciliation Corrections (Phase 0)
 
-This plan is reconciled against `.claude/commands/reconcile-context.md` and backend DDD/CQRS rules.
+This plan is reconciled against `.codex/commands/reconcile-context.md` and backend DDD/CQRS rules.
 
 - `EnemyContext.lua` should remain a pass-through boundary; orchestration is moved into Application commands/queries.
 - Add explicit Application Queries for read-only server API (`alive`, `goalReached`, `count`).
