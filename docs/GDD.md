@@ -107,12 +107,12 @@ All numeric values are v0 placeholders — balance pass required after EconomyCo
 | Gravity Pulse | Dense groups, lane resets | Fast / spread formations | "Heavy" — knockback resisted |
 | Overcharge Field | Clustered waves + structure synergy | Spread formations | "EMP Shielded" — stun immunity |
 
-### Open questions
+### v1 defaults (locked)
 
-1. Is the Overcharge Field channel interruptible by damage? **Recommendation:** Yes — reinforces fragility.
-2. Can Blink Step be used while channeling? **Recommendation:** No — channel locks movement.
-3. Do Swarm Drones target nearest or lowest-HP enemy? **Recommendation:** Nearest for v1.
-4. Does Elite Guardian block enemy pathing or pass-through? **Recommendation:** Pass-through for Phase 0; revisit in Phase 1.
+1. Overcharge Field channel is **interruptible by damage**.
+2. Blink Step **cannot** be used while Overcharge Field is channeling.
+3. Swarm Drones target the **nearest enemy**.
+4. Elite Guardian uses **pass-through pathing** (non-blocking) for Phase 0; revisit in Phase 1 pathing work.
 
 ---
 

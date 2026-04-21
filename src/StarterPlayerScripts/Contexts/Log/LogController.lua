@@ -8,6 +8,7 @@ local React = require(ReplicatedStorage.Packages.React)
 local e = React.createElement
 local ReactRoblox = require(ReplicatedStorage.Packages.ReactRoblox)
 local LogSyncClient = require(script.Parent.Infrastructure.LogSyncClient)
+local CommandSyncClient = require(script.Parent.Infrastructure.CommandSyncClient)
 
 local DEVELOPER_USER_ID = 205423638
 
@@ -24,6 +25,7 @@ function LogController:KnitStart()
 	self._syncClient:Start()
 
 	if self._player.UserId == DEVELOPER_USER_ID then
+		CommandSyncClient.Initialize()
 		self:_mountDevTools()
 	end
 end

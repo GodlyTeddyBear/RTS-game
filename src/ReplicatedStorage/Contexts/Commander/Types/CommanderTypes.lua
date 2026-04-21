@@ -23,6 +23,13 @@ export type SlotKey = "Mobility" | "SummonA" | "SummonB" | "Control" | "Ultimate
 	.energyCost number -- Energy cost to activate the slot.
 	.cooldownDuration number -- Cooldown duration in seconds.
 	.metadata { [string]: any }? -- Slot-specific tuning values.
+		Current v1 defaults encoded in CommanderConfig metadata:
+		- Mobility: `maxRange`, `lockedWhileOverchargeChanneling`
+		- SummonA: `summonCount`, `lifetime`, `targetingRule = "NearestEnemy"`
+		- SummonB: `lifetime`, `stationary`, `pathingMode = "PassThrough"`
+		- Control: `radius`, `knockbackStuds`, `slowDuration`
+		- Ultimate: `channelTime`, `interruptibleByDamage`, `movementLockedDuringChannel`,
+		  `radius`, `stunDuration`, `structureAttackSpeedMultiplier`, `buffDuration`
 ]=]
 export type AbilitySlotDef = {
 	key: SlotKey,

@@ -8,6 +8,8 @@ local Registry = require(ReplicatedStorage.Utilities.Registry)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
 local CommanderTypes = require(ReplicatedStorage.Contexts.Commander.Types.CommanderTypes)
+local CommanderConfig = require(ReplicatedStorage.Contexts.Commander.Config.CommanderConfig)
+local CommandRegistry = require(ReplicatedStorage.Contexts.Log.CommandRegistry)
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local BlinkServer = require(ReplicatedStorage.Network.Generated.CommanderSyncServer)
 
@@ -27,6 +29,8 @@ local fromNilable = Result.fromNilable
 
 type CommanderState = CommanderTypes.CommanderState
 type SlotKey = CommanderTypes.SlotKey
+
+local DEVELOPER_USER_ID = 205423638
 
 --[=[
 	@class CommanderContext
@@ -60,6 +64,80 @@ function CommanderContext:KnitInit()
 	self._getCooldownQuery = registry:Get("GetCooldownQuery")
 	self._playerAddedConnection = nil
 	self._playerRemovingConnection = nil
+
+	self:_RegisterDeveloperLogCommands()
+end
+
+local function _parseUserId(rawValue: string?): number
+	local parsed = tonumber(rawValue)
+	if parsed == nil then
+		return DEVELOPER_USER_ID
+	end
+
+	return math.floor(parsed)
+end
+
+local function _isValidSlot(slotKey: string): boolean
+	for _, slot in CommanderConfig.SLOTS do
+		if slot.key == slotKey then
+			return true
+		end
+	end
+
+	return false
+end
+
+function CommanderContext:_RegisterDeveloperLogCommands()
+	CommandRegistry.Register({
+		name = "Commander.GetStateSummary",
+		context = "Commander",
+		description = "Shows HP and active cooldown count for a commander user id.",
+		params = {
+			{ name = "userId", label = "User ID", default = tostring(DEVELOPER_USER_ID) },
+		},
+		handler = function(params: { [string]: string }): (boolean, string)
+			local userId = _parseUserId(params.userId)
+			local state = self._getCommanderStateQuery:Execute(userId)
+			if state == nil then
+				return false, string.format("No commander state found for user %d", userId)
+			end
+
+			local cooldownCount = 0
+			for _, cooldown in pairs(state.cooldowns) do
+				if cooldown ~= nil then
+					cooldownCount += 1
+				end
+			end
+
+			return true, string.format(
+				"userId=%d hp=%d/%d activeCooldowns=%d",
+				userId,
+				state.hp,
+				state.maxHp,
+				cooldownCount
+			)
+		end,
+	})
+
+	CommandRegistry.Register({
+		name = "Commander.GetCooldownRemaining",
+		context = "Commander",
+		description = "Returns remaining cooldown in seconds for a commander slot.",
+		params = {
+			{ name = "userId", label = "User ID", default = tostring(DEVELOPER_USER_ID) },
+			{ name = "slotKey", label = "Slot Key", default = "Mobility" },
+		},
+		handler = function(params: { [string]: string }): (boolean, string)
+			local userId = _parseUserId(params.userId)
+			local slotKey = params.slotKey or "Mobility"
+			if not _isValidSlot(slotKey) then
+				return false, string.format("Invalid slotKey '%s'", slotKey)
+			end
+
+			local remaining = self._getCooldownQuery:Execute(userId, slotKey :: SlotKey)
+			return true, string.format("userId=%d slot=%s remaining=%.2fs", userId, slotKey, remaining)
+		end,
+	})
 end
 
 --[=[

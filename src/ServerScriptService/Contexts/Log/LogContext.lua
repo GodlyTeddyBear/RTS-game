@@ -7,6 +7,8 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 local Registry = require(ReplicatedStorage.Utilities.Registry)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local LogRetentionConfig = require(ReplicatedStorage.Contexts.Log.Config.LogRetentionConfig)
+local LogCommandTypes = require(ReplicatedStorage.Contexts.Log.Types.LogCommandTypes)
+local CommandRegistry = require(ReplicatedStorage.Contexts.Log.CommandRegistry)
 local BlinkServer = require(ReplicatedStorage.Network.Generated.LogSyncServer)
 local LogSyncService = require(script.Parent.Infrastructure.Persistence.LogSyncService)
 
@@ -28,6 +30,7 @@ export type LogEntry = {
 	traceback: string?,
 	data: { [string]: any }?,
 }
+type CommandExecutionResult = LogCommandTypes.CommandExecutionResult
 
 local LogContext = Knit.CreateService({
 	Name = "LogContext",
@@ -174,6 +177,43 @@ function LogContext.Client:ClearLogsByScope(player: Player, context: string?, ca
 	end
 
 	self.Server._logSyncService:Clear(normalizedContext, normalizedCategory)
+end
+
+function LogContext.Client:GetCommands(player: Player)
+	if player.UserId ~= self.Server._developerUserId then
+		return {}
+	end
+
+	return CommandRegistry.GetAll()
+end
+
+function LogContext.Client:ExecuteCommand(
+	player: Player,
+	commandName: string,
+	params: { [string]: string }?
+): CommandExecutionResult
+	if player.UserId ~= self.Server._developerUserId then
+		return { success = false, message = "Unauthorized" }
+	end
+
+	local command = CommandRegistry.GetByName(commandName)
+	if command == nil then
+		return { success = false, message = "Unknown command: " .. tostring(commandName) }
+	end
+
+	local ok, didSucceed, message = pcall(command.handler, params or {})
+	if not ok then
+		return { success = false, message = tostring(didSucceed) }
+	end
+
+	local messageText = if message ~= nil
+		then tostring(message)
+		else if didSucceed == true then "Command executed." else "Command failed."
+
+	return {
+		success = didSucceed == true,
+		message = messageText,
+	}
 end
 
 return LogContext

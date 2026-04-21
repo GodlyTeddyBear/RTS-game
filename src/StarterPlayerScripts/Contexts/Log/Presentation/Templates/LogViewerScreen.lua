@@ -8,6 +8,7 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 local useLogs = require(script.Parent.Parent.Parent.Application.Hooks.useLogs)
 local LogViewerViewModel = require(script.Parent.Parent.Parent.Application.ViewModels.LogViewerViewModel)
 local LogViewerScreenView = require(script.Parent.LogViewerScreenView)
+local CommandsScreen = require(script.Parent.CommandsScreen)
 
 type Props = {
 	logsAtom: () -> { any },
@@ -26,6 +27,7 @@ end
 
 local function LogViewerScreen(props: Props)
 	local logs = useLogs(props.logsAtom)
+	local activePage, setActivePage = React.useState("logs")
 	local activeLevel, setActiveLevel = React.useState("all")
 	local activeCategory, setActiveCategory = React.useState("all")
 	local activeContext, setActiveContext = React.useState("all")
@@ -58,12 +60,15 @@ local function LogViewerScreen(props: Props)
 
 	return e(LogViewerScreenView, {
 		viewData = viewData,
+		activePage = activePage,
 		activeLevel = activeLevel,
 		activeCategory = activeCategory,
 		activeContext = activeContext,
+		onPageChange = setActivePage,
 		onSelectLevel = setActiveLevel,
 		onSelectCategory = setActiveCategory,
 		onSelectContext = setActiveContext,
+		commandsContent = e(CommandsScreen),
 		onClearAll = function()
 			local logContext = Knit.GetService("LogContext")
 			setActiveLevel("all")

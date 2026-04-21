@@ -34,6 +34,7 @@ CommanderConfig.SLOTS = {
 		cooldownDuration = 10,
 		metadata = {
 			maxRange = 18,
+			lockedWhileOverchargeChanneling = true,
 		},
 	},
 	{
@@ -44,6 +45,7 @@ CommanderConfig.SLOTS = {
 		metadata = {
 			summonCount = 5,
 			lifetime = 20,
+			targetingRule = "NearestEnemy",
 		},
 	},
 	{
@@ -54,6 +56,7 @@ CommanderConfig.SLOTS = {
 		metadata = {
 			lifetime = 30,
 			stationary = true,
+			pathingMode = "PassThrough",
 		},
 	},
 	{
@@ -75,6 +78,7 @@ CommanderConfig.SLOTS = {
 		metadata = {
 			channelTime = 1,
 			interruptibleByDamage = true,
+			movementLockedDuringChannel = true,
 			radius = 25,
 			stunDuration = 3,
 			structureAttackSpeedMultiplier = 1.5,

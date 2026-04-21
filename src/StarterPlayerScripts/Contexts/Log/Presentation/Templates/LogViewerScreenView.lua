@@ -36,14 +36,17 @@ type TLogEntryViewData = LogEntryViewModel.TLogEntryViewData
 
 type TLogViewerScreenViewProps = {
 	viewData: TViewData,
+	activePage: string,
 	activeLevel: string,
 	activeCategory: string,
 	activeContext: string,
+	onPageChange: (string) -> (),
 	onSelectLevel: (string) -> (),
 	onSelectCategory: (string) -> (),
 	onSelectContext: (string) -> (),
 	onClearAll: () -> (),
 	onClearFiltered: () -> (),
+	commandsContent: any,
 }
 
 local function createFilterRow(
@@ -362,6 +365,7 @@ end
 
 local function LogViewerScreenView(props: TLogViewerScreenViewProps)
 	local openViewData, setOpenViewData = useState(nil :: TLogEntryViewData?)
+	local isLogsPage = props.activePage == "logs"
 
 	local rowChildren: { [string]: any } = {
 		Layout = e("UIListLayout", {
@@ -409,7 +413,7 @@ local function LogViewerScreenView(props: TLogViewerScreenViewProps)
 				BorderSizePixel = 0,
 			}, {
 				Title = e("TextLabel", {
-					Size = UDim2.new(1, -256, 1, 0),
+					Size = UDim2.new(1, -470, 1, 0),
 					Position = UDim2.fromOffset(12, 0),
 					BackgroundTransparency = 1,
 					Text = "Log Viewer",
@@ -418,6 +422,50 @@ local function LogViewerScreenView(props: TLogViewerScreenViewProps)
 					Font = Enum.Font.GothamBold,
 					TextXAlignment = Enum.TextXAlignment.Left,
 					TextYAlignment = Enum.TextYAlignment.Center,
+				}),
+				Tabs = e("Frame", {
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, -220, 0.5, 0),
+					Size = UDim2.fromOffset(180, 24),
+					BackgroundTransparency = 1,
+				}, {
+					Layout = e("UIListLayout", {
+						FillDirection = Enum.FillDirection.Horizontal,
+						HorizontalAlignment = Enum.HorizontalAlignment.Right,
+						VerticalAlignment = Enum.VerticalAlignment.Center,
+						Padding = UDim.new(0, 6),
+						SortOrder = Enum.SortOrder.LayoutOrder,
+					}),
+					LogsTab = e("TextButton", {
+						Size = UDim2.fromOffset(84, 24),
+						BackgroundColor3 = if props.activePage == "logs" then TAB_ACTIVE_COLOR else TAB_INACTIVE_COLOR,
+						BorderSizePixel = 0,
+						Text = "Logs",
+						TextColor3 = if props.activePage == "logs" then TAB_TEXT_ACTIVE else TAB_TEXT_INACTIVE,
+						TextSize = 12,
+						Font = Enum.Font.GothamBold,
+						LayoutOrder = 1,
+						[React.Event.Activated] = function()
+							props.onPageChange("logs")
+						end,
+					}, {
+						Corner = e("UICorner", { CornerRadius = UDim.new(0, 4) }),
+					}),
+					CommandsTab = e("TextButton", {
+						Size = UDim2.fromOffset(90, 24),
+						BackgroundColor3 = if props.activePage == "commands" then TAB_ACTIVE_COLOR else TAB_INACTIVE_COLOR,
+						BorderSizePixel = 0,
+						Text = "Commands",
+						TextColor3 = if props.activePage == "commands" then TAB_TEXT_ACTIVE else TAB_TEXT_INACTIVE,
+						TextSize = 12,
+						Font = Enum.Font.GothamBold,
+						LayoutOrder = 2,
+						[React.Event.Activated] = function()
+							props.onPageChange("commands")
+						end,
+					}, {
+						Corner = e("UICorner", { CornerRadius = UDim.new(0, 4) }),
+					}),
 				}),
 				ClearFilteredButton = e("TextButton", {
 					AnchorPoint = Vector2.new(1, 0.5),
@@ -429,6 +477,7 @@ local function LogViewerScreenView(props: TLogViewerScreenViewProps)
 					TextColor3 = CLEAR_FILTERED_TEXT_COLOR,
 					TextSize = 13,
 					Font = Enum.Font.GothamBold,
+					Visible = isLogsPage,
 					[React.Event.Activated] = props.onClearFiltered,
 				}, {
 					UICorner = e("UICorner", { CornerRadius = UDim.new(0, 4) }),
@@ -443,6 +492,7 @@ local function LogViewerScreenView(props: TLogViewerScreenViewProps)
 					TextColor3 = CLEAR_TEXT_COLOR,
 					TextSize = 14,
 					Font = Enum.Font.GothamBold,
+					Visible = isLogsPage,
 					[React.Event.Activated] = props.onClearAll,
 				}, {
 					UICorner = e("UICorner", { CornerRadius = UDim.new(0, 4) }),
@@ -453,6 +503,7 @@ local function LogViewerScreenView(props: TLogViewerScreenViewProps)
 				Size = UDim2.new(1, 0, 0, FILTER_ROW_HEIGHT * 3),
 				BackgroundColor3 = HEADER_COLOR,
 				BorderSizePixel = 0,
+				Visible = isLogsPage,
 			}, {
 				Layout = e("UIListLayout", {
 					FillDirection = Enum.FillDirection.Vertical,
@@ -484,11 +535,21 @@ local function LogViewerScreenView(props: TLogViewerScreenViewProps)
 				ScrollBarThickness = 4,
 				ScrollBarImageColor3 = Color3.fromRGB(80, 80, 100),
 				ClipsDescendants = true,
+				Visible = isLogsPage,
 			}, rowChildren),
+			CommandsContainer = e("Frame", {
+				Position = UDim2.fromOffset(0, HEADER_HEIGHT),
+				Size = UDim2.new(1, 0, 1, -HEADER_HEIGHT),
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				Visible = not isLogsPage,
+			}, {
+				Content = props.commandsContent,
+			}),
 		}),
 
 		-- Rendered outside Panel so it is not clipped by the ScrollingFrame.
-		DetailPopup = if openViewData ~= nil then renderDetailPopup(openViewData, function()
+		DetailPopup = if isLogsPage and openViewData ~= nil then renderDetailPopup(openViewData, function()
 			setOpenViewData(nil)
 		end) else nil,
 	})
