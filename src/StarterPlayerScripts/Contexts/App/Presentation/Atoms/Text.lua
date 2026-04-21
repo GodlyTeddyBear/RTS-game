@@ -25,6 +25,7 @@ export type TTextVariant = "heading" | "body" | "caption" | "label"
 	.Text string? -- Label text. Defaults to `""`.
 	.Size UDim2? -- Label size. Defaults to `UDim2.fromScale(1, 0)`.
 	.Position UDim2? -- Label position.
+	.AnchorPoint Vector2? -- Label anchor point.
 	.LayoutOrder number? -- Sort order within a layout.
 	.Variant TTextVariant? -- Variant preset. Defaults to `"body"`.
 	.TextColor3 Color3? -- Override text colour.
@@ -43,6 +44,7 @@ export type TTextProps = {
 	Text: string?,
 	Size: UDim2?,
 	Position: UDim2?,
+	AnchorPoint: Vector2?,
 	LayoutOrder: number?,
 	Variant: TTextVariant?,
 
@@ -86,6 +88,7 @@ local function Text(props: TTextProps)
 		Text = props.Text or "",
 		Size = props.Size or UDim2.fromScale(1, 0),
 		Position = props.Position,
+		AnchorPoint = props.AnchorPoint,
 		TextColor3 = props.TextColor3 or style.TextColor3,
 		Font = props.Font or style.Font,
 		TextSize = props.TextSize or style.TextSize,

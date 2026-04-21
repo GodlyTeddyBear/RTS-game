@@ -153,7 +153,7 @@ function RunContext:_RegisterDeveloperLogCommands()
 	CommandRegistry.Register({
 		name = "Run.Restart",
 		context = "Run",
-		description = "Force restart the run from any phase.",
+		description = "Return to lobby by transitioning the run to Idle.",
 		handler = function(_params: { [string]: string }): (boolean, string)
 			local result = self:RestartRun()
 			if not result.success then
@@ -164,7 +164,25 @@ function RunContext:_RegisterDeveloperLogCommands()
 				State = self._machine:GetState(),
 				WaveNumber = self._machine:GetWaveNumber(),
 			})
-			return true, string.format("Run restarted. state=%s wave=%d", self._machine:GetState(), self._machine:GetWaveNumber())
+			return true, string.format("Returned to lobby. state=%s wave=%d", self._machine:GetState(), self._machine:GetWaveNumber())
+		end,
+	})
+
+	CommandRegistry.Register({
+		name = "Run.Reset",
+		context = "Run",
+		description = "Force reset and immediately start a fresh run.",
+		handler = function(_params: { [string]: string }): (boolean, string)
+			local result = self:ResetRun()
+			if not result.success then
+				return _formatCommandFailure("Run.Reset", result)
+			end
+
+			Result.MentionEvent("RunContext:DevCommand", "Run.Reset", {
+				State = self._machine:GetState(),
+				WaveNumber = self._machine:GetWaveNumber(),
+			})
+			return true, string.format("Run reset. state=%s wave=%d", self._machine:GetState(), self._machine:GetWaveNumber())
 		end,
 	})
 
@@ -246,11 +264,32 @@ function RunContext:StartRun(): Result.Result<boolean>
 end
 
 --[=[
-	Restarts the run from any phase and enters `Prep`.
+	Restarts the session back to lobby by entering `Idle`.
 	@within RunContext
-	@return Result.Result<boolean> -- Whether the run successfully restarted.
+	@return Result.Result<boolean> -- Whether the run successfully returned to lobby.
 ]=]
 function RunContext:RestartRun(): Result.Result<boolean>
+	return Catch(function()
+		local state = self._machine:GetState()
+		if state ~= "Idle" and state ~= "RunEnd" then
+			Try(self._notifyCommanderDeathCommand:Execute())
+			state = self._machine:GetState()
+		end
+
+		if state == "RunEnd" then
+			Try(self._machine:Transition("Idle"))
+		end
+
+		return Ok(true)
+	end, "Run:RestartRun")
+end
+
+--[=[
+	Resets the current run and immediately starts a fresh run in `Prep`.
+	@within RunContext
+	@return Result.Result<boolean> -- Whether the run successfully reset and started.
+]=]
+function RunContext:ResetRun(): Result.Result<boolean>
 	return Catch(function()
 		local state = self._machine:GetState()
 		if state ~= "Idle" and state ~= "RunEnd" then
@@ -258,7 +297,7 @@ function RunContext:RestartRun(): Result.Result<boolean>
 		end
 
 		return self._startRunCommand:Execute(self._onPrepTimeout)
-	end, "Run:RestartRun")
+	end, "Run:ResetRun")
 end
 
 --[=[
@@ -339,7 +378,7 @@ function RunContext.Client:RequestRestartRun(_player: Player): boolean
 		return false
 	end
 
-	local result = self.Server:RestartRun()
+	local result = self.Server:ResetRun()
 	if result.success then
 		return true
 	end

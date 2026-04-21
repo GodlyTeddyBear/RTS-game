@@ -18,16 +18,20 @@ local LEGAL_TRANSITIONS: { [RunState]: { [RunState]: boolean } } = {
 	},
 	Prep = {
 		Wave = true,
+		RunEnd = true,
 	},
 	Wave = {
 		Resolution = true,
+		RunEnd = true,
 	},
 	Resolution = {
 		Prep = true,
 		Climax = true,
+		RunEnd = true,
 	},
 	Climax = {
 		Endless = true,
+		RunEnd = true,
 	},
 	Endless = {
 		Resolution = true,
@@ -35,6 +39,7 @@ local LEGAL_TRANSITIONS: { [RunState]: { [RunState]: boolean } } = {
 	},
 	RunEnd = {
 		Prep = true,
+		Idle = true,
 	},
 }
 

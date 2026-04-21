@@ -58,6 +58,8 @@ local function ResultsScreenView(props: TResultsScreenViewProps)
 				}),
 				Wave = e(Text, {
 					Size = UDim2.fromScale(1, 0.16),
+					Position = UDim2.fromScale(0.5, 0.5),
+					AnchorPoint = Vector2.new(0.5, 0.5),
 					Text = ("Wave reached: %d"):format(props.waveNumber),
 					Variant = "body",
 					TextXAlignment = Enum.TextXAlignment.Center,
