@@ -2,7 +2,6 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Registry = require(ReplicatedStorage.Utilities.Registry)
@@ -10,6 +9,7 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 local RunConfig = require(ReplicatedStorage.Contexts.Run.Config.RunConfig)
+local CommandRegistry = require(ReplicatedStorage.Contexts.Log.CommandRegistry)
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
 local BlinkServer = require(ReplicatedStorage.Network.Generated.RunSyncServer)
@@ -27,8 +27,10 @@ local OnWaveTimeoutCommand = require(script.Parent.Application.Commands.OnWaveTi
 local OnResolutionTimeoutCommand = require(script.Parent.Application.Commands.OnResolutionTimeoutCommand)
 local GetRunStateQuery = require(script.Parent.Application.Queries.GetRunStateQuery)
 local GetWaveNumberQuery = require(script.Parent.Application.Queries.GetWaveNumberQuery)
+local Errors = require(script.Parent.Errors)
 
 local Catch = Result.Catch
+local Err = Result.Err
 local Ok = Result.Ok
 local Try = Result.Try
 
@@ -87,6 +89,8 @@ function RunContext:KnitInit()
 	self._getRunStateQuery = registry:Get("GetRunStateQuery")
 	self._getWaveNumberQuery = registry:Get("GetWaveNumberQuery")
 
+	self:_RegisterDeveloperLogCommands()
+
 	-- Build timeout delegates once so application commands own all transition rules.
 	-- Prep timeout hands control to the wave entry command chain.
 	self._onPrepTimeout = function()
@@ -120,6 +124,66 @@ function RunContext:KnitInit()
 	self._sync:SetState({
 		state = self._machine:GetState(),
 		waveNumber = self._machine:GetWaveNumber(),
+	})
+end
+
+local function _formatCommandFailure(commandName: string, result: Result.Result<any>): (boolean, string)
+	return false, string.format("%s failed: %s", commandName, result.message)
+end
+
+function RunContext:_RegisterDeveloperLogCommands()
+	CommandRegistry.Register({
+		name = "Run.Start",
+		context = "Run",
+		description = "Start a run from Idle or RunEnd.",
+		handler = function(_params: { [string]: string }): (boolean, string)
+			local result = self:StartRun()
+			if not result.success then
+				return _formatCommandFailure("Run.Start", result)
+			end
+
+			Result.MentionEvent("RunContext:DevCommand", "Run.Start", {
+				State = self._machine:GetState(),
+				WaveNumber = self._machine:GetWaveNumber(),
+			})
+			return true, string.format("Run started. state=%s wave=%d", self._machine:GetState(), self._machine:GetWaveNumber())
+		end,
+	})
+
+	CommandRegistry.Register({
+		name = "Run.Restart",
+		context = "Run",
+		description = "Force restart the run from any phase.",
+		handler = function(_params: { [string]: string }): (boolean, string)
+			local result = self:RestartRun()
+			if not result.success then
+				return _formatCommandFailure("Run.Restart", result)
+			end
+
+			Result.MentionEvent("RunContext:DevCommand", "Run.Restart", {
+				State = self._machine:GetState(),
+				WaveNumber = self._machine:GetWaveNumber(),
+			})
+			return true, string.format("Run restarted. state=%s wave=%d", self._machine:GetState(), self._machine:GetWaveNumber())
+		end,
+	})
+
+	CommandRegistry.Register({
+		name = "Run.SkipPhase",
+		context = "Run",
+		description = "Advance to the next run phase immediately.",
+		handler = function(_params: { [string]: string }): (boolean, string)
+			local result = self:SkipCurrentPhase()
+			if not result.success then
+				return _formatCommandFailure("Run.SkipPhase", result)
+			end
+
+			Result.MentionEvent("RunContext:DevCommand", "Run.SkipPhase", {
+				State = self._machine:GetState(),
+				WaveNumber = self._machine:GetWaveNumber(),
+			})
+			return true, string.format("Phase skipped. state=%s wave=%d", self._machine:GetState(), self._machine:GetWaveNumber())
+		end,
 	})
 end
 
@@ -182,6 +246,22 @@ function RunContext:StartRun(): Result.Result<boolean>
 end
 
 --[=[
+	Restarts the run from any phase and enters `Prep`.
+	@within RunContext
+	@return Result.Result<boolean> -- Whether the run successfully restarted.
+]=]
+function RunContext:RestartRun(): Result.Result<boolean>
+	return Catch(function()
+		local state = self._machine:GetState()
+		if state ~= "Idle" and state ~= "RunEnd" then
+			Try(self._notifyCommanderDeathCommand:Execute())
+		end
+
+		return self._startRunCommand:Execute(self._onPrepTimeout)
+	end, "Run:RestartRun")
+end
+
+--[=[
 	Advances from `Wave` to `Resolution` when the wave ends early.
 	@within RunContext
 	@return Result.Result<boolean> -- Whether the wave was successfully cleared.
@@ -215,17 +295,51 @@ function RunContext:NotifyCommanderDeath(): Result.Result<boolean>
 end
 
 --[=[
+	Skips the current active phase and executes its transition immediately.
+	@within RunContext
+	@return Result.Result<boolean> -- Whether a phase skip was performed.
+]=]
+function RunContext:SkipCurrentPhase(): Result.Result<boolean>
+	return Catch(function()
+		local state = self._machine:GetState()
+		if state == "Prep" then
+			Try(self._onPrepTimeoutCommand:Execute(self._onWaveTimeout))
+			return Ok(true)
+		end
+
+		if state == "Wave" or state == "Endless" then
+			Try(self._onWaveTimeoutCommand:Execute(self._onResolutionTimeout))
+			return Ok(true)
+		end
+
+		if state == "Resolution" then
+			Try(self._onResolutionTimeoutCommand:Execute(self._onPrepTimeout))
+			return Ok(true)
+		end
+
+		if state == "Climax" then
+			return self._notifyClimaxCompleteCommand:Execute(self._onWaveTimeout)
+		end
+
+		return Err("InvalidStateForNotify", Errors.INVALID_STATE_FOR_NOTIFY, {
+			State = state,
+		})
+	end, "Run:SkipCurrentPhase")
+end
+
+--[=[
 	Requests a run restart from the client.
 	@within RunContext
 	@param _player Player -- The requesting player.
 	@return boolean -- `true` when restart succeeded.
 ]=]
 function RunContext.Client:RequestRestartRun(_player: Player): boolean
-	if not RunService:IsStudio() then
+	local state = self.Server._machine:GetState()
+	if state ~= "Idle" and state ~= "RunEnd" then
 		return false
 	end
 
-	local result = self.Server:StartRun()
+	local result = self.Server:RestartRun()
 	if result.success then
 		return true
 	end

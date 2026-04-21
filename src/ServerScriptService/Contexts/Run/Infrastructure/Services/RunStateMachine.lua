@@ -33,7 +33,9 @@ local LEGAL_TRANSITIONS: { [RunState]: { [RunState]: boolean } } = {
 		Resolution = true,
 		RunEnd = true,
 	},
-	RunEnd = {},
+	RunEnd = {
+		Prep = true,
+	},
 }
 
 --[=[

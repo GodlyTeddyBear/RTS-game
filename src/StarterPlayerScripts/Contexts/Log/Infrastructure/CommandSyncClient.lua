@@ -12,18 +12,46 @@ local CommandSyncClient = {}
 
 local commandsAtom = Charm.atom({} :: { CommandManifestEntry })
 
+local function _isPromiseLike(value: any): boolean
+	return type(value) == "table" and type(value.andThen) == "function" and type(value.catch) == "function"
+end
+
+local function _setCommandsIfValid(manifest: any): boolean
+	if type(manifest) ~= "table" then
+		return false
+	end
+
+	commandsAtom(manifest :: { CommandManifestEntry })
+	return true
+end
+
 function CommandSyncClient.Initialize()
 	local logContext = Knit.GetService("LogContext")
-	local ok, manifest = pcall(function()
+	local ok, response = pcall(function()
 		return logContext:GetCommands()
 	end)
 
-	if not ok or type(manifest) ~= "table" then
+	if not ok then
 		commandsAtom({} :: { CommandManifestEntry })
 		return
 	end
 
-	commandsAtom(manifest :: { CommandManifestEntry })
+	if _isPromiseLike(response) then
+		response
+			:andThen(function(manifest: any)
+				if not _setCommandsIfValid(manifest) then
+					commandsAtom({} :: { CommandManifestEntry })
+				end
+			end)
+			:catch(function()
+				commandsAtom({} :: { CommandManifestEntry })
+			end)
+		return
+	end
+
+	if not _setCommandsIfValid(response) then
+		commandsAtom({} :: { CommandManifestEntry })
+	end
 end
 
 CommandSyncClient.commandsAtom = commandsAtom

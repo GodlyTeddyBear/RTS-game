@@ -46,6 +46,9 @@ function StartRunCommand:Execute(onPrepTimeout: () -> ()): Result.Result<boolean
 	-- Validate the current phase before changing any run state.
 	Try(self._transitionPolicy:CheckCanStartRun(self._machine:GetState()))
 
+	-- Ensure no stale phase timer survives into a fresh run bootstrap.
+	self._timer:Cancel()
+
 	-- Reset run progress, then move into the first active phase.
 	self._machine:ResetWaveNumber()
 	Try(self._machine:Transition("Prep"))

@@ -54,6 +54,7 @@ function LogController:_mountDevTools()
 		logViewerGui.Enabled = isVisible
 
 		if isVisible then
+			CommandSyncClient.Initialize()
 			logViewerRoot:render(e(LogViewerScreen, { logsAtom = self._syncClient:GetLogsAtom() }))
 		else
 			logViewerRoot:render(nil)

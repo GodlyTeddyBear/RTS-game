@@ -62,6 +62,7 @@ function CommanderContext:KnitInit()
 	self._useAbilityCommand = registry:Get("UseAbilityCommand")
 	self._getCommanderStateQuery = registry:Get("GetCommanderStateQuery")
 	self._getCooldownQuery = registry:Get("GetCooldownQuery")
+	self._godModeEnabledByUserId = {}
 	self._playerAddedConnection = nil
 	self._playerRemovingConnection = nil
 
@@ -85,6 +86,22 @@ local function _isValidSlot(slotKey: string): boolean
 	end
 
 	return false
+end
+
+local function _parseBooleanDirective(rawValue: string?): boolean?
+	if rawValue == nil then
+		return nil
+	end
+
+	local normalized = string.lower(string.gsub(rawValue, "^%s*(.-)%s*$", "%1"))
+	if normalized == "true" or normalized == "1" or normalized == "on" or normalized == "yes" then
+		return true
+	end
+	if normalized == "false" or normalized == "0" or normalized == "off" or normalized == "no" then
+		return false
+	end
+
+	return nil
 end
 
 function CommanderContext:_RegisterDeveloperLogCommands()
@@ -138,6 +155,53 @@ function CommanderContext:_RegisterDeveloperLogCommands()
 			return true, string.format("userId=%d slot=%s remaining=%.2fs", userId, slotKey, remaining)
 		end,
 	})
+
+	CommandRegistry.Register({
+		name = "Run.SetGodMode",
+		context = "Run",
+		description = "Enable, disable, or toggle commander god mode for a user id.",
+		params = {
+			{ name = "userId", label = "User ID", default = tostring(DEVELOPER_USER_ID) },
+			{ name = "enabled", label = "Enabled (true/false/toggle)", default = "toggle" },
+		},
+		handler = function(params: { [string]: string }): (boolean, string)
+			local userId = _parseUserId(params.userId)
+			local current = self:IsGodModeEnabled(userId)
+			local enabledParam = params.enabled
+			local nextEnabled: boolean
+
+			if enabledParam == nil or string.lower(enabledParam) == "toggle" then
+				nextEnabled = not current
+			else
+				local parsed = _parseBooleanDirective(enabledParam)
+				if parsed == nil then
+					return false, string.format("Invalid enabled value '%s'. Use true/false/toggle.", tostring(enabledParam))
+				end
+				nextEnabled = parsed
+			end
+
+			self:SetGodModeEnabled(userId, nextEnabled)
+			Result.MentionEvent("CommanderContext:GodMode", "God mode updated", {
+				UserId = userId,
+				Enabled = nextEnabled,
+			})
+
+			return true, string.format("Run.SetGodMode userId=%d enabled=%s", userId, tostring(nextEnabled))
+		end,
+	})
+end
+
+function CommanderContext:IsGodModeEnabled(userId: number): boolean
+	return self._godModeEnabledByUserId[userId] == true
+end
+
+function CommanderContext:SetGodModeEnabled(userId: number, isEnabled: boolean)
+	if isEnabled then
+		self._godModeEnabledByUserId[userId] = true
+		return
+	end
+
+	self._godModeEnabledByUserId[userId] = nil
 end
 
 --[=[
@@ -154,6 +218,7 @@ function CommanderContext:KnitStart()
 	-- Remove per-player commander state as soon as the player leaves the server.
 	self._playerRemovingConnection = Players.PlayerRemoving:Connect(function(player: Player)
 		self._syncService:RemovePlayer(player.UserId)
+		self:SetGodModeEnabled(player.UserId, false)
 	end)
 
 	-- Backfill players already in the server before Knit finished starting.
@@ -184,11 +249,18 @@ function CommanderContext:ApplyDamage(player: Player, amount: number): Result.Re
 			{ userId = player.UserId }
 		)) :: CommanderState
 
+		if self:IsGodModeEnabled(player.UserId) then
+			return Ok(previousState.hp)
+		end
+
 		-- Apply damage through the sync service so client replication stays centralized.
 		local nextHp = self._syncService:ApplyDamage(player.UserId, amount)
 
 		-- Emit the shared death event only on the first lethal transition.
 		if previousState.hp > 0 and nextHp <= 0 then
+			Result.MentionEvent("CommanderContext:CommanderDeath", "Commander HP reached zero", {
+				UserId = player.UserId,
+			})
 			GameEvents.Bus:Emit(GameEvents.Events.Commander.CommanderDied, player)
 		end
 

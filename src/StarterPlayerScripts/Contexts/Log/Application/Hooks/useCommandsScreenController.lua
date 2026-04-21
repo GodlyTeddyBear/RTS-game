@@ -49,6 +49,10 @@ local function _cloneParamValues(values: ParamValuesByCommand, commandName: stri
 	return if existing ~= nil then table.clone(existing) else {}
 end
 
+local function _isPromiseLike(value: any): boolean
+	return type(value) == "table" and type(value.andThen) == "function" and type(value.catch) == "function"
+end
+
 local function useCommandsScreenController(): TCommandsScreenController
 	local manifest = useCommands()
 
@@ -108,51 +112,70 @@ local function useCommandsScreenController(): TCommandsScreenController
 
 		local paramsForCommand = _cloneParamValues(paramValues, commandName)
 		local logContext = Knit.GetService("LogContext")
+		local manifestEntry = manifestByName[commandName]
+		local function finalize(success: boolean, message: string)
+			setExecutionResults(function(current: ExecutionResultsByCommand)
+				local updated = table.clone(current)
+				updated[commandName] = {
+					success = success,
+					message = message,
+					timestamp = os.clock(),
+				}
+				return updated
+			end)
 
-		local success = false
-		local message = "Unknown execution error"
+			setParamValues(function(current: ParamValuesByCommand)
+				local updated = table.clone(current)
+				local resetValues: { [string]: string } = {}
+				local params = if manifestEntry ~= nil then manifestEntry.params else nil
+				if params ~= nil then
+					for _, param in ipairs(params) do
+						resetValues[param.name] = param.default or ""
+					end
+				end
+				updated[commandName] = resetValues
+				return updated
+			end)
 
-		local ok, result = pcall(function()
+			setIsExecuting(function(current: BoolMap)
+				local updated = table.clone(current)
+				updated[commandName] = nil
+				return updated
+			end)
+		end
+
+		local ok, response = pcall(function()
 			return logContext:ExecuteCommand(commandName, paramsForCommand)
 		end)
 
-		if ok and type(result) == "table" then
-			local typedResult = result :: CommandExecutionResult
-			success = typedResult.success == true
-			message = tostring(typedResult.message)
-		elseif not ok then
-			message = tostring(result)
+		if not ok then
+			finalize(false, tostring(response))
+			return
 		end
 
-		setExecutionResults(function(current: ExecutionResultsByCommand)
-			local updated = table.clone(current)
-			updated[commandName] = {
-				success = success,
-				message = message,
-				timestamp = os.clock(),
-			}
-			return updated
-		end)
+		if _isPromiseLike(response) then
+			response
+				:andThen(function(result: any)
+					if type(result) == "table" then
+						local typedResult = result :: CommandExecutionResult
+						finalize(typedResult.success == true, tostring(typedResult.message))
+						return
+					end
+					finalize(false, "Invalid command response")
+				end)
+				:catch(function(err: any)
+					finalize(false, tostring(err))
+				end)
+			return
+		end
 
-		local manifestEntry = manifestByName[commandName]
-		setParamValues(function(current: ParamValuesByCommand)
-			local updated = table.clone(current)
-			local resetValues: { [string]: string } = {}
-			local params = if manifestEntry ~= nil then manifestEntry.params else nil
-			if params ~= nil then
-				for _, param in ipairs(params) do
-					resetValues[param.name] = param.default or ""
-				end
-			end
-			updated[commandName] = resetValues
-			return updated
-		end)
+		if type(response) == "table" then
+			local typedResult = response :: CommandExecutionResult
+			finalize(typedResult.success == true, tostring(typedResult.message))
+			return
+		end
 
-		setIsExecuting(function(current: BoolMap)
-			local updated = table.clone(current)
-			updated[commandName] = nil
-			return updated
-		end)
+		finalize(false, "Invalid command response")
 	end, { isExecuting, paramValues, manifestByName })
 
 	return {

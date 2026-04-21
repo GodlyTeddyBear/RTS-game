@@ -24,8 +24,8 @@ export type TStateCandidate = {
 	State: RunState,
 }
 
-local IsIdle = Spec.new("IllegalTransition", Errors.ILLEGAL_TRANSITION, function(ctx: TStateCandidate)
-	return ctx.State == "Idle"
+local IsIdleOrRunEnd = Spec.new("IllegalTransition", Errors.ILLEGAL_TRANSITION, function(ctx: TStateCandidate)
+	return ctx.State == "Idle" or ctx.State == "RunEnd"
 end)
 
 local IsWave = Spec.new("InvalidStateForNotify", Errors.INVALID_STATE_FOR_NOTIFY, function(ctx: TStateCandidate)
@@ -43,9 +43,9 @@ end)
 --[=[
 	@prop CanStartRun any
 	@within RunSpecs
-	Spec that accepts only the `Idle` state.
+	Spec that accepts `Idle` and `RunEnd` states.
 ]=]
-RunSpecs.CanStartRun = IsIdle
+RunSpecs.CanStartRun = IsIdleOrRunEnd
 
 --[=[
 	@prop CanNotifyWaveCleared any
