@@ -2,20 +2,27 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Registry = require(ReplicatedStorage.Utilities.Registry)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
+local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local EconomyConfig = require(ReplicatedStorage.Contexts.Economy.Config.EconomyConfig)
 local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTypes)
+local ProfileManager = require(ServerScriptService.Persistence.ProfileManager)
+local PlayerLifecycleManager = require(ServerScriptService.Persistence.PlayerLifecycleManager)
 
 local BlinkServer = require(ReplicatedStorage.Network.Generated.ResourceSyncServer)
 
 local ResourceValidator = require(script.Parent.EconomyDomain.Services.ResourceValidator)
 local ResourceSyncService = require(script.Parent.Infrastructure.Persistence.ResourceSyncService)
+local EconomyPersistenceService = require(script.Parent.Infrastructure.Persistence.EconomyPersistenceService)
 local AddResourceCommand = require(script.Parent.Application.Commands.AddResourceCommand)
 local SpendResourceCommand = require(script.Parent.Application.Commands.SpendResourceCommand)
+local RecordWaveClearCommand = require(script.Parent.Application.Commands.RecordWaveClearCommand)
+local RecordRunCompletedCommand = require(script.Parent.Application.Commands.RecordRunCompletedCommand)
 local GetResourceBalanceQuery = require(script.Parent.Application.Queries.GetResourceBalanceQuery)
 local GetResourceWalletQuery = require(script.Parent.Application.Queries.GetResourceWalletQuery)
 local Errors = require(script.Parent.Errors)
@@ -26,6 +33,30 @@ local Try = Result.Try
 local Ensure = Result.Ensure
 
 type ResourceWallet = EconomyTypes.ResourceWallet
+type ProfileRunStats = EconomyTypes.ProfileRunStats
+type RBXConnection = RBXScriptConnection
+
+local Events = GameEvents.Events
+
+local function createDefaultRunStats(): ProfileRunStats
+	return {
+		TotalRuns = 0,
+		BestWave = 0,
+		TotalWavesCleared = 0,
+	}
+end
+
+local function normalizeRunStats(runStats: ProfileRunStats?): ProfileRunStats
+	if not runStats then
+		return createDefaultRunStats()
+	end
+
+	return {
+		TotalRuns = runStats.TotalRuns or 0,
+		BestWave = runStats.BestWave or 0,
+		TotalWavesCleared = runStats.TotalWavesCleared or 0,
+	}
+end
 
 --[=[
 	@class EconomyContext
@@ -50,8 +81,11 @@ function EconomyContext:KnitInit()
 	registry:Register("BlinkServer", BlinkServer)
 	registry:Register("ResourceValidator", ResourceValidator.new(), "Domain")
 	registry:Register("ResourceSyncService", ResourceSyncService.new(), "Infrastructure")
+	registry:Register("EconomyPersistenceService", EconomyPersistenceService.new(), "Infrastructure")
 	registry:Register("AddResourceCommand", AddResourceCommand.new(), "Application")
 	registry:Register("SpendResourceCommand", SpendResourceCommand.new(), "Application")
+	registry:Register("RecordWaveClearCommand", RecordWaveClearCommand.new(), "Application")
+	registry:Register("RecordRunCompletedCommand", RecordRunCompletedCommand.new(), "Application")
 	registry:Register("GetResourceBalanceQuery", GetResourceBalanceQuery.new(), "Application")
 	registry:Register("GetResourceWalletQuery", GetResourceWalletQuery.new(), "Application")
 
@@ -60,8 +94,11 @@ function EconomyContext:KnitInit()
 
 	-- Cache resolved modules so the public API stays thin and deterministic.
 	self._sync = registry:Get("ResourceSyncService")
+	self._persistence = registry:Get("EconomyPersistenceService")
 	self._addResourceCommand = registry:Get("AddResourceCommand")
 	self._spendResourceCommand = registry:Get("SpendResourceCommand")
+	self._recordWaveClearCommand = registry:Get("RecordWaveClearCommand")
+	self._recordRunCompletedCommand = registry:Get("RecordRunCompletedCommand")
 	self._getResourceBalanceQuery = registry:Get("GetResourceBalanceQuery")
 	self._getResourceWalletQuery = registry:Get("GetResourceWalletQuery")
 
@@ -70,6 +107,11 @@ function EconomyContext:KnitInit()
 	self._runStateChangedConnection = nil :: any
 	self._playerAddedConnection = nil :: any
 	self._playerRemovingConnection = nil :: any
+	self._profileLoadedConnection = nil :: RBXConnection?
+	self._profileSavingConnection = nil :: RBXConnection?
+	self._sessionRunStats = {} :: { [number]: ProfileRunStats }
+
+	PlayerLifecycleManager:RegisterLoader("Economy")
 end
 
 -- Wires player lifecycle and run-state hooks after Knit has finished initializing all services.
@@ -80,6 +122,12 @@ end
 function EconomyContext:KnitStart()
 	-- Resolve the run context once so event handlers can stay lightweight.
 	self._runContext = Knit.GetService("RunContext")
+
+	self._profileLoadedConnection = GameEvents.Bus:On(Events.Persistence.ProfileLoaded, function(player: Player)
+		self:_HandleProfileLoaded(player)
+	end)
+
+	self._profileSavingConnection = GameEvents.Bus:On(Events.Persistence.ProfileSaving, function(_player: Player) end)
 
 	-- Hydrate players that join after EconomyContext starts listening.
 	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
@@ -94,12 +142,41 @@ function EconomyContext:KnitStart()
 	-- Remove wallet entries as soon as players leave the server.
 	self._playerRemovingConnection = Players.PlayerRemoving:Connect(function(player: Player)
 		self._sync:RemovePlayer(player.UserId)
+		self._sessionRunStats[player.UserId] = nil
 	end)
 
 	-- Bridge run lifecycle changes into the economy state transitions.
 	self._runStateChangedConnection = self._runContext.StateChanged:Connect(function(newState: string, previousState: string)
 		self:_OnRunStateChanged(newState, previousState)
 	end)
+
+	-- Backfill players whose profile loaded before this context subscribed.
+	for _, player in Players:GetPlayers() do
+		if ProfileManager:Has(player) then
+			self:_HandleProfileLoaded(player)
+		end
+	end
+end
+
+-- Handles profile hydration for the persistence lifecycle and signals loader readiness.
+function EconomyContext:_HandleProfileLoaded(player: Player)
+	local loadResult = self._persistence:LoadRunStatsData(player)
+	if loadResult.success then
+		self._sessionRunStats[player.UserId] = normalizeRunStats(loadResult.value)
+	else
+		Result.MentionError("Economy:ProfileLoaded", "Failed to load persisted run stats; using defaults", {
+			PlayerUserId = player.UserId,
+			CauseType = loadResult.type,
+			CauseMessage = loadResult.message,
+		}, loadResult.type)
+		self._sessionRunStats[player.UserId] = createDefaultRunStats()
+	end
+
+	if self._sync:GetWallet(player.UserId) ~= nil then
+		self._sync:SyncRunStats(player.UserId, self._sessionRunStats[player.UserId])
+	end
+
+	PlayerLifecycleManager:NotifyLoaded(player, "Economy")
 end
 
 -- Handles run lifecycle transitions so wallet resets and rewards stay centralized here.
@@ -109,6 +186,7 @@ function EconomyContext:_OnRunStateChanged(newState: string, previousState: stri
 		self._lastRewardedWaveNumber = nil
 		for _, player in Players:GetPlayers() do
 			self._sync:InitPlayer(player.UserId, EconomyConfig.STARTING_WALLET)
+			self._sync:SyncRunStats(player.UserId, self._sessionRunStats[player.UserId] or createDefaultRunStats())
 		end
 		return
 	end
@@ -135,6 +213,22 @@ function EconomyContext:_OnRunStateChanged(newState: string, previousState: stri
 				Try(self._addResourceCommand:Execute(player.UserId, "Energy", EconomyConfig.WAVE_CLEAR_BONUS))
 				return Ok(nil)
 			end, "Economy:OnRunResolutionReward")
+
+			local recordResult = self._recordWaveClearCommand:Execute(player, waveNumber)
+			if recordResult.success then
+				self._sessionRunStats[player.UserId] = recordResult.value
+			else
+				Result.MentionError("Economy:RecordWaveClear", "Failed to persist wave-clear run stats; applying in-memory fallback", {
+					PlayerUserId = player.UserId,
+					CauseType = recordResult.type,
+					CauseMessage = recordResult.message,
+				}, recordResult.type)
+				local runStats = self._sessionRunStats[player.UserId] or createDefaultRunStats()
+				runStats.BestWave = math.max(runStats.BestWave, waveNumber)
+				runStats.TotalWavesCleared += 1
+				self._sessionRunStats[player.UserId] = runStats
+				self._sync:SyncRunStats(player.UserId, runStats)
+			end
 		end
 		return
 	end
@@ -142,6 +236,21 @@ function EconomyContext:_OnRunStateChanged(newState: string, previousState: stri
 	-- RunEnd clears all wallet entries so the next run starts from a clean atom state.
 	if newState == "RunEnd" then
 		for _, player in Players:GetPlayers() do
+			local recordResult = self._recordRunCompletedCommand:Execute(player)
+			if recordResult.success then
+				self._sessionRunStats[player.UserId] = recordResult.value
+			else
+				Result.MentionError("Economy:RecordRunCompleted", "Failed to persist completed-run stats; applying in-memory fallback", {
+					PlayerUserId = player.UserId,
+					CauseType = recordResult.type,
+					CauseMessage = recordResult.message,
+				}, recordResult.type)
+				local runStats = self._sessionRunStats[player.UserId] or createDefaultRunStats()
+				runStats.TotalRuns += 1
+				self._sessionRunStats[player.UserId] = runStats
+				self._sync:SyncRunStats(player.UserId, runStats)
+			end
+
 			self._sync:RemovePlayer(player.UserId)
 		end
 	end
@@ -266,6 +375,12 @@ function EconomyContext:Destroy()
 	end
 	if self._playerRemovingConnection then
 		self._playerRemovingConnection:Disconnect()
+	end
+	if self._profileLoadedConnection then
+		self._profileLoadedConnection:Disconnect()
+	end
+	if self._profileSavingConnection then
+		self._profileSavingConnection:Disconnect()
 	end
 end
 

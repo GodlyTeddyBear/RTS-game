@@ -20,6 +20,16 @@ A map of this project's knowledge base. Read this first to know where to look.
 → Then [methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md](methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md) for runtime/persistence method boundaries
 
 
+### "I need to work with ECS entities, systems, or persistence"
+→ Start with [methods/ECS/COMPONENT_RULES.md](methods/ECS/COMPONENT_RULES.md) for authority labels and component shape
+→ Then [methods/ECS/ENTITY_FACTORY_RULES.md](methods/ECS/ENTITY_FACTORY_RULES.md) for the only JECS mutation surface
+→ Then [methods/ECS/SYSTEM_RULES.md](methods/ECS/SYSTEM_RULES.md) for statelessness and read/write ownership
+→ Then [methods/ECS/WORLD_ISOLATION_RULES.md](methods/ECS/WORLD_ISOLATION_RULES.md) for per-context world boundaries
+→ Then [methods/ECS/PHASE_AND_EXECUTION_RULES.md](methods/ECS/PHASE_AND_EXECUTION_RULES.md) for tick phase order and deferred flushes
+→ Then [methods/ECS/TAG_RULES.md](methods/ECS/TAG_RULES.md) for binary state markers vs data components
+→ Then [methods/ECS/INSTANCE_REVEAL_RULES.md](methods/ECS/INSTANCE_REVEAL_RULES.md) for replicating instance state to the client
+→ Then [methods/ECS/ECS_PERSISTENCE_RULES.md](methods/ECS/ECS_PERSISTENCE_RULES.md) for the ECS↔ProfileStore bridge
+
 ### "I need to create or improve planning quality"
 → Start with [methods/PLAN_DEVELOPMENT.md](methods/PLAN_DEVELOPMENT.md)
 → Then use `.codex/commands/plan-development.md` for GDD + implementation planning output
@@ -138,6 +148,14 @@ A map of this project's knowledge base. Read this first to know where to look.
 | [methods/frontend/HOOK_VIEWMODEL_CONTRACTS.md](methods/frontend/HOOK_VIEWMODEL_CONTRACTS.md) | Read/write hook separation and ViewModel contracts for frontend methods |
 | [methods/frontend/TEMPLATE_ORGANISM_CONTRACTS.md](methods/frontend/TEMPLATE_ORGANISM_CONTRACTS.md) | Template/organism composition contracts and animation guardrails |
 | [methods/frontend/CONTROLLER_INFRA_CONTRACTS.md](methods/frontend/CONTROLLER_INFRA_CONTRACTS.md) | Controller side-effect ownership and frontend infrastructure boundaries |
+| [methods/ECS/COMPONENT_RULES.md](methods/ECS/COMPONENT_RULES.md) | ECS component rules: pure data, Authoritative/Derived labels, frozen registries |
+| [methods/ECS/ENTITY_FACTORY_RULES.md](methods/ECS/ENTITY_FACTORY_RULES.md) | Entity factory rules: only JECS mutation surface, typed accessors, deferred destruction |
+| [methods/ECS/SYSTEM_RULES.md](methods/ECS/SYSTEM_RULES.md) | System rules: stateless, read/write declaration, single owner per authoritative component |
+| [methods/ECS/WORLD_ISOLATION_RULES.md](methods/ECS/WORLD_ISOLATION_RULES.md) | World isolation rules: one world per bounded context, Infrastructure-only JECS access |
+| [methods/ECS/PHASE_AND_EXECUTION_RULES.md](methods/ECS/PHASE_AND_EXECUTION_RULES.md) | Phase rules: Input→Logic→Sync→Render order, deferred flush, Derived writes in Sync only |
+| [methods/ECS/TAG_RULES.md](methods/ECS/TAG_RULES.md) | ECS tag rules: binary state markers, world:entity() creation, PascalCaseTag naming |
+| [methods/ECS/INSTANCE_REVEAL_RULES.md](methods/ECS/INSTANCE_REVEAL_RULES.md) | Instance reveal rules: Attributes and CollectionService tags as the server→client discovery channel |
+| [methods/ECS/ECS_PERSISTENCE_RULES.md](methods/ECS/ECS_PERSISTENCE_RULES.md) | ECS persistence rules: ECS↔ProfileStore bridge, Save/Load/Delete shape, serialization and lifecycle |
 
 
 ### Agent Rules

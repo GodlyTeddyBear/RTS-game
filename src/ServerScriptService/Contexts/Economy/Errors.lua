@@ -63,4 +63,39 @@ Errors.INVALID_GRANT_RESOURCE_TYPE = "EconomyContext: pickup grant missing resou
 ]=]
 Errors.INVALID_GRANT_AMOUNT = "EconomyContext: pickup grant missing amount"
 
+--[=[
+	@prop INVALID_RUN_STATS string
+	@within Errors
+	Returned when run stats payload is missing or malformed.
+]=]
+Errors.INVALID_RUN_STATS = "EconomyContext: run stats are required"
+
+--[=[
+	@prop INVALID_WAVE_NUMBER string
+	@within Errors
+	Returned when a wave number is missing or invalid.
+]=]
+Errors.INVALID_WAVE_NUMBER = "EconomyContext: wave number must be a positive integer"
+
+--[=[
+	@prop PERSISTENCE_PROFILE_NOT_LOADED string
+	@within Errors
+	Returned when persistence is requested before profile data is available.
+]=]
+Errors.PERSISTENCE_PROFILE_NOT_LOADED = "EconomyPersistence: profile data is not loaded"
+
+--[=[
+	@prop PERSISTENCE_RUN_STATS_MUST_BE_TABLE string
+	@within Errors
+	Returned when `profile.Data.RunStats` is not a table.
+]=]
+Errors.PERSISTENCE_RUN_STATS_MUST_BE_TABLE = "EconomyPersistence: run stats must be a table"
+
+--[=[
+	@prop PERSISTENCE_RUN_STATS_FIELDS_MUST_BE_NUMBERS string
+	@within Errors
+	Returned when one or more run stat fields are not numbers.
+]=]
+Errors.PERSISTENCE_RUN_STATS_FIELDS_MUST_BE_NUMBERS = "EconomyPersistence: run stats fields must be numbers"
+
 return table.freeze(Errors)

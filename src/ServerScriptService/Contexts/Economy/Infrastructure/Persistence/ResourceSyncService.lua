@@ -7,6 +7,19 @@ local SharedAtoms = require(ReplicatedStorage.Contexts.Economy.Sync.SharedAtoms)
 local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTypes)
 
 type ResourceWallet = EconomyTypes.ResourceWallet
+type ProfileRunStats = EconomyTypes.ProfileRunStats
+
+local function cloneRunStats(runStats: ProfileRunStats?): ProfileRunStats?
+	if runStats == nil then
+		return nil
+	end
+
+	return {
+		TotalRuns = runStats.TotalRuns,
+		BestWave = runStats.BestWave,
+		TotalWavesCleared = runStats.TotalWavesCleared,
+	}
+end
 
 --[=[
 	@class ResourceSyncService
@@ -21,6 +34,7 @@ local function cloneWallet(wallet: ResourceWallet): ResourceWallet
 	return {
 		energy = wallet.energy,
 		resources = table.clone(wallet.resources),
+		runStats = cloneRunStats(wallet.runStats),
 	}
 end
 
@@ -46,6 +60,26 @@ end
 ]=]
 function ResourceSyncService:InitPlayer(userId: number, startingWallet: ResourceWallet)
 	self:LoadUserData(userId, cloneWallet(startingWallet))
+end
+
+--[=[
+	Updates the synced run-stats snapshot for a player's wallet.
+	@within ResourceSyncService
+	@param userId number -- The player user id.
+	@param runStats ProfileRunStats -- The run stats snapshot to sync.
+]=]
+function ResourceSyncService:SyncRunStats(userId: number, runStats: ProfileRunStats)
+	self.Atom(function(current)
+		local wallet = current[userId]
+		if wallet == nil then
+			return current
+		end
+
+		local updated = table.clone(current)
+		updated[userId] = cloneWallet(wallet)
+		updated[userId].runStats = cloneRunStats(runStats)
+		return updated
+	end)
 end
 
 -- Adds a resource amount by cloning the wallet entry, mutating the copy, and writing it back.

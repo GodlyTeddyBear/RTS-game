@@ -23,14 +23,29 @@ export type ResourceType = "Energy" | string
 export type ZoneResourceMap = { [string]: number }
 
 --[=[
+	@interface ProfileRunStats
+	@within EconomyTypes
+	.TotalRuns number -- Number of completed runs recorded for the player.
+	.BestWave number -- Highest wave number reached across sessions.
+	.TotalWavesCleared number -- Lifetime count of cleared waves.
+]=]
+export type ProfileRunStats = {
+	TotalRuns: number,
+	BestWave: number,
+	TotalWavesCleared: number,
+}
+
+--[=[
 	@interface ResourceWallet
 	@within EconomyTypes
 	.energy number -- Current energy balance.
 	.resources ZoneResourceMap -- Current zone resource balances.
+	.runStats ProfileRunStats? -- Optional persisted run stats snapshot for client HUDs.
 ]=]
 export type ResourceWallet = {
 	energy: number,
 	resources: ZoneResourceMap,
+	runStats: ProfileRunStats?,
 }
 
 --[=[
