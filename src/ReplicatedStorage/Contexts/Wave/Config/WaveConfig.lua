@@ -53,40 +53,19 @@ local WaveConfig = {
 		},
 		[3] = {
 			{ role = "swarm", count = 8, groupDelay = 0 },
-			{ role = "ranged", count = 2, groupDelay = 10 },
+			{ role = "tank", count = 1, groupDelay = 10 },
 		},
 		[4] = {
 			{ role = "swarm", count = 10, groupDelay = 0 },
 			{ role = "tank", count = 2, groupDelay = 12 },
 		},
 		[5] = {
-			{ role = "swarm", count = 10, groupDelay = 0 },
-			{ role = "ranged", count = 4, groupDelay = 9 },
+			{ role = "swarm", count = 12, groupDelay = 0 },
+			{ role = "tank", count = 2, groupDelay = 9 },
 		},
 		[6] = {
-			{ role = "swarm", count = 12, groupDelay = 0 },
-			{ role = "tank", count = 2, groupDelay = 10 },
-			{ role = "ranged", count = 2, groupDelay = 14 },
-		},
-		[7] = {
-			{ role = "swarm", count = 12, groupDelay = 0 },
-			{ role = "tank", count = 3, groupDelay = 10 },
-			{ role = "ranged", count = 3, groupDelay = 14 },
-		},
-		[8] = {
 			{ role = "swarm", count = 14, groupDelay = 0 },
 			{ role = "tank", count = 3, groupDelay = 10 },
-			{ role = "ranged", count = 4, groupDelay = 15 },
-		},
-		[9] = {
-			{ role = "swarm", count = 16, groupDelay = 0 },
-			{ role = "tank", count = 4, groupDelay = 9 },
-			{ role = "ranged", count = 4, groupDelay = 14 },
-		},
-		[10] = {
-			{ role = "swarm", count = 18, groupDelay = 0 },
-			{ role = "tank", count = 5, groupDelay = 8 },
-			{ role = "ranged", count = 6, groupDelay = 12 },
 		},
 	},
 
@@ -96,10 +75,7 @@ local WaveConfig = {
 		Threshold-based role additions for endless waves.
 	]=]
 	-- Extra role groups appended once the endless index reaches each threshold.
-	ENDLESS_ROLE_THRESHOLDS = {
-		[3] = { role = "disruptor", count = 1 },
-		[6] = { role = "artillery", count = 1 },
-	},
+	ENDLESS_ROLE_THRESHOLDS = {},
 }
 
 deepFreeze(WaveConfig)

@@ -25,15 +25,5 @@ local function phase(name: string): PhaseEntry
 end
 
 return table.freeze({
-	phase("NPCPositionPoll"),
-	phase("VillagerPositionPoll"),
-	phase("NPCSync"),
-	phase("VillagerBehavior"),
-	phase("VillagerSync"),
-	phase("CombatTick"),
-	phase("WorkerSync"),
-	phase("LotSync"),
-	phase("BuildingSync"),
-	phase("MachineRuntime"),
-	phase("WorkerProduction"),
+	phase("EnemySync"),
 }) :: { PhaseEntry }

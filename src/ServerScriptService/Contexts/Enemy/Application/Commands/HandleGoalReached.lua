@@ -1,0 +1,63 @@
+--!strict
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local GameEvents = require(ReplicatedStorage.Events.GameEvents)
+
+local Result = require(ReplicatedStorage.Utilities.Result)
+local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
+local Errors = require(script.Parent.Parent.Parent.Errors)
+
+local Ok = Result.Ok
+local Ensure = Result.Ensure
+local Try = Result.Try
+
+--[=[
+	@class HandleGoalReached
+	Handles enemy goal contact by notifying wave logic, damaging the commander, and despawning the enemy.
+	@server
+]=]
+local HandleGoalReached = {}
+HandleGoalReached.__index = HandleGoalReached
+
+function HandleGoalReached.new()
+	return setmetatable({}, HandleGoalReached)
+end
+
+function HandleGoalReached:Init(registry: any, _name: string)
+	self._entityFactory = registry:Get("EnemyEntityFactory")
+	self._despawnEnemyCommand = registry:Get("DespawnEnemyCommand")
+end
+
+function HandleGoalReached:Execute(entity: any, primaryPlayer: Player?, commanderContext: any): Result.Result<boolean>
+	return Result.Catch(function()
+		Ensure(entity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
+
+		local identity = self._entityFactory:GetIdentity(entity)
+		Ensure(identity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
+
+		local roleConfig = EnemyConfig.ROLES[identity.role]
+		Ensure(roleConfig ~= nil, "InvalidRole", Errors.INVALID_ROLE)
+
+		self._entityFactory:MarkGoalReached(entity)
+		local deathCFrame = self._entityFactory:GetDeathCFrame(entity) or CFrame.new()
+		GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.role, identity.waveNumber, deathCFrame)
+
+		Try(self._despawnEnemyCommand:Execute(entity))
+
+		if primaryPlayer and commanderContext then
+			local damageResult = commanderContext:ApplyDamage(primaryPlayer, roleConfig.damage)
+			if not damageResult.success then
+				Result.MentionError("Enemy:HandleGoalReached", "Failed to apply commander damage", {
+					EnemyId = identity.enemyId,
+					Role = identity.role,
+					WaveNumber = identity.waveNumber,
+					PlayerUserId = primaryPlayer.UserId,
+				}, damageResult.type)
+			end
+		end
+
+		return Ok(true)
+	end, "Enemy:HandleGoalReached")
+end
+
+return HandleGoalReached

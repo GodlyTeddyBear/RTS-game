@@ -148,7 +148,6 @@ function ServerScheduler:_BuildHeartbeatPipeline()
 		pipeline:insert(entry.Phase)
 	end
 	_scheduler:insert(pipeline, RunService, "Heartbeat")
-	_scheduler:addRunCondition(PHASE_MAP["WorkerProduction"], Planck.timePassed(1))
 end
 
 function ServerScheduler:_FlushQueuedSystems()
