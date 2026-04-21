@@ -25,5 +25,7 @@ local function phase(name: string): PhaseEntry
 end
 
 return table.freeze({
+	phase("EnemyPositionPoll"),
 	phase("EnemySync"),
+	phase("CombatTick"),
 }) :: { PhaseEntry }

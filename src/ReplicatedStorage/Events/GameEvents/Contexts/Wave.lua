@@ -15,6 +15,7 @@ local Wave = {}
 ]=]
 local events = table.freeze({
 	SpawnEnemy = "Wave.SpawnEnemy",
+	EnemySpawned = "Wave.EnemySpawned",
 	EnemyDied = "Wave.EnemyDied",
 })
 
@@ -25,6 +26,7 @@ local events = table.freeze({
 ]=]
 local schemas: { [string]: { string } } = {
 	[events.SpawnEnemy] = { "string", "CFrame", "number" },
+	[events.EnemySpawned] = { "number", "string", "number" },
 	[events.EnemyDied] = { "string", "number", "CFrame" },
 }
 

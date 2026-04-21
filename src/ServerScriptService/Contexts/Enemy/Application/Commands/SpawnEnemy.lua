@@ -4,6 +4,7 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
@@ -44,6 +45,7 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 		model:PivotTo(spawnCFrame)
 		self._entityFactory:SetModelRef(entity, model)
 		self._syncService:RegisterEntity(entity)
+		GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemySpawned, entity, role, waveNumber)
 
 		return Ok(entity)
 	end, "Enemy:SpawnEnemy", function()

@@ -25,6 +25,7 @@ local GetAliveEnemiesQuery = require(script.Parent.Application.Queries.GetAliveE
 local GetEnemyCountQuery = require(script.Parent.Application.Queries.GetEnemyCountQuery)
 
 local Catch = Result.Catch
+local Ok = Result.Ok
 
 --[=[
 	@class EnemyContext
@@ -64,6 +65,10 @@ function EnemyContext:KnitInit()
 	registry:Get("GetEnemyCountQuery"):Init(registry, "GetEnemyCountQuery")
 
 	self._registry = registry
+	self._world = registry:Get("World")
+	self._components = registry:Get("EnemyComponentRegistry"):GetComponents()
+	self._entityFactory = registry:Get("EnemyEntityFactory")
+	self._modelFactory = registry:Get("EnemyModelFactory")
 	self._syncService = registry:Get("EnemyGameObjectSyncService")
 	self._spawnEnemyCommand = registry:Get("SpawnEnemyCommand")
 	self._despawnEnemyCommand = registry:Get("DespawnEnemyCommand")
@@ -132,6 +137,26 @@ function EnemyContext:GetEnemyCount(): Result.Result<number>
 	return Catch(function()
 		return self._getEnemyCountQuery:Execute()
 	end, "Enemy:GetEnemyCount")
+end
+
+function EnemyContext:GetWorld(): Result.Result<any>
+	return Ok(self._world)
+end
+
+function EnemyContext:GetComponents(): Result.Result<any>
+	return Ok(self._components)
+end
+
+function EnemyContext:GetEntityFactory(): Result.Result<any>
+	return Ok(self._entityFactory)
+end
+
+function EnemyContext:GetModelFactory(): Result.Result<any>
+	return Ok(self._modelFactory)
+end
+
+function EnemyContext:GetGameObjectSyncService(): Result.Result<any>
+	return Ok(self._syncService)
 end
 
 function EnemyContext:CleanupAll(): Result.Result<boolean>
