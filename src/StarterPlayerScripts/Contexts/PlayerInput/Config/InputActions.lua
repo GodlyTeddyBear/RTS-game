@@ -23,4 +23,10 @@ return {
 			PC = { Input = Enum.KeyCode.X, Toggle = true },
 		},
 	},
+	Placement = {
+		Enabled = false,
+		CancelPlacement = {
+			PC = { Input = Enum.KeyCode.Q },
+		},
+	},
 }

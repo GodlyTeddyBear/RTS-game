@@ -12,6 +12,7 @@ local Colors = require(script.Parent.Parent.Parent.Parent.App.Config.ColorTokens
 local Border = require(script.Parent.Parent.Parent.Parent.App.Config.BorderTokens)
 local Spacing = require(script.Parent.Parent.Parent.Parent.App.Config.SpacingTokens)
 local useAnimatedVisibility = require(script.Parent.Parent.Parent.Parent.App.Application.Hooks.useAnimatedVisibility)
+local usePlacementCursorActions = require(script.Parent.Parent.Parent.Parent.App.Application.Hooks.usePlacementCursorActions)
 
 local usePlacementPaletteHud = require(script.Parent.Parent.Parent.Application.Hooks.usePlacementPaletteHud)
 local StructureCard = require(script.Parent.Parent.Molecules.StructureCard)
@@ -24,11 +25,22 @@ export type TPlacementPaletteProps = {
 
 local function PlacementPalette(props: TPlacementPaletteProps)
 	local paletteHud = usePlacementPaletteHud()
+	local placementCursorActions = usePlacementCursorActions()
 	local selectedType, setSelectedType = React.useState(nil :: string?)
 	local visibility = useAnimatedVisibility(paletteHud.isVisible, {
 		Mode = "slideRight",
 		SpringPreset = "Smooth",
 	})
+
+	React.useEffect(function()
+		local connection = placementCursorActions.onCancelled(function()
+			setSelectedType(nil)
+		end)
+
+		return function()
+			connection:Disconnect()
+		end
+	end, { placementCursorActions })
 
 	if not visibility.shouldRender then
 		return nil
@@ -38,8 +50,8 @@ local function PlacementPalette(props: TPlacementPaletteProps)
 	end
 
 	local function _HandleStructureSelected(cardData: TStructureCardData)
-		setSelectedType(cardData.structureType)
 		onStructureSelected(cardData.structureType)
+		setSelectedType(if selectedType == cardData.structureType then nil else cardData.structureType)
 	end
 
 	return e(Frame, {
@@ -81,10 +93,8 @@ local function PlacementPalette(props: TPlacementPaletteProps)
 					children[cardData.structureType] = e(StructureCard, {
 						cardData = cardData,
 						isSelected = selectedType == cardData.structureType,
-						onSelect = function(structureType: string)
-							if structureType == cardData.structureType then
-								_HandleStructureSelected(cardData)
-							end
+						onSelect = function(_structureType: string)
+							_HandleStructureSelected(cardData)
 						end,
 						LayoutOrder = index,
 					})

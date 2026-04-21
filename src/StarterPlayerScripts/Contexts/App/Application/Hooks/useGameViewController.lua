@@ -18,6 +18,7 @@ local useState = React.useState
 local useNavigationActions = require(script.Parent.useNavigationActions)
 local useNavigation = require(script.Parent.useNavigation)
 local useHudVisibility = require(script.Parent.useHudVisibility)
+local usePlacementCursorActions = require(script.Parent.usePlacementCursorActions)
 local useRunState = require(script.Parent.Parent.Parent.Parent.Run.Application.Hooks.useRunState)
 local useSoundActions = require(script.Parent.Parent.Parent.Parent.Sound.Application.Hooks.useSoundActions)
 local AnimationTokens = require(script.Parent.Parent.Parent.Config.AnimationTokens)
@@ -31,6 +32,7 @@ local RESULTS_SCREEN = "Results"
 
 type TNavigationActions = typeof(useNavigationActions())
 type TSoundActions = typeof(useSoundActions())
+type TPlacementCursorActions = typeof(usePlacementCursorActions())
 
 type TSetBooleanState = (boolean | ((boolean) -> boolean)) -> ()
 type TThreadRef = { current: thread? }
@@ -189,9 +191,9 @@ local function _CreateStartPhase2Handler(): () -> ()
 	end
 end
 
-local function _CreateStructureSelectedHandler(): (string) -> ()
-	return function(_structureType: string)
-		-- Reserved for the Phase 2 placement cursor system.
+local function _CreateStructureSelectedHandler(placementCursorActions: TPlacementCursorActions): (string) -> ()
+	return function(structureType: string)
+		placementCursorActions.togglePlacementMode(structureType)
 	end
 end
 
@@ -214,6 +216,7 @@ local function useGameViewController(): TGameViewController
 	local hudVisibility = useHudVisibility()
 	local runState = useRunState()
 	local soundActions = useSoundActions()
+	local placementCursorActions = usePlacementCursorActions()
 	local isMenuOpen, setIsMenuOpen = useState(false)
 	local actionsRef = useRef(actions)
 	local soundActionsRef = useRef(soundActions)
@@ -282,8 +285,8 @@ local function useGameViewController(): TGameViewController
 		return _CreateStartPhase2Handler()
 	end, {})
 	local onStructureSelected = useMemo(function()
-		return _CreateStructureSelectedHandler()
-	end, {})
+		return _CreateStructureSelectedHandler(placementCursorActions)
+	end, { placementCursorActions })
 
 	return {
 		isMenuOpen = isMenuOpen,
