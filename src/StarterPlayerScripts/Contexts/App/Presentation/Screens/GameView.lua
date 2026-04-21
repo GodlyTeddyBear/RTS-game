@@ -23,6 +23,7 @@ local function GameView()
 		onNavigateFromMenu = controller.onNavigateFromMenu,
 		onOpenSettings = controller.onOpenSettings,
 		onExitGame = controller.onExitGame,
+		onStartPhase2 = controller.onStartPhase2,
 		playerUsername = controller.playerUsername,
 		playerLevel = controller.playerLevel,
 	})

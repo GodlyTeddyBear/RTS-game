@@ -8,6 +8,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local React = require(ReplicatedStorage.Packages.React)
+local Knit = require(ReplicatedStorage.Packages.Knit)
 
 local useEffect = React.useEffect
 local useMemo = React.useMemo
@@ -45,6 +46,7 @@ type TValueRef<T> = { current: T }
 	.onNavigateFromMenu (featureName: string) -> () -- Switch tabs within the open menu and play sound.
 	.onOpenSettings () -> () -- Navigate to the Settings screen from the menu.
 	.onExitGame () -> () -- Exit to the Game screen and close the menu.
+	.onStartPhase2 () -> () -- Request the server to teleport into the Phase 2 map and start the run.
 	.isRunActive boolean -- Whether the run lifecycle is currently in an active gameplay state.
 	.playerUsername string -- The current player's username.
 	.playerLevel number -- The current player's level.
@@ -57,6 +59,7 @@ export type TGameViewController = {
 	onNavigateFromMenu: (featureName: string) -> (),
 	onOpenSettings: () -> (),
 	onExitGame: () -> (),
+	onStartPhase2: () -> (),
 	isRunActive: boolean,
 	playerUsername: string,
 	playerLevel: number,
@@ -164,6 +167,26 @@ local function _CreateOpenSettingsHandler(navigateFromMenu: (featureName: string
 	end
 end
 
+local function _RequestStartRun(): boolean
+	local runContext = Knit.GetService("RunContext")
+	local ok, started = pcall(function()
+		return runContext:RequestStartRun()
+	end)
+
+	if not ok or not started then
+		warn("[GameView] Failed to request Phase 2 start")
+		return false
+	end
+
+	return true
+end
+
+local function _CreateStartPhase2Handler(): () -> ()
+	return function()
+		_RequestStartRun()
+	end
+end
+
 local function _IsRunActive(stateName: string): boolean
 	return stateName == "Prep"
 		or stateName == "Wave"
@@ -247,6 +270,9 @@ local function useGameViewController(): TGameViewController
 	local onExitGame = useMemo(function()
 		return _CreateExitGameHandler(actionsRef)
 	end, {})
+	local onStartPhase2 = useMemo(function()
+		return _CreateStartPhase2Handler()
+	end, {})
 
 	return {
 		isMenuOpen = isMenuOpen,
@@ -256,6 +282,7 @@ local function useGameViewController(): TGameViewController
 		onNavigateFromMenu = onNavigateFromMenu,
 		onOpenSettings = onOpenSettings,
 		onExitGame = onExitGame,
+		onStartPhase2 = onStartPhase2,
 		isRunActive = _IsRunActive(runState.state),
 		playerUsername = playerUsername,
 		playerLevel = playerLevel,

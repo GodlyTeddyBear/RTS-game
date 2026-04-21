@@ -2,6 +2,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Registry = require(ReplicatedStorage.Utilities.Registry)
@@ -9,6 +10,7 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 local RunConfig = require(ReplicatedStorage.Contexts.Run.Config.RunConfig)
+local RunTravelConfig = require(ReplicatedStorage.Contexts.Run.Config.RunTravelConfig)
 local CommandRegistry = require(ReplicatedStorage.Contexts.Log.CommandRegistry)
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
@@ -79,6 +81,7 @@ function RunContext:KnitInit()
 	-- Cache the resolved modules so the public Run API stays thin.
 	self._machine = registry:Get("RunStateMachine")
 	self._sync = registry:Get("RunSyncService")
+	self._transitionPolicy = registry:Get("RunTransitionPolicy")
 	self._startRunCommand = registry:Get("StartRunCommand")
 	self._notifyWaveClearedCommand = registry:Get("NotifyWaveClearedCommand")
 	self._notifyClimaxCompleteCommand = registry:Get("NotifyClimaxCompleteCommand")
@@ -129,6 +132,23 @@ end
 
 local function _formatCommandFailure(commandName: string, result: Result.Result<any>): (boolean, string)
 	return false, string.format("%s failed: %s", commandName, result.message)
+end
+
+local function _ResolveSpawnCFrame(markerName: string, fallbackCFrame: CFrame): CFrame
+	local marker = Workspace:FindFirstChild(markerName, true)
+	if marker == nil then
+		return fallbackCFrame
+	end
+
+	if marker:IsA("BasePart") then
+		return marker.CFrame
+	end
+
+	if marker:IsA("Model") then
+		return marker:GetPivot()
+	end
+
+	return fallbackCFrame
 end
 
 function RunContext:_RegisterDeveloperLogCommands()
@@ -259,6 +279,8 @@ end
 ]=]
 function RunContext:StartRun(): Result.Result<boolean>
 	return Catch(function()
+		Try(self._transitionPolicy:CheckCanStartRun(self._machine:GetState()))
+		self:_TeleportPlayersToCFrame(self:_GetPhase2EntryCFrame())
 		return self._startRunCommand:Execute(self._onPrepTimeout)
 	end, "Run:StartRun")
 end
@@ -294,9 +316,14 @@ function RunContext:ResetRun(): Result.Result<boolean>
 		local state = self._machine:GetState()
 		if state ~= "Idle" and state ~= "RunEnd" then
 			Try(self._notifyCommanderDeathCommand:Execute())
+			state = self._machine:GetState()
 		end
 
-		return self._startRunCommand:Execute(self._onPrepTimeout)
+		if state == "RunEnd" then
+			Try(self._machine:Transition("Idle"))
+		end
+
+		return self:StartRun()
 	end, "Run:ResetRun")
 end
 
@@ -367,6 +394,21 @@ function RunContext:SkipCurrentPhase(): Result.Result<boolean>
 end
 
 --[=[
+	Requests a run start from the client lobby flow.
+	@within RunContext
+	@param _player Player -- The requesting player.
+	@return boolean -- `true` when the run successfully started.
+]=]
+function RunContext.Client:RequestStartRun(player: Player): boolean
+	if player.Character == nil then
+		return false
+	end
+
+	local result = self.Server:StartRun()
+	return result.success
+end
+
+--[=[
 	Requests a run restart from the client.
 	@within RunContext
 	@param _player Player -- The requesting player.
@@ -384,6 +426,28 @@ function RunContext.Client:RequestRestartRun(_player: Player): boolean
 	end
 
 	return false
+end
+
+function RunContext:_GetPhase2EntryCFrame(): CFrame
+	return _ResolveSpawnCFrame(RunTravelConfig.PHASE2_ENTRY_MARKER_NAME, RunTravelConfig.PHASE2_ENTRY_CFRAME)
+end
+
+function RunContext:_GetLobbyReturnCFrame(): CFrame
+	return _ResolveSpawnCFrame(RunTravelConfig.LOBBY_RETURN_MARKER_NAME, RunTravelConfig.LOBBY_RETURN_CFRAME)
+end
+
+function RunContext:_TeleportPlayersToCFrame(targetCFrame: CFrame)
+	for _, player in Players:GetPlayers() do
+		local character = player.Character
+		if character then
+			local rootPart = character:FindFirstChild("HumanoidRootPart")
+			if rootPart and rootPart:IsA("BasePart") then
+				rootPart.AssemblyLinearVelocity = Vector3.zero
+				rootPart.AssemblyAngularVelocity = Vector3.zero
+				rootPart.CFrame = targetCFrame
+			end
+		end
+	end
 end
 
 -- Pushes the new run snapshot to sync, then emits milestone logs for lifecycle transitions.
@@ -408,6 +472,7 @@ function RunContext:_OnStateChanged(newState: RunState, previousState: RunState)
 
 	-- Terminal cleanup hooks will be attached here as downstream systems are implemented.
 	if newState == "RunEnd" then
+		self:_TeleportPlayersToCFrame(self:_GetLobbyReturnCFrame())
 		Result.MentionEvent("RunContext:RunEnd", "Run ended; lifecycle cleanup hook", {
 			WaveNumber = self._machine:GetWaveNumber(),
 		})

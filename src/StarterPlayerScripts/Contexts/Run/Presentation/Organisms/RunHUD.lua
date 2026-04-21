@@ -3,14 +3,18 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local React = require(ReplicatedStorage.Packages.React)
+local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 local e = React.createElement
 
 local AppFrame = require(script.Parent.Parent.Parent.Parent.App.Presentation.Atoms.Frame)
 local Text = require(script.Parent.Parent.Parent.Parent.App.Presentation.Atoms.Text)
 local HStack = require(script.Parent.Parent.Parent.Parent.App.Presentation.Layouts.HStack)
+local VStack = require(script.Parent.Parent.Parent.Parent.App.Presentation.Layouts.VStack)
 local useRunState = require(script.Parent.Parent.Parent.Application.Hooks.useRunState)
 local useCommanderHud = require(script.Parent.Parent.Parent.Application.Hooks.useCommanderHud)
 local useResourceHud = require(script.Parent.Parent.Parent.Application.Hooks.useResourceHud)
+
+type RunState = RunTypes.RunState
 
 local function _ComputeHealthFillScale(hp: number, maxHp: number): number
 	if maxHp <= 0 then
@@ -19,6 +23,30 @@ local function _ComputeHealthFillScale(hp: number, maxHp: number): number
 
 	local ratio = hp / maxHp
 	return math.clamp(ratio, 0, 1)
+end
+
+local function _GetPhaseLabel(state: RunState): string
+	if state == "Prep" then
+		return "Prep"
+	end
+
+	if state == "Wave" or state == "Endless" then
+		return "Combat"
+	end
+
+	if state == "Resolution" then
+		return "Breather"
+	end
+
+	if state == "Climax" then
+		return "Climax"
+	end
+
+	if state == "RunEnd" then
+		return "Run End"
+	end
+
+	return "Lobby"
 end
 
 local function RunHUD()
@@ -74,14 +102,29 @@ local function RunHUD()
 					}),
 				}),
 			}),
-			Wave = e(Text, {
-				Size = UDim2.fromScale(0.24, 0.6),
+			CenterCluster = e(VStack, {
+				Size = UDim2.fromScale(0.24, 0.72),
 				Position = UDim2.fromScale(0.5, 0.5),
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Text = ("Wave %d"):format(runState.waveNumber),
-				Variant = "heading",
-				TextXAlignment = Enum.TextXAlignment.Center,
-				TextYAlignment = Enum.TextYAlignment.Center,
+				BackgroundTransparency = 1,
+				Gap = 2,
+				Align = "Center",
+				Justify = "Center",
+			}, {
+				Phase = e(Text, {
+					Size = UDim2.fromScale(1, 0.3),
+					Text = _GetPhaseLabel(runState.state),
+					Variant = "label",
+					TextXAlignment = Enum.TextXAlignment.Center,
+					TextYAlignment = Enum.TextYAlignment.Center,
+				}),
+				Wave = e(Text, {
+					Size = UDim2.fromScale(1, 0.58),
+					Text = ("Wave %d"):format(runState.waveNumber),
+					Variant = "heading",
+					TextXAlignment = Enum.TextXAlignment.Center,
+					TextYAlignment = Enum.TextYAlignment.Center,
+				}),
 			}),
 			RightCluster = e(HStack, {
 				Size = UDim2.fromScale(0.34, 0.7),

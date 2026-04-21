@@ -22,8 +22,8 @@ export type TNavigationState = {
 
 -- Create singleton atom
 local navigationAtom = Charm.atom({
-	CurrentScreen = "Game",
-	History = { "Game" },
+	CurrentScreen = "Home",
+	History = { "Home" },
 	Params = nil,
 } :: TNavigationState)
 
