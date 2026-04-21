@@ -1,0 +1,35 @@
+option ServerOutput = "Generated/ResourceSyncServer.luau"
+option ClientOutput = "Generated/ResourceSyncClient.luau"
+
+option RemoteScope = "RESOURCE_SYNC"
+
+map ResourceMap = { [string]: u32 }
+
+struct WalletPayload {
+	energy: u32?,
+	resources: ResourceMap?,
+}
+
+struct InitPayload {
+	resources: WalletPayload?,
+}
+
+struct PatchPayload {
+	resources: WalletPayload?,
+}
+
+enum SyncPayload = "type" {
+	init {
+		data: InitPayload?,
+	},
+	patch {
+		data: PatchPayload?,
+	},
+}
+
+event SyncResources {
+	from: Server,
+	type: Reliable,
+	call: SingleAsync,
+	data: SyncPayload,
+}

@@ -3,7 +3,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Jabby = require(ReplicatedStorage.Packages.Jabby)
 
-local ServerScheduler = require(script.Parent.Scheduler.ServerScheduler)
 local PlayerCollisionService = require(script.Parent.PlayerCollisionService)
 
 local DEVELOPER_USER_ID = 205423638 -- TODO: replace with your Roblox UserId
@@ -25,7 +24,5 @@ Knit.Start()
 		end)
 
 		PlayerCollisionService:Initialize()
-		ServerScheduler:Initialize()
-		print("Server started with Planck scheduler")
 	end)
 	:catch(warn)
