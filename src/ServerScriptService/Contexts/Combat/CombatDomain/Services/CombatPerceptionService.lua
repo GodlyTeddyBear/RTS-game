@@ -15,7 +15,10 @@ function CombatPerceptionService.new()
 end
 
 -- Resolves the enemy entity factory used to inspect path and health state.
-function CombatPerceptionService:Init(registry: any, _name: string)
+function CombatPerceptionService:Init(_registry: any, _name: string)
+end
+
+function CombatPerceptionService:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
 end
 

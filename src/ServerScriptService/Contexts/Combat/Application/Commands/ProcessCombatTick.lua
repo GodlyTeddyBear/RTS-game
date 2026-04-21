@@ -23,13 +23,16 @@ end
 -- Resolves the combat loop, BT policy, executor registry, and perception services.
 function ProcessCombatTick:Init(registry: any, _name: string)
 	self._loopService = registry:Get("CombatLoopService")
-	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
 	self._tickPolicy = registry:Get("BehaviorTreeTickPolicy")
 	self._waveCompletionPolicy = registry:Get("WaveCompletionPolicy")
 	self._executorRegistry = registry:Get("ExecutorRegistry")
 	self._perceptionService = registry:Get("CombatPerceptionService")
 	self._handleGoalReachedCommand = registry:Get("HandleGoalReached")
 	self._hasSeenAliveByUser = {}
+end
+
+function ProcessCombatTick:Start(registry: any, _name: string)
+	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
 end
 
 -- Runs the behavior tree phase for each alive enemy and updates its last BT tick time.

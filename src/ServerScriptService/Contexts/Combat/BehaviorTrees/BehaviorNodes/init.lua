@@ -1,7 +1,7 @@
 --!strict
 
-local Conditions = require(script.Parent.Conditions)
-local Commands = require(script.Parent.Commands)
+local Conditions = require(script.Conditions)
+local Commands = require(script.Commands)
 
 --[=[
 	@class BehaviorNodes

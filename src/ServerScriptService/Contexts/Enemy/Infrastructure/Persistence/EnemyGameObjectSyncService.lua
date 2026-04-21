@@ -12,7 +12,7 @@ end
 
 function EnemyGameObjectSyncService:Init(registry: any, _name: string)
 	self.World = registry:Get("World")
-	self.Components = registry:Get("Components")
+	self.Components = registry:Get("EnemyComponentRegistry"):GetComponents()
 	self.EnemyEntityFactory = registry:Get("EnemyEntityFactory")
 	self.EnemyModelFactory = registry:Get("EnemyModelFactory")
 end

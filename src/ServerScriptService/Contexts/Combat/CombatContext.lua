@@ -42,7 +42,16 @@ local Try = Result.Try
 
 -- Unwraps a required context dependency and raises immediately if the registry returned a failure.
 local function _unwrapResult(result: any, label: string)
-	assert(result.success, string.format("%s failed: %s", label, result.message))
+	if result.success then
+		return result.value
+	end
+
+	local message = result.message
+	if message == nil then
+		message = result.type or "Unknown error"
+	end
+
+	error(string.format("%s failed: %s", label, tostring(message)))
 	return result.value
 end
 
@@ -73,6 +82,7 @@ function CombatContext:KnitInit()
 	registry:Register("ProcessCombatTick", ProcessCombatTick.new(), "Application")
 	registry:Register("EndCombat", EndCombat.new(), "Application")
 	registry:Register("HandleGoalReached", HandleGoalReached.new(), "Application")
+	registry:InitAll()
 
 	self._registry = registry
 	self._combatLoopService = registry:Get("CombatLoopService")
@@ -122,15 +132,13 @@ function CombatContext:KnitStart()
 	self._registry:Register("World", enemyWorld)
 	self._registry:Register("Components", enemyComponents)
 
-	self._registry:InitAll()
-
 	-- Register the executor singletons before the first wave can enqueue actions.
 	local laneAdvanceExecutor = LaneAdvanceExecutor.new()
 	local idleExecutor = IdleExecutor.new()
 	self._executorRegistry:Register("LaneAdvance", laneAdvanceExecutor)
 	self._executorRegistry:Register("Idle", idleExecutor)
 
-	self._registry:StartOrdered({ "Infrastructure", "Domain", "Application" })
+	self._registry:StartOrdered({ "Domain", "Infrastructure", "Application" })
 
 	-- Cache lane waypoints once so spawn handlers only need to copy the path.
 	self:_CacheLaneWaypoints()

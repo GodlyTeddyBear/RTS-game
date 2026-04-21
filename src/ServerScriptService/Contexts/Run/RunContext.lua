@@ -81,6 +81,7 @@ function RunContext:KnitInit()
 
 	-- Cache the resolved modules so the public Run API stays thin.
 	self._machine = registry:Get("RunStateMachine")
+	self._timer = registry:Get("RunTimerService")
 	self._sync = registry:Get("RunSyncService")
 	self._transitionPolicy = registry:Get("RunTransitionPolicy")
 	self._startRunCommand = registry:Get("StartRunCommand")

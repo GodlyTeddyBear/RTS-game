@@ -24,6 +24,9 @@ end
 function EndCombat:Init(registry: any, _name: string)
 	self._loopService = registry:Get("CombatLoopService")
 	self._executorRegistry = registry:Get("ExecutorRegistry")
+end
+
+function EndCombat:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
 end
 

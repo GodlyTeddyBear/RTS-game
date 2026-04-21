@@ -14,7 +14,10 @@ function WaveCompletionPolicy.new()
 end
 
 -- Resolves the enemy entity factory used to inspect alive entities.
-function WaveCompletionPolicy:Init(registry: any, _name: string)
+function WaveCompletionPolicy:Init(_registry: any, _name: string)
+end
+
+function WaveCompletionPolicy:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
 end
 

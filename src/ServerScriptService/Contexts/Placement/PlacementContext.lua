@@ -42,16 +42,8 @@ local PlacementContext = Knit.CreateService({
 function PlacementContext:KnitInit()
 	local registry = Registry.new("Server")
 
-	-- Resolve cross-context collaborators up front so the command stack stays thin.
-	local runContext = Knit.GetService("RunContext")
-	local worldContext = Knit.GetService("WorldContext")
-	local economyContext = Knit.GetService("EconomyContext")
-
 	registry:Register("BlinkSyncServer", BlinkSyncServer)
 	registry:Register("BlinkRemoteServer", BlinkRemoteServer)
-	registry:Register("RunContext", runContext)
-	registry:Register("WorldContext", worldContext)
-	registry:Register("EconomyContext", economyContext)
 	registry:Register("PlacementValidator", PlacementValidator.new(), "Domain")
 	registry:Register("PlacementService", PlacementService.new(), "Infrastructure")
 	registry:Register("PlacementSyncService", PlacementSyncService.new(), "Infrastructure")
@@ -60,7 +52,8 @@ function PlacementContext:KnitInit()
 	registry:Register("GetPlacedStructuresQuery", GetPlacedStructuresQuery.new(), "Application")
 	registry:InitAll()
 
-	self._runContext = runContext
+	self._registry = registry
+	self._runContext = nil
 	self._validator = registry:Get("PlacementValidator")
 	self._syncService = registry:Get("PlacementSyncService")
 	self._placementService = registry:Get("PlacementService")
@@ -83,6 +76,16 @@ end
 ]=]
 -- Hydrate current and future players, then watch for run-end cleanup.
 function PlacementContext:KnitStart()
+	local runContext = Knit.GetService("RunContext")
+	local worldContext = Knit.GetService("WorldContext")
+	local economyContext = Knit.GetService("EconomyContext")
+	self._runContext = runContext
+
+	self._registry:Register("RunContext", runContext)
+	self._registry:Register("WorldContext", worldContext)
+	self._registry:Register("EconomyContext", economyContext)
+	self._registry:StartOrdered({ "Domain", "Infrastructure", "Application" })
+
 	-- Late joiners need the current placement atom immediately after they connect.
 	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
 		self._syncService:HydratePlayer(player)

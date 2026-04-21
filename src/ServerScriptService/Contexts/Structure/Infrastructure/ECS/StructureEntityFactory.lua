@@ -37,7 +37,22 @@ end
 ]=]
 function StructureEntityFactory:Init(registry: any, _name: string)
 	self._world = registry:Get("World")
-	self._components = registry:Get("StructureComponentRegistry"):GetComponents()
+	self._componentRegistry = registry:Get("StructureComponentRegistry")
+	self._components = self._componentRegistry:GetComponents()
+end
+
+function StructureEntityFactory:_GetComponents()
+	local components = self._components
+	if components ~= nil then
+		return components
+	end
+
+	components = self._componentRegistry:GetComponents()
+	if components ~= nil then
+		self._components = components
+	end
+
+	return components
 end
 
 --[=[
@@ -47,6 +62,9 @@ end
 	@return number -- The new ECS entity id.
 ]=]
 function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord): number
+	local components = self:_GetComponents()
+	assert(components ~= nil, "Structure components are not initialized")
+
 	local structureConfig = StructureConfig.STRUCTURES[record.structureType]
 	assert(structureConfig ~= nil, "Unknown structure type: " .. tostring(record.structureType))
 
@@ -55,36 +73,36 @@ function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord)
 	local structureId = tostring(record.instanceId)
 
 	-- Copy the combat stats from config so later balance changes stay data-driven.
-	self._world:set(entity, self._components.AttackStatsComponent, {
+	self._world:set(entity, components.AttackStatsComponent, {
 		AttackRange = structureConfig.AttackRange,
 		AttackDamage = structureConfig.AttackDamage,
 		AttackCooldown = structureConfig.AttackCooldown,
 	} :: TAttackStatsComponent)
 
 	-- Start every structure with an empty cooldown so the first target can fire immediately once ready.
-	self._world:set(entity, self._components.AttackCooldownComponent, {
+	self._world:set(entity, components.AttackCooldownComponent, {
 		Elapsed = 0,
 	} :: TAttackCooldownComponent)
 
 	-- Store a nil target until the targeting system resolves a nearby enemy.
-	self._world:set(entity, self._components.TargetComponent, {
+	self._world:set(entity, components.TargetComponent, {
 		Entity = nil,
 	})
 
 	-- Persist the runtime instance id and world-space anchor for targeting queries.
-	self._world:set(entity, self._components.InstanceRefComponent, {
+	self._world:set(entity, components.InstanceRefComponent, {
 		InstanceId = record.instanceId,
 		WorldPos = record.worldPos,
 	} :: TInstanceRefComponent)
 
 	-- Keep the canonical identity separate from the runtime instance ref.
-	self._world:set(entity, self._components.IdentityComponent, {
+	self._world:set(entity, components.IdentityComponent, {
 		StructureId = structureId,
 		StructureType = record.structureType,
 	} :: TIdentityComponent)
 
 	-- Mark the entity active so queries and systems can pick it up this frame.
-	self._world:add(entity, self._components.ActiveTag)
+	self._world:add(entity, components.ActiveTag)
 	return entity
 end
 
@@ -100,7 +118,12 @@ function StructureEntityFactory:SetTarget(entity: number?, targetEntity: number?
 		return
 	end
 
-	self._world:set(entity, self._components.TargetComponent, {
+	local components = self:_GetComponents()
+	if components == nil then
+		return
+	end
+
+	self._world:set(entity, components.TargetComponent, {
 		Entity = targetEntity,
 	})
 end
@@ -116,7 +139,12 @@ function StructureEntityFactory:GetTarget(entity: number?): number?
 		return nil
 	end
 
-	local targetComponent = self._world:get(entity, self._components.TargetComponent)
+	local components = self:_GetComponents()
+	if components == nil then
+		return nil
+	end
+
+	local targetComponent = self._world:get(entity, components.TargetComponent)
 	if targetComponent == nil then
 		return nil
 	end
@@ -135,7 +163,12 @@ function StructureEntityFactory:GetAttackStats(entity: number?): TAttackStatsCom
 		return nil
 	end
 
-	return self._world:get(entity, self._components.AttackStatsComponent)
+	local components = self:_GetComponents()
+	if components == nil then
+		return nil
+	end
+
+	return self._world:get(entity, components.AttackStatsComponent)
 end
 
 --[=[
@@ -149,7 +182,12 @@ function StructureEntityFactory:GetCooldown(entity: number?): TAttackCooldownCom
 		return nil
 	end
 
-	return self._world:get(entity, self._components.AttackCooldownComponent)
+	local components = self:_GetComponents()
+	if components == nil then
+		return nil
+	end
+
+	return self._world:get(entity, components.AttackCooldownComponent)
 end
 
 --[=[
@@ -169,7 +207,12 @@ function StructureEntityFactory:SetCooldownElapsed(entity: number?, elapsed: num
 		return
 	end
 
-	self._world:set(entity, self._components.AttackCooldownComponent, {
+	local components = self:_GetComponents()
+	if components == nil then
+		return
+	end
+
+	self._world:set(entity, components.AttackCooldownComponent, {
 		Elapsed = elapsed,
 	} :: TAttackCooldownComponent)
 end
@@ -185,7 +228,12 @@ function StructureEntityFactory:GetIdentity(entity: number?): TIdentityComponent
 		return nil
 	end
 
-	return self._world:get(entity, self._components.IdentityComponent)
+	local components = self:_GetComponents()
+	if components == nil then
+		return nil
+	end
+
+	return self._world:get(entity, components.IdentityComponent)
 end
 
 --[=[
@@ -199,7 +247,12 @@ function StructureEntityFactory:GetInstanceRef(entity: number?): TInstanceRefCom
 		return nil
 	end
 
-	return self._world:get(entity, self._components.InstanceRefComponent)
+	local components = self:_GetComponents()
+	if components == nil then
+		return nil
+	end
+
+	return self._world:get(entity, components.InstanceRefComponent)
 end
 
 --[=[
@@ -208,8 +261,13 @@ end
 	@return { number } -- All active structure entity ids.
 ]=]
 function StructureEntityFactory:QueryActiveEntities(): { number }
+	local components = self:_GetComponents()
+	if components == nil then
+		return {}
+	end
+
 	local entities = {}
-	for entity in self._world:query(self._components.ActiveTag) do
+	for entity in self._world:query(components.ActiveTag) do
 		table.insert(entities, entity)
 	end
 	return entities

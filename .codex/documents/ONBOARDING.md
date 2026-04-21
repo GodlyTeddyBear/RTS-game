@@ -14,6 +14,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 ### "I need low-level backend method contracts"
 → Start with [methods/METHODS_INDEX.md](methods/METHODS_INDEX.md)
 → Then [methods/backend/CONTEXT_BOUNDARIES.md](methods/backend/CONTEXT_BOUNDARIES.md) for context boundary ownership and pass-through rules
+-> Then [methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md](methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md) for registry lifecycle and cross-context dependency wiring
 → Then [methods/backend/APPLICATION_CONTRACTS.md](methods/backend/APPLICATION_CONTRACTS.md) for Command/Query execution flow and dependency contracts
 → Then [methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md](methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md) for Policy/Spec contracts and restore-path requirements
 → Then [methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md](methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md) for runtime/persistence method boundaries
@@ -130,6 +131,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 | [methods/METHODS_INDEX.md](methods/METHODS_INDEX.md) | Index of low-level method contracts for implementation work |
 | [methods/PLAN_DEVELOPMENT.md](methods/PLAN_DEVELOPMENT.md) | Standard output contract and rubric gates for GDD + implementation planning |
 | [methods/backend/CONTEXT_BOUNDARIES.md](methods/backend/CONTEXT_BOUNDARIES.md) | Context boundary categories, Catch ownership, and bridge-only prohibitions |
+| [methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md](methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md) | Registry lifecycle rules for owned modules, cross-context dependencies, and Start ordering |
 | [methods/backend/APPLICATION_CONTRACTS.md](methods/backend/APPLICATION_CONTRACTS.md) | Command/Query flow, Result return contracts, and dependency prohibitions |
 | [methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md](methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md) | Policy/spec contracts, candidate ownership, and restore-path rules |
 | [methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md](methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md) | Infrastructure Result boundaries, lifecycle ownership, and sync placement rules |

@@ -52,17 +52,7 @@ function EnemyContext:KnitInit()
 	registry:Register("CleanupAllEnemiesCommand", CleanupAllEnemiesCommand.new(), "Application")
 	registry:Register("GetAliveEnemiesQuery", GetAliveEnemiesQuery.new(), "Application")
 	registry:Register("GetEnemyCountQuery", GetEnemyCountQuery.new(), "Application")
-
-	registry:Get("EnemyECSWorldService"):Init(registry, "EnemyECSWorldService")
-	registry:Get("EnemyComponentRegistry"):Init(registry, "EnemyComponentRegistry")
-	registry:Get("EnemyEntityFactory"):Init(registry, "EnemyEntityFactory")
-	registry:Get("EnemyModelFactory"):Init(registry, "EnemyModelFactory")
-	registry:Get("EnemyGameObjectSyncService"):Init(registry, "EnemyGameObjectSyncService")
-	registry:Get("DespawnEnemyCommand"):Init(registry, "DespawnEnemyCommand")
-	registry:Get("SpawnEnemyCommand"):Init(registry, "SpawnEnemyCommand")
-	registry:Get("CleanupAllEnemiesCommand"):Init(registry, "CleanupAllEnemiesCommand")
-	registry:Get("GetAliveEnemiesQuery"):Init(registry, "GetAliveEnemiesQuery")
-	registry:Get("GetEnemyCountQuery"):Init(registry, "GetEnemyCountQuery")
+	registry:InitAll()
 
 	self._registry = registry
 	self._world = registry:Get("World")

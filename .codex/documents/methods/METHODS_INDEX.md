@@ -7,6 +7,7 @@ Low-level method contracts for implementation work. These documents convert back
 ## Backend Contracts
 
 - [backend/CONTEXT_BOUNDARIES.md](backend/CONTEXT_BOUNDARIES.md) - Context boundary method categories, Catch ownership, and bridge-only rules.
+- [backend/DEPENDENCY_REGISTRATION_CONTRACTS.md](backend/DEPENDENCY_REGISTRATION_CONTRACTS.md) - Registry lifecycle rules for owned modules vs cross-context dependencies.
 - [backend/APPLICATION_CONTRACTS.md](backend/APPLICATION_CONTRACTS.md) - Command and Query method contracts, execution flow, and dependency prohibitions.
 - [backend/DOMAIN_POLICY_SPEC_CONTRACTS.md](backend/DOMAIN_POLICY_SPEC_CONTRACTS.md) - Policy/spec method contracts, candidate ownership, and restore-path requirements.
 - [backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md](backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md) - Infrastructure runtime/persistence method contracts, lifecycle ownership, and mutation boundaries.

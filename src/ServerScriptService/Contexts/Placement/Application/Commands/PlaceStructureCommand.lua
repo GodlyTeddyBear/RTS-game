@@ -42,6 +42,9 @@ function PlaceStructureCommand:Init(registry: any, _name: string)
 	self._policy = registry:Get("PlaceStructurePolicy")
 	self._placementService = registry:Get("PlacementService")
 	self._syncService = registry:Get("PlacementSyncService")
+end
+
+function PlaceStructureCommand:Start(registry: any, _name: string)
 	self._worldContext = registry:Get("WorldContext")
 	self._economyContext = registry:Get("EconomyContext")
 end

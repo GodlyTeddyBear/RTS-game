@@ -95,15 +95,17 @@ end
 ]=]
 function StructureContext:KnitStart()
 	-- Resolve the other server contexts that drive structure placement and run lifecycle.
+	local worldContext = Knit.GetService("WorldContext")
 	local enemyContext = Knit.GetService("EnemyContext")
 	local runContext = Knit.GetService("RunContext")
 	local placementContext = Knit.GetService("PlacementContext")
 
 	-- Register the sibling contexts before the system modules start so their dependencies are available.
+	self._registry:Register("WorldContext", worldContext)
 	self._registry:Register("EnemyContext", enemyContext)
 	self._registry:Register("RunContext", runContext)
 	self._registry:Register("PlacementContext", placementContext)
-	self._registry:StartOrdered({ "Infrastructure", "Application" })
+	self._registry:StartOrdered({ "Domain", "Infrastructure", "Application" })
 
 	-- Register new placements as ECS entities as soon as PlacementContext announces them.
 	self._structurePlacedConnection = placementContext.StructurePlaced:Connect(function(record: StructureRecord)

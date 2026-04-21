@@ -47,9 +47,12 @@ end
 ]=]
 -- Cache read-only collaborators once so the command can reuse a single policy instance.
 function PlaceStructurePolicy:Init(registry: any, _name: string)
+	self._syncService = registry:Get("PlacementSyncService")
+end
+
+function PlaceStructurePolicy:Start(registry: any, _name: string)
 	self._runContext = registry:Get("RunContext")
 	self._worldContext = registry:Get("WorldContext")
-	self._syncService = registry:Get("PlacementSyncService")
 end
 
 --[=[

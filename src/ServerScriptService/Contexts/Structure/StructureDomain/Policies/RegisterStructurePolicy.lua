@@ -41,6 +41,9 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function RegisterStructurePolicy:Init(registry: any, _name: string)
+end
+
+function RegisterStructurePolicy:Start(registry: any, _name: string)
 	self._worldContext = registry:Get("WorldContext")
 end
 

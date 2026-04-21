@@ -8,6 +8,7 @@ local e = React.createElement
 local Button = require(script.Parent.Parent.Parent.Parent.App.Presentation.Atoms.Button)
 local Frame = require(script.Parent.Parent.Parent.Parent.App.Presentation.Atoms.Frame)
 local Text = require(script.Parent.Parent.Parent.Parent.App.Presentation.Atoms.Text)
+local VStack = require(script.Parent.Parent.Parent.Parent.App.Presentation.Layouts.VStack)
 local Colors = require(script.Parent.Parent.Parent.Parent.App.Config.ColorTokens)
 local Border = require(script.Parent.Parent.Parent.Parent.App.Config.BorderTokens)
 local usePlacementPaletteHud = require(script.Parent.Parent.Parent.Application.Hooks.usePlacementPaletteHud)
@@ -36,14 +37,16 @@ local function StructureCard(props: TStructureCardProps)
 		[React.Event.Activated] = function()
 			props.onSelect(props.cardData.structureType)
 		end,
-	}, {
-		Icon = e(Frame, {
-			Size = UDim2.fromScale(1, 0.62),
-			BackgroundColor3 = Colors.Accent.Yellow,
-			BackgroundTransparency = 0.82,
-			ClipsDescendants = true,
-			ZIndex = 2,
-			CornerRadius = Border.Radius.MD,
+		}, {
+			Icon = e(Frame, {
+				Size = UDim2.fromScale(1, 0.62),
+				Position = UDim2.fromScale(0, 0),
+				AnchorPoint = Vector2.new(0, 0),
+				BackgroundColor3 = Colors.Accent.Yellow,
+				BackgroundTransparency = 0.82,
+				ClipsDescendants = true,
+				ZIndex = 2,
+				CornerRadius = Border.Radius.MD,
 		}, {
 			IconLabel = e(Text, {
 				Size = UDim2.fromScale(1, 1),
@@ -54,14 +57,18 @@ local function StructureCard(props: TStructureCardProps)
 				TextYAlignment = Enum.TextYAlignment.Center,
 			}),
 		}),
-		Content = e(Frame, {
+		Content = e(VStack, {
 			Size = UDim2.fromScale(1, 0.34),
 			Position = UDim2.fromScale(0, 0.66),
+			AnchorPoint = Vector2.new(0, 0),
 			BackgroundTransparency = 1,
-			ZIndex = 3,
+			Gap = 0,
+			Align = "Center",
+			Justify = "Start",
 		}, {
 			Name = e(Text, {
 				Size = UDim2.fromScale(1, 0.42),
+				LayoutOrder = 1,
 				Text = props.cardData.displayName,
 				Variant = "body",
 				TextXAlignment = Enum.TextXAlignment.Center,
@@ -69,7 +76,7 @@ local function StructureCard(props: TStructureCardProps)
 			}),
 			Cost = e(Text, {
 				Size = UDim2.fromScale(1, 0.34),
-				Position = UDim2.fromScale(0, 0.52),
+				LayoutOrder = 2,
 				Text = string.format("%d E", props.cardData.energyCost),
 				Variant = "caption",
 				TextColor3 = costColor,

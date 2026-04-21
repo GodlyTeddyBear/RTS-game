@@ -27,6 +27,9 @@ end
 function StartCombat:Init(registry: any, _name: string)
 	self._loopService = registry:Get("CombatLoopService")
 	self._behaviorTreeFactory = registry:Get("BehaviorTreeFactory")
+end
+
+function StartCombat:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
 end
 
