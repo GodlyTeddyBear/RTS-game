@@ -66,6 +66,8 @@ function PlacementContext:KnitInit()
 	self._placementService = registry:Get("PlacementService")
 	self._placeStructureCommand = registry:Get("PlaceStructureCommand")
 	self._getPlacedStructuresQuery = registry:Get("GetPlacedStructuresQuery")
+	self._structurePlacedSignal = Instance.new("BindableEvent")
+	self.StructurePlaced = self._structurePlacedSignal.Event
 	self._playerAddedConnection = nil :: RBXScriptConnection?
 	self._stateChangedConnection = nil :: RBXScriptConnection?
 
@@ -134,6 +136,8 @@ function PlacementContext:_HandlePlaceStructureRequest(player: Player, request: 
 		}
 	end
 
+	self._structurePlacedSignal:Fire(placementResult.value.record)
+
 	return {
 		success = true,
 		errorMessage = nil,
@@ -169,6 +173,10 @@ function PlacementContext:Destroy()
 
 	if self._syncService then
 		self._syncService:Destroy()
+	end
+
+	if self._structurePlacedSignal then
+		self._structurePlacedSignal:Destroy()
 	end
 end
 

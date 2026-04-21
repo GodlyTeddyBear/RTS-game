@@ -70,7 +70,7 @@ end
 	@return Result.Result<{ instanceId: number }> -- The spawned instance id on success.
 ]=]
 -- Validate first, then spend, then spawn, then occupy, then sync.
-function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structureType: string): Result.Result<{ instanceId: number }>
+function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structureType: string): Result.Result<{ instanceId: number, record: StructureRecord }>
 	-- Policy resolves the live tile and all gate conditions before any mutation occurs.
 	local decision = Try(self._policy:Check(coord, structureType))
 	local cost = decision.cost
@@ -129,6 +129,7 @@ function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structu
 
 	return Ok({
 		instanceId = instanceId,
+		record = record,
 	})
 end
 
