@@ -11,29 +11,21 @@ local PlacementConfig = {}
 -- Keep the placement costs frozen so the command layer reads stable pricing.
 PlacementConfig.STRUCTURE_PLACEMENT_COSTS = table.freeze({
 	turret = 15,
-	wall = 5,
-	extractor = 10,
 })
 
 -- Template names mirror the assets folder names used by PlacementService.
 PlacementConfig.STRUCTURE_TEMPLATES = table.freeze({
 	turret = "Turret",
-	wall = "Wall",
-	extractor = "Extractor",
 })
 
--- Zone compatibility is data-driven so future structure types can extend cleanly.
+-- Phase 2 locks placement to side pads only; lane placement is intentionally disallowed.
 PlacementConfig.VALID_ZONE_TYPES = table.freeze({
-	turret = table.freeze({ "lane" }),
-	wall = table.freeze({ "lane" }),
-	extractor = table.freeze({ "side_pocket" }),
+	turret = table.freeze({ "side_pocket" }),
 })
 
--- Extractors need a real resource tile; other structures only need the zone.
+-- Resource-tile requirements stay data-driven for future structures, even in turret-only Phase 2.
 PlacementConfig.REQUIRES_RESOURCE_TILE = table.freeze({
 	turret = false,
-	wall = false,
-	extractor = true,
 })
 
 PlacementConfig.MAX_STRUCTURES = 20

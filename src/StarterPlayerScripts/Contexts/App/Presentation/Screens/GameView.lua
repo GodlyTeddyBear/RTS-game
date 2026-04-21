@@ -18,6 +18,7 @@ local function GameView()
 	return e(GameViewView, {
 		isMenuOpen = controller.isMenuOpen,
 		isHudEnabled = controller.isHudEnabled,
+		isRunActive = controller.isRunActive,
 		onToggleMenu = controller.onToggleMenu,
 		onNavigateFromMenu = controller.onNavigateFromMenu,
 		onOpenSettings = controller.onOpenSettings,

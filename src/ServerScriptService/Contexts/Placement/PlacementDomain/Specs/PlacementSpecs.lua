@@ -47,12 +47,12 @@ function PlacementSpecs.IsZoneCompatible(structureType: string, tile: Tile): boo
 	return false
 end
 
--- Extractor structures are the only ones that need the side-pocket resource metadata.
+-- Requirement is data-driven so future structures can opt into resource-tile constraints.
 function PlacementSpecs.RequiresResourceTile(structureType: string): boolean
 	return PlacementConfig.REQUIRES_RESOURCE_TILE[structureType] == true
 end
 
--- Side-pocket tiles only count when they actually carry a resource type.
+-- Resource-gated placements require a side-pocket tile with resource metadata.
 function PlacementSpecs.HasRequiredResourceTileData(tile: Tile): boolean
 	return tile.zone == "side_pocket" and tile.resourceType ~= nil
 end

@@ -23,7 +23,7 @@ src/StarterPlayerScripts/Contexts/$ARGUMENTS/
 │   ├── Organisms/
 │   ├── Templates/
 │   │   └── $ARGUMENTS Screen.lua
-│   └── index.lua
+│   └── init.lua
 └── Types/
 ```
 
@@ -135,7 +135,7 @@ end
 return $ARGUMENTS Screen
 ```
 
-### `Presentation/index.lua`
+### `Presentation/init.lua`
 ```lua
 --!strict
 

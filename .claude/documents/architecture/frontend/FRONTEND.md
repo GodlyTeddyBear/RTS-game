@@ -57,7 +57,7 @@ StarterPlayerScripts/
         │   ├── Molecules/           # Feature-local named sub-regions (before 3-feature threshold)
         │   ├── Organisms/           # Feature-specific complex components
         │   ├── Templates/           # Feature screens/layouts
-        │   └── index.lua            # Feature root export
+        │   └── init.lua             # Feature root export
         └── Types/                   # Feature-specific types
 ```
 
@@ -71,7 +71,7 @@ StarterPlayerScripts/
 - **Screens/templates do not orchestrate animation primitives directly** — use shared animation hooks and controller hooks
 - **Templates are always feature-local** — never shared between features
 - **No cross-feature imports** — features cannot import from each other
-- **Use `Presentation/index.lua` as a feature public entrypoint** for App-level mounting/imports
+- **Use `Presentation/init.lua` as a feature public entrypoint** for App-level mounting/imports
 - **Sound side-effects belong in `Hooks/Sounds/`** — screen controllers delegate to a sounds hook, never call `useSoundActions` directly
 - **Feature-local molecules are valid** — extract named sub-regions from organisms into `Presentation/Molecules/` without requiring cross-feature reuse
 - **Grid/list organisms own their child-building logic** — templates pass data props to a grid organism; they do not construct children inline

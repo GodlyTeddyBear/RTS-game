@@ -88,13 +88,13 @@ See [HOOKS.md](HOOKS.md) for detailed hook patterns and ViewModel rules.
 **Contains:**
 - `Organisms/` — feature-specific complex components
 - `Templates/` — full screens / major layouts (always feature-local)
-- `index.lua` — feature root export (public Presentation API)
+- `init.lua` — feature root export (public Presentation API)
 
 Components receive data via props (from ViewModels) and actions via props (from write hooks). They never call services or mutate atoms directly.
 
-`Presentation/index.lua` rules:
-- External consumers (for example `App`) should import a feature's Presentation API via `require(...[Feature].Presentation.index)`.
-- `index.lua` exports only mountable Presentation surfaces (screens/overlays), not Application hooks or Infrastructure modules.
+`Presentation/init.lua` rules:
+- External consumers (for example `App`) should import a feature's Presentation API via `require(...[Feature].Presentation.init)`.
+- `init.lua` exports only mountable Presentation surfaces (screens/overlays), not Application hooks or Infrastructure modules.
 - Avoid deep external imports to `Presentation/Templates/*` unless performing local, same-feature composition.
 
 See [COMPONENTS.md](COMPONENTS.md) for the Atomic Design hierarchy.

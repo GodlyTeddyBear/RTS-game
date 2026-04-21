@@ -54,7 +54,7 @@ StarterPlayerScripts/
     │       │   └── CounterControls.lua             # Action buttons
     │       ├── Templates/
     │       │   └── CounterScreen.lua               # Main screen
-    │       └── index.lua                           # Feature export
+    │       └── init.lua                            # Feature export
     │
     └── [Future Feature Slices]/
         ├── Party/
@@ -432,7 +432,7 @@ end
 - [ ] Create `Application/ViewModels/[Entity]ViewModel.lua`
 - [ ] Create `Presentation/Organisms/[Component].lua` (feature-specific)
 - [ ] Create `Presentation/Templates/[Screen].lua` (main screen)
-- [ ] Create `Presentation/index.lua` (feature export)
+- [ ] Create `Presentation/init.lua` (feature export)
 - [ ] Update `App/Presentation/App.lua` to render feature
 - [ ] Build and test
 

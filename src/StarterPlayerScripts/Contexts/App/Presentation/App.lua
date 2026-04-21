@@ -8,12 +8,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local React = require(ReplicatedStorage.Packages.React)
 
 local e = React.createElement
+local AnimatedRouter = require(script.Parent.AnimatedRouter)
 
 local function App()
-	return e("Frame", {
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-	})
+	return e(AnimatedRouter)
 end
 
 return App

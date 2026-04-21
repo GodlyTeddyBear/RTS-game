@@ -116,7 +116,7 @@ src/
             ├── Presentation/
             │   ├── Organisms/           # Feature-specific components
             │   ├── Templates/           # Screens — ALWAYS feature-local
-            │   └── index.lua
+            │   └── init.lua
             └── Types/
 ```
 

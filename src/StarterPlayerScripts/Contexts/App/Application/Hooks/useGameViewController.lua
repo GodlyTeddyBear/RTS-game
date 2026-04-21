@@ -15,7 +15,9 @@ local useRef = React.useRef
 local useState = React.useState
 
 local useNavigationActions = require(script.Parent.useNavigationActions)
+local useNavigation = require(script.Parent.useNavigation)
 local useHudVisibility = require(script.Parent.useHudVisibility)
+local useRunState = require(script.Parent.Parent.Parent.Parent.Run.Application.Hooks.useRunState)
 local useSoundActions = require(script.Parent.Parent.Parent.Parent.Sound.Application.Hooks.useSoundActions)
 local AnimationTokens = require(script.Parent.Parent.Parent.Config.AnimationTokens)
 
@@ -24,6 +26,7 @@ local MENU_CLOSE_DURATION = 1 / AnimationTokens.Spring.Smooth.Frequency
 local SIDE_PANEL_SOUND_TARGET = "SidePanel"
 local GAME_SCREEN = "Game"
 local SETTINGS_SCREEN = "Settings"
+local RESULTS_SCREEN = "Results"
 
 type TNavigationActions = typeof(useNavigationActions())
 type TSoundActions = typeof(useSoundActions())
@@ -42,6 +45,7 @@ type TValueRef<T> = { current: T }
 	.onNavigateFromMenu (featureName: string) -> () -- Switch tabs within the open menu and play sound.
 	.onOpenSettings () -> () -- Navigate to the Settings screen from the menu.
 	.onExitGame () -> () -- Exit to the Game screen and close the menu.
+	.isRunActive boolean -- Whether the run lifecycle is currently in an active gameplay state.
 	.playerUsername string -- The current player's username.
 	.playerLevel number -- The current player's level.
 ]=]
@@ -53,6 +57,7 @@ export type TGameViewController = {
 	onNavigateFromMenu: (featureName: string) -> (),
 	onOpenSettings: () -> (),
 	onExitGame: () -> (),
+	isRunActive: boolean,
 	playerUsername: string,
 	playerLevel: number,
 }
@@ -159,6 +164,14 @@ local function _CreateOpenSettingsHandler(navigateFromMenu: (featureName: string
 	end
 end
 
+local function _IsRunActive(stateName: string): boolean
+	return stateName == "Prep"
+		or stateName == "Wave"
+		or stateName == "Resolution"
+		or stateName == "Climax"
+		or stateName == "Endless"
+end
+
 --[=[
 	Return a controller object managing menu state and navigation for the Game screen.
 	@within useGameViewController
@@ -166,12 +179,15 @@ end
 ]=]
 local function useGameViewController(): TGameViewController
 	local actions = useNavigationActions()
+	local navigation = useNavigation()
 	local hudVisibility = useHudVisibility()
+	local runState = useRunState()
 	local soundActions = useSoundActions()
 	local isMenuOpen, setIsMenuOpen = useState(false)
 	local actionsRef = useRef(actions)
 	local soundActionsRef = useRef(soundActions)
 	local pendingNavigationRef = useRef(nil :: thread?)
+	local previousRunStateRef = useRef(runState.state)
 
 	actionsRef.current = actions
 	soundActionsRef.current = soundActions
@@ -190,6 +206,30 @@ local function useGameViewController(): TGameViewController
 		setIsMenuOpen(false)
 		_CancelPendingNavigation(pendingNavigationRef)
 	end, { hudVisibility.IsGameHudEnabled })
+
+	useEffect(function()
+		local previousState = previousRunStateRef.current
+		local currentState = runState.state
+		previousRunStateRef.current = currentState
+
+		if previousState == currentState then
+			return
+		end
+
+		if currentState == "RunEnd" then
+			_CancelPendingNavigation(pendingNavigationRef)
+			if navigation.CurrentScreen ~= RESULTS_SCREEN then
+				actionsRef.current.navigate(RESULTS_SCREEN)
+			end
+			return
+		end
+
+		if previousState == "RunEnd" and currentState == "Idle" then
+			if navigation.CurrentScreen ~= GAME_SCREEN then
+				actionsRef.current.reset(GAME_SCREEN)
+			end
+		end
+	end, { runState.state, navigation.CurrentScreen })
 
 	local playerUsername, playerLevel = _GetPlayerInfo()
 	local onToggleMenu = useMemo(function()
@@ -216,6 +256,7 @@ local function useGameViewController(): TGameViewController
 		onNavigateFromMenu = onNavigateFromMenu,
 		onOpenSettings = onOpenSettings,
 		onExitGame = onExitGame,
+		isRunActive = _IsRunActive(runState.state),
 		playerUsername = playerUsername,
 		playerLevel = playerLevel,
 	}

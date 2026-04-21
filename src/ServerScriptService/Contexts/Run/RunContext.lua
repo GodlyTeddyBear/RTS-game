@@ -2,6 +2,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Registry = require(ReplicatedStorage.Utilities.Registry)
@@ -211,6 +212,25 @@ function RunContext:NotifyCommanderDeath(): Result.Result<boolean>
 	return Catch(function()
 		return self._notifyCommanderDeathCommand:Execute()
 	end, "Run:NotifyCommanderDeath")
+end
+
+--[=[
+	Requests a run restart from the client.
+	@within RunContext
+	@param _player Player -- The requesting player.
+	@return boolean -- `true` when restart succeeded.
+]=]
+function RunContext.Client:RequestRestartRun(_player: Player): boolean
+	if not RunService:IsStudio() then
+		return false
+	end
+
+	local result = self.Server:StartRun()
+	if result.success then
+		return true
+	end
+
+	return false
 end
 
 -- Pushes the new run snapshot to sync, then emits milestone logs for lifecycle transitions.

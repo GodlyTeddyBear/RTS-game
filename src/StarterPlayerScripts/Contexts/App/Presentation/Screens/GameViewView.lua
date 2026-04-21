@@ -8,10 +8,12 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local React = require(ReplicatedStorage.Packages.React)
 local e = React.createElement
+local RunPresentation = require(script.Parent.Parent.Parent.Parent.Run.Presentation)
 
 type TGameViewViewProps = {
 	isMenuOpen: boolean,
 	isHudEnabled: boolean,
+	isRunActive: boolean,
 	onToggleMenu: () -> (),
 	onNavigateFromMenu: (string) -> (),
 	onOpenSettings: () -> (),
@@ -27,6 +29,8 @@ local function GameViewView(props: TGameViewViewProps)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
+	}, {
+		RunHUD = props.isHudEnabled and props.isRunActive and e(RunPresentation.RunHUD) or nil,
 	})
 end
 

@@ -33,9 +33,9 @@ Presentation/[Component]View.lua (pure view) → Presentation-only dependencies
 
 ### Presentation public API
 ```
-External consumer → [Feature]/Presentation/index.lua
+External consumer → [Feature]/Presentation/init.lua
 ```
-Prefer `require(...[Feature].Presentation.index)` over deep imports into `Presentation/Templates/*`.
+Prefer `require(...[Feature].Presentation.init)` over deep imports into `Presentation/Templates/*`.
 
 ---
 
