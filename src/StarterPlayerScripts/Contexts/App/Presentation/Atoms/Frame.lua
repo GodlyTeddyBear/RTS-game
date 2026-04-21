@@ -32,6 +32,7 @@ local e = React.createElement
 	.children any? -- Extra React children rendered inside the frame.
 ]=]
 export type TFrameProps = {
+	ref: any?,
 	Size: UDim2?,
 	Position: UDim2?,
 	AnchorPoint: Vector2?,
@@ -98,6 +99,7 @@ local function Frame(props: TFrameProps)
 	end
 
 	return e("Frame", {
+		ref = props.ref,
 		Size = props.Size or UDim2.fromScale(1, 1),
 		Position = props.Position,
 		AnchorPoint = props.AnchorPoint or Vector2.new(0.5, 0.5),

@@ -9,6 +9,10 @@ type RunState = RunTypes.RunState
 type RunSnapshot = RunTypes.RunSnapshot
 
 export type TRunPhaseViewData = {
+	runState: RunState,
+	phaseStartedAt: number?,
+	phaseEndsAt: number?,
+	phaseDuration: number?,
 	phaseLabel: string,
 	waveLabel: string,
 	countdownText: string,
@@ -79,6 +83,10 @@ function RunPhaseViewModel.fromSnapshot(snapshot: RunSnapshot, now: number): TRu
 	end
 
 	return table.freeze({
+		runState = snapshot.state,
+		phaseStartedAt = snapshot.phaseStartedAt,
+		phaseEndsAt = snapshot.phaseEndsAt,
+		phaseDuration = snapshot.phaseDuration,
 		phaseLabel = _GetPhaseLabel(snapshot.state),
 		waveLabel = if snapshot.waveNumber > 0 then string.format("Wave %d", snapshot.waveNumber) else "Wave --",
 		countdownText = _GetCountdownText(snapshot, now),

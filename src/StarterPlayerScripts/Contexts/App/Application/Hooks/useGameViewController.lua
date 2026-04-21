@@ -47,6 +47,7 @@ type TValueRef<T> = { current: T }
 	.onOpenSettings () -> () -- Navigate to the Settings screen from the menu.
 	.onExitGame () -> () -- Exit to the Game screen and close the menu.
 	.onStartPhase2 () -> () -- Request the server to teleport into the Phase 2 map and start the run.
+	.onStructureSelected (structureType: string) -> () -- Temporary placement selection callback for Phase 2 HUD wiring.
 	.isRunActive boolean -- Whether the run lifecycle is currently in an active gameplay state.
 	.playerUsername string -- The current player's username.
 	.playerLevel number -- The current player's level.
@@ -60,6 +61,7 @@ export type TGameViewController = {
 	onOpenSettings: () -> (),
 	onExitGame: () -> (),
 	onStartPhase2: () -> (),
+	onStructureSelected: (string) -> (),
 	isRunActive: boolean,
 	playerUsername: string,
 	playerLevel: number,
@@ -187,6 +189,12 @@ local function _CreateStartPhase2Handler(): () -> ()
 	end
 end
 
+local function _CreateStructureSelectedHandler(): (string) -> ()
+	return function(_structureType: string)
+		-- Reserved for the Phase 2 placement cursor system.
+	end
+end
+
 local function _IsRunActive(stateName: string): boolean
 	return stateName == "Prep"
 		or stateName == "Wave"
@@ -273,6 +281,9 @@ local function useGameViewController(): TGameViewController
 	local onStartPhase2 = useMemo(function()
 		return _CreateStartPhase2Handler()
 	end, {})
+	local onStructureSelected = useMemo(function()
+		return _CreateStructureSelectedHandler()
+	end, {})
 
 	return {
 		isMenuOpen = isMenuOpen,
@@ -283,6 +294,7 @@ local function useGameViewController(): TGameViewController
 		onOpenSettings = onOpenSettings,
 		onExitGame = onExitGame,
 		onStartPhase2 = onStartPhase2,
+		onStructureSelected = onStructureSelected,
 		isRunActive = _IsRunActive(runState.state),
 		playerUsername = playerUsername,
 		playerLevel = playerLevel,

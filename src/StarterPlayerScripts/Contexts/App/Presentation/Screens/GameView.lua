@@ -24,6 +24,7 @@ local function GameView()
 		onOpenSettings = controller.onOpenSettings,
 		onExitGame = controller.onExitGame,
 		onStartPhase2 = controller.onStartPhase2,
+		onStructureSelected = controller.onStructureSelected,
 		playerUsername = controller.playerUsername,
 		playerLevel = controller.playerLevel,
 	})

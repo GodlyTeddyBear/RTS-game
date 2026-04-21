@@ -22,6 +22,7 @@ type TGameViewViewProps = {
 	onOpenSettings: () -> (),
 	onExitGame: () -> (),
 	onStartPhase2: () -> (),
+	onStructureSelected: (string) -> (),
 	playerUsername: string,
 	playerLevel: number,
 }
@@ -34,7 +35,9 @@ local function GameViewView(props: TGameViewViewProps)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 	}, {
-		RunHUD = props.isHudEnabled and props.isRunActive and e(RunPresentation.RunHUD) or nil,
+		RunHUD = props.isHudEnabled and props.isRunActive and e(RunPresentation.RunHUD, {
+			onStructureSelected = props.onStructureSelected,
+		}) or nil,
 		Phase2Launch = (not props.isRunActive) and e("Frame", {
 			Size = UDim2.fromScale(1, 1),
 			BackgroundColor3 = Color3.fromRGB(10, 14, 24),
