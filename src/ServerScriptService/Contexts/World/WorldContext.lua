@@ -8,6 +8,7 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
 local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 
+local WorldGridRuntimeService = require(script.Parent.Infrastructure.Services.WorldGridRuntimeService)
 local WorldGridService = require(script.Parent.Infrastructure.Services.WorldGridService)
 local WorldLayoutService = require(script.Parent.Infrastructure.Services.WorldLayoutService)
 local Errors = require(script.Parent.Errors)
@@ -42,6 +43,7 @@ type Tile = WorldTypes.Tile
 function WorldContext:KnitInit()
 	-- Register infrastructure services so the world grid is built before any query can run.
 	local registry = Registry.new("Server")
+	registry:Register("WorldGridRuntimeService", WorldGridRuntimeService.new(), "Infrastructure")
 	registry:Register("WorldGridService", WorldGridService.new(), "Infrastructure")
 	registry:Register("WorldLayoutService", WorldLayoutService.new(), "Infrastructure")
 	registry:InitAll()
@@ -61,9 +63,7 @@ function WorldContext:KnitInit()
 	}
 
 	-- Emit a milestone so startup order is visible in the log stream.
-	Result.MentionSuccess("World:KnitInit", "World context initialized", {
-		TileCount = #self._worldGridService:GetAllTiles(),
-	})
+	Result.MentionSuccess("World:KnitInit", "World context initialized", nil)
 end
 
 --[=[

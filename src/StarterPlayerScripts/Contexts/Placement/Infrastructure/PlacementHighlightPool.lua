@@ -1,9 +1,7 @@
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
 local PlacementCursorService = require(script.Parent.Parent.Application.PlacementCursorService)
-local WorldConfig = require(ReplicatedStorage.Contexts.World.Config.WorldConfig)
+local PlacementGridRuntime = require(script.Parent.PlacementGridRuntime)
 
 type GridCoord = {
 	row: number,
@@ -15,13 +13,13 @@ PlacementHighlightPool.__index = PlacementHighlightPool
 
 local VALID_COLOR = Color3.fromRGB(0, 200, 100)
 local HOVER_COLOR = Color3.fromRGB(255, 230, 0)
-local TILE_OFFSET = Vector3.new(WorldConfig.TILE_SIZE * 0.5, 0.025, WorldConfig.TILE_SIZE * 0.5)
 
 local function _GetCoordKey(row: number, col: number): string
 	return ("%d_%d"):format(row, col)
 end
 
 local function _CreateHighlightPart(parent: Instance, coord: GridCoord): Part
+	local gridSpec = PlacementGridRuntime.GetGridSpec()
 	local part = Instance.new("Part")
 	part.Name = ("Highlight_%d_%d"):format(coord.row, coord.col)
 	part.Anchored = true
@@ -32,8 +30,8 @@ local function _CreateHighlightPart(parent: Instance, coord: GridCoord): Part
 	part.Material = Enum.Material.SmoothPlastic
 	part.Color = VALID_COLOR
 	part.Transparency = 0.5
-	part.Size = Vector3.new(WorldConfig.TILE_SIZE, 0.05, WorldConfig.TILE_SIZE)
-	part.CFrame = CFrame.new(PlacementCursorService.CoordToWorld(coord.row, coord.col) + TILE_OFFSET)
+	part.Size = Vector3.new(gridSpec.tileSize, 0.05, gridSpec.tileSize)
+	part.CFrame = CFrame.new(PlacementCursorService.CoordToWorld(coord.row, coord.col) + Vector3.new(0, 0.025, 0))
 	part.Parent = parent
 	return part
 end

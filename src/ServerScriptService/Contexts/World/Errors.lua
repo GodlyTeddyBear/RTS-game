@@ -9,4 +9,6 @@ return table.freeze({
 	INVALID_COORD = "Grid coordinate is invalid",
 	OUT_OF_BOUNDS = "Grid coordinate is out of bounds",
 	TILE_NOT_FOUND = "Tile not found",
+	MISSING_PLACEMENT_GRID_PART = "WorldContext: missing PlacementGrid part",
+	INVALID_PLACEMENT_GRID_DIMENSIONS = "WorldContext: invalid PlacementGrid dimensions",
 })

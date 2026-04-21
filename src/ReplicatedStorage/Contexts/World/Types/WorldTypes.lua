@@ -43,6 +43,27 @@ export type TileDescriptor = {
 }
 
 --[=[
+	@interface GridSpec
+	@within WorldTypes
+	.gridCFrame CFrame -- World transform for the authoritative grid part.
+	.gridSize Vector3 -- Physical size of the authoritative grid part.
+	.tileSize number -- Tile size in studs.
+	.gridRows number -- Derived row count from part Z size.
+	.gridCols number -- Derived column count from part X size.
+	.laneRow number -- Center lane row used for lane zoning.
+	.sidePocketRows { number } -- Rows adjacent to lane that may host side pockets.
+]=]
+export type GridSpec = {
+	gridCFrame: CFrame,
+	gridSize: Vector3,
+	tileSize: number,
+	gridRows: number,
+	gridCols: number,
+	laneRow: number,
+	sidePocketRows: { number },
+}
+
+--[=[
 	@interface Tile
 	@within WorldTypes
 	.coord GridCoord -- Grid coordinate for the tile.

@@ -2,11 +2,12 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local WorldConfig = require(ReplicatedStorage.Contexts.World.Config.WorldConfig)
 local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
+local Errors = require(script.Parent.Parent.Parent.Errors)
 
 type GridCoord = WorldTypes.GridCoord
 type Tile = WorldTypes.Tile
+type GridSpec = WorldTypes.GridSpec
 
 --[=[
 	@class WorldGridService
@@ -16,10 +17,6 @@ type Tile = WorldTypes.Tile
 local WorldGridService = {}
 WorldGridService.__index = WorldGridService
 
-local function getTileIndex(row: number, col: number): number
-	return ((row - 1) * WorldConfig.GRID_COLS) + col
-end
-
 --[=[
 	Creates an empty world grid service instance.
 	@within WorldGridService
@@ -28,6 +25,9 @@ end
 function WorldGridService.new()
 	local self = setmetatable({}, WorldGridService)
 	self._tiles = {} :: { Tile }
+	self._gridSpec = nil :: GridSpec?
+	self._gridRuntimeService = nil :: any
+	self._isBuilt = false
 	return self
 end
 
@@ -37,8 +37,17 @@ end
 	@param registry any -- Registry instance passed through the lifecycle contract.
 	@param name string -- Registered module name.
 ]=]
-function WorldGridService:Init(_registry: any, _name: string)
+function WorldGridService:Init(registry: any, _name: string)
+	self._gridRuntimeService = registry:Get("WorldGridRuntimeService")
+end
+
+function WorldGridService:_EnsureBuilt()
+	if self._isBuilt then
+		return
+	end
+
 	self:Build()
+	self._isBuilt = true
 end
 
 --[=[
@@ -46,26 +55,47 @@ end
 	@within WorldGridService
 ]=]
 function WorldGridService:Build()
-	local tiles = table.create(WorldConfig.GRID_ROWS * WorldConfig.GRID_COLS)
+	local runtimeService = self._gridRuntimeService
+	assert(runtimeService ~= nil, "WorldGridRuntimeService is required")
 
-	for row = 1, WorldConfig.GRID_ROWS do
+	local validationCodes = runtimeService:GetValidationCodes()
+	local ok, resolvedSpecOrErr = pcall(function(): GridSpec
+		return runtimeService:GetGridSpec()
+	end)
+	if not ok then
+		local code = resolvedSpecOrErr
+		if code == validationCodes.MissingPart then
+			error(Errors.MISSING_PLACEMENT_GRID_PART)
+		end
+		if code == validationCodes.InvalidDimensions then
+			error(Errors.INVALID_PLACEMENT_GRID_DIMENSIONS)
+		end
+		error(code)
+	end
+
+	local gridSpec = resolvedSpecOrErr :: GridSpec
+	self._gridSpec = gridSpec
+	local zoneLayout = runtimeService:BuildZoneLayout()
+	local tiles = table.create(gridSpec.gridRows * gridSpec.gridCols)
+
+	for row = 1, gridSpec.gridRows do
 		-- Fill one row at a time so the flat index stays aligned with the config layout.
-		for col = 1, WorldConfig.GRID_COLS do
-			local descriptor = WorldConfig.ZONE_LAYOUT[row][col]
+		for col = 1, gridSpec.gridCols do
+			local descriptor = zoneLayout[row][col]
 			assert(descriptor ~= nil, "Missing tile descriptor at row=" .. row .. " col=" .. col)
 			assert(descriptor.zone ~= "side_pocket" or descriptor.resourceType ~= nil, "Side pocket tiles must define resourceType")
 			assert(descriptor.zone == "side_pocket" or descriptor.resourceType == nil, "Only side pocket tiles can define resourceType")
-
-			-- Offset from the authoritative origin so the grid can be moved by config alone.
-			local tileCFrame = WorldConfig.WORLD_ORIGIN * CFrame.new((col - 1) * WorldConfig.TILE_SIZE, 0, (row - 1) * WorldConfig.TILE_SIZE)
-			local tileIndex = getTileIndex(row, col)
+			local tileIndex = ((row - 1) * gridSpec.gridCols) + col
 
 			tiles[tileIndex] = {
 				coord = {
 					row = row,
 					col = col,
 				},
-				worldPos = tileCFrame.Position,
+				worldPos = runtimeService:CoordToWorld({
+					row = row,
+					col = col,
+				}),
 				zone = descriptor.zone,
 				occupied = false,
 				resourceType = descriptor.resourceType,
@@ -74,6 +104,7 @@ function WorldGridService:Build()
 	end
 
 	self._tiles = tiles
+	self._isBuilt = true
 end
 
 --[=[
@@ -83,18 +114,21 @@ end
 	@return Tile? -- The matching tile, or nil when out of bounds.
 ]=]
 function WorldGridService:GetTile(coord: GridCoord): Tile?
+	self:_EnsureBuilt()
 	assert(type(coord) == "table", "coord must be a table")
 	assert(type(coord.row) == "number" and type(coord.col) == "number", "coord.row and coord.col must be numbers")
+	local gridSpec = self._gridSpec
+	assert(gridSpec ~= nil, "WorldGridService not built")
 
-	if coord.row < 1 or coord.row > WorldConfig.GRID_ROWS then
+	if coord.row < 1 or coord.row > gridSpec.gridRows then
 		return nil
 	end
 
-	if coord.col < 1 or coord.col > WorldConfig.GRID_COLS then
+	if coord.col < 1 or coord.col > gridSpec.gridCols then
 		return nil
 	end
 
-	return self._tiles[getTileIndex(coord.row, coord.col)]
+	return self._tiles[((coord.row - 1) * gridSpec.gridCols) + coord.col]
 end
 
 --[=[
@@ -104,6 +138,7 @@ end
 	@return Tile? -- The matching tile, or nil when the index is invalid.
 ]=]
 function WorldGridService:GetTileByIndex(index: number): Tile?
+	self:_EnsureBuilt()
 	return self._tiles[index]
 end
 
@@ -113,6 +148,7 @@ end
 	@return { Tile } -- The current tile list.
 ]=]
 function WorldGridService:GetAllTiles(): { Tile }
+	self:_EnsureBuilt()
 	return table.clone(self._tiles)
 end
 
@@ -122,6 +158,7 @@ end
 	@return { Tile } -- The buildable tile list.
 ]=]
 function WorldGridService:GetBuildableTiles(): { Tile }
+	self:_EnsureBuilt()
 	local buildableTiles = {}
 
 	for _, tile in ipairs(self._tiles) do
@@ -139,6 +176,7 @@ end
 	@return { Tile } -- The extraction tile list.
 ]=]
 function WorldGridService:GetExtractionTiles(): { Tile }
+	self:_EnsureBuilt()
 	local extractionTiles = {}
 
 	for _, tile in ipairs(self._tiles) do
@@ -156,6 +194,7 @@ end
 	@return { Tile } -- The lane tile list.
 ]=]
 function WorldGridService:GetLaneTiles(): { Tile }
+	self:_EnsureBuilt()
 	local laneTiles = {}
 
 	for _, tile in ipairs(self._tiles) do
@@ -175,6 +214,7 @@ end
 	@return boolean -- Whether the tile existed and was updated.
 ]=]
 function WorldGridService:SetOccupied(coord: GridCoord, occupied: boolean): boolean
+	self:_EnsureBuilt()
 	local tile = self:GetTile(coord)
 	if tile == nil then
 		return false

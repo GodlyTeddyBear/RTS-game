@@ -1,9 +1,5 @@
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local WorldConfig = require(ReplicatedStorage.Contexts.World.Config.WorldConfig)
-
 --[=[
 	@class WorldLayoutService
 	Resolves authoritative spawn and goal positions from world configuration.
@@ -18,7 +14,9 @@ WorldLayoutService.__index = WorldLayoutService
 	@return WorldLayoutService -- The new service instance.
 ]=]
 function WorldLayoutService.new()
-	return setmetatable({}, WorldLayoutService)
+	local self = setmetatable({}, WorldLayoutService)
+	self._gridRuntimeService = nil :: any
+	return self
 end
 
 --[=[
@@ -27,8 +25,8 @@ end
 	@param registry any -- Registry instance passed through the lifecycle contract.
 	@param name string -- Registered module name.
 ]=]
-function WorldLayoutService:Init(_registry: any, _name: string)
-	-- No setup needed in phase 0.
+function WorldLayoutService:Init(registry: any, _name: string)
+	self._gridRuntimeService = registry:Get("WorldGridRuntimeService")
 end
 
 --[=[
@@ -37,7 +35,13 @@ end
 	@return { CFrame } -- The configured spawn points.
 ]=]
 function WorldLayoutService:GetSpawnPoints(): { CFrame }
-	return WorldConfig.SPAWN_POINTS
+	local gridRuntimeService = self._gridRuntimeService
+	assert(gridRuntimeService ~= nil, "WorldGridRuntimeService is required")
+
+	local lanePoints = gridRuntimeService:GetLanePoints()
+	return table.freeze({
+		lanePoints.spawnPoint,
+	})
 end
 
 --[=[
@@ -46,7 +50,11 @@ end
 	@return CFrame -- The goal point enemies should path toward.
 ]=]
 function WorldLayoutService:GetGoalPoint(): CFrame
-	return WorldConfig.GOAL_POINT
+	local gridRuntimeService = self._gridRuntimeService
+	assert(gridRuntimeService ~= nil, "WorldGridRuntimeService is required")
+
+	local lanePoints = gridRuntimeService:GetLanePoints()
+	return lanePoints.goalPoint
 end
 
 return WorldLayoutService

@@ -3,11 +3,12 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
-local WorldConfig = require(ReplicatedStorage.Contexts.World.Config.WorldConfig)
+local PlacementGridRuntime = require(script.Parent.Parent.Infrastructure.PlacementGridRuntime)
 local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 
 type GridCoord = WorldTypes.GridCoord
 type ZoneType = WorldTypes.ZoneType
+type GridSpec = WorldTypes.GridSpec
 
 type OccupiedSet = { [string]: boolean }
 
@@ -25,36 +26,25 @@ local function _CloneCoord(row: number, col: number): GridCoord
 end
 
 function PlacementCursorService.CoordToWorld(row: number, col: number): Vector3
-	return WorldConfig.WORLD_ORIGIN:PointToWorldSpace(Vector3.new((col - 1) * WorldConfig.TILE_SIZE, 0, (row - 1) * WorldConfig.TILE_SIZE))
+	return PlacementGridRuntime.CoordToWorld({
+		row = row,
+		col = col,
+	})
 end
 
 function PlacementCursorService.WorldToCoord(worldPos: Vector3): GridCoord?
-	local localPos = WorldConfig.WORLD_ORIGIN:PointToObjectSpace(worldPos)
-	local col = math.floor(localPos.X / WorldConfig.TILE_SIZE) + 1
-	local row = math.floor(localPos.Z / WorldConfig.TILE_SIZE) + 1
-
-	if row < 1 or row > WorldConfig.GRID_ROWS then
+	local coord = PlacementGridRuntime.WorldToCoord(worldPos)
+	if coord == nil then
 		return nil
 	end
-
-	if col < 1 or col > WorldConfig.GRID_COLS then
-		return nil
-	end
-
-	return _CloneCoord(row, col)
+	return _CloneCoord(coord.row, coord.col)
 end
 
 function PlacementCursorService.GetZone(row: number, col: number): ZoneType?
-	local zoneRow = WorldConfig.ZONE_LAYOUT[row]
-	if zoneRow == nil then
-		return nil
-	end
-
-	local descriptor = zoneRow[col]
+	local descriptor = PlacementGridRuntime.GetTileDescriptor(row, col)
 	if descriptor == nil then
 		return nil
 	end
-
 	return descriptor.zone
 end
 
@@ -69,9 +59,10 @@ function PlacementCursorService.GetValidTiles(structureType: string, occupiedSet
 		allowedZoneSet[zoneName] = true
 	end
 
+	local spec: GridSpec = PlacementGridRuntime.GetGridSpec()
 	local validTiles = {}
-	for row = 1, WorldConfig.GRID_ROWS do
-		for col = 1, WorldConfig.GRID_COLS do
+	for row = 1, spec.gridRows do
+		for col = 1, spec.gridCols do
 			local zone = PlacementCursorService.GetZone(row, col)
 			local coordKey = _GetCoordKey(row, col)
 			if zone ~= nil and allowedZoneSet[zone] == true and occupiedSet[coordKey] ~= true then
