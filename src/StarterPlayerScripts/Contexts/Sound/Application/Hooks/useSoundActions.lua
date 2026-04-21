@@ -19,41 +19,72 @@ local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local Events = GameEvents.Events
 
 local function useSoundActions()
+	local uiEvents = Events.UI
+	local inventoryEvents = Events.Inventory
+	local commissionEvents = Events.Commission
+
 	return {
 		playButtonClick = function(variant: string?)
-			GameEvents.Bus:Emit(Events.UI.ButtonClicked, variant or "primary")
+			if not uiEvents then
+				return
+			end
+			GameEvents.Bus:Emit(uiEvents.ButtonClicked, variant or "primary")
 		end,
 
 		playMenuOpen = function(menuName: string)
-			GameEvents.Bus:Emit(Events.UI.MenuOpened, menuName)
+			if not uiEvents then
+				return
+			end
+			GameEvents.Bus:Emit(uiEvents.MenuOpened, menuName)
 		end,
 
 		playMenuClose = function(menuName: string)
-			GameEvents.Bus:Emit(Events.UI.MenuClosed, menuName)
+			if not uiEvents then
+				return
+			end
+			GameEvents.Bus:Emit(uiEvents.MenuClosed, menuName)
 		end,
 
 		playTabSwitch = function(tabName: string)
-			GameEvents.Bus:Emit(Events.UI.TabSwitched, tabName)
+			if not uiEvents then
+				return
+			end
+			GameEvents.Bus:Emit(uiEvents.TabSwitched, tabName)
 		end,
 
 		playError = function(errorType: string?)
-			GameEvents.Bus:Emit(Events.UI.ErrorOccurred, errorType or "generic")
+			if not uiEvents then
+				return
+			end
+			GameEvents.Bus:Emit(uiEvents.ErrorOccurred, errorType or "generic")
 		end,
 
 		playPurchase = function()
-			GameEvents.Bus:Emit(Events.Inventory.ItemBought)
+			if not inventoryEvents then
+				return
+			end
+			GameEvents.Bus:Emit(inventoryEvents.ItemBought)
 		end,
 
 		playSell = function()
-			GameEvents.Bus:Emit(Events.Inventory.ItemSoldClient)
+			if not inventoryEvents then
+				return
+			end
+			GameEvents.Bus:Emit(inventoryEvents.ItemSoldClient)
 		end,
 
 		playCommissionAccept = function()
-			GameEvents.Bus:Emit(Events.Commission.CommissionAcceptedClient)
+			if not commissionEvents then
+				return
+			end
+			GameEvents.Bus:Emit(commissionEvents.CommissionAcceptedClient)
 		end,
 
 		playCommissionDeliver = function()
-			GameEvents.Bus:Emit(Events.Commission.CommissionDeliveredClient)
+			if not commissionEvents then
+				return
+			end
+			GameEvents.Bus:Emit(commissionEvents.CommissionDeliveredClient)
 		end,
 	}
 end

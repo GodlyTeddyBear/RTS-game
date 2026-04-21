@@ -16,7 +16,6 @@ local useState = React.useState
 
 local useNavigationActions = require(script.Parent.useNavigationActions)
 local useScreenTransition = require(script.Parent.useScreenTransition)
-local useLotActions = require(script.Parent.Parent.Parent.Parent.Lot.Application.Hooks.useLotActions)
 local useSoundActions = require(script.Parent.Parent.Parent.Parent.Sound.Application.Hooks.useSoundActions)
 
 local BLUR_EFFECT_NAME = "HomeMenuBlur"
@@ -26,7 +25,6 @@ local HOME_MENU_SOUND_TARGET = "Home"
 local HOME_PLAY_VARIANT = "home_play"
 
 type TNavigationActions = typeof(useNavigationActions())
-type TLotActions = typeof(useLotActions())
 type TSoundActions = typeof(useSoundActions())
 
 type TValueRef<T> = { current: T }
@@ -77,11 +75,9 @@ end
 
 local function _StartGameFlow(
 	soundActionsRef: TValueRef<TSoundActions>,
-	lotActionsRef: TValueRef<TLotActions>,
 	actionsRef: TValueRef<TNavigationActions>
 )
 	soundActionsRef.current.playMenuClose(HOME_MENU_SOUND_TARGET)
-	lotActionsRef.current.spawnLot()
 	actionsRef.current.navigate(GAME_SCREEN)
 end
 
@@ -102,11 +98,10 @@ end
 
 local function _CreatePlayCompleteHandler(
 	soundActionsRef: TValueRef<TSoundActions>,
-	lotActionsRef: TValueRef<TLotActions>,
 	actionsRef: TValueRef<TNavigationActions>
 ): () -> ()
 	return function()
-		_StartGameFlow(soundActionsRef, lotActionsRef, actionsRef)
+		_StartGameFlow(soundActionsRef, actionsRef)
 	end
 end
 
@@ -124,16 +119,13 @@ end
 local function useHomeScreenController(): THomeScreenController
 	local anim = useScreenTransition("Simple")
 	local actions = useNavigationActions()
-	local lotActions = useLotActions()
 	local soundActions = useSoundActions()
 	local isPlaying, setIsPlaying = useState(false)
 	local actionsRef = useRef(actions)
-	local lotActionsRef = useRef(lotActions)
 	local soundActionsRef = useRef(soundActions)
 	local isPlayingRef = useRef(isPlaying)
 
 	actionsRef.current = actions
-	lotActionsRef.current = lotActions
 	soundActionsRef.current = soundActions
 	isPlayingRef.current = isPlaying
 
@@ -150,7 +142,7 @@ local function useHomeScreenController(): THomeScreenController
 	end, {})
 
 	local onPlayComplete = useMemo(function()
-		return _CreatePlayCompleteHandler(soundActionsRef, lotActionsRef, actionsRef)
+		return _CreatePlayCompleteHandler(soundActionsRef, actionsRef)
 	end, {})
 
 	return {

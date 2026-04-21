@@ -158,14 +158,176 @@ local Queue: any = {
 
 local SerdesEvent = "?"
 local SerdesThread: thread?
-local function WriteEVENT_SyncPlacements(Value: buffer): ()
-	-- Allocate BLOCK: 3 bytes
-	local BLOCK_START = Allocate(3)
+export type GridCoordPayload = { row: number?, col: number? }
+export type StructureRecordPayload = { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }
+export type PlacementList = {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}
+export type PlacementStatePayload = { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }
+export type InitPayload = { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }
+export type PatchPayload = { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }
+export type SyncPayload = { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? }
+local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? }): ()
+	-- Allocate BLOCK: 2 bytes
+	local BLOCK_START = Allocate(2)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
-	local Length = buffer.len(Value)
-	buffer.writeu16(SendBuffer, BLOCK_START + 1, Length)
-	Allocate(Length)
-	buffer.copy(SendBuffer, SendOffset, Value, 0, Length)
+	if Value.type == "init" then
+		buffer.writeu8(SendBuffer, BLOCK_START + 1, 0)
+		-- Allocate BLOCK: 1 bytes
+		local BLOCK_START = Allocate(1)
+		buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data ~= nil and 1 or 0)
+		if Value.data ~= nil then
+			-- Allocate BLOCK: 1 bytes
+			local BLOCK_START = Allocate(1)
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.placements ~= nil and 1 or 0)
+			if Value.data.placements ~= nil then
+				-- Allocate BLOCK: 1 bytes
+				local BLOCK_START = Allocate(1)
+				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.placements.placements ~= nil and 1 or 0)
+				if Value.data.placements.placements ~= nil then
+					-- Allocate BLOCK: 2 bytes
+					local BLOCK_START = Allocate(2)
+					local Elements_5 = 0
+					for Key_5, Element_5 in Value.data.placements.placements do
+						Elements_5 += 1
+						local OFFSET_0 = Allocate(4)
+						buffer.writeu32(SendBuffer, OFFSET_0, Key_5)
+						local OFFSET_1 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_1, Element_5.coord ~= nil and 1 or 0)
+						if Element_5.coord ~= nil then
+							-- Allocate BLOCK: 2 bytes
+							local BLOCK_START = Allocate(2)
+							buffer.writeu8(SendBuffer, BLOCK_START + 0, Element_5.coord.row ~= nil and 1 or 0)
+							if Element_5.coord.row ~= nil then
+								-- Allocate BLOCK: 8 bytes
+								local BLOCK_START = Allocate(8)
+								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.coord.row)
+							end
+							buffer.writeu8(SendBuffer, BLOCK_START + 1, Element_5.coord.col ~= nil and 1 or 0)
+							if Element_5.coord.col ~= nil then
+								-- Allocate BLOCK: 8 bytes
+								local BLOCK_START = Allocate(8)
+								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.coord.col)
+							end
+						end
+						local OFFSET_2 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_2, Element_5.structureType ~= nil and 1 or 0)
+						if Element_5.structureType ~= nil then
+							-- Allocate BLOCK: 2 bytes
+							local BLOCK_START = Allocate(2)
+							local Length = #Element_5.structureType
+							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+							Allocate(Length)
+							buffer.writestring(SendBuffer, SendOffset, Element_5.structureType, Length)
+						end
+						local OFFSET_3 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_3, Element_5.instanceId ~= nil and 1 or 0)
+						if Element_5.instanceId ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.instanceId)
+						end
+						local OFFSET_4 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_4, Element_5.tier ~= nil and 1 or 0)
+						if Element_5.tier ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.tier)
+						end
+						local OFFSET_5 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_5, Element_5.resourceType ~= nil and 1 or 0)
+						if Element_5.resourceType ~= nil then
+							-- Allocate BLOCK: 2 bytes
+							local BLOCK_START = Allocate(2)
+							local Length = #Element_5.resourceType
+							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+							Allocate(Length)
+							buffer.writestring(SendBuffer, SendOffset, Element_5.resourceType, Length)
+						end
+					end
+					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
+				end
+			end
+		end
+	elseif Value.type == "patch" then
+		buffer.writeu8(SendBuffer, BLOCK_START + 1, 1)
+		-- Allocate BLOCK: 1 bytes
+		local BLOCK_START = Allocate(1)
+		buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data ~= nil and 1 or 0)
+		if Value.data ~= nil then
+			-- Allocate BLOCK: 1 bytes
+			local BLOCK_START = Allocate(1)
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.placements ~= nil and 1 or 0)
+			if Value.data.placements ~= nil then
+				-- Allocate BLOCK: 1 bytes
+				local BLOCK_START = Allocate(1)
+				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.placements.placements ~= nil and 1 or 0)
+				if Value.data.placements.placements ~= nil then
+					-- Allocate BLOCK: 2 bytes
+					local BLOCK_START = Allocate(2)
+					local Elements_5 = 0
+					for Key_5, Element_5 in Value.data.placements.placements do
+						Elements_5 += 1
+						local OFFSET_0 = Allocate(4)
+						buffer.writeu32(SendBuffer, OFFSET_0, Key_5)
+						local OFFSET_1 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_1, Element_5.coord ~= nil and 1 or 0)
+						if Element_5.coord ~= nil then
+							-- Allocate BLOCK: 2 bytes
+							local BLOCK_START = Allocate(2)
+							buffer.writeu8(SendBuffer, BLOCK_START + 0, Element_5.coord.row ~= nil and 1 or 0)
+							if Element_5.coord.row ~= nil then
+								-- Allocate BLOCK: 8 bytes
+								local BLOCK_START = Allocate(8)
+								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.coord.row)
+							end
+							buffer.writeu8(SendBuffer, BLOCK_START + 1, Element_5.coord.col ~= nil and 1 or 0)
+							if Element_5.coord.col ~= nil then
+								-- Allocate BLOCK: 8 bytes
+								local BLOCK_START = Allocate(8)
+								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.coord.col)
+							end
+						end
+						local OFFSET_2 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_2, Element_5.structureType ~= nil and 1 or 0)
+						if Element_5.structureType ~= nil then
+							-- Allocate BLOCK: 2 bytes
+							local BLOCK_START = Allocate(2)
+							local Length = #Element_5.structureType
+							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+							Allocate(Length)
+							buffer.writestring(SendBuffer, SendOffset, Element_5.structureType, Length)
+						end
+						local OFFSET_3 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_3, Element_5.instanceId ~= nil and 1 or 0)
+						if Element_5.instanceId ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.instanceId)
+						end
+						local OFFSET_4 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_4, Element_5.tier ~= nil and 1 or 0)
+						if Element_5.tier ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.tier)
+						end
+						local OFFSET_5 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_5, Element_5.resourceType ~= nil and 1 or 0)
+						if Element_5.resourceType ~= nil then
+							-- Allocate BLOCK: 2 bytes
+							local BLOCK_START = Allocate(2)
+							local Length = #Element_5.resourceType
+							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+							Allocate(Length)
+							buffer.writestring(SendBuffer, SendOffset, Element_5.resourceType, Length)
+						end
+					end
+					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
+				end
+			end
+		end
+	else
+		error(`Unexpected variant: {Value.type}`)
+	end
 end
 
 if not RunService:IsRunning() then
@@ -264,12 +426,12 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	SyncPlacements = {
-		Fire = function(Player: Player, Value: buffer): ()
+		Fire = function(Player: Player, Value: { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? }): ()
 			Load(PlayersMap[Player])
 			WriteEVENT_SyncPlacements(Value)
 			PlayersMap[Player] = Save()
 		end,
-		FireAll = function(Value: buffer): ()
+		FireAll = function(Value: { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncPlacements(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -281,7 +443,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireList = function(List: {Player}, Value: buffer): ()
+		FireList = function(List: {Player}, Value: { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncPlacements(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -293,7 +455,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireExcept = function(Except: Player, Value: buffer): ()
+		FireExcept = function(Except: Player, Value: { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncPlacements(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances

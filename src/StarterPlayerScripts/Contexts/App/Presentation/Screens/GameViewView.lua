@@ -9,10 +9,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local React = require(ReplicatedStorage.Packages.React)
 local e = React.createElement
 
-local GameHUD = require(script.Parent.Parent.Organisms.GameHUD)
-local NPCCommandPresentation = require(script.Parent.Parent.Parent.Parent.NPCCommand.Presentation)
-local DialoguePresentation = require(script.Parent.Parent.Parent.Parent.Dialogue.Presentation)
-
 type TGameViewViewProps = {
 	isMenuOpen: boolean,
 	isHudEnabled: boolean,
@@ -31,18 +27,6 @@ local function GameViewView(props: TGameViewViewProps)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-	}, {
-		HUDOverlay = if props.isHudEnabled then e(GameHUD, {
-			IsMenuOpen = props.isMenuOpen,
-			OnToggleMenu = props.onToggleMenu,
-			OnNavigateFromMenu = props.onNavigateFromMenu,
-			OnOpenSettings = props.onOpenSettings,
-			OnExitGame = props.onExitGame,
-			PlayerUsername = props.playerUsername,
-			PlayerLevel = props.playerLevel,
-		}) else nil,
-		NPCCommandOverlay = e(NPCCommandPresentation.NPCCommandScreen),
-		DialogueOverlay = e(DialoguePresentation.DialogueOverlay),
 	})
 end
 

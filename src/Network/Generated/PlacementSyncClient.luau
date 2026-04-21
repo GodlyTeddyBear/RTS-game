@@ -158,12 +158,159 @@ local Queue: any = {
 local SerdesEvent = "?"
 local SerdesThread: thread?
 Queue.Reliable[0] = table.create(256)
-local function ReadEVENT_SyncPlacements(): (buffer)
-	-- Read BLOCK: 2 bytes
-	local BLOCK_START = Read(2)
-	local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
-	local Value = buffer.create(Length)
-	buffer.copy(Value, 0, RecieveBuffer, Read(Length), Length)
+export type GridCoordPayload = { row: number?, col: number? }
+export type StructureRecordPayload = { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }
+export type PlacementList = {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}
+export type PlacementStatePayload = { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }
+export type InitPayload = { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }
+export type PatchPayload = { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }
+export type SyncPayload = { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? }
+local function ReadEVENT_SyncPlacements(): ({ type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? })
+	-- Read BLOCK: 1 bytes
+	local BLOCK_START = Read(1)
+	local Tag = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	local Value = true :: any
+	if Tag == 0 then
+		-- Read BLOCK: 1 bytes
+		local BLOCK_START = Read(1)
+		Value = {} :: any
+		if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			Value.data = {} :: any
+			if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
+				-- Read BLOCK: 1 bytes
+				local BLOCK_START = Read(1)
+				Value.data.placements = {} :: any
+				if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
+					-- Read BLOCK: 2 bytes
+					local BLOCK_START = Read(2)
+					Value.data.placements.placements = {}
+					local Elements_5 = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+					for _ = 1, Elements_5 do
+						local OFFSET_0 = Read(4)
+						local Key_5 = buffer.readu32(RecieveBuffer, OFFSET_0)
+						local Element_5 = {} :: any
+						local OFFSET_1 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_1) == 1 then
+							-- Read BLOCK: 2 bytes
+							local BLOCK_START = Read(2)
+							Element_5.coord = {} :: any
+							if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
+								-- Read BLOCK: 8 bytes
+								local BLOCK_START = Read(8)
+								Element_5.coord.row = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+							end
+							if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
+								-- Read BLOCK: 8 bytes
+								local BLOCK_START = Read(8)
+								Element_5.coord.col = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+							end
+						end
+						local OFFSET_2 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_2) == 1 then
+							-- Read BLOCK: 2 bytes
+							local BLOCK_START = Read(2)
+							local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+							Element_5.structureType = buffer.readstring(RecieveBuffer, Read(Length), Length)
+						end
+						local OFFSET_3 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_3) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.instanceId = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_4 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_4) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.tier = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_5 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_5) == 1 then
+							-- Read BLOCK: 2 bytes
+							local BLOCK_START = Read(2)
+							local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+							Element_5.resourceType = buffer.readstring(RecieveBuffer, Read(Length), Length)
+						end
+						Value.data.placements.placements[Key_5] = Element_5
+					end
+				end
+			end
+		end
+		Value.type = "init"
+	elseif Tag == 1 then
+		-- Read BLOCK: 1 bytes
+		local BLOCK_START = Read(1)
+		Value = {} :: any
+		if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			Value.data = {} :: any
+			if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
+				-- Read BLOCK: 1 bytes
+				local BLOCK_START = Read(1)
+				Value.data.placements = {} :: any
+				if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
+					-- Read BLOCK: 2 bytes
+					local BLOCK_START = Read(2)
+					Value.data.placements.placements = {}
+					local Elements_5 = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+					for _ = 1, Elements_5 do
+						local OFFSET_0 = Read(4)
+						local Key_5 = buffer.readu32(RecieveBuffer, OFFSET_0)
+						local Element_5 = {} :: any
+						local OFFSET_1 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_1) == 1 then
+							-- Read BLOCK: 2 bytes
+							local BLOCK_START = Read(2)
+							Element_5.coord = {} :: any
+							if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
+								-- Read BLOCK: 8 bytes
+								local BLOCK_START = Read(8)
+								Element_5.coord.row = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+							end
+							if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
+								-- Read BLOCK: 8 bytes
+								local BLOCK_START = Read(8)
+								Element_5.coord.col = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+							end
+						end
+						local OFFSET_2 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_2) == 1 then
+							-- Read BLOCK: 2 bytes
+							local BLOCK_START = Read(2)
+							local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+							Element_5.structureType = buffer.readstring(RecieveBuffer, Read(Length), Length)
+						end
+						local OFFSET_3 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_3) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.instanceId = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_4 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_4) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.tier = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_5 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_5) == 1 then
+							-- Read BLOCK: 2 bytes
+							local BLOCK_START = Read(2)
+							local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+							Element_5.resourceType = buffer.readstring(RecieveBuffer, Read(Length), Length)
+						end
+						Value.data.placements.placements[Key_5] = Element_5
+					end
+				end
+			end
+		end
+		Value.type = "patch"
+	else
+		error(`Unexpected variant: {Tag}`)
+	end
 	return Value
 end
 
@@ -216,7 +363,7 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
 		if Index == 0 then
-			local Value: buffer = ReadEVENT_SyncPlacements()
+			local Value: { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } = ReadEVENT_SyncPlacements()
 			if Events.Reliable[0] ~= nil then
 				task.spawn(Events.Reliable[0], Value)
 			else
@@ -251,7 +398,7 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	SyncPlacements = {
-		On = function(Listener: (Value: buffer) -> ()): () -> ()
+		On = function(Listener: (Value: { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? }) -> ()): () -> ()
 			Events.Reliable[0] = Listener
 			for Index, Arguments in Queue.Reliable[0] do
 				task.spawn(Listener, table.unpack(Arguments))

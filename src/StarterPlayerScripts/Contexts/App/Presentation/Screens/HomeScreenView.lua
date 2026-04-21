@@ -10,8 +10,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local React = require(ReplicatedStorage.Packages.React)
 local e = React.createElement
 
-local HomePlayButton = require(script.Parent.Parent.Organisms.HomePlayButton)
-
 type THomeScreenViewProps = {
 	containerRef: { current: Frame? },
 	isPlaying: boolean,
@@ -43,12 +41,6 @@ local function HomeScreenView(props: THomeScreenViewProps)
 				TextColor3 = Color3.fromRGB(234, 199, 116),
 				TextStrokeTransparency = 0.7,
 				TextScaled = true,
-			}),
-			PlayButton = e(HomePlayButton, {
-				isPlaying = props.isPlaying,
-				onPlayStart = props.onPlayStart,
-				onPlayHover = props.onPlayHover,
-				onPlayComplete = props.onPlayComplete,
 			}),
 			Version = e("TextLabel", {
 				Size = UDim2.fromOffset(200, 24),

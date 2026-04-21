@@ -184,7 +184,10 @@ local function Button(props: TButtonProps)
 		end,
 		[React.Event.Activated] = function(...)
 			-- Emit UI event for tracking
-			GameEvents.Bus:Emit(Events.UI.ButtonClicked, variantName)
+			local uiEvents = Events.UI
+			if uiEvents and uiEvents.ButtonClicked then
+				GameEvents.Bus:Emit(uiEvents.ButtonClicked, variantName)
+			end
 			-- Play press animation (scale down then back up)
 			ButtonHelpers.animatePressSpring(uiScaleRef, variant, shouldAnimate)
 			-- Call user's callback if provided

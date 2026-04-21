@@ -170,41 +170,50 @@ end
 	Connect to client-side GameEvents for UI sounds.
 ]]
 function SoundController:_ConnectClientEvents()
-	GameEvents.Bus:On(Events.UI.ButtonClicked, function(_variant: string)
-		self:_PlayFromMap("ButtonClicked")
-	end)
+	local uiEvents = Events.UI
+	if uiEvents then
+		GameEvents.Bus:On(uiEvents.ButtonClicked, function(_variant: string)
+			self:_PlayFromMap("ButtonClicked")
+		end)
 
-	GameEvents.Bus:On(Events.UI.MenuOpened, function(_menuName: string)
-		self:_PlayFromMap("MenuOpened")
-	end)
+		GameEvents.Bus:On(uiEvents.MenuOpened, function(_menuName: string)
+			self:_PlayFromMap("MenuOpened")
+		end)
 
-	GameEvents.Bus:On(Events.UI.MenuClosed, function(_menuName: string)
-		self:_PlayFromMap("MenuClosed")
-	end)
+		GameEvents.Bus:On(uiEvents.MenuClosed, function(_menuName: string)
+			self:_PlayFromMap("MenuClosed")
+		end)
 
-	GameEvents.Bus:On(Events.UI.TabSwitched, function(_tabName: string)
-		self:_PlayFromMap("TabSwitched")
-	end)
+		GameEvents.Bus:On(uiEvents.TabSwitched, function(_tabName: string)
+			self:_PlayFromMap("TabSwitched")
+		end)
 
-	GameEvents.Bus:On(Events.UI.ErrorOccurred, function(_errorType: string)
-		self:_PlayFromMap("ErrorOccurred")
-	end)
+		GameEvents.Bus:On(uiEvents.ErrorOccurred, function(_errorType: string)
+			self:_PlayFromMap("ErrorOccurred")
+		end)
+	end
 
-	GameEvents.Bus:On(Events.Inventory.ItemBought, function()
-		self:_PlayFromMap("ItemBought")
-	end)
+	local inventoryEvents = Events.Inventory
+	if inventoryEvents then
+		GameEvents.Bus:On(inventoryEvents.ItemBought, function()
+			self:_PlayFromMap("ItemBought")
+		end)
 
-	GameEvents.Bus:On(Events.Inventory.ItemSoldClient, function()
-		self:_PlayFromMap("ItemSoldClient")
-	end)
+		GameEvents.Bus:On(inventoryEvents.ItemSoldClient, function()
+			self:_PlayFromMap("ItemSoldClient")
+		end)
+	end
 
-	GameEvents.Bus:On(Events.Commission.CommissionAcceptedClient, function()
-		self:_PlayFromMap("CommissionAcceptedClient")
-	end)
+	local commissionEvents = Events.Commission
+	if commissionEvents then
+		GameEvents.Bus:On(commissionEvents.CommissionAcceptedClient, function()
+			self:_PlayFromMap("CommissionAcceptedClient")
+		end)
 
-	GameEvents.Bus:On(Events.Commission.CommissionDeliveredClient, function()
-		self:_PlayFromMap("CommissionDeliveredClient")
-	end)
+		GameEvents.Bus:On(commissionEvents.CommissionDeliveredClient, function()
+			self:_PlayFromMap("CommissionDeliveredClient")
+		end)
+	end
 end
 
 --[[

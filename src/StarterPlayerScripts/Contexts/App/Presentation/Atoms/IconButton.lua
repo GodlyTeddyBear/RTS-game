@@ -191,7 +191,10 @@ local function IconButton(props: TIconButtonProps)
 			setIsHovered(false)
 		end,
 		[React.Event.Activated] = function(...)
-			GameEvents.Bus:Emit(Events.UI.ButtonClicked, variantName)
+			local uiEvents = Events.UI
+			if uiEvents and uiEvents.ButtonClicked then
+				GameEvents.Bus:Emit(uiEvents.ButtonClicked, variantName)
+			end
 			ButtonHelpers.animatePressSpring(uiScaleRef, variant, shouldAnimate)
 			if props[React.Event.Activated] then
 				props[React.Event.Activated](...)

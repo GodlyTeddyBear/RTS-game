@@ -3,9 +3,45 @@ option ClientOutput = "Generated/PlacementSyncClient.luau"
 
 option RemoteScope = "PLACEMENT_SYNC"
 
+struct GridCoordPayload {
+	row: f64?,
+	col: f64?,
+}
+
+struct StructureRecordPayload {
+	coord: GridCoordPayload?,
+	structureType: string?,
+	instanceId: f64?,
+	tier: f64?,
+	resourceType: string?,
+}
+
+map PlacementList = { [u32]: StructureRecordPayload }
+
+struct PlacementStatePayload {
+	placements: PlacementList?,
+}
+
+struct InitPayload {
+	placements: PlacementStatePayload?,
+}
+
+struct PatchPayload {
+	placements: PlacementStatePayload?,
+}
+
+enum SyncPayload = "type" {
+	init {
+		data: InitPayload?,
+	},
+	patch {
+		data: PatchPayload?,
+	},
+}
+
 event SyncPlacements {
 	from: Server,
 	type: Reliable,
 	call: SingleAsync,
-	data: buffer,
+	data: SyncPayload,
 }
