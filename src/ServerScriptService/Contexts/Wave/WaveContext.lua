@@ -11,6 +11,7 @@ local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local Errors = require(script.Parent.Errors)
 local HandleWaveStartedCommand = require(script.Parent.Application.Commands.HandleWaveStartedCommand)
 local HandleEnemyDiedCommand = require(script.Parent.Application.Commands.HandleEnemyDiedCommand)
+local HandleWaveEndedCommand = require(script.Parent.Application.Commands.HandleWaveEndedCommand)
 local HandleRunEndedCommand = require(script.Parent.Application.Commands.HandleRunEndedCommand)
 local GetActiveEnemyCountQuery = require(script.Parent.Application.Queries.GetActiveEnemyCountQuery)
 local GetCurrentWaveNumberQuery = require(script.Parent.Application.Queries.GetCurrentWaveNumberQuery)
@@ -51,6 +52,7 @@ function WaveContext:KnitInit()
 	registry:Register("WaveCountingService", WaveCountingService.new(), "Domain")
 	registry:Register("HandleWaveStartedCommand", HandleWaveStartedCommand.new(), "Application")
 	registry:Register("HandleEnemyDiedCommand", HandleEnemyDiedCommand.new(), "Application")
+	registry:Register("HandleWaveEndedCommand", HandleWaveEndedCommand.new(), "Application")
 	registry:Register("HandleRunEndedCommand", HandleRunEndedCommand.new(), "Application")
 	registry:Register("GetActiveEnemyCountQuery", GetActiveEnemyCountQuery.new(), "Application")
 	registry:Register("GetCurrentWaveNumberQuery", GetCurrentWaveNumberQuery.new(), "Application")
@@ -58,6 +60,7 @@ function WaveContext:KnitInit()
 
 	self._handleWaveStartedCommand = registry:Get("HandleWaveStartedCommand")
 	self._handleEnemyDiedCommand = registry:Get("HandleEnemyDiedCommand")
+	self._handleWaveEndedCommand = registry:Get("HandleWaveEndedCommand")
 	self._handleRunEndedCommand = registry:Get("HandleRunEndedCommand")
 	self._getActiveEnemyCountQuery = registry:Get("GetActiveEnemyCountQuery")
 	self._getCurrentWaveNumberQuery = registry:Get("GetCurrentWaveNumberQuery")
@@ -67,6 +70,7 @@ function WaveContext:KnitInit()
 	self._worldContext = nil :: any
 
 	self._runWaveStartedConnection = nil :: any
+	self._runWaveEndedConnection = nil :: any
 	self._runEndedConnection = nil :: any
 	self._enemyDiedConnection = nil :: any
 end
@@ -98,6 +102,10 @@ function WaveContext:KnitStart()
 	-- Bridge run transitions into wave-start handling.
 	self._runWaveStartedConnection = GameEvents.Bus:On(GameEvents.Events.Run.WaveStarted, function(waveNumber: number, isEndless: boolean)
 		self:_OnRunWaveStarted(waveNumber, isEndless)
+	end)
+
+	self._runWaveEndedConnection = GameEvents.Bus:On(GameEvents.Events.Run.WaveEnded, function(waveNumber: number)
+		self:_OnRunWaveEnded(waveNumber)
 	end)
 
 	-- Bridge run termination into wave cleanup.
@@ -136,6 +144,13 @@ function WaveContext:_OnWaveEnemyDied(role: string, waveNumber: number, deathCFr
 		Try(self._handleEnemyDiedCommand:Execute(role, waveNumber, deathCFrame, self._runContext))
 		return Ok(nil)
 	end, "Wave:OnWaveEnemyDied")
+end
+
+function WaveContext:_OnRunWaveEnded(waveNumber: number)
+	Catch(function()
+		Try(self._handleWaveEndedCommand:Execute(waveNumber))
+		return Ok(nil)
+	end, "Wave:OnRunWaveEnded")
 end
 
 -- Reset the wave session when the run ends so no stale callbacks survive the lifecycle boundary.
@@ -180,6 +195,9 @@ function WaveContext:Destroy()
 
 	if self._runWaveStartedConnection then
 		self._runWaveStartedConnection:Disconnect()
+	end
+	if self._runWaveEndedConnection then
+		self._runWaveEndedConnection:Disconnect()
 	end
 	if self._runEndedConnection then
 		self._runEndedConnection:Disconnect()

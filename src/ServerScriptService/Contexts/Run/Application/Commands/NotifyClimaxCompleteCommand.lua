@@ -49,9 +49,9 @@ function NotifyClimaxCompleteCommand:Execute(onWaveTimeout: () -> ()): Result.Re
 	-- Increment the wave counter before the endless loop starts.
 	self._machine:IncrementWaveNumber()
 
-	-- Enter the endless phase and arm the shared wave timer.
-	Try(self._machine:Transition("Endless"))
+	-- Arm the shared wave timer before exposing the endless phase snapshot.
 	self._timer:StartWaveCountdown(onWaveTimeout)
+	Try(self._machine:Transition("Endless"))
 
 	return Ok(true)
 end

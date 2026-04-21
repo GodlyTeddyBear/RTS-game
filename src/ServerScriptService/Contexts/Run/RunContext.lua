@@ -37,6 +37,7 @@ local Ok = Result.Ok
 local Try = Result.Try
 
 type RunState = RunTypes.RunState
+type RunSnapshot = RunTypes.RunSnapshot
 
 --[=[
 	@class RunContext
@@ -124,10 +125,7 @@ function RunContext:KnitInit()
 		self:_OnStateChanged(newState, previousState)
 	end)
 
-	self._sync:SetState({
-		state = self._machine:GetState(),
-		waveNumber = self._machine:GetWaveNumber(),
-	})
+	self._sync:SetState(self:_BuildRunSnapshot())
 end
 
 local function _formatCommandFailure(commandName: string, result: Result.Result<any>): (boolean, string)
@@ -450,13 +448,21 @@ function RunContext:_TeleportPlayersToCFrame(targetCFrame: CFrame)
 	end
 end
 
+function RunContext:_BuildRunSnapshot(): RunSnapshot
+	local phaseClock = self._timer:GetPhaseClock()
+	return {
+		state = self._machine:GetState(),
+		waveNumber = self._machine:GetWaveNumber(),
+		phaseStartedAt = phaseClock.phaseStartedAt,
+		phaseEndsAt = phaseClock.phaseEndsAt,
+		phaseDuration = phaseClock.phaseDuration,
+	}
+end
+
 -- Pushes the new run snapshot to sync, then emits milestone logs for lifecycle transitions.
 function RunContext:_OnStateChanged(newState: RunState, previousState: RunState)
 	-- Replicate the latest authoritative snapshot before observers react to the transition.
-	self._sync:SetState({
-		state = newState,
-		waveNumber = self._machine:GetWaveNumber(),
-	})
+	self._sync:SetState(self:_BuildRunSnapshot())
 
 	Result.MentionEvent("RunContext:RunStateMachine", "State -> " .. newState, {
 		PreviousState = previousState,
@@ -479,7 +485,9 @@ function RunContext:_OnStateChanged(newState: RunState, previousState: RunState)
 	end
 
 	-- Emit run lifecycle events after the sync snapshot is updated so downstream listeners read the latest state.
-	if newState == "Wave" then
+	if newState == "Resolution" and (previousState == "Wave" or previousState == "Endless") then
+		GameEvents.Bus:Emit(GameEvents.Events.Run.WaveEnded, self._machine:GetWaveNumber())
+	elseif newState == "Wave" then
 		GameEvents.Bus:Emit(GameEvents.Events.Run.WaveStarted, self._machine:GetWaveNumber(), false)
 	elseif newState == "Endless" then
 		GameEvents.Bus:Emit(GameEvents.Events.Run.WaveStarted, self._machine:GetWaveNumber(), true)

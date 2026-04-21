@@ -49,13 +49,14 @@ function OnResolutionTimeoutCommand:Execute(onPrepTimeout: () -> ()): Result.Res
 
 	-- Route to climax once the configured wave threshold has been reached.
 	if self._machine:GetWaveNumber() >= RunConfig.CLIMAX_WAVE then
+		self._timer:ClearPhaseClock()
 		Try(self._machine:Transition("Climax"))
 		return Ok(nil)
 	end
 
-	-- Otherwise loop back into prep and arm the next prep countdown.
-	Try(self._machine:Transition("Prep"))
+	-- Otherwise loop back into prep and arm the next prep countdown before sync.
 	self._timer:StartPrepCountdown(onPrepTimeout)
+	Try(self._machine:Transition("Prep"))
 
 	return Ok(nil)
 end

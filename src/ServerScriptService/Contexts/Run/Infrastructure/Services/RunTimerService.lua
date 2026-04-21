@@ -1,5 +1,7 @@
 --!strict
 
+local Workspace = game:GetService("Workspace")
+
 --[=[
 	@class RunTimerService
 	Owns cancellable countdowns for the run phase transitions.
@@ -25,6 +27,9 @@ function RunTimerService.new(config: {
 	local self = setmetatable({}, RunTimerService)
 	self._config = config
 	self._activeThread = nil :: thread?
+	self._phaseStartedAt = nil :: number?
+	self._phaseEndsAt = nil :: number?
+	self._phaseDuration = nil :: number?
 	return self
 end
 
@@ -41,6 +46,10 @@ end
 function RunTimerService:_StartCountdown(duration: number, onExpire: () -> ())
 	-- Reset any active delay before scheduling the next phase timeout.
 	self:Cancel()
+	local startedAt = Workspace:GetServerTimeNow()
+	self._phaseStartedAt = startedAt
+	self._phaseDuration = duration
+	self._phaseEndsAt = startedAt + duration
 
 	local activeThread: thread? = nil
 	-- Capture the newly scheduled delay so stale callbacks can self-disqualify.
@@ -90,12 +99,25 @@ end
 ]=]
 function RunTimerService:Cancel()
 	local activeThread = self._activeThread
-	if not activeThread then
-		return
+	if activeThread then
+		task.cancel(activeThread)
 	end
-
-	task.cancel(activeThread)
 	self._activeThread = nil
+	self:ClearPhaseClock()
+end
+
+function RunTimerService:ClearPhaseClock()
+	self._phaseStartedAt = nil
+	self._phaseEndsAt = nil
+	self._phaseDuration = nil
+end
+
+function RunTimerService:GetPhaseClock()
+	return {
+		phaseStartedAt = self._phaseStartedAt,
+		phaseEndsAt = self._phaseEndsAt,
+		phaseDuration = self._phaseDuration,
+	}
 end
 
 return RunTimerService

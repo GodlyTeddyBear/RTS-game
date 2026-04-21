@@ -44,6 +44,9 @@ function RunSyncService:SetState(snapshot: RunSnapshot)
 		return {
 			state = snapshot.state,
 			waveNumber = snapshot.waveNumber,
+			phaseStartedAt = snapshot.phaseStartedAt,
+			phaseEndsAt = snapshot.phaseEndsAt,
+			phaseDuration = snapshot.phaseDuration,
 		}
 	end)
 end

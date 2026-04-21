@@ -11,11 +11,17 @@ type RunState = RunTypes.RunState
 export type TRunState = {
 	state: RunState,
 	waveNumber: number,
+	phaseStartedAt: number?,
+	phaseEndsAt: number?,
+	phaseDuration: number?,
 }
 
 local DEFAULT_RUN_STATE: TRunState = table.freeze({
 	state = "Idle",
 	waveNumber = 0,
+	phaseStartedAt = nil,
+	phaseEndsAt = nil,
+	phaseDuration = nil,
 })
 
 local runAtom: (() -> TRunState)? = nil

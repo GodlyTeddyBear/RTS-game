@@ -15,6 +15,7 @@ local Run = {}
 ]=]
 local events = table.freeze({
 	WaveStarted = "Run.WaveStarted",
+	WaveEnded = "Run.WaveEnded",
 	RunEnded = "Run.RunEnded",
 })
 
@@ -25,6 +26,7 @@ local events = table.freeze({
 ]=]
 local schemas: { [string]: { string } } = {
 	[events.WaveStarted] = { "number", "boolean" },
+	[events.WaveEnded] = { "number" },
 	[events.RunEnded] = {},
 }
 

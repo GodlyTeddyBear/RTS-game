@@ -6,6 +6,9 @@ option RemoteScope = "RUN_SYNC"
 struct RunSnapshotPayload {
     state: string?,
     waveNumber: f64?,
+    phaseStartedAt: f64?,
+    phaseEndsAt: f64?,
+    phaseDuration: f64?,
 }
 
 struct InitPayload {

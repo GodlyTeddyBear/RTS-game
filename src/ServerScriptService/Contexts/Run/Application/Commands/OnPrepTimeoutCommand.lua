@@ -46,12 +46,10 @@ function OnPrepTimeoutCommand:Execute(onWaveTimeout: () -> ()): Result.Result<ni
 		return Ok(nil)
 	end
 
-	-- Advance the wave counter before transitioning into active combat.
+	-- Advance the wave counter and arm the wave countdown before state sync fires.
 	self._machine:IncrementWaveNumber()
-	Try(self._machine:Transition("Wave"))
-
-	-- Arm the wave countdown after the state machine is already in `Wave`.
 	self._timer:StartWaveCountdown(onWaveTimeout)
+	Try(self._machine:Transition("Wave"))
 
 	return Ok(nil)
 end

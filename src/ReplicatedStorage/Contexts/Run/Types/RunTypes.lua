@@ -21,10 +21,16 @@ export type RunState = "Idle" | "Prep" | "Wave" | "Resolution" | "Climax" | "End
 	@within RunTypes
 	.state RunState -- Current authoritative run state.
 	.waveNumber number -- Current authoritative wave counter.
+	.phaseStartedAt number? -- Server timestamp when the current timed phase started.
+	.phaseEndsAt number? -- Server timestamp when the current timed phase ends.
+	.phaseDuration number? -- Current timed phase duration in seconds.
 ]=]
 export type RunSnapshot = {
 	state: RunState,
 	waveNumber: number,
+	phaseStartedAt: number?,
+	phaseEndsAt: number?,
+	phaseDuration: number?,
 }
 
 return table.freeze(RunTypes)

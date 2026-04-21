@@ -25,6 +25,9 @@ function SharedAtoms.CreateServerAtom()
 	return Charm.atom({
 		state = "Idle",
 		waveNumber = 0,
+		phaseStartedAt = nil,
+		phaseEndsAt = nil,
+		phaseDuration = nil,
 	} :: RunSnapshot)
 end
 
@@ -38,6 +41,9 @@ function SharedAtoms.CreateClientAtom()
 	return Charm.atom({
 		state = "Idle",
 		waveNumber = 0,
+		phaseStartedAt = nil,
+		phaseEndsAt = nil,
+		phaseDuration = nil,
 	} :: RunSnapshot)
 end
 

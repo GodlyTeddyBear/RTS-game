@@ -49,12 +49,10 @@ function StartRunCommand:Execute(onPrepTimeout: () -> ()): Result.Result<boolean
 	-- Ensure no stale phase timer survives into a fresh run bootstrap.
 	self._timer:Cancel()
 
-	-- Reset run progress, then move into the first active phase.
+	-- Reset run progress, arm the timer, then move into the first active phase.
 	self._machine:ResetWaveNumber()
-	Try(self._machine:Transition("Prep"))
-
-	-- Arm the prep timeout only after the state machine is already in Prep.
 	self._timer:StartPrepCountdown(onPrepTimeout)
+	Try(self._machine:Transition("Prep"))
 
 	return Ok(true)
 end

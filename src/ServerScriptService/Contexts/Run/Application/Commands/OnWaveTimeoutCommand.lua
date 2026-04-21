@@ -47,11 +47,9 @@ function OnWaveTimeoutCommand:Execute(onResolutionTimeout: () -> ()): Result.Res
 		return Ok(nil)
 	end
 
-	-- Transition first so downstream systems see the authoritative state change.
-	Try(self._machine:Transition("Resolution"))
-
-	-- Arm the cleanup timer after the resolution phase is active.
+	-- Arm the cleanup timer before state sync exposes the breather deadline.
 	self._timer:StartResolutionCountdown(onResolutionTimeout)
+	Try(self._machine:Transition("Resolution"))
 
 	return Ok(nil)
 end

@@ -74,6 +74,7 @@ function CombatContext:KnitInit()
 	self._laneWaypoints = {} :: { Vector3 }
 
 	self._runWaveStartedConnection = nil :: any
+	self._runWaveEndedConnection = nil :: any
 	self._runEndedConnection = nil :: any
 	self._enemySpawnedConnection = nil :: any
 	self._playerRemovingConnection = nil :: any
@@ -121,6 +122,10 @@ function CombatContext:KnitStart()
 
 	self._runWaveStartedConnection = GameEvents.Bus:On(GameEvents.Events.Run.WaveStarted, function(waveNumber: number, isEndless: boolean)
 		self:_OnRunWaveStarted(waveNumber, isEndless)
+	end)
+
+	self._runWaveEndedConnection = GameEvents.Bus:On(GameEvents.Events.Run.WaveEnded, function(waveNumber: number)
+		self:_OnRunWaveEnded(waveNumber)
 	end)
 
 	self._runEndedConnection = GameEvents.Bus:On(GameEvents.Events.Run.RunEnded, function()
@@ -188,6 +193,14 @@ function CombatContext:_OnRunEnded()
 	end, "Combat:OnRunEnded")
 end
 
+function CombatContext:_OnRunWaveEnded(_waveNumber: number)
+	Catch(function()
+		Try(self._endCombatCommand:Execute())
+		Try(self._enemyContext:CleanupAll())
+		return Ok(nil)
+	end, "Combat:OnRunWaveEnded")
+end
+
 function CombatContext:_OnEnemySpawned(entity: number, _role: string, _waveNumber: number)
 	if #self._laneWaypoints == 0 then
 		return
@@ -233,6 +246,9 @@ function CombatContext:Destroy()
 
 	if self._runWaveStartedConnection then
 		self._runWaveStartedConnection:Disconnect()
+	end
+	if self._runWaveEndedConnection then
+		self._runWaveEndedConnection:Disconnect()
 	end
 	if self._runEndedConnection then
 		self._runEndedConnection:Disconnect()

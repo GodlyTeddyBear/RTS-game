@@ -49,9 +49,9 @@ function NotifyWaveClearedCommand:Execute(onResolutionTimeout: () -> ()): Result
 	-- Stop the active wave countdown before scheduling the resolution timer.
 	self._timer:Cancel()
 
-	-- Move into resolution and arm the next countdown in one sequence.
-	Try(self._machine:Transition("Resolution"))
+	-- Arm resolution before the transition so sync carries the breather deadline.
 	self._timer:StartResolutionCountdown(onResolutionTimeout)
+	Try(self._machine:Transition("Resolution"))
 
 	return Ok(true)
 end

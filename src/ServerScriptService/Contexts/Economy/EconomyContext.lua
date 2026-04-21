@@ -66,6 +66,7 @@ function EconomyContext:KnitInit()
 	self._getResourceWalletQuery = registry:Get("GetResourceWalletQuery")
 
 	self._runContext = nil :: any
+	self._lastRewardedWaveNumber = nil :: number?
 	self._runStateChangedConnection = nil :: any
 	self._playerAddedConnection = nil :: any
 	self._playerRemovingConnection = nil :: any
@@ -105,6 +106,7 @@ end
 function EconomyContext:_OnRunStateChanged(newState: string, previousState: string)
 	-- Prep is the authoritative run start, so every player receives a fresh starting wallet here.
 	if previousState == "Idle" and newState == "Prep" then
+		self._lastRewardedWaveNumber = nil
 		for _, player in Players:GetPlayers() do
 			self._sync:InitPlayer(player.UserId, EconomyConfig.STARTING_WALLET)
 		end
@@ -113,6 +115,21 @@ function EconomyContext:_OnRunStateChanged(newState: string, previousState: stri
 
 	-- Resolution grants the wave-clear reward once, after combat finishes and before the next phase.
 	if newState == "Resolution" then
+		local waveNumberResult = self._runContext:GetWaveNumber()
+		if not waveNumberResult.success then
+			Result.MentionError("Economy:OnRunResolutionReward", "Unable to read current wave number", {
+				CauseType = waveNumberResult.type,
+				CauseMessage = waveNumberResult.message,
+			}, waveNumberResult.type)
+			return
+		end
+
+		local waveNumber = waveNumberResult.value
+		if self._lastRewardedWaveNumber == waveNumber then
+			return
+		end
+
+		self._lastRewardedWaveNumber = waveNumber
 		for _, player in Players:GetPlayers() do
 			Catch(function()
 				Try(self._addResourceCommand:Execute(player.UserId, "Energy", EconomyConfig.WAVE_CLEAR_BONUS))

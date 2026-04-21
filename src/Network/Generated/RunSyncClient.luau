@@ -158,11 +158,11 @@ local Queue: any = {
 local SerdesEvent = "?"
 local SerdesThread: thread?
 Queue.Reliable[0] = table.create(256)
-export type RunSnapshotPayload = { state: string?, waveNumber: number? }
-export type InitPayload = { runState: { state: string?, waveNumber: number? }? }
-export type PatchPayload = { runState: { state: string?, waveNumber: number? }? }
-export type SyncPayload = { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }
-local function ReadEVENT_SyncRunState(): ({ type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? })
+export type RunSnapshotPayload = { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }
+export type InitPayload = { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }
+export type PatchPayload = { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }
+export type SyncPayload = { type: "init", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? }
+local function ReadEVENT_SyncRunState(): ({ type: "init", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? })
 	-- Read BLOCK: 1 bytes
 	local BLOCK_START = Read(1)
 	local Tag = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
@@ -176,8 +176,8 @@ local function ReadEVENT_SyncRunState(): ({ type: "init", data: { runState: { st
 			local BLOCK_START = Read(1)
 			Value.data = {} :: any
 			if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
-				-- Read BLOCK: 2 bytes
-				local BLOCK_START = Read(2)
+				-- Read BLOCK: 5 bytes
+				local BLOCK_START = Read(5)
 				Value.data.runState = {} :: any
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 					-- Read BLOCK: 2 bytes
@@ -189,6 +189,21 @@ local function ReadEVENT_SyncRunState(): ({ type: "init", data: { runState: { st
 					-- Read BLOCK: 8 bytes
 					local BLOCK_START = Read(8)
 					Value.data.runState.waveNumber = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+				end
+				if buffer.readu8(RecieveBuffer, BLOCK_START + 2) == 1 then
+					-- Read BLOCK: 8 bytes
+					local BLOCK_START = Read(8)
+					Value.data.runState.phaseStartedAt = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+				end
+				if buffer.readu8(RecieveBuffer, BLOCK_START + 3) == 1 then
+					-- Read BLOCK: 8 bytes
+					local BLOCK_START = Read(8)
+					Value.data.runState.phaseEndsAt = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+				end
+				if buffer.readu8(RecieveBuffer, BLOCK_START + 4) == 1 then
+					-- Read BLOCK: 8 bytes
+					local BLOCK_START = Read(8)
+					Value.data.runState.phaseDuration = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 				end
 			end
 		end
@@ -202,8 +217,8 @@ local function ReadEVENT_SyncRunState(): ({ type: "init", data: { runState: { st
 			local BLOCK_START = Read(1)
 			Value.data = {} :: any
 			if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
-				-- Read BLOCK: 2 bytes
-				local BLOCK_START = Read(2)
+				-- Read BLOCK: 5 bytes
+				local BLOCK_START = Read(5)
 				Value.data.runState = {} :: any
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 					-- Read BLOCK: 2 bytes
@@ -215,6 +230,21 @@ local function ReadEVENT_SyncRunState(): ({ type: "init", data: { runState: { st
 					-- Read BLOCK: 8 bytes
 					local BLOCK_START = Read(8)
 					Value.data.runState.waveNumber = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+				end
+				if buffer.readu8(RecieveBuffer, BLOCK_START + 2) == 1 then
+					-- Read BLOCK: 8 bytes
+					local BLOCK_START = Read(8)
+					Value.data.runState.phaseStartedAt = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+				end
+				if buffer.readu8(RecieveBuffer, BLOCK_START + 3) == 1 then
+					-- Read BLOCK: 8 bytes
+					local BLOCK_START = Read(8)
+					Value.data.runState.phaseEndsAt = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+				end
+				if buffer.readu8(RecieveBuffer, BLOCK_START + 4) == 1 then
+					-- Read BLOCK: 8 bytes
+					local BLOCK_START = Read(8)
+					Value.data.runState.phaseDuration = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 				end
 			end
 		end
@@ -274,7 +304,7 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
 		if Index == 0 then
-			local Value: { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? } = ReadEVENT_SyncRunState()
+			local Value: { type: "init", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? } = ReadEVENT_SyncRunState()
 			if Events.Reliable[0] ~= nil then
 				task.spawn(Events.Reliable[0], Value)
 			else
@@ -309,7 +339,7 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	SyncRunState = {
-		On = function(Listener: (Value: { type: "init", data: { runState: { state: string?, waveNumber: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number? }? }? }) -> ()): () -> ()
+		On = function(Listener: (Value: { type: "init", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? }) -> ()): () -> ()
 			Events.Reliable[0] = Listener
 			for Index, Arguments in Queue.Reliable[0] do
 				task.spawn(Listener, table.unpack(Arguments))
