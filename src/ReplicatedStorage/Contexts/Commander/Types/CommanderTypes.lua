@@ -75,10 +75,17 @@ export type CommanderState = {
 --[=[
 	@type CommanderAtomState { [number]: CommanderState }
 	@within CommanderTypes
-	Per-player commander atom keyed by `userId`.
+	Server-side per-player commander atom keyed by `userId`.
 ]=]
 export type CommanderAtomState = {
 	[number]: CommanderState,
 }
+
+--[=[
+	@type CommanderClientState CommanderState?
+	@within CommanderTypes
+	Client-side player-scoped commander snapshot received from sync payloads.
+]=]
+export type CommanderClientState = CommanderState?
 
 return table.freeze(CommanderTypes)

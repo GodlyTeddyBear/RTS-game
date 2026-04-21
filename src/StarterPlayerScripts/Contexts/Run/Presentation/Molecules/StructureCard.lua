@@ -35,6 +35,9 @@ local function StructureCard(props: TStructureCardProps)
 		StrokeColor = ColorSequence.new(strokeColor, strokeColor),
 		StrokeThickness = if props.isSelected then Border.Width.Medium else Border.Width.Thin,
 		[React.Event.Activated] = function()
+			if not props.cardData.canAfford then
+				return
+			end
 			props.onSelect(props.cardData.structureType)
 		end,
 		}, {

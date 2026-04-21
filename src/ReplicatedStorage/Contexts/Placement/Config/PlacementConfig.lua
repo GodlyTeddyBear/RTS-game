@@ -13,11 +13,6 @@ PlacementConfig.STRUCTURE_PLACEMENT_COSTS = table.freeze({
 	turret = 15,
 })
 
--- Template names mirror the assets folder names used by PlacementService.
-PlacementConfig.STRUCTURE_TEMPLATES = table.freeze({
-	turret = "Turret",
-})
-
 -- Phase 2 locks placement to side pads only; lane placement is intentionally disallowed.
 PlacementConfig.VALID_ZONE_TYPES = table.freeze({
 	turret = table.freeze({ "side_pocket" }),

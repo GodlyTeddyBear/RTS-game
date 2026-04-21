@@ -6,6 +6,7 @@ local Charm = require(ReplicatedStorage.Packages.Charm)
 local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTypes)
 
 type ResourceAtom = EconomyTypes.ResourceAtom
+type ResourceWallet = EconomyTypes.ResourceWallet
 
 --[=[
 	@class SharedAtoms
@@ -31,8 +32,8 @@ end
 	@return any -- The client-side per-player wallet atom.
 ]=]
 function SharedAtoms.CreateClientAtom()
-	-- Mirror the server atom shape exactly so the client can hydrate sync payloads deterministically.
-	return Charm.atom({} :: ResourceAtom)
+	-- Client receives a player-scoped wallet payload for this sync channel.
+	return Charm.atom(nil :: ResourceWallet?)
 end
 
 return table.freeze(SharedAtoms)

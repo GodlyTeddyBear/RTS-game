@@ -6,6 +6,7 @@ local Charm = require(ReplicatedStorage.Packages.Charm)
 local CommanderTypes = require(ReplicatedStorage.Contexts.Commander.Types.CommanderTypes)
 
 type CommanderAtomState = CommanderTypes.CommanderAtomState
+type CommanderState = CommanderTypes.CommanderState
 
 --[=[
 	@class SharedAtoms
@@ -30,7 +31,7 @@ end
 	@return any -- The replicated commander atom.
 ]=]
 function SharedAtoms.CreateClientAtom()
-	return Charm.atom({} :: CommanderAtomState)
+	return Charm.atom(nil :: CommanderState?)
 end
 
 return table.freeze(SharedAtoms)

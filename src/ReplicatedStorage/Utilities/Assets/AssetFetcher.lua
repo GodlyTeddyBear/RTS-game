@@ -188,4 +188,19 @@ function AssetFetcher.CreateBuildingRegistry(folder: Folder)
 	return BuildingRegistry.new(folder)
 end
 
+--[=[
+	Creates a StructureRegistry for loading structure models with Default fallback.
+
+	@param folder Folder - The root Structures folder (Assets/Structures)
+	@return StructureRegistry - Registry instance for loading structure models
+
+	Example:
+		local structureRegistry = AssetFetcher.CreateStructureRegistry(Assets.Structures)
+		local model = structureRegistry:GetStructureModel("turret")
+]=]
+function AssetFetcher.CreateStructureRegistry(folder: Folder)
+	local StructureRegistry = require(script.Parent.StructureRegistry)
+	return StructureRegistry.new(folder)
+end
+
 return AssetFetcher

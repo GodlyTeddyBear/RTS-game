@@ -143,7 +143,7 @@ local function RunHUD(props: TRunHUDProps)
 				}, {
 					Energy = e(Text, {
 						Size = UDim2.fromScale(0.33, 1),
-						Text = ("Energy: %d"):format(resourceHud.energy),
+						Text = if resourceHud.isSyncing then "Energy: Syncing..." else ("Energy: %d"):format(resourceHud.energy),
 						Variant = "body",
 						TextXAlignment = Enum.TextXAlignment.Right,
 						TextYAlignment = Enum.TextYAlignment.Center,

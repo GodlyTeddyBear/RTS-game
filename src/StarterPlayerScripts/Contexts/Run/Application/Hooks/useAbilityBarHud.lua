@@ -1,7 +1,6 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
@@ -11,12 +10,11 @@ local ReactCharm = require(ReplicatedStorage.Packages["React-charm"])
 local CommanderConfig = require(ReplicatedStorage.Contexts.Commander.Config.CommanderConfig)
 local CommanderTypes = require(ReplicatedStorage.Contexts.Commander.Types.CommanderTypes)
 local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTypes)
+local ResourceHudViewModel = require(script.Parent.Parent.ViewModels.ResourceHudViewModel)
 
 type AbilitySlotDef = CommanderTypes.AbilitySlotDef
-type CommanderAtomState = CommanderTypes.CommanderAtomState
-type CommanderState = CommanderTypes.CommanderState
-type ResourceAtom = EconomyTypes.ResourceAtom
-type ResourceWallet = EconomyTypes.ResourceWallet
+type CommanderClientState = CommanderTypes.CommanderClientState
+type ResourceClientState = EconomyTypes.ResourceClientState
 
 export type TAbilitySlotHudData = {
 	key: string,
@@ -29,12 +27,10 @@ export type TAbilitySlotHudData = {
 	isOnCooldown: boolean,
 }
 
-local abilityAtom: (() -> CommanderAtomState)? = nil
-local resourceAtom: (() -> ResourceAtom)? = nil
-local DEFAULT_COMMANDER_STATE: CommanderAtomState = table.freeze({})
-local DEFAULT_RESOURCE_STATE: ResourceAtom = table.freeze({})
+local abilityAtom: (() -> CommanderClientState)? = nil
+local resourceAtom: (() -> ResourceClientState)? = nil
 
-local function _GetCommanderAtom(): () -> CommanderAtomState
+local function _GetCommanderAtom(): () -> CommanderClientState
 	if abilityAtom == nil then
 		local commanderController = Knit.GetController("CommanderController")
 		abilityAtom = commanderController:GetAtom()
@@ -42,7 +38,7 @@ local function _GetCommanderAtom(): () -> CommanderAtomState
 	return abilityAtom
 end
 
-local function _GetResourceAtom(): () -> ResourceAtom
+local function _GetResourceAtom(): () -> ResourceClientState
 	if resourceAtom == nil then
 		local economyController = Knit.GetController("EconomyController")
 		resourceAtom = economyController:GetAtom()
@@ -50,21 +46,13 @@ local function _GetResourceAtom(): () -> ResourceAtom
 	return resourceAtom
 end
 
-local function _GetLocalCommanderState(allCommanderState: CommanderAtomState): CommanderState?
-	return allCommanderState[Players.LocalPlayer.UserId]
-end
-
-local function _GetEnergy(wallets: ResourceAtom): number
-	local wallet: ResourceWallet? = wallets[Players.LocalPlayer.UserId]
-	if wallet == nil then
-		return 0
-	end
-	return wallet.energy
+local function _GetEnergy(wallet: ResourceClientState): number
+	return ResourceHudViewModel.getEnergy(wallet)
 end
 
 local function _BuildSlotData(
 	slot: AbilitySlotDef,
-	commanderState: CommanderState?,
+	commanderState: CommanderClientState,
 	energy: number,
 	now: number
 ): TAbilitySlotHudData
@@ -98,8 +86,8 @@ local function _BuildSlotData(
 end
 
 local function useAbilityBarHud(): { slots: { TAbilitySlotHudData } }
-	local commanderState = ReactCharm.useAtom(_GetCommanderAtom()) or DEFAULT_COMMANDER_STATE
-	local wallets = ReactCharm.useAtom(_GetResourceAtom()) or DEFAULT_RESOURCE_STATE
+	local commanderState = ReactCharm.useAtom(_GetCommanderAtom()) :: CommanderClientState
+	local wallet = ReactCharm.useAtom(_GetResourceAtom()) :: ResourceClientState
 	local now, setNow = React.useState(function()
 		return Workspace:GetServerTimeNow()
 	end)
@@ -118,12 +106,11 @@ local function useAbilityBarHud(): { slots: { TAbilitySlotHudData } }
 		end
 	end, {})
 
-	local localCommanderState = _GetLocalCommanderState(commanderState)
-	local energy = _GetEnergy(wallets)
+	local energy = _GetEnergy(wallet)
 
 	local slots = table.create(#CommanderConfig.SLOTS)
 	for index, slot in CommanderConfig.SLOTS do
-		slots[index] = _BuildSlotData(slot, localCommanderState, energy, now)
+		slots[index] = _BuildSlotData(slot, commanderState, energy, now)
 	end
 
 	return table.freeze({

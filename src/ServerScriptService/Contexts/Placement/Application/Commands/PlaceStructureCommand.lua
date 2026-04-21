@@ -79,6 +79,9 @@ function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structu
 	local cost = decision.cost
 	local tile = decision.tile
 
+	-- Fail before any wallet mutation if the configured runtime template is missing.
+	Try(self._placementService:ValidateTemplate(structureType))
+
 	-- Energy spend happens after all read-only checks so a failure never needs rollback.
 	Try(self._economyContext:SpendEnergy(player, cost))
 

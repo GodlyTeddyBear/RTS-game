@@ -4,14 +4,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
 local Ensure = Result.Ensure
-local fromNilable = Result.fromNilable
 
-type SpawnedStructure = Model | BasePart
+type SpawnedStructure = Model
 
 --[=[
 	@class PlacementService
@@ -30,6 +30,7 @@ PlacementService.__index = PlacementService
 function PlacementService.new()
 	local self = setmetatable({}, PlacementService)
 	self._folder = nil :: Folder?
+	self._structureRegistry = nil :: any
 	self._instanceMap = {} :: { [number]: SpawnedStructure }
 	self._nextId = 1
 	return self
@@ -52,6 +53,28 @@ function PlacementService:Init(_registry: any, _name: string)
 		folder.Parent = Workspace
 		self._folder = folder
 	end
+
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local structuresFolder = assets and assets:FindFirstChild("Structures")
+	if structuresFolder and structuresFolder:IsA("Folder") then
+		self._structureRegistry = AssetFetcher.CreateStructureRegistry(structuresFolder)
+	end
+end
+
+function PlacementService:_ResolveSpawnModel(structureType: string): SpawnedStructure
+	Ensure(self._structureRegistry ~= nil, "TemplateNotFound", Errors.TEMPLATE_NOT_FOUND, {
+		structureType = structureType,
+		requiredPath = "ReplicatedStorage.Assets.Structures",
+	})
+
+	local model = self._structureRegistry:GetStructureModel(structureType)
+	Ensure(model ~= nil, "TemplateNotFound", Errors.TEMPLATE_NOT_FOUND, {
+		structureType = structureType,
+		requiredPath = "ReplicatedStorage.Assets.Structures",
+		fallback = "Default",
+	})
+
+	return model
 end
 
 --[=[
@@ -63,39 +86,27 @@ end
 ]=]
 -- Clone the configured template, place it at the tile position, and remember the runtime id.
 function PlacementService:SpawnStructure(structureType: string, worldPos: Vector3): Result.Result<number>
-	local templateName = PlacementConfig.STRUCTURE_TEMPLATES[structureType]
-	Ensure(templateName ~= nil, "UnknownStructureType", Errors.UNKNOWN_STRUCTURE_TYPE, {
-		structureType = structureType,
-	})
-
-	local assets = ReplicatedStorage:FindFirstChild("Assets")
-	local structuresFolder = assets and assets:FindFirstChild("Structures")
-	local templateResult = fromNilable(
-		structuresFolder and structuresFolder:FindFirstChild(templateName),
-		"TemplateNotFound",
-		Errors.TEMPLATE_NOT_FOUND,
-		{
-			structureType = structureType,
-			templateName = templateName,
-		}
-	)
-
-	local templateInstance = Result.Try(templateResult)
-	Ensure(templateInstance:IsA("Model") or templateInstance:IsA("BasePart"), "TemplateNotFound", Errors.TEMPLATE_NOT_FOUND, {
-		structureType = structureType,
-		templateName = templateName,
-	})
-
 	-- Models and parts both support :PivotTo, which keeps the spawn path generic.
-	local clone = templateInstance:Clone() :: SpawnedStructure
-	clone:PivotTo(CFrame.new(worldPos))
-	clone.Parent = self._folder
+	local spawnModel = self:_ResolveSpawnModel(structureType)
+	spawnModel:PivotTo(CFrame.new(worldPos))
+	spawnModel.Parent = self._folder
 
 	local instanceId = self._nextId
 	self._nextId += 1
-	self._instanceMap[instanceId] = clone
+	self._instanceMap[instanceId] = spawnModel
 
 	return Ok(instanceId)
+end
+
+--[=[
+	Validates whether the configured structure template exists and is spawnable.
+	@within PlacementService
+	@param structureType string -- The placement key.
+	@return Result.Result<nil> -- `Ok(nil)` when a spawnable template exists.
+]=]
+function PlacementService:ValidateTemplate(structureType: string): Result.Result<nil>
+	self:_ResolveSpawnModel(structureType):Destroy()
+	return Ok(nil)
 end
 
 --[=[

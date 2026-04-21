@@ -3,7 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
-local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
+local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 
 local PlacementGhostModel = {}
 PlacementGhostModel.__index = PlacementGhostModel
@@ -24,54 +24,34 @@ local function _ApplyGhostStyle(model: Model)
 	end
 end
 
-local function _CreatePlaceholderModel(): Model
-	local model = Instance.new("Model")
-	model.Name = "PlacementGhostPlaceholder"
-
-	local part = Instance.new("Part")
-	part.Name = "GhostPart"
-	part.Anchored = true
-	part.CanCollide = false
-	part.CanQuery = false
-	part.CanTouch = false
-	part.CastShadow = false
-	part.Material = Enum.Material.Neon
-	part.Color = VALID_COLOR
-	part.Transparency = 0.5
-	part.Size = Vector3.new(6, 4, 6)
-	part.Parent = model
-
-	return model
-end
-
-local function _FindTemplateModel(structureType: string): Model?
-	local templateName = PlacementConfig.STRUCTURE_TEMPLATES[structureType]
-	if templateName == nil then
-		return nil
-	end
-
+local function _CreateStructureRegistry()
 	local assetsFolder = ReplicatedStorage:FindFirstChild("Assets")
 	if assetsFolder == nil then
 		return nil
 	end
 
 	local structuresFolder = assetsFolder:FindFirstChild("Structures")
-	if structuresFolder == nil then
+	if structuresFolder == nil or not structuresFolder:IsA("Folder") then
 		return nil
 	end
 
-	local template = structuresFolder:FindFirstChild(templateName)
-	if template == nil or not template:IsA("Model") then
+	return AssetFetcher.CreateStructureRegistry(structuresFolder)
+end
+
+local structureRegistry = _CreateStructureRegistry()
+
+local function _FindTemplateModel(structureType: string): Model?
+	if structureRegistry == nil then
 		return nil
 	end
 
-	return template:Clone()
+	return structureRegistry:GetStructureModel(structureType)
 end
 
 function PlacementGhostModel.new(structureType: string)
 	local model = _FindTemplateModel(structureType)
 	if model == nil then
-		model = _CreatePlaceholderModel()
+		error("PlacementGhostModel: missing structure model for type '" .. structureType .. "'")
 	end
 
 	_ApplyGhostStyle(model)

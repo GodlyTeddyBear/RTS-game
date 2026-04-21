@@ -58,6 +58,10 @@ local function normalizeRunStats(runStats: ProfileRunStats?): ProfileRunStats
 	}
 end
 
+local function shouldHaveActiveWallet(runState: string): boolean
+	return runState ~= "Idle" and runState ~= "RunEnd"
+end
+
 --[=[
 	@class EconomyContext
 	Bridges the economy application stack to Run lifecycle events and public server APIs.
@@ -131,11 +135,13 @@ function EconomyContext:KnitStart()
 
 	-- Hydrate players that join after EconomyContext starts listening.
 	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
+		self:_EnsureWalletForActiveRun(player)
 		self._sync:HydratePlayer(player)
 	end)
 
 	-- Hydrate players already present so they see the current wallet state immediately.
 	for _, player in Players:GetPlayers() do
+		self:_EnsureWalletForActiveRun(player)
 		self._sync:HydratePlayer(player)
 	end
 
@@ -156,6 +162,24 @@ function EconomyContext:KnitStart()
 			self:_HandleProfileLoaded(player)
 		end
 	end
+end
+
+function EconomyContext:_EnsureWalletForActiveRun(player: Player)
+	local runStateResult = self._runContext:GetState()
+	if not runStateResult.success then
+		return
+	end
+
+	if not shouldHaveActiveWallet(runStateResult.value) then
+		return
+	end
+
+	if self._sync:GetWallet(player.UserId) ~= nil then
+		return
+	end
+
+	self._sync:InitPlayer(player.UserId, EconomyConfig.STARTING_WALLET)
+	self._sync:SyncRunStats(player.UserId, self._sessionRunStats[player.UserId] or createDefaultRunStats())
 end
 
 -- Handles profile hydration for the persistence lifecycle and signals loader readiness.
@@ -181,8 +205,8 @@ end
 
 -- Handles run lifecycle transitions so wallet resets and rewards stay centralized here.
 function EconomyContext:_OnRunStateChanged(newState: string, previousState: string)
-	-- Prep is the authoritative run start, so every player receives a fresh starting wallet here.
-	if previousState == "Idle" and newState == "Prep" then
+	-- Prep is the authoritative run start when entered from lobby terminal states.
+	if newState == "Prep" and (previousState == "Idle" or previousState == "RunEnd") then
 		self._lastRewardedWaveNumber = nil
 		for _, player in Players:GetPlayers() do
 			self._sync:InitPlayer(player.UserId, EconomyConfig.STARTING_WALLET)

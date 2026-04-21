@@ -51,8 +51,15 @@ export type ResourceWallet = {
 --[=[
 	@type ResourceAtom table<number, ResourceWallet>
 	@within EconomyTypes
-	Per-player wallet atom keyed by `userId`.
+	Server-side per-player wallet atom keyed by `userId`.
 ]=]
 export type ResourceAtom = { [number]: ResourceWallet }
+
+--[=[
+	@type ResourceClientState ResourceWallet?
+	@within EconomyTypes
+	Client-side player-scoped wallet snapshot received from sync payloads.
+]=]
+export type ResourceClientState = ResourceWallet?
 
 return table.freeze(EconomyTypes)
