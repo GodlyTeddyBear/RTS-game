@@ -128,7 +128,7 @@ end
 ]=]
 function RunContext:KnitStart()
 	-- Hydrate late joiners so they receive the current global run snapshot.
-	Players.PlayerAdded:Connect(function(player: Player)
+	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
 		self._sync:HydratePlayer(player)
 	end)
 
@@ -136,6 +136,15 @@ function RunContext:KnitStart()
 	for _, player in Players:GetPlayers() do
 		self._sync:HydratePlayer(player)
 	end
+
+	-- Listen for commander death through the shared event bus so run termination stays decoupled.
+	self._commanderDiedConnection = GameEvents.Bus:On(GameEvents.Events.Commander.CommanderDied, function(_player: Instance)
+		-- Convert the event into the existing run-termination command flow.
+		Catch(function()
+			Try(self:NotifyCommanderDeath())
+			return Ok(nil)
+		end, "Run:OnCommanderDied")
+	end)
 end
 
 --[=[
@@ -238,6 +247,24 @@ function RunContext:_OnStateChanged(newState: RunState, previousState: RunState)
 		GameEvents.Bus:Emit(GameEvents.Events.Run.WaveStarted, self._machine:GetWaveNumber(), true)
 	elseif newState == "RunEnd" then
 		GameEvents.Bus:Emit(GameEvents.Events.Run.RunEnded)
+	end
+end
+
+--[=[
+	Cancels run lifecycle subscriptions and state listeners.
+	@within RunContext
+]=]
+function RunContext:Destroy()
+	if self._playerAddedConnection then
+		self._playerAddedConnection:Disconnect()
+	end
+
+	if self._commanderDiedConnection then
+		self._commanderDiedConnection:Disconnect()
+	end
+
+	if self._stateChangedConnection then
+		self._stateChangedConnection:Disconnect()
 	end
 end
 

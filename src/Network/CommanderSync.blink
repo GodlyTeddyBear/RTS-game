@@ -1,0 +1,41 @@
+option ServerOutput = "Generated/CommanderSyncServer.luau"
+option ClientOutput = "Generated/CommanderSyncClient.luau"
+
+option RemoteScope = "COMMANDER_SYNC"
+
+struct CooldownEntryPayload {
+	startedAt: f64,
+	duration: f64,
+}
+
+map CooldownMap = { [string]: CooldownEntryPayload }
+
+struct CommanderStatePayload {
+	hp: f64?,
+	maxHp: f64?,
+	cooldowns: CooldownMap?,
+}
+
+struct InitPayload {
+	commander: CommanderStatePayload?,
+}
+
+struct PatchPayload {
+	commander: CommanderStatePayload?,
+}
+
+enum SyncPayload = "type" {
+	init {
+		data: InitPayload?,
+	},
+	patch {
+		data: PatchPayload?,
+	},
+}
+
+event SyncCommander {
+	from: Server,
+	type: Reliable,
+	call: SingleAsync,
+	data: SyncPayload,
+}
