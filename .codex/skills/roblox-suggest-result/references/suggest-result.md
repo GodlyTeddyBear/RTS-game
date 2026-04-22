@@ -1,3 +1,10 @@
+---
+name: suggest-result
+description: Read when you need this skill reference template and workflow rules.
+---
+
+# Suggest Result
+
 <!-- This is a repo-local prompt template. Codex does not automatically expose this as a slash command. Prefer the matching skill when available. -->
 
 Read the file at $ARGUMENTS and analyze it for places where Result library methods could improve the code. Produce a structured report of findings with before/after examples. Do not modify any files unless the user explicitly asks after seeing the report.
@@ -186,6 +193,9 @@ Total findings: N (by type)
 Group by opportunity type.
 
 ```
+
+---
+
 ## <Opportunity type> — `Result.methodName`
 
 ### [file:line]

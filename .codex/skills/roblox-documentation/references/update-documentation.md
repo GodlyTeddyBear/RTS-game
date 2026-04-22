@@ -1,3 +1,10 @@
+---
+name: update-documentation
+description: Read when you need this skill reference template and workflow rules.
+---
+
+# Update Documentation
+
 <!-- This is a repo-local prompt template. Codex does not automatically expose this as a slash command. Prefer the matching skill when available. -->
 
 Add or update Moonwave doc comments for the file or folder specified in $ARGUMENTS. Write doc comments directly into the files — do not produce a report.
@@ -168,6 +175,9 @@ Files updated: N
 Then for each file:
 
 ```
+
+---
+
 ## [file path]
 - Added @class <Name>
 - Documented: FunctionA, FunctionB, PropertyC

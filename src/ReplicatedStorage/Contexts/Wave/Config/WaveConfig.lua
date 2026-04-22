@@ -1,10 +1,21 @@
 --!strict
 
+--[[
+    Module: WaveConfig
+    Purpose: Defines shared scripted wave tables and endless scaling constants.
+    Used In System: Imported by server wave orchestration and shared wave consumers.
+    Boundaries: Owns static wave data only; does not own scheduling, spawning, or lifecycle transitions.
+]]
+
+-- [Utilities]
+
+-- Recursively freezes nested wave tables so shared config stays immutable at runtime.
 local function deepFreeze<T>(value: T): T
 	if type(value) ~= "table" then
 		return value
 	end
 
+	-- Freeze nested tables first so the outer table closes over immutable children.
 	for _, nested in value do
 		if type(nested) == "table" then
 			deepFreeze(nested)
@@ -13,6 +24,8 @@ local function deepFreeze<T>(value: T): T
 
 	return table.freeze(value)
 end
+
+-- [Constants]
 
 --[=[
 	@class WaveConfig

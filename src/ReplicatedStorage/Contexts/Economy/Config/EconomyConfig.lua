@@ -1,5 +1,14 @@
 --!strict
 
+--[[
+	Module: EconomyConfig
+	Purpose: Defines the shared economy constants used by server and client code.
+	Used In System: Imported by wallet, validation, and UI-adjacent economy modules.
+	Boundaries: Owns static configuration only; does not own mutable state or per-player runtime values.
+]]
+
+-- [Constants]
+
 --[=[
 	@class EconomyConfig
 	Defines the shared economy constants used by server and client code.

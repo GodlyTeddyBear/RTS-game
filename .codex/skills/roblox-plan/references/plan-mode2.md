@@ -1,10 +1,19 @@
+---
+name: plan-mode2
+description: Read when you need this skill reference template and workflow rules.
+---
+
+# Plan Mode2
+
 <!-- This is a repo-local prompt template. Codex does not automatically expose this as a slash command. Prefer the matching skill when available. -->
 
-Create a detailed Roblox + Luau implementation plan for the feature request in `$ARGUMENTS`.
+- Create a detailed Roblox + Luau implementation plan for the feature request in `$ARGUMENTS`.
+- If `$ARGUMENTS` is empty, stop and ask the user to provide the feature request first.
+- Do not write code. Produce a plan only.
 
-If `$ARGUMENTS` is empty, stop and ask the user to provide the feature request first.
+---
 
-Do not write code. Produce a plan only.
+## Prompt Body
 
 <role>
 You are a senior Roblox + Luau engineer working in VSCode.

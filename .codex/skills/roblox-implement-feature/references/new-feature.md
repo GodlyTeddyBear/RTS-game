@@ -1,6 +1,16 @@
+---
+name: new-feature
+description: Read when you need this skill reference template and workflow rules.
+---
+
+# New Feature
+
 <!-- This is a repo-local prompt template. Codex does not automatically expose this as a slash command. Prefer the matching skill when available. -->
 
 Create a new frontend feature slice named $ARGUMENTS.
+
+
+---
 
 ## What to do
 
@@ -8,6 +18,9 @@ Create a new frontend feature slice named $ARGUMENTS.
 2. Read the Counter feature at `src/StarterPlayerScripts/Contexts/Counter/` as the reference implementation — mirror its structure exactly.
 3. Scaffold the full folder structure and all boilerplate files listed below.
 4. After creating all files, report what was created.
+
+
+---
 
 ## Folder structure to create
 
@@ -28,6 +41,9 @@ src/StarterPlayerScripts/Contexts/$ARGUMENTS/
 │   └── init.lua
 └── Types/
 ```
+
+
+---
 
 ## File contents
 
@@ -147,6 +163,9 @@ return {
     Screen = $ARGUMENTS Screen,
 }
 ```
+
+
+---
 
 ## Rules to follow
 

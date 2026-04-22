@@ -5,7 +5,9 @@ description: Use when the user asks Codex to analyze or refactor Roblox/Luau cod
 
 # Roblox Refactor Better
 
-Use this skill for targeted refactor analysis and implementation in this Roblox + Luau repo.
+- Use this skill for targeted refactor analysis and implementation in this Roblox + Luau repo.
+
+---
 
 ## Workflow
 
@@ -15,6 +17,9 @@ Use this skill for targeted refactor analysis and implementation in this Roblox 
 4. Read all target files before making claims or edits.
 5. Follow `references/refactor-better.md` for the analysis contract, refactor priorities, output format, and validation expectations.
 
+---
+
 ## Focus
 
-Prioritize concrete readability and maintainability improvements that align with existing project patterns. Avoid unrelated rewrites and speculative abstractions.
+- Prioritize concrete readability and maintainability improvements that align with existing project patterns.
+- Avoid unrelated rewrites and speculative abstractions.

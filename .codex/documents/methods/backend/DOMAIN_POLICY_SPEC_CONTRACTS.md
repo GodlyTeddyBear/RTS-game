@@ -9,6 +9,13 @@ Canonical architecture references:
 
 ---
 
+## Core Rules
+
+- Follow the required contracts in the sections below.
+- Treat Prohibitions, Failure Signals, and Checklist as pass/fail requirements.
+
+---
+
 ## Policy Contract
 
 - Policies own candidate construction from Infrastructure reads.
@@ -16,8 +23,8 @@ Canonical architecture references:
 - Success payload must include resolved state needed by caller execution steps.
 - Policy methods are read/validate boundaries only.
 
----
 
+---
 ## Spec Contract
 
 - Specs are declared as named constants (`Spec.new(...)`) at module scope.
@@ -25,15 +32,15 @@ Canonical architecture references:
 - Spec failures must use context `Errors.lua` constants for error messages.
 - Specs evaluate candidates only; they do not fetch state.
 
----
 
+---
 ## Restore-Path Contract
 
 - Restore commands keep policy checks when those checks resolve required runtime state.
 - Restore commands may skip non-applicable side effects (for example redundant persist/sync), but not required policy resolution steps.
 
----
 
+---
 ## Prohibitions
 
 - Policies must not mutate sync state, save persistence data, or spawn side effects.
@@ -41,8 +48,8 @@ Canonical architecture references:
 - Specs must not fetch infrastructure state.
 - Specs must not use inline literal error strings when context errors constants exist.
 
----
 
+---
 ## Failure Signals
 
 - Policy returns only boolean pass/fail and forces command to re-fetch resolved state.
@@ -50,8 +57,8 @@ Canonical architecture references:
 - Spec is built inline inside policy method bodies rather than as module constants.
 - Restore path skips policy and manually reconstructs resolved runtime objects.
 
----
 
+---
 ## Checklist
 
 - [ ] `Policy:Check(...)` returns `Result.Result<TResolvedState>`.
@@ -60,3 +67,10 @@ Canonical architecture references:
 - [ ] Specs are named module-level constants with named composed exports.
 - [ ] Spec failure messages come from `Errors.lua`.
 - [ ] Restore command keeps policy resolution when required state is returned by policy.
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+

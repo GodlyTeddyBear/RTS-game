@@ -1,5 +1,15 @@
 --!strict
 
+--[=[
+	@class CommanderContext
+	Purpose: Owns the authoritative commander runtime, including state hydration, ability execution, god-mode overrides, and death signaling.
+	Used In System: Started by Knit on the server and called by combat, run, and developer log flows that need commander state or mutation.
+	High-Level Flow: Initialize registry -> hydrate player state -> service queries and commands -> sync changes and emit death signals.
+	Boundaries: Owns orchestration only; does not own commander formulas, sync payload shape, or client presentation.
+	@server
+]=]
+-- [Dependencies]
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -27,20 +37,21 @@ local Try = Result.Try
 local Ensure = Result.Ensure
 local fromNilable = Result.fromNilable
 
+-- [Types]
+
 type CommanderState = CommanderTypes.CommanderState
 type SlotKey = CommanderTypes.SlotKey
 
+-- [Constants]
+
 local DEVELOPER_USER_ID = 205423638
 
---[=[
-	@class CommanderContext
-	Owns the authoritative commander state, ability execution, and death signaling.
-	@server
-]=]
 local CommanderContext = Knit.CreateService({
 	Name = "CommanderContext",
 	Client = {},
 })
+
+-- [Initialization]
 
 --[=[
 	Initializes the commander sync service, commands, and queries.
@@ -58,6 +69,7 @@ function CommanderContext:KnitInit()
 	registry:Register("GetCooldownQuery", GetCooldownQuery.new(), "Application")
 	registry:InitAll()
 
+	-- Cache the commander services and reset per-user runtime flags.
 	self._syncService = registry:Get("CommanderSyncService")
 	self._useAbilityCommand = registry:Get("UseAbilityCommand")
 	self._getCommanderStateQuery = registry:Get("GetCommanderStateQuery")
@@ -66,9 +78,13 @@ function CommanderContext:KnitInit()
 	self._playerAddedConnection = nil
 	self._playerRemovingConnection = nil
 
+	-- Register developer-only log commands after initialization completes.
 	self:_RegisterDeveloperLogCommands()
 end
 
+-- [Private Helpers]
+
+-- Normalizes a debug command user id so ad-hoc console input always resolves to a safe integer target.
 local function _parseUserId(rawValue: string?): number
 	local parsed = tonumber(rawValue)
 	if parsed == nil then
@@ -78,6 +94,7 @@ local function _parseUserId(rawValue: string?): number
 	return math.floor(parsed)
 end
 
+-- Validates that a debug command slot key matches one of the configured commander abilities.
 local function _isValidSlot(slotKey: string): boolean
 	for _, slot in CommanderConfig.SLOTS do
 		if slot.key == slotKey then
@@ -88,6 +105,7 @@ local function _isValidSlot(slotKey: string): boolean
 	return false
 end
 
+-- Parses the flexible console toggle syntax used by developer log commands.
 local function _parseBooleanDirective(rawValue: string?): boolean?
 	if rawValue == nil then
 		return nil
@@ -104,7 +122,9 @@ local function _parseBooleanDirective(rawValue: string?): boolean?
 	return nil
 end
 
+-- Registers commander-focused developer log commands after the runtime dependencies are ready.
 function CommanderContext:_RegisterDeveloperLogCommands()
+	-- Register the commander state summary command for quick runtime inspection.
 	CommandRegistry.Register({
 		name = "Commander.GetStateSummary",
 		context = "Commander",
@@ -136,6 +156,7 @@ function CommanderContext:_RegisterDeveloperLogCommands()
 		end,
 	})
 
+	-- Register the cooldown query command for slot-specific debugging.
 	CommandRegistry.Register({
 		name = "Commander.GetCooldownRemaining",
 		context = "Commander",
@@ -156,6 +177,7 @@ function CommanderContext:_RegisterDeveloperLogCommands()
 		end,
 	})
 
+	-- Register the god-mode toggle command for controlled damage testing.
 	CommandRegistry.Register({
 		name = "Run.SetGodMode",
 		context = "Run",
@@ -191,10 +213,25 @@ function CommanderContext:_RegisterDeveloperLogCommands()
 	})
 end
 
+-- [Public API]
+
+--[=[
+	Checks whether a user id is temporarily protected from commander damage.
+	@within CommanderContext
+	@param userId number -- The player user id to read.
+	@return boolean -- Whether god mode is currently enabled.
+]=]
 function CommanderContext:IsGodModeEnabled(userId: number): boolean
 	return self._godModeEnabledByUserId[userId] == true
 end
 
+-- This stays server-owned so debug state never leaks into the client atom.
+--[=[
+	Enables or clears the temporary commander damage override for a user id.
+	@within CommanderContext
+	@param userId number -- The player user id to update.
+	@param isEnabled boolean -- Whether the override should stay enabled.
+]=]
 function CommanderContext:SetGodModeEnabled(userId: number, isEnabled: boolean)
 	if isEnabled then
 		self._godModeEnabledByUserId[userId] = true

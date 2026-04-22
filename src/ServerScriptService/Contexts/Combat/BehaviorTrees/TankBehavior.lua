@@ -12,6 +12,11 @@ local Nodes = require(script.Parent.BehaviorNodes)
 ]=]
 local TankBehavior = {}
 
+--[=[
+	@within TankBehavior
+	Builds the tank enemy behavior tree.
+	@return any -- Behavior tree configured for tank enemies.
+]=]
 function TankBehavior.Create()
 	return BehaviorTree:new({
 		tree = BehaviorTree.Priority:new({

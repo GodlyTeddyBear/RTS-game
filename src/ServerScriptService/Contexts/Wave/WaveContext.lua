@@ -1,5 +1,14 @@
 --!strict
 
+--[[
+    Module: WaveContext
+    Purpose: Coordinates wave lifecycle commands, queries, and event bridges on the server.
+    Used In System: Started by Knit as the server boundary for wave-start, wave-end, and enemy-death events.
+    Boundaries: Owns orchestration only; does not own wave composition, countdown math, or enemy spawning.
+]]
+
+-- [Dependencies]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
@@ -37,6 +46,8 @@ local Ok = Result.Ok
 local Try = Result.Try
 local Ensure = Result.Ensure
 
+-- [Initialization]
+
 --[=[
 	Initializes the wave registry, commands, queries, and runtime state.
 	@within WaveContext
@@ -65,6 +76,7 @@ function WaveContext:KnitInit()
 	self._getActiveEnemyCountQuery = registry:Get("GetActiveEnemyCountQuery")
 	self._getCurrentWaveNumberQuery = registry:Get("GetCurrentWaveNumberQuery")
 
+	-- Prepare the runtime caches and listener slots before subscriptions begin.
 	self._spawnCFrames = {}
 	self._runContext = nil :: any
 	self._worldContext = nil :: any
@@ -122,6 +134,8 @@ function WaveContext:KnitStart()
 	)
 end
 
+-- [Private Handlers]
+
 --[=[
 	Delegates a wave-start event into the application command pipeline.
 	@within WaveContext
@@ -146,6 +160,7 @@ function WaveContext:_OnWaveEnemyDied(role: string, waveNumber: number, deathCFr
 	end, "Wave:OnWaveEnemyDied")
 end
 
+-- Bridge the wave-ended event into the command pipeline so cleanup stays centralized.
 function WaveContext:_OnRunWaveEnded(waveNumber: number)
 	Catch(function()
 		Try(self._handleWaveEndedCommand:Execute(waveNumber))
@@ -160,6 +175,8 @@ function WaveContext:_OnRunEnded()
 		return Ok(nil)
 	end, "Wave:OnRunEnded")
 end
+
+-- [Public API]
 
 --[=[
 	Returns the number of active enemies currently tracked for the wave.
@@ -188,11 +205,13 @@ end
 	@within WaveContext
 ]=]
 function WaveContext:Destroy()
+	-- Trigger the run-end cleanup path before disconnecting listeners.
 	Catch(function()
 		Try(self._handleRunEndedCommand:Execute())
 		return Ok(nil)
 	end, "Wave:Destroy")
 
+	-- Disconnect every listener so the context stops receiving lifecycle events.
 	if self._runWaveStartedConnection then
 		self._runWaveStartedConnection:Disconnect()
 	end

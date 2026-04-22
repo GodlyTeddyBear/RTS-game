@@ -1,10 +1,19 @@
 --!strict
 
+--[[
+    Module: WorldTypes
+    Purpose: Defines the shared world-grid type contracts used by server and client world consumers.
+    Used In System: Imported by world layout services, placement helpers, and any code that exchanges world tile data.
+    Boundaries: Owns type shape only; does not own runtime grid state, configuration values, or conversion logic.
+]]
+
 --[=[
 	@class WorldTypes
 	Defines the shared world grid types used by the world context.
 ]=]
 local WorldTypes = {}
+
+-- [Types]
 
 --[=[
 	@type ZoneType "lane" | "side_pocket" | "blocked"

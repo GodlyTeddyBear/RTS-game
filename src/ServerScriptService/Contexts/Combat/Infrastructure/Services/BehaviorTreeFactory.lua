@@ -16,16 +16,30 @@ local BEHAVIOR_MAP = {
 local BehaviorTreeFactory = {}
 BehaviorTreeFactory.__index = BehaviorTreeFactory
 
--- Creates a new behavior tree factory.
+--[=[
+	@within BehaviorTreeFactory
+	Creates a new behavior tree factory.
+	@return BehaviorTreeFactory -- Factory instance used to build combat trees.
+]=]
 function BehaviorTreeFactory.new()
 	return setmetatable({}, BehaviorTreeFactory)
 end
 
--- No-op initialization hook kept for registry symmetry.
+--[=[
+	@within BehaviorTreeFactory
+	No-op initialization hook kept for registry symmetry.
+	@param _registry any -- Registry instance supplied by the context bootstrap.
+	@param _name string -- Registry key used to register the service.
+]=]
 function BehaviorTreeFactory:Init(_registry: any, _name: string)
 end
 
--- Creates a tree for the requested enemy role, falling back to swarm behavior.
+--[=[
+	@within BehaviorTreeFactory
+	Creates a tree for the requested enemy role, falling back to swarm behavior.
+	@param role string -- Enemy role name used to pick the tree builder.
+	@return any -- Behavior tree created for the requested role.
+]=]
 function BehaviorTreeFactory:CreateTree(role: string)
 	local builder = BEHAVIOR_MAP[role] or SwarmBehavior
 	return builder.Create()

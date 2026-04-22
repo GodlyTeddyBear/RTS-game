@@ -1,5 +1,15 @@
 --!strict
 
+--[[
+	Module: PlacementContext
+	Purpose: Owns server-authoritative placement requests, placement replication, and run-end cleanup.
+	Used In System: Started by Knit on the server; called by Blink remote handlers and other server contexts that need placement state.
+	High-Level Flow: Register dependencies -> validate remote payloads -> execute placement command -> hydrate clients and clear at run end.
+	Boundaries: Does not own placement rules, spawning, or request shape coercion beyond validation.
+]]
+
+-- [Dependencies]
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -23,6 +33,8 @@ local Ok = Result.Ok
 
 type StructureRecord = PlacementTypes.StructureRecord
 type PlaceResponse = PlacementTypes.PlaceResponse
+
+-- [Public API]
 
 --[=[
 	@class PlacementContext
@@ -159,6 +171,8 @@ function PlacementContext:GetPlacedStructures(): Result.Result<{ StructureRecord
 		return Ok(self._getPlacedStructuresQuery:Execute())
 	end, "Placement:GetPlacedStructures")
 end
+
+-- [Private Helpers]
 
 --[=[
 	Disconnects listeners and tears down the sync bridge.

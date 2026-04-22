@@ -4,6 +4,13 @@ Method contracts for registry lifecycle and cross-context dependency wiring in b
 
 ---
 
+## Core Rules
+
+- Follow the required contracts in the sections below.
+- Treat Prohibitions, Failure Signals, and Checklist as pass/fail requirements.
+
+---
+
 ## Intent
 
 Prevent startup-order defects by separating:
@@ -14,8 +21,8 @@ Prevent startup-order defects by separating:
 
 This contract applies to server contexts that use `Registry`.
 
----
 
+---
 ## Required Lifecycle Pattern
 
 ### `KnitInit` (owned modules only)
@@ -31,8 +38,8 @@ This contract applies to server contexts that use `Registry`.
 - Register those external dependencies in the same registry.
 - Call `registry:StartOrdered({ "Domain", "Infrastructure", "Application" })` (or the minimal ordered subset used by the context).
 
----
 
+---
 ## Prohibitions
 
 - Do not call `Knit.GetService(...)` in `KnitInit` for dependencies that are not context-owned.
@@ -40,8 +47,8 @@ This contract applies to server contexts that use `Registry`.
 - Do not call `registry:InitAll()` in `KnitStart`.
 - Do not manually call `module:Init(...)` per-module when `InitAll` can perform the lifecycle pass.
 
----
 
+---
 ## Module Contract For Cross-Context Dependencies
 
 When a module needs dependencies registered during `KnitStart`:
@@ -51,8 +58,8 @@ When a module needs dependencies registered during `KnitStart`:
 
 This ensures `InitAll` is safe in `KnitInit` before external contexts are registered.
 
----
 
+---
 ## Failure Signals
 
 - `Registry` errors in startup such as:
@@ -60,13 +67,19 @@ This ensures `InitAll` is safe in `KnitInit` before external contexts are regist
 - Runtime nil-index errors caused by modules assuming dependencies were initialized in the wrong lifecycle phase.
 - Re-initialization bugs caused by invoking `InitAll` after external modules/services were registered.
 
----
 
+---
 ## Checklist
 
-- `KnitInit` contains only context-owned `registry:Register(...)` calls.
-- `KnitInit` calls `registry:InitAll()` exactly once.
-- `KnitStart` performs all `Knit.GetService(...)` resolution.
-- `KnitStart` registers cross-context dependencies before `StartOrdered(...)`.
-- Modules that need cross-context services resolve them in `Start`, not `Init`.
+- [ ] `KnitInit` contains only context-owned `registry:Register(...)` calls.
+- [ ] `KnitInit` calls `registry:InitAll()` exactly once.
+- [ ] `KnitStart` performs all `Knit.GetService(...)` resolution.
+- [ ] `KnitStart` registers cross-context dependencies before `StartOrdered(...)`.
+- [ ] Modules that need cross-context services resolve them in `Start`, not `Init`.
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
 

@@ -7,10 +7,15 @@ local BehaviorTree = require(ReplicatedStorage.Utilities.BehaviorTree)
 --[=[
 	@class Conditions
 	Builds combat behavior tree condition nodes.
+	@server
 ]=]
 local Conditions = {}
 
--- Returns a condition node that succeeds when the enemy has lane waypoints.
+--[=[
+	@within Conditions
+	Returns a condition node that succeeds when the enemy has lane waypoints.
+	@return any -- Behavior tree task that validates lane availability.
+]=]
 function Conditions.HasWaypointsCondition()
 	return BehaviorTree.Task:new({
 		run = function(task, ctx)
@@ -19,11 +24,15 @@ function Conditions.HasWaypointsCondition()
 				return
 			end
 			task:fail()
-		end,
+	end,
 	})
 end
 
--- Returns a condition node reserved for future flee logic.
+--[=[
+	@within Conditions
+	Returns a condition node reserved for future flee logic.
+	@return any -- Behavior tree task that checks flee pressure.
+]=]
 function Conditions.ShouldFleeCondition()
 	return BehaviorTree.Task:new({
 		run = function(task, ctx)
@@ -32,7 +41,7 @@ function Conditions.ShouldFleeCondition()
 				return
 			end
 			task:fail()
-		end,
+	end,
 	})
 end
 

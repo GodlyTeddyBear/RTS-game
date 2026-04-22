@@ -20,24 +20,41 @@ local Try = Result.Try
 local HandleGoalReached = {}
 HandleGoalReached.__index = HandleGoalReached
 
--- Creates a new goal-resolution command.
+--[=[
+	@within HandleGoalReached
+	Creates a new goal-resolution command.
+	@return HandleGoalReached -- Command instance used to resolve goal-reaching enemies.
+]=]
 function HandleGoalReached.new()
 	return setmetatable({}, HandleGoalReached)
 end
 
--- Resolves the enemy and commander dependencies needed for goal cleanup.
+--[=[
+	@within HandleGoalReached
+	Resolves the enemy and commander dependencies needed for goal cleanup.
+	@param registry any -- Registry instance supplied by the context bootstrap.
+	@param _name string -- Registry key used to register the command.
+]=]
 function HandleGoalReached:Init(registry: any, _name: string)
 	self.Registry = registry
 end
 
--- Caches the enemy and commander contexts after the registry is fully initialized.
+--[=[
+	@within HandleGoalReached
+	Caches the enemy and commander contexts after the registry is fully initialized.
+]=]
 function HandleGoalReached:Start()
 	self._enemyContext = self.Registry:Get("EnemyContext")
 	self._entityFactory = self.Registry:Get("EnemyEntityFactory")
 	self._commanderContext = self.Registry:Get("CommanderContext")
 end
 
--- Marks the enemy as resolved, emits wave death events, and applies commander damage.
+--[=[
+	@within HandleGoalReached
+	Marks the enemy as resolved, emits wave death events, and applies commander damage.
+	@param entity any -- Enemy entity id that reached the goal.
+	@return Result.Result<boolean> -- Success confirmation or a typed combat error.
+]=]
 function HandleGoalReached:Execute(entity: any): Result.Result<boolean>
 	return Result.Catch(function()
 		-- Validate the enemy entity before reading its state.

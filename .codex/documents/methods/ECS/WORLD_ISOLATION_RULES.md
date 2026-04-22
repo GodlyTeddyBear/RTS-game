@@ -1,5 +1,7 @@
 # World Isolation Rules
 
+
+---
 ## Core Rules
 
 - One JECS world per bounded context — worlds are never shared across contexts
@@ -9,11 +11,13 @@
 - World lifetime is managed by a dedicated `*ECSWorldService` per context
 - Cross-context communication uses domain events or service APIs, never shared world queries
 
+
+---
 ## Layer Boundary
 
 JECS is an infrastructure concern. It must not leak into the Domain or Application layers.
 
-```
+```text
 Infrastructure  → creates world, registers components, ticks systems, owns factories
 Application     → calls factory/service APIs; no JECS imports
 Domain          → pure logic; no JECS imports
@@ -28,6 +32,8 @@ local count = 0
 for _ in world:query(components.AliveTag) do count += 1 end
 ```
 
+
+---
 ## World Ownership
 
 Each bounded context that manages entities owns exactly one world through a dedicated world service. The world service is responsible for:
@@ -48,6 +54,8 @@ EnemyEntityFactory.new(sharedWorld, ...)
 StructureEntityFactory.new(sharedWorld, ...)
 ```
 
+
+---
 ## Cross-Context Communication
 
 When one context needs information about another context's entities, it goes through a service API or domain event — never through a direct world query.
@@ -59,3 +67,28 @@ local target = self._enemyService:GetNearestAliveEnemy(position)
 -- WRONG: StructureAttackSystem queries the enemy world directly
 for entity in enemyWorld:query(enemyComponents.AliveTag) do ... end
 ```
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+
+---
+
+## Prohibitions
+
+- Do not violate the required rules defined in this document's Core Rules and contract sections.
+
+---
+
+## Failure Signals
+
+- Implementation behavior contradicts one or more required rules in this contract.
+
+---
+
+## Checklist
+
+- [ ] All required rules in this contract are satisfied.
+

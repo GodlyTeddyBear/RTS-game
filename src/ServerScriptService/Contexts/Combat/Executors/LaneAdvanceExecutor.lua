@@ -17,7 +17,11 @@ local LaneAdvanceExecutor = {}
 LaneAdvanceExecutor.__index = LaneAdvanceExecutor
 setmetatable(LaneAdvanceExecutor, { __index = BaseExecutor })
 
--- Creates a new lane-advance executor with per-entity path tracking.
+--[=[
+	@within LaneAdvanceExecutor
+	Creates a new lane-advance executor with per-entity path tracking.
+	@return LaneAdvanceExecutor -- Executor instance that manages lane movement.
+]=]
 function LaneAdvanceExecutor.new()
 	local self = BaseExecutor.new({
 		ActionId = "LaneAdvance",
@@ -28,7 +32,13 @@ function LaneAdvanceExecutor.new()
 	return self
 end
 
--- Resolves the agent params from the enemy role so pathfinding matches the unit profile.
+--[=[
+	@within LaneAdvanceExecutor
+	Resolves the agent params from the enemy role so pathfinding matches the unit profile.
+	@param entity number -- Enemy entity id being processed.
+	@param services any -- Shared executor services for the current tick.
+	@return { [string]: any } -- SimplePath agent parameters for the entity.
+]=]
 function LaneAdvanceExecutor:_GetAgentParams(entity: number, services: any): { [string]: any }
 	local role = services.EnemyEntityFactory:GetRole(entity)
 	if role then
@@ -40,7 +50,13 @@ function LaneAdvanceExecutor:_GetAgentParams(entity: number, services: any): { [
 	return CombatMovementConfig.DEFAULT_AGENT_PARAMS
 end
 
--- Starts the next path segment toward the current waypoint.
+--[=[
+	@within LaneAdvanceExecutor
+	Starts the next path segment toward the current waypoint.
+	@param entity number -- Enemy entity id being processed.
+	@param services any -- Shared executor services for the current tick.
+	@return boolean -- Whether a path segment started successfully.
+]=]
 function LaneAdvanceExecutor:_StartPath(entity: number, services: any): boolean
 	local pathState = services.EnemyEntityFactory:GetPathState(entity)
 	if not pathState or not pathState.waypoints then
@@ -68,7 +84,15 @@ function LaneAdvanceExecutor:_StartPath(entity: number, services: any): boolean
 	return true
 end
 
--- Begins lane advancement for one entity and returns whether the executor could start.
+--[=[
+	@within LaneAdvanceExecutor
+	Begins lane advancement for one entity and returns whether the executor could start.
+	@param entity number -- Enemy entity id being processed.
+	@param _data any? -- Unused action payload.
+	@param services any -- Shared executor services for the current tick.
+	@return boolean -- Whether the action started successfully.
+	@return string? -- Optional failure reason when the action cannot start.
+]=]
 function LaneAdvanceExecutor:Start(entity: number, _data: any?, services: any): (boolean, string?)
 	if self._promises[entity] then
 		self:Cancel(entity, services)
@@ -90,7 +114,14 @@ function LaneAdvanceExecutor:Start(entity: number, _data: any?, services: any): 
 	return true, nil
 end
 
--- Advances the current path promise and returns the execution state for this tick.
+--[=[
+	@within LaneAdvanceExecutor
+	Advances the current path promise and returns the execution state for this tick.
+	@param entity number -- Enemy entity id being processed.
+	@param _dt number -- Frame delta time for the current tick.
+	@param services any -- Shared executor services for the current tick.
+	@return string -- Current action status for the executor pipeline.
+]=]
 function LaneAdvanceExecutor:Tick(entity: number, _dt: number, services: any): string
 	local promise = self._promises[entity]
 	if not promise then
@@ -131,7 +162,12 @@ function LaneAdvanceExecutor:Tick(entity: number, _dt: number, services: any): s
 	return "Fail"
 end
 
--- Cancels the active path promise and clears movement state for the entity.
+--[=[
+	@within LaneAdvanceExecutor
+	Cancels the active path promise and clears movement state for the entity.
+	@param entity number -- Enemy entity id being processed.
+	@param services any -- Shared executor services for the current tick.
+]=]
 function LaneAdvanceExecutor:Cancel(entity: number, services: any)
 	local promise = self._promises[entity]
 	if promise then
@@ -141,7 +177,12 @@ function LaneAdvanceExecutor:Cancel(entity: number, services: any)
 	services.EnemyEntityFactory:SetPathMoving(entity, false)
 end
 
--- Completes by delegating to the same cleanup path as cancellation.
+--[=[
+	@within LaneAdvanceExecutor
+	Completes by delegating to the same cleanup path as cancellation.
+	@param entity number -- Enemy entity id being processed.
+	@param services any -- Shared executor services for the current tick.
+]=]
 function LaneAdvanceExecutor:Complete(entity: number, services: any)
 	self:Cancel(entity, services)
 end

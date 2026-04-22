@@ -2,6 +2,8 @@
 
 This is the root index for all architecture documentation.
 
+---
+
 ## Backend
 
 Server-side architecture: DDD layers, Knit, JECS, ProfileStore, state sync, error handling.
@@ -15,12 +17,16 @@ Server-side architecture: DDD layers, Knit, JECS, ProfileStore, state sync, erro
 - [backend/SYSTEMS.md](backend/SYSTEMS.md) - JECS, ProfileStore, debug logging, key libraries
 - [backend/POLICIES_AND_SPECS.md](backend/POLICIES_AND_SPECS.md) - Specifications, Policies, eligibility checking, candidate types
 
+---
+
 ## Data Files
 
 Conventions for splitting large data files (configs, event registries, dialogue trees) into folder modules.
 
 - [DATA_FILES.md](DATA_FILES.md) - When to split, Pattern A (partitioned data), Pattern B (structured aggregation), rules
 - [UNLOCK_REGISTRY.md](UNLOCK_REGISTRY.md) - Context-owned unlock definitions merged into UnlockConfig
+
+---
 
 ## Frontend
 

@@ -1,5 +1,14 @@
 --!strict
 
+--[[
+	Module: SharedAtoms
+	Purpose: Builds the server and client Charm atoms for economy wallet replication.
+	Used In System: Called by the sync service on the server and the sync client on the client.
+	Boundaries: Owns atom construction only; does not own wallet mutation, payload shaping, or registry wiring.
+]]
+
+-- [Dependencies]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Charm = require(ReplicatedStorage.Packages.Charm)
@@ -15,6 +24,8 @@ type ResourceWallet = EconomyTypes.ResourceWallet
 	@client
 ]=]
 local SharedAtoms = {}
+
+-- [Public API]
 
 --[=[
 	Creates the server-side economy atom.

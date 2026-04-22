@@ -1,5 +1,14 @@
 --!strict
 
+--[[
+	Module: ResourceSyncService
+	Purpose: Owns the per-player economy wallet atom and publishes sync-safe mutations.
+	Used In System: Invoked by Economy application commands and queries on the server.
+	Boundaries: Owns atom cloning and transport-facing sync only; does not own validation or persistence.
+]]
+
+-- [Dependencies]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BaseSyncService = require(ReplicatedStorage.Utilities.BaseSyncService)
@@ -8,6 +17,8 @@ local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTyp
 
 type ResourceWallet = EconomyTypes.ResourceWallet
 type ProfileRunStats = EconomyTypes.ProfileRunStats
+
+-- [Private Helpers]
 
 local function cloneRunStats(runStats: ProfileRunStats?): ProfileRunStats?
 	if runStats == nil then
@@ -38,6 +49,8 @@ local function cloneWallet(wallet: ResourceWallet): ResourceWallet
 	}
 end
 
+-- [Initialization]
+
 --[=[
 	Creates a new economy sync service.
 	@within ResourceSyncService
@@ -50,6 +63,8 @@ function ResourceSyncService.new()
 	self.CreateAtom = SharedAtoms.CreateServerAtom
 	return self
 end
+
+-- [Public API]
 
 -- Loads the starting wallet for a player into the shared atom.
 --[=[

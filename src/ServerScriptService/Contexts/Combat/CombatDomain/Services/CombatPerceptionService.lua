@@ -10,19 +10,41 @@ local FLEE_THRESHOLD = 0.2
 local CombatPerceptionService = {}
 CombatPerceptionService.__index = CombatPerceptionService
 
+--[=[
+	@within CombatPerceptionService
+	Creates a new combat perception service.
+	@return CombatPerceptionService -- Service instance used to build behavior facts.
+]=]
 function CombatPerceptionService.new()
 	return setmetatable({}, CombatPerceptionService)
 end
 
--- Resolves the enemy entity factory used to inspect path and health state.
+--[=[
+	@within CombatPerceptionService
+	Resolves the enemy entity factory used to inspect path and health state.
+	@param _registry any -- Registry instance supplied by the context bootstrap.
+	@param _name string -- Registry key used to register the service.
+]=]
 function CombatPerceptionService:Init(_registry: any, _name: string)
 end
 
+--[=[
+	@within CombatPerceptionService
+	Stores the enemy entity factory needed to build perception snapshots.
+	@param registry any -- Registry instance used to resolve dependencies.
+	@param _name string -- Registry key used to register the service.
+]=]
 function CombatPerceptionService:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
 end
 
--- Returns the perception facts a behavior tree needs to decide the next action.
+--[=[
+	@within CombatPerceptionService
+	Returns the perception facts a behavior tree needs to decide the next action.
+	@param entity number -- Enemy entity id whose state should be sampled.
+	@param _currentTime number -- Current timestamp, reserved for future time-based facts.
+	@return table -- Facts snapshot consumed by combat behavior trees.
+]=]
 function CombatPerceptionService:BuildSnapshot(entity: number, _currentTime: number)
 	local pathState = self._enemyEntityFactory:GetPathState(entity)
 	local health = self._enemyEntityFactory:GetHealth(entity)

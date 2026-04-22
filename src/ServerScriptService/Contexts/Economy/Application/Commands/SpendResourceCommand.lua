@@ -1,5 +1,12 @@
 --!strict
 
+--[[
+	Module: SpendResourceCommand
+	Purpose: Validates and applies a resource spend against a player wallet.
+	Used In System: Invoked by EconomyContext and other server-side deduction flows when resources are consumed.
+	Boundaries: Owns command orchestration only; does not own affordability rules, sync mutation, or persistence.
+]]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -8,6 +15,8 @@ local Errors = require(script.Parent.Parent.Parent.Errors)
 local Ok = Result.Ok
 local Err = Result.Err
 local Try = Result.Try
+
+-- [Initialization]
 
 --[=[
 	@class SpendResourceCommand
@@ -26,6 +35,8 @@ SpendResourceCommand.__index = SpendResourceCommand
 function SpendResourceCommand.new()
 	return setmetatable({}, SpendResourceCommand)
 end
+
+-- [Public API]
 
 -- Resolves the validator and sync service from the registry so the command stays thin.
 --[=[

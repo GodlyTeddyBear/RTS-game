@@ -1,5 +1,7 @@
 # Phase and Execution Rules
 
+
+---
 ## Core Rules
 
 - Phase order is declared in one place per context and is the single source of truth
@@ -9,9 +11,11 @@
 - `[DERIVED]` components are updated in the Sync phase, after all `[AUTHORITATIVE]` writes are complete
 - Systems in the Render phase are read-only — no component writes
 
+
+---
 ## Standard Phase Order
 
-```
+```text
 Input  →  Logic  →  Sync  →  Render
 ```
 
@@ -22,6 +26,8 @@ Input  →  Logic  →  Sync  →  Render
 | Sync | Derived components updated to reflect authoritative values; deferred ops have already flushed | `[DERIVED]` components only |
 | Render | Push values to UI or visuals | None |
 
+
+---
 ## Phase Declaration
 
 Phase order is declared once per context, typically in the world service. Never rely on implicit ordering.
@@ -36,6 +42,8 @@ local PHASES = {
 }
 ```
 
+
+---
 ## Deferred Operation Flush
 
 Entity creation and destruction queued during the Logic phase are flushed at the end of Logic, before Sync runs. This ensures the Sync phase sees a stable, fully updated set of entities.
@@ -55,6 +63,8 @@ function EnemyECSWorldService:Tick(dt: number)
 end
 ```
 
+
+---
 ## Sync Phase Example
 
 `[DERIVED]` components are updated in Sync after all `[AUTHORITATIVE]` writes in Logic are complete.
@@ -69,3 +79,28 @@ function HealthSyncSystem:Tick()
     end
 end
 ```
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+
+---
+
+## Prohibitions
+
+- Do not violate the required rules defined in this document's Core Rules and contract sections.
+
+---
+
+## Failure Signals
+
+- Implementation behavior contradicts one or more required rules in this contract.
+
+---
+
+## Checklist
+
+- [ ] All required rules in this contract are satisfied.
+

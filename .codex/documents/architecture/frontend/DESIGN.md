@@ -1,8 +1,11 @@
 # Frontend Design
 
-This document defines how to create the visual style of frontend UI. It applies before implementation: screens should have an intentional appearance plan before components are built.
+- This document defines how to create the visual style of frontend UI.
+- It applies before implementation: screens should have an intentional appearance plan before components are built.
+- This does not replace layer, hook, or component placement rules.
+- Use this with `FRONTEND.md`, `COMPONENTS.md`, `ANIMATION_PATTERN.md`, and `UDIM_LAYOUT_RULES.md`.
 
-This does not replace layer, hook, or component placement rules. Use this with `FRONTEND.md`, `COMPONENTS.md`, `ANIMATION_PATTERN.md`, and `UDIM_LAYOUT_RULES.md`.
+---
 
 ## Style Creation Process
 
@@ -18,6 +21,8 @@ For every new screen or feature UI, define:
 
 Choose surfaces, accents, spacing, and motion only after that concept is clear.
 
+---
+
 ## Visual Direction
 
 Use tactical RTS/game UI, not generic app UI.
@@ -25,6 +30,8 @@ Use tactical RTS/game UI, not generic app UI.
 - Prefer near-black surfaces, warm gold metallic strokes, strong readable panels, compact information density, and purposeful highlights.
 - UI should feel like an in-game command interface: structured, decisive, and readable under pressure.
 - Avoid default gray boxes, flat utility dashboards, randomly themed feature screens, and decoration that does not support hierarchy.
+
+---
 
 ## Cards And Panels
 
@@ -38,6 +45,8 @@ Cards are strictly limited.
 
 If everything is a card, nothing has hierarchy.
 
+---
+
 ## Composition Rules
 
 - Every screen needs one dominant focus.
@@ -47,6 +56,8 @@ If everything is a card, nothing has hierarchy.
 - Dense RTS UI is allowed, but density must come from organized information, not clutter.
 - Use scale-based sizing and positioning from `UDIM_LAYOUT_RULES.md`.
 
+---
+
 ## Depth, Chrome, And Decoration
 
 Use purposeful chrome.
@@ -55,6 +66,8 @@ Use purposeful chrome.
 - Avoid decorative effects that compete with gameplay information.
 - Major panels may use stronger chrome; secondary controls should be quieter.
 - Do not stack gradients, strokes, glows, and shadows unless each layer has a distinct role.
+
+---
 
 ## Token Use
 
@@ -69,6 +82,8 @@ After choosing the visual concept, implement it with existing tokens first:
 
 Hardcoded colors, spacing, radii, and animation values need a clear reason. Add new tokens only for values expected to recur across multiple UI pieces or features.
 
+---
+
 ## Typography And Copy
 
 - Use typography to establish command hierarchy: title, section label, value, description, metadata.
@@ -76,12 +91,16 @@ Hardcoded colors, spacing, radii, and animation values need a clear reason. Add 
 - Important values should be scannable without reading full sentences.
 - Do not reduce text below readable token sizes to force a layout to fit.
 
+---
+
 ## Interaction States
 
 - Interactive elements need clear default, hover, pressed, selected, disabled, and loading/error states where relevant.
 - Hover and press motion must not resize or shift neighboring layout.
 - Selected state should be stronger and more persistent than hover.
 - Destructive, expensive, or irreversible actions need stronger visual distinction than ordinary navigation.
+
+---
 
 ## Common Anti-Patterns
 
@@ -95,6 +114,8 @@ Hardcoded colors, spacing, radii, and animation values need a clear reason. Add 
 - Feature UI inventing a new unrelated style without a gameplay reason.
 - Empty space filled with decoration instead of improving composition.
 
+---
+
 ## Design Review Checklist
 
 - [ ] The screen has a named visual concept.
@@ -106,4 +127,3 @@ Hardcoded colors, spacing, radii, and animation values need a clear reason. Add 
 - [ ] Layout follows `UDIM_LAYOUT_RULES.md`.
 - [ ] Repeated and interactive elements are layout-stable.
 - [ ] Motion supports interaction and follows `ANIMATION_PATTERN.md`.
-

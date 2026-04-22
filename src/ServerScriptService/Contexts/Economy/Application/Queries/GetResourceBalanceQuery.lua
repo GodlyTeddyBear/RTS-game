@@ -1,5 +1,12 @@
 --!strict
 
+--[[
+	Module: GetResourceBalanceQuery
+	Purpose: Reads a single resource balance from the economy sync service.
+	Used In System: Invoked by EconomyContext and other server-side callers that need a read-only balance lookup.
+	Boundaries: Owns query orchestration only; does not own sync mutation or validation.
+]]
+
 --[=[
 	@class GetResourceBalanceQuery
 	Reads a single resource balance from the economy sync service.
@@ -7,6 +14,8 @@
 ]=]
 local GetResourceBalanceQuery = {}
 GetResourceBalanceQuery.__index = GetResourceBalanceQuery
+
+-- [Initialization]
 
 --[=[
 	Creates a new balance query.
@@ -16,6 +25,8 @@ GetResourceBalanceQuery.__index = GetResourceBalanceQuery
 function GetResourceBalanceQuery.new()
 	return setmetatable({}, GetResourceBalanceQuery)
 end
+
+-- [Public API]
 
 -- Resolves the sync service once so the query remains a thin read-only wrapper.
 --[=[

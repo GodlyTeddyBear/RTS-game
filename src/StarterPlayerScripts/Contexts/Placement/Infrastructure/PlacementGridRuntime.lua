@@ -1,5 +1,12 @@
 --!strict
 
+--[[
+    Module: PlacementGridRuntime
+    Purpose: Resolves client-side world grid geometry and tile descriptors for placement and cursor helpers.
+    Used In System: Called by placement services to convert between world positions, grid coordinates, and valid tile zones.
+    Boundaries: Owns client-side resolution and caching only; does not own authoritative world state or placement decisions.
+]]
+
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -11,6 +18,11 @@ type TileDescriptor = WorldTypes.TileDescriptor
 type ZoneType = WorldTypes.ZoneType
 type GridSpec = WorldTypes.GridSpec
 
+--[=[
+	@class PlacementGridRuntime
+	Resolves client-side world grid geometry and tile descriptors for placement helpers.
+	@client
+]=]
 local PlacementGridRuntime = {}
 
 local cachedGridSpec: GridSpec? = nil
@@ -20,6 +32,9 @@ local cachedSidePocketResourceByKey: { [string]: string }? = nil
 local GRID_PART_WAIT_TIMEOUT_SECONDS = 30
 local GRID_PART_POLL_INTERVAL_SECONDS = 0.25
 
+-- [Private Helpers]
+
+-- Resolves a dot-path into an instance so the client can find authored world markers without hardcoding references.
 local function _ResolvePath(path: string): Instance?
 	local segments = {}
 	for segment in string.gmatch(path, "[^%.]+") do
@@ -54,6 +69,7 @@ local function _ResolvePath(path: string): Instance?
 	return current
 end
 
+-- Waits for the authoritative placement grid part because the client may initialize before the map finishes loading.
 local function _GetGridPart(): BasePart
 	local deadline = os.clock() + GRID_PART_WAIT_TIMEOUT_SECONDS
 
@@ -73,6 +89,7 @@ local function _GetGridPart(): BasePart
 	error("PlacementGridRuntime: missing PlacementGrid part")
 end
 
+-- Collects authored side-pocket parts so tile zoning can be derived from map markers instead of hardcoded coordinates.
 local function _GetSidePocketParts(): { BasePart }
 	local parts = {}
 	local container = _ResolvePath(WorldConfig.SIDE_POCKETS_PATH)
@@ -106,6 +123,7 @@ local function _GetSidePocketParts(): { BasePart }
 	return parts
 end
 
+-- Derives the immutable grid specification from the authoritative grid part dimensions.
 local function _BuildGridSpec(gridPart: BasePart): GridSpec
 	local tileSize = WorldConfig.TILE_SIZE
 	local gridSize = gridPart.Size
@@ -139,6 +157,13 @@ local function _BuildGridSpec(gridPart: BasePart): GridSpec
 	})
 end
 
+-- [Public API]
+
+--[=[
+	Returns the cached grid spec so repeated coordinate conversions do not rebuild map metadata.
+	@within PlacementGridRuntime
+	@return GridSpec -- The immutable grid specification.
+]=]
 function PlacementGridRuntime.GetGridSpec(): GridSpec
 	if cachedGridSpec ~= nil then
 		return cachedGridSpec
@@ -149,6 +174,7 @@ function PlacementGridRuntime.GetGridSpec(): GridSpec
 	return spec
 end
 
+-- Returns the cached side-pocket part list because authored map markers do not change during play.
 local function _GetSidePocketPartsCached(): { BasePart }
 	if cachedSidePocketParts ~= nil then
 		return cachedSidePocketParts
@@ -159,6 +185,12 @@ local function _GetSidePocketPartsCached(): { BasePart }
 	return parts
 end
 
+--[=[
+	Converts a grid coordinate into a world position using the cached grid spec.
+	@within PlacementGridRuntime
+	@param coord GridCoord -- Grid coordinate to convert.
+	@return Vector3 -- World-space tile center.
+]=]
 function PlacementGridRuntime.CoordToWorld(coord: GridCoord): Vector3
 	local spec = PlacementGridRuntime.GetGridSpec()
 	local localX = -spec.gridSize.X * 0.5 + spec.tileSize * 0.5 + (coord.col - 1) * spec.tileSize
@@ -166,6 +198,12 @@ function PlacementGridRuntime.CoordToWorld(coord: GridCoord): Vector3
 	return spec.gridCFrame:PointToWorldSpace(Vector3.new(localX, 0, localZ))
 end
 
+--[=[
+	Converts a world position back into a grid coordinate when the point is inside the grid bounds.
+	@within PlacementGridRuntime
+	@param worldPos Vector3 -- World position to resolve.
+	@return GridCoord? -- The resolved grid coordinate or nil if the point is outside the grid.
+]=]
 function PlacementGridRuntime.WorldToCoord(worldPos: Vector3): GridCoord?
 	local spec = PlacementGridRuntime.GetGridSpec()
 	local localPos = spec.gridCFrame:PointToObjectSpace(worldPos)
@@ -185,14 +223,17 @@ function PlacementGridRuntime.WorldToCoord(worldPos: Vector3): GridCoord?
 	})
 end
 
+-- Builds the fallback resource label for side-pocket tiles when the authored part does not specify one.
 local function _BuildResourceType(col: number): string
 	return if (col / WorldConfig.SIDE_POCKET_COLUMN_INTERVAL) % 2 == 0 then "Crystal" else "Metal"
 end
 
+-- Builds a stable lookup key for a grid coordinate so cached tile membership can stay table-driven.
 local function _GetCoordKey(row: number, col: number): string
 	return (`{row}_{col}`)
 end
 
+-- Reads the authored resource type from a side-pocket marker part when the map explicitly defines one.
 local function _GetPartResourceType(part: BasePart): string?
 	local attributeValue = part:GetAttribute("ResourceType")
 	if type(attributeValue) == "string" and #attributeValue > 0 then
@@ -201,6 +242,7 @@ local function _GetPartResourceType(part: BasePart): string?
 	return nil
 end
 
+-- Checks whether a world point falls within a part's XZ footprint, ignoring height so thin markers still register.
 local function _IsInsidePartXZ(part: BasePart, worldPoint: Vector3): boolean
 	local localPoint = part.CFrame:PointToObjectSpace(worldPoint)
 	local halfSize = part.Size * 0.5
@@ -208,6 +250,7 @@ local function _IsInsidePartXZ(part: BasePart, worldPoint: Vector3): boolean
 	return math.abs(localPoint.X) <= halfSize.X + epsilon and math.abs(localPoint.Z) <= halfSize.Z + epsilon
 end
 
+-- Tests whether a tile center overlaps a marker part by sampling the tile corners and center.
 local function _TileOverlapsPartXZ(part: BasePart, worldCenter: Vector3, spec: GridSpec): boolean
 	local halfTile = spec.tileSize * 0.5
 	local right = spec.gridCFrame.RightVector
@@ -229,6 +272,7 @@ local function _TileOverlapsPartXZ(part: BasePart, worldCenter: Vector3, spec: G
 	return false
 end
 
+-- Finds the nearest non-lane grid coordinate so the client can recover when a marker sits slightly off-grid.
 local function _ResolveNearestEligibleCoord(worldPos: Vector3, spec: GridSpec): GridCoord?
 	local bestCoord: GridCoord? = nil
 	local bestDistanceSquared = math.huge
@@ -256,6 +300,7 @@ local function _ResolveNearestEligibleCoord(worldPos: Vector3, spec: GridSpec): 
 	return bestCoord
 end
 
+-- Resolves side-pocket membership and optional resource overrides from authored marker parts.
 local function _GetResolvedSidePocketTiles(spec: GridSpec): ({ [string]: boolean }, { [string]: string })
 	if cachedSidePocketCoordKeySet ~= nil and cachedSidePocketResourceByKey ~= nil then
 		return cachedSidePocketCoordKeySet, cachedSidePocketResourceByKey
@@ -306,6 +351,13 @@ local function _GetResolvedSidePocketTiles(spec: GridSpec): ({ [string]: boolean
 	return coordKeySet, resourceByKey
 end
 
+--[=[
+	Returns the tile descriptor for a grid coordinate so placement code can filter by zone and resource type.
+	@within PlacementGridRuntime
+	@param row number -- Grid row to inspect.
+	@param col number -- Grid column to inspect.
+	@return TileDescriptor? -- The resolved tile descriptor or nil when the coordinate is out of bounds.
+]=]
 function PlacementGridRuntime.GetTileDescriptor(row: number, col: number): TileDescriptor?
 	local spec = PlacementGridRuntime.GetGridSpec()
 	if row < 1 or row > spec.gridRows or col < 1 or col > spec.gridCols then

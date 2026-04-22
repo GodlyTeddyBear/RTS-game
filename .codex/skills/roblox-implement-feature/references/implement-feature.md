@@ -1,12 +1,25 @@
+---
+name: implement-feature
+description: Read when you need this skill reference template and workflow rules.
+---
+
+# Implement Feature
+
 <!-- This is a repo-local prompt template. Codex does not automatically expose this as a slash command. Prefer the matching skill when available. -->
 
 Implement the feature request in `$ARGUMENTS` end-to-end.
 
 If `$ARGUMENTS` is empty, stop and ask the user to provide the feature request first.
 
+
+---
+
 ## Goal
 
 Deliver working code, not just a plan. Ensure required architecture/context files are read before editing.
+
+
+---
 
 ## Required pre-read (must do before edits)
 
@@ -27,12 +40,18 @@ Deliver working code, not just a plan. Ensure required architecture/context file
      - `src/ReplicatedStorage/Contexts/<ContextName>/Types/<ContextName>Types.lua`
    - Existing feature entry: `src/StarterPlayerScripts/Contexts/<FeatureName>/Presentation/Templates/*` when frontend is involved.
 
+
+---
+
 ## Scaffolding rules
 
 - New backend bounded context: use `/new-context <Name>` conventions.
 - New backend module inside an existing context: use `/new-service <Context> <Kind> <Name>` conventions.
 - New frontend feature slice: use `/new-feature <Name>` conventions.
 - Do not invent parallel folder conventions when a scaffold command exists.
+
+
+---
 
 ## Implementation requirements
 
@@ -44,6 +63,9 @@ Deliver working code, not just a plan. Ensure required architecture/context file
 6. Keep DDD/CQRS boundaries intact (queries read-only, commands mutate through infrastructure).
 7. For backend context persistence, wire hydration/save through `GameEvents.Events.Persistence` (`ProfileLoaded`, `ProfileSaving`) and readiness through `PlayerLifecycleManager` (`RegisterLoader`/`NotifyLoaded`).
 8. Update registration/wiring where needed (`Context.lua`, registries, presentation indices, etc.).
+
+
+---
 
 ## Required completion checklist (must be explicit in final response)
 
@@ -73,10 +95,16 @@ Use markdown checkboxes (`- [x]` / `- [ ]`) and include this section in the fina
 - [ ] Targeted lint/build checks were run, or explicitly marked as not run with reason.
 - [ ] Any incomplete items are listed with concrete blockers.
 
+
+---
+
 ## Completion gate
 
 Do not claim the feature is complete if any required checklist item is unchecked.
 If an item is intentionally out of scope, mark it unchecked and provide a one-line reason.
+
+
+---
 
 ## Validation requirements
 
@@ -84,6 +112,9 @@ If an item is intentionally out of scope, mark it unchecked and provide a one-li
    - Lint touched Luau files (prefer `selene` on touched paths when available).
    - Run any relevant build/sync command used in this repo when needed.
 2. If validation cannot be run, explicitly state what could not be run and why.
+
+
+---
 
 ## Response format
 

@@ -12,6 +12,11 @@ local Nodes = require(script.Parent.BehaviorNodes)
 ]=]
 local SwarmBehavior = {}
 
+--[=[
+	@within SwarmBehavior
+	Builds the default swarm enemy behavior tree.
+	@return any -- Behavior tree configured for swarm enemies.
+]=]
 function SwarmBehavior.Create()
 	return BehaviorTree:new({
 		tree = BehaviorTree.Priority:new({

@@ -69,7 +69,10 @@ local function _sortLaneTiles(laneTiles: { any }): { any }
 	return cloned
 end
 
--- Registers combat infrastructure, policies, and commands before the rest of the server starts ticking.
+--[=[
+	@within CombatContext
+	Registers combat infrastructure, policies, and commands before the rest of the server starts ticking.
+]=]
 function CombatContext:KnitInit()
 	local registry = Registry.new("Server")
 	registry:Register("CombatLoopService", CombatLoopService.new(), "Infrastructure")
@@ -107,7 +110,10 @@ function CombatContext:KnitInit()
 	self._playerRemovingConnection = nil :: any
 end
 
--- Resolves dependent contexts, wires event handlers, and registers the heartbeat systems.
+--[=[
+	@within CombatContext
+	Resolves dependent contexts, wires event handlers, and registers the heartbeat systems.
+]=]
 function CombatContext:KnitStart()
 	local enemyContext = Knit.GetService("EnemyContext")
 	local worldContext = Knit.GetService("WorldContext")
@@ -271,12 +277,19 @@ function CombatContext:_OnPlayerRemoving(_player: Player)
 	end
 end
 
--- Exposes the active combat loop service for other contexts that need to query or control it.
+--[=[
+	@within CombatContext
+	Exposes the active combat loop service for other contexts that need to query or control it.
+	@return Result.Result<any> -- Active combat loop service or a typed context error.
+]=]
 function CombatContext:GetCombatLoopService(): Result.Result<any>
 	return Ok(self._combatLoopService)
 end
 
--- Disconnects listeners and stops combat so server shutdown leaves no active tick work behind.
+--[=[
+	@within CombatContext
+	Disconnects listeners and stops combat so server shutdown leaves no active tick work behind.
+]=]
 function CombatContext:Destroy()
 	Catch(function()
 		Try(self._endCombatCommand:Execute())

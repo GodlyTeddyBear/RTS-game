@@ -5,7 +5,9 @@ description: Use when the user asks for a Roblox code review, architecture revie
 
 # Roblox Review
 
-Use this skill for code reviews in this Roblox + Luau repo.
+- Use this skill for code reviews in this Roblox + Luau repo.
+
+---
 
 ## Workflow
 
@@ -16,6 +18,8 @@ Use this skill for code reviews in this Roblox + Luau repo.
 5. Produce findings first, ordered by severity, with file and line references.
 6. Follow the review output contract in `references/review.md`.
 
+---
+
 ## Review Focus
 
-Prioritize bugs, behavioral regressions, architecture boundary violations, unsafe state sync, error-handling violations, frontend dependency violations, and missing targeted validation.
+- Prioritize bugs, behavioral regressions, architecture boundary violations, unsafe state sync, error-handling violations, frontend dependency violations, and missing targeted validation.

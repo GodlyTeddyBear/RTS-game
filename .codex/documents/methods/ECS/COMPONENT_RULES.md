@@ -1,5 +1,7 @@
 # Component Rules
 
+
+---
 ## Core Rules
 
 - Components are pure data — no methods, no logic, no behavior
@@ -8,6 +10,8 @@
 - All component fields must be valid at any point in time — no partial initialization states
 - Tags (zero-field components) are first-class citizens; prefer them over boolean fields
 
+
+---
 ## Authority Labels
 
 Every component carries one of two authority labels. The label must appear in the component registry comment.
@@ -24,14 +28,17 @@ This component reflects the value of one or more `[AUTHORITATIVE]` components. I
 - `[DERIVED]` components are always updated in the Sync phase, after all `[AUTHORITATIVE]` writes are complete
 - A component cannot be both `[AUTHORITATIVE]` and `[DERIVED]` — split it if tempted
 
+
+---
 ## Component Registries
 
 - Registries are always frozen after initialization with `table.freeze`
 - Every component is named with `_nameComponent` for debuggability
 - Raw component IDs are never exposed outside the registry and its factory
 
-## Example
 
+---
+## Examples
 ```lua
 function EnemyComponentRegistry:Init(registry: any, _name: string)
     local world = registry:Get("World")
@@ -55,3 +62,22 @@ function EnemyComponentRegistry:Init(registry: any, _name: string)
     })
 end
 ```
+
+---
+
+## Prohibitions
+
+- Do not violate the required rules defined in this document's Core Rules and contract sections.
+
+---
+
+## Failure Signals
+
+- Implementation behavior contradicts one or more required rules in this contract.
+
+---
+
+## Checklist
+
+- [ ] All required rules in this contract are satisfied.
+

@@ -87,3 +87,10 @@ Domain-specific subclasses may add named getter methods (e.g. `GetWalletAtom()`)
 - [ ] `GetAtom()` delegates to `BaseSyncClient.GetAtom(self)`.
 - [ ] No mutation methods exposed.
 - [ ] `Start()` called from `KnitStart`, not `KnitInit`.
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+

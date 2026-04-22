@@ -12,6 +12,11 @@ local Ensure = Result.Ensure
 local fromNilable = Result.fromNilable
 
 type SlotKey = CommanderTypes.SlotKey
+--[=[
+	@interface UseAbilityResult
+	@within UseAbilityCommand
+	.slotKey SlotKey -- The commander slot that was accepted.
+]=]
 type UseAbilityResult = {
 	slotKey: SlotKey,
 }

@@ -1,7 +1,22 @@
 --!strict
 
+--[[
+Module: PlacementController
+Purpose: Owns client-side placement replication startup and the UI-facing accessor for placement state.
+Used In System: Started by Knit on the client before placement UI hooks subscribe to the atom.
+High-Level Flow: Create sync wrapper -> start Blink/atom subscription -> expose read access to UI consumers.
+Boundaries: Does not own placement validation, spawning, or server-authoritative mutation.
+]]
+
+-- [Dependencies]
+
 local Knit = require(game:GetService("ReplicatedStorage").Packages.Knit)
+local PlacementTypes = require(game:GetService("ReplicatedStorage").Contexts.Placement.Types.PlacementTypes)
 local PlacementSyncClient = require(script.Parent.Infrastructure.PlacementSyncClient)
+
+type PlacementAtom = PlacementTypes.PlacementAtom
+
+-- [Public API]
 
 --[=[
 	@class PlacementController
@@ -33,10 +48,10 @@ end
 --[=[
 	Returns the local placement atom.
 	@within PlacementController
-	@return any -- The client placement atom.
+	@return PlacementAtom -- The client placement atom.
 ]=]
 -- Expose the local placement atom to UI consumers.
-function PlacementController:GetAtom()
+function PlacementController:GetAtom(): PlacementAtom
 	return self._syncClient:GetAtom()
 end
 

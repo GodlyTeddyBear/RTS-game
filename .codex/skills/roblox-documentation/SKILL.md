@@ -5,7 +5,9 @@ description: Use when the user asks Codex to update project documentation, add o
 
 # Roblox Documentation
 
-Use this skill for documentation and inline-comment work in this repo.
+- Use this skill for documentation, module-overview, section-comment, and inline-comment work in this repo.
+
+---
 
 ## Workflow
 
@@ -13,10 +15,16 @@ Use this skill for documentation and inline-comment work in this repo.
 2. Read `.codex/MEMORIES.md` and `.codex/documents/ONBOARDING.md`.
 3. For public API docs or Moonwave annotations, read `.codex/documents/coding-style/MOONWAVE.md`.
 4. For inline comments or readability-driven docs, read `.codex/documents/coding-style/READABILITY.md`.
-5. Choose the matching reference:
-   - `references/update-documentation.md` for project documentation updates.
-   - `references/add-inlines.md` for inline comment work.
+5. Run all three references in this order for documentation tasks:
+   - `references/add-overview.md` (top-of-file module overviews and section headers).
+   - `references/update-documentation.md` (Moonwave/public API docs).
+   - `references/add-inlines.md` (inline intent/phase comments).
+
+---
 
 ## Requirements
 
-Do not invent documentation style. Keep comments sparse, useful, and aligned with the repo's existing conventions.
+- Do not invent documentation style.
+- Keep comments sparse, useful, and aligned with the repo's existing conventions.
+- For overview work, place the module overview immediately under the file's `--!` pragma.
+- For overview work, indent overview fields by 4 spaces inside the `--[[ ... ]]` block.

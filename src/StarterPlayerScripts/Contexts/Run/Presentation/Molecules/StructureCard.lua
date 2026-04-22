@@ -1,5 +1,13 @@
 --!strict
 
+--[[
+	Module: StructureCard
+	Purpose: Renders a selectable structure card for the placement palette UI.
+	Used In System: Rendered by the client placement palette to display structure options during prep.
+	High-Level Flow: Derive styling -> gate selection on affordability -> render icon, name, and cost.
+	Boundaries: Owns presentation only; does not own selection state, affordability logic, or placement actions.
+]]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local React = require(ReplicatedStorage.Packages.React)
@@ -13,8 +21,18 @@ local Colors = require(script.Parent.Parent.Parent.Parent.App.Config.ColorTokens
 local Border = require(script.Parent.Parent.Parent.Parent.App.Config.BorderTokens)
 local usePlacementPaletteHud = require(script.Parent.Parent.Parent.Application.Hooks.usePlacementPaletteHud)
 
+-- [Types]
+
 type TStructureCardData = usePlacementPaletteHud.TStructureCardData
 
+--[=[
+	@interface TStructureCardProps
+	@within StructureCard
+	.cardData TStructureCardData -- Structure data and affordability state for the card.
+	.isSelected boolean -- Whether this card is the currently selected option.
+	.onSelect (string) -> () -- Callback invoked when the player selects the card.
+	.LayoutOrder number? -- Optional layout order used by the palette list.
+]=]
 export type TStructureCardProps = {
 	cardData: TStructureCardData,
 	isSelected: boolean,
@@ -22,6 +40,16 @@ export type TStructureCardProps = {
 	LayoutOrder: number?,
 }
 
+--[=[
+	@class StructureCard
+	@client
+]=]
+--[=[
+	Renders a structure card for the placement palette.
+	@within StructureCard
+	@param props TStructureCardProps -- The component props.
+	@return any -- The rendered React element.
+]=]
 local function StructureCard(props: TStructureCardProps)
 	local strokeColor = if props.isSelected then Colors.Accent.Yellow else Colors.Border.Subtle
 	local costColor = if props.cardData.canAfford then Colors.Text.Secondary else Colors.Semantic.Error

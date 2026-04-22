@@ -1,3 +1,10 @@
+---
+name: refactor-better
+description: Read when you need this skill reference template and workflow rules.
+---
+
+# Refactor Better
+
 <!-- This is a repo-local prompt template. Codex does not automatically expose this as a slash command. Prefer the matching skill when available. -->
 
 Analyze the file or folder specified in $ARGUMENTS for readability, abstraction, and library-usage issues. Produce a structured report of findings with fix suggestions. Do not modify any files unless the user explicitly asks after seeing the report.
@@ -226,6 +233,9 @@ Total findings: W warnings, S suggestions, Y style notes
 Group by file. Within each file, group by severity.
 
 ```
+
+---
+
 ## [file path]
 
 ### Warning
@@ -246,6 +256,9 @@ Group by file. Within each file, group by severity.
 
 ### library_opportunities
 ```
+
+---
+
 ## [file path]
 - [line N] <manual pattern> → use <library function>
   Before: <code>

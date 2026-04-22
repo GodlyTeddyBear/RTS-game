@@ -1,5 +1,12 @@
 --!strict
 
+--[[
+	Module: AddResourceCommand
+	Purpose: Validates and applies a resource grant to a player wallet.
+	Used In System: Invoked by EconomyContext and other server-side reward flows when resources are earned.
+	Boundaries: Owns command orchestration only; does not own wallet math, sync mutation, or persistence.
+]]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -8,6 +15,8 @@ local Errors = require(script.Parent.Parent.Parent.Errors)
 local Ok = Result.Ok
 local Err = Result.Err
 local Try = Result.Try
+
+-- [Initialization]
 
 --[=[
 	@class AddResourceCommand
@@ -26,6 +35,8 @@ AddResourceCommand.__index = AddResourceCommand
 function AddResourceCommand.new()
 	return setmetatable({}, AddResourceCommand)
 end
+
+-- [Public API]
 
 -- Resolves the validator and sync service from the registry so the command stays thin.
 --[=[

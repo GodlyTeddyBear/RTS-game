@@ -1,5 +1,14 @@
 --!strict
 
+--[[
+	Module: EconomyTypes
+	Purpose: Defines the shared economy wallet, atom, and run-stat types used by server and client code.
+	Used In System: Imported anywhere Economy context code needs a stable replicated type shape.
+	Boundaries: Owns type declarations only; does not own runtime logic, defaults, or validation.
+]]
+
+-- [Types]
+
 --[=[
 	@class EconomyTypes
 	Defines the shared economy wallet and atom types used by sync and context code.

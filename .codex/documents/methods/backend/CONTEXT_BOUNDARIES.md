@@ -8,14 +8,21 @@ Canonical architecture references:
 
 ---
 
+## Core Rules
+
+- Follow the required contracts in the sections below.
+- Treat Prohibitions, Failure Signals, and Checklist as pass/fail requirements.
+
+---
+
 ## Method Categories
 
 1. `Server public` - public server-to-server context methods.
 2. `.Client delegate` - `.Client` methods that call `self.Server:Method(...)`.
 3. `.Client direct Execute` - `.Client` methods that call an Application command/query `Execute(...)` directly.
 
----
 
+---
 ## Contract
 
 ### 1) Server public
@@ -32,8 +39,8 @@ Canonical architecture references:
 - May own a `Catch(...)` when directly calling `Execute(...)`.
 - Must return `Result.Result<T>` compatible output so `WrapContext` can preserve rejection behavior.
 
----
 
+---
 ## Prohibitions
 
 - Do not implement business orchestration in `Context.lua`.
@@ -42,8 +49,8 @@ Canonical architecture references:
 - Do not stack multi-hop `Catch(...)` wrappers across a delegate chain by default.
 - Do not use `unwrapOr(default)` in public server-to-server context method return paths.
 
----
 
+---
 ## Failure Signals
 
 - A `.Client` delegate method wraps `self.Server:Method(...)` in `Catch(...)`.
@@ -51,8 +58,8 @@ Canonical architecture references:
 - A context method contains validation trees, policy checks, or persistence write steps instead of delegating.
 - A public method swallows failures with fallback defaults.
 
----
 
+---
 ## Checklist
 
 - [ ] Method is correctly classified (`Server public`, `.Client delegate`, `.Client direct Execute`).
@@ -60,3 +67,10 @@ Canonical architecture references:
 - [ ] Public server-to-server method returns `Result.Result<T>`.
 - [ ] `Context.lua` method remains bridge-only (route/delegate only).
 - [ ] No fallback swallowing (`unwrapOr`) in public return path.
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+

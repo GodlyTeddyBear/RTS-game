@@ -15,20 +15,41 @@ local Err = Result.Err
 local BehaviorTreeTickPolicy = {}
 BehaviorTreeTickPolicy.__index = BehaviorTreeTickPolicy
 
--- Creates a new behavior tree tick policy.
+--[=[
+	@within BehaviorTreeTickPolicy
+	Creates a new behavior tree tick policy.
+	@return BehaviorTreeTickPolicy -- Policy instance used to gate BT updates.
+]=]
 function BehaviorTreeTickPolicy.new()
 	return setmetatable({}, BehaviorTreeTickPolicy)
 end
 
--- Resolves the enemy entity factory used to read combat action and behavior tree state.
+--[=[
+	@within BehaviorTreeTickPolicy
+	Resolves the enemy entity factory used to read combat action and behavior tree state.
+	@param _registry any -- Registry instance supplied by the context bootstrap.
+	@param _name string -- Registry key used to register the policy.
+]=]
 function BehaviorTreeTickPolicy:Init(_registry: any, _name: string)
 end
 
+--[=[
+	@within BehaviorTreeTickPolicy
+	Stores the enemy entity factory needed by the policy.
+	@param registry any -- Registry instance used to resolve dependencies.
+	@param _name string -- Registry key used to register the policy.
+]=]
 function BehaviorTreeTickPolicy:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
 end
 
--- Returns the stored behavior tree when the entity is allowed to evaluate this frame.
+--[=[
+	@within BehaviorTreeTickPolicy
+	Returns the stored behavior tree when the entity is allowed to evaluate this frame.
+	@param entity number -- Enemy entity id being evaluated.
+	@param currentTime number -- Current timestamp used to enforce the tick interval.
+	@return Result.Result<any> -- Behavior tree payload or an error when the entity cannot tick.
+]=]
 function BehaviorTreeTickPolicy:Check(entity: number, currentTime: number): Result.Result<any>
 	local combatAction = self._enemyEntityFactory:GetCombatAction(entity)
 	if combatAction and combatAction.ActionState == "Committed" then

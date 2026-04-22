@@ -1,5 +1,15 @@
 --!strict
 
+--[[
+    Module: RunContext
+    Purpose: Owns the authoritative run lifecycle service and bridges run state to other contexts.
+    Used In System: Loaded by Knit on the server to manage run start, restart, reset, phase advance, and sync hydration.
+    Boundaries: Does not own transition rules, timeout behavior, sync persistence internals, or client UI logic.
+    High-Level Flow: Register runtime modules -> hydrate sync -> react to state changes -> expose client requests.
+]]
+
+-- [Dependencies]
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -36,12 +46,15 @@ local Err = Result.Err
 local Ok = Result.Ok
 local Try = Result.Try
 
+-- [Types]
+
 type RunState = RunTypes.RunState
 type RunSnapshot = RunTypes.RunSnapshot
 
 --[=[
 	@class RunContext
 	Owns the authoritative run state machine and bridges it to other contexts.
+	High-Level Flow: Register runtime modules -> hydrate sync -> react to state changes -> expose client requests.
 	@server
 ]=]
 local RunContext = Knit.CreateService({
@@ -55,6 +68,8 @@ local RunContext = Knit.CreateService({
 	Fires when the authoritative run state changes.
 ]=]
 RunContext.StateChanged = nil
+
+-- [Initialization]
 
 --[=[
 	Initializes the run state machine, timers, and shared sync atom.
@@ -129,6 +144,8 @@ function RunContext:KnitInit()
 	self._sync:SetState(self:_BuildRunSnapshot())
 end
 
+-- [Private Helpers]
+
 local function _formatCommandFailure(commandName: string, result: Result.Result<any>): (boolean, string)
 	return false, string.format("%s failed: %s", commandName, result.message)
 end
@@ -150,7 +167,9 @@ local function _ResolveSpawnCFrame(markerName: string, fallbackCFrame: CFrame): 
 	return fallbackCFrame
 end
 
+-- Registers developer-only commands that map to the public run API.
 function RunContext:_RegisterDeveloperLogCommands()
+	-- Register the start command so developers can enter the run lifecycle from chat.
 	CommandRegistry.Register({
 		name = "Run.Start",
 		context = "Run",
@@ -169,6 +188,7 @@ function RunContext:_RegisterDeveloperLogCommands()
 		end,
 	})
 
+	-- Register the restart command so developers can return the session to lobby state.
 	CommandRegistry.Register({
 		name = "Run.Restart",
 		context = "Run",
@@ -187,6 +207,7 @@ function RunContext:_RegisterDeveloperLogCommands()
 		end,
 	})
 
+	-- Register the reset command so developers can force a clean run restart.
 	CommandRegistry.Register({
 		name = "Run.Reset",
 		context = "Run",
@@ -205,6 +226,7 @@ function RunContext:_RegisterDeveloperLogCommands()
 		end,
 	})
 
+	-- Register the phase-skip command so developers can fast-forward lifecycle transitions.
 	CommandRegistry.Register({
 		name = "Run.SkipPhase",
 		context = "Run",
@@ -223,6 +245,8 @@ function RunContext:_RegisterDeveloperLogCommands()
 		end,
 	})
 end
+
+-- [Lifecycle]
 
 --[=[
 	Starts hydration for players already present and players who join later.
@@ -248,6 +272,8 @@ function RunContext:KnitStart()
 		end, "Run:OnCommanderDied")
 	end)
 end
+
+-- [Public API]
 
 --[=[
 	Returns the current authoritative run state.
@@ -279,6 +305,7 @@ end
 function RunContext:StartRun(): Result.Result<boolean>
 	return Catch(function()
 		Try(self._transitionPolicy:CheckCanStartRun(self._machine:GetState()))
+		-- Teleport first so the prep countdown starts from the correct phase entry point.
 		self:_TeleportPlayersToCFrame(self:_GetPhase2EntryCFrame())
 		return self._startRunCommand:Execute(self._onPrepTimeout)
 	end, "Run:StartRun")
@@ -292,11 +319,13 @@ end
 function RunContext:RestartRun(): Result.Result<boolean>
 	return Catch(function()
 		local state = self._machine:GetState()
+		-- Route active runs through the commander-death command so shutdown side effects stay centralized.
 		if state ~= "Idle" and state ~= "RunEnd" then
 			Try(self._notifyCommanderDeathCommand:Execute())
 			state = self._machine:GetState()
 		end
 
+		-- Only transition back to Idle after the terminal state has settled.
 		if state == "RunEnd" then
 			Try(self._machine:Transition("Idle"))
 		end
@@ -313,11 +342,13 @@ end
 function RunContext:ResetRun(): Result.Result<boolean>
 	return Catch(function()
 		local state = self._machine:GetState()
+		-- Route active runs through the commander-death command so reset preserves termination behavior.
 		if state ~= "Idle" and state ~= "RunEnd" then
 			Try(self._notifyCommanderDeathCommand:Execute())
 			state = self._machine:GetState()
 		end
 
+		-- Only transition back to Idle after the terminal state has settled.
 		if state == "RunEnd" then
 			Try(self._machine:Transition("Idle"))
 		end
@@ -367,21 +398,25 @@ end
 function RunContext:SkipCurrentPhase(): Result.Result<boolean>
 	return Catch(function()
 		local state = self._machine:GetState()
+		-- Skip Prep by invoking the prep timeout command, which advances into Wave.
 		if state == "Prep" then
 			Try(self._onPrepTimeoutCommand:Execute(self._onWaveTimeout))
 			return Ok(true)
 		end
 
+		-- Skip Wave and Endless through the same resolution transition path.
 		if state == "Wave" or state == "Endless" then
 			Try(self._onWaveTimeoutCommand:Execute(self._onResolutionTimeout))
 			return Ok(true)
 		end
 
+		-- Skip Resolution by invoking the resolution timeout command, which returns to Prep.
 		if state == "Resolution" then
 			Try(self._onResolutionTimeoutCommand:Execute(self._onPrepTimeout))
 			return Ok(true)
 		end
 
+		-- Skip Climax by using the climax completion command so loop-entry side effects still run.
 		if state == "Climax" then
 			return self._notifyClimaxCompleteCommand:Execute(self._onWaveTimeout)
 		end
@@ -391,6 +426,8 @@ function RunContext:SkipCurrentPhase(): Result.Result<boolean>
 		})
 	end, "Run:SkipCurrentPhase")
 end
+
+-- [Client API]
 
 --[=[
 	Requests a run start from the client lobby flow.
@@ -427,6 +464,8 @@ function RunContext.Client:RequestRestartRun(_player: Player): boolean
 	return false
 end
 
+-- [Private Helpers]
+
 function RunContext:_GetPhase2EntryCFrame(): CFrame
 	return _ResolveSpawnCFrame(RunTravelConfig.PHASE2_ENTRY_MARKER_NAME, RunTravelConfig.PHASE2_ENTRY_CFRAME)
 end
@@ -436,6 +475,7 @@ function RunContext:_GetLobbyReturnCFrame(): CFrame
 end
 
 function RunContext:_TeleportPlayersToCFrame(targetCFrame: CFrame)
+	-- Clear velocity before teleporting so players do not carry momentum across phases.
 	for _, player in Players:GetPlayers() do
 		local character = player.Character
 		if character then
@@ -496,6 +536,8 @@ function RunContext:_OnStateChanged(newState: RunState, previousState: RunState)
 		GameEvents.Bus:Emit(GameEvents.Events.Run.RunEnded)
 	end
 end
+
+-- [Shutdown]
 
 --[=[
 	Cancels run lifecycle subscriptions and state listeners.

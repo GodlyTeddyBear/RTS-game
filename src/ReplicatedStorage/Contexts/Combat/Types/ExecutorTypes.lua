@@ -3,12 +3,17 @@
 --[=[
 	@class ExecutorTypes
 	Defines shared combat executor component and service shapes.
+	@server
+	@client
 ]=]
 
 --[=[
-	@type TBehaviorTreeComponent
+	@interface TBehaviorTreeComponent
 	@within ExecutorTypes
 	Stores the assigned behavior tree and tick state for an enemy.
+	.TreeInstance any -- Behavior tree object assigned to the enemy.
+	.TickInterval number -- Minimum time between behavior tree evaluations.
+	.LastTickTime number -- Timestamp of the last successful tick.
 ]=]
 export type TBehaviorTreeComponent = {
 	TreeInstance: any,
@@ -24,9 +29,15 @@ export type TBehaviorTreeComponent = {
 export type TCombatActionState = "None" | "Running" | "Committed"
 
 --[=[
-	@type TCombatActionComponent
+	@interface TCombatActionComponent
 	@within ExecutorTypes
 	Tracks the current and pending action ids for one enemy.
+	.CurrentActionId string? -- Action currently being executed.
+	.ActionState TCombatActionState -- Current state of the action lifecycle.
+	.ActionData any? -- Data attached to the current action.
+	.PendingActionId string? -- Action queued by behavior tree evaluation.
+	.PendingActionData any? -- Data attached to the pending action.
+	.ActionStartedAt number? -- Timestamp when the current action started.
 ]=]
 export type TCombatActionComponent = {
 	CurrentActionId: string?,
@@ -38,9 +49,11 @@ export type TCombatActionComponent = {
 }
 
 --[=[
-	@type TAttackCooldownComponent
+	@interface TAttackCooldownComponent
 	@within ExecutorTypes
 	Stores a future attack cooldown window for enemy action systems.
+	.Cooldown number -- Minimum time between attacks.
+	.LastAttackTime number -- Timestamp of the last attack.
 ]=]
 export type TAttackCooldownComponent = {
 	Cooldown: number,
@@ -48,18 +61,22 @@ export type TAttackCooldownComponent = {
 }
 
 --[=[
-	@type TBehaviorConfigComponent
+	@interface TBehaviorConfigComponent
 	@within ExecutorTypes
 	Stores role-specific behavior tree timing for one enemy.
+	.TickInterval number -- Role-specific time between behavior tree evaluations.
 ]=]
 export type TBehaviorConfigComponent = {
 	TickInterval: number,
 }
 
 --[=[
-	@type TExecutorServices
+	@interface TExecutorServices
 	@within ExecutorTypes
 	Shared runtime services passed into combat executors.
+	.EnemyEntityFactory any -- Combat enemy entity access facade.
+	.CurrentTime number -- Timestamp shared across executor calls for one tick.
+	.HandleGoalReached any -- Command used to resolve goal-reaching enemies.
 ]=]
 export type TExecutorServices = {
 	EnemyEntityFactory: any,

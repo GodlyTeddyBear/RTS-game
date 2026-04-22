@@ -1,8 +1,18 @@
+---
+name: review
+description: Read when you need this skill reference template and workflow rules.
+---
+
+# Review
+
 <!-- This is a repo-local prompt template. Codex does not automatically expose this as a slash command. Prefer the matching skill when available. -->
 
 Review the code specified in $ARGUMENTS for correctness against this project's architecture rules and coding standards.
 
 If no argument is given, review the files most recently discussed or edited in this conversation.
+
+
+---
 
 ## How to review
 
@@ -25,6 +35,9 @@ If no argument is given, review the files most recently discussed or edited in t
 - [ ] Context file (`[Name]Context.lua`) is a pure pass-through — no logic, no `warn()`
 - [ ] Commands live in `Application/Commands/`, Queries in `Application/Queries/` — no `Application/Services/`
 
+
+---
+
 ## Error Handling & Result Library
 
 - [ ] Infrastructure uses `Result` for external/cross-boundary calls; plain Lua returns for safe in-memory reads
@@ -40,6 +53,9 @@ If no argument is given, review the files most recently discussed or edited in t
 - [ ] `Defect` / `Catch` never used to swallow expected failures — those use `Err`
 - [ ] `Try()` return value is not chained — `Try()` returns a plain value, not a Result
 
+
+---
+
 ## Policies & Specifications
 
 - [ ] Specs are module-level constants — never constructed inside functions
@@ -54,11 +70,17 @@ If no argument is given, review the files most recently discussed or edited in t
 - [ ] Application Commands use the returned policy `ctx` — no re-fetching Infrastructure state that the policy already read
 - [ ] Restore/hydration commands call the same policy as the original assign command — no duplicate Infrastructure resolution logic
 
+
+---
+
 ## State Synchronization
 
 - [ ] Getters that return atom state return a deep clone, not a direct reference
 - [ ] Atom mutations use targeted cloning — every level along the modified path is cloned
 - [ ] No Application or Domain service modifies an atom directly
+
+
+---
 
 ## Coding Style
 
@@ -73,11 +95,17 @@ If no argument is given, review the files most recently discussed or edited in t
 - [ ] Value objects call `table.freeze(self)` in `.new()`
 - [ ] Value objects use `assert()` for constructor preconditions — not `Err`
 
+
+---
+
 ## Constructor Injection
 
 - [ ] Services receive all dependencies via `.new(...)` or `Init(registry)` — no global state access for deps
 - [ ] `self.FieldName` matches the injected type (Domain → Domain, Infra → Infra)
 - [ ] No Singleton pattern — inject shared instances instead
+
+
+---
 
 ## Frontend (if applicable)
 

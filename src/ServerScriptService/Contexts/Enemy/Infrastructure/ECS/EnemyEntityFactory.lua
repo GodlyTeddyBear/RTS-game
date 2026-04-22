@@ -40,6 +40,7 @@ end
 function EnemyEntityFactory:Init(registry: any, _name: string)
 	self._world = registry:Get("World")
 	self._components = registry:Get("EnemyComponentRegistry"):GetComponents()
+	assert(self._components ~= nil and self._components.AliveTag ~= nil, "EnemyEntityFactory: missing EnemyComponentRegistry components")
 end
 
 function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFrame: CFrame, waveNumber: number): number
@@ -106,12 +107,16 @@ function EnemyEntityFactory:SetPathMoving(entity: number, isMoving: boolean)
 	if state == nil then
 		return
 	end
+	if state.isMoving == isMoving then
+		return
+	end
 
 	self._world:set(entity, self._components.PathState, {
 		waypointIndex = state.waypointIndex,
 		waypoints = state.waypoints,
 		isMoving = isMoving,
 	})
+	self._world:add(entity, self._components.DirtyTag)
 end
 
 function EnemyEntityFactory:SetWaypointIndex(entity: number, waypointIndex: number)

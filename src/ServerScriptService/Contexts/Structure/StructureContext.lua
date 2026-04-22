@@ -1,5 +1,15 @@
 --!strict
 
+--[[
+	Module: StructureContext
+	Purpose: Owns server-authoritative structure registration, cleanup, and combat scheduling.
+	Used In System: Started by Knit on the server and invoked by placement and run-lifecycle callbacks.
+	High-Level Flow: Register infrastructure -> initialize ECS and commands -> bridge placement and run events -> schedule targeting and attacks.
+	Boundaries: Owns structure orchestration only; does not own placement validation, enemy selection, or client presentation.
+]]
+
+-- [Dependencies]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
@@ -29,6 +39,8 @@ local Ok = Result.Ok
 type StructureRecord = PlacementTypes.StructureRecord
 type StructureAttackPayload = StructureTypes.StructureAttackPayload
 type RunState = "Idle" | "Prep" | "Wave" | "Resolution" | "Climax" | "Endless" | "RunEnd"
+
+-- [Public API]
 
 --[=[
 	@class StructureContext
@@ -146,6 +158,8 @@ function StructureContext:KnitStart()
 	end, "CombatTick")
 end
 
+-- [Private Helpers]
+
 -- Registers a structure record with the ECS world through the application command stack.
 function StructureContext:_RegisterStructure(record: StructureRecord): Result.Result<number>
 	return Catch(function()
@@ -159,6 +173,8 @@ function StructureContext:_CleanupAll(): Result.Result<boolean>
 		return self._cleanupAllCommand:Execute()
 	end, "Structure:CleanupAll")
 end
+
+-- [Public API]
 
 --[=[
 	Returns the active structure entities.

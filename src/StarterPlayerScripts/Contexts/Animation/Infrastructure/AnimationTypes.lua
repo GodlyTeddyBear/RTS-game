@@ -41,6 +41,7 @@ export type TAnimationPreset = {
 	WarnOnMissingPose: boolean?,
 	WarnOnMissingAnimation: boolean?,
 	UseDirectAnimationsFolder: boolean?,
+	UseStateDrivenCorePoses: boolean?,
 	ActionNameTransform: ((string) -> string)?,
 	ActionStateFallback: ((string, { [string]: boolean }) -> string?)?,
 }

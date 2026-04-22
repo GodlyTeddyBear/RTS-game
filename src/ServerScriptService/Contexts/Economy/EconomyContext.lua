@@ -1,5 +1,15 @@
 --!strict
 
+--[[
+Module: EconomyContext
+Purpose: Bridges Economy application services to run lifecycle events and player-facing server APIs.
+Used In System: Started by Knit on the server after the economy dependencies are registered.
+High-Level Flow: Register services -> subscribe to lifecycle events -> hydrate sync state -> expose read/write API.
+Boundaries: Owns orchestration and event wiring only; does not own wallet math, validation rules, or persistence schema.
+]]
+
+-- [Dependencies]
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -38,6 +48,8 @@ type RBXConnection = RBXScriptConnection
 
 local Events = GameEvents.Events
 
+-- [Private Helpers]
+
 local function createDefaultRunStats(): ProfileRunStats
 	return {
 		TotalRuns = 0,
@@ -71,6 +83,8 @@ local EconomyContext = Knit.CreateService({
 	Name = "EconomyContext",
 	Client = {},
 })
+
+-- [Initialization]
 
 -- Registers the sync service, validator, commands, and queries before the context starts handling events.
 --[=[
@@ -117,6 +131,8 @@ function EconomyContext:KnitInit()
 
 	PlayerLifecycleManager:RegisterLoader("Economy")
 end
+
+-- [Public API]
 
 -- Wires player lifecycle and run-state hooks after Knit has finished initializing all services.
 --[=[

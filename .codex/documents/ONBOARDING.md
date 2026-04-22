@@ -84,6 +84,11 @@ A map of this project's knowledge base. Read this first to know where to look.
 → Read `src/ReplicatedStorage/Events/GameEvents/Misc/Persistence.lua` for canonical event names
 → Read `src/ServerScriptService/Persistence/PlayerLifecycleManager.lua` for loader readiness contract (`RegisterLoader` / `NotifyLoaded`)
 
+### "I need to create or improve a .codex/ markdown file"
+→ Use the `codex-create-md` skill to author a new method contract, architecture doc, skill, or command template
+→ Use the `codex-improve-md` skill to audit and rewrite an existing MD that may be missing sections or using prose where bullets belong
+→ Both skills enforce the formatting and content standards established for this project
+
 ### "I need to understand coding conventions"
 → [coding-style/CODING_STYLE.md](coding-style/CODING_STYLE.md) — naming, type annotations, file structure
 → [coding-style/IMMUTABILITY.md](coding-style/IMMUTABILITY.md) — what to freeze and when
@@ -179,6 +184,8 @@ A map of this project's knowledge base. Read this first to know where to look.
 | `roblox-refactor-better` | Analyze or refactor code for readability, abstraction quality, naming, control flow, and project fit. |
 | `roblox-suggest-result` | Suggest or apply the backend Result/error-handling pattern and boundary rules. |
 | `roblox-documentation` | Update project docs or inline comments using Moonwave and readability rules. |
+| `codex-create-md` | Create a new `.codex/` markdown file (method contract, architecture doc, skill, or command) following this project's formatting and content standards. |
+| `codex-improve-md` | Audit and rewrite an existing `.codex/` markdown file — adds missing sections, converts prose to bullets, tightens constraints, and fixes frontmatter. |
 
 ## Repo-Local Templates
 

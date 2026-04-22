@@ -18,17 +18,32 @@ local Ensure = Result.Ensure
 local StartCombat = {}
 StartCombat.__index = StartCombat
 
--- Creates a new combat-start command.
+--[=[
+	@within StartCombat
+	Creates a new combat-start command.
+	@return StartCombat -- Command instance used to begin combat sessions.
+]=]
 function StartCombat.new()
 	return setmetatable({}, StartCombat)
 end
 
--- Resolves the combat loop and enemy infrastructure dependencies.
+--[=[
+	@within StartCombat
+	Resolves the combat loop and enemy infrastructure dependencies.
+	@param registry any -- Registry instance supplied by the context bootstrap.
+	@param _name string -- Registry key used to register the command.
+]=]
 function StartCombat:Init(registry: any, _name: string)
 	self._loopService = registry:Get("CombatLoopService")
 	self._behaviorTreeFactory = registry:Get("BehaviorTreeFactory")
 end
 
+--[=[
+	@within StartCombat
+	Stores the enemy entity factory needed to backfill existing enemies.
+	@param registry any -- Registry instance used to resolve dependencies.
+	@param _name string -- Registry key used to register the command.
+]=]
 function StartCombat:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
 end
@@ -49,7 +64,13 @@ function StartCombat:_AssignBehaviorTree(entity: number)
 	self._enemyEntityFactory:ClearAction(entity)
 end
 
--- Validates the wave start, activates combat for the primary player, and assigns trees to existing enemies.
+--[=[
+	@within StartCombat
+	Validates the wave start, activates combat for the primary player, and assigns trees to existing enemies.
+	@param waveNumber number -- Wave number being started.
+	@param isEndless boolean -- Whether the run is in endless mode.
+	@return Result.Result<boolean> -- Success confirmation or a typed combat error.
+]=]
 function StartCombat:Execute(waveNumber: number, isEndless: boolean): Result.Result<boolean>
 	return Result.Catch(function()
 		-- Guard the wave number before any combat state changes happen.

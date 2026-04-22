@@ -1,5 +1,12 @@
 --!strict
 
+--[[
+	Module: RecordRunCompletedCommand
+	Purpose: Records a completed run and synchronizes the updated run stats snapshot.
+	Used In System: Invoked by EconomyContext when a run transitions into the RunEnd state.
+	Boundaries: Owns command orchestration only; does not own persistence schema or sync atom mutation.
+]]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -10,6 +17,8 @@ local Try = Result.Try
 
 type ProfileRunStats = EconomyTypes.ProfileRunStats
 
+-- [Initialization]
+
 --[=[
 	@class RecordRunCompletedCommand
 	Records completed-run progress and persists updated run stats.
@@ -18,14 +27,27 @@ type ProfileRunStats = EconomyTypes.ProfileRunStats
 local RecordRunCompletedCommand = {}
 RecordRunCompletedCommand.__index = RecordRunCompletedCommand
 
+--[=[
+	Creates a new run-complete command.
+	@within RecordRunCompletedCommand
+	@return RecordRunCompletedCommand -- The new command instance.
+]=]
 function RecordRunCompletedCommand.new()
 	return setmetatable({}, RecordRunCompletedCommand)
 end
 
+--[=[
+	Initializes command dependencies.
+	@within RecordRunCompletedCommand
+	@param registry any -- The registry that owns this command.
+	@param _name string -- The registered module name.
+]=]
 function RecordRunCompletedCommand:Init(registry: any, _name: string)
 	self._persistenceService = registry:Get("EconomyPersistenceService")
 	self._syncService = registry:Get("ResourceSyncService")
 end
+
+-- [Public API]
 
 --[=[
 	Updates and persists run stats for a completed run.
@@ -34,8 +56,13 @@ end
 	@return Result.Result<ProfileRunStats> -- Updated run stats.
 ]=]
 function RecordRunCompletedCommand:Execute(player: Player): Result.Result<ProfileRunStats>
+	-- Persist the completed run and reuse the authoritative run-stat snapshot.
 	local updatedRunStats = Try(self._persistenceService:AddCompletedRun(player))
+
+	-- Mirror the persisted snapshot into the replicated wallet atom.
 	self._syncService:SyncRunStats(player.UserId, updatedRunStats)
+
+	-- Return the updated snapshot so callers can keep the same state without rereading storage.
 	return Ok(updatedRunStats)
 end
 

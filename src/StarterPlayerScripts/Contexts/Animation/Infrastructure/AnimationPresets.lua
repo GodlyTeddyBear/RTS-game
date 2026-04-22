@@ -18,6 +18,12 @@ local COMBAT_CORE_POSE_FOLDERS = {
 	{ Folder = "run", Pose = "Run" },
 }
 
+local ENEMY_LOCOMOTION_CORE_POSE_FOLDERS = {
+	{ Folder = "idle", Pose = "Idle" },
+	{ Folder = "walk", Pose = "Walk" },
+	{ Folder = "run", Pose = "Run" },
+}
+
 local ALL_POSES = {
 	"Run",
 	"Idle",
@@ -55,6 +61,16 @@ local COMBAT_POSE_FALLBACKS = {
 	Swimming = "Walk",
 	SwimIdle = "Idle",
 	Climbing = "Walk",
+}
+
+local ENEMY_LOCOMOTION_POSES = {
+	"Idle",
+	"Walk",
+	"Run",
+}
+
+local ENEMY_LOCOMOTION_POSE_FALLBACKS = {
+	Run = "Walk",
 }
 
 local EMOTE_FOLDERS = {
@@ -115,6 +131,19 @@ AnimationPresets.CombatNPC = {
 		end
 		return nil
 	end,
+}
+
+AnimationPresets.EnemyLocomotion = {
+	Tag = "[AnimateEnemy]",
+	VariantAttribute = "EnemyRole",
+	DefaultVariant = "Default",
+	ReloadOnVariantChanged = true,
+	CorePoseFolders = ENEMY_LOCOMOTION_CORE_POSE_FOLDERS,
+	AllPoses = ENEMY_LOCOMOTION_POSES,
+	PoseFallbacks = ENEMY_LOCOMOTION_POSE_FALLBACKS,
+	WarnOnMissingPose = true,
+	WarnOnMissingAnimation = true,
+	UseStateDrivenCorePoses = true,
 }
 
 return AnimationPresets

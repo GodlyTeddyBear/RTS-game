@@ -7,6 +7,15 @@ local CommanderTypes = require(ReplicatedStorage.Contexts.Commander.Types.Comman
 type AbilitySlotDef = CommanderTypes.AbilitySlotDef
 type SlotKey = CommanderTypes.SlotKey
 
+--[=[
+	@interface AbilitySlotRecord
+	@within AbilitySlot
+	.Key SlotKey -- Stable commander slot identifier.
+	.DisplayName string -- Player-facing slot name.
+	.EnergyCost number -- Energy cost required to activate the slot.
+	.CooldownDuration number -- Cooldown duration in seconds.
+	.Metadata { [string]: any }? -- Optional slot-specific tuning values.
+]=]
 export type AbilitySlotRecord = {
 	Key: SlotKey,
 	DisplayName: string,

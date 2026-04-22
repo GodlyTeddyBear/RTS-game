@@ -1,5 +1,7 @@
 # Instance Reveal Rules
 
+
+---
 ## Purpose
 
 Instance Reveal is the mechanism for replicating ECS entity state to the client via Roblox Instance **Attributes** and **CollectionService Tags**. It is a controlled reveal channel — the server decides when an instance becomes discoverable by the client.
@@ -53,7 +55,7 @@ export type TRevealState = {
 
 Tags follow a hierarchical `"Prefix:Type"` and `"Prefix:Type:SourceId"` structure.
 
-```
+```text
 "Target:Ore"           -- type-level: all ore targets
 "Target:Ore:rock_1"    -- type-and-source: specific ore definition
 ```
@@ -80,7 +82,7 @@ Rules:
 
 `TargetId` is a scoped string that uniquely identifies a target instance:
 
-```
+```text
 "zone1:Ore:rock_1"   -- scopeId:targetType:sourceId
 ```
 
@@ -109,7 +111,7 @@ The client never reads ECS components or queries the ECS world — it reads only
 
 ## Pipeline
 
-```
+```text
 ECS [AUTHORITATIVE] component
     → server sync system decides to reveal
     → TargetRevealBuilder.Build(options) → TRevealState
@@ -119,3 +121,28 @@ ECS [AUTHORITATIVE] component
     → TargetIndexService indexes the instance
     → TargetingController exposes it to client systems
 ```
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+
+---
+
+## Prohibitions
+
+- Do not violate the required rules defined in this document's Core Rules and contract sections.
+
+---
+
+## Failure Signals
+
+- Implementation behavior contradicts one or more required rules in this contract.
+
+---
+
+## Checklist
+
+- [ ] All required rules in this contract are satisfied.
+

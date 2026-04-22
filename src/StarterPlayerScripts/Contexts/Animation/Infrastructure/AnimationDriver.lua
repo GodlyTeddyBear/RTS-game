@@ -49,6 +49,14 @@ local function _BuildKeyMap(entries: { TActionEntry }): { [string]: boolean }
 	return keyMap
 end
 
+local function _BuildCoreKeyMap(coreAnimations: { [string]: { any } }): { [string]: boolean }
+	local keyMap: { [string]: boolean } = {}
+	for poseName in coreAnimations do
+		keyMap[poseName] = true
+	end
+	return keyMap
+end
+
 local function _BuildAllKeys(actions: { TActionEntry }, emotes: { TActionEntry }): { string }
 	local keys: { string } = {}
 	for _, entry in actions do
@@ -128,7 +136,16 @@ local function _LoadVariant(
 		_RegisterActions(action, loaded.Emotes)
 
 		_AttachCleanup(controllerJanitor, core, action, _BuildAllKeys(loaded.Actions, loaded.Emotes))
-		AnimationStatePlayer.Bind(model, controllerJanitor, action, _BuildKeyMap(loaded.Actions), context, preset)
+		AnimationStatePlayer.Bind(
+			model,
+			controllerJanitor,
+			action,
+			_BuildKeyMap(loaded.Actions),
+			core,
+			_BuildCoreKeyMap(loaded.CoreAnimations),
+			context,
+			preset
+		)
 
 		if preset.EnableEmotes == true then
 			EmoteCommandBinder.Bind(model, controllerJanitor, action, core, _BuildKeyMap(loaded.Emotes))

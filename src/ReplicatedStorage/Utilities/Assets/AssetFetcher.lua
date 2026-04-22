@@ -3,6 +3,7 @@
 
 	Provides factory methods for creating specialized asset registries:
 	- AnimationRegistry: Load animations with class-specific fallback
+	- EnemyRegistry: Load enemy models with Default fallback
 	- EntityRegistry: Load player/enemy models with Default fallback
 	- WorkerRegistry: Load worker models with Default fallback
 	- LotRegistry: Load lot models with Default fallback
@@ -50,6 +51,21 @@ end
 function AssetFetcher.CreateEntityRegistry(folder: Folder)
 	local EntityRegistry = require(script.Parent.EntityRegistry)
 	return EntityRegistry.new(folder)
+end
+
+--[=[
+	Creates an EnemyRegistry for loading enemy models with Default fallback.
+
+	@param folder Folder - The root Enemies folder
+	@return EnemyRegistry - Registry instance for loading enemy models
+
+	Example:
+		local enemyRegistry = AssetFetcher.CreateEnemyRegistry(Assets.Enemies)
+		local swarmModel = enemyRegistry:GetEnemyModel("swarm")
+]=]
+function AssetFetcher.CreateEnemyRegistry(folder: Folder)
+	local EnemyRegistry = require(script.Parent.EnemyRegistry)
+	return EnemyRegistry.new(folder)
 end
 
 --[=[

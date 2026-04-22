@@ -15,6 +15,8 @@ function AnimationStatePlayer.Bind(
 	janitor: any,
 	action: any,
 	validActions: { [string]: boolean },
+	core: any,
+	validCoreStates: { [string]: boolean },
 	context: any,
 	preset: TAnimationPreset
 )
@@ -22,6 +24,10 @@ function AnimationStatePlayer.Bind(
 	local activeCallbackState: string? = nil
 	local stoppedConnection: RBXScriptConnection? = nil
 	local routerCleanup: (() -> ())? = nil
+	local useStateDrivenCorePoses = preset.UseStateDrivenCorePoses == true
+		and core ~= nil
+		and core.PoseController ~= nil
+		and next(validCoreStates) ~= nil
 
 	local function stopActive()
 		if stoppedConnection then
@@ -47,6 +53,11 @@ function AnimationStatePlayer.Bind(
 			activeAction = nil
 			activeCallbackState = nil
 		end
+	end
+
+	if useStateDrivenCorePoses then
+		core.PoseController:SetCoreActive(false)
+		core.PoseController:SetCoreCanPlayAnims(true)
 	end
 
 	local function playState(state: string)
@@ -96,6 +107,20 @@ function AnimationStatePlayer.Bind(
 	end
 
 	local function applyState(state: string)
+		if useStateDrivenCorePoses then
+			local nextState = state
+			if not validCoreStates[nextState] then
+				nextState = "Idle"
+			end
+
+			stopActive()
+			core.PoseController:SetCoreCanPlayAnims(true)
+			if core.PoseController:GetPose() ~= nextState then
+				core.PoseController:ChangePose(nextState, 1, true)
+			end
+			return
+		end
+
 		stopActive()
 		playState(state)
 	end
@@ -109,6 +134,9 @@ function AnimationStatePlayer.Bind(
 
 	janitor:Add(function()
 		stopActive()
+		if useStateDrivenCorePoses then
+			core.PoseController:SetCoreActive(true)
+		end
 	end, true)
 
 	applyState((model:GetAttribute("AnimationState") or "Idle") :: string)

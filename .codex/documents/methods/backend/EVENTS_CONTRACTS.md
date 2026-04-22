@@ -7,6 +7,13 @@ Canonical architecture references:
 
 ---
 
+## Core Rules
+
+- Follow the required contracts in the sections below.
+- Treat Prohibitions, Failure Signals, and Checklist as pass/fail requirements.
+
+---
+
 ## Event Module Contract
 
 Every event module must expose exactly two frozen tables:
@@ -16,16 +23,16 @@ Every event module must expose exactly two frozen tables:
 
 Both tables must be frozen with `table.freeze`.
 
----
 
+---
 ## Naming Rules
 
 - Event keys are PascalCase (e.g. `WaveStarted`, `EnemyDied`).
 - Event string values follow `"Context.EventName"` dot notation.
 - The context prefix must match the owning module name exactly (e.g. `"Wave."`, `"Run."`, `"Commander."`).
 
----
 
+---
 ## Schema Rules
 
 - Each event in `events` has exactly one corresponding entry in `schemas`.
@@ -33,8 +40,8 @@ Both tables must be frozen with `table.freeze`.
 - An event with no arguments uses an empty array `{}`.
 - Type strings are lowercase Luau primitives (`"string"`, `"number"`, `"boolean"`) or Roblox class names (`"Instance"`, `"CFrame"`, `"Vector3"`).
 
----
 
+---
 ## Prohibitions
 
 - Do not add methods, logic, or mutable state to event modules — they are pure data registries.
@@ -43,8 +50,8 @@ Both tables must be frozen with `table.freeze`.
 - Do not place event modules outside `ReplicatedStorage/Events/GameEvents/`.
 - Do not share a single module across unrelated contexts — one module per logical context group.
 
----
 
+---
 ## Failure Signals
 
 - A key in `events` has no matching entry in `schemas`.
@@ -53,8 +60,8 @@ Both tables must be frozen with `table.freeze`.
 - A caller passes a raw string literal instead of an `events.*` constant to the event bus.
 - Module exports functions, metatables, or non-table values alongside `events`/`schemas`.
 
----
 
+---
 ## Checklist
 
 - [ ] `events` table is frozen with `table.freeze`.
@@ -64,3 +71,10 @@ Both tables must be frozen with `table.freeze`.
 - [ ] Schema arrays use valid Luau/Roblox type strings only.
 - [ ] Module exports no methods, logic, or mutable state.
 - [ ] Callers reference event names via `events.*` constants, never raw strings.
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+

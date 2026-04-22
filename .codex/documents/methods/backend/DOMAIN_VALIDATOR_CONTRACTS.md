@@ -79,3 +79,10 @@ Validators validate **shape and eligibility** only:
 - [ ] No Infrastructure reads, atom access, or event emissions inside the validator.
 - [ ] Registered under `"Domain"` category in the context registry.
 - [ ] Owns exactly one domain validation concept.
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+

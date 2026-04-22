@@ -8,7 +8,7 @@ local BlinkClient = require(ReplicatedStorage.Network.Generated.CommanderSyncCli
 
 --[=[
 	@class CommanderSyncClient
-	Wraps the client commander atom and Blink listener.
+	Owns the client commander atom and Blink listener used by read hooks.
 	@client
 ]=]
 local CommanderSyncClient = setmetatable({}, { __index = BaseSyncClient })

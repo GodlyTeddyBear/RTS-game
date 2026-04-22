@@ -1,5 +1,7 @@
 # Tag Rules
 
+
+---
 ## Core Rules
 
 - Tags are zero-field components used as state markers or capability markers
@@ -10,6 +12,8 @@
 - A tag represents a binary state — if the state has associated data, use a data component instead
 - Systems use tags as primary query filters; data components as secondary reads
 
+
+---
 ## Creation
 
 ```lua
@@ -21,6 +25,8 @@ _nameComponent(world, aliveTag, "Enemy.AliveTag")
 local aliveTag = world:component() -- component() is for data components
 ```
 
+
+---
 ## Adding and Removing
 
 ```lua
@@ -32,6 +38,8 @@ world:remove(entity, aliveTag)   -- entity is now dead
 world:set(entity, aliveTag, true)
 ```
 
+
+---
 ## Tags vs Boolean Fields
 
 ```lua
@@ -44,6 +52,8 @@ world:set(entity, statusComponent, { isAlive = true, isActive = false })
 -- split into AliveTag and ActiveTag instead
 ```
 
+
+---
 ## Tags vs Data Components
 
 A tag is only appropriate when the state is purely binary. If the state carries any associated data, use a data component.
@@ -61,6 +71,8 @@ world:set(entity, damageComponent, { amount = 50, source = attackerEntity })
 world:set(entity, damagedTag, { amount = 50 }) -- this should be a data component
 ```
 
+
+---
 ## Querying
 
 Tags are the primary filter in queries. Data components are read after the query narrows the set.
@@ -78,3 +90,28 @@ for entity in self._world:query(self._components.Health) do
     if not status.isAlive then continue end -- use AliveTag instead
 end
 ```
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+
+---
+
+## Prohibitions
+
+- Do not violate the required rules defined in this document's Core Rules and contract sections.
+
+---
+
+## Failure Signals
+
+- Implementation behavior contradicts one or more required rules in this contract.
+
+---
+
+## Checklist
+
+- [ ] All required rules in this contract are satisfied.
+

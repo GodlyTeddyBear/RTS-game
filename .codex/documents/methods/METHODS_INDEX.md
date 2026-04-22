@@ -15,6 +15,8 @@ Low-level method contracts for implementation work. These documents convert back
 - [backend/CONTEXT_REGISTRY_CONTRACTS.md](backend/CONTEXT_REGISTRY_CONTRACTS.md) - KnitInit registry setup rules: registration order (Infra→Domain→App), InitAll timing, cross-context dependency placement, and connection ownership.
 - [backend/DOMAIN_VALIDATOR_CONTRACTS.md](backend/DOMAIN_VALIDATOR_CONTRACTS.md) - Domain validator authoring rules: Result return contract, Ensure vs Err usage, private helper shape, and Infrastructure read prohibition.
 
+
+---
 ## Frontend Contracts
 
 - [frontend/HOOK_VIEWMODEL_CONTRACTS.md](frontend/HOOK_VIEWMODEL_CONTRACTS.md) - Read/write hook separation and ViewModel method contracts.
@@ -23,11 +25,15 @@ Low-level method contracts for implementation work. These documents convert back
 - [frontend/SYNC_HOOK_STATE_PAYLOAD_CONTRACTS.md](frontend/SYNC_HOOK_STATE_PAYLOAD_CONTRACTS.md) - Sync payload consumption, infrastructure atom ownership, and read/write hook boundaries.
 - [frontend/SYNC_CLIENT_CONTRACTS.md](frontend/SYNC_CLIENT_CONTRACTS.md) - SyncClient authoring rules: BaseSyncClient inheritance, four-argument constructor contract, Start/GetAtom delegation, and lifecycle placement.
 
+
+---
 ## Shared / Cross-Cutting Contracts
 
 - [backend/EVENTS_CONTRACTS.md](backend/EVENTS_CONTRACTS.md) - GameEvents module authoring rules: `events`/`schemas` table structure, naming, schema types, and caller constraints.
 - [backend/ERRORS_CONTRACTS.md](backend/ERRORS_CONTRACTS.md) - Per-context `Errors.lua` authoring rules: key naming, string prefixes, `table.freeze` requirement, Moonwave docs, and `Result.Err` usage.
 
+
+---
 ## Planning Standards
 
 - [PLAN_DEVELOPMENT.md](PLAN_DEVELOPMENT.md) - Required output contract, quality rubric, and approval gates for GDD + implementation planning.

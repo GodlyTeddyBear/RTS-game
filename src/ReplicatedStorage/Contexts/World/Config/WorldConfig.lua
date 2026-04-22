@@ -1,5 +1,12 @@
 --!strict
 
+--[[
+    Module: WorldConfig
+    Purpose: Stores shared world-grid constants used to resolve the authoritative map layout.
+    Used In System: Required by server world services and client placement runtime helpers.
+    Boundaries: Owns stable configuration only; does not own live grid state, runtime caching, or placement validation.
+]]
+
 local TILE_SIZE = 8
 
 --[=[
@@ -7,6 +14,8 @@ local TILE_SIZE = 8
 	Holds shared world-grid runtime constants.
 ]=]
 local WorldConfig = {}
+
+-- [Constants]
 
 --[=[
 	@prop TILE_SIZE number

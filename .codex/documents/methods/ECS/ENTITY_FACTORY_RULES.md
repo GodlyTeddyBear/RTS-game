@@ -1,5 +1,7 @@
 # Entity Factory Rules
 
+
+---
 ## Core Rules
 
 - Factories are the only surface for JECS mutations — never call `world:set`, `world:add`, `world:remove`, or `world:delete` outside a factory
@@ -9,6 +11,8 @@
 - Factories expose typed getter and setter methods per component — callers never touch raw component IDs
 - A factory owns exactly one entity type
 
+
+---
 ## Creation
 
 Entity creation must go through a dedicated factory method. The method is responsible for setting all required components before returning the entity. An entity must never be returned in a partially initialized state.
@@ -30,6 +34,8 @@ local entity = world:entity()
 world:set(entity, components.Health, { current = 100, max = 100 })
 ```
 
+
+---
 ## Reads and Writes
 
 Factories expose typed getter and setter methods. No caller ever accesses a raw component ID.
@@ -48,6 +54,8 @@ end
 return self._components.Health -- never expose this
 ```
 
+
+---
 ## Queries
 
 All queries are owned by the factory. Systems call factory query methods — they never iterate the world themselves.
@@ -66,6 +74,8 @@ end
 for entity in world:query(components.AliveTag) do ... end
 ```
 
+
+---
 ## Destruction
 
 Destruction is deferred. Factories never call `world:delete` mid-tick. Instead, they queue the entity for removal and a teardown system flushes the queue at the phase boundary.
@@ -86,3 +96,28 @@ end
 -- WRONG: immediate destruction mid-tick
 self._world:delete(entity)
 ```
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+
+---
+
+## Prohibitions
+
+- Do not violate the required rules defined in this document's Core Rules and contract sections.
+
+---
+
+## Failure Signals
+
+- Implementation behavior contradicts one or more required rules in this contract.
+
+---
+
+## Checklist
+
+- [ ] All required rules in this contract are satisfied.
+

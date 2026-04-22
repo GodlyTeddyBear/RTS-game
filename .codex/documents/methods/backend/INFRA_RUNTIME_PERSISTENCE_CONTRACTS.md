@@ -9,6 +9,13 @@ Canonical architecture references:
 
 ---
 
+## Core Rules
+
+- Follow the required contracts in the sections below.
+- Treat Prohibitions, Failure Signals, and Checklist as pass/fail requirements.
+
+---
+
 ## Runtime Boundary Contract
 
 - Use `Result` at genuinely fallible runtime boundaries:
@@ -17,16 +24,16 @@ Canonical architecture references:
   - multi-step operations that can partially fail
 - Use plain Lua returns for safe in-memory reads where `nil` is a valid state.
 
----
 
+---
 ## Sync Service Placement Contract
 
 - Atom read/write orchestration services must live in `Infrastructure/Persistence`.
 - Context/Application modules mutate atom state only through these sync services.
 - Direct atom mutation outside sync services is prohibited.
 
----
 
+---
 ## Persistence Lifecycle Contract
 
 - Hydration/save ownership is context-driven through:
@@ -36,15 +43,15 @@ Canonical architecture references:
   - `PlayerLifecycleManager:NotifyLoaded(...)`
 - Persistence lifecycle logic must not be owned by feature-local `Players.PlayerAdded/PlayerRemoving` flows.
 
----
 
+---
 ## Persistence Method Shape Contract
 
 - Persistence infrastructure exposes explicit method pairs (for example `Load...`, `Save...`).
 - Context event handlers call these explicit methods at profile lifecycle boundaries.
 
----
 
+---
 ## Prohibitions
 
 - Do not place sync services under `Infrastructure/Services`.
@@ -52,8 +59,8 @@ Canonical architecture references:
 - Do not mutate atom state from Application, Domain, or Context modules directly.
 - Do not implement profile hydration/save ownership with ad-hoc player event handlers inside contexts.
 
----
 
+---
 ## Failure Signals
 
 - Infrastructure read/write orchestration module exists outside `Infrastructure/Persistence`.
@@ -62,8 +69,8 @@ Canonical architecture references:
 - Context persistence flow depends on `PlayerAdded/PlayerRemoving` rather than persistence events + lifecycle manager.
 - Persistence module exposes a generic ambiguous sync entrypoint with no explicit load/save boundary semantics.
 
----
 
+---
 ## Checklist
 
 - [ ] Result usage follows runtime-boundary rules (`fromPcall`, `fromNilable`, `Try` where appropriate).
@@ -72,3 +79,10 @@ Canonical architecture references:
 - [ ] Hydration/save wiring uses persistence events + lifecycle manager.
 - [ ] Persistence modules expose explicit `Load...` / `Save...` methods.
 - [ ] Infrastructure contains runtime operations only, not domain eligibility decisions.
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+

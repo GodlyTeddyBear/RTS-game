@@ -1,6 +1,7 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectionService = game:GetService("CollectionService")
 local Workspace = game:GetService("Workspace")
 
 local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
@@ -14,10 +15,13 @@ local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local EnemyModelFactory = {}
 EnemyModelFactory.__index = EnemyModelFactory
 
+local ANIMATED_ENEMY_TAG = "AnimatedEnemy"
+
 function EnemyModelFactory.new()
 	local self = setmetatable({}, EnemyModelFactory)
 	self._entityRegistry = nil
 	self._folder = nil :: Folder?
+	self._animationsFolder = nil :: Folder?
 	return self
 end
 
@@ -35,9 +39,13 @@ end
 
 function EnemyModelFactory:Init(_registry: any, _name: string)
 	local assets = ReplicatedStorage:FindFirstChild("Assets")
-	local entitiesFolder = assets and assets:FindFirstChild("Entities")
-	if entitiesFolder and entitiesFolder:IsA("Folder") then
-		self._entityRegistry = AssetFetcher.CreateEntityRegistry(entitiesFolder)
+	local enemiesFolder = assets and assets:FindFirstChild("Enemies")
+	if enemiesFolder and enemiesFolder:IsA("Folder") then
+		self._entityRegistry = AssetFetcher.CreateEnemyRegistry(enemiesFolder)
+	end
+	local animationsFolder = assets and assets:FindFirstChild("Animations")
+	if animationsFolder and animationsFolder:IsA("Folder") then
+		self._animationsFolder = animationsFolder
 	end
 
 	self._folder = _findOrCreateFolder(Workspace, "Enemies")
@@ -90,6 +98,26 @@ function EnemyModelFactory:_PrepareModel(model: Model, role: string, enemyId: st
 	model:SetAttribute("TargetPreference", roleConfig.targetPreference)
 	model:SetAttribute("Alive", true)
 	model:SetAttribute("GoalReached", false)
+	model:SetAttribute("AnimationState", "Idle")
+	model:SetAttribute("AnimationLooping", true)
+
+	if not CollectionService:HasTag(model, ANIMATED_ENEMY_TAG) then
+		CollectionService:AddTag(model, ANIMATED_ENEMY_TAG)
+	end
+
+	local animationsFolderRef = model:FindFirstChild("AnimationsFolder")
+	if not animationsFolderRef or not animationsFolderRef:IsA("ObjectValue") then
+		if animationsFolderRef then
+			animationsFolderRef:Destroy()
+		end
+		animationsFolderRef = Instance.new("ObjectValue")
+		animationsFolderRef.Name = "AnimationsFolder"
+		animationsFolderRef.Parent = model
+	end
+
+	if self._animationsFolder and (animationsFolderRef :: ObjectValue).Value == nil then
+		(animationsFolderRef :: ObjectValue).Value = self._animationsFolder
+	end
 
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	if humanoid == nil then
@@ -133,6 +161,9 @@ function EnemyModelFactory:CreateEnemyModel(role: string, enemyId: string, waveN
 end
 
 function EnemyModelFactory:DestroyModel(model: Model)
+	if CollectionService:HasTag(model, ANIMATED_ENEMY_TAG) then
+		CollectionService:RemoveTag(model, ANIMATED_ENEMY_TAG)
+	end
 	model:Destroy()
 end
 

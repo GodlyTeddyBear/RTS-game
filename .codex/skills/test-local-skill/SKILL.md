@@ -5,6 +5,12 @@ description: Use when the user asks to test whether Codex discovers skills store
 
 # Test Local Skill
 
+- Use this skill only to verify that repo-local skills are discoverable.
+
+---
+
+## Output
+
 If this skill is available, reply with:
 
 ```text

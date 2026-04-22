@@ -1,5 +1,14 @@
 --!strict
 
+--[[
+    Module: WaveTypes
+    Purpose: Defines shared wave composition and runtime state types used across server and client code.
+    Used In System: Imported by Wave context services and shared UI/state consumers.
+    Boundaries: Owns type declarations only; does not own behavior, mutation, or transport wiring.
+]]
+
+-- [Types]
+
 --[=[
 	@class WaveTypes
 	Defines shared wave composition and runtime state types.

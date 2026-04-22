@@ -15,12 +15,21 @@ local Ok = Result.Ok
 local ProcessCombatTick = {}
 ProcessCombatTick.__index = ProcessCombatTick
 
--- Creates a new combat tick command.
+--[=[
+	@within ProcessCombatTick
+	Creates a new combat tick command.
+	@return ProcessCombatTick -- Command instance used to advance combat.
+]=]
 function ProcessCombatTick.new()
 	return setmetatable({}, ProcessCombatTick)
 end
 
--- Resolves the combat loop, BT policy, executor registry, and perception services.
+--[=[
+	@within ProcessCombatTick
+	Resolves the combat loop, BT policy, executor registry, and perception services.
+	@param registry any -- Registry instance supplied by the context bootstrap.
+	@param _name string -- Registry key used to register the command.
+]=]
 function ProcessCombatTick:Init(registry: any, _name: string)
 	self._loopService = registry:Get("CombatLoopService")
 	self._tickPolicy = registry:Get("BehaviorTreeTickPolicy")
@@ -31,6 +40,12 @@ function ProcessCombatTick:Init(registry: any, _name: string)
 	self._hasSeenAliveByUser = {}
 end
 
+--[=[
+	@within ProcessCombatTick
+	Stores the enemy factory needed to read and mutate enemy combat state.
+	@param registry any -- Registry instance used to resolve dependencies.
+	@param _name string -- Registry key used to register the command.
+]=]
 function ProcessCombatTick:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
 end
@@ -151,7 +166,13 @@ function ProcessCombatTick:_RunActionPhase(aliveEntities: { number }, dt: number
 	end
 end
 
--- Advances combat for one active user session and emits wave completion when all enemies are resolved.
+--[=[
+	@within ProcessCombatTick
+	Advances combat for one active user session and emits wave completion when all enemies are resolved.
+	@param userId number -- User id whose combat session should advance.
+	@param dt number -- Frame delta time for the current tick.
+	@return Result.Result<boolean> -- Success confirmation or a typed combat error.
+]=]
 function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<boolean>
 	return Result.Catch(function()
 		-- Skip inactive or paused sessions so the scheduler can safely keep iterating.

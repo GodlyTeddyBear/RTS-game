@@ -1,3 +1,10 @@
+---
+name: new-service
+description: Read when you need this skill reference template and workflow rules.
+---
+
+# New Service
+
 <!-- This is a repo-local prompt template. Codex does not automatically expose this as a slash command. Prefer the matching skill when available. -->
 
 Add a new backend module to an existing bounded context.
@@ -7,6 +14,9 @@ Add a new backend module to an existing bounded context.
 - `<ContextName>`: existing context name in PascalCase (for example: `Worker`, `World`)
 - `<Kind>`: one of `ApplicationCommand`, `ApplicationQuery`, `DomainPolicy`, `DomainService`, `DomainSpecs`, `DomainValueObject`, `InfrastructureService`, `InfrastructurePersistence`, `InfrastructureECS`
 - `<Name>`: module name in PascalCase (for example: `HireWorker`, `FindAvailableLots`, `AssignRolePolicy`)
+
+
+---
 
 ## What to do
 
@@ -22,6 +32,9 @@ Add a new backend module to an existing bounded context.
 8. Wire it in `'<ContextName>Context.lua'` when required (require + registry register + cached reference if used).
 9. Report what was created and what wiring was added.
 
+
+---
+
 ## Paths by kind
 
 - `ApplicationCommand` -> `src/ServerScriptService/Contexts/<ContextName>/Application/Commands/<Name>.lua`
@@ -34,6 +47,9 @@ Add a new backend module to an existing bounded context.
 - `InfrastructurePersistence` -> `src/ServerScriptService/Contexts/<ContextName>/Infrastructure/Persistence/<Name>.lua`
 - `InfrastructureECS` -> `src/ServerScriptService/Contexts/<ContextName>/Infrastructure/ECS/<Name>.lua`
 - **Any `*SyncService` must use `InfrastructurePersistence` and live under `Infrastructure/Persistence/` (never `Infrastructure/Services/`).**
+
+
+---
 
 ## Boilerplate by kind
 
@@ -322,6 +338,9 @@ end
 return <Name>
 ```
 
+
+---
+
 ## Wiring rules
 
 - Register new modules in `<ContextName>Context.lua` using the correct category:
@@ -334,6 +353,9 @@ return <Name>
 - Infrastructure is the only layer that mutates sync state.
 - If wiring a new public server-to-server method in `<ContextName>Context.lua`, return `Result.Result<T>` from the method boundary and preserve propagation.
 - Reserve `result:unwrapOr(default)` for terminal/private boundaries where fallback behavior is explicitly required.
+
+
+---
 
 ## Rules
 

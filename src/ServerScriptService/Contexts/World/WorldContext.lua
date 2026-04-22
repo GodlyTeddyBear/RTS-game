@@ -1,5 +1,13 @@
 --!strict
 
+--[[
+    Module: WorldContext
+    Purpose: Owns the server bridge for authoritative world queries and tile occupancy updates.
+    Used In System: Called by other server contexts that need world layout, spawn, goal, or occupancy data.
+    High-Level Flow: Initialize grid services -> cache query adapters -> expose Result-wrapped context methods.
+    Boundaries: Owns orchestration only; does not own grid math, layout derivation, or placement policy decisions.
+]]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
@@ -20,6 +28,8 @@ local GetBuildableTilesQuery = require(script.Parent.Application.Queries.GetBuil
 local GetExtractionTilesQuery = require(script.Parent.Application.Queries.GetExtractionTilesQuery)
 local GetLaneTilesQuery = require(script.Parent.Application.Queries.GetLaneTilesQuery)
 
+-- [Dependencies]
+
 --[=[
 	@class WorldContext
 	Exposes authoritative world layout queries and tile occupancy controls for server contexts.
@@ -35,6 +45,8 @@ local Ok = Result.Ok
 local Ensure = Result.Ensure
 type GridCoord = WorldTypes.GridCoord
 type Tile = WorldTypes.Tile
+
+-- [Initialization]
 
 --[=[
 	Initializes the world services, builds the tile grid, and caches query wrappers.
@@ -65,6 +77,8 @@ function WorldContext:KnitInit()
 	-- Emit a milestone so startup order is visible in the log stream.
 	Result.MentionSuccess("World:KnitInit", "World context initialized", nil)
 end
+
+-- [Public API]
 
 --[=[
 	Starts the world context after Knit initialization.

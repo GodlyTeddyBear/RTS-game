@@ -66,7 +66,7 @@ function AbilityService:CanAffordAbility(_userId: number, _slotKey: SlotKey): bo
 end
 
 --[=[
-	Records stub execution for a commander ability use.
+	Records a stub commander ability execution event.
 	@within AbilityService
 	@param userId number -- The player user id.
 	@param slotKey SlotKey -- The slot key being used.

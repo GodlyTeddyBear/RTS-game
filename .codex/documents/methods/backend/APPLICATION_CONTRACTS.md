@@ -9,6 +9,13 @@ Canonical architecture references:
 
 ---
 
+## Core Rules
+
+- Follow the required contracts in the sections below.
+- Treat Prohibitions, Failure Signals, and Checklist as pass/fail requirements.
+
+---
+
 ## Command Contract
 
 `Execute(...)` flow must follow this sequence:
@@ -20,8 +27,8 @@ Canonical architecture references:
 
 Command `Execute(...)` must return `Result.Result<T>`.
 
----
 
+---
 ## Query Contract
 
 `Execute(...)` flow must follow this sequence:
@@ -34,8 +41,8 @@ Query `Execute(...)` must return `Result.Result<T>`.
 
 Queries are read-only and do not depend on Domain modules.
 
----
 
+---
 ## Prohibitions
 
 ### Commands
@@ -48,8 +55,8 @@ Queries are read-only and do not depend on Domain modules.
 - Do not inject Domain services in `Init(...)`.
 - Do not call Infrastructure mutation methods from queries.
 
----
 
+---
 ## Failure Signals
 
 - Command performs mutation before eligibility policy checks.
@@ -58,8 +65,8 @@ Queries are read-only and do not depend on Domain modules.
 - Query calls write methods (for example `Set*`, `Update*`, `Create*`, `Save*`) on infrastructure services.
 - `Execute(...)` returns plain values instead of `Result.Result<T>`.
 
----
 
+---
 ## Checklist
 
 - [ ] Command `Execute(...)` returns `Result.Result<T>`.
@@ -68,3 +75,10 @@ Queries are read-only and do not depend on Domain modules.
 - [ ] Query `Execute(...)` returns `Result.Result<T>`.
 - [ ] Query reads Infrastructure only and performs no mutation.
 - [ ] Query has no Domain imports/injections.
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+

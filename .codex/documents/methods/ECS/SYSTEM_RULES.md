@@ -1,5 +1,7 @@
 # System Rules
 
+
+---
 ## Core Rules
 
 - Systems are stateless — all state lives in components, not in the system object
@@ -10,6 +12,8 @@
 - Systems belong to exactly one phase
 - Deferred operations (spawn, destroy) are queued and flushed at phase boundaries, never mid-tick
 
+
+---
 ## Statelessness
 
 A system may hold references to its dependencies (factory, event bus, config) but never mutable state. If you find yourself storing frame-to-frame values on the system, those values belong in a component.
@@ -24,6 +28,8 @@ end
 self._lastAttackTime = tick() -- this belongs in a component
 ```
 
+
+---
 ## Read/Write Declaration
 
 Every `Tick` method declares its reads and writes in comments at the top. This is the contract between the system and the phase scheduler.
@@ -46,6 +52,8 @@ function StructureAttackSystem:Tick(dt: number)
 end
 ```
 
+
+---
 ## Communication
 
 Systems communicate intent through events or by writing components — never by calling another system's methods.
@@ -58,6 +66,8 @@ self._eventBus:Fire("AttackReady", { entity = entity })
 self._damageSystem:ApplyDamage(entity, damage)
 ```
 
+
+---
 ## Ownership
 
 No two systems write the same `[AUTHORITATIVE]` component. If a second system needs to influence a value, it does so by writing a separate input component that the owning system reads.
@@ -68,3 +78,28 @@ No two systems write the same `[AUTHORITATIVE]` component. If a second system ne
 
 -- WRONG: both AttackSystem and PoisonSystem write Health directly
 ```
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+
+---
+
+## Prohibitions
+
+- Do not violate the required rules defined in this document's Core Rules and contract sections.
+
+---
+
+## Failure Signals
+
+- Implementation behavior contradicts one or more required rules in this contract.
+
+---
+
+## Checklist
+
+- [ ] All required rules in this contract are satisfied.
+

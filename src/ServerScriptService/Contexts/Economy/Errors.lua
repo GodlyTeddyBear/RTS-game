@@ -1,5 +1,14 @@
 --!strict
 
+--[[
+	Module: Errors
+	Purpose: Defines the centralized Economy context error constants.
+	Used In System: Imported by commands, queries, validators, and persistence helpers.
+	Boundaries: Owns error strings only; does not own error handling or logging policy.
+]]
+
+-- [Constants]
+
 --[=[
 	@class Errors
 	Defines the centralized Economy context error constants.

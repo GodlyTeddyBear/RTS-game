@@ -96,3 +96,10 @@ self._someQuery  = registry:Get("SomeQuery")
 - [ ] `Knit.GetService(...)` calls are in `KnitStart`, not `KnitInit`.
 - [ ] Connections and subscriptions are in `KnitStart` and stored on `self`.
 - [ ] `Destroy` disconnects every stored connection.
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+

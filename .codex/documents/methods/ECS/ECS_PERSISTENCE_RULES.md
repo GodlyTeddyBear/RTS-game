@@ -1,5 +1,7 @@
 # ECS Persistence Rules
 
+
+---
 ## Purpose
 
 ECS Persistence is the bridge between ECS entity components and ProfileStore. It converts entity component data to plain data tables for storage, and plain data tables back into ECS entity state on load.
@@ -117,7 +119,7 @@ end
 
 ECS persistence hooks into the standard persistence lifecycle events - it does not use ad-hoc `Players.PlayerAdded` / `Players.PlayerRemoving` handlers.
 
-```
+```text
 ProfileLoaded  -> persistence service loads data -> factory hydrates entities
 ProfileSaving  -> persistence service serializes entities -> writes to profile.Data
 ```
@@ -163,8 +165,33 @@ A context may have both a `*SyncService` (Charm-sync) and a `*PersistenceService
 
 They must not call each other directly. Coordination belongs in Application commands and Context lifecycle handlers.
 
-```
+```text
 ResourceSyncService      -> owns Charm atom -> replicates wallet to client
 WorkerPersistenceService -> owns profile.Data.Production.Workers -> persists entity state
 Command/Context bridge   -> orchestrates persist then sync order
 ```
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+
+---
+
+## Prohibitions
+
+- Do not violate the required rules defined in this document's Core Rules and contract sections.
+
+---
+
+## Failure Signals
+
+- Implementation behavior contradicts one or more required rules in this contract.
+
+---
+
+## Checklist
+
+- [ ] All required rules in this contract are satisfied.
+

@@ -1,7 +1,29 @@
 --!strict
 
+local RUN_SPEED_THRESHOLD = 17
+
 local EnemyGameObjectSyncService = {}
 EnemyGameObjectSyncService.__index = EnemyGameObjectSyncService
+
+local function _SetAttributeIfChanged(model: Model, attributeName: string, value: any)
+	if model:GetAttribute(attributeName) == value then
+		return
+	end
+
+	model:SetAttribute(attributeName, value)
+end
+
+local function _ComputeAnimationState(pathState: any, role: any): string
+	if not pathState or pathState.isMoving ~= true then
+		return "Idle"
+	end
+
+	if role and type(role.moveSpeed) == "number" and role.moveSpeed >= RUN_SPEED_THRESHOLD then
+		return "Run"
+	end
+
+	return "Walk"
+end
 
 function EnemyGameObjectSyncService.new()
 	local self = setmetatable({}, EnemyGameObjectSyncService)
@@ -81,6 +103,7 @@ function EnemyGameObjectSyncService:_SyncEntity(entity: any)
 	local identity = self.EnemyEntityFactory:GetIdentity(entity)
 	local health = self.EnemyEntityFactory:GetHealth(entity)
 	local role = self.EnemyEntityFactory:GetRole(entity)
+	local pathState = self.EnemyEntityFactory:GetPathState(entity)
 
 	if identity then
 		model:SetAttribute("EnemyId", identity.enemyId)
@@ -98,6 +121,10 @@ function EnemyGameObjectSyncService:_SyncEntity(entity: any)
 		model:SetAttribute("Damage", role.damage)
 		model:SetAttribute("TargetPreference", role.targetPreference)
 	end
+
+	local nextAnimationState = _ComputeAnimationState(pathState, role)
+	_SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
+	_SetAttributeIfChanged(model, "AnimationLooping", true)
 
 	model:SetAttribute("Alive", self.World:has(entity, self.Components.AliveTag))
 	model:SetAttribute("GoalReached", self.World:has(entity, self.Components.GoalReachedTag))

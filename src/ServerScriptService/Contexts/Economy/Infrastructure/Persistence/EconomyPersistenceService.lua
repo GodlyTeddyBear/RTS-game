@@ -1,5 +1,14 @@
 --!strict
 
+--[[
+	Module: EconomyPersistenceService
+	Purpose: Owns the Economy profile persistence path and the run-stat serialization boundary.
+	Used In System: Called by Economy commands during wave-clear and run-complete updates.
+	Boundaries: Owns profile-data conversion only; does not own sync atom mutation or gameplay policy.
+]]
+
+-- [Dependencies]
+
 local ServerScriptService = game:GetService("ServerScriptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -22,6 +31,8 @@ type ResultType<T> = Result.Result<T>
 ]=]
 local EconomyPersistenceService = {}
 EconomyPersistenceService.__index = EconomyPersistenceService
+
+-- [Private Helpers]
 
 local function deepCopy<T>(value: T): T
 	if type(value) ~= "table" then
@@ -70,9 +81,18 @@ local function getOrCreateRunStats(profileData: any): ResultType<ProfileRunStats
 	return validateRunStats(runStats)
 end
 
+-- [Initialization]
+
+--[=[
+	Creates a new persistence service.
+	@within EconomyPersistenceService
+	@return EconomyPersistenceService -- The new persistence service.
+]=]
 function EconomyPersistenceService.new()
 	return setmetatable({}, EconomyPersistenceService)
 end
+
+-- [Public API]
 
 --[=[
 	Loads persisted run stats from profile data.
@@ -81,6 +101,7 @@ end
 	@return Result.Result<ProfileRunStats?> -- Deep copied run stats, or `Ok(nil)` when no run stats exist.
 ]=]
 function EconomyPersistenceService:LoadRunStatsData(player: Player): ResultType<ProfileRunStats?>
+	-- Resolve the player profile before reading any persisted Economy state.
 	local profileDataResult = fromNilable(
 		ProfileManager:GetData(player),
 		"ProfileNotLoaded",
@@ -90,17 +111,20 @@ function EconomyPersistenceService:LoadRunStatsData(player: Player): ResultType<
 		return profileDataResult
 	end
 
+	-- Return the existing snapshot when the profile has no run-stat payload yet.
 	local profileData = profileDataResult.value
 	local runStats = profileData.RunStats
 	if runStats == nil then
 		return Ok(nil)
 	end
 
+	-- Validate the persisted shape before cloning it out to callers.
 	local validatedRunStatsResult = validateRunStats(runStats)
 	if not validatedRunStatsResult.success then
 		return validatedRunStatsResult
 	end
 
+	-- Return a deep copy so callers cannot mutate profile data in place.
 	return Ok(deepCopy(validatedRunStatsResult.value))
 end
 
@@ -111,6 +135,7 @@ end
 	@return Result.Result<ProfileRunStats> -- Updated persisted run stats snapshot.
 ]=]
 function EconomyPersistenceService:AddCompletedRun(player: Player): ResultType<ProfileRunStats>
+	-- Resolve the player profile before mutating the stored run stats.
 	local profileDataResult = fromNilable(
 		ProfileManager:GetData(player),
 		"ProfileNotLoaded",
@@ -120,15 +145,19 @@ function EconomyPersistenceService:AddCompletedRun(player: Player): ResultType<P
 		return profileDataResult
 	end
 
+	-- Get or create the mutable snapshot that lives inside profile data.
 	local profileData = profileDataResult.value
 	local runStatsResult = getOrCreateRunStats(profileData)
 	if not runStatsResult.success then
 		return runStatsResult
 	end
 
+	-- Increment the completed-run counter and write the updated snapshot back.
 	local runStats = runStatsResult.value
 	runStats.TotalRuns += 1
 	profileData.RunStats = runStats
+
+	-- Return a cloned snapshot so downstream code never retains profile storage references.
 	return Ok(deepCopy(runStats))
 end
 
@@ -140,12 +169,14 @@ end
 	@return Result.Result<ProfileRunStats> -- Updated persisted run stats snapshot.
 ]=]
 function EconomyPersistenceService:RecordWaveClear(player: Player, waveNumber: number): ResultType<ProfileRunStats>
+	-- Reject malformed wave values before touching profile data.
 	if type(waveNumber) ~= "number" or waveNumber <= 0 or math.floor(waveNumber) ~= waveNumber then
 		return Err("InvalidWaveNumber", Errors.INVALID_WAVE_NUMBER, {
 			waveNumber = waveNumber,
 		})
 	end
 
+	-- Resolve the player profile before mutating the stored run stats.
 	local profileDataResult = fromNilable(
 		ProfileManager:GetData(player),
 		"ProfileNotLoaded",
@@ -155,16 +186,20 @@ function EconomyPersistenceService:RecordWaveClear(player: Player, waveNumber: n
 		return profileDataResult
 	end
 
+	-- Get or create the mutable snapshot that lives inside profile data.
 	local profileData = profileDataResult.value
 	local runStatsResult = getOrCreateRunStats(profileData)
 	if not runStatsResult.success then
 		return runStatsResult
 	end
 
+	-- Apply the wave-clear update and write the snapshot back to the profile.
 	local runStats = runStatsResult.value
 	runStats.TotalWavesCleared += 1
 	runStats.BestWave = math.max(runStats.BestWave, waveNumber)
 	profileData.RunStats = runStats
+
+	-- Return a cloned snapshot so downstream code never retains profile storage references.
 	return Ok(deepCopy(runStats))
 end
 

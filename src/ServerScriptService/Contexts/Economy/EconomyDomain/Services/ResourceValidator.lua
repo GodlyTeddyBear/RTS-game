@@ -1,5 +1,14 @@
 --!strict
 
+--[[
+	Module: ResourceValidator
+	Purpose: Validates economy resource earnings, spending, and cap handling.
+	Used In System: Called by Economy application commands before wallet mutations occur.
+	Boundaries: Owns validation rules only; does not own wallet mutation or persistence.
+]]
+
+-- [Dependencies]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local EconomyConfig = require(ReplicatedStorage.Contexts.Economy.Config.EconomyConfig)
@@ -17,7 +26,14 @@ local Err = Result.Err
 local ResourceValidator = {}
 ResourceValidator.__index = ResourceValidator
 
+-- [Initialization]
+
 -- Seeds the known resource lookup once so validation stays O(1) per call.
+--[=[
+	Creates a new resource validator.
+	@within ResourceValidator
+	@return ResourceValidator -- The new validator instance.
+]=]
 function ResourceValidator.new()
 	local self = setmetatable({}, ResourceValidator)
 
@@ -32,6 +48,8 @@ function ResourceValidator.new()
 	return self
 end
 
+-- [Private Helpers]
+
 -- Rejects zero, negatives, and fractional values so all wallet math stays integral.
 function ResourceValidator:_IsPositiveInteger(amount: number): boolean
 	return amount > 0 and math.floor(amount) == amount
@@ -41,6 +59,8 @@ end
 function ResourceValidator:_IsKnownResourceType(resourceType: string): boolean
 	return self._knownResources[resourceType] == true
 end
+
+-- [Public API]
 
 -- Validates a resource grant before the sync service mutates the wallet.
 -- This keeps write commands from applying partial state on malformed input.

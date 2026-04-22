@@ -5,7 +5,9 @@ description: Use when the user asks Codex to suggest or apply this repo's backen
 
 # Roblox Suggest Result
 
-Use this skill for Result-pattern guidance or edits in this Roblox + Luau repo.
+- Use this skill for Result-pattern guidance or edits in this Roblox + Luau repo.
+
+---
 
 ## Workflow
 
@@ -14,6 +16,10 @@ Use this skill for Result-pattern guidance or edits in this Roblox + Luau repo.
 3. Read target backend files before making claims or edits.
 4. Follow `references/suggest-result.md` for the exact Result-pattern workflow, output format, and checks.
 
+---
+
 ## Focus
 
-Keep error strings centralized, preserve boundary wrapping rules, and avoid changing unrelated behavior.
+- Keep error strings centralized.
+- Preserve boundary wrapping rules.
+- Avoid changing unrelated behavior.

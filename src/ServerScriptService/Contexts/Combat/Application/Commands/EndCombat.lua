@@ -15,22 +15,42 @@ local Ok = Result.Ok
 local EndCombat = {}
 EndCombat.__index = EndCombat
 
--- Creates a new combat teardown command.
+--[=[
+	@within EndCombat
+	Creates a new combat teardown command.
+	@return EndCombat -- Command instance used to end combat sessions.
+]=]
 function EndCombat.new()
 	return setmetatable({}, EndCombat)
 end
 
--- Resolves the combat loop, executor registry, and enemy factory dependencies.
+--[=[
+	@within EndCombat
+	Resolves the combat loop, executor registry, and enemy factory dependencies.
+	@param registry any -- Registry instance supplied by the context bootstrap.
+	@param _name string -- Registry key used to register the command.
+]=]
 function EndCombat:Init(registry: any, _name: string)
 	self._loopService = registry:Get("CombatLoopService")
 	self._executorRegistry = registry:Get("ExecutorRegistry")
 end
 
+--[=[
+	@within EndCombat
+	Stores the enemy factory needed to clear combat-owned state.
+	@param registry any -- Registry instance used to resolve dependencies.
+	@param _name string -- Registry key used to register the command.
+]=]
 function EndCombat:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
 end
 
--- Cancels every active executor, clears enemy action state, and stops the active combat session.
+--[=[
+	@within EndCombat
+	Cancels every active executor, clears enemy action state, and stops the active combat session.
+	@param userId number? -- Optional user id to stop; falls back to the first connected player.
+	@return Result.Result<boolean> -- Success confirmation or a typed combat error.
+]=]
 function EndCombat:Execute(userId: number?): Result.Result<boolean>
 	return Result.Catch(function()
 		-- Default to the lone player when callers omit an explicit user id.

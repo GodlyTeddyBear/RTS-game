@@ -1,8 +1,18 @@
+---
+name: new-context
+description: Read when you need this skill reference template and workflow rules.
+---
+
+# New Context
+
 <!-- This is a repo-local prompt template. Codex does not automatically expose this as a slash command. Prefer the matching skill when available. -->
 
 Create a new backend bounded context named `$ARGUMENTS`.
 
 `$ARGUMENTS` format: `<ContextName>` in PascalCase with no spaces (for example: `Fishing`, `PetTraining`).
+
+
+---
 
 ## What to do
 
@@ -14,6 +24,9 @@ Create a new backend bounded context named `$ARGUMENTS`.
 4. Scaffold the folder structure below using the exact naming shown.
 5. Create only the boilerplate files listed below; do not create command/query/domain/infrastructure implementation files yet.
 6. After creation, report every file and folder created.
+
+
+---
 
 ## Folder structure to create
 
@@ -44,6 +57,9 @@ src/ReplicatedStorage/Contexts/<ContextName>/
 |- Types/
 `- Sync/
 ```
+
+
+---
 
 ## File contents
 
@@ -96,6 +112,9 @@ local <ContextName>Types = {}
 
 return table.freeze(<ContextName>Types)
 ```
+
+
+---
 
 ## Rules to follow
 

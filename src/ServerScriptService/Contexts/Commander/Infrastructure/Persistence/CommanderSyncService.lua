@@ -13,7 +13,7 @@ type SlotKey = CommanderTypes.SlotKey
 
 --[=[
 	@class CommanderSyncService
-	Owns the authoritative commander atom and mutates it for server sync.
+	Owns the authoritative commander atom and the mutation bridge used for server sync.
 	@server
 ]=]
 local CommanderSyncService = setmetatable({}, { __index = BaseSyncService })
@@ -70,6 +70,12 @@ function CommanderSyncService:GetStateReadOnly(userId: number): CommanderState?
 end
 
 -- Clones the commander entry before changing HP so Charm sees a new reference chain.
+--[=[
+	Sets the commander HP for a player while preserving the replicated atom update path.
+	@within CommanderSyncService
+	@param userId number -- The player user id.
+	@param newHp number -- The requested HP value before clamping into the valid range.
+]=]
 function CommanderSyncService:SetHP(userId: number, newHp: number)
 	-- Clone the root atom and the commander record so the HP write is observable.
 	self.Atom(function(current)

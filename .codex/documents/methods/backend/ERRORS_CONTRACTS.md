@@ -7,6 +7,13 @@ Canonical architecture references:
 
 ---
 
+## Core Rules
+
+- Follow the required contracts in the sections below.
+- Treat Prohibitions, Failure Signals, and Checklist as pass/fail requirements.
+
+---
+
 ## Errors Module Contract
 
 Every context that has Application or Domain modules must have exactly one `Errors.lua` at its context root.
@@ -17,8 +24,8 @@ The module must:
 2. Return the table frozen with `table.freeze`.
 3. Never expose methods, non-string values, or cross-module dependencies.
 
----
 
+---
 ## Naming Rules
 
 - Error keys are SCREAMING_SNAKE_CASE (e.g. `WAVE_ALREADY_ACTIVE`, `INVALID_PLAYER`).
@@ -27,16 +34,16 @@ The module must:
   - Persistence errors: `"[ContextName]Persistence: "`
 - The prefix must match the context directory name exactly.
 
----
 
+---
 ## Usage Contract
 
 - Callers pass error constants to `Result.Err(Errors.SOME_ERROR, ...)` — never an inline string.
 - Error constants are the only allowed value for the type field of `Result.Err`.
 - Do not catch and re-wrap error strings — propagate `Result` chains instead.
 
----
 
+---
 ## Moonwave Documentation
 
 Every error constant must carry a doc comment block with:
@@ -49,8 +56,8 @@ Every error constant must carry a doc comment block with:
 ]=]
 ```
 
----
 
+---
 ## Prohibitions
 
 - Do not define errors for cases that cannot happen — every constant must have at least one caller.
@@ -59,8 +66,8 @@ Every error constant must carry a doc comment block with:
 - Do not import or require other modules inside `Errors.lua`.
 - Do not use numeric, boolean, or table values — all constants must be strings.
 
----
 
+---
 ## Failure Signals
 
 - An error string value does not start with the expected `"[ContextName]Context: "` or `"[ContextName]Persistence: "` prefix.
@@ -70,8 +77,8 @@ Every error constant must carry a doc comment block with:
 - The returned table is not frozen.
 - A constant is missing its `@prop` Moonwave doc comment.
 
----
 
+---
 ## Checklist
 
 - [ ] One `Errors.lua` exists at the context root.
@@ -81,3 +88,10 @@ Every error constant must carry a doc comment block with:
 - [ ] Every constant has a Moonwave `@prop` doc comment with `@within Errors`.
 - [ ] No methods, non-string fields, or module-level `require` calls present.
 - [ ] Every constant is referenced by at least one caller via `Result.Err`.
+
+---
+
+## Examples
+
+<!-- Add context-specific correct usage examples here when updating this contract. -->
+

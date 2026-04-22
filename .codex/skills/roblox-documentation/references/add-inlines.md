@@ -1,3 +1,10 @@
+---
+name: add-inlines
+description: Read when you need this skill reference template and workflow rules.
+---
+
+# Add Inlines
+
 <!-- This is a repo-local prompt template. Codex does not automatically expose this as a slash command. Prefer the matching skill when available. -->
 
 Add or update inline documentation (plain `--` comments) for the file or folder specified in $ARGUMENTS. Do not add Moonwave doc comments — focus only on logical phase labels and intent-revealing comments inside function bodies.
@@ -218,6 +225,9 @@ Files updated: N
 Then for each file:
 
 ```
+
+---
+
 ## [file path]
 - Added N phase labels to function(s): FunctionA, FunctionB
 - Added N inline comments to explain: <brief reason>
