@@ -1,21 +1,38 @@
 --!strict
 
 local CollectionService = game:GetService("CollectionService")
+local RunService = game:GetService("RunService")
 
 export type TAttributeValue = string | number | boolean | Vector3 | CFrame | Color3 | BrickColor | UDim | UDim2 | NumberSequence | ColorSequence | NumberRange | Rect | nil
 
-export type TRevealState = {
+export type ECSRevealState = {
 	Attributes: { [string]: TAttributeValue }?,
 	ClearAttributes: { string }?,
 	Tags: { [string]: boolean }?,
 }
 
+export type TCollectionServiceLike = {
+	HasTag: (self: any, instance: Instance, tagName: string) -> boolean,
+	AddTag: (self: any, instance: Instance, tagName: string) -> (),
+	RemoveTag: (self: any, instance: Instance, tagName: string) -> (),
+}
+
+--[=[
+	Applies a reveal state contract onto a Roblox instance.
+	Preferred access: `require(ReplicatedStorage.Utilities.ECS).RevealApplier`.
+	@class ECSRevealApplier
+	@server
+]=]
 local ECSRevealApplier = {}
 
-function ECSRevealApplier.Apply(instance: Instance?, revealState: TRevealState?)
+function ECSRevealApplier.Apply(instance: Instance?, revealState: ECSRevealState?, collectionServiceOverride: TCollectionServiceLike?)
+	assert(RunService:IsServer(), "ECSRevealApplier.Apply is server-only")
+
 	if not instance or not revealState then
 		return
 	end
+
+	local service = collectionServiceOverride or CollectionService
 
 	local attributes = revealState.Attributes
 	if attributes then
@@ -38,11 +55,11 @@ function ECSRevealApplier.Apply(instance: Instance?, revealState: TRevealState?)
 	local tags = revealState.Tags
 	if tags then
 		for tagName, shouldHaveTag in tags do
-			local hasTag = CollectionService:HasTag(instance, tagName)
+			local hasTag = service:HasTag(instance, tagName)
 			if shouldHaveTag and not hasTag then
-				CollectionService:AddTag(instance, tagName)
+				service:AddTag(instance, tagName)
 			elseif not shouldHaveTag and hasTag then
-				CollectionService:RemoveTag(instance, tagName)
+				service:RemoveTag(instance, tagName)
 			end
 		end
 	end
