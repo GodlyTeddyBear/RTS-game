@@ -41,9 +41,10 @@ end
 function MapContext:KnitInit()
 	local registry = Registry.new("Server")
 	local worldService = MapECSWorldService.new()
-	local world = worldService:GetWorld()
 
 	registry:Register("MapECSWorldService", worldService, "Infrastructure")
+	worldService:Init(registry, "MapECSWorldService")
+	local world = worldService:GetWorld()
 	registry:Register("World", world)
 	registry:Register("MapComponentRegistry", MapComponentRegistry.new(), "Infrastructure")
 	registry:Register("MapEntityFactory", MapEntityFactory.new(), "Infrastructure")
@@ -88,6 +89,12 @@ function MapContext:GetGoalInstance(): Result.Result<BasePart?>
 	return Catch(function()
 		return Ok(self._entityFactory:GetGoalInstance())
 	end, "Map:GetGoalInstance")
+end
+
+function MapContext:GetSpawnInstance(): Result.Result<BasePart?>
+	return Catch(function()
+		return Ok(self._entityFactory:GetSpawnInstance())
+	end, "Map:GetSpawnInstance")
 end
 
 function MapContext:Destroy()

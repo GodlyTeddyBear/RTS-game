@@ -28,6 +28,7 @@ local EnemySpawnPolicy = require(script.Parent.EnemyDomain.Policies.EnemySpawnPo
 
 local SpawnEnemyCommand = require(script.Parent.Application.Commands.SpawnEnemy)
 local DespawnEnemyCommand = require(script.Parent.Application.Commands.DespawnEnemy)
+local ApplyDamageEnemyCommand = require(script.Parent.Application.Commands.ApplyDamageEnemy)
 local CleanupAllEnemiesCommand = require(script.Parent.Application.Commands.CleanupAllEnemies)
 local GetAliveEnemiesQuery = require(script.Parent.Application.Queries.GetAliveEnemiesQuery)
 local GetEnemyCountQuery = require(script.Parent.Application.Queries.GetEnemyCountQuery)
@@ -67,16 +68,19 @@ end
 ]=]
 function EnemyContext:KnitInit()
 	local registry = Registry.new("Server")
+	local worldService = EnemyECSWorldService.new()
 
 	-- Register infrastructure first so downstream modules can resolve ECS dependencies.
-	registry:Register("EnemyECSWorldService", EnemyECSWorldService.new(), "Infrastructure")
-	registry:Register("World", registry:Get("EnemyECSWorldService"):GetWorld())
+	registry:Register("EnemyECSWorldService", worldService, "Infrastructure")
+	worldService:Init(registry, "EnemyECSWorldService")
+	registry:Register("World", worldService:GetWorld())
 	registry:Register("EnemyComponentRegistry", EnemyComponentRegistry.new(), "Infrastructure")
 	registry:Register("EnemyEntityFactory", EnemyEntityFactory.new(), "Infrastructure")
 	registry:Register("EnemyModelFactory", EnemyModelFactory.new(), "Infrastructure")
 	registry:Register("EnemyGameObjectSyncService", EnemyGameObjectSyncService.new(), "Infrastructure")
 	registry:Register("EnemySpawnPolicy", EnemySpawnPolicy.new(), "Domain")
 	registry:Register("DespawnEnemyCommand", DespawnEnemyCommand.new(), "Application")
+	registry:Register("ApplyDamageEnemyCommand", ApplyDamageEnemyCommand.new(), "Application")
 	registry:Register("SpawnEnemyCommand", SpawnEnemyCommand.new(), "Application")
 	registry:Register("CleanupAllEnemiesCommand", CleanupAllEnemiesCommand.new(), "Application")
 	registry:Register("GetAliveEnemiesQuery", GetAliveEnemiesQuery.new(), "Application")
@@ -92,6 +96,7 @@ function EnemyContext:KnitInit()
 	_InitModule(registry, "EnemyGameObjectSyncService")
 	_InitModule(registry, "EnemySpawnPolicy")
 	_InitModule(registry, "DespawnEnemyCommand")
+	_InitModule(registry, "ApplyDamageEnemyCommand")
 	_InitModule(registry, "SpawnEnemyCommand")
 	_InitModule(registry, "CleanupAllEnemiesCommand")
 	_InitModule(registry, "GetAliveEnemiesQuery")
@@ -105,6 +110,7 @@ function EnemyContext:KnitInit()
 	self._syncService = registry:Get("EnemyGameObjectSyncService")
 	self._spawnEnemyCommand = registry:Get("SpawnEnemyCommand")
 	self._despawnEnemyCommand = registry:Get("DespawnEnemyCommand")
+	self._applyDamageEnemyCommand = registry:Get("ApplyDamageEnemyCommand")
 	self._cleanupAllEnemiesCommand = registry:Get("CleanupAllEnemiesCommand")
 	self._getAliveEnemiesQuery = registry:Get("GetAliveEnemiesQuery")
 	self._getEnemyCountQuery = registry:Get("GetEnemyCountQuery")
@@ -184,6 +190,19 @@ function EnemyContext:DespawnEnemy(entity: any): Result.Result<boolean>
 	return Catch(function()
 		return self._despawnEnemyCommand:Execute(entity)
 	end, "Enemy:DespawnEnemy")
+end
+
+--[=[
+	@within EnemyContext
+	Applies damage to an enemy entity and resolves death side effects when health reaches zero.
+	@param entity any -- Enemy entity id to damage.
+	@param amount number -- Positive damage amount to apply.
+	@return Result.Result<boolean> -- Whether the damage killed the enemy.
+]=]
+function EnemyContext:ApplyDamage(entity: any, amount: number): Result.Result<boolean>
+	return Catch(function()
+		return self._applyDamageEnemyCommand:Execute(entity, amount)
+	end, "Enemy:ApplyDamage")
 end
 
 --[=[

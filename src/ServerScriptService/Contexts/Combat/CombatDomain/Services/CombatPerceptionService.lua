@@ -36,6 +36,55 @@ end
 ]=]
 function CombatPerceptionService:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
+	self._structureEntityFactory = registry:Get("StructureEntityFactory")
+end
+
+function CombatPerceptionService:_FindNearestStructureInRange(enemyPosition: Vector3, attackRange: number): number?
+	if self._structureEntityFactory == nil then
+		return nil
+	end
+
+	local nearestStructure = nil :: number?
+	local nearestDistanceSq = math.huge
+	local maxDistanceSq = attackRange * attackRange
+
+	for _, structureEntity in ipairs(self._structureEntityFactory:QueryActiveEntities()) do
+		local structurePosition = self._structureEntityFactory:GetPosition(structureEntity)
+		if structurePosition == nil then
+			continue
+		end
+
+		local offset = structurePosition - enemyPosition
+		local distanceSq = offset:Dot(offset)
+		if distanceSq <= maxDistanceSq and distanceSq < nearestDistanceSq then
+			nearestDistanceSq = distanceSq
+			nearestStructure = structureEntity
+		end
+	end
+
+	return nearestStructure
+end
+
+function CombatPerceptionService:_FindNearestEnemyInRange(structurePosition: Vector3, attackRange: number): number?
+	local nearestEnemy = nil :: number?
+	local nearestDistanceSq = math.huge
+	local maxDistanceSq = attackRange * attackRange
+
+	for _, enemyEntity in ipairs(self._enemyEntityFactory:QueryAliveEntities()) do
+		local position = self._enemyEntityFactory:GetPosition(enemyEntity)
+		if position == nil then
+			continue
+		end
+
+		local offset = position.cframe.Position - structurePosition
+		local distanceSq = offset:Dot(offset)
+		if distanceSq <= maxDistanceSq and distanceSq < nearestDistanceSq then
+			nearestDistanceSq = distanceSq
+			nearestEnemy = enemyEntity
+		end
+	end
+
+	return nearestEnemy
 end
 
 --[=[
@@ -48,6 +97,8 @@ end
 function CombatPerceptionService:BuildSnapshot(entity: number, _currentTime: number)
 	local pathState = self._enemyEntityFactory:GetPathState(entity)
 	local health = self._enemyEntityFactory:GetHealth(entity)
+	local role = self._enemyEntityFactory:GetRole(entity)
+	local position = self._enemyEntityFactory:GetPosition(entity)
 
 	local hasWaypoints = pathState ~= nil and pathState.waypoints ~= nil and #pathState.waypoints > 0
 	local isAtGoal = false
@@ -60,11 +111,31 @@ function CombatPerceptionService:BuildSnapshot(entity: number, _currentTime: num
 		healthPct = math.clamp(health.current / health.max, 0, 1)
 	end
 
+	local targetStructureEntity = nil :: number?
+	if role and position and position.cframe and type(role.attackRange) == "number" then
+		targetStructureEntity = self:_FindNearestStructureInRange(position.cframe.Position, role.attackRange)
+	end
+
 	return {
 		HasWaypoints = hasWaypoints,
 		IsAtGoal = isAtGoal,
 		HealthPct = healthPct,
 		ShouldFlee = healthPct < FLEE_THRESHOLD,
+		TargetStructureEntity = targetStructureEntity,
+	}
+end
+
+function CombatPerceptionService:BuildStructureSnapshot(entity: number, _currentTime: number)
+	local attackStats = self._structureEntityFactory:GetAttackStats(entity)
+	local position = self._structureEntityFactory:GetPosition(entity)
+
+	local targetEnemyEntity = nil :: number?
+	if attackStats ~= nil and position ~= nil then
+		targetEnemyEntity = self:_FindNearestEnemyInRange(position, attackStats.AttackRange)
+	end
+
+	return {
+		TargetEnemyEntity = targetEnemyEntity,
 	}
 end
 

@@ -42,6 +42,7 @@ function CleanupAllCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
 		-- Bulk cleanup stays centralized in the entity factory so teardown remains atomic.
 		self._factory:DeleteAll()
+		self._factory:FlushPendingDeletes()
 		return Ok(true)
 	end, "Structure:CleanupAllCommand")
 end

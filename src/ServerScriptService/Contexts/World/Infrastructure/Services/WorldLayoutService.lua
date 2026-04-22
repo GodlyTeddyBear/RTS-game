@@ -46,15 +46,28 @@ local function _ResolvePath(path: string): Instance?
 	return current
 end
 
+local function _CollectNamedBaseParts(container: Instance, markerName: string): { BasePart }
+	local parts = {}
+	if container:IsA("BasePart") and container.Name == markerName then
+		table.insert(parts, container)
+	end
+
+	for _, descendant in ipairs(container:GetDescendants()) do
+		if descendant:IsA("BasePart") and descendant.Name == markerName then
+			table.insert(parts, descendant)
+		end
+	end
+
+	return parts
+end
+
 --[=[
 	Creates a layout service that proxies to shared world config.
 	@within WorldLayoutService
 	@return WorldLayoutService -- The new service instance.
 ]=]
 function WorldLayoutService.new()
-	local self = setmetatable({}, WorldLayoutService)
-	self._gridRuntimeService = nil :: any
-	return self
+	return setmetatable({}, WorldLayoutService)
 end
 
 --[=[
@@ -64,7 +77,7 @@ end
 	@param name string -- Registered module name.
 ]=]
 function WorldLayoutService:Init(registry: any, _name: string)
-	self._gridRuntimeService = registry:Get("WorldGridRuntimeService")
+	-- No runtime dependencies required for explicit part-path lookup.
 end
 
 --[=[
@@ -73,12 +86,17 @@ end
 	@return { CFrame } -- The configured spawn points.
 ]=]
 function WorldLayoutService:GetSpawnPoints(): { CFrame }
-	local gridRuntimeService = self._gridRuntimeService
-	assert(gridRuntimeService ~= nil, "WorldGridRuntimeService is required")
+	local spawnsContainer = _ResolvePath(WorldConfig.SPAWNS_FOLDER_PATH)
+	assert(spawnsContainer ~= nil, Errors.MISSING_SPAWN_PART)
 
-	local lanePoints = gridRuntimeService:GetLanePoints()
+	local spawnMarkers = _CollectNamedBaseParts(spawnsContainer, WorldConfig.SPAWN_PART_NAME)
+	assert(#spawnMarkers > 0, Errors.INVALID_SPAWN_PART)
+
+	local randomIndex = Random.new():NextInteger(1, #spawnMarkers)
+	local spawnInstance = spawnMarkers[randomIndex]
+
 	return table.freeze({
-		lanePoints.spawnPoint,
+		spawnInstance.CFrame,
 	})
 end
 
@@ -88,12 +106,12 @@ end
 	@return CFrame -- The goal point enemies should path toward.
 ]=]
 function WorldLayoutService:GetGoalPoint(): CFrame
-	local goalInstance = _ResolvePath(WorldConfig.GOAL_PART_PATH)
-	if goalInstance == nil then
-		goalInstance = Workspace:FindFirstChild("Goal", true)
-	end
-	assert(goalInstance ~= nil, Errors.MISSING_GOAL_PART)
-	assert(goalInstance:IsA("BasePart"), Errors.INVALID_GOAL_PART)
+	local goalsContainer = _ResolvePath(WorldConfig.GOALS_FOLDER_PATH)
+	assert(goalsContainer ~= nil, Errors.MISSING_GOAL_PART)
+
+	local goalMarkers = _CollectNamedBaseParts(goalsContainer, WorldConfig.GOAL_PART_NAME)
+	assert(#goalMarkers > 0, Errors.INVALID_GOAL_PART)
+	local goalInstance = goalMarkers[1]
 	return goalInstance.CFrame
 end
 

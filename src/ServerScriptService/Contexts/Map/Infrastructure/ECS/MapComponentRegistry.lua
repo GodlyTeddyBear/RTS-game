@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local JECS = require(ReplicatedStorage.Packages.JECS)
+local BaseECSComponentRegistry = require(ReplicatedStorage.Utilities.BaseECSComponentRegistry)
 local MapTypes = require(ReplicatedStorage.Contexts.Map.Types.MapTypes)
 
 export type MapRootComponent = MapTypes.MapRootComponent
@@ -9,6 +10,8 @@ export type MapInstanceComponent = MapTypes.MapInstanceComponent
 export type ZoneComponent = MapTypes.ZoneComponent
 export type GoalComponent = MapTypes.GoalComponent
 export type GoalZoneTag = MapTypes.GoalZoneTag
+export type SpawnComponent = MapTypes.SpawnComponent
+export type SpawnZoneTag = MapTypes.SpawnZoneTag
 
 --[=[
 	@class MapComponentRegistry
@@ -17,52 +20,36 @@ export type GoalZoneTag = MapTypes.GoalZoneTag
 ]=]
 local MapComponentRegistry = {}
 MapComponentRegistry.__index = MapComponentRegistry
-
-local function _nameComponent(world: any, componentId: number, name: string)
-	world:set(componentId, JECS.Name, name)
-end
+setmetatable(MapComponentRegistry, { __index = BaseECSComponentRegistry })
 
 function MapComponentRegistry.new()
-	local self = setmetatable({}, MapComponentRegistry)
-	self._components = nil
-	return self
+	return setmetatable(BaseECSComponentRegistry._new("Map"), MapComponentRegistry)
 end
 
 function MapComponentRegistry:Init(registry: any, _name: string)
-	local world = registry:Get("World")
+	BaseECSComponentRegistry.InitBase(self, registry)
 
 	-- [AUTHORITATIVE] Runtime map root metadata.
-	local mapRoot = world:component() :: MapRootComponent
-	_nameComponent(world, mapRoot, "Map.MapRoot")
-
+	self:RegisterComponent("MapRootComponent", "Map.MapRoot", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] Roblox model instance for the map root.
-	local mapInstance = world:component() :: MapInstanceComponent
-	_nameComponent(world, mapInstance, "Map.MapInstance")
-
+	self:RegisterComponent("MapInstanceComponent", "Map.MapInstance", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] Zone marker instance reference.
-	local zone = world:component() :: ZoneComponent
-	_nameComponent(world, zone, "Map.Zone")
-
+	self:RegisterComponent("ZoneComponent", "Map.Zone", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] Cached goal marker reference for fast lookup.
-	local goal = world:component() :: GoalComponent
-	_nameComponent(world, goal, "Map.Goal")
+	self:RegisterComponent("GoalComponent", "Map.Goal", "AUTHORITATIVE")
+	-- [AUTHORITATIVE] Cached spawn marker reference for fast lookup.
+	self:RegisterComponent("SpawnComponent", "Map.Spawn", "AUTHORITATIVE")
 
-	local goalZoneTag = world:entity() :: GoalZoneTag
-	_nameComponent(world, goalZoneTag, "Map.GoalZone")
+	self:RegisterTag("GoalZoneTag", "Map.GoalZoneTag")
+	self:RegisterTag("SpawnZoneTag", "Map.SpawnZoneTag")
 
-	self._components = table.freeze({
-		MapRootComponent = mapRoot,
-		MapInstanceComponent = mapInstance,
-		ZoneComponent = zone,
-		GoalComponent = goal,
-		GoalZoneTag = goalZoneTag,
+	self:Finalize({
 		ChildOf = JECS.ChildOf,
 	})
 end
 
 function MapComponentRegistry:GetComponents()
-	return self._components
+	return BaseECSComponentRegistry.GetComponents(self)
 end
 
 return MapComponentRegistry
-

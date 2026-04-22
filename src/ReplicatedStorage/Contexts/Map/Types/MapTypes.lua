@@ -21,6 +21,11 @@ export type GoalComponent = {
 	Instance: BasePart,
 }
 
+export type SpawnComponent = {
+	Instance: BasePart,
+}
+
 export type GoalZoneTag = boolean
+export type SpawnZoneTag = boolean
 
 return table.freeze(MapTypes)

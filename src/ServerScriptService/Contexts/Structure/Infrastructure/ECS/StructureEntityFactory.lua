@@ -4,13 +4,17 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.StructureConfig)
 local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.StructureTypes)
+local ExecutorTypes = require(ReplicatedStorage.Contexts.Combat.Types.ExecutorTypes)
+local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
 
 type StructureType = StructureTypes.StructureType
 type TAttackStatsComponent = StructureTypes.TAttackStatsComponent
 type TAttackCooldownComponent = StructureTypes.TAttackCooldownComponent
+type THealthComponent = StructureTypes.THealthComponent
 type TIdentityComponent = StructureTypes.TIdentityComponent
 type TInstanceRefComponent = StructureTypes.TInstanceRefComponent
 type ResolvedStructureRecord = StructureTypes.ResolvedStructureRecord
+type TCombatAction = ExecutorTypes.TCombatActionComponent
 
 --[=[
 	@class StructureEntityFactory
@@ -19,6 +23,18 @@ type ResolvedStructureRecord = StructureTypes.ResolvedStructureRecord
 ]=]
 local StructureEntityFactory = {}
 StructureEntityFactory.__index = StructureEntityFactory
+setmetatable(StructureEntityFactory, { __index = BaseECSEntityFactory })
+
+local function _buildDefaultAction(): TCombatAction
+	return {
+		CurrentActionId = nil,
+		ActionState = "None",
+		ActionData = nil,
+		PendingActionId = nil,
+		PendingActionData = nil,
+		ActionStartedAt = nil,
+	}
+end
 
 --[=[
 	Creates a new entity factory wrapper.
@@ -26,7 +42,9 @@ StructureEntityFactory.__index = StructureEntityFactory
 	@return StructureEntityFactory -- The new factory instance.
 ]=]
 function StructureEntityFactory.new()
-	return setmetatable({}, StructureEntityFactory)
+	local self = setmetatable(BaseECSEntityFactory._new("Structure"), StructureEntityFactory)
+	self._componentRegistry = nil
+	return self
 end
 
 --[=[
@@ -36,12 +54,13 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function StructureEntityFactory:Init(registry: any, _name: string)
-	self._world = registry:Get("World")
 	self._componentRegistry = registry:Get("StructureComponentRegistry")
-	self._components = self._componentRegistry:GetComponents()
+	BaseECSEntityFactory.InitBase(self, registry, "StructureComponentRegistry")
 end
 
 function StructureEntityFactory:_GetComponents()
+	self:RequireReady()
+
 	local components = self._components
 	if components ~= nil then
 		return components
@@ -79,15 +98,22 @@ function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord)
 		AttackCooldown = structureConfig.AttackCooldown,
 	} :: TAttackStatsComponent)
 
-	-- Start every structure with an empty cooldown so the first target can fire immediately once ready.
+	-- Start ready so the first acquired target can be attacked immediately.
 	self._world:set(entity, components.AttackCooldownComponent, {
-		Elapsed = 0,
+		Elapsed = structureConfig.AttackCooldown,
 	} :: TAttackCooldownComponent)
+
+	self._world:set(entity, components.HealthComponent, {
+		Current = structureConfig.MaxHealth,
+		Max = structureConfig.MaxHealth,
+	} :: THealthComponent)
 
 	-- Store a nil target until the targeting system resolves a nearby enemy.
 	self._world:set(entity, components.TargetComponent, {
 		Entity = nil,
 	})
+
+	self._world:set(entity, components.CombatActionComponent, _buildDefaultAction())
 
 	-- Persist the runtime instance id and world-space anchor for targeting queries.
 	self._world:set(entity, components.InstanceRefComponent, {
@@ -191,6 +217,25 @@ function StructureEntityFactory:GetCooldown(entity: number?): TAttackCooldownCom
 end
 
 --[=[
+	Returns the health component for a structure entity.
+	@within StructureEntityFactory
+	@param entity number? -- The ECS entity to inspect.
+	@return THealthComponent? -- The health state or `nil`.
+]=]
+function StructureEntityFactory:GetHealth(entity: number?): THealthComponent?
+	if entity == nil then
+		return nil
+	end
+
+	local components = self:_GetComponents()
+	if components == nil then
+		return nil
+	end
+
+	return self._world:get(entity, components.HealthComponent)
+end
+
+--[=[
 	Sets the elapsed cooldown value for a structure entity.
 	@within StructureEntityFactory
 	@param entity number? -- The ECS entity to mutate.
@@ -215,6 +260,155 @@ function StructureEntityFactory:SetCooldownElapsed(entity: number?, elapsed: num
 	self._world:set(entity, components.AttackCooldownComponent, {
 		Elapsed = elapsed,
 	} :: TAttackCooldownComponent)
+end
+
+function StructureEntityFactory:SetBehaviorTree(entity: number, treeInstance: any, tickInterval: number)
+	local components = self:_GetComponents()
+	if components == nil then
+		return
+	end
+
+	self._world:set(entity, components.BehaviorTreeComponent, {
+		TreeInstance = treeInstance,
+		TickInterval = tickInterval,
+		LastTickTime = 0,
+	})
+end
+
+function StructureEntityFactory:GetBehaviorTree(entity: number)
+	local components = self:_GetComponents()
+	if components == nil then
+		return nil
+	end
+
+	return self._world:get(entity, components.BehaviorTreeComponent)
+end
+
+function StructureEntityFactory:UpdateBTLastTickTime(entity: number, currentTime: number)
+	local behaviorTree = self:GetBehaviorTree(entity)
+	if behaviorTree == nil then
+		return
+	end
+
+	local components = self:_GetComponents()
+	if components == nil then
+		return
+	end
+
+	self._world:set(entity, components.BehaviorTreeComponent, {
+		TreeInstance = behaviorTree.TreeInstance,
+		TickInterval = behaviorTree.TickInterval,
+		LastTickTime = currentTime,
+	})
+end
+
+function StructureEntityFactory:GetCombatAction(entity: number)
+	local components = self:_GetComponents()
+	if components == nil then
+		return nil
+	end
+
+	return self._world:get(entity, components.CombatActionComponent)
+end
+
+function StructureEntityFactory:SetPendingAction(entity: number, actionId: string, actionData: any?)
+	local components = self:_GetComponents()
+	if components == nil then
+		return
+	end
+
+	local action = self:GetCombatAction(entity) or _buildDefaultAction()
+	self._world:set(entity, components.CombatActionComponent, {
+		CurrentActionId = action.CurrentActionId,
+		ActionState = action.ActionState,
+		ActionData = action.ActionData,
+		PendingActionId = actionId,
+		PendingActionData = actionData,
+		ActionStartedAt = action.ActionStartedAt,
+	})
+end
+
+function StructureEntityFactory:ClearPendingAction(entity: number)
+	local components = self:_GetComponents()
+	if components == nil then
+		return
+	end
+
+	local action = self:GetCombatAction(entity) or _buildDefaultAction()
+	self._world:set(entity, components.CombatActionComponent, {
+		CurrentActionId = action.CurrentActionId,
+		ActionState = action.ActionState,
+		ActionData = action.ActionData,
+		PendingActionId = nil,
+		PendingActionData = nil,
+		ActionStartedAt = action.ActionStartedAt,
+	})
+end
+
+function StructureEntityFactory:StartAction(entity: number, actionId: string, actionData: any?, currentTime: number)
+	local components = self:_GetComponents()
+	if components == nil then
+		return
+	end
+
+	self._world:set(entity, components.CombatActionComponent, {
+		CurrentActionId = actionId,
+		ActionState = "Running",
+		ActionData = actionData,
+		PendingActionId = nil,
+		PendingActionData = nil,
+		ActionStartedAt = currentTime,
+	})
+end
+
+function StructureEntityFactory:ClearAction(entity: number)
+	local components = self:_GetComponents()
+	if components == nil then
+		return
+	end
+
+	self._world:set(entity, components.CombatActionComponent, _buildDefaultAction())
+end
+
+function StructureEntityFactory:ResetActionState(entity: number)
+	local action = self:GetCombatAction(entity)
+	if action == nil then
+		return
+	end
+
+	local components = self:_GetComponents()
+	if components == nil then
+		return
+	end
+
+	self._world:set(entity, components.CombatActionComponent, {
+		CurrentActionId = action.CurrentActionId,
+		ActionState = "None",
+		ActionData = action.ActionData,
+		PendingActionId = nil,
+		PendingActionData = nil,
+		ActionStartedAt = action.ActionStartedAt,
+	})
+end
+
+function StructureEntityFactory:ApplyDamage(entity: number, amount: number): boolean
+	local health = self:GetHealth(entity)
+	if health == nil then
+		return false
+	end
+
+	local nextHp = math.max(0, health.Current - amount)
+	local components = self:_GetComponents()
+	if components == nil then
+		return false
+	end
+
+	self._world:set(entity, components.HealthComponent, {
+		Current = nextHp,
+		Max = health.Max,
+	} :: THealthComponent)
+
+	return nextHp <= 0
 end
 
 --[=[
@@ -255,6 +449,28 @@ function StructureEntityFactory:GetInstanceRef(entity: number?): TInstanceRefCom
 	return self._world:get(entity, components.InstanceRefComponent)
 end
 
+function StructureEntityFactory:GetPosition(entity: number?): Vector3?
+	local instanceRef = self:GetInstanceRef(entity)
+	if instanceRef == nil then
+		return nil
+	end
+
+	return instanceRef.WorldPos
+end
+
+function StructureEntityFactory:IsActive(entity: number?): boolean
+	if entity == nil then
+		return false
+	end
+
+	local components = self:_GetComponents()
+	if components == nil then
+		return false
+	end
+
+	return self._world:has(entity, components.ActiveTag)
+end
+
 --[=[
 	Collects every active structure entity into an array.
 	@within StructureEntityFactory
@@ -266,11 +482,7 @@ function StructureEntityFactory:QueryActiveEntities(): { number }
 		return {}
 	end
 
-	local entities = {}
-	for entity in self._world:query(components.ActiveTag) do
-		table.insert(entities, entity)
-	end
-	return entities
+	return self:CollectQuery(components.ActiveTag)
 end
 
 --[=[
@@ -283,7 +495,12 @@ function StructureEntityFactory:DeleteEntity(entity: number?)
 		return
 	end
 
-	self._world:delete(entity)
+	local components = self:_GetComponents()
+	if components ~= nil and self._world:has(entity, components.ActiveTag) then
+		self._world:remove(entity, components.ActiveTag)
+	end
+
+	self:MarkForDestruction(entity)
 end
 
 --[=[
@@ -294,6 +511,15 @@ function StructureEntityFactory:DeleteAll()
 	for _, entity in ipairs(self:QueryActiveEntities()) do
 		self:DeleteEntity(entity)
 	end
+end
+
+--[=[
+	Flushes deferred structure entity deletions.
+	@within StructureEntityFactory
+	@return boolean -- True when at least one entity was deleted.
+]=]
+function StructureEntityFactory:FlushPendingDeletes(): boolean
+	return self:FlushDestructionQueue()
 end
 
 return StructureEntityFactory

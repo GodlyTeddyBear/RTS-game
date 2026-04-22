@@ -23,6 +23,12 @@ function SwarmBehavior.Create()
 			nodes = {
 				BehaviorTree.Sequence:new({
 					nodes = {
+						Nodes.Conditions.HasStructureTargetInRangeCondition(),
+						Nodes.Commands.AttackStructure(),
+					},
+				}),
+				BehaviorTree.Sequence:new({
+					nodes = {
 						Nodes.Conditions.HasWaypointsCondition(),
 						Nodes.Commands.LaneAdvance(),
 					},

@@ -8,14 +8,18 @@ MapConfig.WORKSPACE_MAP_CONTAINER_NAME = "Map"
 MapConfig.WORKSPACE_GAME_CONTAINER_NAME = "Game"
 
 MapConfig.ZONE_PATHS = table.freeze({
-	Goal = "Environment.Zones.Goal",
-	PlacementGrid = "Environment.Zones.PlacementGrid",
+	Spawns = "Environment.Zones.Spawns",
+	Goals = "Environment.Zones.Goals",
+	PlacementGrids = "Environment.Zones.PlacementGrids",
+	Lanes = "Environment.Zones.Lanes",
 	SidePockets = "Environment.Zones.SidePockets",
 })
 
 MapConfig.REQUIRED_ZONES = table.freeze({
-	"Goal",
-	"PlacementGrid",
+	"Spawns",
+	"Goals",
+	"PlacementGrids",
+	"Lanes",
 	"SidePockets",
 })
 

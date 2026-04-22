@@ -23,7 +23,7 @@ type UseAbilityResult = {
 
 --[=[
 	@class UseAbilityCommand
-	Validates and applies commander ability usage through the sync layer.
+	Validates and applies commander ability usage through authoritative ECS state.
 	@server
 ]=]
 local UseAbilityCommand = {}
@@ -47,6 +47,7 @@ end
 function UseAbilityCommand:Init(registry: any, _name: string)
 	self._abilityService = registry:Get("AbilityService")
 	self._cooldownService = registry:Get("CooldownService")
+	self._entityFactory = registry:Get("CommanderEntityFactory")
 	self._syncService = registry:Get("CommanderSyncService")
 end
 
@@ -62,7 +63,7 @@ function UseAbilityCommand:Execute(player: Player, slotKey: SlotKey): Result.Res
 
 	-- Resolve the live commander state before doing any slot validation.
 	Try(fromNilable(
-		self._syncService:GetStateReadOnly(userId),
+		self._entityFactory:GetCommanderState(userId),
 		"CommanderNotFound",
 		Errors.COMMANDER_NOT_FOUND,
 		{ userId = userId }
@@ -94,7 +95,8 @@ function UseAbilityCommand:Execute(player: Player, slotKey: SlotKey): Result.Res
 
 	-- Execute the stub effect and stamp the new cooldown atomically through the sync service.
 	self._abilityService:ExecuteStub(userId, slot.Key)
-	self._syncService:SetCooldown(userId, slot.Key, slot.CooldownDuration)
+	self._entityFactory:SetCooldown(userId, slot.Key, slot.CooldownDuration)
+	self._syncService:SyncCommanderState(userId)
 
 	-- Return the accepted slot key so callers can mirror the successful action.
 	return Ok({

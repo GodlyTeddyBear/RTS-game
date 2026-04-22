@@ -1,7 +1,7 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local JECS = require(ReplicatedStorage.Packages.JECS)
+local BaseECSWorldService = require(ReplicatedStorage.Utilities.BaseECSWorldService)
 
 --[=[
 	@class StructureECSWorldService
@@ -10,6 +10,7 @@ local JECS = require(ReplicatedStorage.Packages.JECS)
 ]=]
 local StructureECSWorldService = {}
 StructureECSWorldService.__index = StructureECSWorldService
+setmetatable(StructureECSWorldService, { __index = BaseECSWorldService })
 
 --[=[
 	Creates a new isolated JECS world service.
@@ -17,9 +18,7 @@ StructureECSWorldService.__index = StructureECSWorldService
 	@return StructureECSWorldService -- The new service instance.
 ]=]
 function StructureECSWorldService.new()
-	local self = setmetatable({}, StructureECSWorldService)
-	self._world = JECS.World.new()
-	return self
+	return setmetatable(BaseECSWorldService._new("Structure"), StructureECSWorldService)
 end
 
 --[=[
@@ -29,6 +28,7 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function StructureECSWorldService:Init(_registry: any, _name: string)
+	BaseECSWorldService.Init(self, _registry, _name)
 end
 
 --[=[
@@ -37,7 +37,7 @@ end
 	@return any -- The authoritative JECS world.
 ]=]
 function StructureECSWorldService:GetWorld()
-	return self._world
+	return BaseECSWorldService.GetWorld(self)
 end
 
 return StructureECSWorldService

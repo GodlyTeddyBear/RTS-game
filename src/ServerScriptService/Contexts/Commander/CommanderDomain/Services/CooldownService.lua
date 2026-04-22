@@ -9,7 +9,7 @@ type CooldownEntry = CommanderTypes.CooldownEntry
 
 --[=[
 	@class CooldownService
-	Calculates commander ability cooldown readiness from synced state.
+	Calculates commander ability cooldown readiness from authoritative ECS state.
 	@server
 ]=]
 local CooldownService = {}
@@ -31,7 +31,7 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function CooldownService:Init(registry: any, _name: string)
-	self._syncService = registry:Get("CommanderSyncService")
+	self._entityFactory = registry:Get("CommanderEntityFactory")
 end
 
 -- Returns the remaining cooldown seconds for a slot entry; extracted so readiness logic stays readable.
@@ -52,7 +52,7 @@ end
 	@return boolean -- `true` when the slot has no active cooldown.
 ]=]
 function CooldownService:IsReady(userId: number, slotKey: SlotKey): boolean
-	local state = self._syncService:GetStateReadOnly(userId)
+	local state = self._entityFactory:GetCommanderState(userId)
 	if state == nil then
 		return false
 	end
@@ -68,7 +68,7 @@ end
 	@return number -- The remaining cooldown time in seconds.
 ]=]
 function CooldownService:GetRemainingTime(userId: number, slotKey: SlotKey): number
-	local state = self._syncService:GetStateReadOnly(userId)
+	local state = self._entityFactory:GetCommanderState(userId)
 	if state == nil then
 		return 0
 	end

@@ -43,6 +43,9 @@ end
 ]=]
 function EndCombat:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
+	self._structureEntityFactory = registry:Get("StructureEntityFactory")
+	self._enemyContext = registry:Get("EnemyContext")
+	self._structureContext = registry:Get("StructureContext")
 end
 
 --[=[
@@ -65,6 +68,9 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 		-- Build the cleanup payload once so each executor gets the same service view.
 		local services = {
 			EnemyEntityFactory = self._enemyEntityFactory,
+			StructureEntityFactory = self._structureEntityFactory,
+			EnemyContext = self._enemyContext,
+			StructureContext = self._structureContext,
 			CurrentTime = os.clock(),
 		}
 
@@ -72,6 +78,11 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 		for _, entity in ipairs(self._enemyEntityFactory:QueryAliveEntities()) do
 			self._executorRegistry:CancelAll(entity, services)
 			self._enemyEntityFactory:ClearAction(entity)
+		end
+
+		for _, entity in ipairs(self._structureEntityFactory:QueryActiveEntities()) do
+			self._executorRegistry:CancelAll(entity, services)
+			self._structureEntityFactory:ClearAction(entity)
 		end
 
 		if targetUserId then

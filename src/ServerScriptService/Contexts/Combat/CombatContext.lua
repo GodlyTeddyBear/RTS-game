@@ -17,6 +17,8 @@ local BehaviorTreeFactory = require(script.Parent.Infrastructure.Services.Behavi
 local ExecutorRegistry = require(script.Parent.Executors.Base.ExecutorRegistry)
 local LaneAdvanceExecutor = require(script.Parent.Executors.LaneAdvanceExecutor)
 local IdleExecutor = require(script.Parent.Executors.IdleExecutor)
+local EnemyAttackStructureExecutor = require(script.Parent.Executors.EnemyAttackStructureExecutor)
+local StructureAttackExecutor = require(script.Parent.Executors.StructureAttackExecutor)
 local BehaviorTreeTickPolicy = require(script.Parent.CombatDomain.Policies.BehaviorTreeTickPolicy)
 local WaveCompletionPolicy = require(script.Parent.CombatDomain.Policies.WaveCompletionPolicy)
 local CombatPerceptionService = require(script.Parent.CombatDomain.Services.CombatPerceptionService)
@@ -101,6 +103,8 @@ function CombatContext:KnitInit()
 	self._enemyModelFactory = nil
 	self._worldContext = nil
 	self._commanderContext = nil
+	self._structureContext = nil
+	self._structureEntityFactory = nil
 	self._laneWaypoints = {} :: { Vector3 }
 
 	self._runWaveStartedConnection = nil :: any
@@ -118,14 +122,17 @@ function CombatContext:KnitStart()
 	local enemyContext = Knit.GetService("EnemyContext")
 	local worldContext = Knit.GetService("WorldContext")
 	local commanderContext = Knit.GetService("CommanderContext")
+	local structureContext = Knit.GetService("StructureContext")
 
 	self._enemyContext = enemyContext
 	self._worldContext = worldContext
 	self._commanderContext = commanderContext
+	self._structureContext = structureContext
 
 	self._enemyEntityFactory = _unwrapResult(enemyContext:GetEntityFactory(), "EnemyContext:GetEntityFactory")
 	self._enemyGameObjectSyncService = _unwrapResult(enemyContext:GetGameObjectSyncService(), "EnemyContext:GetGameObjectSyncService")
 	self._enemyModelFactory = _unwrapResult(enemyContext:GetModelFactory(), "EnemyContext:GetModelFactory")
+	self._structureEntityFactory = _unwrapResult(structureContext:GetEntityFactory(), "StructureContext:GetEntityFactory")
 	local enemyWorld = _unwrapResult(enemyContext:GetWorld(), "EnemyContext:GetWorld")
 	local enemyComponents = _unwrapResult(enemyContext:GetComponents(), "EnemyContext:GetComponents")
 
@@ -133,6 +140,8 @@ function CombatContext:KnitStart()
 	self._registry:Register("EnemyEntityFactory", self._enemyEntityFactory)
 	self._registry:Register("EnemyGameObjectSyncService", self._enemyGameObjectSyncService)
 	self._registry:Register("EnemyModelFactory", self._enemyModelFactory)
+	self._registry:Register("StructureContext", structureContext)
+	self._registry:Register("StructureEntityFactory", self._structureEntityFactory)
 	self._registry:Register("CommanderContext", commanderContext)
 	self._registry:Register("WorldContext", worldContext)
 	self._registry:Register("World", enemyWorld)
@@ -141,8 +150,12 @@ function CombatContext:KnitStart()
 	-- Register the executor singletons before the first wave can enqueue actions.
 	local laneAdvanceExecutor = LaneAdvanceExecutor.new()
 	local idleExecutor = IdleExecutor.new()
+	local enemyAttackStructureExecutor = EnemyAttackStructureExecutor.new()
+	local structureAttackExecutor = StructureAttackExecutor.new()
 	self._executorRegistry:Register("LaneAdvance", laneAdvanceExecutor)
 	self._executorRegistry:Register("Idle", idleExecutor)
+	self._executorRegistry:Register("AttackStructure", enemyAttackStructureExecutor)
+	self._executorRegistry:Register("StructureAttack", structureAttackExecutor)
 
 	self._registry:StartOrdered({ "Domain", "Infrastructure", "Application" })
 
@@ -184,6 +197,7 @@ function CombatContext:KnitStart()
 	self._playerRemovingConnection = Players.PlayerRemoving:Connect(function(player: Player)
 		self:_OnPlayerRemoving(player)
 	end)
+
 end
 
 -- Builds the cached waypoint list used by both startup and mid-wave enemy spawns.

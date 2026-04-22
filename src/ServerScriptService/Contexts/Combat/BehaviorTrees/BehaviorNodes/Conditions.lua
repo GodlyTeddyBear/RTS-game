@@ -45,4 +45,38 @@ function Conditions.ShouldFleeCondition()
 	})
 end
 
+--[=[
+	@within Conditions
+	Returns a condition node that succeeds when an enemy can melee a nearby structure.
+	@return any -- Behavior tree task that validates structure target availability.
+]=]
+function Conditions.HasStructureTargetInRangeCondition()
+	return BehaviorTree.Task:new({
+		run = function(task, ctx)
+			if ctx.Facts.TargetStructureEntity ~= nil then
+				task:success()
+				return
+			end
+			task:fail()
+		end,
+	})
+end
+
+--[=[
+	@within Conditions
+	Returns a condition node that succeeds when a structure can attack an enemy.
+	@return any -- Behavior tree task that validates enemy target availability.
+]=]
+function Conditions.HasEnemyTargetInRangeCondition()
+	return BehaviorTree.Task:new({
+		run = function(task, ctx)
+			if ctx.Facts.TargetEnemyEntity ~= nil then
+				task:success()
+				return
+			end
+			task:fail()
+		end,
+	})
+end
+
 return Conditions

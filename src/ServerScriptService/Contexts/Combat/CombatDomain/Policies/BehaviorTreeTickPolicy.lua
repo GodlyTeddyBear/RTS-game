@@ -51,12 +51,20 @@ end
 	@return Result.Result<any> -- Behavior tree payload or an error when the entity cannot tick.
 ]=]
 function BehaviorTreeTickPolicy:Check(entity: number, currentTime: number): Result.Result<any>
-	local combatAction = self._enemyEntityFactory:GetCombatAction(entity)
+	return self:CheckFactory(self._enemyEntityFactory, entity, currentTime)
+end
+
+function BehaviorTreeTickPolicy:CheckFactory(factory: any, entity: number, currentTime: number): Result.Result<any>
+	if factory == nil then
+		return Err("MissingFactory", "Behavior tree factory dependency missing")
+	end
+
+	local combatAction = factory:GetCombatAction(entity)
 	if combatAction and combatAction.ActionState == "Committed" then
 		return Err("Committed", "Action is committed")
 	end
 
-	local behaviorTree = self._enemyEntityFactory:GetBehaviorTree(entity)
+	local behaviorTree = factory:GetBehaviorTree(entity)
 	if not behaviorTree then
 		return Err("NoBT", "Behavior tree not assigned")
 	end

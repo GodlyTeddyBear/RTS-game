@@ -48,44 +48,51 @@ end
 ]=]
 function ProcessCombatTick:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
+	self._structureEntityFactory = registry:Get("StructureEntityFactory")
+	self._enemyContext = registry:Get("EnemyContext")
+	self._structureContext = registry:Get("StructureContext")
 end
 
 -- Runs the behavior tree phase for each alive enemy and updates its last BT tick time.
-function ProcessCombatTick:_RunBehaviorTreePhase(aliveEntities: { number }, currentTime: number)
-	for _, entity in ipairs(aliveEntities) do
-		local checkResult = self._tickPolicy:Check(entity, currentTime)
+function ProcessCombatTick:_RunBehaviorTreePhase(entities: { number }, currentTime: number, factory: any, actorType: string)
+	for _, entity in ipairs(entities) do
+		local checkResult = self._tickPolicy:CheckFactory(factory, entity, currentTime)
 		if checkResult.success then
 			local behaviorTree = checkResult.value.BehaviorTree
+			local facts = if actorType == "Structure"
+				then self._perceptionService:BuildStructureSnapshot(entity, currentTime)
+				else self._perceptionService:BuildSnapshot(entity, currentTime)
 			local context = {
 				Entity = entity,
 				EnemyEntityFactory = self._enemyEntityFactory,
-				Facts = self._perceptionService:BuildSnapshot(entity, currentTime),
+				StructureEntityFactory = self._structureEntityFactory,
+				Facts = facts,
 			}
 
 			pcall(function()
 				behaviorTree.TreeInstance:run(context)
 			end)
 
-			self._enemyEntityFactory:UpdateBTLastTickTime(entity, currentTime)
+			factory:UpdateBTLastTickTime(entity, currentTime)
 		end
 	end
 end
 
 -- Converts pending BT actions into running executors and replaces any current executor that no longer matches.
-function ProcessCombatTick:_RunTransitionPhase(aliveEntities: { number }, currentTime: number, services: any)
-	for _, entity in ipairs(aliveEntities) do
-		local action = self._enemyEntityFactory:GetCombatAction(entity)
+function ProcessCombatTick:_RunTransitionPhase(entities: { number }, currentTime: number, services: any, factory: any)
+	for _, entity in ipairs(entities) do
+		local action = factory:GetCombatAction(entity)
 		if not action or not action.PendingActionId then
 			continue
 		end
 
 		if action.ActionState == "Committed" then
-			self._enemyEntityFactory:ClearPendingAction(entity)
+			factory:ClearPendingAction(entity)
 			continue
 		end
 
 		if action.CurrentActionId == action.PendingActionId then
-			self._enemyEntityFactory:ClearPendingAction(entity)
+			factory:ClearPendingAction(entity)
 			continue
 		end
 
@@ -100,7 +107,7 @@ function ProcessCombatTick:_RunTransitionPhase(aliveEntities: { number }, curren
 
 		local nextExecutor = self._executorRegistry:Get(action.PendingActionId)
 		if not nextExecutor then
-			self._enemyEntityFactory:ClearAction(entity)
+			factory:ClearAction(entity)
 			continue
 		end
 
@@ -110,18 +117,18 @@ function ProcessCombatTick:_RunTransitionPhase(aliveEntities: { number }, curren
 		end)
 
 		if not startSuccess then
-			self._enemyEntityFactory:ClearAction(entity)
+			factory:ClearAction(entity)
 			continue
 		end
 
-		self._enemyEntityFactory:StartAction(entity, action.PendingActionId, action.PendingActionData, currentTime)
+		factory:StartAction(entity, action.PendingActionId, action.PendingActionData, currentTime)
 	end
 end
 
 -- Ticks active executors and resolves success or failure outcomes.
-function ProcessCombatTick:_RunActionPhase(aliveEntities: { number }, dt: number, services: any)
-	for _, entity in ipairs(aliveEntities) do
-		local action = self._enemyEntityFactory:GetCombatAction(entity)
+function ProcessCombatTick:_RunActionPhase(entities: { number }, dt: number, services: any, factory: any)
+	for _, entity in ipairs(entities) do
+		local action = factory:GetCombatAction(entity)
 		if not action or not action.CurrentActionId then
 			continue
 		end
@@ -132,7 +139,7 @@ function ProcessCombatTick:_RunActionPhase(aliveEntities: { number }, dt: number
 
 		local executor = self._executorRegistry:Get(action.CurrentActionId)
 		if not executor then
-			self._enemyEntityFactory:ClearAction(entity)
+			factory:ClearAction(entity)
 			continue
 		end
 
@@ -156,12 +163,12 @@ function ProcessCombatTick:_RunActionPhase(aliveEntities: { number }, dt: number
 			pcall(function()
 				executor:Complete(entity, services)
 			end)
-			self._enemyEntityFactory:ResetActionState(entity)
+			factory:ResetActionState(entity)
 		elseif tickStatus == "Fail" then
 			pcall(function()
 				executor:Cancel(entity, services)
 			end)
-			self._enemyEntityFactory:ClearAction(entity)
+			factory:ClearAction(entity)
 		end
 	end
 end
@@ -189,19 +196,26 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 		-- Capture one timestamp so BT gating and action execution stay aligned.
 		local currentTime = os.clock()
 		local aliveEntities = self._enemyEntityFactory:QueryAliveEntities()
+		local activeStructures = self._structureEntityFactory:QueryActiveEntities()
 		if #aliveEntities > 0 then
 			self._hasSeenAliveByUser[userId] = true
 		end
 		-- Build the service payload shared by executors and completion handling.
 		local services = {
 			EnemyEntityFactory = self._enemyEntityFactory,
+			StructureEntityFactory = self._structureEntityFactory,
+			EnemyContext = self._enemyContext,
+			StructureContext = self._structureContext,
 			CurrentTime = currentTime,
 			HandleGoalReached = self._handleGoalReachedCommand,
 		}
 
-		self:_RunBehaviorTreePhase(aliveEntities, currentTime)
-		self:_RunTransitionPhase(aliveEntities, currentTime, services)
-		self:_RunActionPhase(aliveEntities, dt, services)
+		self:_RunBehaviorTreePhase(aliveEntities, currentTime, self._enemyEntityFactory, "Enemy")
+		self:_RunBehaviorTreePhase(activeStructures, currentTime, self._structureEntityFactory, "Structure")
+		self:_RunTransitionPhase(aliveEntities, currentTime, services, self._enemyEntityFactory)
+		self:_RunTransitionPhase(activeStructures, currentTime, services, self._structureEntityFactory)
+		self:_RunActionPhase(aliveEntities, dt, services, self._enemyEntityFactory)
+		self:_RunActionPhase(activeStructures, dt, services, self._structureEntityFactory)
 
 		-- Only emit wave completion after the combat has actually seen enemies on this session.
 		local completion = self._waveCompletionPolicy:Check()

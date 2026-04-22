@@ -30,15 +30,19 @@ end
 function ApplyDamageEnemy:Execute(entity: any, amount: number): Result.Result<boolean>
 	return Result.Catch(function()
 		Ensure(entity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
-		Ensure(amount > 0, "InvalidDamageAmount", Errors.INVALID_DAMAGE_AMOUNT, {
+		Ensure(type(amount) == "number" and amount > 0, "InvalidDamageAmount", Errors.INVALID_DAMAGE_AMOUNT, {
 			Amount = amount,
 		})
 
 		local identity = self._entityFactory:GetIdentity(entity)
 		Ensure(identity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
+		Ensure(self._entityFactory:IsAlive(entity), "InvalidEntity", Errors.INVALID_ENTITY)
 
-		local nextHp = self._entityFactory:ApplyDamage(entity, amount)
-		if nextHp <= 0 then
+		local health = self._entityFactory:GetHealth(entity)
+		Ensure(health ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
+
+		local didDie = self._entityFactory:ApplyDamage(entity, amount)
+		if didDie then
 			local deathCFrame = self._entityFactory:GetDeathCFrame(entity) or CFrame.new()
 			GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.role, identity.waveNumber, deathCFrame)
 			Try(self._despawnEnemyCommand:Execute(entity))

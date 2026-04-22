@@ -69,28 +69,18 @@ local function _ResolvePath(path: string): Instance?
 end
 
 local function _GetGridPart(): BasePart?
-	local gridInstance = _ResolvePath(WorldConfig.GRID_PART_PATH)
-	if gridInstance ~= nil and gridInstance:IsA("BasePart") then
-		return gridInstance
+	local gridContainer = _ResolvePath(WorldConfig.GRID_FOLDER_PATH)
+	if gridContainer == nil then
+		return nil
 	end
 
-	local workspaceCandidate = Workspace:FindFirstChild("PlacementGrid", true)
-	if workspaceCandidate ~= nil and workspaceCandidate:IsA("BasePart") then
-		return workspaceCandidate
+	if gridContainer:IsA("BasePart") and gridContainer.Name == WorldConfig.GRID_PART_NAME then
+		return gridContainer
 	end
 
-	local globalCandidate = game:FindFirstChild("PlacementGrid", true)
-	if globalCandidate ~= nil and globalCandidate:IsA("BasePart") then
-		return globalCandidate
-	end
-
-	for _, instance in game:GetDescendants() do
-		if instance:IsA("BasePart") and instance.Name == "PlacementGrid" then
-			local parent = instance.Parent
-			local grandParent = parent and parent.Parent
-			if parent and grandParent and parent.Name == "Zones" and grandParent.Name == "Environment" then
-				return instance
-			end
+	for _, descendant in ipairs(gridContainer:GetDescendants()) do
+		if descendant:IsA("BasePart") and descendant.Name == WorldConfig.GRID_PART_NAME then
+			return descendant
 		end
 	end
 

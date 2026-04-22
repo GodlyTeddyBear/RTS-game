@@ -2,6 +2,7 @@
 
 local SwarmBehavior = require(script.Parent.Parent.Parent.BehaviorTrees.SwarmBehavior)
 local TankBehavior = require(script.Parent.Parent.Parent.BehaviorTrees.TankBehavior)
+local StructureBehavior = require(script.Parent.Parent.Parent.BehaviorTrees.StructureBehavior)
 
 local BEHAVIOR_MAP = {
 	swarm = SwarmBehavior,
@@ -43,6 +44,10 @@ end
 function BehaviorTreeFactory:CreateTree(role: string)
 	local builder = BEHAVIOR_MAP[role] or SwarmBehavior
 	return builder.Create()
+end
+
+function BehaviorTreeFactory:CreateStructureTree()
+	return StructureBehavior.Create()
 end
 
 return BehaviorTreeFactory

@@ -1,7 +1,7 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local JECS = require(ReplicatedStorage.Packages.JECS)
+local BaseECSWorldService = require(ReplicatedStorage.Utilities.BaseECSWorldService)
 
 --[=[
 	@class MapECSWorldService
@@ -10,19 +10,18 @@ local JECS = require(ReplicatedStorage.Packages.JECS)
 ]=]
 local MapECSWorldService = {}
 MapECSWorldService.__index = MapECSWorldService
+setmetatable(MapECSWorldService, { __index = BaseECSWorldService })
 
 function MapECSWorldService.new()
-	local self = setmetatable({}, MapECSWorldService)
-	self._world = JECS.World.new()
-	return self
+	return setmetatable(BaseECSWorldService._new("Map"), MapECSWorldService)
 end
 
 function MapECSWorldService:Init(_registry: any, _name: string)
+	BaseECSWorldService.Init(self, _registry, _name)
 end
 
 function MapECSWorldService:GetWorld()
-	return self._world
+	return BaseECSWorldService.GetWorld(self)
 end
 
 return MapECSWorldService
-

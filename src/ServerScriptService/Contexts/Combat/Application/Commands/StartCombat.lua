@@ -46,6 +46,7 @@ end
 ]=]
 function StartCombat:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
+	self._structureEntityFactory = registry:Get("StructureEntityFactory")
 end
 
 -- Builds and stores the role-specific behavior tree for one enemy entity.
@@ -62,6 +63,12 @@ function StartCombat:_AssignBehaviorTree(entity: number)
 		TickInterval = tickInterval,
 	})
 	self._enemyEntityFactory:ClearAction(entity)
+end
+
+function StartCombat:_AssignStructureBehaviorTree(entity: number)
+	local tree = self._behaviorTreeFactory:CreateStructureTree()
+	self._structureEntityFactory:SetBehaviorTree(entity, tree, BehaviorConfig.DEFAULT.TickInterval)
+	self._structureEntityFactory:ClearAction(entity)
 end
 
 --[=[
@@ -88,6 +95,11 @@ function StartCombat:Execute(waveNumber: number, isEndless: boolean): Result.Res
 		local aliveEntities = self._enemyEntityFactory:QueryAliveEntities()
 		for _, entity in ipairs(aliveEntities) do
 			self:_AssignBehaviorTree(entity)
+		end
+
+		local activeStructures = self._structureEntityFactory:QueryActiveEntities()
+		for _, entity in ipairs(activeStructures) do
+			self:_AssignStructureBehaviorTree(entity)
 		end
 
 		return Ok(true)

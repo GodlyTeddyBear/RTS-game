@@ -12,6 +12,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Registry = require(ReplicatedStorage.Utilities.Registry)
@@ -22,7 +23,12 @@ local CommanderConfig = require(ReplicatedStorage.Contexts.Commander.Config.Comm
 local CommandRegistry = require(ReplicatedStorage.Contexts.Log.CommandRegistry)
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local BlinkServer = require(ReplicatedStorage.Network.Generated.CommanderSyncServer)
+local ProfileManager = require(ServerScriptService.Persistence.ProfileManager)
+local PlayerLifecycleManager = require(ServerScriptService.Persistence.PlayerLifecycleManager)
 
+local CommanderECSWorldService = require(script.Parent.Infrastructure.ECS.CommanderECSWorldService)
+local CommanderComponentRegistry = require(script.Parent.Infrastructure.ECS.CommanderComponentRegistry)
+local CommanderEntityFactory = require(script.Parent.Infrastructure.ECS.CommanderEntityFactory)
 local CommanderSyncService = require(script.Parent.Infrastructure.Persistence.CommanderSyncService)
 local AbilityService = require(script.Parent.CommanderDomain.Services.AbilityService)
 local CooldownService = require(script.Parent.CommanderDomain.Services.CooldownService)
@@ -51,40 +57,68 @@ local CommanderContext = Knit.CreateService({
 	Client = {},
 })
 
+local function _InitModule(registry: any, moduleName: string)
+	local module = registry:Get(moduleName)
+	if type(module) == "function" then
+		return
+	end
+
+	if module and module.Init and type(module.Init) == "function" then
+		module:Init(registry, moduleName)
+	end
+end
+
 -- [Initialization]
 
 --[=[
-	Initializes the commander sync service, commands, and queries.
+	Initializes the commander ECS stack, sync service, commands, and queries.
 	@within CommanderContext
 ]=]
 function CommanderContext:KnitInit()
-	-- Register the commander stack before any player joins can trigger hydration.
 	local registry = Registry.new("Server")
+	local worldService = CommanderECSWorldService.new()
+
 	registry:Register("BlinkServer", BlinkServer)
+	registry:Register("CommanderECSWorldService", worldService, "Infrastructure")
+	worldService:Init(registry, "CommanderECSWorldService")
+	registry:Register("World", worldService:GetWorld())
+	registry:Register("CommanderComponentRegistry", CommanderComponentRegistry.new(), "Infrastructure")
+	registry:Register("CommanderEntityFactory", CommanderEntityFactory.new(), "Infrastructure")
 	registry:Register("CommanderSyncService", CommanderSyncService.new(), "Infrastructure")
 	registry:Register("AbilityService", AbilityService.new(), "Domain")
 	registry:Register("CooldownService", CooldownService.new(), "Domain")
 	registry:Register("UseAbilityCommand", UseAbilityCommand.new(), "Application")
 	registry:Register("GetCommanderStateQuery", GetCommanderStateQuery.new(), "Application")
 	registry:Register("GetCooldownQuery", GetCooldownQuery.new(), "Application")
-	registry:InitAll()
 
-	-- Cache the commander services and reset per-user runtime flags.
+	_InitModule(registry, "CommanderECSWorldService")
+	_InitModule(registry, "CommanderComponentRegistry")
+	_InitModule(registry, "CommanderEntityFactory")
+	_InitModule(registry, "CommanderSyncService")
+	_InitModule(registry, "AbilityService")
+	_InitModule(registry, "CooldownService")
+	_InitModule(registry, "UseAbilityCommand")
+	_InitModule(registry, "GetCommanderStateQuery")
+	_InitModule(registry, "GetCooldownQuery")
+
+	self._registry = registry
 	self._syncService = registry:Get("CommanderSyncService")
+	self._entityFactory = registry:Get("CommanderEntityFactory")
 	self._useAbilityCommand = registry:Get("UseAbilityCommand")
 	self._getCommanderStateQuery = registry:Get("GetCommanderStateQuery")
 	self._getCooldownQuery = registry:Get("GetCooldownQuery")
 	self._godModeEnabledByUserId = {}
-	self._playerAddedConnection = nil
+	self._loadedUserIds = {} :: { [number]: true }
 	self._playerRemovingConnection = nil
+	self._profileLoadedConnection = nil
+	self._profileSavingConnection = nil
 
-	-- Register developer-only log commands after initialization completes.
+	PlayerLifecycleManager:RegisterLoader("Commander")
 	self:_RegisterDeveloperLogCommands()
 end
 
 -- [Private Helpers]
 
--- Normalizes a debug command user id so ad-hoc console input always resolves to a safe integer target.
 local function _parseUserId(rawValue: string?): number
 	local parsed = tonumber(rawValue)
 	if parsed == nil then
@@ -94,7 +128,6 @@ local function _parseUserId(rawValue: string?): number
 	return math.floor(parsed)
 end
 
--- Validates that a debug command slot key matches one of the configured commander abilities.
 local function _isValidSlot(slotKey: string): boolean
 	for _, slot in CommanderConfig.SLOTS do
 		if slot.key == slotKey then
@@ -105,7 +138,6 @@ local function _isValidSlot(slotKey: string): boolean
 	return false
 end
 
--- Parses the flexible console toggle syntax used by developer log commands.
 local function _parseBooleanDirective(rawValue: string?): boolean?
 	if rawValue == nil then
 		return nil
@@ -122,9 +154,32 @@ local function _parseBooleanDirective(rawValue: string?): boolean?
 	return nil
 end
 
--- Registers commander-focused developer log commands after the runtime dependencies are ready.
+function CommanderContext:_HandleProfileLoaded(player: Player)
+	if self._loadedUserIds[player.UserId] == true then
+		self._syncService:HydrateAndSyncPlayer(player)
+		PlayerLifecycleManager:NotifyLoaded(player, "Commander")
+		return
+	end
+
+	self._entityFactory:CreateOrResetCommander(player.UserId, CommanderConfig.MAX_HP)
+	self._syncService:HydrateAndSyncPlayer(player)
+	self._loadedUserIds[player.UserId] = true
+	PlayerLifecycleManager:NotifyLoaded(player, "Commander")
+end
+
+function CommanderContext:_HandleProfileSaving(player: Player)
+	self._syncService:SyncCommanderState(player.UserId)
+end
+
+function CommanderContext:_HandlePlayerRemoving(player: Player)
+	self._entityFactory:RemoveCommander(player.UserId)
+	self._entityFactory:FlushPendingDeletes()
+	self._syncService:RemovePlayer(player.UserId)
+	self:SetGodModeEnabled(player.UserId, false)
+	self._loadedUserIds[player.UserId] = nil
+end
+
 function CommanderContext:_RegisterDeveloperLogCommands()
-	-- Register the commander state summary command for quick runtime inspection.
 	CommandRegistry.Register({
 		name = "Commander.GetStateSummary",
 		context = "Commander",
@@ -156,7 +211,6 @@ function CommanderContext:_RegisterDeveloperLogCommands()
 		end,
 	})
 
-	-- Register the cooldown query command for slot-specific debugging.
 	CommandRegistry.Register({
 		name = "Commander.GetCooldownRemaining",
 		context = "Commander",
@@ -177,7 +231,6 @@ function CommanderContext:_RegisterDeveloperLogCommands()
 		end,
 	})
 
-	-- Register the god-mode toggle command for controlled damage testing.
 	CommandRegistry.Register({
 		name = "Run.SetGodMode",
 		context = "Run",
@@ -215,23 +268,10 @@ end
 
 -- [Public API]
 
---[=[
-	Checks whether a user id is temporarily protected from commander damage.
-	@within CommanderContext
-	@param userId number -- The player user id to read.
-	@return boolean -- Whether god mode is currently enabled.
-]=]
 function CommanderContext:IsGodModeEnabled(userId: number): boolean
 	return self._godModeEnabledByUserId[userId] == true
 end
 
--- This stays server-owned so debug state never leaks into the client atom.
---[=[
-	Enables or clears the temporary commander damage override for a user id.
-	@within CommanderContext
-	@param userId number -- The player user id to update.
-	@param isEnabled boolean -- Whether the override should stay enabled.
-]=]
 function CommanderContext:SetGodModeEnabled(userId: number, isEnabled: boolean)
 	if isEnabled then
 		self._godModeEnabledByUserId[userId] = true
@@ -242,43 +282,36 @@ function CommanderContext:SetGodModeEnabled(userId: number, isEnabled: boolean)
 end
 
 --[=[
-	Starts commander hydration for current and future players.
+	Starts commander lifecycle wiring.
 	@within CommanderContext
 ]=]
 function CommanderContext:KnitStart()
-	-- Hydrate late joiners so they receive the commander atom immediately on spawn.
-	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
-		self._syncService:LoadPlayer(player.UserId)
-		self._syncService:HydratePlayer(player)
+	local events = GameEvents.Events.Persistence
+
+	self._profileLoadedConnection = GameEvents.Bus:On(events.ProfileLoaded, function(player: Player)
+		self:_HandleProfileLoaded(player)
 	end)
 
-	-- Remove per-player commander state as soon as the player leaves the server.
+	self._profileSavingConnection = GameEvents.Bus:On(events.ProfileSaving, function(player: Player)
+		self:_HandleProfileSaving(player)
+	end)
+
 	self._playerRemovingConnection = Players.PlayerRemoving:Connect(function(player: Player)
-		self._syncService:RemovePlayer(player.UserId)
-		self:SetGodModeEnabled(player.UserId, false)
+		self:_HandlePlayerRemoving(player)
 	end)
 
-	-- Backfill players already in the server before Knit finished starting.
 	for _, player in Players:GetPlayers() do
-		self._syncService:LoadPlayer(player.UserId)
-		self._syncService:HydratePlayer(player)
+		if ProfileManager:Has(player) then
+			self:_HandleProfileLoaded(player)
+		end
 	end
 end
 
---[=[
-	Applies damage to the commander and emits the commander-death event if lethal.
-	@within CommanderContext
-	@param player Player -- The player whose commander should take damage.
-	@param amount number -- The amount of damage to apply.
-	@return Result.Result<number> -- The remaining HP after damage is applied.
-]=]
 function CommanderContext:ApplyDamage(player: Player, amount: number): Result.Result<number>
 	return Catch(function()
-		-- Validate the request before touching authoritative state.
 		Ensure(player, "InvalidPlayer", Errors.INVALID_PLAYER)
 		Ensure(amount > 0, "InvalidDamageAmount", Errors.INVALID_DAMAGE_AMOUNT, { amount = amount })
 
-		-- Read the current HP first so lethal transitions only fire once.
 		local previousState = Try(fromNilable(
 			self._getCommanderStateQuery:Execute(player.UserId),
 			"CommanderNotFound",
@@ -290,10 +323,14 @@ function CommanderContext:ApplyDamage(player: Player, amount: number): Result.Re
 			return Ok(previousState.hp)
 		end
 
-		-- Apply damage through the sync service so client replication stays centralized.
-		local nextHp = self._syncService:ApplyDamage(player.UserId, amount)
+		local nextHp = Try(fromNilable(
+			self._entityFactory:ApplyDamage(player.UserId, amount),
+			"CommanderNotFound",
+			Errors.COMMANDER_NOT_FOUND,
+			{ userId = player.UserId }
+		))
+		self._syncService:SyncCommanderState(player.UserId)
 
-		-- Emit the shared death event only on the first lethal transition.
 		if previousState.hp > 0 and nextHp <= 0 then
 			Result.MentionEvent("CommanderContext:CommanderDeath", "Commander HP reached zero", {
 				UserId = player.UserId,
@@ -305,70 +342,40 @@ function CommanderContext:ApplyDamage(player: Player, amount: number): Result.Re
 	end, "Commander:ApplyDamage")
 end
 
---[=[
-	Reads the current commander state for a player.
-	@within CommanderContext
-	@param userId number -- The player user id to read.
-	@return Result.Result<CommanderState?> -- The cloned commander state, or `nil` if uninitialized.
-]=]
 function CommanderContext:GetCommanderState(userId: number): Result.Result<CommanderState?>
 	return Catch(function()
 		return Ok(self._getCommanderStateQuery:Execute(userId))
 	end, "Commander:GetCommanderState")
 end
 
---[=[
-	Reads the remaining cooldown time for a commander ability slot.
-	@within CommanderContext
-	@param userId number -- The player user id to read.
-	@param slotKey SlotKey -- The ability slot key to inspect.
-	@return Result.Result<number> -- The remaining cooldown time in seconds.
-]=]
 function CommanderContext:GetCooldownRemaining(userId: number, slotKey: SlotKey): Result.Result<number>
 	return Catch(function()
 		return Ok(self._getCooldownQuery:Execute(userId, slotKey))
 	end, "Commander:GetCooldownRemaining")
 end
 
---[=[
-	Uses a commander ability for the supplied player.
-	@within CommanderContext
-	@param player Player -- The player using the ability.
-	@param slotKey SlotKey -- The ability slot key to activate.
-	@return Result.Result<{ slotKey: SlotKey }> -- The accepted slot key.
-]=]
 function CommanderContext:UseAbility(player: Player, slotKey: SlotKey): Result.Result<{ slotKey: SlotKey }>
 	return Catch(function()
-		-- Validate the caller before delegating to the command layer.
 		Ensure(player, "InvalidPlayer", Errors.INVALID_PLAYER)
 		return self._useAbilityCommand:Execute(player, slotKey)
 	end, "Commander:UseAbility")
 end
 
---[=[
-	Invokes the commander ability remote from the client.
-	@within CommanderContext
-	@param player Player -- The calling player.
-	@param slotKey SlotKey -- The ability slot key to activate.
-	@return Result.Result<{ slotKey: SlotKey }> -- The accepted slot key.
-]=]
 function CommanderContext.Client:UseAbility(player: Player, slotKey: SlotKey)
 	return self.Server:UseAbility(player, slotKey)
 end
 
---[=[
-	Disconnects commander lifecycle listeners and tears down sync state.
-	@within CommanderContext
-]=]
 function CommanderContext:Destroy()
 	if self._syncService then
 		self._syncService:Destroy()
 	end
 
-	if self._playerAddedConnection then
-		self._playerAddedConnection:Disconnect()
+	if self._profileLoadedConnection then
+		self._profileLoadedConnection:Disconnect()
 	end
-
+	if self._profileSavingConnection then
+		self._profileSavingConnection:Disconnect()
+	end
 	if self._playerRemovingConnection then
 		self._playerRemovingConnection:Disconnect()
 	end
@@ -377,3 +384,4 @@ end
 WrapContext(CommanderContext, "Commander")
 
 return CommanderContext
+

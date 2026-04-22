@@ -29,6 +29,8 @@ export type RoleComponent = {
 	role: EnemyRole,
 	moveSpeed: number,
 	damage: number,
+	attackRange: number,
+	attackCooldown: number,
 	targetPreference: string,
 }
 

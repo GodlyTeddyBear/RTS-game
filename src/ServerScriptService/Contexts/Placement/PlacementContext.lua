@@ -26,6 +26,7 @@ local PlaceStructurePolicy = require(script.Parent.PlacementDomain.Policies.Plac
 local PlacementService = require(script.Parent.Infrastructure.Services.PlacementService)
 local PlacementSyncService = require(script.Parent.Infrastructure.Persistence.PlacementSyncService)
 local PlaceStructureCommand = require(script.Parent.Application.Commands.PlaceStructureCommand)
+local DestroyStructureInstanceCommand = require(script.Parent.Application.Commands.DestroyStructureInstanceCommand)
 local GetPlacedStructuresQuery = require(script.Parent.Application.Queries.GetPlacedStructuresQuery)
 
 local Catch = Result.Catch
@@ -61,6 +62,7 @@ function PlacementContext:KnitInit()
 	registry:Register("PlacementSyncService", PlacementSyncService.new(), "Infrastructure")
 	registry:Register("PlaceStructurePolicy", PlaceStructurePolicy.new(), "Domain")
 	registry:Register("PlaceStructureCommand", PlaceStructureCommand.new(), "Application")
+	registry:Register("DestroyStructureInstanceCommand", DestroyStructureInstanceCommand.new(), "Application")
 	registry:Register("GetPlacedStructuresQuery", GetPlacedStructuresQuery.new(), "Application")
 	registry:InitAll()
 
@@ -70,6 +72,7 @@ function PlacementContext:KnitInit()
 	self._syncService = registry:Get("PlacementSyncService")
 	self._placementService = registry:Get("PlacementService")
 	self._placeStructureCommand = registry:Get("PlaceStructureCommand")
+	self._destroyStructureInstanceCommand = registry:Get("DestroyStructureInstanceCommand")
 	self._getPlacedStructuresQuery = registry:Get("GetPlacedStructuresQuery")
 	self._structurePlacedSignal = Instance.new("BindableEvent")
 	self.StructurePlaced = self._structurePlacedSignal.Event
@@ -170,6 +173,18 @@ function PlacementContext:GetPlacedStructures(): Result.Result<{ StructureRecord
 	return Catch(function()
 		return Ok(self._getPlacedStructuresQuery:Execute())
 	end, "Placement:GetPlacedStructures")
+end
+
+--[=[
+	Destroys a spawned structure model while leaving placement records untouched.
+	@within PlacementContext
+	@param instanceId number -- Runtime structure instance id.
+	@return Result.Result<boolean> -- Whether the runtime instance destroy path completed.
+]=]
+function PlacementContext:DestroyStructureInstance(instanceId: number): Result.Result<boolean>
+	return Catch(function()
+		return self._destroyStructureInstanceCommand:Execute(instanceId)
+	end, "Placement:DestroyStructureInstance")
 end
 
 -- [Private Helpers]

@@ -9,13 +9,14 @@
 local StructureConfig = {}
 
 --[=[
-	@prop STRUCTURES { [string]: { DisplayName: string, AttackRange: number, AttackDamage: number, AttackCooldown: number } }
+	@prop STRUCTURES { [string]: { DisplayName: string, MaxHealth: number, AttackRange: number, AttackDamage: number, AttackCooldown: number } }
 	@within StructureConfig
 	Frozen structure definitions keyed by canonical structure type.
 ]=]
 StructureConfig.STRUCTURES = table.freeze({
 	SentryTurret = table.freeze({
 		DisplayName = "Sentry Turret",
+		MaxHealth = 100,
 		AttackRange = 18,
 		AttackDamage = 15,
 		AttackCooldown = 1.2,

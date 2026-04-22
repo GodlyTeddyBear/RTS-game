@@ -74,12 +74,22 @@ local function _GetGridPart(): BasePart
 	local deadline = os.clock() + GRID_PART_WAIT_TIMEOUT_SECONDS
 
 	repeat
-		local gridInstance = _ResolvePath(WorldConfig.GRID_PART_PATH)
-		if gridInstance == nil then
-			gridInstance = Workspace:FindFirstChild("PlacementGrid", true)
+		local gridContainer = _ResolvePath(WorldConfig.GRID_FOLDER_PATH)
+		local gridInstance = nil :: BasePart?
+		if gridContainer ~= nil then
+			if gridContainer:IsA("BasePart") and gridContainer.Name == WorldConfig.GRID_PART_NAME then
+				gridInstance = gridContainer
+			else
+				for _, descendant in ipairs(gridContainer:GetDescendants()) do
+					if descendant:IsA("BasePart") and descendant.Name == WorldConfig.GRID_PART_NAME then
+						gridInstance = descendant
+						break
+					end
+				end
+			end
 		end
 
-		if gridInstance ~= nil and gridInstance:IsA("BasePart") then
+		if gridInstance ~= nil then
 			return gridInstance
 		end
 

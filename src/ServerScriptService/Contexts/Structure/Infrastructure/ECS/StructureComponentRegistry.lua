@@ -1,7 +1,7 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local JECS = require(ReplicatedStorage.Packages.JECS)
+local BaseECSComponentRegistry = require(ReplicatedStorage.Utilities.BaseECSComponentRegistry)
 
 --[=[
 	@class StructureComponentRegistry
@@ -10,6 +10,7 @@ local JECS = require(ReplicatedStorage.Packages.JECS)
 ]=]
 local StructureComponentRegistry = {}
 StructureComponentRegistry.__index = StructureComponentRegistry
+setmetatable(StructureComponentRegistry, { __index = BaseECSComponentRegistry })
 
 --[=[
 	Creates a new component registry wrapper.
@@ -17,13 +18,7 @@ StructureComponentRegistry.__index = StructureComponentRegistry
 	@return StructureComponentRegistry -- The new registry instance.
 ]=]
 function StructureComponentRegistry.new()
-	local self = setmetatable({}, StructureComponentRegistry)
-	self._components = nil
-	return self
-end
-
-local function _nameComponent(world: any, componentId: number, name: string)
-	world:set(componentId, JECS.Name, name)
+	return setmetatable(BaseECSComponentRegistry._new("Structure"), StructureComponentRegistry)
 end
 
 --[=[
@@ -33,33 +28,27 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function StructureComponentRegistry:Init(registry: any, _name: string)
-	-- Create the component ids from the shared structure world.
-	local world = registry:Get("World")
+	BaseECSComponentRegistry.InitBase(self, registry)
 
-	local attackStatsComponent = world:component()
-	local attackCooldownComponent = world:component()
-	local targetComponent = world:component()
-	local instanceRefComponent = world:component()
-	local identityComponent = world:component()
-	local activeTag = world:entity()
+	-- [AUTHORITATIVE] static combat stats for each structure.
+	self:RegisterComponent("AttackStatsComponent", "Structure.AttackStats", "AUTHORITATIVE")
+	-- [AUTHORITATIVE] runtime cooldown accumulator.
+	self:RegisterComponent("AttackCooldownComponent", "Structure.AttackCooldown", "AUTHORITATIVE")
+	-- [AUTHORITATIVE] runtime health for destructible structures.
+	self:RegisterComponent("HealthComponent", "Structure.Health", "AUTHORITATIVE")
+	-- [AUTHORITATIVE] current enemy target entity id.
+	self:RegisterComponent("TargetComponent", "Structure.Target", "AUTHORITATIVE")
+	-- [AUTHORITATIVE] assigned combat behavior tree and tick timing.
+	self:RegisterComponent("BehaviorTreeComponent", "Structure.BehaviorTree", "AUTHORITATIVE")
+	-- [AUTHORITATIVE] current and pending combat executor action.
+	self:RegisterComponent("CombatActionComponent", "Structure.CombatAction", "AUTHORITATIVE")
+	-- [AUTHORITATIVE] runtime world position and source instance id.
+	self:RegisterComponent("InstanceRefComponent", "Structure.InstanceRef", "AUTHORITATIVE")
+	-- [AUTHORITATIVE] stable identity metadata.
+	self:RegisterComponent("IdentityComponent", "Structure.Identity", "AUTHORITATIVE")
+	self:RegisterTag("ActiveTag", "Structure.ActiveTag")
 
-	-- Name each component so debug output and inspector tools stay readable.
-	_nameComponent(world, attackStatsComponent, "Structure.AttackStats")
-	_nameComponent(world, attackCooldownComponent, "Structure.AttackCooldown")
-	_nameComponent(world, targetComponent, "Structure.Target")
-	_nameComponent(world, instanceRefComponent, "Structure.InstanceRef")
-	_nameComponent(world, identityComponent, "Structure.Identity")
-	_nameComponent(world, activeTag, "Structure.Active")
-
-	-- Freeze the lookup table before exposing it to downstream services.
-	self._components = table.freeze({
-		AttackStatsComponent = attackStatsComponent,
-		AttackCooldownComponent = attackCooldownComponent,
-		TargetComponent = targetComponent,
-		InstanceRefComponent = instanceRefComponent,
-		IdentityComponent = identityComponent,
-		ActiveTag = activeTag,
-	})
+	self:Finalize()
 end
 
 --[=[
@@ -68,7 +57,7 @@ end
 	@return table -- The component lookup table.
 ]=]
 function StructureComponentRegistry:GetComponents()
-	return self._components
+	return BaseECSComponentRegistry.GetComponents(self)
 end
 
 return StructureComponentRegistry

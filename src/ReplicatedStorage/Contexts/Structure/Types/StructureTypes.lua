@@ -45,6 +45,17 @@ export type TAttackCooldownComponent = {
 }
 
 --[=[
+	@interface THealthComponent
+	@within StructureTypes
+	.Current number -- Current structure hit points.
+	.Max number -- Maximum structure hit points.
+]=]
+export type THealthComponent = {
+	Current: number,
+	Max: number,
+}
+
+--[=[
 	@interface TTargetComponent
 	@within StructureTypes
 	.Entity any? -- Current target entity or `nil` when idle.

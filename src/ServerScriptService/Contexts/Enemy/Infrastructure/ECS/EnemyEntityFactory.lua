@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
+local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
 
 type TCombatActionState = "None" | "Running" | "Committed"
 
@@ -21,9 +22,10 @@ type TCombatAction = {
 ]=]
 local EnemyEntityFactory = {}
 EnemyEntityFactory.__index = EnemyEntityFactory
+setmetatable(EnemyEntityFactory, { __index = BaseECSEntityFactory })
 
 function EnemyEntityFactory.new()
-	return setmetatable({}, EnemyEntityFactory)
+	return setmetatable(BaseECSEntityFactory._new("Enemy"), EnemyEntityFactory)
 end
 
 local function _buildDefaultAction(): TCombatAction
@@ -38,8 +40,7 @@ local function _buildDefaultAction(): TCombatAction
 end
 
 function EnemyEntityFactory:Init(registry: any, _name: string)
-	self._world = registry:Get("World")
-	self._components = registry:Get("EnemyComponentRegistry"):GetComponents()
+	BaseECSEntityFactory.InitBase(self, registry, "EnemyComponentRegistry")
 	assert(self._components ~= nil and self._components.AliveTag ~= nil, "EnemyEntityFactory: missing EnemyComponentRegistry components")
 end
 
@@ -59,6 +60,8 @@ function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFra
 		role = role,
 		moveSpeed = roleConfig.moveSpeed,
 		damage = roleConfig.damage,
+		attackRange = roleConfig.attackRange,
+		attackCooldown = roleConfig.attackCooldown,
 		targetPreference = roleConfig.targetPreference,
 	})
 	self._world:set(entity, self._components.PathState, {
@@ -73,7 +76,7 @@ function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFra
 	})
 	self._world:set(entity, self._components.CombatAction, _buildDefaultAction())
 	self._world:set(entity, self._components.AttackCooldown, {
-		Cooldown = 0,
+		Cooldown = roleConfig.attackCooldown,
 		LastAttackTime = 0,
 	})
 	self._world:set(entity, self._components.BehaviorConfig, {
@@ -220,6 +223,22 @@ function EnemyEntityFactory:GetBehaviorConfig(entity: number)
 	return self._world:get(entity, self._components.BehaviorConfig)
 end
 
+function EnemyEntityFactory:GetAttackCooldown(entity: number)
+	return self._world:get(entity, self._components.AttackCooldown)
+end
+
+function EnemyEntityFactory:SetLastAttackTime(entity: number, lastAttackTime: number)
+	local attackCooldown = self:GetAttackCooldown(entity)
+	if attackCooldown == nil then
+		return
+	end
+
+	self._world:set(entity, self._components.AttackCooldown, {
+		Cooldown = attackCooldown.Cooldown,
+		LastAttackTime = lastAttackTime,
+	})
+end
+
 function EnemyEntityFactory:SetBehaviorConfig(entity: number, config: { TickInterval: number })
 	self._world:set(entity, self._components.BehaviorConfig, {
 		TickInterval = config.TickInterval,
@@ -309,19 +328,11 @@ function EnemyEntityFactory:GetPosition(entity: number)
 end
 
 function EnemyEntityFactory:QueryAliveEntities(): { number }
-	local entities = {}
-	for entity in self._world:query(self._components.AliveTag) do
-		table.insert(entities, entity)
-	end
-	return entities
+	return self:CollectQuery(self._components.AliveTag)
 end
 
 function EnemyEntityFactory:QueryGoalReachedEntities(): { number }
-	local entities = {}
-	for entity in self._world:query(self._components.GoalReachedTag) do
-		table.insert(entities, entity)
-	end
-	return entities
+	return self:CollectQuery(self._components.GoalReachedTag)
 end
 
 function EnemyEntityFactory:DeleteEntity(entity: number)

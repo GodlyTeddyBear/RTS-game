@@ -75,11 +75,17 @@ export type TBehaviorConfigComponent = {
 	@within ExecutorTypes
 	Shared runtime services passed into combat executors.
 	.EnemyEntityFactory any -- Combat enemy entity access facade.
+	.StructureEntityFactory any -- Combat structure entity access facade.
+	.EnemyContext any -- Enemy context public damage API.
+	.StructureContext any -- Structure context public damage API.
 	.CurrentTime number -- Timestamp shared across executor calls for one tick.
 	.HandleGoalReached any -- Command used to resolve goal-reaching enemies.
 ]=]
 export type TExecutorServices = {
 	EnemyEntityFactory: any,
+	StructureEntityFactory: any,
+	EnemyContext: any,
+	StructureContext: any,
 	CurrentTime: number,
 	HandleGoalReached: any,
 }

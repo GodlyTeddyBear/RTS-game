@@ -25,10 +25,9 @@ local ServerScheduler = require(ServerScriptService.Scheduler.ServerScheduler)
 local StructureECSWorldService = require(script.Parent.Infrastructure.ECS.StructureECSWorldService)
 local StructureComponentRegistry = require(script.Parent.Infrastructure.ECS.StructureComponentRegistry)
 local StructureEntityFactory = require(script.Parent.Infrastructure.ECS.StructureEntityFactory)
-local StructureTargetingSystem = require(script.Parent.Infrastructure.Services.StructureTargetingSystem)
-local StructureAttackSystem = require(script.Parent.Infrastructure.Services.StructureAttackSystem)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
 local RegisterStructureCommand = require(script.Parent.Application.Commands.RegisterStructureCommand)
+local ApplyDamageStructureCommand = require(script.Parent.Application.Commands.ApplyDamageStructureCommand)
 local CleanupAllCommand = require(script.Parent.Application.Commands.CleanupAllCommand)
 local GetActiveStructuresQuery = require(script.Parent.Application.Queries.GetActiveStructuresQuery)
 local GetStructureCountQuery = require(script.Parent.Application.Queries.GetStructureCountQuery)
@@ -65,16 +64,17 @@ StructureContext.StructureAttacked = nil
 ]=]
 function StructureContext:KnitInit()
 	local registry = Registry.new("Server")
+	local worldService = StructureECSWorldService.new()
 
 	-- Register the isolated ECS world and all structure-specific services first.
-	registry:Register("StructureECSWorldService", StructureECSWorldService.new(), "Infrastructure")
-	registry:Register("World", registry:Get("StructureECSWorldService"):GetWorld())
+	registry:Register("StructureECSWorldService", worldService, "Infrastructure")
+	worldService:Init(registry, "StructureECSWorldService")
+	registry:Register("World", worldService:GetWorld())
 	registry:Register("StructureComponentRegistry", StructureComponentRegistry.new(), "Infrastructure")
 	registry:Register("StructureEntityFactory", StructureEntityFactory.new(), "Infrastructure")
-	registry:Register("StructureTargetingSystem", StructureTargetingSystem.new(), "Infrastructure")
-	registry:Register("StructureAttackSystem", StructureAttackSystem.new(), "Infrastructure")
 	registry:Register("RegisterStructurePolicy", RegisterStructurePolicy.new(), "Domain")
 	registry:Register("RegisterStructureCommand", RegisterStructureCommand.new(), "Application")
+	registry:Register("ApplyDamageStructureCommand", ApplyDamageStructureCommand.new(), "Application")
 	registry:Register("CleanupAllCommand", CleanupAllCommand.new(), "Application")
 	registry:Register("GetActiveStructuresQuery", GetActiveStructuresQuery.new(), "Application")
 	registry:Register("GetStructureCountQuery", GetStructureCountQuery.new(), "Application")
@@ -92,11 +92,11 @@ function StructureContext:KnitInit()
 	-- Cache the resolved services and public helpers used by the runtime hooks.
 	self._registry = registry
 	self._registerStructureCommand = registry:Get("RegisterStructureCommand")
+	self._applyDamageStructureCommand = registry:Get("ApplyDamageStructureCommand")
 	self._cleanupAllCommand = registry:Get("CleanupAllCommand")
 	self._getActiveStructuresQuery = registry:Get("GetActiveStructuresQuery")
 	self._getStructureCountQuery = registry:Get("GetStructureCountQuery")
-	self._targetingSystem = registry:Get("StructureTargetingSystem")
-	self._attackSystem = registry:Get("StructureAttackSystem")
+	self._entityFactory = registry:Get("StructureEntityFactory")
 	self._structurePlacedConnection = nil :: RBXScriptConnection?
 	self._runStateChangedConnection = nil :: RBXScriptConnection?
 end
@@ -147,14 +147,8 @@ function StructureContext:KnitStart()
 		end
 	end)
 
-	-- Run targeting before attack scheduling so newly acquired targets can attack on the same frame.
 	ServerScheduler:RegisterSystem(function()
-		self._targetingSystem:Tick()
-	end, "CombatTick")
-
-	-- Advance cooldowns and emit attack payloads after targeting has resolved.
-	ServerScheduler:RegisterSystem(function()
-		self._attackSystem:Tick(ServerScheduler:GetDeltaTime())
+		self._entityFactory:FlushPendingDeletes()
 	end, "CombatTick")
 end
 
@@ -196,6 +190,28 @@ function StructureContext:GetStructureCount(): Result.Result<number>
 	return Catch(function()
 		return Ok(self._getStructureCountQuery:Execute())
 	end, "Structure:GetStructureCount")
+end
+
+--[=[
+	Applies damage to a structure entity and disables it if it dies.
+	@within StructureContext
+	@param entity any -- Structure entity id.
+	@param amount number -- Positive damage amount.
+	@return Result.Result<boolean> -- Whether the damage killed the structure.
+]=]
+function StructureContext:ApplyDamage(entity: any, amount: number): Result.Result<boolean>
+	return Catch(function()
+		return self._applyDamageStructureCommand:Execute(entity, amount)
+	end, "Structure:ApplyDamage")
+end
+
+--[=[
+	Returns the structure entity factory for server-side bridge consumers.
+	@within StructureContext
+	@return Result.Result<any> -- Structure entity factory.
+]=]
+function StructureContext:GetEntityFactory(): Result.Result<any>
+	return Ok(self._entityFactory)
 end
 
 --[=[

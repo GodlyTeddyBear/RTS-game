@@ -8,7 +8,7 @@ type CommanderState = CommanderTypes.CommanderState
 
 --[=[
 	@class GetCommanderStateQuery
-	Reads the commander atom without crossing into the domain layer.
+	Reads authoritative commander ECS state without crossing into the domain layer.
 	@server
 ]=]
 local GetCommanderStateQuery = {}
@@ -30,7 +30,7 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function GetCommanderStateQuery:Init(registry: any, _name: string)
-	self._syncService = registry:Get("CommanderSyncService")
+	self._entityFactory = registry:Get("CommanderEntityFactory")
 end
 
 --[=[
@@ -40,7 +40,7 @@ end
 	@return CommanderState? -- The cloned commander state, or `nil` if unavailable.
 ]=]
 function GetCommanderStateQuery:Execute(userId: number): CommanderState?
-	return self._syncService:GetStateReadOnly(userId)
+	return self._entityFactory:GetCommanderState(userId)
 end
 
 return GetCommanderStateQuery

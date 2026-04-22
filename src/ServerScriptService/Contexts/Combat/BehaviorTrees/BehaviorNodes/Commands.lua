@@ -39,4 +39,36 @@ function Commands.Idle()
 	})
 end
 
+--[=[
+	@within Commands
+	Returns the action node that queues an enemy melee attack against a structure.
+	@return any -- Behavior tree task that queues structure attack data.
+]=]
+function Commands.AttackStructure()
+	return BehaviorTree.Task:new({
+		run = function(task, ctx)
+			ctx.EnemyEntityFactory:SetPendingAction(ctx.Entity, "AttackStructure", {
+				TargetStructureEntity = ctx.Facts.TargetStructureEntity,
+			})
+			task:success()
+		end,
+	})
+end
+
+--[=[
+	@within Commands
+	Returns the action node that queues a structure shot against an enemy.
+	@return any -- Behavior tree task that queues enemy attack data.
+]=]
+function Commands.StructureAttack()
+	return BehaviorTree.Task:new({
+		run = function(task, ctx)
+			ctx.StructureEntityFactory:SetPendingAction(ctx.Entity, "StructureAttack", {
+				TargetEnemyEntity = ctx.Facts.TargetEnemyEntity,
+			})
+			task:success()
+		end,
+	})
+end
+
 return Commands
