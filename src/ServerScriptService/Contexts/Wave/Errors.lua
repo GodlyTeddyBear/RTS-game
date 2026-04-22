@@ -37,6 +37,12 @@ local Errors = {
 	]=]
 	INVALID_WAVE_NUMBER = "WaveContext: wave number must be greater than zero",
 	--[=[
+		@prop DISALLOWED_ENEMY_ROLE string
+		@within Errors
+		Returned when a wave composition includes a role not allowed for the active phase.
+	]=]
+	DISALLOWED_ENEMY_ROLE = "WaveContext: wave composition contains a disallowed enemy role",
+	--[=[
 		@prop NOTIFY_WAVE_CLEARED_FAILED string
 		@within Errors
 		Returned when `RunContext` rejects the wave-cleared notification.

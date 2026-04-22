@@ -20,9 +20,9 @@ Use this checklist to decide whether Phase 2 is complete.
 
 ## Economy and Placement
 
-- [ ] Placement rules are implemented using one simple model
-- [ ] Resource spend and income are implemented
-- [ ] Resource values are readable during play
+- [x] Placement rules are implemented using one simple model
+- [x] Resource spend and income are implemented
+- [x] Resource values are readable during play
 
 ## Commander Interaction
 

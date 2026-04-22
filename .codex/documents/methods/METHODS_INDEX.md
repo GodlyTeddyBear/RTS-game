@@ -12,6 +12,8 @@ Low-level method contracts for implementation work. These documents convert back
 - [backend/APPLICATION_CONTRACTS.md](backend/APPLICATION_CONTRACTS.md) - Command and Query method contracts, execution flow, and dependency prohibitions.
 - [backend/DOMAIN_POLICY_SPEC_CONTRACTS.md](backend/DOMAIN_POLICY_SPEC_CONTRACTS.md) - Policy/spec method contracts, candidate ownership, and restore-path requirements.
 - [backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md](backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md) - Infrastructure runtime/persistence method contracts, lifecycle ownership, and mutation boundaries.
+- [backend/CONTEXT_REGISTRY_CONTRACTS.md](backend/CONTEXT_REGISTRY_CONTRACTS.md) - KnitInit registry setup rules: registration order (Infra→Domain→App), InitAll timing, cross-context dependency placement, and connection ownership.
+- [backend/DOMAIN_VALIDATOR_CONTRACTS.md](backend/DOMAIN_VALIDATOR_CONTRACTS.md) - Domain validator authoring rules: Result return contract, Ensure vs Err usage, private helper shape, and Infrastructure read prohibition.
 
 ## Frontend Contracts
 
@@ -19,6 +21,12 @@ Low-level method contracts for implementation work. These documents convert back
 - [frontend/TEMPLATE_ORGANISM_CONTRACTS.md](frontend/TEMPLATE_ORGANISM_CONTRACTS.md) - Template/organism composition boundaries and animation guardrails.
 - [frontend/CONTROLLER_INFRA_CONTRACTS.md](frontend/CONTROLLER_INFRA_CONTRACTS.md) - Controller side-effect ownership and infrastructure boundary rules.
 - [frontend/SYNC_HOOK_STATE_PAYLOAD_CONTRACTS.md](frontend/SYNC_HOOK_STATE_PAYLOAD_CONTRACTS.md) - Sync payload consumption, infrastructure atom ownership, and read/write hook boundaries.
+- [frontend/SYNC_CLIENT_CONTRACTS.md](frontend/SYNC_CLIENT_CONTRACTS.md) - SyncClient authoring rules: BaseSyncClient inheritance, four-argument constructor contract, Start/GetAtom delegation, and lifecycle placement.
+
+## Shared / Cross-Cutting Contracts
+
+- [backend/EVENTS_CONTRACTS.md](backend/EVENTS_CONTRACTS.md) - GameEvents module authoring rules: `events`/`schemas` table structure, naming, schema types, and caller constraints.
+- [backend/ERRORS_CONTRACTS.md](backend/ERRORS_CONTRACTS.md) - Per-context `Errors.lua` authoring rules: key naming, string prefixes, `table.freeze` requirement, Moonwave docs, and `Result.Err` usage.
 
 ## Planning Standards
 

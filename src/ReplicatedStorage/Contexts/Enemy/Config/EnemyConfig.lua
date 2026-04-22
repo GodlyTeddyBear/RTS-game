@@ -29,4 +29,8 @@ EnemyConfig.ROLES = table.freeze({
 	}),
 })
 
+EnemyConfig.PHASE2_ALLOWED_ROLES = table.freeze({
+	swarm = true,
+})
+
 return table.freeze(EnemyConfig)
