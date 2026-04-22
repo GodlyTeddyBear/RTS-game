@@ -9,3 +9,4 @@ sourcemap.json
 Packages/
 wally.lock
 Imports/
+node_modules/

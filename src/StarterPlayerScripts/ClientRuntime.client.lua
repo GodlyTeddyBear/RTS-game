@@ -3,6 +3,10 @@ if not game:IsLoaded() then
 end
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local NevermoreFolder = ReplicatedStorage:WaitForChild("Nevermore")
+local NevermoreLoader = NevermoreFolder:WaitForChild("loader") :: ModuleScript
+require(NevermoreLoader).bootstrapGame(NevermoreFolder)
+
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
 local Contexts: Folder = script.Parent.Contexts

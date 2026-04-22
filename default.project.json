@@ -13,6 +13,7 @@
       "Network": {
 				"$path": "src/Network"
 			}
+
     },
 
     "ServerScriptService": {
@@ -20,6 +21,12 @@
       "$ignoreUnknownInstances": true,
       "ServerPackages":{
         "$path": "ServerPackages"
+      },
+      "Nevermore": {
+        "$className": "Folder",
+        "node_modules": {
+          "$path": "node_modules"
+        }
       }
     },
 
