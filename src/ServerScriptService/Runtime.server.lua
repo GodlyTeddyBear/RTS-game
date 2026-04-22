@@ -12,6 +12,7 @@ local Contexts: Folder = script.Parent.Contexts
 
 -- Get contexts
 for _, context in ipairs(Contexts:GetChildren()) do
+	task.wait()
 	if context:FindFirstChildOfClass("ModuleScript") then
 		Knit.AddServices(context)
 	end

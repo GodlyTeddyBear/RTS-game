@@ -8,6 +8,7 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 local Contexts: Folder = script.Parent.Contexts
 
 for _, context in ipairs(Contexts:GetChildren()) do
+	task.wait()
 	if context:FindFirstChildOfClass("ModuleScript") then
 		Knit.AddControllers(context)
 	end

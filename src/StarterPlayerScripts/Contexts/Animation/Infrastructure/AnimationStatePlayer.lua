@@ -24,10 +24,53 @@ function AnimationStatePlayer.Bind(
 	local activeCallbackState: string? = nil
 	local stoppedConnection: RBXScriptConnection? = nil
 	local routerCleanup: (() -> ())? = nil
+	local poseController = if core ~= nil then core.PoseController else nil
 	local useStateDrivenCorePoses = preset.UseStateDrivenCorePoses == true
-		and core ~= nil
-		and core.PoseController ~= nil
+		and poseController ~= nil
 		and next(validCoreStates) ~= nil
+
+	local function setCoreActive(enabled: boolean)
+		if not poseController then
+			return
+		end
+
+		local setCoreActiveMethod = poseController.SetCoreActive
+		if typeof(setCoreActiveMethod) == "function" then
+			pcall(setCoreActiveMethod, poseController, enabled)
+		end
+	end
+
+	local function setCoreCanPlayAnims(enabled: boolean)
+		if not poseController then
+			return
+		end
+
+		local setCoreCanPlayAnimsMethod = poseController.SetCoreCanPlayAnims
+		if typeof(setCoreCanPlayAnimsMethod) == "function" then
+			pcall(setCoreCanPlayAnimsMethod, poseController, enabled)
+		end
+	end
+
+	local function applyCorePose(state: string)
+		if not poseController then
+			return
+		end
+
+		local getPoseMethod = poseController.GetPose
+		local changePoseMethod = poseController.ChangePose
+		if typeof(getPoseMethod) ~= "function" or typeof(changePoseMethod) ~= "function" then
+			return
+		end
+
+		local ok, currentPose = pcall(getPoseMethod, poseController)
+		if not ok then
+			return
+		end
+
+		if currentPose ~= state then
+			pcall(changePoseMethod, poseController, state, 1, false)
+		end
+	end
 
 	local function stopActive()
 		if stoppedConnection then
@@ -56,8 +99,8 @@ function AnimationStatePlayer.Bind(
 	end
 
 	if useStateDrivenCorePoses then
-		core.PoseController:SetCoreActive(false)
-		core.PoseController:SetCoreCanPlayAnims(true)
+		setCoreActive(false)
+		setCoreCanPlayAnims(true)
 	end
 
 	local function playState(state: string)
@@ -114,10 +157,8 @@ function AnimationStatePlayer.Bind(
 			end
 
 			stopActive()
-			core.PoseController:SetCoreCanPlayAnims(true)
-			if core.PoseController:GetPose() ~= nextState then
-				core.PoseController:ChangePose(nextState, 1, true)
-			end
+			setCoreCanPlayAnims(true)
+			applyCorePose(nextState)
 			return
 		end
 
@@ -135,7 +176,7 @@ function AnimationStatePlayer.Bind(
 	janitor:Add(function()
 		stopActive()
 		if useStateDrivenCorePoses then
-			core.PoseController:SetCoreActive(true)
+			setCoreActive(true)
 		end
 	end, true)
 
