@@ -13,7 +13,7 @@ CommanderECSWorldService.__index = CommanderECSWorldService
 setmetatable(CommanderECSWorldService, BaseECSWorldService)
 
 function CommanderECSWorldService.new()
-	return setmetatable(BaseECSWorldService._new("Commander"), CommanderECSWorldService)
+	return setmetatable(BaseECSWorldService.new("Commander"), CommanderECSWorldService)
 end
 
 function CommanderECSWorldService:Init(registry: any, name: string)
@@ -25,4 +25,3 @@ function CommanderECSWorldService:GetWorld()
 end
 
 return CommanderECSWorldService
-

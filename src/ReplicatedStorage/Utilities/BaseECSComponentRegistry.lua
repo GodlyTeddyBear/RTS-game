@@ -21,7 +21,7 @@ end
 	@param contextName string -- The owning context label used in assertions.
 	@return BaseECSComponentRegistry -- The base registry instance.
 ]=]
-function BaseECSComponentRegistry._new(contextName: string)
+function BaseECSComponentRegistry.new(contextName: string)
 	local self = setmetatable({}, BaseECSComponentRegistry)
 	self._contextName = contextName
 	self._world = nil

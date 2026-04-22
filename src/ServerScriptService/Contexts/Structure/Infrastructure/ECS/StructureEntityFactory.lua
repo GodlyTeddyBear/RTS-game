@@ -42,7 +42,7 @@ end
 	@return StructureEntityFactory -- The new factory instance.
 ]=]
 function StructureEntityFactory.new()
-	local self = setmetatable(BaseECSEntityFactory._new("Structure"), StructureEntityFactory)
+	local self = setmetatable(BaseECSEntityFactory.new("Structure"), StructureEntityFactory)
 	self._componentRegistry = nil
 	return self
 end

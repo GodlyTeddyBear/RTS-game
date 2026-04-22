@@ -14,7 +14,7 @@ BaseECSEntityFactory.__index = BaseECSEntityFactory
 	@param contextName string -- The owning context label used in assertions.
 	@return BaseECSEntityFactory -- The base factory instance.
 ]=]
-function BaseECSEntityFactory._new(contextName: string)
+function BaseECSEntityFactory.new(contextName: string)
 	local self = setmetatable({}, BaseECSEntityFactory)
 	self._contextName = contextName
 	self._world = nil

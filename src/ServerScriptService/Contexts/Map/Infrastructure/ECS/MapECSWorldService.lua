@@ -13,7 +13,7 @@ MapECSWorldService.__index = MapECSWorldService
 setmetatable(MapECSWorldService, { __index = BaseECSWorldService })
 
 function MapECSWorldService.new()
-	return setmetatable(BaseECSWorldService._new("Map"), MapECSWorldService)
+	return setmetatable(BaseECSWorldService.new("Map"), MapECSWorldService)
 end
 
 function MapECSWorldService:Init(_registry: any, _name: string)

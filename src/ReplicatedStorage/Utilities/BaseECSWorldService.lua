@@ -17,7 +17,7 @@ BaseECSWorldService.__index = BaseECSWorldService
 	@param contextName string -- The owning context label used in assertions.
 	@return BaseECSWorldService -- The base service instance.
 ]=]
-function BaseECSWorldService._new(contextName: string)
+function BaseECSWorldService.new(contextName: string)
 	local self = setmetatable({}, BaseECSWorldService)
 	self._contextName = contextName
 	self._world = JECS.World.new()
@@ -47,7 +47,7 @@ end
 --[=[
 	Returns the owning context label for diagnostics.
 	@within BaseECSWorldService
-	@return string -- Context name passed to _new().
+	@return string -- Context name passed to new().
 ]=]
 function BaseECSWorldService:GetContextName(): string
 	return self._contextName

@@ -27,7 +27,7 @@ local function _FindFirstNamedBasePart(root: Instance, markerName: string): Base
 end
 
 function MapEntityFactory.new()
-	local self = setmetatable(BaseECSEntityFactory._new("Map"), MapEntityFactory)
+	local self = setmetatable(BaseECSEntityFactory.new("Map"), MapEntityFactory)
 	self._mapEntity = nil
 	self._zoneEntityByName = {} :: { [string]: number }
 	return self

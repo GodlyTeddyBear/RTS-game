@@ -41,7 +41,7 @@ local function _cloneCooldowns(source: CooldownState): CooldownState
 end
 
 function CommanderEntityFactory.new()
-	local self = setmetatable(BaseECSEntityFactory._new("Commander"), CommanderEntityFactory)
+	local self = setmetatable(BaseECSEntityFactory.new("Commander"), CommanderEntityFactory)
 	self._entityByUserId = {} :: { [number]: number }
 	self._userIdByEntity = {} :: { [number]: number }
 	return self

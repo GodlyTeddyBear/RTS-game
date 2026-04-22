@@ -23,7 +23,7 @@ MapComponentRegistry.__index = MapComponentRegistry
 setmetatable(MapComponentRegistry, { __index = BaseECSComponentRegistry })
 
 function MapComponentRegistry.new()
-	return setmetatable(BaseECSComponentRegistry._new("Map"), MapComponentRegistry)
+	return setmetatable(BaseECSComponentRegistry.new("Map"), MapComponentRegistry)
 end
 
 function MapComponentRegistry:Init(registry: any, _name: string)

@@ -13,7 +13,7 @@ EnemyComponentRegistry.__index = EnemyComponentRegistry
 setmetatable(EnemyComponentRegistry, { __index = BaseECSComponentRegistry })
 
 function EnemyComponentRegistry.new()
-	return setmetatable(BaseECSComponentRegistry._new("Enemy"), EnemyComponentRegistry)
+	return setmetatable(BaseECSComponentRegistry.new("Enemy"), EnemyComponentRegistry)
 end
 
 function EnemyComponentRegistry:Init(registry: any, _name: string)

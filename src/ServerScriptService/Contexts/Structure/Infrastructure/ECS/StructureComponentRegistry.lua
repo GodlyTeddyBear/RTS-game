@@ -18,7 +18,7 @@ setmetatable(StructureComponentRegistry, { __index = BaseECSComponentRegistry })
 	@return StructureComponentRegistry -- The new registry instance.
 ]=]
 function StructureComponentRegistry.new()
-	return setmetatable(BaseECSComponentRegistry._new("Structure"), StructureComponentRegistry)
+	return setmetatable(BaseECSComponentRegistry.new("Structure"), StructureComponentRegistry)
 end
 
 --[=[

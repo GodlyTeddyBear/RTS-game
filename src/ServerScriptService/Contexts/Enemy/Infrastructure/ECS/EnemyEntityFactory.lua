@@ -25,7 +25,7 @@ EnemyEntityFactory.__index = EnemyEntityFactory
 setmetatable(EnemyEntityFactory, { __index = BaseECSEntityFactory })
 
 function EnemyEntityFactory.new()
-	return setmetatable(BaseECSEntityFactory._new("Enemy"), EnemyEntityFactory)
+	return setmetatable(BaseECSEntityFactory.new("Enemy"), EnemyEntityFactory)
 end
 
 local function _buildDefaultAction(): TCombatAction

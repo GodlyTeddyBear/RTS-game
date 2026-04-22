@@ -18,7 +18,7 @@ setmetatable(StructureECSWorldService, { __index = BaseECSWorldService })
 	@return StructureECSWorldService -- The new service instance.
 ]=]
 function StructureECSWorldService.new()
-	return setmetatable(BaseECSWorldService._new("Structure"), StructureECSWorldService)
+	return setmetatable(BaseECSWorldService.new("Structure"), StructureECSWorldService)
 end
 
 --[=[

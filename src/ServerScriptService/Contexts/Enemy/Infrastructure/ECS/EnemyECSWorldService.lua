@@ -13,7 +13,7 @@ EnemyECSWorldService.__index = EnemyECSWorldService
 setmetatable(EnemyECSWorldService, { __index = BaseECSWorldService })
 
 function EnemyECSWorldService.new()
-	return setmetatable(BaseECSWorldService._new("Enemy"), EnemyECSWorldService)
+	return setmetatable(BaseECSWorldService.new("Enemy"), EnemyECSWorldService)
 end
 
 function EnemyECSWorldService:Init(_registry: any, _name: string)

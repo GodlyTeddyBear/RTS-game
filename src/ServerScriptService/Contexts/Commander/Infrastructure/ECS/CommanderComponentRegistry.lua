@@ -13,7 +13,7 @@ CommanderComponentRegistry.__index = CommanderComponentRegistry
 setmetatable(CommanderComponentRegistry, BaseECSComponentRegistry)
 
 function CommanderComponentRegistry.new()
-	return setmetatable(BaseECSComponentRegistry._new("Commander"), CommanderComponentRegistry)
+	return setmetatable(BaseECSComponentRegistry.new("Commander"), CommanderComponentRegistry)
 end
 
 function CommanderComponentRegistry:Init(registry: any, _name: string)
@@ -32,4 +32,3 @@ function CommanderComponentRegistry:GetComponents()
 end
 
 return CommanderComponentRegistry
-
