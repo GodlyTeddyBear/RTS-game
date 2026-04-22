@@ -29,7 +29,7 @@ WorldConfig.TILE_SIZE = TILE_SIZE
 	@within WorldConfig
 	Dot-path to the authoritative placement grid part in Workspace.
 ]=]
-WorldConfig.GRID_PART_PATH = "Workspace.Map.Game.Map.Environment.Zones.PlacementGrid"
+WorldConfig.GRID_PART_PATH = "Workspace.Map.Game.Environment.Zones.PlacementGrid"
 
 --[=[
 	@prop SIDE_POCKET_COLUMN_INTERVAL number
@@ -43,7 +43,14 @@ WorldConfig.SIDE_POCKET_COLUMN_INTERVAL = 4
 	@within WorldConfig
 	Dot-path to the Studio-authored side-pocket container.
 ]=]
-WorldConfig.SIDE_POCKETS_PATH = "Workspace.Map.Game.Map.Environment.Zones.SidePockets"
+WorldConfig.SIDE_POCKETS_PATH = "Workspace.Map.Game.Environment.Zones.SidePockets"
+
+--[=[
+	@prop GOAL_PART_PATH string
+	@within WorldConfig
+	Dot-path to the authoritative enemy goal BasePart in Workspace.
+]=]
+WorldConfig.GOAL_PART_PATH = "Workspace.Map.Game.Environment.Zones.Goal"
 
 --[=[
 	@prop LANE_POINT_Y_OFFSET number

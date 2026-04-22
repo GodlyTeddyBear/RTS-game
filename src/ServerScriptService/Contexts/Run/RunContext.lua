@@ -45,6 +45,7 @@ local Catch = Result.Catch
 local Err = Result.Err
 local Ok = Result.Ok
 local Try = Result.Try
+local Ensure = Result.Ensure
 
 -- [Types]
 
@@ -140,6 +141,9 @@ function RunContext:KnitInit()
 	self._stateChangedConnection = self._machine.StateChanged:Connect(function(newState: RunState, previousState: RunState)
 		self:_OnStateChanged(newState, previousState)
 	end)
+
+	self._mapContext = nil :: any
+	self._worldContext = nil :: any
 
 	self._sync:SetState(self:_BuildRunSnapshot())
 end
@@ -253,6 +257,9 @@ end
 	@within RunContext
 ]=]
 function RunContext:KnitStart()
+	self._mapContext = Knit.GetService("MapContext")
+	self._worldContext = Knit.GetService("WorldContext")
+
 	-- Hydrate late joiners so they receive the current global run snapshot.
 	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
 		self._sync:HydratePlayer(player)
@@ -305,6 +312,10 @@ end
 function RunContext:StartRun(): Result.Result<boolean>
 	return Catch(function()
 		Try(self._transitionPolicy:CheckCanStartRun(self._machine:GetState()))
+		Ensure(self._mapContext, "MissingDependency", Errors.MISSING_MAP_CONTEXT)
+		Ensure(self._worldContext, "MissingDependency", Errors.MISSING_WORLD_CONTEXT)
+		Try(self._mapContext:PrepareRuntimeMap())
+		Try(self._worldContext:RefreshRuntimeGeometry())
 		-- Teleport first so the prep countdown starts from the correct phase entry point.
 		self:_TeleportPlayersToCFrame(self:_GetPhase2EntryCFrame())
 		return self._startRunCommand:Execute(self._onPrepTimeout)
@@ -519,6 +530,13 @@ function RunContext:_OnStateChanged(newState: RunState, previousState: RunState)
 
 	-- Terminal cleanup hooks will be attached here as downstream systems are implemented.
 	if newState == "RunEnd" then
+		Catch(function()
+			if self._mapContext then
+				Try(self._mapContext:CleanupRuntimeMap())
+			end
+			return Ok(nil)
+		end, "Run:CleanupRuntimeMapOnRunEnd")
+
 		self:_TeleportPlayersToCFrame(self:_GetLobbyReturnCFrame())
 		Result.MentionEvent("RunContext:RunEnd", "Run ended; lifecycle cleanup hook", {
 			WaveNumber = self._machine:GetWaveNumber(),

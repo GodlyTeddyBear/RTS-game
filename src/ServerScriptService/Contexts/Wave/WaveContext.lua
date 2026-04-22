@@ -95,16 +95,7 @@ function WaveContext:KnitStart()
 	-- Resolve cross-context dependencies once so handlers stay lightweight.
 	self._runContext = Knit.GetService("RunContext")
 	self._worldContext = Knit.GetService("WorldContext")
-	local spawnPointsResult = self._worldContext:GetSpawnPoints()
-	if spawnPointsResult.success then
-		self._spawnCFrames = spawnPointsResult.value
-	else
-		Result.MentionError("Wave:KnitStart", Errors.MISSING_WORLD_CONTEXT, {
-			CauseType = spawnPointsResult.type,
-			CauseMessage = spawnPointsResult.message,
-		}, "MissingWorldContext")
-		self._spawnCFrames = {}
-	end
+	self:_RefreshSpawnCFrames()
 
 	-- Guard the scheduler input early so the event handlers can assume a valid spawn list.
 	if #self._spawnCFrames == 0 then
@@ -134,6 +125,26 @@ function WaveContext:KnitStart()
 	)
 end
 
+function WaveContext:_RefreshSpawnCFrames(): boolean
+	if not self._worldContext then
+		self._spawnCFrames = {}
+		return false
+	end
+
+	local spawnPointsResult = self._worldContext:GetSpawnPoints()
+	if not spawnPointsResult.success then
+		Result.MentionError("Wave:RefreshSpawnCFrames", Errors.NO_SPAWN_POINTS, {
+			CauseType = spawnPointsResult.type,
+			CauseMessage = spawnPointsResult.message,
+		}, "NoSpawnPoints")
+		self._spawnCFrames = {}
+		return false
+	end
+
+	self._spawnCFrames = spawnPointsResult.value
+	return #self._spawnCFrames > 0
+end
+
 -- [Private Handlers]
 
 --[=[
@@ -146,6 +157,7 @@ end
 function WaveContext:_OnRunWaveStarted(waveNumber: number, isEndless: boolean)
 	Catch(function()
 		Ensure(self._runContext, "MissingDependency", Errors.MISSING_RUN_CONTEXT)
+		Ensure(self:_RefreshSpawnCFrames(), "NoSpawnPoints", Errors.NO_SPAWN_POINTS)
 		Try(self._handleWaveStartedCommand:Execute(waveNumber, isEndless, self._spawnCFrames, self._runContext))
 		return Ok(nil)
 	end, "Wave:OnRunWaveStarted")

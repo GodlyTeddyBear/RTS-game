@@ -179,6 +179,19 @@ function WorldContext:SetTileOccupied(coord: GridCoord, occupied: boolean): Resu
 	end, "World:SetTileOccupied")
 end
 
+--[=[
+	Invalidates cached runtime world geometry and forces rebuild against the active runtime map.
+	@within WorldContext
+	@return Result.Result<boolean> -- True when runtime geometry was refreshed successfully.
+]=]
+function WorldContext:RefreshRuntimeGeometry(): Result.Result<boolean>
+	return Catch(function()
+		self._worldGridService:ResetCache()
+		self._worldGridService:Build()
+		return Ok(true)
+	end, "World:RefreshRuntimeGeometry")
+end
+
 WrapContext(WorldContext, "World")
 
 return WorldContext

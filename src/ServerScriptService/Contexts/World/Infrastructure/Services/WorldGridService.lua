@@ -50,6 +50,17 @@ function WorldGridService:_EnsureBuilt()
 	self._isBuilt = true
 end
 
+function WorldGridService:ResetCache()
+	local runtimeService = self._gridRuntimeService
+	if runtimeService and runtimeService.ResetCache then
+		runtimeService:ResetCache()
+	end
+
+	self._tiles = {}
+	self._gridSpec = nil
+	self._isBuilt = false
+end
+
 --[=[
 	Populates the flat tile array from the zone layout config.
 	@within WorldGridService

@@ -146,9 +146,6 @@ function CombatContext:KnitStart()
 
 	self._registry:StartOrdered({ "Domain", "Infrastructure", "Application" })
 
-	-- Cache lane waypoints once so spawn handlers only need to copy the path.
-	self:_CacheLaneWaypoints()
-
 	-- Lane movement sync still runs independently from combat AI ticks.
 	ServerScheduler:RegisterSystem(function()
 		self._enemyGameObjectSyncService:PollPositions()
@@ -194,23 +191,20 @@ function CombatContext:_CacheLaneWaypoints()
 	local laneTilesResult = self._worldContext:GetLaneTiles()
 	local goalPointResult = self._worldContext:GetGoalPoint()
 
-	if not laneTilesResult.success then
-		Result.MentionError("Combat:KnitStart", "Unable to read lane tiles", {
-			CauseType = laneTilesResult.type,
-			CauseMessage = laneTilesResult.message,
-		}, laneTilesResult.type)
-		self._laneWaypoints = {}
-		return
-	end
-
-	if not goalPointResult.success then
-		Result.MentionError("Combat:KnitStart", "Unable to read goal point", {
-			CauseType = goalPointResult.type,
-			CauseMessage = goalPointResult.message,
-		}, goalPointResult.type)
-		self._laneWaypoints = {}
-		return
-	end
+	assert(
+		laneTilesResult.success,
+		string.format(
+			"CombatContext: lane waypoint cache failed reading lane tiles (%s)",
+			tostring(laneTilesResult.message or laneTilesResult.type or "unknown")
+		)
+	)
+	assert(
+		goalPointResult.success,
+		string.format(
+			"CombatContext: lane waypoint cache failed reading goal point (%s)",
+			tostring(goalPointResult.message or goalPointResult.type or "unknown")
+		)
+	)
 
 	local laneTiles = _sortLaneTiles(laneTilesResult.value)
 	local goalPoint = goalPointResult.value
@@ -228,6 +222,7 @@ end
 -- Starts combat for the active run wave and assigns behavior trees to existing enemies.
 function CombatContext:_OnRunWaveStarted(waveNumber: number, isEndless: boolean)
 	Catch(function()
+		self:_CacheLaneWaypoints()
 		Try(self._startCombatCommand:Execute(waveNumber, isEndless))
 		return Ok(nil)
 	end, "Combat:OnRunWaveStarted")
@@ -252,6 +247,12 @@ end
 
 -- Assigns lane waypoints to spawned enemies and backfills their behavior tree state if combat is already active.
 function CombatContext:_OnEnemySpawned(entity: number, _role: string, _waveNumber: number)
+	if #self._laneWaypoints == 0 then
+		pcall(function()
+			self:_CacheLaneWaypoints()
+		end)
+	end
+
 	if #self._laneWaypoints > 0 then
 		local success, err = pcall(function()
 			self._enemyEntityFactory:SetWaypoints(entity, self._laneWaypoints)
