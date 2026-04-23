@@ -15,9 +15,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local Registry = require(ReplicatedStorage.Utilities.Registry)
+local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 local RunConfig = require(ReplicatedStorage.Contexts.Run.Config.RunConfig)
 local RunTravelConfig = require(ReplicatedStorage.Contexts.Run.Config.RunTravelConfig)
@@ -52,6 +51,91 @@ local Ensure = Result.Ensure
 type RunState = RunTypes.RunState
 type RunSnapshot = RunTypes.RunSnapshot
 
+local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "BlinkServer",
+		Instance = BlinkServer,
+	},
+	{
+		Name = "RunStateMachine",
+		Module = RunStateMachine,
+		CacheAs = "_machine",
+	},
+	{
+		Name = "RunTimerService",
+		Module = RunTimerService,
+		Args = { RunConfig },
+		CacheAs = "_timer",
+	},
+	{
+		Name = "RunSyncService",
+		Module = RunSyncService,
+		CacheAs = "_sync",
+	},
+}
+
+local DomainModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "RunTransitionPolicy",
+		Module = RunTransitionPolicy,
+		CacheAs = "_transitionPolicy",
+	},
+}
+
+local ApplicationModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "StartRunCommand",
+		Module = StartRunCommand,
+		CacheAs = "_startRunCommand",
+	},
+	{
+		Name = "NotifyWaveClearedCommand",
+		Module = NotifyWaveClearedCommand,
+		CacheAs = "_notifyWaveClearedCommand",
+	},
+	{
+		Name = "NotifyClimaxCompleteCommand",
+		Module = NotifyClimaxCompleteCommand,
+		CacheAs = "_notifyClimaxCompleteCommand",
+	},
+	{
+		Name = "NotifyCommanderDeathCommand",
+		Module = NotifyCommanderDeathCommand,
+		CacheAs = "_notifyCommanderDeathCommand",
+	},
+	{
+		Name = "OnPrepTimeoutCommand",
+		Module = OnPrepTimeoutCommand,
+		CacheAs = "_onPrepTimeoutCommand",
+	},
+	{
+		Name = "OnWaveTimeoutCommand",
+		Module = OnWaveTimeoutCommand,
+		CacheAs = "_onWaveTimeoutCommand",
+	},
+	{
+		Name = "OnResolutionTimeoutCommand",
+		Module = OnResolutionTimeoutCommand,
+		CacheAs = "_onResolutionTimeoutCommand",
+	},
+	{
+		Name = "GetRunStateQuery",
+		Module = GetRunStateQuery,
+		CacheAs = "_getRunStateQuery",
+	},
+	{
+		Name = "GetWaveNumberQuery",
+		Module = GetWaveNumberQuery,
+		CacheAs = "_getWaveNumberQuery",
+	},
+}
+
+local RunModules: BaseContext.TModuleLayers = {
+	Infrastructure = InfrastructureModules,
+	Domain = DomainModules,
+	Application = ApplicationModules,
+}
+
 --[=[
 	@class RunContext
 	Owns the authoritative run state machine and bridges it to other contexts.
@@ -61,7 +145,21 @@ type RunSnapshot = RunTypes.RunSnapshot
 local RunContext = Knit.CreateService({
 	Name = "RunContext",
 	Client = {},
+	Modules = RunModules,
+	ExternalServices = {
+		{ Name = "MapContext", CacheAs = "_mapContext" },
+		{ Name = "WorldContext", CacheAs = "_worldContext" },
+	},
+	Teardown = {
+		Fields = {
+			{ Field = "_playerAddedConnection", Method = "Disconnect" },
+			{ Field = "_commanderDiedConnection", Method = "Disconnect" },
+			{ Field = "_stateChangedConnection", Method = "Disconnect" },
+		},
+	},
 })
+
+local RunBaseContext = BaseContext.new(RunContext)
 
 --[=[
 	@prop StateChanged RBXScriptSignal
@@ -77,38 +175,7 @@ RunContext.StateChanged = nil
 	@within RunContext
 ]=]
 function RunContext:KnitInit()
-	-- Register infrastructure and application modules before context methods are callable.
-	local registry = Registry.new("Server")
-	registry:Register("BlinkServer", BlinkServer)
-	registry:Register("RunStateMachine", RunStateMachine.new(), "Infrastructure")
-	registry:Register("RunTimerService", RunTimerService.new(RunConfig), "Infrastructure")
-	registry:Register("RunSyncService", RunSyncService.new(), "Infrastructure")
-	registry:Register("RunTransitionPolicy", RunTransitionPolicy.new(), "Domain")
-	registry:Register("StartRunCommand", StartRunCommand.new(), "Application")
-	registry:Register("NotifyWaveClearedCommand", NotifyWaveClearedCommand.new(), "Application")
-	registry:Register("NotifyClimaxCompleteCommand", NotifyClimaxCompleteCommand.new(), "Application")
-	registry:Register("NotifyCommanderDeathCommand", NotifyCommanderDeathCommand.new(), "Application")
-	registry:Register("OnPrepTimeoutCommand", OnPrepTimeoutCommand.new(), "Application")
-	registry:Register("OnWaveTimeoutCommand", OnWaveTimeoutCommand.new(), "Application")
-	registry:Register("OnResolutionTimeoutCommand", OnResolutionTimeoutCommand.new(), "Application")
-	registry:Register("GetRunStateQuery", GetRunStateQuery.new(), "Application")
-	registry:Register("GetWaveNumberQuery", GetWaveNumberQuery.new(), "Application")
-	registry:InitAll()
-
-	-- Cache the resolved modules so the public Run API stays thin.
-	self._machine = registry:Get("RunStateMachine")
-	self._timer = registry:Get("RunTimerService")
-	self._sync = registry:Get("RunSyncService")
-	self._transitionPolicy = registry:Get("RunTransitionPolicy")
-	self._startRunCommand = registry:Get("StartRunCommand")
-	self._notifyWaveClearedCommand = registry:Get("NotifyWaveClearedCommand")
-	self._notifyClimaxCompleteCommand = registry:Get("NotifyClimaxCompleteCommand")
-	self._notifyCommanderDeathCommand = registry:Get("NotifyCommanderDeathCommand")
-	self._onPrepTimeoutCommand = registry:Get("OnPrepTimeoutCommand")
-	self._onWaveTimeoutCommand = registry:Get("OnWaveTimeoutCommand")
-	self._onResolutionTimeoutCommand = registry:Get("OnResolutionTimeoutCommand")
-	self._getRunStateQuery = registry:Get("GetRunStateQuery")
-	self._getWaveNumberQuery = registry:Get("GetWaveNumberQuery")
+	RunBaseContext:KnitInit()
 
 	self:_RegisterDeveloperLogCommands()
 
@@ -141,9 +208,6 @@ function RunContext:KnitInit()
 	self._stateChangedConnection = self._machine.StateChanged:Connect(function(newState: RunState, previousState: RunState)
 		self:_OnStateChanged(newState, previousState)
 	end)
-
-	self._mapContext = nil :: any
-	self._worldContext = nil :: any
 
 	self._sync:SetState(self:_BuildRunSnapshot())
 end
@@ -257,8 +321,7 @@ end
 	@within RunContext
 ]=]
 function RunContext:KnitStart()
-	self._mapContext = Knit.GetService("MapContext")
-	self._worldContext = Knit.GetService("WorldContext")
+	RunBaseContext:KnitStart()
 
 	-- Hydrate late joiners so they receive the current global run snapshot.
 	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
@@ -562,19 +625,13 @@ end
 	@within RunContext
 ]=]
 function RunContext:Destroy()
-	if self._playerAddedConnection then
-		self._playerAddedConnection:Disconnect()
-	end
-
-	if self._commanderDiedConnection then
-		self._commanderDiedConnection:Disconnect()
-	end
-
-	if self._stateChangedConnection then
-		self._stateChangedConnection:Disconnect()
+	local destroyResult = RunBaseContext:Destroy()
+	if not destroyResult.success then
+		Result.MentionError("Run:Destroy", "BaseContext teardown failed", {
+			CauseType = destroyResult.type,
+			CauseMessage = destroyResult.message,
+		}, destroyResult.type)
 	end
 end
-
-WrapContext(RunContext, "Run")
 
 return RunContext

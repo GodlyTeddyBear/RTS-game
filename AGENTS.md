@@ -25,6 +25,7 @@
 - Current planned migrated skills:
   - `roblox-plan`
   - `roblox-implement-feature`
+  - `roblox-migrate-context-ecs`
   - `roblox-review`
   - `roblox-refactor-better`
   - `roblox-suggest-result`

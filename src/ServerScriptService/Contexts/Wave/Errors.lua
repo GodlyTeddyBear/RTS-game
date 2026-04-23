@@ -60,6 +60,12 @@ local Errors = {
 		Returned when `WorldContext` is unavailable during startup.
 	]=]
 	MISSING_WORLD_CONTEXT = "WaveContext: WorldContext dependency is unavailable",
+	--[=[
+		@prop TEARDOWN_FAILED string
+		@within Errors
+		Returned when BaseContext teardown reports a failure.
+	]=]
+	TEARDOWN_FAILED = "WaveContext: BaseContext teardown failed",
 }
 
 return table.freeze(Errors)

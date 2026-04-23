@@ -14,9 +14,8 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local Registry = require(ReplicatedStorage.Utilities.Registry)
+local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 
 local BlinkSyncServer = require(ReplicatedStorage.Network.Generated.PlacementSyncServer)
@@ -35,6 +34,63 @@ local Ok = Result.Ok
 type StructureRecord = PlacementTypes.StructureRecord
 type PlaceResponse = PlacementTypes.PlaceResponse
 
+local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "BlinkSyncServer",
+		Instance = BlinkSyncServer,
+	},
+	{
+		Name = "BlinkRemoteServer",
+		Instance = BlinkRemoteServer,
+	},
+	{
+		Name = "PlacementService",
+		Module = PlacementService,
+		CacheAs = "_placementService",
+	},
+	{
+		Name = "PlacementSyncService",
+		Module = PlacementSyncService,
+		CacheAs = "_syncService",
+	},
+}
+
+local DomainModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "PlacementValidator",
+		Module = PlacementValidator,
+		CacheAs = "_validator",
+	},
+	{
+		Name = "PlaceStructurePolicy",
+		Module = PlaceStructurePolicy,
+	},
+}
+
+local ApplicationModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "PlaceStructureCommand",
+		Module = PlaceStructureCommand,
+		CacheAs = "_placeStructureCommand",
+	},
+	{
+		Name = "DestroyStructureInstanceCommand",
+		Module = DestroyStructureInstanceCommand,
+		CacheAs = "_destroyStructureInstanceCommand",
+	},
+	{
+		Name = "GetPlacedStructuresQuery",
+		Module = GetPlacedStructuresQuery,
+		CacheAs = "_getPlacedStructuresQuery",
+	},
+}
+
+local PlacementModules: BaseContext.TModuleLayers = {
+	Infrastructure = InfrastructureModules,
+	Domain = DomainModules,
+	Application = ApplicationModules,
+}
+
 -- [Public API]
 
 --[=[
@@ -45,7 +101,23 @@ type PlaceResponse = PlacementTypes.PlaceResponse
 local PlacementContext = Knit.CreateService({
 	Name = "PlacementContext",
 	Client = {},
+	Modules = PlacementModules,
+	ExternalServices = {
+		{ Name = "RunContext", CacheAs = "_runContext" },
+		{ Name = "WorldContext", CacheAs = "_worldContext" },
+		{ Name = "EconomyContext", CacheAs = "_economyContext" },
+	},
+	Teardown = {
+		Fields = {
+			{ Field = "_playerAddedConnection", Method = "Disconnect" },
+			{ Field = "_stateChangedConnection", Method = "Disconnect" },
+			{ Field = "_syncService", Method = "Destroy" },
+			{ Field = "_structurePlacedSignal", Method = "Destroy" },
+		},
+	},
 })
+
+local PlacementBaseContext = BaseContext.new(PlacementContext)
 
 --[=[
 	Initializes the placement registry, sync bridge, and request handler.
@@ -53,27 +125,8 @@ local PlacementContext = Knit.CreateService({
 ]=]
 -- Register the placement stack before any remote invocation can reach it.
 function PlacementContext:KnitInit()
-	local registry = Registry.new("Server")
+	PlacementBaseContext:KnitInit()
 
-	registry:Register("BlinkSyncServer", BlinkSyncServer)
-	registry:Register("BlinkRemoteServer", BlinkRemoteServer)
-	registry:Register("PlacementValidator", PlacementValidator.new(), "Domain")
-	registry:Register("PlacementService", PlacementService.new(), "Infrastructure")
-	registry:Register("PlacementSyncService", PlacementSyncService.new(), "Infrastructure")
-	registry:Register("PlaceStructurePolicy", PlaceStructurePolicy.new(), "Domain")
-	registry:Register("PlaceStructureCommand", PlaceStructureCommand.new(), "Application")
-	registry:Register("DestroyStructureInstanceCommand", DestroyStructureInstanceCommand.new(), "Application")
-	registry:Register("GetPlacedStructuresQuery", GetPlacedStructuresQuery.new(), "Application")
-	registry:InitAll()
-
-	self._registry = registry
-	self._runContext = nil
-	self._validator = registry:Get("PlacementValidator")
-	self._syncService = registry:Get("PlacementSyncService")
-	self._placementService = registry:Get("PlacementService")
-	self._placeStructureCommand = registry:Get("PlaceStructureCommand")
-	self._destroyStructureInstanceCommand = registry:Get("DestroyStructureInstanceCommand")
-	self._getPlacedStructuresQuery = registry:Get("GetPlacedStructuresQuery")
 	self._structurePlacedSignal = Instance.new("BindableEvent")
 	self.StructurePlaced = self._structurePlacedSignal.Event
 	self._playerAddedConnection = nil :: RBXScriptConnection?
@@ -91,15 +144,7 @@ end
 ]=]
 -- Hydrate current and future players, then watch for run-end cleanup.
 function PlacementContext:KnitStart()
-	local runContext = Knit.GetService("RunContext")
-	local worldContext = Knit.GetService("WorldContext")
-	local economyContext = Knit.GetService("EconomyContext")
-	self._runContext = runContext
-
-	self._registry:Register("RunContext", runContext)
-	self._registry:Register("WorldContext", worldContext)
-	self._registry:Register("EconomyContext", economyContext)
-	self._registry:StartOrdered({ "Domain", "Infrastructure", "Application" })
+	PlacementBaseContext:KnitStart()
 
 	-- Late joiners need the current placement atom immediately after they connect.
 	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
@@ -112,12 +157,14 @@ function PlacementContext:KnitStart()
 	end
 
 	-- RunEnd is the cleanup boundary for all spawned structures and synced records.
-	self._stateChangedConnection = self._runContext.StateChanged:Connect(function(newState: string, _previousState: string)
-		if newState == "RunEnd" then
-			self._placementService:DestroyAll()
-			self._syncService:ClearAll()
+	self._stateChangedConnection = self._runContext.StateChanged:Connect(
+		function(newState: string, _previousState: string)
+			if newState == "RunEnd" then
+				self._placementService:DestroyAll()
+				self._syncService:ClearAll()
+			end
 		end
-	end)
+	)
 end
 
 --[=[
@@ -144,7 +191,11 @@ function PlacementContext:_HandlePlaceStructureRequest(player: Player, request: 
 
 	-- Catch keeps structured failures inside the remote response instead of throwing across Blink.
 	local placementResult = Catch(function()
-		return self._placeStructureCommand:Execute(player, validatedResult.value.coord, validatedResult.value.structureType)
+		return self._placeStructureCommand:Execute(
+			player,
+			validatedResult.value.coord,
+			validatedResult.value.structureType
+		)
 	end, "Placement:PlaceStructure")
 	if not placementResult.success then
 		return {
@@ -195,23 +246,13 @@ end
 ]=]
 -- Disconnect listeners and tear down the sync bridge when the service shuts down.
 function PlacementContext:Destroy()
-	if self._playerAddedConnection then
-		self._playerAddedConnection:Disconnect()
-	end
-
-	if self._stateChangedConnection then
-		self._stateChangedConnection:Disconnect()
-	end
-
-	if self._syncService then
-		self._syncService:Destroy()
-	end
-
-	if self._structurePlacedSignal then
-		self._structurePlacedSignal:Destroy()
+	local destroyResult = PlacementBaseContext:Destroy()
+	if not destroyResult.success then
+		Result.MentionError("Placement:Destroy", "BaseContext teardown failed", {
+			CauseType = destroyResult.type,
+			CauseMessage = destroyResult.message,
+		}, destroyResult.type)
 	end
 end
-
-WrapContext(PlacementContext, "Placement")
 
 return PlacementContext

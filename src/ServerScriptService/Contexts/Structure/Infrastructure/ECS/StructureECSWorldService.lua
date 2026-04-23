@@ -10,7 +10,7 @@ local BaseECSWorldService = require(ReplicatedStorage.Utilities.BaseECSWorldServ
 ]=]
 local StructureECSWorldService = {}
 StructureECSWorldService.__index = StructureECSWorldService
-setmetatable(StructureECSWorldService, { __index = BaseECSWorldService })
+setmetatable(StructureECSWorldService, BaseECSWorldService)
 
 --[=[
 	Creates a new isolated JECS world service.
@@ -24,11 +24,11 @@ end
 --[=[
 	Initializes the service lifecycle hook.
 	@within StructureECSWorldService
-	@param _registry any -- The dependency registry for this context.
-	@param _name string -- The registered module name.
+	@param registry any -- The dependency registry for this context.
+	@param name string -- The registered module name.
 ]=]
-function StructureECSWorldService:Init(_registry: any, _name: string)
-	BaseECSWorldService.Init(self, _registry, _name)
+function StructureECSWorldService:Init(registry: any, name: string)
+	BaseECSWorldService.Init(self, registry, name)
 end
 
 --[=[

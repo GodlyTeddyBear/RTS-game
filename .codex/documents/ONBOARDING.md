@@ -14,6 +14,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 ### "I need low-level backend method contracts"
 → Start with [methods/METHODS_INDEX.md](methods/METHODS_INDEX.md)
 → Then [methods/backend/CONTEXT_BOUNDARIES.md](methods/backend/CONTEXT_BOUNDARIES.md) for context boundary ownership and pass-through rules
+-> Then [methods/backend/BASE_CONTEXT_CONTRACTS.md](methods/backend/BASE_CONTEXT_CONTRACTS.md) for BaseContext context creation and migration rules
 -> Then [methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md](methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md) for registry lifecycle and cross-context dependency wiring
 -> Then [methods/backend/ASSET_ACCESS_CONTRACTS.md](methods/backend/ASSET_ACCESS_CONTRACTS.md) for AssetFetcher registry usage and direct asset access prohibitions
 → Then [methods/backend/APPLICATION_CONTRACTS.md](methods/backend/APPLICATION_CONTRACTS.md) for Command/Query execution flow and dependency contracts
@@ -50,6 +51,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 → Then [methods/frontend/CONTROLLER_INFRA_CONTRACTS.md](methods/frontend/CONTROLLER_INFRA_CONTRACTS.md) for side-effect ownership and infrastructure boundaries
 
 ### "I'm adding a new feature to the backend"
+→ Read [methods/backend/BASE_CONTEXT_CONTRACTS.md](methods/backend/BASE_CONTEXT_CONTRACTS.md) before creating or migrating a context entry module
 → Use the `roblox-implement-feature` skill with the `new-context` reference to scaffold a full bounded context
 → Use the `roblox-implement-feature` skill with the `new-service` reference to add a single service inside an existing context
 → Reference [architecture/backend/DDD.md](architecture/backend/DDD.md) for which layer the service belongs to
@@ -58,6 +60,11 @@ A map of this project's knowledge base. Read this first to know where to look.
 → Use the `roblox-implement-feature` skill
 → It requires pre-reading relevant architecture docs and context files before edits
 → Use the `roblox-plan` skill first if you want a plan before implementation
+
+### "I need to migrate a context or ECS layer to base classes"
+-> Read [methods/backend/BASE_CONTEXT_CONTRACTS.md](methods/backend/BASE_CONTEXT_CONTRACTS.md) for BaseContext migration rules
+-> Read the relevant ECS method contracts for world, component, factory, system, and phase boundaries
+-> Use the `roblox-migrate-context-ecs` skill to migrate context registry wiring and ECS infrastructure to the shared base classes
 
 ### "I'm adding a new frontend feature"
 → Use the `roblox-implement-feature` skill with the `new-feature` reference to scaffold a full feature slice
@@ -148,6 +155,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 | [methods/METHODS_INDEX.md](methods/METHODS_INDEX.md) | Index of low-level method contracts for implementation work |
 | [methods/PLAN_DEVELOPMENT.md](methods/PLAN_DEVELOPMENT.md) | Standard output contract and rubric gates for GDD + implementation planning |
 | [methods/backend/CONTEXT_BOUNDARIES.md](methods/backend/CONTEXT_BOUNDARIES.md) | Context boundary categories, Catch ownership, and bridge-only prohibitions |
+| [methods/backend/BASE_CONTEXT_CONTRACTS.md](methods/backend/BASE_CONTEXT_CONTRACTS.md) | BaseContext service-table configuration, module specs, caching, lifecycle delegation, and migration rules |
 | [methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md](methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md) | Registry lifecycle rules for owned modules, cross-context dependencies, and Start ordering |
 | [methods/backend/ASSET_ACCESS_CONTRACTS.md](methods/backend/ASSET_ACCESS_CONTRACTS.md) | AssetFetcher registry lifecycle and prohibition on direct asset tree traversal |
 | [methods/backend/APPLICATION_CONTRACTS.md](methods/backend/APPLICATION_CONTRACTS.md) | Command/Query flow, Result return contracts, and dependency prohibitions |
@@ -180,6 +188,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 |---------|-------------|
 | `roblox-plan` | Generate a strict, execution-ready Roblox implementation plan using a structured output schema (no code). |
 | `roblox-implement-feature` | Implement a feature end-to-end and handle new-context, new-service, or new-feature scaffolding when needed. |
+| `roblox-migrate-context-ecs` | Migrate backend context registry wiring and ECS infrastructure to BaseContext and BaseECS base classes. |
 | `roblox-review` | Review code against DDD, error handling, state sync, and style rules. |
 | `roblox-refactor-better` | Analyze or refactor code for readability, abstraction quality, naming, control flow, and project fit. |
 | `roblox-suggest-result` | Suggest or apply the backend Result/error-handling pattern and boundary rules. |

@@ -17,8 +17,37 @@ local SignalsMethods = require(script.Public.Signals)
 local StartMethods = require(script.Public.Start)
 local Types = require(script.Types)
 
-type TContextService = Types.TContextService
 type RegistryContext = Registry.RegistryContext
+export type TModuleSpec = Types.TModuleSpec
+export type TWorldServiceSpec = Types.TWorldServiceSpec
+export type TModuleLayers = Types.TModuleLayers
+export type TCacheMethodSpec = Types.TCacheMethodSpec
+export type TCacheConfig = Types.TCacheConfig
+export type TProfileLifecycleHandler = Types.TProfileLifecycleHandler
+export type TProfileLifecycleSpec = Types.TProfileLifecycleSpec
+export type TPlayerSyncOptions = Types.TPlayerSyncOptions
+export type TTeardownFieldSpec = Types.TTeardownFieldSpec
+export type TTeardownSpec = Types.TTeardownSpec
+export type TExternalServiceSpec = Types.TExternalServiceSpec
+export type TExternalDependencySpec = Types.TExternalDependencySpec
+export type TStartOrder = Types.TStartOrder
+export type TContextService = Types.TContextService
+export type TBaseContext = {
+	KnitInit: (self: TBaseContext) -> (),
+	KnitStart: (self: TBaseContext) -> (),
+	GetRegistry: (self: TBaseContext) -> any,
+	Destroy: (self: TBaseContext) -> any,
+	Cleanup: (self: TBaseContext) -> any,
+	AddCleanup: (self: TBaseContext, resource: any, cleanupMethod: string?) -> any,
+	AddCleanupField: (self: TBaseContext, fieldName: string, cleanupMethod: string?) -> (),
+	RegisterSchedulerSystem: (self: TBaseContext, phaseName: string, callback: () -> ()) -> (),
+	RegisterMethodSystem: (self: TBaseContext, phaseName: string, targetField: string, methodName: string) -> (),
+	RegisterPollSystem: (self: TBaseContext, targetField: string, methodName: string?, phaseName: string) -> (),
+	RegisterTickSystem: (self: TBaseContext, targetField: string, methodName: string?, phaseName: string) -> (),
+	RegisterDeltaTickSystem: (self: TBaseContext, targetField: string, methodName: string?, phaseName: string) -> (),
+	RegisterSyncSystem: (self: TBaseContext, targetField: string, methodName: string?, phaseName: string) -> (),
+	GetSchedulerDeltaTime: (self: TBaseContext) -> number,
+}
 
 --[=[
 	@class BaseContext
@@ -42,7 +71,7 @@ end
 	@param registryContext RegistryContext? -- Registry context, defaults to `"Server"`.
 	@return BaseContext -- Base context wrapper.
 ]=]
-function BaseContext.new(service: TContextService, registryContext: RegistryContext?)
+function BaseContext.new(service: TContextService, registryContext: RegistryContext?): TBaseContext
 	assert(service ~= nil, "BaseContext.new requires a service table")
 	assert(type(service.Name) == "string" and service.Name ~= "", "BaseContext.new requires service.Name")
 	WrapContext(service, service.Name)
@@ -54,7 +83,7 @@ function BaseContext.new(service: TContextService, registryContext: RegistryCont
 	self._janitor = Janitor.new()
 	self._cleanupResults = nil
 	self._destroyed = false
-	return self
+	return self :: any
 end
 
 ApplyMethods(BaseContext, BootstrapMethods)

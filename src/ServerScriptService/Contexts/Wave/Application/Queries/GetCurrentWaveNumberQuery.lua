@@ -24,7 +24,7 @@ end
 	@param name string -- The registered module name.
 ]=]
 function GetCurrentWaveNumberQuery:Init(registry: any, _name: string)
-	self._state = registry:Get("WaveRuntimeStateService")
+	self._state = registry:Get("WaveEntityFactory")
 end
 
 --[=[

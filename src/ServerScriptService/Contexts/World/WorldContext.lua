@@ -11,9 +11,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local Registry = require(ReplicatedStorage.Utilities.Registry)
+local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
 local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 
 local WorldGridRuntimeService = require(script.Parent.Infrastructure.Services.WorldGridRuntimeService)
@@ -30,6 +29,73 @@ local GetLaneTilesQuery = require(script.Parent.Application.Queries.GetLaneTiles
 
 -- [Dependencies]
 
+local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "WorldGridRuntimeService",
+		Module = WorldGridRuntimeService,
+	},
+	{
+		Name = "WorldGridService",
+		Module = WorldGridService,
+		CacheAs = "_worldGridService",
+	},
+	{
+		Name = "WorldLayoutService",
+		Module = WorldLayoutService,
+		CacheAs = "_worldLayoutService",
+	},
+}
+
+local ApplicationModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "GetTileQuery",
+		Factory = function(_service: any, baseContext: any)
+			return GetTileQuery.new(baseContext:GetRegistry():Get("WorldGridService"))
+		end,
+		CacheAs = "_getTileQuery",
+	},
+	{
+		Name = "GetSpawnPointsQuery",
+		Factory = function(_service: any, baseContext: any)
+			return GetSpawnPointsQuery.new(baseContext:GetRegistry():Get("WorldLayoutService"))
+		end,
+		CacheAs = "_getSpawnPointsQuery",
+	},
+	{
+		Name = "GetGoalPointQuery",
+		Factory = function(_service: any, baseContext: any)
+			return GetGoalPointQuery.new(baseContext:GetRegistry():Get("WorldLayoutService"))
+		end,
+		CacheAs = "_getGoalPointQuery",
+	},
+	{
+		Name = "GetBuildableTilesQuery",
+		Factory = function(_service: any, baseContext: any)
+			return GetBuildableTilesQuery.new(baseContext:GetRegistry():Get("WorldGridService"))
+		end,
+		CacheAs = "_getBuildableTilesQuery",
+	},
+	{
+		Name = "GetExtractionTilesQuery",
+		Factory = function(_service: any, baseContext: any)
+			return GetExtractionTilesQuery.new(baseContext:GetRegistry():Get("WorldGridService"))
+		end,
+		CacheAs = "_getExtractionTilesQuery",
+	},
+	{
+		Name = "GetLaneTilesQuery",
+		Factory = function(_service: any, baseContext: any)
+			return GetLaneTilesQuery.new(baseContext:GetRegistry():Get("WorldGridService"))
+		end,
+		CacheAs = "_getLaneTilesQuery",
+	},
+}
+
+local WorldModules: BaseContext.TModuleLayers = {
+	Infrastructure = InfrastructureModules,
+	Application = ApplicationModules,
+}
+
 --[=[
 	@class WorldContext
 	Exposes authoritative world layout queries and tile occupancy controls for server contexts.
@@ -38,13 +104,24 @@ local GetLaneTilesQuery = require(script.Parent.Application.Queries.GetLaneTiles
 local WorldContext = Knit.CreateService({
 	Name = "WorldContext",
 	Client = {},
+	Modules = WorldModules,
 })
 
+local WorldBaseContext = BaseContext.new(WorldContext)
 local Catch = Result.Catch
 local Ok = Result.Ok
 local Ensure = Result.Ensure
 type GridCoord = WorldTypes.GridCoord
 type Tile = WorldTypes.Tile
+type WorldContextService = typeof(WorldContext) & {
+	_getTileQuery: any,
+	_getSpawnPointsQuery: any,
+	_getGoalPointQuery: any,
+	_getBuildableTilesQuery: any,
+	_getExtractionTilesQuery: any,
+	_getLaneTilesQuery: any,
+	_worldGridService: any,
+}
 
 -- [Initialization]
 
@@ -53,28 +130,7 @@ type Tile = WorldTypes.Tile
 	@within WorldContext
 ]=]
 function WorldContext:KnitInit()
-	-- Register infrastructure services so the world grid is built before any query can run.
-	local registry = Registry.new("Server")
-	registry:Register("WorldGridRuntimeService", WorldGridRuntimeService.new(), "Infrastructure")
-	registry:Register("WorldGridService", WorldGridService.new(), "Infrastructure")
-	registry:Register("WorldLayoutService", WorldLayoutService.new(), "Infrastructure")
-	registry:InitAll()
-
-	-- Cache the concrete services after initialization so query objects can stay thin.
-	self._worldGridService = registry:Get("WorldGridService")
-	self._worldLayoutService = registry:Get("WorldLayoutService")
-
-	-- Build one query object per world read path to keep the context methods pass-through.
-	self._queries = {
-		GetTile = GetTileQuery.new(self._worldGridService),
-		GetSpawnPoints = GetSpawnPointsQuery.new(self._worldLayoutService),
-		GetGoalPoint = GetGoalPointQuery.new(self._worldLayoutService),
-		GetBuildableTiles = GetBuildableTilesQuery.new(self._worldGridService),
-		GetExtractionTiles = GetExtractionTilesQuery.new(self._worldGridService),
-		GetLaneTiles = GetLaneTilesQuery.new(self._worldGridService),
-	}
-
-	-- Emit a milestone so startup order is visible in the log stream.
+	WorldBaseContext:KnitInit()
 	Result.MentionSuccess("World:KnitInit", "World context initialized", nil)
 end
 
@@ -85,6 +141,7 @@ end
 	@within WorldContext
 ]=]
 function WorldContext:KnitStart()
+	WorldBaseContext:KnitStart()
 	Result.MentionEvent("World:KnitStart", "World context started", nil)
 end
 
@@ -94,10 +151,10 @@ end
 	@param coord GridCoord -- Grid coordinate to resolve.
 	@return Result.Result<Tile?> -- The resolved tile wrapped in `Result`.
 ]=]
-function WorldContext:GetTile(coord: GridCoord): Result.Result<Tile?>
+function WorldContext.GetTile(self: WorldContextService, coord: GridCoord): Result.Result<Tile?>
 	return Catch(function()
 		Ensure(coord, "InvalidCoord", Errors.INVALID_COORD)
-		return Ok(self._queries.GetTile:Execute(coord))
+		return Ok(self._getTileQuery:Execute(coord))
 	end, "World:GetTile")
 end
 
@@ -106,9 +163,9 @@ end
 	@within WorldContext
 	@return Result.Result<{ CFrame }> -- Spawn points wrapped in `Result`.
 ]=]
-function WorldContext:GetSpawnPoints(): Result.Result<{ CFrame }>
+function WorldContext.GetSpawnPoints(self: WorldContextService): Result.Result<{ CFrame }>
 	return Catch(function()
-		return Ok(self._queries.GetSpawnPoints:Execute())
+		return Ok(self._getSpawnPointsQuery:Execute())
 	end, "World:GetSpawnPoints")
 end
 
@@ -117,9 +174,9 @@ end
 	@within WorldContext
 	@return Result.Result<CFrame?> -- Goal point wrapped in `Result`.
 ]=]
-function WorldContext:GetGoalPoint(): Result.Result<CFrame?>
+function WorldContext.GetGoalPoint(self: WorldContextService): Result.Result<CFrame?>
 	return Catch(function()
-		return Ok(self._queries.GetGoalPoint:Execute())
+		return Ok(self._getGoalPointQuery:Execute())
 	end, "World:GetGoalPoint")
 end
 
@@ -128,9 +185,9 @@ end
 	@within WorldContext
 	@return Result.Result<{ Tile }> -- Buildable tile list wrapped in `Result`.
 ]=]
-function WorldContext:GetBuildableTiles(): Result.Result<{ Tile }>
+function WorldContext.GetBuildableTiles(self: WorldContextService): Result.Result<{ Tile }>
 	return Catch(function()
-		return Ok(self._queries.GetBuildableTiles:Execute())
+		return Ok(self._getBuildableTilesQuery:Execute())
 	end, "World:GetBuildableTiles")
 end
 
@@ -139,9 +196,9 @@ end
 	@within WorldContext
 	@return Result.Result<{ Tile }> -- Extraction tile list wrapped in `Result`.
 ]=]
-function WorldContext:GetExtractionTiles(): Result.Result<{ Tile }>
+function WorldContext.GetExtractionTiles(self: WorldContextService): Result.Result<{ Tile }>
 	return Catch(function()
-		return Ok(self._queries.GetExtractionTiles:Execute())
+		return Ok(self._getExtractionTilesQuery:Execute())
 	end, "World:GetExtractionTiles")
 end
 
@@ -150,9 +207,9 @@ end
 	@within WorldContext
 	@return Result.Result<{ Tile }> -- Lane tile list wrapped in `Result`.
 ]=]
-function WorldContext:GetLaneTiles(): Result.Result<{ Tile }>
+function WorldContext.GetLaneTiles(self: WorldContextService): Result.Result<{ Tile }>
 	return Catch(function()
-		return Ok(self._queries.GetLaneTiles:Execute())
+		return Ok(self._getLaneTilesQuery:Execute())
 	end, "World:GetLaneTiles")
 end
 
@@ -161,7 +218,7 @@ end
 	@within WorldContext
 	@return Result.Result<{ Tile }> -- Buildable tile list wrapped in `Result`.
 ]=]
-function WorldContext:GetPlacementZones(): Result.Result<{ Tile }>
+function WorldContext.GetPlacementZones(self: WorldContextService): Result.Result<{ Tile }>
 	return self:GetBuildableTiles()
 end
 
@@ -172,7 +229,11 @@ end
 	@param occupied boolean -- Whether the tile should be marked occupied.
 	@return Result.Result<boolean> -- Whether the tile was found and updated, wrapped in `Result`.
 ]=]
-function WorldContext:SetTileOccupied(coord: GridCoord, occupied: boolean): Result.Result<boolean>
+function WorldContext.SetTileOccupied(
+	self: WorldContextService,
+	coord: GridCoord,
+	occupied: boolean
+): Result.Result<boolean>
 	return Catch(function()
 		Ensure(coord, "InvalidCoord", Errors.INVALID_COORD)
 		return Ok(self._worldGridService:SetOccupied(coord, occupied))
@@ -184,14 +245,12 @@ end
 	@within WorldContext
 	@return Result.Result<boolean> -- True when runtime geometry was refreshed successfully.
 ]=]
-function WorldContext:RefreshRuntimeGeometry(): Result.Result<boolean>
+function WorldContext.RefreshRuntimeGeometry(self: WorldContextService): Result.Result<boolean>
 	return Catch(function()
 		self._worldGridService:ResetCache()
 		self._worldGridService:Build()
 		return Ok(true)
 	end, "World:RefreshRuntimeGeometry")
 end
-
-WrapContext(WorldContext, "World")
 
 return WorldContext

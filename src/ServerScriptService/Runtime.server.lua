@@ -1,7 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local NevermoreFolder = script.Parent:WaitForChild("Nevermore")
-local NevermoreLoaderModule = NevermoreFolder.node_modules["@quenty"].loader.src :: ModuleScript
+local NevermoreLoaderModule = NevermoreFolder.node_modules["@quenty"].loader :: ModuleScript
 local NevermoreLoader = require(NevermoreLoaderModule)
 NevermoreLoader.bootstrapGame(NevermoreFolder)
 

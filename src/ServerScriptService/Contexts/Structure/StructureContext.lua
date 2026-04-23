@@ -11,16 +11,12 @@
 -- [Dependencies]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local Registry = require(ReplicatedStorage.Utilities.Registry)
+local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.StructureTypes)
-
-local ServerScheduler = require(ServerScriptService.Scheduler.ServerScheduler)
 
 local StructureECSWorldService = require(script.Parent.Infrastructure.ECS.StructureECSWorldService)
 local StructureComponentRegistry = require(script.Parent.Infrastructure.ECS.StructureComponentRegistry)
@@ -39,6 +35,69 @@ type StructureRecord = PlacementTypes.StructureRecord
 type StructureAttackPayload = StructureTypes.StructureAttackPayload
 type RunState = "Idle" | "Prep" | "Wave" | "Resolution" | "Climax" | "Endless" | "RunEnd"
 
+local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "StructureComponentRegistry",
+		Module = StructureComponentRegistry,
+	},
+	{
+		Name = "StructureEntityFactory",
+		Module = StructureEntityFactory,
+		CacheAs = "_entityFactory",
+	},
+	{
+		Name = "OnStructureAttacked",
+		Factory = function(service: any, _baseContext: any)
+			service._structureAttackedSignal = Instance.new("BindableEvent")
+			service.StructureAttacked = service._structureAttackedSignal.Event
+			return function(payload: StructureAttackPayload)
+				service._structureAttackedSignal:Fire(payload)
+			end
+		end,
+	},
+}
+
+local DomainModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "RegisterStructurePolicy",
+		Module = RegisterStructurePolicy,
+	},
+}
+
+local ApplicationModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "RegisterStructureCommand",
+		Module = RegisterStructureCommand,
+		CacheAs = "_registerStructureCommand",
+	},
+	{
+		Name = "ApplyDamageStructureCommand",
+		Module = ApplyDamageStructureCommand,
+		CacheAs = "_applyDamageStructureCommand",
+	},
+	{
+		Name = "CleanupAllCommand",
+		Module = CleanupAllCommand,
+		CacheAs = "_cleanupAllCommand",
+	},
+	{
+		Name = "GetActiveStructuresQuery",
+		Module = GetActiveStructuresQuery,
+		CacheAs = "_getActiveStructuresQuery",
+	},
+	{
+		Name = "GetStructureCountQuery",
+		Module = GetStructureCountQuery,
+		CacheAs = "_getStructureCountQuery",
+	},
+}
+
+local StructureModules: BaseContext.TModuleLayers = {
+	Infrastructure = InfrastructureModules,
+	Domain = DomainModules,
+	Application = ApplicationModules,
+}
+
 -- [Public API]
 
 --[=[
@@ -49,7 +108,28 @@ type RunState = "Idle" | "Prep" | "Wave" | "Resolution" | "Climax" | "Endless" |
 local StructureContext = Knit.CreateService({
 	Name = "StructureContext",
 	Client = {},
+	WorldService = {
+		Name = "StructureECSWorldService",
+		Module = StructureECSWorldService,
+	},
+	Modules = StructureModules,
+	ExternalServices = {
+		{ Name = "WorldContext" },
+		{ Name = "EnemyContext" },
+		{ Name = "RunContext", CacheAs = "_runContext" },
+		{ Name = "PlacementContext", CacheAs = "_placementContext" },
+	},
+	Teardown = {
+		Before = "_BeforeDestroy",
+		Fields = {
+			{ Field = "_structurePlacedConnection", Method = "Disconnect" },
+			{ Field = "_runStateChangedConnection", Method = "Disconnect" },
+			{ Field = "_structureAttackedSignal", Method = "Destroy" },
+		},
+	},
 })
+
+local StructureBaseContext = BaseContext.new(StructureContext)
 
 --[=[
 	@prop StructureAttacked RBXScriptSignal
@@ -63,40 +143,7 @@ StructureContext.StructureAttacked = nil
 	@within StructureContext
 ]=]
 function StructureContext:KnitInit()
-	local registry = Registry.new("Server")
-	local worldService = StructureECSWorldService.new()
-
-	-- Register the isolated ECS world and all structure-specific services first.
-	registry:Register("StructureECSWorldService", worldService, "Infrastructure")
-	worldService:Init(registry, "StructureECSWorldService")
-	registry:Register("World", worldService:GetWorld())
-	registry:Register("StructureComponentRegistry", StructureComponentRegistry.new(), "Infrastructure")
-	registry:Register("StructureEntityFactory", StructureEntityFactory.new(), "Infrastructure")
-	registry:Register("RegisterStructurePolicy", RegisterStructurePolicy.new(), "Domain")
-	registry:Register("RegisterStructureCommand", RegisterStructureCommand.new(), "Application")
-	registry:Register("ApplyDamageStructureCommand", ApplyDamageStructureCommand.new(), "Application")
-	registry:Register("CleanupAllCommand", CleanupAllCommand.new(), "Application")
-	registry:Register("GetActiveStructuresQuery", GetActiveStructuresQuery.new(), "Application")
-	registry:Register("GetStructureCountQuery", GetStructureCountQuery.new(), "Application")
-
-	-- Expose a server-only signal so CombatContext can subscribe without a remote.
-	self._structureAttackedSignal = Instance.new("BindableEvent")
-	self.StructureAttacked = self._structureAttackedSignal.Event
-	registry:Register("OnStructureAttacked", function(payload: StructureAttackPayload)
-		self._structureAttackedSignal:Fire(payload)
-	end)
-
-	-- Finish module initialization after every dependency has been registered.
-	registry:InitAll()
-
-	-- Cache the resolved services and public helpers used by the runtime hooks.
-	self._registry = registry
-	self._registerStructureCommand = registry:Get("RegisterStructureCommand")
-	self._applyDamageStructureCommand = registry:Get("ApplyDamageStructureCommand")
-	self._cleanupAllCommand = registry:Get("CleanupAllCommand")
-	self._getActiveStructuresQuery = registry:Get("GetActiveStructuresQuery")
-	self._getStructureCountQuery = registry:Get("GetStructureCountQuery")
-	self._entityFactory = registry:Get("StructureEntityFactory")
+	StructureBaseContext:KnitInit()
 	self._structurePlacedConnection = nil :: RBXScriptConnection?
 	self._runStateChangedConnection = nil :: RBXScriptConnection?
 end
@@ -106,21 +153,10 @@ end
 	@within StructureContext
 ]=]
 function StructureContext:KnitStart()
-	-- Resolve the other server contexts that drive structure placement and run lifecycle.
-	local worldContext = Knit.GetService("WorldContext")
-	local enemyContext = Knit.GetService("EnemyContext")
-	local runContext = Knit.GetService("RunContext")
-	local placementContext = Knit.GetService("PlacementContext")
-
-	-- Register the sibling contexts before the system modules start so their dependencies are available.
-	self._registry:Register("WorldContext", worldContext)
-	self._registry:Register("EnemyContext", enemyContext)
-	self._registry:Register("RunContext", runContext)
-	self._registry:Register("PlacementContext", placementContext)
-	self._registry:StartOrdered({ "Domain", "Infrastructure", "Application" })
+	StructureBaseContext:KnitStart()
 
 	-- Register new placements as ECS entities as soon as PlacementContext announces them.
-	self._structurePlacedConnection = placementContext.StructurePlaced:Connect(function(record: StructureRecord)
+	self._structurePlacedConnection = self._placementContext.StructurePlaced:Connect(function(record: StructureRecord)
 		local result = self:_RegisterStructure(record)
 		if not result.success then
 			Result.MentionError("Structure:OnStructurePlaced", "Failed to register structure", {
@@ -133,7 +169,7 @@ function StructureContext:KnitStart()
 	end)
 
 	-- Tear down all structures when the run ends so the next session starts clean.
-	self._runStateChangedConnection = runContext.StateChanged:Connect(function(newState: RunState, _previousState: RunState)
+	self._runStateChangedConnection = self._runContext.StateChanged:Connect(function(newState: RunState, _previousState: RunState)
 		if newState ~= "RunEnd" then
 			return
 		end
@@ -147,9 +183,7 @@ function StructureContext:KnitStart()
 		end
 	end)
 
-	ServerScheduler:RegisterSystem(function()
-		self._entityFactory:FlushPendingDeletes()
-	end, "CombatTick")
+	StructureBaseContext:RegisterMethodSystem("CombatTick", "_entityFactory", "FlushPendingDeletes")
 end
 
 -- [Private Helpers]
@@ -214,11 +248,7 @@ function StructureContext:GetEntityFactory(): Result.Result<any>
 	return Ok(self._entityFactory)
 end
 
---[=[
-	Disconnects listeners and cleans up the isolated world.
-	@within StructureContext
-]=]
-function StructureContext:Destroy()
+function StructureContext:_BeforeDestroy()
 	-- Run cleanup first so entity deletion still has access to live collaborators.
 	local cleanupResult = self:_CleanupAll()
 	if not cleanupResult.success then
@@ -227,23 +257,20 @@ function StructureContext:Destroy()
 			CauseMessage = cleanupResult.message,
 		}, cleanupResult.type)
 	end
-
-	-- Disconnect the placement bridge before destroying the signal object.
-	if self._structurePlacedConnection then
-		self._structurePlacedConnection:Disconnect()
-	end
-
-	-- Disconnect the run-end listener once teardown begins.
-	if self._runStateChangedConnection then
-		self._runStateChangedConnection:Disconnect()
-	end
-
-	-- Destroy the BindableEvent so no stale server listeners remain attached.
-	if self._structureAttackedSignal then
-		self._structureAttackedSignal:Destroy()
-	end
 end
 
-WrapContext(StructureContext, "Structure")
+--[=[
+	Disconnects listeners and cleans up the isolated world.
+	@within StructureContext
+]=]
+function StructureContext:Destroy()
+	local destroyResult = StructureBaseContext:Destroy()
+	if not destroyResult.success then
+		Result.MentionError("Structure:Destroy", "BaseContext teardown failed", {
+			CauseType = destroyResult.type,
+			CauseMessage = destroyResult.message,
+		}, destroyResult.type)
+	end
+end
 
 return StructureContext

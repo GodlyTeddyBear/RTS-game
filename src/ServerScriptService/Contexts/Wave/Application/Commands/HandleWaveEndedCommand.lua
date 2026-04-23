@@ -20,7 +20,7 @@ end
 
 function HandleWaveEndedCommand:Init(registry: any, _name: string)
 	self._scheduler = registry:Get("WaveSpawnScheduler")
-	self._state = registry:Get("WaveRuntimeStateService")
+	self._state = registry:Get("WaveEntityFactory")
 	self._lifecycle = registry:Get("WaveLifecycleService")
 end
 

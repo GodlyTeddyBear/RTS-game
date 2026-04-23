@@ -35,7 +35,7 @@ end
 ]=]
 function HandleEnemyDiedCommand:Init(registry: any, _name: string)
 	self._scheduler = registry:Get("WaveSpawnScheduler")
-	self._state = registry:Get("WaveRuntimeStateService")
+	self._state = registry:Get("WaveEntityFactory")
 	self._lifecycle = registry:Get("WaveLifecycleService")
 	self._counting = registry:Get("WaveCountingService")
 end

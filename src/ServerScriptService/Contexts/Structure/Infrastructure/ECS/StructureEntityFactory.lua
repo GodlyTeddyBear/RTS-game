@@ -23,7 +23,7 @@ type TCombatAction = ExecutorTypes.TCombatActionComponent
 ]=]
 local StructureEntityFactory = {}
 StructureEntityFactory.__index = StructureEntityFactory
-setmetatable(StructureEntityFactory, { __index = BaseECSEntityFactory })
+setmetatable(StructureEntityFactory, BaseECSEntityFactory)
 
 local function _buildDefaultAction(): TCombatAction
 	return {
@@ -42,9 +42,7 @@ end
 	@return StructureEntityFactory -- The new factory instance.
 ]=]
 function StructureEntityFactory.new()
-	local self = setmetatable(BaseECSEntityFactory.new("Structure"), StructureEntityFactory)
-	self._componentRegistry = nil
-	return self
+	return setmetatable(BaseECSEntityFactory.new("Structure"), StructureEntityFactory)
 end
 
 --[=[
@@ -54,24 +52,20 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function StructureEntityFactory:Init(registry: any, _name: string)
-	self._componentRegistry = registry:Get("StructureComponentRegistry")
 	BaseECSEntityFactory.InitBase(self, registry, "StructureComponentRegistry")
-end
-
-function StructureEntityFactory:_GetComponents()
-	self:RequireReady()
-
-	local components = self._components
-	if components ~= nil then
-		return components
-	end
-
-	components = self._componentRegistry:GetComponents()
-	if components ~= nil then
-		self._components = components
-	end
-
-	return components
+	assert(
+		self._components ~= nil
+			and self._components.AttackStatsComponent ~= nil
+			and self._components.AttackCooldownComponent ~= nil
+			and self._components.HealthComponent ~= nil
+			and self._components.TargetComponent ~= nil
+			and self._components.BehaviorTreeComponent ~= nil
+			and self._components.CombatActionComponent ~= nil
+			and self._components.InstanceRefComponent ~= nil
+			and self._components.IdentityComponent ~= nil
+			and self._components.ActiveTag ~= nil,
+		"StructureEntityFactory: missing StructureComponentRegistry components"
+	)
 end
 
 --[=[
@@ -81,8 +75,7 @@ end
 	@return number -- The new ECS entity id.
 ]=]
 function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord): number
-	local components = self:_GetComponents()
-	assert(components ~= nil, "Structure components are not initialized")
+	local components = self:GetComponentsOrThrow()
 
 	local structureConfig = StructureConfig.STRUCTURES[record.structureType]
 	assert(structureConfig ~= nil, "Unknown structure type: " .. tostring(record.structureType))
@@ -144,10 +137,7 @@ function StructureEntityFactory:SetTarget(entity: number?, targetEntity: number?
 		return
 	end
 
-	local components = self:_GetComponents()
-	if components == nil then
-		return
-	end
+	local components = self:GetComponentsOrThrow()
 
 	self._world:set(entity, components.TargetComponent, {
 		Entity = targetEntity,
@@ -165,10 +155,7 @@ function StructureEntityFactory:GetTarget(entity: number?): number?
 		return nil
 	end
 
-	local components = self:_GetComponents()
-	if components == nil then
-		return nil
-	end
+	local components = self:GetComponentsOrThrow()
 
 	local targetComponent = self._world:get(entity, components.TargetComponent)
 	if targetComponent == nil then
@@ -189,10 +176,7 @@ function StructureEntityFactory:GetAttackStats(entity: number?): TAttackStatsCom
 		return nil
 	end
 
-	local components = self:_GetComponents()
-	if components == nil then
-		return nil
-	end
+	local components = self:GetComponentsOrThrow()
 
 	return self._world:get(entity, components.AttackStatsComponent)
 end
@@ -208,10 +192,7 @@ function StructureEntityFactory:GetCooldown(entity: number?): TAttackCooldownCom
 		return nil
 	end
 
-	local components = self:_GetComponents()
-	if components == nil then
-		return nil
-	end
+	local components = self:GetComponentsOrThrow()
 
 	return self._world:get(entity, components.AttackCooldownComponent)
 end
@@ -227,10 +208,7 @@ function StructureEntityFactory:GetHealth(entity: number?): THealthComponent?
 		return nil
 	end
 
-	local components = self:_GetComponents()
-	if components == nil then
-		return nil
-	end
+	local components = self:GetComponentsOrThrow()
 
 	return self._world:get(entity, components.HealthComponent)
 end
@@ -252,10 +230,7 @@ function StructureEntityFactory:SetCooldownElapsed(entity: number?, elapsed: num
 		return
 	end
 
-	local components = self:_GetComponents()
-	if components == nil then
-		return
-	end
+	local components = self:GetComponentsOrThrow()
 
 	self._world:set(entity, components.AttackCooldownComponent, {
 		Elapsed = elapsed,
@@ -263,10 +238,7 @@ function StructureEntityFactory:SetCooldownElapsed(entity: number?, elapsed: num
 end
 
 function StructureEntityFactory:SetBehaviorTree(entity: number, treeInstance: any, tickInterval: number)
-	local components = self:_GetComponents()
-	if components == nil then
-		return
-	end
+	local components = self:GetComponentsOrThrow()
 
 	self._world:set(entity, components.BehaviorTreeComponent, {
 		TreeInstance = treeInstance,
@@ -276,10 +248,7 @@ function StructureEntityFactory:SetBehaviorTree(entity: number, treeInstance: an
 end
 
 function StructureEntityFactory:GetBehaviorTree(entity: number)
-	local components = self:_GetComponents()
-	if components == nil then
-		return nil
-	end
+	local components = self:GetComponentsOrThrow()
 
 	return self._world:get(entity, components.BehaviorTreeComponent)
 end
@@ -290,10 +259,7 @@ function StructureEntityFactory:UpdateBTLastTickTime(entity: number, currentTime
 		return
 	end
 
-	local components = self:_GetComponents()
-	if components == nil then
-		return
-	end
+	local components = self:GetComponentsOrThrow()
 
 	self._world:set(entity, components.BehaviorTreeComponent, {
 		TreeInstance = behaviorTree.TreeInstance,
@@ -303,19 +269,13 @@ function StructureEntityFactory:UpdateBTLastTickTime(entity: number, currentTime
 end
 
 function StructureEntityFactory:GetCombatAction(entity: number)
-	local components = self:_GetComponents()
-	if components == nil then
-		return nil
-	end
+	local components = self:GetComponentsOrThrow()
 
 	return self._world:get(entity, components.CombatActionComponent)
 end
 
 function StructureEntityFactory:SetPendingAction(entity: number, actionId: string, actionData: any?)
-	local components = self:_GetComponents()
-	if components == nil then
-		return
-	end
+	local components = self:GetComponentsOrThrow()
 
 	local action = self:GetCombatAction(entity) or _buildDefaultAction()
 	self._world:set(entity, components.CombatActionComponent, {
@@ -329,10 +289,7 @@ function StructureEntityFactory:SetPendingAction(entity: number, actionId: strin
 end
 
 function StructureEntityFactory:ClearPendingAction(entity: number)
-	local components = self:_GetComponents()
-	if components == nil then
-		return
-	end
+	local components = self:GetComponentsOrThrow()
 
 	local action = self:GetCombatAction(entity) or _buildDefaultAction()
 	self._world:set(entity, components.CombatActionComponent, {
@@ -346,10 +303,7 @@ function StructureEntityFactory:ClearPendingAction(entity: number)
 end
 
 function StructureEntityFactory:StartAction(entity: number, actionId: string, actionData: any?, currentTime: number)
-	local components = self:_GetComponents()
-	if components == nil then
-		return
-	end
+	local components = self:GetComponentsOrThrow()
 
 	self._world:set(entity, components.CombatActionComponent, {
 		CurrentActionId = actionId,
@@ -362,10 +316,7 @@ function StructureEntityFactory:StartAction(entity: number, actionId: string, ac
 end
 
 function StructureEntityFactory:ClearAction(entity: number)
-	local components = self:_GetComponents()
-	if components == nil then
-		return
-	end
+	local components = self:GetComponentsOrThrow()
 
 	self._world:set(entity, components.CombatActionComponent, _buildDefaultAction())
 end
@@ -376,10 +327,7 @@ function StructureEntityFactory:ResetActionState(entity: number)
 		return
 	end
 
-	local components = self:_GetComponents()
-	if components == nil then
-		return
-	end
+	local components = self:GetComponentsOrThrow()
 
 	self._world:set(entity, components.CombatActionComponent, {
 		CurrentActionId = action.CurrentActionId,
@@ -398,10 +346,7 @@ function StructureEntityFactory:ApplyDamage(entity: number, amount: number): boo
 	end
 
 	local nextHp = math.max(0, health.Current - amount)
-	local components = self:_GetComponents()
-	if components == nil then
-		return false
-	end
+	local components = self:GetComponentsOrThrow()
 
 	self._world:set(entity, components.HealthComponent, {
 		Current = nextHp,
@@ -422,10 +367,7 @@ function StructureEntityFactory:GetIdentity(entity: number?): TIdentityComponent
 		return nil
 	end
 
-	local components = self:_GetComponents()
-	if components == nil then
-		return nil
-	end
+	local components = self:GetComponentsOrThrow()
 
 	return self._world:get(entity, components.IdentityComponent)
 end
@@ -441,10 +383,7 @@ function StructureEntityFactory:GetInstanceRef(entity: number?): TInstanceRefCom
 		return nil
 	end
 
-	local components = self:_GetComponents()
-	if components == nil then
-		return nil
-	end
+	local components = self:GetComponentsOrThrow()
 
 	return self._world:get(entity, components.InstanceRefComponent)
 end
@@ -463,10 +402,7 @@ function StructureEntityFactory:IsActive(entity: number?): boolean
 		return false
 	end
 
-	local components = self:_GetComponents()
-	if components == nil then
-		return false
-	end
+	local components = self:GetComponentsOrThrow()
 
 	return self._world:has(entity, components.ActiveTag)
 end
@@ -477,10 +413,7 @@ end
 	@return { number } -- All active structure entity ids.
 ]=]
 function StructureEntityFactory:QueryActiveEntities(): { number }
-	local components = self:_GetComponents()
-	if components == nil then
-		return {}
-	end
+	local components = self:GetComponentsOrThrow()
 
 	return self:CollectQuery(components.ActiveTag)
 end
@@ -495,8 +428,8 @@ function StructureEntityFactory:DeleteEntity(entity: number?)
 		return
 	end
 
-	local components = self:_GetComponents()
-	if components ~= nil and self._world:has(entity, components.ActiveTag) then
+	local components = self:GetComponentsOrThrow()
+	if self._world:has(entity, components.ActiveTag) then
 		self._world:remove(entity, components.ActiveTag)
 	end
 

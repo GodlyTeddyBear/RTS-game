@@ -12,24 +12,98 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local Registry = require(ReplicatedStorage.Utilities.Registry)
+local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
 local Errors = require(script.Parent.Errors)
+local WaveECSWorldService = require(script.Parent.Infrastructure.ECS.WaveECSWorldService)
+local WaveComponentRegistry = require(script.Parent.Infrastructure.ECS.WaveComponentRegistry)
+local WaveEntityFactory = require(script.Parent.Infrastructure.ECS.WaveEntityFactory)
+local EndlessScalingService = require(script.Parent.Infrastructure.Services.EndlessScalingService)
+local WaveCompositionService = require(script.Parent.Infrastructure.Services.WaveCompositionService)
+local WaveSpawnScheduler = require(script.Parent.Infrastructure.Services.WaveSpawnScheduler)
+local WaveLifecycleService = require(script.Parent.WaveDomain.Services.WaveLifecycleService)
+local WaveCountingService = require(script.Parent.WaveDomain.Services.WaveCountingService)
 local HandleWaveStartedCommand = require(script.Parent.Application.Commands.HandleWaveStartedCommand)
 local HandleEnemyDiedCommand = require(script.Parent.Application.Commands.HandleEnemyDiedCommand)
 local HandleWaveEndedCommand = require(script.Parent.Application.Commands.HandleWaveEndedCommand)
 local HandleRunEndedCommand = require(script.Parent.Application.Commands.HandleRunEndedCommand)
 local GetActiveEnemyCountQuery = require(script.Parent.Application.Queries.GetActiveEnemyCountQuery)
 local GetCurrentWaveNumberQuery = require(script.Parent.Application.Queries.GetCurrentWaveNumberQuery)
-local EndlessScalingService = require(script.Parent.Infrastructure.Services.EndlessScalingService)
-local WaveCompositionService = require(script.Parent.Infrastructure.Services.WaveCompositionService)
-local WaveSpawnScheduler = require(script.Parent.Infrastructure.Services.WaveSpawnScheduler)
-local WaveRuntimeStateService = require(script.Parent.Infrastructure.Services.WaveRuntimeStateService)
-local WaveLifecycleService = require(script.Parent.WaveDomain.Services.WaveLifecycleService)
-local WaveCountingService = require(script.Parent.WaveDomain.Services.WaveCountingService)
+
+local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "WaveComponentRegistry",
+		Module = WaveComponentRegistry,
+	},
+	{
+		Name = "WaveEntityFactory",
+		Module = WaveEntityFactory,
+	},
+	{
+		Name = "EndlessScalingService",
+		Module = EndlessScalingService,
+	},
+	{
+		Name = "WaveCompositionService",
+		Module = WaveCompositionService,
+	},
+	{
+		Name = "WaveSpawnScheduler",
+		Module = WaveSpawnScheduler,
+	},
+}
+
+local DomainModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "WaveLifecycleService",
+		Module = WaveLifecycleService,
+	},
+	{
+		Name = "WaveCountingService",
+		Module = WaveCountingService,
+	},
+}
+
+local ApplicationModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "HandleWaveStartedCommand",
+		Module = HandleWaveStartedCommand,
+		CacheAs = "_handleWaveStartedCommand",
+	},
+	{
+		Name = "HandleEnemyDiedCommand",
+		Module = HandleEnemyDiedCommand,
+		CacheAs = "_handleEnemyDiedCommand",
+	},
+	{
+		Name = "HandleWaveEndedCommand",
+		Module = HandleWaveEndedCommand,
+		CacheAs = "_handleWaveEndedCommand",
+	},
+	{
+		Name = "HandleRunEndedCommand",
+		Module = HandleRunEndedCommand,
+		CacheAs = "_handleRunEndedCommand",
+	},
+	{
+		Name = "GetActiveEnemyCountQuery",
+		Module = GetActiveEnemyCountQuery,
+		CacheAs = "_getActiveEnemyCountQuery",
+	},
+	{
+		Name = "GetCurrentWaveNumberQuery",
+		Module = GetCurrentWaveNumberQuery,
+		CacheAs = "_getCurrentWaveNumberQuery",
+	},
+}
+
+local WaveModules: BaseContext.TModuleLayers = {
+	Infrastructure = InfrastructureModules,
+	Domain = DomainModules,
+	Application = ApplicationModules,
+}
 
 --[=[
 	@class WaveContext
@@ -39,7 +113,27 @@ local WaveCountingService = require(script.Parent.WaveDomain.Services.WaveCounti
 local WaveContext = Knit.CreateService({
 	Name = "WaveContext",
 	Client = {},
+	WorldService = {
+		Name = "WaveECSWorldService",
+		Module = WaveECSWorldService,
+	},
+	Modules = WaveModules,
+	ExternalServices = {
+		{ Name = "RunContext", CacheAs = "_runContext" },
+		{ Name = "WorldContext", CacheAs = "_worldContext" },
+	},
+	Teardown = {
+		Before = "_BeforeDestroy",
+		Fields = {
+			{ Field = "_runWaveStartedConnection", Method = "Disconnect" },
+			{ Field = "_runWaveEndedConnection", Method = "Disconnect" },
+			{ Field = "_runEndedConnection", Method = "Disconnect" },
+			{ Field = "_enemyDiedConnection", Method = "Disconnect" },
+		},
+	},
 })
+
+local WaveBaseContext = BaseContext.new(WaveContext)
 
 local Catch = Result.Catch
 local Ok = Result.Ok
@@ -53,28 +147,7 @@ local Ensure = Result.Ensure
 	@within WaveContext
 ]=]
 function WaveContext:KnitInit()
-	-- Register the full Wave context stack before any event can reach the handlers.
-	local registry = Registry.new("Server")
-	registry:Register("EndlessScalingService", EndlessScalingService.new(), "Infrastructure")
-	registry:Register("WaveCompositionService", WaveCompositionService.new(), "Infrastructure")
-	registry:Register("WaveSpawnScheduler", WaveSpawnScheduler.new(), "Infrastructure")
-	registry:Register("WaveRuntimeStateService", WaveRuntimeStateService.new(), "Infrastructure")
-	registry:Register("WaveLifecycleService", WaveLifecycleService.new(), "Domain")
-	registry:Register("WaveCountingService", WaveCountingService.new(), "Domain")
-	registry:Register("HandleWaveStartedCommand", HandleWaveStartedCommand.new(), "Application")
-	registry:Register("HandleEnemyDiedCommand", HandleEnemyDiedCommand.new(), "Application")
-	registry:Register("HandleWaveEndedCommand", HandleWaveEndedCommand.new(), "Application")
-	registry:Register("HandleRunEndedCommand", HandleRunEndedCommand.new(), "Application")
-	registry:Register("GetActiveEnemyCountQuery", GetActiveEnemyCountQuery.new(), "Application")
-	registry:Register("GetCurrentWaveNumberQuery", GetCurrentWaveNumberQuery.new(), "Application")
-	registry:InitAll()
-
-	self._handleWaveStartedCommand = registry:Get("HandleWaveStartedCommand")
-	self._handleEnemyDiedCommand = registry:Get("HandleEnemyDiedCommand")
-	self._handleWaveEndedCommand = registry:Get("HandleWaveEndedCommand")
-	self._handleRunEndedCommand = registry:Get("HandleRunEndedCommand")
-	self._getActiveEnemyCountQuery = registry:Get("GetActiveEnemyCountQuery")
-	self._getCurrentWaveNumberQuery = registry:Get("GetCurrentWaveNumberQuery")
+	WaveBaseContext:KnitInit()
 
 	-- Prepare the runtime caches and listener slots before subscriptions begin.
 	self._spawnCFrames = {}
@@ -92,9 +165,7 @@ end
 	@within WaveContext
 ]=]
 function WaveContext:KnitStart()
-	-- Resolve cross-context dependencies once so handlers stay lightweight.
-	self._runContext = Knit.GetService("RunContext")
-	self._worldContext = Knit.GetService("WorldContext")
+	WaveBaseContext:KnitStart()
 	self:_RefreshSpawnCFrames()
 
 	-- Guard the scheduler input early so the event handlers can assume a valid spawn list.
@@ -116,7 +187,7 @@ function WaveContext:KnitStart()
 		self:_OnRunEnded()
 	end)
 
-	-- Count down active enemies when the future enemy context reports a death.
+	-- Count down active enemies when enemy context reports a death.
 	self._enemyDiedConnection = GameEvents.Bus:On(
 		GameEvents.Events.Wave.EnemyDied,
 		function(role: string, waveNumber: number, deathCFrame: CFrame)
@@ -153,7 +224,6 @@ end
 	@param waveNumber number -- The active wave number.
 	@param isEndless boolean -- Whether the wave is in endless mode.
 ]=]
--- Bridge the run start event into the command pipeline so the context stays a thin boundary.
 function WaveContext:_OnRunWaveStarted(waveNumber: number, isEndless: boolean)
 	Catch(function()
 		Ensure(self._runContext, "MissingDependency", Errors.MISSING_RUN_CONTEXT)
@@ -188,6 +258,15 @@ function WaveContext:_OnRunEnded()
 	end, "Wave:OnRunEnded")
 end
 
+function WaveContext:_BeforeDestroy()
+	Catch(function()
+		if self._handleRunEndedCommand then
+			Try(self._handleRunEndedCommand:Execute())
+		end
+		return Ok(nil)
+	end, "Wave:Destroy")
+end
+
 -- [Public API]
 
 --[=[
@@ -217,27 +296,13 @@ end
 	@within WaveContext
 ]=]
 function WaveContext:Destroy()
-	-- Trigger the run-end cleanup path before disconnecting listeners.
-	Catch(function()
-		Try(self._handleRunEndedCommand:Execute())
-		return Ok(nil)
-	end, "Wave:Destroy")
-
-	-- Disconnect every listener so the context stops receiving lifecycle events.
-	if self._runWaveStartedConnection then
-		self._runWaveStartedConnection:Disconnect()
-	end
-	if self._runWaveEndedConnection then
-		self._runWaveEndedConnection:Disconnect()
-	end
-	if self._runEndedConnection then
-		self._runEndedConnection:Disconnect()
-	end
-	if self._enemyDiedConnection then
-		self._enemyDiedConnection:Disconnect()
+	local destroyResult = WaveBaseContext:Destroy()
+	if not destroyResult.success then
+		Result.MentionError("Wave:Destroy", Errors.TEARDOWN_FAILED, {
+			CauseType = destroyResult.type,
+			CauseMessage = destroyResult.message,
+		}, destroyResult.type)
 	end
 end
-
-WrapContext(WaveContext, "Wave")
 
 return WaveContext

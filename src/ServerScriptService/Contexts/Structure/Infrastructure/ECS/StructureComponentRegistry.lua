@@ -10,7 +10,7 @@ local BaseECSComponentRegistry = require(ReplicatedStorage.Utilities.BaseECSComp
 ]=]
 local StructureComponentRegistry = {}
 StructureComponentRegistry.__index = StructureComponentRegistry
-setmetatable(StructureComponentRegistry, { __index = BaseECSComponentRegistry })
+setmetatable(StructureComponentRegistry, BaseECSComponentRegistry)
 
 --[=[
 	Creates a new component registry wrapper.
