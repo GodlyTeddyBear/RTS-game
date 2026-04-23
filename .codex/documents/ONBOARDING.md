@@ -63,8 +63,8 @@ A map of this project's knowledge base. Read this first to know where to look.
 
 ### "I need to migrate a context or ECS layer to base classes"
 -> Read [methods/backend/BASE_CONTEXT_CONTRACTS.md](methods/backend/BASE_CONTEXT_CONTRACTS.md) for BaseContext migration rules
--> Read the relevant ECS method contracts for world, component, factory, system, and phase boundaries
--> Use the `roblox-migrate-context-ecs` skill to migrate context registry wiring and ECS infrastructure to the shared base classes
+-> Read the relevant ECS method contracts for world, component, factory, system, phase, and instance-reveal boundaries
+-> Use the `roblox-migrate-context-ecs` skill to migrate context registry wiring, ECS infrastructure, and ECS-backed runtime instance services to the shared base classes
 
 ### "I'm adding a new frontend feature"
 → Use the `roblox-implement-feature` skill with the `new-feature` reference to scaffold a full feature slice
@@ -188,7 +188,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 |---------|-------------|
 | `roblox-plan` | Generate a strict, execution-ready Roblox implementation plan using a structured output schema (no code). |
 | `roblox-implement-feature` | Implement a feature end-to-end and handle new-context, new-service, or new-feature scaffolding when needed. |
-| `roblox-migrate-context-ecs` | Migrate backend context registry wiring and ECS infrastructure to BaseContext and BaseECS base classes. |
+| `roblox-migrate-context-ecs` | Migrate backend context registry wiring, ECS infrastructure, and ECS-backed runtime instance services to BaseContext, BaseECS, and BaseInstanceFactory base classes. |
 | `roblox-review` | Review code against DDD, error handling, state sync, and style rules. |
 | `roblox-refactor-better` | Analyze or refactor code for readability, abstraction quality, naming, control flow, and project fit. |
 | `roblox-suggest-result` | Suggest or apply the backend Result/error-handling pattern and boundary rules. |

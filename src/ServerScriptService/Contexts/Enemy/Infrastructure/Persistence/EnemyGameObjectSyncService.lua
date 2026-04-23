@@ -26,21 +26,19 @@ local function _ComputeAnimationState(pathState: any, role: any): string
 end
 
 function EnemyGameObjectSyncService.new()
-	local self = setmetatable({}, EnemyGameObjectSyncService)
-	self.EntityToInstance = {} :: { [any]: Model }
-	self.InstanceToEntity = {} :: { [Model]: any }
-	return self
+	return setmetatable({}, EnemyGameObjectSyncService)
 end
 
 function EnemyGameObjectSyncService:Init(registry: any, _name: string)
 	self.World = registry:Get("World")
 	self.Components = registry:Get("EnemyComponentRegistry"):GetComponents()
 	self.EnemyEntityFactory = registry:Get("EnemyEntityFactory")
-	self.EnemyModelFactory = registry:Get("EnemyModelFactory")
+	self.EnemyInstanceFactory = registry:Get("EnemyInstanceFactory")
 end
 
 function EnemyGameObjectSyncService:PollPositions()
-	for entity, model in pairs(self.EntityToInstance) do
+	for _, entity in self.EnemyEntityFactory:QueryAliveEntities() do
+		local model = self.EnemyInstanceFactory:GetInstance(entity)
 		if model and model.Parent ~= nil then
 			local success, err = pcall(function()
 				self.EnemyEntityFactory:UpdatePosition(entity, model:GetPivot())
@@ -66,50 +64,31 @@ function EnemyGameObjectSyncService:SyncDirtyEntities()
 	end
 end
 
-function EnemyGameObjectSyncService:RegisterEntity(entity: any)
-	local modelRef = self.World:get(entity, self.Components.ModelRefComponent)
-	if not modelRef or not modelRef.model then
+function EnemyGameObjectSyncService:RegisterEntity(entity: any, model: Model?)
+	local resolvedModel = model
+	if resolvedModel == nil then
+		local modelRef = self.World:get(entity, self.Components.ModelRefComponent)
+		if modelRef and modelRef.model then
+			resolvedModel = modelRef.model
+		end
+	end
+
+	if resolvedModel == nil then
 		return
 	end
 
-	local model = modelRef.model
-	self.EntityToInstance[entity] = model
-	self.InstanceToEntity[model] = entity
+	self:_SyncEntity(entity, resolvedModel)
 end
 
-function EnemyGameObjectSyncService:_ResolveModel(entity: any): Model?
-	local model = self.EntityToInstance[entity]
-	if model then
-		return model
-	end
-
-	local modelRef = self.World:get(entity, self.Components.ModelRefComponent)
-	if not modelRef or not modelRef.model then
-		return nil
-	end
-
-	model = modelRef.model
-	self.EntityToInstance[entity] = model
-	self.InstanceToEntity[model] = entity
-	return model
-end
-
-function EnemyGameObjectSyncService:_SyncEntity(entity: any)
-	local model = self:_ResolveModel(entity)
+function EnemyGameObjectSyncService:_SyncEntity(entity: any, explicitModel: Model?)
+	local model = explicitModel or self.EnemyInstanceFactory:GetInstance(entity)
 	if not model then
 		return
 	end
 
-	local identity = self.EnemyEntityFactory:GetIdentity(entity)
 	local health = self.EnemyEntityFactory:GetHealth(entity)
 	local role = self.EnemyEntityFactory:GetRole(entity)
 	local pathState = self.EnemyEntityFactory:GetPathState(entity)
-
-	if identity then
-		model:SetAttribute("EnemyId", identity.enemyId)
-		model:SetAttribute("EnemyRole", identity.role)
-		model:SetAttribute("WaveNumber", identity.waveNumber)
-	end
 
 	if health then
 		model:SetAttribute("Health", health.current)
@@ -131,26 +110,11 @@ function EnemyGameObjectSyncService:_SyncEntity(entity: any)
 end
 
 function EnemyGameObjectSyncService:GetInstanceForEntity(entity: any): Model?
-	return self.EntityToInstance[entity]
-end
-
-function EnemyGameObjectSyncService:DeleteEntity(entity: any)
-	local instance = self.EntityToInstance[entity]
-	if instance then
-		self.EnemyModelFactory:DestroyModel(instance)
-		self.EntityToInstance[entity] = nil
-		self.InstanceToEntity[instance] = nil
-	end
-
-	if self.World:get(entity, self.Components.ModelRefComponent) then
-		self.World:remove(entity, self.Components.ModelRefComponent)
-	end
+	return self.EnemyInstanceFactory:GetInstance(entity) :: Model?
 end
 
 function EnemyGameObjectSyncService:CleanupAll()
-	for entity in pairs(self.EntityToInstance) do
-		self:DeleteEntity(entity)
-	end
+	return
 end
 
 return EnemyGameObjectSyncService

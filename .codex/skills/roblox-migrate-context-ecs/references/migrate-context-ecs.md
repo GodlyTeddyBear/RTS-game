@@ -1,13 +1,13 @@
 ---
 name: migrate-context-ecs
-description: Read when migrating a Roblox backend context and ECS layer to BaseContext and BaseECS base classes.
+description: Read when migrating a Roblox backend context, ECS layer, and runtime instance layer to BaseContext, BaseECS, and BaseInstanceFactory base classes.
 ---
 
 <!-- This is a repo-local prompt template for the roblox-migrate-context-ecs skill. -->
 
 # Migrate Context ECS
 
-Use this workflow to migrate one existing bounded context and its ECS layer to the shared BaseContext and BaseECS classes.
+Use this workflow to migrate one existing bounded context and its ECS layer to the shared BaseContext, BaseECS, and BaseInstanceFactory classes.
 
 ---
 
@@ -17,22 +17,29 @@ Use this workflow to migrate one existing bounded context and its ECS layer to t
 - `.codex/documents/methods/backend/BASE_CONTEXT_CONTRACTS.md`
 - `.codex/documents/methods/backend/CONTEXT_BOUNDARIES.md`
 - `.codex/documents/methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md`
+- `.codex/documents/methods/backend/ASSET_ACCESS_CONTRACTS.md`
+- `.codex/documents/methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md`
 - `.codex/documents/methods/ECS/COMPONENT_RULES.md`
 - `.codex/documents/methods/ECS/ENTITY_FACTORY_RULES.md`
 - `.codex/documents/methods/ECS/WORLD_ISOLATION_RULES.md`
 - `.codex/documents/methods/ECS/PHASE_AND_EXECUTION_RULES.md`
 - `.codex/documents/methods/ECS/TAG_RULES.md`
+- `.codex/documents/methods/ECS/INSTANCE_REVEAL_RULES.md`
 2. Read the target context entry module and every target ECS world service, component registry, entity factory, system, and persistence bridge that the migration touches.
-3. Read the migrated examples before editing:
+3. If the context creates Roblox runtime objects for ECS-backed entities, also read every model factory, object factory, or other runtime instance service that owns Workspace instances, attributes, or CollectionService tags.
+4. Read the migrated examples before editing:
 - `src/ServerScriptService/Contexts/World/WorldContext.lua`
 - `src/ServerScriptService/Contexts/Commander/Infrastructure/ECS/CommanderECSWorldService.lua`
 - `src/ServerScriptService/Contexts/Commander/Infrastructure/ECS/CommanderComponentRegistry.lua`
 - `src/ServerScriptService/Contexts/Commander/Infrastructure/ECS/CommanderEntityFactory.lua`
-4. Audit the target context for manual `Registry.new(...)`, `WrapContext(...)`, `_InitModule(...)`, lifecycle ordering, cross-context `Knit.GetService(...)`, signals, persistence loader hooks, scheduler registrations, and `Destroy()` cleanup.
-5. Convert context-owned modules to BaseContext service-table config.
-6. Convert ECS infrastructure to the appropriate BaseECS inheritance pattern.
-7. Preserve public APIs and behavior; do not rename public context methods, result shapes, client methods, bindable signal names, event payloads, or persistence data shapes unless the user explicitly requests it.
-8. Run targeted validation and report any validation that could not be run.
+- `src/ReplicatedStorage/Utilities/BaseInstanceFactory.lua`
+- `src/ServerScriptService/Contexts/Enemy/Infrastructure/Services/EnemyInstanceFactory.lua`
+5. Audit the target context for manual `Registry.new(...)`, `WrapContext(...)`, `_InitModule(...)`, lifecycle ordering, cross-context `Knit.GetService(...)`, signals, persistence loader hooks, scheduler registrations, runtime instance binding tables, direct reveal/tag stamping, and `Destroy()` cleanup.
+6. Convert context-owned modules to BaseContext service-table config.
+7. Convert ECS infrastructure to the appropriate BaseECS inheritance pattern.
+8. Convert runtime Workspace instance services to `BaseInstanceFactory` only when they own ECS-backed runtime object lifecycle, reveal, or binding concerns.
+9. Preserve public APIs and behavior; do not rename public context methods, result shapes, client methods, bindable signal names, event payloads, or persistence data shapes unless the user explicitly requests it.
+10. Run targeted validation and report any validation that could not be run.
 
 ---
 
@@ -75,6 +82,26 @@ Use this workflow to migrate one existing bounded context and its ECS layer to t
 
 ---
 
+## BaseInstanceFactory Rules
+
+- Convert runtime services such as `*ModelFactory`, `*ObjectFactory`, or similar Workspace-instance owners to inherit from `BaseInstanceFactory` only when they own ECS-backed runtime object lifecycle.
+- Use `BaseInstanceFactory` for asset-backed instance creation, Workspace folder ownership, entity-instance binding, and reveal lifecycle.
+- Do not move JECS world reads/writes into `BaseInstanceFactory`; `*EntityFactory` remains the only JECS mutation surface.
+- Keep runtime mutable projection in a sync service when the values come from ECS state and change over time.
+- Implement `_GetWorkspaceFolderName()` in the derived instance factory.
+- Implement `_CreateAssetRegistry(assetsRoot)` in the derived instance factory when the runtime object family is asset-backed.
+- Implement `_CreateInstanceForEntity(entityId, options)` in the derived instance factory.
+- Implement `_PrepareInstance(instance, entityId, options)` in the derived instance factory for family-specific model/object setup.
+- Prefer `_BuildRevealIdentityOptions(...)`, `_BuildRevealAttributes(...)`, and `_BuildRevealTags(...)` over assembling raw reveal-apply logic inline.
+- Let `BaseInstanceFactory` own `BuildIdentityRevealState(...)`, `MergeRevealStates(...)`, `BuildRevealState(...)`, `RegisterReveal(...)`, `RefreshReveal(...)`, `DestroyInstance(...)`, and `DestroyAll()`.
+- Keep ownership explicit:
+  - `*EntityFactory`: JECS entities/components/tags
+  - `*InstanceFactory`: Workspace instances, binding, reveal, cleanup
+  - sync service: mutable ECS-to-instance projection
+- Preserve existing public service methods when migrating. If a context exposes `GetModelFactory()`, keep a compatibility bridge unless the user explicitly requests a breaking rename.
+
+---
+
 ## Prohibitions
 
 - Do not register cross-context Knit services in `Modules`.
@@ -82,7 +109,10 @@ Use this workflow to migrate one existing bounded context and its ECS layer to t
 - Do not expose the registry through public context methods.
 - Do not move business logic into `Factory` callbacks.
 - Do not convert an ECS helper to a base-class helper when custom behavior is not equivalent.
+- Do not convert a pure placement/runtime helper to `BaseInstanceFactory` unless it actually owns ECS-backed runtime instance lifecycle.
 - Do not let systems call `world:set`, `world:add`, `world:remove`, `world:delete`, or `world:query` directly.
+- Do not let `BaseInstanceFactory` or derived instance factories take JECS world ownership.
+- Do not split identity/discovery reveal ownership across both the instance factory and a sync service.
 - Do not remove cleanup, signal, scheduler, or persistence behavior while simplifying setup.
 - Do not change saved data, sync payload, or public server API contracts as part of the migration.
 
@@ -95,6 +125,9 @@ Use this workflow to migrate one existing bounded context and its ECS layer to t
 - Confirm all module spec layer arrays are typed as `{ BaseContext.TModuleSpec }`.
 - Confirm all component registries use authority labels and call `Finalize()`.
 - Confirm all entity factories call `RequireReady()` before world/component access.
+- Confirm runtime instance factories do not read or mutate JECS world state.
+- Confirm runtime instance factories use `AssetFetcher` registries rather than direct asset traversal where the context is asset-backed.
+- Confirm reveal/tag/attribute ownership is explicit: identity/discovery in the instance factory, mutable ECS projection in the sync service when applicable.
 - Run available targeted checks such as `selene`, `luau-lsp`, `stylua --check`, or project tests when present.
 
 ---

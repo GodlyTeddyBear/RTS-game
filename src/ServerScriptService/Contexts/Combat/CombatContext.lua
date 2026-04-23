@@ -100,7 +100,7 @@ function CombatContext:KnitInit()
 	self._enemyContext = nil
 	self._enemyEntityFactory = nil
 	self._enemyGameObjectSyncService = nil
-	self._enemyModelFactory = nil
+	self._enemyInstanceFactory = nil
 	self._worldContext = nil
 	self._commanderContext = nil
 	self._structureContext = nil
@@ -131,7 +131,7 @@ function CombatContext:KnitStart()
 
 	self._enemyEntityFactory = _unwrapResult(enemyContext:GetEntityFactory(), "EnemyContext:GetEntityFactory")
 	self._enemyGameObjectSyncService = _unwrapResult(enemyContext:GetGameObjectSyncService(), "EnemyContext:GetGameObjectSyncService")
-	self._enemyModelFactory = _unwrapResult(enemyContext:GetModelFactory(), "EnemyContext:GetModelFactory")
+	self._enemyInstanceFactory = _unwrapResult(enemyContext:GetInstanceFactory(), "EnemyContext:GetInstanceFactory")
 	self._structureEntityFactory = _unwrapResult(structureContext:GetEntityFactory(), "StructureContext:GetEntityFactory")
 	local enemyWorld = _unwrapResult(enemyContext:GetWorld(), "EnemyContext:GetWorld")
 	local enemyComponents = _unwrapResult(enemyContext:GetComponents(), "EnemyContext:GetComponents")
@@ -139,7 +139,7 @@ function CombatContext:KnitStart()
 	self._registry:Register("EnemyContext", enemyContext)
 	self._registry:Register("EnemyEntityFactory", self._enemyEntityFactory)
 	self._registry:Register("EnemyGameObjectSyncService", self._enemyGameObjectSyncService)
-	self._registry:Register("EnemyModelFactory", self._enemyModelFactory)
+	self._registry:Register("EnemyInstanceFactory", self._enemyInstanceFactory)
 	self._registry:Register("StructureContext", structureContext)
 	self._registry:Register("StructureEntityFactory", self._structureEntityFactory)
 	self._registry:Register("CommanderContext", commanderContext)

@@ -26,7 +26,7 @@ end
 function SpawnEnemy:Init(registry: any, _name: string)
 	self._spawnPolicy = registry:Get("EnemySpawnPolicy")
 	self._entityFactory = registry:Get("EnemyEntityFactory")
-	self._modelFactory = registry:Get("EnemyModelFactory")
+	self._instanceFactory = registry:Get("EnemyInstanceFactory")
 	self._syncService = registry:Get("EnemyGameObjectSyncService")
 end
 
@@ -39,18 +39,18 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 		Ensure(waveNumber > 0, "InvalidWaveNumber", Errors.INVALID_WAVE_NUMBER)
 
 		local enemyId = HttpService:GenerateGUID(false)
-		model = self._modelFactory:CreateEnemyModel(role, enemyId, waveNumber)
 		entity = self._entityFactory:CreateEnemy(enemyId, role, spawnCFrame, waveNumber)
+		model = self._instanceFactory:CreateEnemyInstance(entity, role, enemyId, waveNumber)
 
 		model:PivotTo(spawnCFrame)
 		self._entityFactory:SetModelRef(entity, model)
-		self._syncService:RegisterEntity(entity)
+		self._syncService:RegisterEntity(entity, model)
 		GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemySpawned, entity, role, waveNumber)
 
 		return Ok(entity)
 	end, "Enemy:SpawnEnemy", function()
-		if model then
-			self._modelFactory:DestroyModel(model)
+		if entity then
+			self._instanceFactory:DestroyInstance(entity)
 		end
 		if entity then
 			self._entityFactory:DeleteEntity(entity)

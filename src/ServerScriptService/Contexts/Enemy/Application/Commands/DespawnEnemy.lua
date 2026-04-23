@@ -22,7 +22,7 @@ end
 
 function DespawnEnemy:Init(registry: any, _name: string)
 	self._entityFactory = registry:Get("EnemyEntityFactory")
-	self._syncService = registry:Get("EnemyGameObjectSyncService")
+	self._instanceFactory = registry:Get("EnemyInstanceFactory")
 end
 
 function DespawnEnemy:Execute(entity: any): Result.Result<boolean>
@@ -35,7 +35,7 @@ function DespawnEnemy:Execute(entity: any): Result.Result<boolean>
 			return Ok(false)
 		end
 
-		self._syncService:DeleteEntity(entity)
+		self._instanceFactory:DestroyInstance(entity)
 		self._entityFactory:DeleteEntity(entity)
 		return Ok(true)
 	end, "Enemy:DespawnEnemy")

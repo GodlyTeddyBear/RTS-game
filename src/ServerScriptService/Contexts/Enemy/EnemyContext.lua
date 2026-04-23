@@ -18,7 +18,7 @@ local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local EnemyECSWorldService = require(script.Parent.Infrastructure.ECS.EnemyECSWorldService)
 local EnemyComponentRegistry = require(script.Parent.Infrastructure.ECS.EnemyComponentRegistry)
 local EnemyEntityFactory = require(script.Parent.Infrastructure.ECS.EnemyEntityFactory)
-local EnemyModelFactory = require(script.Parent.Infrastructure.Services.EnemyModelFactory)
+local EnemyInstanceFactory = require(script.Parent.Infrastructure.Services.EnemyInstanceFactory)
 local EnemyGameObjectSyncService = require(script.Parent.Infrastructure.Persistence.EnemyGameObjectSyncService)
 local EnemySpawnPolicy = require(script.Parent.EnemyDomain.Policies.EnemySpawnPolicy)
 
@@ -44,9 +44,9 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		CacheAs = "_entityFactory",
 	},
 	{
-		Name = "EnemyModelFactory",
-		Module = EnemyModelFactory,
-		CacheAs = "_modelFactory",
+		Name = "EnemyInstanceFactory",
+		Module = EnemyInstanceFactory,
+		CacheAs = "_instanceFactory",
 	},
 	{
 		Name = "EnemyGameObjectSyncService",
@@ -283,10 +283,14 @@ end
 --[=[
 	@within EnemyContext
 	Returns the enemy model factory for other server contexts that need it.
-	@return Result.Result<any> -- Enemy model factory.
+	@return Result.Result<any> -- Enemy instance factory.
 ]=]
+function EnemyContext:GetInstanceFactory(): Result.Result<any>
+	return Ok(self._instanceFactory)
+end
+
 function EnemyContext:GetModelFactory(): Result.Result<any>
-	return Ok(self._modelFactory)
+	return Ok(self._instanceFactory)
 end
 
 --[=[
