@@ -2,6 +2,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
 
+local WrappedFunctions = setmetatable({}, { __mode = "k" })
+
 --[=[
 	@class WrapContext
 	Wraps context client methods with structured error handling using Result types.
@@ -12,7 +14,7 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 -- The wrapper uses xpcall to intercept throws, converting unstructured errors into Defects
 -- and allowing functions to return Result types which get unwrapped.
 local function wrapFn(fn: any, label: string): any
-	return function(self, ...)
+	local wrapped = function(self, ...)
 		-- Execute the function and catch any throws via xpcall
 		local ok, result = xpcall(fn, function(thrown)
 			-- Check if the thrown value is already a Result (e.g., from Catch() in a method)
@@ -41,6 +43,9 @@ local function wrapFn(fn: any, label: string): any
 
 		return result
 	end
+
+	WrappedFunctions[wrapped] = true
+	return wrapped
 end
 
 --[=[
@@ -52,7 +57,7 @@ end
 local function WrapContext(context: any, contextName: string)
 	if context.Client then
 		for name, fn in context.Client do
-			if type(fn) == "function" then
+			if type(fn) == "function" and not WrappedFunctions[fn] then
 				context.Client[name] = wrapFn(fn, contextName .. ".Client:" .. name)
 			end
 		end

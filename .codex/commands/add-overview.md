@@ -33,21 +33,39 @@ Do not write overviews without reading relevant architecture/method docs for the
 
 ## Overview Contract
 
-Every module overview must include:
+Every module overview must use a top-of-file Moonwave class block:
 
-1. `Module`: file/module name.
-2. `Purpose`: one-sentence ownership statement.
-3. `Used In System`: where and when this module is invoked.
-4. `Boundaries`: explicit "does not own" scope line.
+```lua
+--[=[
+    @class ServerScheduler
+    Singleton Planck scheduler that owns and drives all server-side ECS systems.
 
-Optional section:
+    Contexts register their systems during `KnitStart()` via `RegisterSystem()`.
+    `Runtime.server.lua` calls `Initialize()` after `Knit.Start()` resolves, which
+    builds the pipeline, flushes queued systems, and connects to `RunService.Heartbeat`.
+    @server
+]=]
+```
 
-- `High-Level Flow`: 1 short line only when orchestration/boundaries are easier to understand with flow context.
+Required content:
+
+1. `@class <Name>` using the file/module name.
+2. A concise ownership statement that explains what the module owns.
+3. System context only when it clarifies where or when the module is invoked.
+4. `@server`, `@client`, or both depending on where the module runs.
+
+Optional content:
+
+- A short high-level flow or ordered phase list when the module is an orchestrator.
+- Boundary wording when ownership could be confused with another layer or context.
 
 ### Style rules
 
-- Use plain Lua block comment style: `--[[ ... ]]`.
-- Keep to 4-8 lines in most files.
+- Use Moonwave block comment style: `--[=[ ... ]=]`.
+- Place the overview immediately below the `--!` pragma (`--!strict` or equivalent) when present.
+- If no `--!` pragma exists, place the overview at absolute top-of-file.
+- Indent each overview content line by 4 spaces inside the block.
+- Keep most overviews concise; allow longer blocks for schedulers, orchestration modules, or phase lists.
 - Prefer contract language (owns/does not own/must) over narrative.
 - Describe intent and system role, not branch-by-branch behavior.
 - Use stable wording that will survive refactors.
@@ -60,47 +78,52 @@ Optional section:
 
 ## Section Comments Contract
 
-Use bracketed section headers for major file divisions:
+Use scheduler-style separator headers for major file divisions:
 
-- `-- [Dependencies]`
-- `-- [Public API]`
-- `-- [Private Helpers]`
+```lua
+-- ── Private ──────────────────────────────────────────────────────────────────
+```
 
-Optional additional headers when needed:
+Allowed labels:
 
-- `-- [Types]`
-- `-- [Constants]`
-- `-- [Initialization]`
+- `Types`
+- `Constants`
+- `Public`
+- `Private`
+- `Initialization`
+- Context-specific labels only when they improve scanning more than a generic label.
 
 ### Section style rules
 
-- Use the exact bracket style: `-- [Section Name]`.
+- Use the exact separator style: `-- ── <Label> ──────────────────────────────────────────────────────────────────`.
 - Apply only to major divisions, not every function.
 - Keep section names short and consistent across files.
-- Use vertical whitespace between sections; do not use decorative separator bars.
+- Use vertical whitespace between sections.
 
 ### Small example
 
 ```lua
---[[
-Module: UseAbilityCommand
-Purpose: Executes the application use-case for commander ability activation.
-Used In System: Called by CommanderContext from validated player input handling.
-High-Level Flow: Parse request -> enforce policy/spec -> invoke runtime service -> return Result.
-Boundaries: Owns orchestration only; does not own cooldown math, targeting formulas, or transport wiring.
-]]
+--!strict
 
--- [Dependencies]
+--[=[
+    @class UseAbilityCommand
+    Executes the application use-case for commander ability activation.
+
+    Called by `CommanderContext` from validated player input handling.
+    Flow: Parse request -> enforce policy/spec -> invoke runtime service -> return Result.
+    Owns orchestration only; does not own cooldown math, targeting formulas, or transport wiring.
+    @server
+]=]
 
 local AbilityPolicy = require(script.Parent.Parent.Parent.CommanderDomain.Policies.AbilityPolicy)
 
--- [Public API]
+-- ── Public ───────────────────────────────────────────────────────────────────
 
 local function Execute(dependencies, input)
     return dependencies.AbilityRuntimeService:UseAbility(input)
 end
 
--- [Private Helpers]
+-- ── Private ──────────────────────────────────────────────────────────────────
 
 local function _normalizeInput(input)
     return input
@@ -115,7 +138,8 @@ end
 - Do not duplicate full method docs, policy docs, or design docs.
 - Do not claim ownership for behavior handled by other layers/contexts.
 - Do not remove existing file headers that contain valid project-specific docs.
-- Do not use large visual separators like `-----` or `==========`.
+- Do not use ASCII-only separators like `-----` or `==========`.
+- Do not use bracket headers like `-- [Private Helpers]` for new overview work.
 
 ---
 

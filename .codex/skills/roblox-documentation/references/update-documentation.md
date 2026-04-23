@@ -34,15 +34,17 @@ Do not write any comments without having read that doc first.
 
 ## Rules
 
-### Top of file Documentaiton
+### Top-of-file documentation
 
-The /update-documentation skill removes existing plain-comment documentation blocks at the top of files when adding Moonwave @class declarations. It should preserve these blocks and place the Moonwave doc comment after them instead.
+The `/update-documentation` skill must preserve existing top-of-file overview blocks when adding Moonwave docs.
 
-Example: A file with a --[[...]] documentation block at the top should keep that block and have the @class Moonwave comment added after it, not replace it.
+- If a file already has a top-of-file `--[=[ ... @class ... ]=]` overview, treat it as the class declaration and update it in place when needed.
+- If a file has a plain `--[[ ... ]]` overview, preserve it and place the Moonwave `@class` block after it.
+- Do not create a second `@class` block when one already exists.
 
 ### Class declaration
 
-Every file must have exactly one `--[=[  @class <Name>  ]=]` block placed directly above the module table declaration.
+Every file must have exactly one `--[=[  @class <Name>  ]=]` block. For overview work, place it immediately below the `--!` pragma; otherwise place it directly above the module table declaration.
 
 - Use the file name (without `.lua`) as the class name.
 - Add a one-sentence description of what the class does.

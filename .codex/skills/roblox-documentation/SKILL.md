@@ -26,5 +26,6 @@ description: Use when the user asks Codex to update project documentation, add o
 
 - Do not invent documentation style.
 - Keep comments sparse, useful, and aligned with the repo's existing conventions.
-- For overview work, place the module overview immediately under the file's `--!` pragma.
-- For overview work, indent overview fields by 4 spaces inside the `--[[ ... ]]` block.
+- For overview work, place the Moonwave `@class` overview immediately under the file's `--!` pragma.
+- For overview work, use the scheduler-style `--[=[ ... ]=]` block and indent overview lines by 4 spaces.
+- For section-comment work, use scheduler-style separator headers such as `-- ── Private ──────────────────────────────────────────────────────────────────`.
