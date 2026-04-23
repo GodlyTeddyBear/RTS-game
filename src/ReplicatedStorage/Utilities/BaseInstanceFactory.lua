@@ -30,11 +30,14 @@ type TInstanceBinding = {
 
 --[=[
 	@class BaseInstanceFactory
-	Shared lifecycle helper for ECS-backed runtime Workspace instances.
+	Owns Workspace instance lifecycle and reveal state for ECS-backed runtime
+	objects, without taking JECS world ownership.
 	@server
 ]=]
 local BaseInstanceFactory = {}
 BaseInstanceFactory.__index = BaseInstanceFactory
+
+-- ── Private ───────────────────────────────────────────────────────────────────
 
 local function _FindOrCreateFolder(parent: Instance, name: string): Folder
 	local existing = parent:FindFirstChild(name)
@@ -84,6 +87,8 @@ local function _BuildClearRevealState(lastRevealState: ECSRevealState?): ECSReve
 	}
 end
 
+-- ── Public ────────────────────────────────────────────────────────────────────
+
 function BaseInstanceFactory.new(contextName: string)
 	local self = setmetatable({}, BaseInstanceFactory)
 	self._contextName = contextName
@@ -95,6 +100,12 @@ function BaseInstanceFactory.new(contextName: string)
 	return self
 end
 
+--[=[
+	Initializes the workspace folder and optional asset registry for the context.
+	@within BaseInstanceFactory
+	@param registry any -- Dependency registry for this context.
+	@param name string -- Registered module name.
+]=]
 function BaseInstanceFactory:Init(registry: any, name: string)
 	assert(RunService:IsServer(), ("%sInstanceFactory is server-only"):format(self._contextName))
 
@@ -146,6 +157,7 @@ function BaseInstanceFactory:_PrepareInstance(_instance: Instance, _entityId: nu
 	return
 end
 
+-- Rebuilds the clear-state for a destroyed binding so stale identity data is removed.
 function BaseInstanceFactory:_BuildClearRevealState(_instance: Instance, entityId: number): ECSRevealState?
 	local binding = self._revealBindingsByEntity[entityId]
 	local clearState = _BuildClearRevealState(binding and binding.LastRevealState or nil)
@@ -174,14 +186,31 @@ function BaseInstanceFactory:_GetRootFolderOrThrow(): Folder
 	return rootFolder
 end
 
+--[=[
+	Returns the ECS utility facade for reveal helper delegation.
+	@within BaseInstanceFactory
+	@return any -- ECS utility facade.
+]=]
 function BaseInstanceFactory:GetECSUtilities()
 	return ECS
 end
 
+--[=[
+	Builds reveal identity metadata through the ECS utility facade.
+	@within BaseInstanceFactory
+	@param revealOptions ECSRevealOptions -- Reveal identity payload.
+	@return string, ECSRevealState -- Resolved identity id and reveal state.
+]=]
 function BaseInstanceFactory:BuildIdentityRevealState(revealOptions: ECSRevealOptions): (string, ECSRevealState)
 	return ECS.RevealBuilder.Build(revealOptions)
 end
 
+--[=[
+	Merges multiple reveal states into one state table.
+	@within BaseInstanceFactory
+	@param ... ECSRevealState? -- Reveal states to merge in priority order.
+	@return ECSRevealState? -- Combined reveal state or nil when all inputs are empty.
+]=]
 function BaseInstanceFactory:MergeRevealStates(...: ECSRevealState?): ECSRevealState?
 	local attributes = nil :: { [string]: any }?
 	local clearAttributes = nil :: { string }?
@@ -223,6 +252,14 @@ function BaseInstanceFactory:MergeRevealStates(...: ECSRevealState?): ECSRevealS
 	}
 end
 
+--[=[
+	Builds the complete reveal state for an entity instance and its options.
+	@within BaseInstanceFactory
+	@param entityId number -- Entity id being revealed.
+	@param instance Instance -- Instance to stamp.
+	@param options any -- Factory-specific reveal options.
+	@return ECSRevealState? -- Combined reveal state or nil when no reveal metadata exists.
+]=]
 function BaseInstanceFactory:BuildRevealState(entityId: number, instance: Instance, options: any): ECSRevealState?
 	local identityOptions = self:_BuildRevealIdentityOptions(entityId, instance, options)
 	local identityRevealState = nil :: ECSRevealState?
@@ -250,6 +287,13 @@ function BaseInstanceFactory:BuildRevealState(entityId: number, instance: Instan
 	return self:MergeRevealStates(identityRevealState, customRevealState)
 end
 
+--[=[
+	Registers a reveal binding and applies reveal state immediately.
+	@within BaseInstanceFactory
+	@param entityId number -- Entity id owning the reveal binding.
+	@param instance Instance -- Instance to reveal on clients.
+	@param options any -- Factory-specific create options.
+]=]
 function BaseInstanceFactory:RegisterReveal(entityId: number, instance: Instance, options: any)
 	local revealOptions = self:_BuildRevealIdentityOptions(entityId, instance, options)
 	local revealState = self:BuildRevealState(entityId, instance, options)
@@ -267,6 +311,13 @@ function BaseInstanceFactory:RegisterReveal(entityId: number, instance: Instance
 	}
 end
 
+--[=[
+	Rebuilds and reapplies reveal state for a previously registered reveal binding.
+	@within BaseInstanceFactory
+	@param entityId number -- Entity id whose reveal binding should refresh.
+	@param optionsOverride any? -- Optional replacement options for the refresh.
+	@return ECSRevealState? -- Refreshed reveal state or nil when no binding exists.
+]=]
 function BaseInstanceFactory:RefreshReveal(entityId: number, optionsOverride: any?): ECSRevealState?
 	local binding = self._revealBindingsByEntity[entityId]
 	if binding == nil then
@@ -287,6 +338,7 @@ function BaseInstanceFactory:RefreshReveal(entityId: number, optionsOverride: an
 	return revealState
 end
 
+-- Creates, prepares, and registers the instance before reveal metadata is applied.
 function BaseInstanceFactory:_CreateBoundInstance(entityId: number, options: any): Instance
 	assert(type(entityId) == "number", ("%sInstanceFactory:_CreateBoundInstance requires entity id"):format(self._contextName))
 
@@ -306,26 +358,62 @@ function BaseInstanceFactory:_CreateBoundInstance(entityId: number, options: any
 	return instance
 end
 
+--[=[
+	Returns the instance bound to an entity, if one exists.
+	@within BaseInstanceFactory
+	@param entityId number -- Entity id to resolve.
+	@return Instance? -- Bound instance or nil.
+]=]
 function BaseInstanceFactory:GetInstance(entityId: number): Instance?
 	return self._entityToInstance[entityId]
 end
 
+--[=[
+	Returns the entity bound to an instance, if one exists.
+	@within BaseInstanceFactory
+	@param instance Instance -- Instance to resolve.
+	@return number? -- Bound entity id or nil.
+]=]
 function BaseInstanceFactory:GetEntity(instance: Instance): number?
 	return self._instanceToEntity[instance]
 end
 
+--[=[
+	Returns whether the entity currently has a bound instance.
+	@within BaseInstanceFactory
+	@param entityId number -- Entity id to check.
+	@return boolean -- True when a bound instance exists.
+]=]
 function BaseInstanceFactory:HasInstance(entityId: number): boolean
 	return self._entityToInstance[entityId] ~= nil
 end
 
+--[=[
+	Applies reveal metadata to an instance through the ECS utility facade.
+	@within BaseInstanceFactory
+	@param instance Instance? -- Instance to stamp.
+	@param revealState ECSRevealState -- Reveal state contract.
+]=]
 function BaseInstanceFactory:ApplyReveal(instance: Instance, revealState: ECSRevealState)
 	ECS.RevealApplier.Apply(instance, revealState)
 end
 
+--[=[
+	Applies clear reveal metadata to an instance through the ECS utility facade.
+	@within BaseInstanceFactory
+	@param instance Instance? -- Instance to clear.
+	@param clearState ECSRevealState? -- Clear-state contract.
+]=]
 function BaseInstanceFactory:ClearReveal(instance: Instance, clearState: ECSRevealState?)
 	ECS.RevealApplier.Apply(instance, clearState)
 end
 
+--[=[
+	Deletes the instance bound to an entity and clears its reveal binding.
+	@within BaseInstanceFactory
+	@param entityId number -- Entity id to destroy.
+	@return boolean -- True when an instance was destroyed.
+]=]
 function BaseInstanceFactory:DestroyInstance(entityId: number): boolean
 	local instance = self._entityToInstance[entityId]
 	if instance == nil then
@@ -345,6 +433,10 @@ function BaseInstanceFactory:DestroyInstance(entityId: number): boolean
 	return true
 end
 
+--[=[
+	Deletes every bound instance and clears all bindings.
+	@within BaseInstanceFactory
+]=]
 function BaseInstanceFactory:DestroyAll()
 	local entityIds = {}
 

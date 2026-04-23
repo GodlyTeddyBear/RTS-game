@@ -5,20 +5,25 @@ local JECS = require(ReplicatedStorage.Packages.JECS)
 
 --[=[
 	@class BaseECSComponentRegistry
-	Shared helpers for JECS component/tag registration and frozen registry export.
+	Owns JECS component, tag, and external id registration for one bounded ECS
+	context and exports a frozen lookup table plus registry metadata.
 	@server
 ]=]
 local BaseECSComponentRegistry = {}
 BaseECSComponentRegistry.__index = BaseECSComponentRegistry
 
+-- ── Private ───────────────────────────────────────────────────────────────────
+
 local function _nameComponent(world: any, componentId: number, name: string)
 	world:set(componentId, JECS.Name, name)
 end
 
+-- ── Public ────────────────────────────────────────────────────────────────────
+
 --[=[
 	Creates a new base registry helper.
 	@within BaseECSComponentRegistry
-	@param contextName string -- The owning context label used in assertions.
+	@param contextName string -- Owning context label used in assertions and diagnostics.
 	@return BaseECSComponentRegistry -- The base registry instance.
 ]=]
 function BaseECSComponentRegistry.new(contextName: string)
@@ -36,6 +41,13 @@ function BaseECSComponentRegistry.new(contextName: string)
 	return self
 end
 
+--[=[
+	Initializes the registry, runs derived registration, validates conventions,
+	and freezes the exported lookup table.
+	@within BaseECSComponentRegistry
+	@param registry any -- Dependency registry for this context.
+	@param name string -- Registered module name.
+]=]
 function BaseECSComponentRegistry:Init(registry: any, name: string)
 	self:InitBase(registry)
 	if type(self._RegisterComponents) == "function" then
@@ -54,7 +66,7 @@ end
 --[=[
 	Resolves the world dependency before component registration begins.
 	@within BaseECSComponentRegistry
-	@param registry any -- The dependency registry for this context.
+	@param registry any -- Dependency registry for this context.
 ]=]
 function BaseECSComponentRegistry:InitBase(registry: any)
 	assert(not self._frozen, ("%sComponentRegistry: already finalized"):format(self._contextName))
@@ -67,7 +79,7 @@ end
 	@within BaseECSComponentRegistry
 	@param key string -- Public key exposed through GetComponents().
 	@param ecsName string -- Debug JECS name label.
-	@param _authorityLabel string? -- Optional authority label metadata comment.
+	@param authorityLabel ("AUTHORITATIVE" | "DERIVED") -- Ownership label for sync and validation rules.
 	@return number -- The JECS component id.
 ]=]
 function BaseECSComponentRegistry:RegisterComponent(key: string, ecsName: string, authorityLabel: "AUTHORITATIVE" | "DERIVED"): number
@@ -112,7 +124,7 @@ end
 	Useful for JECS built-ins like ChildOf.
 	@within BaseECSComponentRegistry
 	@param key string -- Public key exposed through GetComponents().
-	@param id any -- Existing JECS id/value to expose.
+	@param id any -- Existing JECS id or value to expose.
 ]=]
 function BaseECSComponentRegistry:RegisterExternal(key: string, id: any)
 	assert(not self._frozen, ("%sComponentRegistry: cannot register external after Finalize"):format(self._contextName))
@@ -126,6 +138,7 @@ local function _endsWith(value: string, suffix: string): boolean
 	return string.sub(value, -#suffix) == suffix
 end
 
+-- Checks for duplicate debug names across registered components and tags.
 function BaseECSComponentRegistry:_HasECSName(ecsName: string): boolean
 	for _, registeredName in pairs(self._componentNames) do
 		if registeredName == ecsName then
@@ -234,7 +247,7 @@ end
 --[=[
 	Returns registry metadata for diagnostics and validation.
 	@within BaseECSComponentRegistry
-	@return { AuthorityByKey: { [string]: string }, Keys: { string } } -- Frozen metadata snapshot.
+	@return { AuthorityByKey: { [string]: string }, Keys: { string }, KindByKey: { [string]: string }, NameByKey: { [string]: string } } -- Frozen metadata snapshot.
 ]=]
 function BaseECSComponentRegistry:GetRegistryMetadata(): { AuthorityByKey: { [string]: string }, Keys: { string }, KindByKey: { [string]: string }, NameByKey: { [string]: string } }
 	assert(self._frozen, ("%sComponentRegistry: GetRegistryMetadata called before Finalize"):format(self._contextName))

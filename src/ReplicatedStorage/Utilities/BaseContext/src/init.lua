@@ -51,18 +51,22 @@ export type TBaseContext = {
 
 --[=[
 	@class BaseContext
-	Shared bootstrap helper that wires a Knit service table to the registry,
-	module, cache, profile, signal, scheduler, and cleanup helpers.
+	Owns the shared bootstrap wrapper for a Knit service table and wires the
+	registry, module, cache, profile, signal, scheduler, and cleanup helpers.
 	@server
 ]=]
 local BaseContext = {}
 BaseContext.__index = BaseContext
+
+-- ── Private ───────────────────────────────────────────────────────────────────
 
 local function ApplyMethods(target: any, methods: { [string]: any })
 	for name, method in pairs(methods) do
 		target[name] = method
 	end
 end
+
+-- ── Public ────────────────────────────────────────────────────────────────────
 
 --[=[
 	Creates a base context wrapper around a Knit service table.

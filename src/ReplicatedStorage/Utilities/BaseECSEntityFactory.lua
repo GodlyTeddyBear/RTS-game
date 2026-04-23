@@ -22,16 +22,19 @@ type ECSRevealBinding = {
 
 --[=[
 	@class BaseECSEntityFactory
-	Shared world/component guards and deferred-destruction queue helpers.
+	Owns the JECS world/component access surface for one bounded ECS context and
+	manages deferred destruction plus reveal binding lifecycle.
 	@server
 ]=]
 local BaseECSEntityFactory = {}
 BaseECSEntityFactory.__index = BaseECSEntityFactory
 
+-- ── Public ────────────────────────────────────────────────────────────────────
+
 --[=[
 	Creates a new base factory helper.
 	@within BaseECSEntityFactory
-	@param contextName string -- The owning context label used in assertions.
+	@param contextName string -- Owning context label used in assertions and diagnostics.
 	@return BaseECSEntityFactory -- The base factory instance.
 ]=]
 function BaseECSEntityFactory.new(contextName: string)
@@ -62,6 +65,12 @@ function BaseECSEntityFactory:Init(registry: any, name: string)
 	end
 end
 
+--[=[
+	Resolves the world and component registry before the derived factory starts using JECS.
+	@within BaseECSEntityFactory
+	@param registry any -- Dependency registry for this context.
+	@param componentRegistryName string -- Registry key that exposes `GetComponents()`.
+]=]
 function BaseECSEntityFactory:InitBase(registry: any, componentRegistryName: string)
 	self._world = registry:Get("World")
 	assert(self._world ~= nil, ("%sEntityFactory: missing World"):format(self._contextName))
@@ -78,6 +87,7 @@ function BaseECSEntityFactory:_GetComponentRegistryName(): string
 	error(("%sEntityFactory must implement _GetComponentRegistryName"):format(self._contextName))
 end
 
+-- Runs the derived init hook after the base world and component lookup are ready.
 function BaseECSEntityFactory:_OnInit(_registry: any, _name: string, _componentRegistry: any)
 	return
 end
@@ -106,6 +116,7 @@ function BaseECSEntityFactory:GetWorldOrThrow()
 	return self._world
 end
 
+-- Internal helper for derived methods that need the world without repeating checks.
 function BaseECSEntityFactory:_GetWorldUnsafe()
 	self:RequireReady()
 	return self._world
@@ -121,6 +132,7 @@ function BaseECSEntityFactory:GetComponentsOrThrow()
 	return self._components
 end
 
+-- Centralized existence guard for all direct JECS mutations.
 function BaseECSEntityFactory:_RequireEntityExists(entity: number, methodName: string?)
 	self:RequireReady()
 	assert(type(entity) == "number", ("%sEntityFactory:%s requires entity"):format(self._contextName, methodName or "Unknown"))
@@ -185,6 +197,14 @@ function BaseECSEntityFactory:CollectQuery(...: any): { number }
 	return entities
 end
 
+-- Collects children through `ChildOf` so derived factories do not repeat query setup.
+--[=[
+	Collects children of the supplied parent entity into an array.
+	@within BaseECSEntityFactory
+	@param parentEntity number -- Parent entity id.
+	@param childOfComponent any -- JECS `ChildOf` component or compatible pair id.
+	@return { number } -- Matching child entity ids.
+]=]
 function BaseECSEntityFactory:CollectChildren(parentEntity: number, childOfComponent: any): { number }
 	self:_RequireEntityExists(parentEntity, "CollectChildren")
 
@@ -196,6 +216,12 @@ function BaseECSEntityFactory:CollectChildren(parentEntity: number, childOfCompo
 	return entities
 end
 
+--[=[
+	Returns the first entity that matches the supplied tag, or nil when no entity matches.
+	@within BaseECSEntityFactory
+	@param tagId any -- JECS tag id.
+	@return number? -- First matching entity id or nil.
+]=]
 function BaseECSEntityFactory:FindFirstWithTag(tagId: any): number?
 	local world = self:GetWorldOrThrow()
 	for entity in world:query(tagId) do
@@ -360,6 +386,7 @@ function BaseECSEntityFactory:HasReveal(entity: number): boolean
 	return self._revealBindingsByEntity[entity] ~= nil
 end
 
+-- Builds the clear state used when a revealed entity is destroyed or unregistered.
 function BaseECSEntityFactory:_BuildRevealClearState(binding: ECSRevealBinding): any
 	local clearAttributes = {}
 	local tags = {}
@@ -388,6 +415,7 @@ function BaseECSEntityFactory:_BuildRevealClearState(binding: ECSRevealBinding):
 	}
 end
 
+-- Clears the reveal binding after applying the matching clear state to the instance.
 function BaseECSEntityFactory:_ClearRevealForEntity(entity: number)
 	local binding = self._revealBindingsByEntity[entity]
 	if binding == nil then
