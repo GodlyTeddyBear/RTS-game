@@ -76,4 +76,130 @@ export type TBehaviorPriorityNode = {
 ]=]
 export type TBehaviorDefinitionNode = string | TBehaviorSequenceNode | TBehaviorPriorityNode
 
+--[=[
+	Runtime context bag forwarded to executor lifecycle methods by the shared dispatcher.
+	@within BehaviorSystemTypes
+	@interface TActionRuntimeContext
+	.DeltaTime number? -- Optional frame delta used by `TickCurrentAction`
+	.Dt number? -- Optional alias for `DeltaTime`
+	.Services any? -- Optional service bag forwarded to executors
+]=]
+export type TActionRuntimeContext = {
+	DeltaTime: number?,
+	Dt: number?,
+	Services: any?,
+}
+
+--[=[
+	Generic executor lifecycle surface used by the shared runtime dispatcher.
+	@within BehaviorSystemTypes
+	@interface TExecutor
+	.Start (self: TExecutor, entity: number, data: any?, runtimeContext: TActionRuntimeContext) -> (boolean, string?) -- Starts the action
+	.Tick (self: TExecutor, entity: number, dt: number, runtimeContext: TActionRuntimeContext) -> string -- Advances the action and returns status
+	.Cancel (self: TExecutor, entity: number, runtimeContext: TActionRuntimeContext) -> () -- Cancels the action
+	.Complete (self: TExecutor, entity: number, runtimeContext: TActionRuntimeContext) -> () -- Finalizes the action after success
+]=]
+export type TExecutor = {
+	Start: (self: TExecutor, entity: number, data: any?, runtimeContext: TActionRuntimeContext) -> (boolean, string?),
+	Tick: (self: TExecutor, entity: number, dt: number, runtimeContext: TActionRuntimeContext) -> string,
+	Cancel: (self: TExecutor, entity: number, runtimeContext: TActionRuntimeContext) -> (),
+	Complete: (self: TExecutor, entity: number, runtimeContext: TActionRuntimeContext) -> (),
+}
+
+--[=[
+	Shared action registration contract used by the runtime dispatcher.
+	@within BehaviorSystemTypes
+	@interface TActionDefinition
+	.ActionId string -- Stable action id used for registration and lookup
+	.CreateExecutor (() -> TExecutor)? -- Factory used to build one executor instance for the action
+	.Executor TExecutor? -- Prebuilt executor instance used directly instead of a factory
+]=]
+export type TActionDefinition = {
+	ActionId: string,
+	CreateExecutor: (() -> TExecutor)?,
+	Executor: TExecutor?,
+}
+
+--[=[
+	Shared action state bag read by the runtime dispatcher. The owning context still stores and mutates this state.
+	@within BehaviorSystemTypes
+	@interface TActionState
+	.PendingActionId string? -- Requested action id awaiting transition into active execution
+	.PendingActionData any? -- Payload for the pending action
+	.CurrentActionId string? -- Currently running action id
+	.ActionData any? -- Payload for the current action
+	.ActionState string? -- Optional domain-local state label such as `Running` or `Committed`
+]=]
+export type TActionState = {
+	PendingActionId: string?,
+	PendingActionData: any?,
+	CurrentActionId: string?,
+	ActionData: any?,
+	ActionState: string?,
+}
+
+--[=[
+	Result returned when attempting to start a pending action through the shared dispatcher.
+	@within BehaviorSystemTypes
+	@interface TStartActionResult
+	.Status string -- `NoAction`, `Blocked`, `NoChange`, `MissingAction`, `FailedToStart`, `Started`, or `Replaced`
+	.ActionId string? -- Action id involved in the attempt
+	.ReplacedActionId string? -- Previous current action id when one was cancelled before a replacement
+	.FailureReason string? -- Optional executor-provided start failure reason
+]=]
+export type TStartActionResult = {
+	Status: string,
+	ActionId: string?,
+	ReplacedActionId: string?,
+	FailureReason: string?,
+}
+
+--[=[
+	Result returned when the shared runtime applies a generic start commit to the owning context's action-state table.
+	@within BehaviorSystemTypes
+	@interface TCommitStartResult
+	.Status string -- `Committed`, `Skipped`, or `InvalidResult`
+	.ActionId string? -- Action id that was committed into current action state
+]=]
+export type TCommitStartResult = {
+	Status: string,
+	ActionId: string?,
+}
+
+--[=[
+	Result returned when ticking the current action through the shared dispatcher.
+	@within BehaviorSystemTypes
+	@interface TTickActionResult
+	.Status string -- `NoCurrentAction`, `MissingAction`, `Running`, `Success`, or `Fail`
+	.ActionId string? -- Action id involved in the tick
+]=]
+export type TTickActionResult = {
+	Status: string,
+	ActionId: string?,
+}
+
+--[=[
+	Result returned when the shared runtime resolves a finished action into idle state.
+	@within BehaviorSystemTypes
+	@interface TResolveFinishedActionResult
+	.Status string -- `Resolved`, `Skipped`, or `InvalidResult`
+	.ActionId string? -- Action id that was resolved out of current action state
+]=]
+export type TResolveFinishedActionResult = {
+	Status: string,
+	ActionId: string?,
+}
+
+--[=[
+	Result returned when cancelling the current action through the shared dispatcher.
+	@within BehaviorSystemTypes
+	@interface TCancelActionResult
+	.Status string -- `NoCurrentAction`, `MissingAction`, or `Cancelled`
+	.ActionId string? -- Action id involved in the cancellation
+]=]
+export type TCancelActionResult = {
+	Status: string,
+	ActionId: string?,
+}
+
 return table.freeze(Types)
