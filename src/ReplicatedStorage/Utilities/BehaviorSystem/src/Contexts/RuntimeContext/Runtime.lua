@@ -7,9 +7,15 @@
 	@client
 ]=]
 
-local ActionAssertions = require(script.Parent.Internal.ActionAssertions)
-local Builder = require(script.Parent.Builder)
-local Types = require(script.Parent.Types)
+local ActionAssertions = require(script.Parent.Parent.Parent.SharedDomain.Assertions.ActionAssertions)
+local ActionId = require(script.Parent.Parent.Parent.SharedDomain.ValueObjects.ActionId)
+local Builder = require(script.Parent.Parent.BuildContext.Builder)
+local StartPendingAction = require(script.Parent.Application.UseCases.Runtime.StartPendingAction)
+local CommitStartedAction = require(script.Parent.Application.UseCases.Runtime.CommitStartedAction)
+local TickCurrentAction = require(script.Parent.Application.UseCases.Runtime.TickCurrentAction)
+local ResolveFinishedAction = require(script.Parent.Application.UseCases.Runtime.ResolveFinishedAction)
+local CancelCurrentAction = require(script.Parent.Application.UseCases.Runtime.CancelCurrentAction)
+local Types = require(script.Parent.Parent.Parent.SharedDomain.Types)
 
 type TBuilderConfig = Types.TBuilderConfig
 type TActionDefinition = Types.TActionDefinition
@@ -20,39 +26,17 @@ type TCommitStartResult = Types.TCommitStartResult
 type TTickActionResult = Types.TTickActionResult
 type TResolveFinishedActionResult = Types.TResolveFinishedActionResult
 type TCancelActionResult = Types.TCancelActionResult
+type TTryStartActionResult = Types.TTryStartActionResult
+type TTryTickActionResult = Types.TTryTickActionResult
+type TTryCancelActionResult = Types.TTryCancelActionResult
 
 local Runtime = {}
 Runtime.__index = Runtime
 
-local function _getExecutorServices(runtimeContext: TActionRuntimeContext)
-	if type(runtimeContext) ~= "table" then
-		return runtimeContext
-	end
-
-	if runtimeContext.Services ~= nil then
-		return runtimeContext.Services
-	end
-
-	return runtimeContext
-end
-
-local function _getDeltaTime(runtimeContext: TActionRuntimeContext): number
-	if type(runtimeContext) ~= "table" then
-		return 0
-	end
-
-	local deltaTime = runtimeContext.DeltaTime
-	if type(deltaTime) == "number" then
-		return deltaTime
-	end
-
-	local dt = runtimeContext.Dt
-	if type(dt) == "number" then
-		return dt
-	end
-
-	return 0
-end
+local assertActionDefinition = ActionAssertions.AssertActionDefinition
+local assertActionId = ActionAssertions.AssertActionId
+local assertActionState = ActionAssertions.AssertActionState
+local assertExecutor = ActionAssertions.AssertExecutor
 
 --[=[
 	Creates a runtime facade with a configured behavior builder.
@@ -61,6 +45,7 @@ end
 	@return BehaviorSystemRuntime -- Runtime facade that can also register and dispatch actions
 ]=]
 function Runtime.new(config: TBuilderConfig)
+	-- Build the shared definition compiler and initialize action registries
 	local self = setmetatable({}, Runtime)
 	self._builder = Builder.new(config)
 	self._actions = {}
@@ -93,13 +78,19 @@ end
 	@param definition TActionDefinition -- Action registration contract
 ]=]
 function Runtime:RegisterAction(definition: TActionDefinition)
-	ActionAssertions.AssertActionDefinition(definition)
+	-- Validate the action definition before touching the runtime registries
+	assertActionDefinition(definition)
 
-	local actionId = definition.ActionId
+	-- Normalize the action id and reject duplicate registrations
+	local actionId = ActionId.From(definition.ActionId, "action definition ActionId")
+	assert(self._actions[actionId] == nil, ("BehaviorSystem action '%s' is already registered"):format(actionId))
+
+	-- Materialize the executor once so registration and dispatch share the same instance
 	local executor = definition.Executor
 	if executor == nil then
 		executor = definition.CreateExecutor()
 	end
+	assertExecutor(executor, actionId)
 
 	self._actions[actionId] = definition
 	self._executors[actionId] = executor
@@ -111,8 +102,10 @@ end
 	@param definitions { [any]: TActionDefinition } -- Action definitions to register
 ]=]
 function Runtime:RegisterActions(definitions: { [any]: TActionDefinition })
+	-- Validate the container before iterating over its action definitions
 	assert(type(definitions) == "table", "BehaviorSystem:RegisterActions requires a definition table")
 
+	-- Register each definition through the single-action path so validation stays centralized
 	for _, definition in pairs(definitions) do
 		self:RegisterAction(definition)
 	end
@@ -125,8 +118,9 @@ end
 	@return TExecutor? -- Registered executor instance or `nil`
 ]=]
 function Runtime:GetExecutor(actionId: string)
-	ActionAssertions.AssertActionId(actionId, "actionId")
-	return self._executors[actionId]
+	-- Normalize the lookup key so callers can pass any valid action-id string
+	assertActionId(actionId, "actionId")
+	return self._executors[ActionId.From(actionId, "actionId")]
 end
 
 --[=[
@@ -135,7 +129,7 @@ end
 	@within BehaviorSystemRuntime
 	@param entity number -- Runtime entity id whose action should start
 	@param actionState TActionState -- Owning context's action-state table
-	@param runtimeContext TActionRuntimeContext -- Context bag forwarded to executors
+	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services and delta time
 	@return TStartActionResult -- Generic dispatch result for the owning context to interpret
 ]=]
 function Runtime:StartPendingAction(
@@ -143,81 +137,27 @@ function Runtime:StartPendingAction(
 	actionState: TActionState,
 	runtimeContext: TActionRuntimeContext
 ): TStartActionResult
-	ActionAssertions.AssertActionState(actionState)
+	-- Validate the action-state table before delegating to the shared start use case
+	assertActionState(actionState)
+	return StartPendingAction.Execute(entity, actionState, runtimeContext, self._executors)
+end
 
-	local pendingActionId = actionState.PendingActionId
-	if type(pendingActionId) ~= "string" or #pendingActionId == 0 then
-		return {
-			Status = "NoAction",
-			ActionId = nil,
-			ReplacedActionId = nil,
-			FailureReason = nil,
-		}
-	end
-
-	if actionState.ActionState == "Committed" then
-		return {
-			Status = "Blocked",
-			ActionId = pendingActionId,
-			ReplacedActionId = nil,
-			FailureReason = "Committed",
-		}
-	end
-
-	local currentActionId = actionState.CurrentActionId
-	if currentActionId == pendingActionId then
-		return {
-			Status = "NoChange",
-			ActionId = pendingActionId,
-			ReplacedActionId = nil,
-			FailureReason = nil,
-		}
-	end
-
-	local services = _getExecutorServices(runtimeContext)
-	local replacedActionId = nil :: string?
-
-	if type(currentActionId) == "string" and #currentActionId > 0 then
-		local currentExecutor = self._executors[currentActionId]
-		if currentExecutor ~= nil then
-			pcall(function()
-				currentExecutor:Cancel(entity, services)
-			end)
-		end
-		replacedActionId = currentActionId
-	end
-
-	local nextExecutor = self._executors[pendingActionId]
-	if nextExecutor == nil then
-		return {
-			Status = "MissingAction",
-			ActionId = pendingActionId,
-			ReplacedActionId = replacedActionId,
-			FailureReason = nil,
-		}
-	end
-
-	local startSuccess = false
-	local failureReason = nil :: string?
-	pcall(function()
-		startSuccess, failureReason = nextExecutor:Start(entity, actionState.PendingActionData, services)
-	end)
-
-	if not startSuccess then
-		return {
-			Status = "FailedToStart",
-			ActionId = pendingActionId,
-			ReplacedActionId = replacedActionId,
-			FailureReason = failureReason,
-		}
-	end
-
-	return {
-		Status = if replacedActionId ~= nil then "Replaced" else "Started",
-		ActionId = pendingActionId,
-		ReplacedActionId = replacedActionId,
-		FailureReason = nil,
-	}
+--[=[
+	Starts the pending action through the safe executor-boundary API.
+	Returns `Ok(TStartActionResult)` for normal runtime outcomes and a `Defect` when executor code crashes.
+	@within BehaviorSystemRuntime
+	@param entity number -- Runtime entity id whose action should start
+	@param actionState TActionState -- Owning context's action-state table
+	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services and delta time
+	@return TTryStartActionResult -- Structured result carrying the normal start record or an executor defect
+]=]
+function Runtime:TryStartPendingAction(
+	entity: number,
+	actionState: TActionState,
+	runtimeContext: TActionRuntimeContext
+): TTryStartActionResult
+	assertActionState(actionState)
+	return StartPendingAction.TryExecute(entity, actionState, runtimeContext, self._executors)
 end
 
 --[=[
@@ -234,38 +174,9 @@ function Runtime:CommitStartedAction(
 	startResult: TStartActionResult,
 	startedAt: any?
 ): TCommitStartResult
-	ActionAssertions.AssertActionState(actionState)
-	assert(type(startResult) == "table", "BehaviorSystem CommitStartedAction requires a startResult table")
-
-	if startResult.Status ~= "Started" and startResult.Status ~= "Replaced" then
-		return {
-			Status = "Skipped",
-			ActionId = startResult.ActionId,
-		}
-	end
-
-	local pendingActionId = actionState.PendingActionId
-	if type(pendingActionId) ~= "string" or #pendingActionId == 0 then
-		return {
-			Status = "InvalidResult",
-			ActionId = nil,
-		}
-	end
-
-	actionState.CurrentActionId = pendingActionId
-	actionState.ActionData = actionState.PendingActionData
-	actionState.PendingActionId = nil
-	actionState.PendingActionData = nil
-	actionState.ActionState = "Running"
-
-	if startedAt ~= nil then
-		actionState.StartedAt = startedAt
-	end
-
-	return {
-		Status = "Committed",
-		ActionId = pendingActionId,
-	}
+	-- Validate the action-state table before delegating to the shared commit use case
+	assertActionState(actionState)
+	return CommitStartedAction.Execute(actionState, startResult, startedAt)
 end
 
 --[=[
@@ -274,7 +185,7 @@ end
 	@within BehaviorSystemRuntime
 	@param entity number -- Runtime entity id whose current action should tick
 	@param actionState TActionState -- Owning context's action-state table
-	@param runtimeContext TActionRuntimeContext -- Context bag forwarded to executors
+	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services and delta time
 	@return TTickActionResult -- Generic tick result for the owning context to interpret
 ]=]
 function Runtime:TickCurrentAction(
@@ -282,57 +193,27 @@ function Runtime:TickCurrentAction(
 	actionState: TActionState,
 	runtimeContext: TActionRuntimeContext
 ): TTickActionResult
-	ActionAssertions.AssertActionState(actionState)
+	-- Validate the action-state table before delegating to the shared tick use case
+	assertActionState(actionState)
+	return TickCurrentAction.Execute(entity, actionState, runtimeContext, self._executors)
+end
 
-	local currentActionId = actionState.CurrentActionId
-	if type(currentActionId) ~= "string" or #currentActionId == 0 then
-		return {
-			Status = "NoCurrentAction",
-			ActionId = nil,
-		}
-	end
-
-	local executor = self._executors[currentActionId]
-	if executor == nil then
-		return {
-			Status = "MissingAction",
-			ActionId = currentActionId,
-		}
-	end
-
-	local tickStatus = "Fail"
-	pcall(function()
-		tickStatus = executor:Tick(entity, _getDeltaTime(runtimeContext), _getExecutorServices(runtimeContext))
-	end)
-
-	if tickStatus == "Success" then
-		pcall(function()
-			executor:Complete(entity, _getExecutorServices(runtimeContext))
-		end)
-
-		return {
-			Status = "Success",
-			ActionId = currentActionId,
-		}
-	end
-
-	if tickStatus == "Running" then
-		return {
-			Status = "Running",
-			ActionId = currentActionId,
-		}
-	end
-
-	if tickStatus == "Fail" then
-		pcall(function()
-			executor:Cancel(entity, _getExecutorServices(runtimeContext))
-		end)
-	end
-
-	return {
-		Status = "Fail",
-		ActionId = currentActionId,
-	}
+--[=[
+	Ticks the current action through the safe executor-boundary API.
+	Returns `Ok(TTickActionResult)` for normal runtime outcomes and a `Defect` when executor code crashes.
+	@within BehaviorSystemRuntime
+	@param entity number -- Runtime entity id whose current action should tick
+	@param actionState TActionState -- Owning context's action-state table
+	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services and delta time
+	@return TTryTickActionResult -- Structured result carrying the normal tick record or an executor defect
+]=]
+function Runtime:TryTickCurrentAction(
+	entity: number,
+	actionState: TActionState,
+	runtimeContext: TActionRuntimeContext
+): TTryTickActionResult
+	assertActionState(actionState)
+	return TickCurrentAction.TryExecute(entity, actionState, runtimeContext, self._executors)
 end
 
 --[=[
@@ -349,37 +230,9 @@ function Runtime:ResolveFinishedAction(
 	tickResult: TTickActionResult,
 	finishedAt: any?
 ): TResolveFinishedActionResult
-	ActionAssertions.AssertActionState(actionState)
-	assert(type(tickResult) == "table", "BehaviorSystem ResolveFinishedAction requires a tickResult table")
-
-	local status = tickResult.Status
-	if status == "Running" or status == "NoCurrentAction" then
-		return {
-			Status = "Skipped",
-			ActionId = tickResult.ActionId,
-		}
-	end
-
-	if status ~= "Success" and status ~= "Fail" and status ~= "MissingAction" then
-		return {
-			Status = "InvalidResult",
-			ActionId = tickResult.ActionId,
-		}
-	end
-
-	local resolvedActionId = actionState.CurrentActionId
-	actionState.CurrentActionId = nil
-	actionState.ActionData = nil
-	actionState.ActionState = "Idle"
-
-	if finishedAt ~= nil then
-		actionState.FinishedAt = finishedAt
-	end
-
-	return {
-		Status = "Resolved",
-		ActionId = resolvedActionId,
-	}
+	-- Validate the action-state table before delegating to the shared resolve use case
+	assertActionState(actionState)
+	return ResolveFinishedAction.Execute(actionState, tickResult, finishedAt)
 end
 
 --[=[
@@ -396,15 +249,18 @@ function Runtime:OnActionSucceeded(
 	actionId: string?,
 	callback: (tickResult: TTickActionResult) -> ()
 ): boolean
+	-- Require a result table and callback before attempting the conditional dispatch
 	assert(type(tickResult) == "table", "BehaviorSystem OnActionSucceeded requires a tickResult table")
 	assert(type(callback) == "function", "BehaviorSystem OnActionSucceeded requires a callback")
 
+	-- Only success results should reach the callback
 	if tickResult.Status ~= "Success" then
 		return false
 	end
 
+	-- Apply the optional action-id filter before invoking the callback
 	if actionId ~= nil then
-		ActionAssertions.AssertActionId(actionId, "actionId")
+		assertActionId(actionId, "actionId")
 		if tickResult.ActionId ~= actionId then
 			return false
 		end
@@ -419,7 +275,7 @@ end
 	@within BehaviorSystemRuntime
 	@param entity number -- Runtime entity id whose current action should cancel
 	@param actionState TActionState -- Owning context's action-state table
-	@param runtimeContext TActionRuntimeContext -- Context bag forwarded to executors
+	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services and delta time
 	@return TCancelActionResult -- Generic cancellation result for the owning context to interpret
 ]=]
 function Runtime:CancelCurrentAction(
@@ -427,32 +283,27 @@ function Runtime:CancelCurrentAction(
 	actionState: TActionState,
 	runtimeContext: TActionRuntimeContext
 ): TCancelActionResult
-	ActionAssertions.AssertActionState(actionState)
+	-- Validate the action-state table before delegating to the shared cancel use case
+	assertActionState(actionState)
+	return CancelCurrentAction.Execute(entity, actionState, runtimeContext, self._executors)
+end
 
-	local currentActionId = actionState.CurrentActionId
-	if type(currentActionId) ~= "string" or #currentActionId == 0 then
-		return {
-			Status = "NoCurrentAction",
-			ActionId = nil,
-		}
-	end
-
-	local executor = self._executors[currentActionId]
-	if executor == nil then
-		return {
-			Status = "MissingAction",
-			ActionId = currentActionId,
-		}
-	end
-
-	pcall(function()
-		executor:Cancel(entity, _getExecutorServices(runtimeContext))
-	end)
-
-	return {
-		Status = "Cancelled",
-		ActionId = currentActionId,
-	}
+--[=[
+	Cancels the current action through the safe executor-boundary API.
+	Returns `Ok(TCancelActionResult)` for normal runtime outcomes and a `Defect` when executor code crashes.
+	@within BehaviorSystemRuntime
+	@param entity number -- Runtime entity id whose current action should cancel
+	@param actionState TActionState -- Owning context's action-state table
+	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services and delta time
+	@return TTryCancelActionResult -- Structured result carrying the normal cancel record or an executor defect
+]=]
+function Runtime:TryCancelCurrentAction(
+	entity: number,
+	actionState: TActionState,
+	runtimeContext: TActionRuntimeContext
+): TTryCancelActionResult
+	assertActionState(actionState)
+	return CancelCurrentAction.TryExecute(entity, actionState, runtimeContext, self._executors)
 end
 
 return table.freeze(Runtime)

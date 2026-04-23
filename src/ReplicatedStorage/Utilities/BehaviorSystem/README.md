@@ -8,6 +8,24 @@ Shared utility for validating symbolic behavior definitions and compiling them i
 - Keep condition and command registries outside individual feature modules.
 - Leave runtime facts, action requests, and execution orchestration to the owning context.
 
+## Internal Architecture (DDD-Mimic)
+
+`BehaviorSystem` remains a utility library in `ReplicatedStorage`. It is **not** a server bounded context.
+
+Its internals now mimic multiple bounded-style internal contexts for organization only:
+
+- `src/Contexts/BuildContext/` owns build orchestration and build-specific use cases.
+- `src/Contexts/RuntimeContext/` owns action runtime orchestration and lifecycle use cases.
+- `src/SharedDomain/` holds types, value objects, specs, and pure validation/assertion invariants used by both internal contexts.
+- `src/Infrastructure/` holds BehaviorTree integration helpers and node resolution plumbing.
+
+Top-level composition happens in `src/init.lua`, which wires these layers and exports the public surface.
+
+Domain modeling additions:
+
+- `ValueObjects/` normalize boundary inputs such as action ids, definition paths, and status values.
+- `Specs/` centralize reusable rules (definition-node shape, child-array structure, and action-state transition checks).
+
 ## Public Surface
 
 Exports:
@@ -34,11 +52,14 @@ Runtime methods:
 - `runtime:RegisterActions(definitions)` registers many action definitions.
 - `runtime:GetExecutor(actionId)` returns the registered executor instance for an action id.
 - `runtime:StartPendingAction(entity, actionState, runtimeContext)` starts a pending action generically.
+- `runtime:TryStartPendingAction(entity, actionState, runtimeContext)` returns `Result<TStartActionResult>` with executor defects preserved.
 - `runtime:CommitStartedAction(actionState, startResult, startedAt?)` commits a started pending action into current action state.
 - `runtime:TickCurrentAction(entity, actionState, runtimeContext)` ticks the current action generically.
+- `runtime:TryTickCurrentAction(entity, actionState, runtimeContext)` returns `Result<TTickActionResult>` with executor defects preserved.
 - `runtime:ResolveFinishedAction(actionState, tickResult, finishedAt?)` resolves a terminal tick result back into idle action state.
 - `runtime:OnActionSucceeded(tickResult, actionId?, callback)` runs a callback for successful actions, optionally filtered by action id.
 - `runtime:CancelCurrentAction(entity, actionState, runtimeContext)` cancels the current action generically.
+- `runtime:TryCancelCurrentAction(entity, actionState, runtimeContext)` returns `Result<TCancelActionResult>` with executor defects preserved.
 
 Validator methods:
 
@@ -72,6 +93,7 @@ Types:
 - `TBehaviorPriorityNode`
 - `TBehaviorDefinitionNode`
 - `TExecutor`
+- `TExecutorServices`
 - `TActionRuntimeContext`
 - `TActionDefinition`
 - `TActionState`
@@ -80,6 +102,9 @@ Types:
 - `TTickActionResult`
 - `TResolveFinishedActionResult`
 - `TCancelActionResult`
+- `TTryStartActionResult`
+- `TTryTickActionResult`
+- `TTryCancelActionResult`
 
 ## Definition Rules
 
@@ -223,6 +248,17 @@ runtime:ResolveFinishedAction(actionState, tickResult, os.clock())
 ```
 
 ## Runtime Boundary
+
+`runtimeContext` is an adapter bag owned by the caller:
+
+- `Services` is extracted and forwarded to executor lifecycle methods.
+- `DeltaTime` and `Dt` are used only when ticking.
+
+Safe runtime methods use `Result` only at the executor boundary:
+
+- `Ok(...)` means executor invocation completed and carries the normal runtime status record.
+- `Defect` means executor code crashed during `Start`, `Tick`, `Cancel`, or `Complete`.
+- Owning contexts using `Try*` methods should branch on `result.success` before interpreting the status record.
 
 `BehaviorSystem` owns:
 

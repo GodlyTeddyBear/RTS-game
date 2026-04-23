@@ -7,13 +7,10 @@
 	@client
 ]=]
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local BehaviorTree = require(ReplicatedStorage.Utilities.BehaviorTree)
-
-local NodeResolver = require(script.Parent.Internal.NodeResolver)
-local Validator = require(script.Parent.Validator)
-local Types = require(script.Parent.Types)
+local BuildBehaviorTree = require(script.Parent.Application.UseCases.Build.BuildBehaviorTree)
+local ValidateDefinition = require(script.Parent.Application.UseCases.Build.ValidateDefinition)
+local NodeResolver = require(script.Parent.Parent.Parent.Infrastructure.Build.Resolvers.NodeResolver)
+local Types = require(script.Parent.Parent.Parent.SharedDomain.Types)
 
 type TBuilderConfig = Types.TBuilderConfig
 
@@ -29,7 +26,7 @@ Builder.__index = Builder
 	@return BehaviorSystemBuilder -- Configured builder instance
 ]=]
 function Builder.new(config: TBuilderConfig)
-	Validator.ValidateRegistries(config)
+	ValidateDefinition.ValidateRegistries(config)
 
 	local self = setmetatable({}, Builder)
 	self._conditions = config.Conditions
@@ -44,7 +41,7 @@ end
 	@param definition TBehaviorDefinitionNode -- Symbolic tree root to validate
 ]=]
 function Builder:Validate(definition: Types.TBehaviorDefinitionNode)
-	Validator.ValidateDefinition(definition, {
+	ValidateDefinition.Execute(definition, {
 		Conditions = self._conditions,
 		Commands = self._commands,
 	})
@@ -57,10 +54,9 @@ end
 	@return BehaviorTree -- Compiled behavior tree instance
 ]=]
 function Builder:Build(definition: Types.TBehaviorDefinitionNode)
-	self:Validate(definition)
-
-	return BehaviorTree:new({
-		tree = self._resolver:ResolveNode(definition, "Root"),
+	return BuildBehaviorTree.Execute(definition, self._resolver, {
+		Conditions = self._conditions,
+		Commands = self._commands,
 	})
 end
 

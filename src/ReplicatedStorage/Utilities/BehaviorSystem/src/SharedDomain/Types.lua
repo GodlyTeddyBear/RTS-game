@@ -1,5 +1,8 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Result = require(ReplicatedStorage.Utilities.Result)
+
 --[=[
 	@class BehaviorSystemTypes
 	Shared type definitions for BehaviorSystem registries, builder config, and symbolic tree nodes.
@@ -82,7 +85,7 @@ export type TBehaviorDefinitionNode = string | TBehaviorSequenceNode | TBehavior
 	@interface TActionRuntimeContext
 	.DeltaTime number? -- Optional frame delta used by `TickCurrentAction`
 	.Dt number? -- Optional alias for `DeltaTime`
-	.Services any? -- Optional service bag forwarded to executors
+	.Services any? -- Optional service bag extracted and forwarded to executors
 ]=]
 export type TActionRuntimeContext = {
 	DeltaTime: number?,
@@ -91,19 +94,26 @@ export type TActionRuntimeContext = {
 }
 
 --[=[
+	Service bag extracted from `TActionRuntimeContext` and forwarded to executor lifecycle methods.
+	@within BehaviorSystemTypes
+	@type TExecutorServices any
+]=]
+export type TExecutorServices = any
+
+--[=[
 	Generic executor lifecycle surface used by the shared runtime dispatcher.
 	@within BehaviorSystemTypes
 	@interface TExecutor
-	.Start (self: TExecutor, entity: number, data: any?, runtimeContext: TActionRuntimeContext) -> (boolean, string?) -- Starts the action
-	.Tick (self: TExecutor, entity: number, dt: number, runtimeContext: TActionRuntimeContext) -> string -- Advances the action and returns status
-	.Cancel (self: TExecutor, entity: number, runtimeContext: TActionRuntimeContext) -> () -- Cancels the action
-	.Complete (self: TExecutor, entity: number, runtimeContext: TActionRuntimeContext) -> () -- Finalizes the action after success
+	.Start (self: TExecutor, entity: number, data: any?, services: TExecutorServices) -> (boolean, string?) -- Starts the action with the extracted service bag
+	.Tick (self: TExecutor, entity: number, dt: number, services: TExecutorServices) -> string -- Advances the action and returns status
+	.Cancel (self: TExecutor, entity: number, services: TExecutorServices) -> () -- Cancels the action with the extracted service bag
+	.Complete (self: TExecutor, entity: number, services: TExecutorServices) -> () -- Finalizes the action after success
 ]=]
 export type TExecutor = {
-	Start: (self: TExecutor, entity: number, data: any?, runtimeContext: TActionRuntimeContext) -> (boolean, string?),
-	Tick: (self: TExecutor, entity: number, dt: number, runtimeContext: TActionRuntimeContext) -> string,
-	Cancel: (self: TExecutor, entity: number, runtimeContext: TActionRuntimeContext) -> (),
-	Complete: (self: TExecutor, entity: number, runtimeContext: TActionRuntimeContext) -> (),
+	Start: (self: TExecutor, entity: number, data: any?, services: TExecutorServices) -> (boolean, string?),
+	Tick: (self: TExecutor, entity: number, dt: number, services: TExecutorServices) -> string,
+	Cancel: (self: TExecutor, entity: number, services: TExecutorServices) -> (),
+	Complete: (self: TExecutor, entity: number, services: TExecutorServices) -> (),
 }
 
 --[=[
@@ -201,5 +211,26 @@ export type TCancelActionResult = {
 	Status: string,
 	ActionId: string?,
 }
+
+--[=[
+	Result returned by the safe executor-boundary start API.
+	@within BehaviorSystemTypes
+	@type TTryStartActionResult Result.Result<TStartActionResult>
+]=]
+export type TTryStartActionResult = Result.Result<TStartActionResult>
+
+--[=[
+	Result returned by the safe executor-boundary tick API.
+	@within BehaviorSystemTypes
+	@type TTryTickActionResult Result.Result<TTickActionResult>
+]=]
+export type TTryTickActionResult = Result.Result<TTickActionResult>
+
+--[=[
+	Result returned by the safe executor-boundary cancel API.
+	@within BehaviorSystemTypes
+	@type TTryCancelActionResult Result.Result<TCancelActionResult>
+]=]
+export type TTryCancelActionResult = Result.Result<TCancelActionResult>
 
 return table.freeze(Types)
