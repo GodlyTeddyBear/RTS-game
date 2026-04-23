@@ -23,7 +23,7 @@ type TCombatAction = ExecutorTypes.TCombatActionComponent
 ]=]
 local StructureEntityFactory = {}
 StructureEntityFactory.__index = StructureEntityFactory
-setmetatable(StructureEntityFactory, BaseECSEntityFactory)
+setmetatable(StructureEntityFactory, { __index = BaseECSEntityFactory })
 
 local function _buildDefaultAction(): TCombatAction
 	return {
@@ -51,8 +51,11 @@ end
 	@param registry any -- The dependency registry for this context.
 	@param _name string -- The registered module name.
 ]=]
-function StructureEntityFactory:Init(registry: any, _name: string)
-	BaseECSEntityFactory.InitBase(self, registry, "StructureComponentRegistry")
+function StructureEntityFactory:_GetComponentRegistryName(): string
+	return "StructureComponentRegistry"
+end
+
+function StructureEntityFactory:_OnInit(_registry: any, _name: string, _componentRegistry: any)
 	assert(
 		self._components ~= nil
 			and self._components.AttackStatsComponent ~= nil
@@ -81,47 +84,47 @@ function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord)
 	assert(structureConfig ~= nil, "Unknown structure type: " .. tostring(record.structureType))
 
 	-- Create the entity first so every component write targets the same ECS id.
-	local entity = self._world:entity()
+	local entity = self:_CreateEntity()
 	local structureId = tostring(record.instanceId)
 
 	-- Copy the combat stats from config so later balance changes stay data-driven.
-	self._world:set(entity, components.AttackStatsComponent, {
+	self:_Set(entity, components.AttackStatsComponent, {
 		AttackRange = structureConfig.AttackRange,
 		AttackDamage = structureConfig.AttackDamage,
 		AttackCooldown = structureConfig.AttackCooldown,
 	} :: TAttackStatsComponent)
 
 	-- Start ready so the first acquired target can be attacked immediately.
-	self._world:set(entity, components.AttackCooldownComponent, {
+	self:_Set(entity, components.AttackCooldownComponent, {
 		Elapsed = structureConfig.AttackCooldown,
 	} :: TAttackCooldownComponent)
 
-	self._world:set(entity, components.HealthComponent, {
+	self:_Set(entity, components.HealthComponent, {
 		Current = structureConfig.MaxHealth,
 		Max = structureConfig.MaxHealth,
 	} :: THealthComponent)
 
 	-- Store a nil target until the targeting system resolves a nearby enemy.
-	self._world:set(entity, components.TargetComponent, {
+	self:_Set(entity, components.TargetComponent, {
 		Entity = nil,
 	})
 
-	self._world:set(entity, components.CombatActionComponent, _buildDefaultAction())
+	self:_Set(entity, components.CombatActionComponent, _buildDefaultAction())
 
 	-- Persist the runtime instance id and world-space anchor for targeting queries.
-	self._world:set(entity, components.InstanceRefComponent, {
+	self:_Set(entity, components.InstanceRefComponent, {
 		InstanceId = record.instanceId,
 		WorldPos = record.worldPos,
 	} :: TInstanceRefComponent)
 
 	-- Keep the canonical identity separate from the runtime instance ref.
-	self._world:set(entity, components.IdentityComponent, {
+	self:_Set(entity, components.IdentityComponent, {
 		StructureId = structureId,
 		StructureType = record.structureType,
 	} :: TIdentityComponent)
 
 	-- Mark the entity active so queries and systems can pick it up this frame.
-	self._world:add(entity, components.ActiveTag)
+	self:_Add(entity, components.ActiveTag)
 	return entity
 end
 
@@ -139,7 +142,7 @@ function StructureEntityFactory:SetTarget(entity: number?, targetEntity: number?
 
 	local components = self:GetComponentsOrThrow()
 
-	self._world:set(entity, components.TargetComponent, {
+	self:_Set(entity, components.TargetComponent, {
 		Entity = targetEntity,
 	})
 end
@@ -157,7 +160,7 @@ function StructureEntityFactory:GetTarget(entity: number?): number?
 
 	local components = self:GetComponentsOrThrow()
 
-	local targetComponent = self._world:get(entity, components.TargetComponent)
+	local targetComponent = self:_Get(entity, components.TargetComponent)
 	if targetComponent == nil then
 		return nil
 	end
@@ -178,7 +181,7 @@ function StructureEntityFactory:GetAttackStats(entity: number?): TAttackStatsCom
 
 	local components = self:GetComponentsOrThrow()
 
-	return self._world:get(entity, components.AttackStatsComponent)
+	return self:_Get(entity, components.AttackStatsComponent)
 end
 
 --[=[
@@ -194,7 +197,7 @@ function StructureEntityFactory:GetCooldown(entity: number?): TAttackCooldownCom
 
 	local components = self:GetComponentsOrThrow()
 
-	return self._world:get(entity, components.AttackCooldownComponent)
+	return self:_Get(entity, components.AttackCooldownComponent)
 end
 
 --[=[
@@ -210,7 +213,7 @@ function StructureEntityFactory:GetHealth(entity: number?): THealthComponent?
 
 	local components = self:GetComponentsOrThrow()
 
-	return self._world:get(entity, components.HealthComponent)
+	return self:_Get(entity, components.HealthComponent)
 end
 
 --[=[
@@ -232,7 +235,7 @@ function StructureEntityFactory:SetCooldownElapsed(entity: number?, elapsed: num
 
 	local components = self:GetComponentsOrThrow()
 
-	self._world:set(entity, components.AttackCooldownComponent, {
+	self:_Set(entity, components.AttackCooldownComponent, {
 		Elapsed = elapsed,
 	} :: TAttackCooldownComponent)
 end
@@ -240,7 +243,7 @@ end
 function StructureEntityFactory:SetBehaviorTree(entity: number, treeInstance: any, tickInterval: number)
 	local components = self:GetComponentsOrThrow()
 
-	self._world:set(entity, components.BehaviorTreeComponent, {
+	self:_Set(entity, components.BehaviorTreeComponent, {
 		TreeInstance = treeInstance,
 		TickInterval = tickInterval,
 		LastTickTime = 0,
@@ -250,7 +253,7 @@ end
 function StructureEntityFactory:GetBehaviorTree(entity: number)
 	local components = self:GetComponentsOrThrow()
 
-	return self._world:get(entity, components.BehaviorTreeComponent)
+	return self:_Get(entity, components.BehaviorTreeComponent)
 end
 
 function StructureEntityFactory:UpdateBTLastTickTime(entity: number, currentTime: number)
@@ -261,7 +264,7 @@ function StructureEntityFactory:UpdateBTLastTickTime(entity: number, currentTime
 
 	local components = self:GetComponentsOrThrow()
 
-	self._world:set(entity, components.BehaviorTreeComponent, {
+	self:_Set(entity, components.BehaviorTreeComponent, {
 		TreeInstance = behaviorTree.TreeInstance,
 		TickInterval = behaviorTree.TickInterval,
 		LastTickTime = currentTime,
@@ -271,14 +274,14 @@ end
 function StructureEntityFactory:GetCombatAction(entity: number)
 	local components = self:GetComponentsOrThrow()
 
-	return self._world:get(entity, components.CombatActionComponent)
+	return self:_Get(entity, components.CombatActionComponent)
 end
 
 function StructureEntityFactory:SetPendingAction(entity: number, actionId: string, actionData: any?)
 	local components = self:GetComponentsOrThrow()
 
 	local action = self:GetCombatAction(entity) or _buildDefaultAction()
-	self._world:set(entity, components.CombatActionComponent, {
+	self:_Set(entity, components.CombatActionComponent, {
 		CurrentActionId = action.CurrentActionId,
 		ActionState = action.ActionState,
 		ActionData = action.ActionData,
@@ -292,7 +295,7 @@ function StructureEntityFactory:ClearPendingAction(entity: number)
 	local components = self:GetComponentsOrThrow()
 
 	local action = self:GetCombatAction(entity) or _buildDefaultAction()
-	self._world:set(entity, components.CombatActionComponent, {
+	self:_Set(entity, components.CombatActionComponent, {
 		CurrentActionId = action.CurrentActionId,
 		ActionState = action.ActionState,
 		ActionData = action.ActionData,
@@ -305,7 +308,7 @@ end
 function StructureEntityFactory:StartAction(entity: number, actionId: string, actionData: any?, currentTime: number)
 	local components = self:GetComponentsOrThrow()
 
-	self._world:set(entity, components.CombatActionComponent, {
+	self:_Set(entity, components.CombatActionComponent, {
 		CurrentActionId = actionId,
 		ActionState = "Running",
 		ActionData = actionData,
@@ -318,7 +321,7 @@ end
 function StructureEntityFactory:ClearAction(entity: number)
 	local components = self:GetComponentsOrThrow()
 
-	self._world:set(entity, components.CombatActionComponent, _buildDefaultAction())
+	self:_Set(entity, components.CombatActionComponent, _buildDefaultAction())
 end
 
 function StructureEntityFactory:ResetActionState(entity: number)
@@ -329,7 +332,7 @@ function StructureEntityFactory:ResetActionState(entity: number)
 
 	local components = self:GetComponentsOrThrow()
 
-	self._world:set(entity, components.CombatActionComponent, {
+	self:_Set(entity, components.CombatActionComponent, {
 		CurrentActionId = action.CurrentActionId,
 		ActionState = "None",
 		ActionData = action.ActionData,
@@ -348,7 +351,7 @@ function StructureEntityFactory:ApplyDamage(entity: number, amount: number): boo
 	local nextHp = math.max(0, health.Current - amount)
 	local components = self:GetComponentsOrThrow()
 
-	self._world:set(entity, components.HealthComponent, {
+	self:_Set(entity, components.HealthComponent, {
 		Current = nextHp,
 		Max = health.Max,
 	} :: THealthComponent)
@@ -369,7 +372,7 @@ function StructureEntityFactory:GetIdentity(entity: number?): TIdentityComponent
 
 	local components = self:GetComponentsOrThrow()
 
-	return self._world:get(entity, components.IdentityComponent)
+	return self:_Get(entity, components.IdentityComponent)
 end
 
 --[=[
@@ -385,7 +388,7 @@ function StructureEntityFactory:GetInstanceRef(entity: number?): TInstanceRefCom
 
 	local components = self:GetComponentsOrThrow()
 
-	return self._world:get(entity, components.InstanceRefComponent)
+	return self:_Get(entity, components.InstanceRefComponent)
 end
 
 function StructureEntityFactory:GetPosition(entity: number?): Vector3?
@@ -404,7 +407,7 @@ function StructureEntityFactory:IsActive(entity: number?): boolean
 
 	local components = self:GetComponentsOrThrow()
 
-	return self._world:has(entity, components.ActiveTag)
+	return self:_Has(entity, components.ActiveTag)
 end
 
 --[=[
@@ -429,8 +432,8 @@ function StructureEntityFactory:DeleteEntity(entity: number?)
 	end
 
 	local components = self:GetComponentsOrThrow()
-	if self._world:has(entity, components.ActiveTag) then
-		self._world:remove(entity, components.ActiveTag)
+	if self:_Has(entity, components.ActiveTag) then
+		self:_Remove(entity, components.ActiveTag)
 	end
 
 	self:MarkForDestruction(entity)

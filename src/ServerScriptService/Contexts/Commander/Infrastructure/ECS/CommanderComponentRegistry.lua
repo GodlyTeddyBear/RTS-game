@@ -10,25 +10,17 @@ local BaseECSComponentRegistry = require(ReplicatedStorage.Utilities.BaseECSComp
 ]=]
 local CommanderComponentRegistry = {}
 CommanderComponentRegistry.__index = CommanderComponentRegistry
-setmetatable(CommanderComponentRegistry, BaseECSComponentRegistry)
+setmetatable(CommanderComponentRegistry, { __index = BaseECSComponentRegistry })
 
 function CommanderComponentRegistry.new()
 	return setmetatable(BaseECSComponentRegistry.new("Commander"), CommanderComponentRegistry)
 end
 
-function CommanderComponentRegistry:Init(registry: any, _name: string)
-	BaseECSComponentRegistry.InitBase(self, registry)
-
+function CommanderComponentRegistry:_RegisterComponents(_registry: any, _name: string)
 	self:RegisterComponent("IdentityComponent", "Commander.Identity", "AUTHORITATIVE")
 	self:RegisterComponent("HealthComponent", "Commander.Health", "AUTHORITATIVE")
 	self:RegisterComponent("CooldownsComponent", "Commander.Cooldowns", "AUTHORITATIVE")
 	self:RegisterTag("ActiveTag", "Commander.ActiveTag")
-
-	self:Finalize()
-end
-
-function CommanderComponentRegistry:GetComponents()
-	return BaseECSComponentRegistry.GetComponents(self)
 end
 
 return CommanderComponentRegistry

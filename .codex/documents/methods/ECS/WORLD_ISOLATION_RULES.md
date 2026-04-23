@@ -9,6 +9,7 @@
 - Only the Infrastructure layer interacts with JECS directly (world creation, component registration, system ticking)
 - Domain and Application layers are fully decoupled from JECS — they call factory and service APIs only
 - World lifetime is managed by a dedicated `*ECSWorldService` per context
+- Contexts own system construction, phase order, and ticking; world services own world lifetime only
 - Cross-context communication uses domain events or service APIs, never shared world queries
 
 
@@ -39,9 +40,15 @@ for _ in world:query(components.AliveTag) do count += 1 end
 Each bounded context that manages entities owns exactly one world through a dedicated world service. The world service is responsible for:
 
 - Creating the JECS world
+- Exposing the initialized world handle
+- Managing world readiness and teardown/reset hooks
+
+The context or a context-owned orchestration layer is responsible for:
+
 - Initializing the component registry
-- Constructing all factories
-- Constructing and ticking all systems
+- Constructing factories and systems
+- Declaring phase order
+- Ticking systems and deferred flush boundaries
 
 ```lua
 -- CORRECT: isolated worlds per context

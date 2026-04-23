@@ -16,12 +16,4 @@ function MapECSWorldService.new()
 	return setmetatable(BaseECSWorldService.new("Map"), MapECSWorldService)
 end
 
-function MapECSWorldService:Init(_registry: any, _name: string)
-	BaseECSWorldService.Init(self, _registry, _name)
-end
-
-function MapECSWorldService:GetWorld()
-	return BaseECSWorldService.GetWorld(self)
-end
-
 return MapECSWorldService

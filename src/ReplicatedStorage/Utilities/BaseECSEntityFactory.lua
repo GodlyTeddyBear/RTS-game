@@ -1,6 +1,7 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local JECS = require(ReplicatedStorage.Packages.JECS)
 local ECS = require(ReplicatedStorage.Utilities.ECS)
 local ECSIdentitySchema = ECS.IdentitySchema
 
@@ -50,6 +51,17 @@ end
 	@param registry any -- The dependency registry for this context.
 	@param componentRegistryName string -- Registry key that exposes GetComponents().
 ]=]
+function BaseECSEntityFactory:Init(registry: any, name: string)
+	local componentRegistryName = self:_GetComponentRegistryName()
+	assert(type(componentRegistryName) == "string" and componentRegistryName ~= "", ("%sEntityFactory: missing component registry name"):format(self._contextName))
+	self:InitBase(registry, componentRegistryName)
+
+	local componentRegistry = registry:Get(componentRegistryName)
+	if type(self._OnInit) == "function" then
+		self:_OnInit(registry, name, componentRegistry)
+	end
+end
+
 function BaseECSEntityFactory:InitBase(registry: any, componentRegistryName: string)
 	self._world = registry:Get("World")
 	assert(self._world ~= nil, ("%sEntityFactory: missing World"):format(self._contextName))
@@ -60,6 +72,14 @@ function BaseECSEntityFactory:InitBase(registry: any, componentRegistryName: str
 
 	self._components = componentRegistry:GetComponents()
 	assert(self._components ~= nil, ("%sEntityFactory: %s returned nil components"):format(self._contextName, componentRegistryName))
+end
+
+function BaseECSEntityFactory:_GetComponentRegistryName(): string
+	error(("%sEntityFactory must implement _GetComponentRegistryName"):format(self._contextName))
+end
+
+function BaseECSEntityFactory:_OnInit(_registry: any, _name: string, _componentRegistry: any)
+	return
 end
 
 --[=[
@@ -86,6 +106,11 @@ function BaseECSEntityFactory:GetWorldOrThrow()
 	return self._world
 end
 
+function BaseECSEntityFactory:_GetWorldUnsafe()
+	self:RequireReady()
+	return self._world
+end
+
 --[=[
 	Returns the component lookup after readiness checks.
 	@within BaseECSEntityFactory
@@ -96,19 +121,87 @@ function BaseECSEntityFactory:GetComponentsOrThrow()
 	return self._components
 end
 
+function BaseECSEntityFactory:_RequireEntityExists(entity: number, methodName: string?)
+	self:RequireReady()
+	assert(type(entity) == "number", ("%sEntityFactory:%s requires entity"):format(self._contextName, methodName or "Unknown"))
+	assert(self:_Exists(entity), ("%sEntityFactory:%s entity does not exist"):format(self._contextName, methodName or "Unknown"))
+end
+
+function BaseECSEntityFactory:_CreateEntity(): number
+	local world = self:GetWorldOrThrow()
+	return world:entity()
+end
+
+function BaseECSEntityFactory:_Set(entity: number, component: any, value: any)
+	self:_RequireEntityExists(entity, "_Set")
+	self._world:set(entity, component, value)
+end
+
+function BaseECSEntityFactory:_Add(entity: number, tag: any)
+	self:_RequireEntityExists(entity, "_Add")
+	self._world:add(entity, tag)
+end
+
+function BaseECSEntityFactory:_Remove(entity: number, tag: any)
+	self:_RequireEntityExists(entity, "_Remove")
+	self._world:remove(entity, tag)
+end
+
+function BaseECSEntityFactory:_Get(entity: number, component: any)
+	self:_RequireEntityExists(entity, "_Get")
+	return self._world:get(entity, component)
+end
+
+function BaseECSEntityFactory:_Has(entity: number, componentOrTag: any): boolean
+	self:_RequireEntityExists(entity, "_Has")
+	return self._world:has(entity, componentOrTag)
+end
+
+function BaseECSEntityFactory:_Exists(entity: number): boolean
+	self:RequireReady()
+	return self._world:exists(entity)
+end
+
+function BaseECSEntityFactory:_DeleteNow(entity: number)
+	self:_RequireEntityExists(entity, "_DeleteNow")
+	self:_ClearRevealForEntity(entity)
+	self._world:delete(entity)
+end
+
 --[=[
 	Collects entities matching a component/tag query into an array.
 	@within BaseECSEntityFactory
 	@param componentOrTagId any -- JECS query id.
 	@return { number } -- Matching entity ids.
 ]=]
-function BaseECSEntityFactory:CollectQuery(componentOrTagId: any): { number }
+function BaseECSEntityFactory:CollectQuery(...: any): { number }
 	local world = self:GetWorldOrThrow()
+	local queryIds = { ... }
+	assert(#queryIds > 0, ("%sEntityFactory:CollectQuery requires at least one query id"):format(self._contextName))
 	local entities = {}
-	for entity in world:query(componentOrTagId) do
+	for entity in world:query(table.unpack(queryIds)) do
 		table.insert(entities, entity)
 	end
 	return entities
+end
+
+function BaseECSEntityFactory:CollectChildren(parentEntity: number, childOfComponent: any): { number }
+	self:_RequireEntityExists(parentEntity, "CollectChildren")
+
+	local world = self:GetWorldOrThrow()
+	local entities = {}
+	for entity in world:query(JECS.pair(childOfComponent, parentEntity)) do
+		table.insert(entities, entity)
+	end
+	return entities
+end
+
+function BaseECSEntityFactory:FindFirstWithTag(tagId: any): number?
+	local world = self:GetWorldOrThrow()
+	for entity in world:query(tagId) do
+		return entity
+	end
+	return nil
 end
 
 --[=[
@@ -161,8 +254,9 @@ function BaseECSEntityFactory:FlushDestructionQueue(): boolean
 	end
 
 	for _, entity in ipairs(self._destructionQueue) do
-		self:_ClearRevealForEntity(entity)
-		self._world:delete(entity)
+		if self:_Exists(entity) then
+			self:_DeleteNow(entity)
+		end
 	end
 
 	table.clear(self._destructionQueue)

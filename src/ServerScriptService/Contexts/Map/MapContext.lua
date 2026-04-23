@@ -3,9 +3,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local Registry = require(ReplicatedStorage.Utilities.Registry)
+local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
 
 local Errors = require(script.Parent.Errors)
 local MapECSWorldService = require(script.Parent.Infrastructure.ECS.MapECSWorldService)
@@ -17,6 +16,27 @@ local Catch = Result.Catch
 local Ok = Result.Ok
 local Ensure = Result.Ensure
 
+local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "MapComponentRegistry",
+		Module = MapComponentRegistry,
+	},
+	{
+		Name = "MapEntityFactory",
+		Module = MapEntityFactory,
+		CacheAs = "_entityFactory",
+	},
+	{
+		Name = "RuntimeMapService",
+		Module = RuntimeMapService,
+		CacheAs = "_runtimeMapService",
+	},
+}
+
+local MapModules: BaseContext.TModuleLayers = {
+	Infrastructure = InfrastructureModules,
+}
+
 --[=[
 	@class MapContext
 	Owns runtime map bootstrap and ECS zone lookups for play sessions.
@@ -25,45 +45,30 @@ local Ensure = Result.Ensure
 local MapContext = Knit.CreateService({
 	Name = "MapContext",
 	Client = {},
+	WorldService = {
+		Name = "MapECSWorldService",
+		Module = MapECSWorldService,
+	},
+	Modules = MapModules,
+	Cache = {
+		World = "_world",
+		MapComponents = {
+			Field = "_components",
+			From = "MapComponentRegistry",
+			Method = "GetComponents",
+			Result = false,
+		},
+	},
 })
 
-local function _InitModule(registry: any, moduleName: string)
-	local module = registry:Get(moduleName)
-	if type(module) == "function" then
-		return
-	end
-
-	if module and module.Init and type(module.Init) == "function" then
-		module:Init(registry, moduleName)
-	end
-end
+local MapBaseContext = BaseContext.new(MapContext)
 
 function MapContext:KnitInit()
-	local registry = Registry.new("Server")
-	local worldService = MapECSWorldService.new()
-
-	registry:Register("MapECSWorldService", worldService, "Infrastructure")
-	worldService:Init(registry, "MapECSWorldService")
-	local world = worldService:GetWorld()
-	registry:Register("World", world)
-	registry:Register("MapComponentRegistry", MapComponentRegistry.new(), "Infrastructure")
-	registry:Register("MapEntityFactory", MapEntityFactory.new(), "Infrastructure")
-	registry:Register("RuntimeMapService", RuntimeMapService.new(), "Infrastructure")
-
-	-- Initialize ECS core modules in deterministic order so component ids exist before factories use them.
-	_InitModule(registry, "MapECSWorldService")
-	_InitModule(registry, "MapComponentRegistry")
-	_InitModule(registry, "MapEntityFactory")
-	_InitModule(registry, "RuntimeMapService")
-
-	self._registry = registry
-	self._world = world
-	self._components = registry:Get("MapComponentRegistry"):GetComponents()
-	self._entityFactory = registry:Get("MapEntityFactory")
-	self._runtimeMapService = registry:Get("RuntimeMapService")
+	MapBaseContext:KnitInit()
 end
 
 function MapContext:KnitStart()
+	MapBaseContext:KnitStart()
 end
 
 function MapContext:PrepareRuntimeMap(): Result.Result<boolean>
@@ -101,8 +106,14 @@ function MapContext:Destroy()
 	Catch(function()
 		return self._runtimeMapService:CleanupRuntimeMap()
 	end, "Map:Destroy")
-end
 
-WrapContext(MapContext, "Map")
+	local destroyResult = MapBaseContext:Destroy()
+	if not destroyResult.success then
+		Result.MentionError("Map:Destroy", "BaseContext teardown failed", {
+			CauseType = destroyResult.type,
+			CauseMessage = destroyResult.message,
+		}, destroyResult.type)
+	end
+end
 
 return MapContext

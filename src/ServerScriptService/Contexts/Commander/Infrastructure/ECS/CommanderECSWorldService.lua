@@ -10,18 +10,10 @@ local BaseECSWorldService = require(ReplicatedStorage.Utilities.BaseECSWorldServ
 ]=]
 local CommanderECSWorldService = {}
 CommanderECSWorldService.__index = CommanderECSWorldService
-setmetatable(CommanderECSWorldService, BaseECSWorldService)
+setmetatable(CommanderECSWorldService, { __index = BaseECSWorldService })
 
 function CommanderECSWorldService.new()
 	return setmetatable(BaseECSWorldService.new("Commander"), CommanderECSWorldService)
-end
-
-function CommanderECSWorldService:Init(registry: any, name: string)
-	BaseECSWorldService.Init(self, registry, name)
-end
-
-function CommanderECSWorldService:GetWorld()
-	return BaseECSWorldService.GetWorld(self)
 end
 
 return CommanderECSWorldService

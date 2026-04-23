@@ -28,9 +28,27 @@ function BaseECSComponentRegistry.new(contextName: string)
 	self._components = {} :: { [string]: any }
 	self._componentNames = {} :: { [string]: string }
 	self._tagNames = {} :: { [string]: string }
+	self._externalNames = {} :: { [string]: string }
 	self._authorityByKey = {} :: { [string]: "AUTHORITATIVE" | "DERIVED" }
+	self._registrationKindByKey = {} :: { [string]: "Component" | "Tag" | "External" }
+	self._metadataSnapshot = nil :: { AuthorityByKey: { [string]: string }, Keys: { string }, KindByKey: { [string]: string }, NameByKey: { [string]: string } }?
 	self._frozen = false
 	return self
+end
+
+function BaseECSComponentRegistry:Init(registry: any, name: string)
+	self:InitBase(registry)
+	if type(self._RegisterComponents) == "function" then
+		self:_RegisterComponents(registry, name)
+	end
+	if type(self._ValidateRegistry) == "function" then
+		self:_ValidateRegistry()
+	end
+	self:Finalize()
+end
+
+function BaseECSComponentRegistry:_RegisterComponents(_registry: any, _name: string)
+	return
 end
 
 --[=[
@@ -57,12 +75,14 @@ function BaseECSComponentRegistry:RegisterComponent(key: string, ecsName: string
 	assert(self._world ~= nil, ("%sComponentRegistry: InitBase must run before RegisterComponent"):format(self._contextName))
 	assert(self._components[key] == nil, ("%sComponentRegistry: duplicate key '%s'"):format(self._contextName, key))
 	assert(authorityLabel == "AUTHORITATIVE" or authorityLabel == "DERIVED", ("%sComponentRegistry: invalid authority '%s' for key '%s'"):format(self._contextName, tostring(authorityLabel), key))
+	assert(not self:_HasECSName(ecsName), ("%sComponentRegistry: duplicate ecsName '%s'"):format(self._contextName, ecsName))
 
 	local componentId = self._world:component()
 	_nameComponent(self._world, componentId, ecsName)
 	self._components[key] = componentId
 	self._componentNames[key] = ecsName
 	self._authorityByKey[key] = authorityLabel
+	self._registrationKindByKey[key] = "Component"
 	return componentId
 end
 
@@ -77,11 +97,13 @@ function BaseECSComponentRegistry:RegisterTag(key: string, ecsName: string): num
 	assert(not self._frozen, ("%sComponentRegistry: cannot register tag after Finalize"):format(self._contextName))
 	assert(self._world ~= nil, ("%sComponentRegistry: InitBase must run before RegisterTag"):format(self._contextName))
 	assert(self._components[key] == nil, ("%sComponentRegistry: duplicate key '%s'"):format(self._contextName, key))
+	assert(not self:_HasECSName(ecsName), ("%sComponentRegistry: duplicate ecsName '%s'"):format(self._contextName, ecsName))
 
 	local tagId = self._world:entity()
 	_nameComponent(self._world, tagId, ecsName)
 	self._components[key] = tagId
 	self._tagNames[key] = ecsName
+	self._registrationKindByKey[key] = "Tag"
 	return tagId
 end
 
@@ -96,10 +118,28 @@ function BaseECSComponentRegistry:RegisterExternal(key: string, id: any)
 	assert(not self._frozen, ("%sComponentRegistry: cannot register external after Finalize"):format(self._contextName))
 	assert(self._components[key] == nil, ("%sComponentRegistry: duplicate key '%s'"):format(self._contextName, key))
 	self._components[key] = id
+	self._externalNames[key] = key
+	self._registrationKindByKey[key] = "External"
 end
 
 local function _endsWith(value: string, suffix: string): boolean
 	return string.sub(value, -#suffix) == suffix
+end
+
+function BaseECSComponentRegistry:_HasECSName(ecsName: string): boolean
+	for _, registeredName in pairs(self._componentNames) do
+		if registeredName == ecsName then
+			return true
+		end
+	end
+
+	for _, registeredName in pairs(self._tagNames) do
+		if registeredName == ecsName then
+			return true
+		end
+	end
+
+	return false
 end
 
 --[=[
@@ -107,15 +147,24 @@ end
 	@within BaseECSComponentRegistry
 ]=]
 function BaseECSComponentRegistry:ValidateKeyAndNameConventions()
-	for key, ecsName in pairs(self._tagNames) do
-		assert(_endsWith(key, "Tag"), ("%sComponentRegistry: tag key '%s' must end with 'Tag'"):format(self._contextName, key))
-		assert(_endsWith(ecsName, "Tag"), ("%sComponentRegistry: tag ecsName '%s' must end with 'Tag'"):format(self._contextName, ecsName))
-	end
+	local expectedPrefix = ("%s."):format(self._contextName)
 
-	for key, _ in pairs(self._componentNames) do
+	for key, ecsName in pairs(self._componentNames) do
+		assert(_endsWith(key, "Component"), ("%sComponentRegistry: component key '%s' must end with 'Component'"):format(self._contextName, key))
+		assert(string.sub(ecsName, 1, #expectedPrefix) == expectedPrefix, ("%sComponentRegistry: component ecsName '%s' must start with '%s'"):format(self._contextName, ecsName, expectedPrefix))
 		local authority = self._authorityByKey[key]
 		assert(authority == "AUTHORITATIVE" or authority == "DERIVED", ("%sComponentRegistry: missing authority for component '%s'"):format(self._contextName, key))
 	end
+
+	for key, ecsName in pairs(self._tagNames) do
+		assert(_endsWith(key, "Tag"), ("%sComponentRegistry: tag key '%s' must end with 'Tag'"):format(self._contextName, key))
+		assert(_endsWith(ecsName, "Tag"), ("%sComponentRegistry: tag ecsName '%s' must end with 'Tag'"):format(self._contextName, ecsName))
+		assert(string.sub(ecsName, 1, #expectedPrefix) == expectedPrefix, ("%sComponentRegistry: tag ecsName '%s' must start with '%s'"):format(self._contextName, ecsName, expectedPrefix))
+	end
+end
+
+function BaseECSComponentRegistry:_ValidateRegistry()
+	return
 end
 
 --[=[
@@ -135,6 +184,29 @@ function BaseECSComponentRegistry:Finalize(extra: { [string]: any }?)
 	self:ValidateKeyAndNameConventions()
 	self._components = table.freeze(self._components)
 	self._authorityByKey = table.freeze(self._authorityByKey)
+	self._registrationKindByKey = table.freeze(self._registrationKindByKey)
+	self._metadataSnapshot = table.freeze({
+		AuthorityByKey = self._authorityByKey,
+		Keys = table.freeze((function()
+			local keys = {}
+			for key in pairs(self._components) do
+				table.insert(keys, key)
+			end
+			table.sort(keys)
+			return keys
+		end)()),
+		KindByKey = self._registrationKindByKey,
+		NameByKey = table.freeze((function()
+			local namesByKey = table.clone(self._componentNames)
+			for key, ecsName in pairs(self._tagNames) do
+				namesByKey[key] = ecsName
+			end
+			for key, ecsName in pairs(self._externalNames) do
+				namesByKey[key] = ecsName
+			end
+			return namesByKey
+		end)()),
+	})
 	self._frozen = true
 end
 
@@ -164,19 +236,10 @@ end
 	@within BaseECSComponentRegistry
 	@return { AuthorityByKey: { [string]: string }, Keys: { string } } -- Frozen metadata snapshot.
 ]=]
-function BaseECSComponentRegistry:GetRegistryMetadata(): { AuthorityByKey: { [string]: string }, Keys: { string } }
+function BaseECSComponentRegistry:GetRegistryMetadata(): { AuthorityByKey: { [string]: string }, Keys: { string }, KindByKey: { [string]: string }, NameByKey: { [string]: string } }
 	assert(self._frozen, ("%sComponentRegistry: GetRegistryMetadata called before Finalize"):format(self._contextName))
-
-	local keys = {}
-	for key in pairs(self._components) do
-		table.insert(keys, key)
-	end
-	table.sort(keys)
-
-	return {
-		AuthorityByKey = self._authorityByKey,
-		Keys = keys,
-	}
+	assert(self._metadataSnapshot ~= nil, ("%sComponentRegistry: missing metadata snapshot"):format(self._contextName))
+	return self._metadataSnapshot
 end
 
 return BaseECSComponentRegistry

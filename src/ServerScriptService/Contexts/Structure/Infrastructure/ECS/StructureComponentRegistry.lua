@@ -10,7 +10,7 @@ local BaseECSComponentRegistry = require(ReplicatedStorage.Utilities.BaseECSComp
 ]=]
 local StructureComponentRegistry = {}
 StructureComponentRegistry.__index = StructureComponentRegistry
-setmetatable(StructureComponentRegistry, BaseECSComponentRegistry)
+setmetatable(StructureComponentRegistry, { __index = BaseECSComponentRegistry })
 
 --[=[
 	Creates a new component registry wrapper.
@@ -27,9 +27,7 @@ end
 	@param registry any -- The dependency registry for this context.
 	@param _name string -- The registered module name.
 ]=]
-function StructureComponentRegistry:Init(registry: any, _name: string)
-	BaseECSComponentRegistry.InitBase(self, registry)
-
+function StructureComponentRegistry:_RegisterComponents(_registry: any, _name: string)
 	-- [AUTHORITATIVE] static combat stats for each structure.
 	self:RegisterComponent("AttackStatsComponent", "Structure.AttackStats", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] runtime cooldown accumulator.
@@ -47,17 +45,6 @@ function StructureComponentRegistry:Init(registry: any, _name: string)
 	-- [AUTHORITATIVE] stable identity metadata.
 	self:RegisterComponent("IdentityComponent", "Structure.Identity", "AUTHORITATIVE")
 	self:RegisterTag("ActiveTag", "Structure.ActiveTag")
-
-	self:Finalize()
-end
-
---[=[
-	Returns the frozen component lookup table.
-	@within StructureComponentRegistry
-	@return table -- The component lookup table.
-]=]
-function StructureComponentRegistry:GetComponents()
-	return BaseECSComponentRegistry.GetComponents(self)
 end
 
 return StructureComponentRegistry

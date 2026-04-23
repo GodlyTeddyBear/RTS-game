@@ -11,6 +11,7 @@ Canonical architecture references:
 ## Core Rules
 
 - Every SyncClient extends `BaseSyncClient` via metatable inheritance.
+- Follow the repo-wide metatable inheritance convention from `coding-style/CODING_STYLE.md`: subclass class tables use `setmetatable(SubClass, BaseClass)`.
 - `new()` delegates construction to `BaseSyncClient.new(...)` and wraps the result with the subclass metatable.
 - `Start()` and `GetAtom()` delegate directly to `BaseSyncClient` — do not re-implement the logic.
 - SyncClients are read-only from the consumer's perspective — they expose no mutation methods.
@@ -80,7 +81,7 @@ Domain-specific subclasses may add named getter methods (e.g. `GetWalletAtom()`)
 
 ## Checklist
 
-- [ ] Subclass metatable: `setmetatable({}, { __index = BaseSyncClient })`.
+- [ ] Subclass class table inherits with `setmetatable(MySyncClient, BaseSyncClient)`.
 - [ ] `new()` calls `BaseSyncClient.new(blinkClient, blinkEventName, atomKey, createAtom)`.
 - [ ] `atomKey` matches the server-side `CharmSync` atom registration key exactly.
 - [ ] `Start()` delegates to `BaseSyncClient.Start(self)`.

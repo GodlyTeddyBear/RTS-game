@@ -67,7 +67,7 @@ function EnemyGameObjectSyncService:SyncDirtyEntities()
 end
 
 function EnemyGameObjectSyncService:RegisterEntity(entity: any)
-	local modelRef = self.World:get(entity, self.Components.ModelRef)
+	local modelRef = self.World:get(entity, self.Components.ModelRefComponent)
 	if not modelRef or not modelRef.model then
 		return
 	end
@@ -83,7 +83,7 @@ function EnemyGameObjectSyncService:_ResolveModel(entity: any): Model?
 		return model
 	end
 
-	local modelRef = self.World:get(entity, self.Components.ModelRef)
+	local modelRef = self.World:get(entity, self.Components.ModelRefComponent)
 	if not modelRef or not modelRef.model then
 		return nil
 	end
@@ -142,8 +142,8 @@ function EnemyGameObjectSyncService:DeleteEntity(entity: any)
 		self.InstanceToEntity[instance] = nil
 	end
 
-	if self.World:get(entity, self.Components.ModelRef) then
-		self.World:remove(entity, self.Components.ModelRef)
+	if self.World:get(entity, self.Components.ModelRefComponent) then
+		self.World:remove(entity, self.Components.ModelRefComponent)
 	end
 end
 

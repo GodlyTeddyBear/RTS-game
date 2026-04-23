@@ -16,12 +16,4 @@ function EnemyECSWorldService.new()
 	return setmetatable(BaseECSWorldService.new("Enemy"), EnemyECSWorldService)
 end
 
-function EnemyECSWorldService:Init(_registry: any, _name: string)
-	BaseECSWorldService.Init(self, _registry, _name)
-end
-
-function EnemyECSWorldService:GetWorld()
-	return BaseECSWorldService.GetWorld(self)
-end
-
 return EnemyECSWorldService

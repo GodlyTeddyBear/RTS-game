@@ -26,9 +26,7 @@ function MapComponentRegistry.new()
 	return setmetatable(BaseECSComponentRegistry.new("Map"), MapComponentRegistry)
 end
 
-function MapComponentRegistry:Init(registry: any, _name: string)
-	BaseECSComponentRegistry.InitBase(self, registry)
-
+function MapComponentRegistry:_RegisterComponents(_registry: any, _name: string)
 	-- [AUTHORITATIVE] Runtime map root metadata.
 	self:RegisterComponent("MapRootComponent", "Map.MapRoot", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] Roblox model instance for the map root.
@@ -42,14 +40,7 @@ function MapComponentRegistry:Init(registry: any, _name: string)
 
 	self:RegisterTag("GoalZoneTag", "Map.GoalZoneTag")
 	self:RegisterTag("SpawnZoneTag", "Map.SpawnZoneTag")
-
-	self:Finalize({
-		ChildOf = JECS.ChildOf,
-	})
-end
-
-function MapComponentRegistry:GetComponents()
-	return BaseECSComponentRegistry.GetComponents(self)
+	self:RegisterExternal("ChildOf", JECS.ChildOf)
 end
 
 return MapComponentRegistry

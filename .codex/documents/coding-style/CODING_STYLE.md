@@ -89,6 +89,27 @@ export type TItemSlot = {
 - Separate type exports from implementation — types live in `Types/` folders
 - Freeze configuration tables (see [IMMUTABILITY.md](IMMUTABILITY.md))
 
+### Metatable Inheritance
+
+- Class tables own their own `__index` field (`MyClass.__index = MyClass`).
+- When a class inherits from a base class, set the subclass metatable directly to the base class: `setmetatable(SubClass, BaseClass)`.
+- Do not use an inline wrapper metatable such as `setmetatable(SubClass, { __index = BaseClass })`.
+- Instance construction continues to point at the concrete class table: `setmetatable({}, MyClass)`.
+
+```lua
+local BaseSyncClient = {}
+BaseSyncClient.__index = BaseSyncClient
+
+local MySyncClient = {}
+MySyncClient.__index = MySyncClient
+setmetatable(MySyncClient, BaseSyncClient)
+
+function MySyncClient.new()
+    local self = BaseSyncClient.new(...)
+    return setmetatable(self, MySyncClient)
+end
+```
+
 ```lua
 -- Config table
 return table.freeze({

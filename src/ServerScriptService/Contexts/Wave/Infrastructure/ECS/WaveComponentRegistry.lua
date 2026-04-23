@@ -27,23 +27,10 @@ end
 	@param registry any -- The dependency registry for this context.
 	@param name string -- The registered module name.
 ]=]
-function WaveComponentRegistry:Init(registry: any, _name: string)
-	BaseECSComponentRegistry.InitBase(self, registry)
-
+function WaveComponentRegistry:_RegisterComponents(_registry: any, _name: string)
 	-- [AUTHORITATIVE] canonical runtime counters and lifecycle flags for the active wave session.
 	self:RegisterComponent("RuntimeStateComponent", "Wave.RuntimeState", "AUTHORITATIVE")
 	self:RegisterTag("SessionTag", "Wave.SessionTag")
-
-	self:Finalize()
-end
-
---[=[
-	Returns the frozen component lookup table.
-	@within WaveComponentRegistry
-	@return table -- The component lookup table.
-]=]
-function WaveComponentRegistry:GetComponents()
-	return BaseECSComponentRegistry.GetComponents(self)
 end
 
 return WaveComponentRegistry

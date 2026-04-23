@@ -35,6 +35,9 @@ This component reflects the value of one or more `[AUTHORITATIVE]` components. I
 - Registries are always frozen after initialization with `table.freeze`
 - Every component is named with `_nameComponent` for debuggability
 - Raw component IDs are never exposed outside the registry and its factory
+- Component registry keys end with `Component`
+- Tag registry keys end with `Tag`
+- ECS debug names are prefixed with the owning context name (for example `Enemy.Health`)
 
 
 ---

@@ -33,7 +33,14 @@ end
 ]=]
 function BaseECSWorldService:Init(_registry: any, _name: string)
 	assert(self._world ~= nil, ("%sECSWorldService: missing world"):format(self._contextName))
+	if type(self._OnInit) == "function" then
+		self:_OnInit(_registry, _name)
+	end
 	self._initialized = true
+end
+
+function BaseECSWorldService:_OnInit(_registry: any, _name: string)
+	return
 end
 
 --[=[
@@ -59,8 +66,30 @@ end
 	@return any -- The context world.
 ]=]
 function BaseECSWorldService:GetWorld()
+	self:AssertInitialized()
 	assert(self._world ~= nil, ("%sECSWorldService: missing world"):format(self._contextName))
 	return self._world
+end
+
+function BaseECSWorldService:Reset()
+	if type(self._OnDestroy) == "function" then
+		self:_OnDestroy()
+	end
+
+	self._world = JECS.World.new()
+	self._initialized = false
+end
+
+function BaseECSWorldService:Destroy()
+	if type(self._OnDestroy) == "function" then
+		self:_OnDestroy()
+	end
+
+	self._initialized = false
+end
+
+function BaseECSWorldService:_OnDestroy()
+	return
 end
 
 return BaseECSWorldService

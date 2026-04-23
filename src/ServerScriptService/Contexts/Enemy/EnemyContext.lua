@@ -9,15 +9,11 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local Registry = require(ReplicatedStorage.Utilities.Registry)
+local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
-
-local ServerScheduler = require(ServerScriptService.Scheduler.ServerScheduler)
 
 local EnemyECSWorldService = require(script.Parent.Infrastructure.ECS.EnemyECSWorldService)
 local EnemyComponentRegistry = require(script.Parent.Infrastructure.ECS.EnemyComponentRegistry)
@@ -37,6 +33,74 @@ local Catch = Result.Catch
 local Ok = Result.Ok
 
 -- [Dependencies]
+local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "EnemyComponentRegistry",
+		Module = EnemyComponentRegistry,
+	},
+	{
+		Name = "EnemyEntityFactory",
+		Module = EnemyEntityFactory,
+		CacheAs = "_entityFactory",
+	},
+	{
+		Name = "EnemyModelFactory",
+		Module = EnemyModelFactory,
+		CacheAs = "_modelFactory",
+	},
+	{
+		Name = "EnemyGameObjectSyncService",
+		Module = EnemyGameObjectSyncService,
+		CacheAs = "_syncService",
+	},
+}
+
+local DomainModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "EnemySpawnPolicy",
+		Module = EnemySpawnPolicy,
+	},
+}
+
+local ApplicationModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "SpawnEnemyCommand",
+		Module = SpawnEnemyCommand,
+		CacheAs = "_spawnEnemyCommand",
+	},
+	{
+		Name = "DespawnEnemyCommand",
+		Module = DespawnEnemyCommand,
+		CacheAs = "_despawnEnemyCommand",
+	},
+	{
+		Name = "ApplyDamageEnemyCommand",
+		Module = ApplyDamageEnemyCommand,
+		CacheAs = "_applyDamageEnemyCommand",
+	},
+	{
+		Name = "CleanupAllEnemiesCommand",
+		Module = CleanupAllEnemiesCommand,
+		CacheAs = "_cleanupAllEnemiesCommand",
+	},
+	{
+		Name = "GetAliveEnemiesQuery",
+		Module = GetAliveEnemiesQuery,
+		CacheAs = "_getAliveEnemiesQuery",
+	},
+	{
+		Name = "GetEnemyCountQuery",
+		Module = GetEnemyCountQuery,
+		CacheAs = "_getEnemyCountQuery",
+	},
+}
+
+local EnemyModules: BaseContext.TModuleLayers = {
+	Infrastructure = InfrastructureModules,
+	Domain = DomainModules,
+	Application = ApplicationModules,
+}
+
 --[=[
 	@class EnemyContext
 	Orchestrates the authoritative enemy lane stack for spawn, model sync, and cleanup.
@@ -45,75 +109,39 @@ local Ok = Result.Ok
 local EnemyContext = Knit.CreateService({
 	Name = "EnemyContext",
 	Client = {},
+	WorldService = {
+		Name = "EnemyECSWorldService",
+		Module = EnemyECSWorldService,
+	},
+	Modules = EnemyModules,
+	Cache = {
+		World = "_world",
+		EnemyComponents = {
+			Field = "_components",
+			From = "EnemyComponentRegistry",
+			Method = "GetComponents",
+			Result = false,
+		},
+	},
+	Teardown = {
+		Before = "_BeforeDestroy",
+		Fields = {
+			{ Field = "_spawnConnection", Method = "Disconnect" },
+			{ Field = "_runEndedConnection", Method = "Disconnect" },
+		},
+	},
 })
 
--- [Private Helpers]
-
-local function _InitModule(registry: any, moduleName: string)
-	local module = registry:Get(moduleName)
-	if type(module) == "function" then
-		return
-	end
-
-	if module.Init and type(module.Init) == "function" then
-		module:Init(registry, moduleName)
-	end
-end
+local EnemyBaseContext = BaseContext.new(EnemyContext)
 
 -- [Public API]
 
 --[=[
 	@within EnemyContext
-	Registers the enemy registry, infrastructure services, and public use-case modules.
+	Registers the enemy world, services, commands, and queries.
 ]=]
 function EnemyContext:KnitInit()
-	local registry = Registry.new("Server")
-	local worldService = EnemyECSWorldService.new()
-
-	-- Register infrastructure first so downstream modules can resolve ECS dependencies.
-	registry:Register("EnemyECSWorldService", worldService, "Infrastructure")
-	worldService:Init(registry, "EnemyECSWorldService")
-	registry:Register("World", worldService:GetWorld())
-	registry:Register("EnemyComponentRegistry", EnemyComponentRegistry.new(), "Infrastructure")
-	registry:Register("EnemyEntityFactory", EnemyEntityFactory.new(), "Infrastructure")
-	registry:Register("EnemyModelFactory", EnemyModelFactory.new(), "Infrastructure")
-	registry:Register("EnemyGameObjectSyncService", EnemyGameObjectSyncService.new(), "Infrastructure")
-	registry:Register("EnemySpawnPolicy", EnemySpawnPolicy.new(), "Domain")
-	registry:Register("DespawnEnemyCommand", DespawnEnemyCommand.new(), "Application")
-	registry:Register("ApplyDamageEnemyCommand", ApplyDamageEnemyCommand.new(), "Application")
-	registry:Register("SpawnEnemyCommand", SpawnEnemyCommand.new(), "Application")
-	registry:Register("CleanupAllEnemiesCommand", CleanupAllEnemiesCommand.new(), "Application")
-	registry:Register("GetAliveEnemiesQuery", GetAliveEnemiesQuery.new(), "Application")
-	registry:Register("GetEnemyCountQuery", GetEnemyCountQuery.new(), "Application")
-
-	-- Initialize core ECS modules first so entity factory component ids are guaranteed.
-	_InitModule(registry, "EnemyECSWorldService")
-	_InitModule(registry, "EnemyComponentRegistry")
-	_InitModule(registry, "EnemyEntityFactory")
-
-	-- Initialize remaining modules after core ECS dependencies are ready.
-	_InitModule(registry, "EnemyModelFactory")
-	_InitModule(registry, "EnemyGameObjectSyncService")
-	_InitModule(registry, "EnemySpawnPolicy")
-	_InitModule(registry, "DespawnEnemyCommand")
-	_InitModule(registry, "ApplyDamageEnemyCommand")
-	_InitModule(registry, "SpawnEnemyCommand")
-	_InitModule(registry, "CleanupAllEnemiesCommand")
-	_InitModule(registry, "GetAliveEnemiesQuery")
-	_InitModule(registry, "GetEnemyCountQuery")
-
-	self._registry = registry
-	self._world = registry:Get("World")
-	self._components = registry:Get("EnemyComponentRegistry"):GetComponents()
-	self._entityFactory = registry:Get("EnemyEntityFactory")
-	self._modelFactory = registry:Get("EnemyModelFactory")
-	self._syncService = registry:Get("EnemyGameObjectSyncService")
-	self._spawnEnemyCommand = registry:Get("SpawnEnemyCommand")
-	self._despawnEnemyCommand = registry:Get("DespawnEnemyCommand")
-	self._applyDamageEnemyCommand = registry:Get("ApplyDamageEnemyCommand")
-	self._cleanupAllEnemiesCommand = registry:Get("CleanupAllEnemiesCommand")
-	self._getAliveEnemiesQuery = registry:Get("GetAliveEnemiesQuery")
-	self._getEnemyCountQuery = registry:Get("GetEnemyCountQuery")
+	EnemyBaseContext:KnitInit()
 	self._spawnConnection = nil :: any
 	self._runEndedConnection = nil :: any
 end
@@ -123,10 +151,8 @@ end
 	Wires the sync scheduler and run event handlers after initialization has completed.
 ]=]
 function EnemyContext:KnitStart()
-	-- Sync dirty enemy entities every scheduler tick so replicated models stay current.
-	ServerScheduler:RegisterSystem(function()
-		self._syncService:SyncDirtyEntities()
-	end, "EnemySync")
+	EnemyBaseContext:KnitStart()
+	EnemyBaseContext:RegisterSyncSystem("_syncService", nil, "EnemySync")
 
 	-- Forward wave spawns into the spawn command so the context owns the creation path.
 	self._spawnConnection = GameEvents.Bus:On(
@@ -283,11 +309,7 @@ function EnemyContext:CleanupAll(): Result.Result<boolean>
 	end, "Enemy:CleanupAll")
 end
 
---[=[
-	@within EnemyContext
-	Stops enemy event listeners and clears remaining enemies during shutdown.
-]=]
-function EnemyContext:Destroy()
+function EnemyContext:_BeforeDestroy()
 	-- Clear live enemies before disconnecting listeners so no later callback sees stale entities.
 	local cleanupResult = self:CleanupAll()
 	if not cleanupResult.success then
@@ -296,17 +318,20 @@ function EnemyContext:Destroy()
 			CauseMessage = cleanupResult.message,
 		}, cleanupResult.type)
 	end
-
-	-- Disconnect run-lifecycle listeners after cleanup completes.
-	if self._spawnConnection then
-		self._spawnConnection:Disconnect()
-	end
-
-	if self._runEndedConnection then
-		self._runEndedConnection:Disconnect()
-	end
 end
 
-WrapContext(EnemyContext, "Enemy")
+--[=[
+	@within EnemyContext
+	Stops enemy event listeners and clears remaining enemies during shutdown.
+]=]
+function EnemyContext:Destroy()
+	local destroyResult = EnemyBaseContext:Destroy()
+	if not destroyResult.success then
+		Result.MentionError("Enemy:Destroy", "BaseContext teardown failed", {
+			CauseType = destroyResult.type,
+			CauseMessage = destroyResult.message,
+		}, destroyResult.type)
+	end
+end
 
 return EnemyContext

@@ -25,7 +25,7 @@ type CooldownsComponent = {
 
 local CommanderEntityFactory = {}
 CommanderEntityFactory.__index = CommanderEntityFactory
-setmetatable(CommanderEntityFactory, BaseECSEntityFactory)
+setmetatable(CommanderEntityFactory, { __index = BaseECSEntityFactory })
 
 local function _cloneCooldowns(source: CooldownState): CooldownState
 	local clone = {} :: CooldownState
@@ -47,8 +47,11 @@ function CommanderEntityFactory.new()
 	return self
 end
 
-function CommanderEntityFactory:Init(registry: any, _name: string)
-	BaseECSEntityFactory.InitBase(self, registry, "CommanderComponentRegistry")
+function CommanderEntityFactory:_GetComponentRegistryName(): string
+	return "CommanderComponentRegistry"
+end
+
+function CommanderEntityFactory:_OnInit(_registry: any, _name: string, _componentRegistry: any)
 	assert(
 		self._components ~= nil
 			and self._components.IdentityComponent ~= nil
@@ -64,22 +67,22 @@ function CommanderEntityFactory:CreateOrResetCommander(userId: number, maxHp: nu
 
 	local entity = self._entityByUserId[userId]
 	if entity == nil then
-		entity = self._world:entity()
+		entity = self:_CreateEntity()
 		self._entityByUserId[userId] = entity
 		self._userIdByEntity[entity] = userId
-		self._world:set(entity, self._components.IdentityComponent, {
+		self:_Set(entity, self._components.IdentityComponent, {
 			UserId = userId,
 		} :: IdentityComponent)
 	end
 
-	self._world:set(entity, self._components.HealthComponent, {
+	self:_Set(entity, self._components.HealthComponent, {
 		hp = maxHp,
 		maxHp = maxHp,
 	} :: HealthComponent)
-	self._world:set(entity, self._components.CooldownsComponent, {
+	self:_Set(entity, self._components.CooldownsComponent, {
 		Cooldowns = {} :: CooldownState,
 	} :: CooldownsComponent)
-	self._world:add(entity, self._components.ActiveTag)
+	self:_Add(entity, self._components.ActiveTag)
 
 	return entity
 end
@@ -100,7 +103,7 @@ function CommanderEntityFactory:GetHealth(userId: number): HealthComponent?
 	if entity == nil then
 		return nil
 	end
-	return self._world:get(entity, self._components.HealthComponent)
+	return self:_Get(entity, self._components.HealthComponent)
 end
 
 function CommanderEntityFactory:SetHP(userId: number, hp: number): number?
@@ -110,13 +113,13 @@ function CommanderEntityFactory:SetHP(userId: number, hp: number): number?
 		return nil
 	end
 
-	local health = self._world:get(entity, self._components.HealthComponent)
+	local health = self:_Get(entity, self._components.HealthComponent)
 	if health == nil then
 		return nil
 	end
 
 	local clampedHp = math.max(0, math.min(health.maxHp, hp))
-	self._world:set(entity, self._components.HealthComponent, {
+	self:_Set(entity, self._components.HealthComponent, {
 		hp = clampedHp,
 		maxHp = health.maxHp,
 	} :: HealthComponent)
@@ -137,7 +140,7 @@ function CommanderEntityFactory:ApplyDamage(userId: number, amount: number): num
 
 	local sanitizedAmount = math.max(0, amount)
 	local nextHp = math.max(0, health.hp - sanitizedAmount)
-	self._world:set(entity, self._components.HealthComponent, {
+	self:_Set(entity, self._components.HealthComponent, {
 		hp = nextHp,
 		maxHp = health.maxHp,
 	} :: HealthComponent)
@@ -151,7 +154,7 @@ function CommanderEntityFactory:GetCooldowns(userId: number): CooldownState?
 		return nil
 	end
 
-	local cooldowns = self._world:get(entity, self._components.CooldownsComponent) :: CooldownsComponent?
+	local cooldowns = self:_Get(entity, self._components.CooldownsComponent) :: CooldownsComponent?
 	if cooldowns == nil then
 		return nil
 	end
@@ -166,14 +169,14 @@ function CommanderEntityFactory:SetCooldown(userId: number, slotKey: SlotKey, du
 		return
 	end
 
-	local current = self._world:get(entity, self._components.CooldownsComponent) :: CooldownsComponent?
+	local current = self:_Get(entity, self._components.CooldownsComponent) :: CooldownsComponent?
 	local nextCooldowns = _cloneCooldowns(if current == nil then {} :: CooldownState else current.Cooldowns)
 	nextCooldowns[slotKey] = {
 		startedAt = os.clock(),
 		duration = duration,
 	} :: CooldownEntry
 
-	self._world:set(entity, self._components.CooldownsComponent, {
+	self:_Set(entity, self._components.CooldownsComponent, {
 		Cooldowns = nextCooldowns,
 	} :: CooldownsComponent)
 end
@@ -185,7 +188,7 @@ function CommanderEntityFactory:ClearCooldown(userId: number, slotKey: SlotKey)
 		return
 	end
 
-	local current = self._world:get(entity, self._components.CooldownsComponent) :: CooldownsComponent?
+	local current = self:_Get(entity, self._components.CooldownsComponent) :: CooldownsComponent?
 	if current == nil then
 		return
 	end
@@ -193,7 +196,7 @@ function CommanderEntityFactory:ClearCooldown(userId: number, slotKey: SlotKey)
 	local nextCooldowns = _cloneCooldowns(current.Cooldowns)
 	nextCooldowns[slotKey] = nil
 
-	self._world:set(entity, self._components.CooldownsComponent, {
+	self:_Set(entity, self._components.CooldownsComponent, {
 		Cooldowns = nextCooldowns,
 	} :: CooldownsComponent)
 end
@@ -220,8 +223,8 @@ function CommanderEntityFactory:RemoveCommander(userId: number)
 		return
 	end
 
-	if self._world:has(entity, self._components.ActiveTag) then
-		self._world:remove(entity, self._components.ActiveTag)
+	if self:_Has(entity, self._components.ActiveTag) then
+		self:_Remove(entity, self._components.ActiveTag)
 	end
 
 	self._entityByUserId[userId] = nil
