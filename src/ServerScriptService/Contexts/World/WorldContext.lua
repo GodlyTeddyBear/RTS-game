@@ -105,6 +105,9 @@ local WorldContext = Knit.CreateService({
 	Name = "WorldContext",
 	Client = {},
 	Modules = WorldModules,
+	ExternalServices = {
+		{ Name = "MapContext", CacheAs = "_mapContext" },
+	},
 })
 
 local WorldBaseContext = BaseContext.new(WorldContext)
@@ -121,6 +124,7 @@ type WorldContextService = typeof(WorldContext) & {
 	_getExtractionTilesQuery: any,
 	_getLaneTilesQuery: any,
 	_worldGridService: any,
+	_mapContext: any,
 }
 
 -- [Initialization]

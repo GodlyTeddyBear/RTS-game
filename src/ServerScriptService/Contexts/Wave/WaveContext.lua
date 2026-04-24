@@ -166,12 +166,6 @@ end
 ]=]
 function WaveContext:KnitStart()
 	WaveBaseContext:KnitStart()
-	self:_RefreshSpawnCFrames()
-
-	-- Guard the scheduler input early so the event handlers can assume a valid spawn list.
-	if #self._spawnCFrames == 0 then
-		Result.MentionError("Wave:KnitStart", Errors.NO_SPAWN_POINTS, nil, "NoSpawnPoints")
-	end
 
 	-- Bridge run transitions into wave-start handling.
 	self._runWaveStartedConnection = GameEvents.Bus:On(GameEvents.Events.Run.WaveStarted, function(waveNumber: number, isEndless: boolean)

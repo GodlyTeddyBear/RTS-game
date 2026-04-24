@@ -25,16 +25,9 @@ local WorldConfig = {}
 WorldConfig.TILE_SIZE = TILE_SIZE
 
 --[=[
-	@prop GRID_FOLDER_PATH string
-	@within WorldConfig
-	Dot-path to the authoritative placement-grid folder in Workspace.
-]=]
-WorldConfig.GRID_FOLDER_PATH = "Workspace.Map.Game.Environment.Zones.PlacementGrids"
-
---[=[
 	@prop GRID_PART_NAME string
 	@within WorldConfig
-	Marker part name used inside `GRID_FOLDER_PATH`.
+	Marker part name used inside the runtime map `PlacementGrids` zone.
 ]=]
 WorldConfig.GRID_PART_NAME = "PlacementGrid"
 
@@ -46,46 +39,18 @@ WorldConfig.GRID_PART_NAME = "PlacementGrid"
 WorldConfig.SIDE_POCKET_COLUMN_INTERVAL = 4
 
 --[=[
-	@prop SIDE_POCKETS_PATH string
-	@within WorldConfig
-	Dot-path to the Studio-authored side-pocket container.
-]=]
-WorldConfig.SIDE_POCKETS_PATH = "Workspace.Map.Game.Environment.Zones.SidePockets"
-
---[=[
-	@prop SPAWNS_FOLDER_PATH string
-	@within WorldConfig
-	Dot-path to the authoritative enemy spawn-marker folder in Workspace.
-]=]
-WorldConfig.SPAWNS_FOLDER_PATH = "Workspace.Map.Game.Environment.Zones.Spawns"
-
---[=[
 	@prop SPAWN_PART_NAME string
 	@within WorldConfig
-	Marker part name used inside `SPAWNS_FOLDER_PATH`.
+	Marker part name used inside the runtime map `Spawns` zone.
 ]=]
 WorldConfig.SPAWN_PART_NAME = "Spawn"
 
 --[=[
-	@prop GOALS_FOLDER_PATH string
-	@within WorldConfig
-	Dot-path to the authoritative enemy goal-marker folder in Workspace.
-]=]
-WorldConfig.GOALS_FOLDER_PATH = "Workspace.Map.Game.Environment.Zones.Goals"
-
---[=[
 	@prop GOAL_PART_NAME string
 	@within WorldConfig
-	Marker part name used inside `GOALS_FOLDER_PATH`.
+	Marker part name used inside the runtime map `Goals` zone.
 ]=]
 WorldConfig.GOAL_PART_NAME = "Goal"
-
---[=[
-	@prop LANES_FOLDER_PATH string
-	@within WorldConfig
-	Dot-path to the authored lane-marker folder in Workspace.
-]=]
-WorldConfig.LANES_FOLDER_PATH = "Workspace.Map.Game.Environment.Zones.Lanes"
 
 --[=[
 	@prop LANE_POINT_Y_OFFSET number

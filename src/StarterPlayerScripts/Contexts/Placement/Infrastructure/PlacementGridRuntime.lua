@@ -31,6 +31,8 @@ local cachedSidePocketCoordKeySet: { [string]: boolean }? = nil
 local cachedSidePocketResourceByKey: { [string]: string }? = nil
 local GRID_PART_WAIT_TIMEOUT_SECONDS = 30
 local GRID_PART_POLL_INTERVAL_SECONDS = 0.25
+local PLACEMENT_GRIDS_PATH = "Workspace.Map.Game.Environment.Zones.PlacementGrids"
+local SIDE_POCKETS_PATH = "Workspace.Map.Game.Environment.Zones.SidePockets"
 
 -- [Private Helpers]
 
@@ -74,7 +76,7 @@ local function _GetGridPart(): BasePart
 	local deadline = os.clock() + GRID_PART_WAIT_TIMEOUT_SECONDS
 
 	repeat
-		local gridContainer = _ResolvePath(WorldConfig.GRID_FOLDER_PATH)
+		local gridContainer = _ResolvePath(PLACEMENT_GRIDS_PATH)
 		local gridInstance = nil :: BasePart?
 		if gridContainer ~= nil then
 			if gridContainer:IsA("BasePart") and gridContainer.Name == WorldConfig.GRID_PART_NAME then
@@ -102,7 +104,7 @@ end
 -- Collects authored side-pocket parts so tile zoning can be derived from map markers instead of hardcoded coordinates.
 local function _GetSidePocketParts(): { BasePart }
 	local parts = {}
-	local container = _ResolvePath(WorldConfig.SIDE_POCKETS_PATH)
+	local container = _ResolvePath(SIDE_POCKETS_PATH)
 	if container ~= nil then
 		if container:IsA("BasePart") then
 			table.insert(parts, container)

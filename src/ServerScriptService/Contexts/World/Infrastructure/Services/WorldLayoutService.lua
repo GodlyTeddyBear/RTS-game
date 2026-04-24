@@ -8,43 +8,10 @@
 local WorldLayoutService = {}
 WorldLayoutService.__index = WorldLayoutService
 
-local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local WorldConfig = require(ReplicatedStorage.Contexts.World.Config.WorldConfig)
 local Errors = require(script.Parent.Parent.Parent.Errors)
-
-local function _ResolvePath(path: string): Instance?
-	local segments = {}
-	for segment in string.gmatch(path, "[^%.]+") do
-		table.insert(segments, segment)
-	end
-
-	if #segments == 0 then
-		return nil
-	end
-
-	local current: Instance = game
-	local segmentIndex = 1
-	local first = string.lower(segments[1])
-	if first == "game" then
-		segmentIndex = 2
-	elseif first == "workspace" then
-		current = Workspace
-		segmentIndex = 2
-	end
-
-	for index = segmentIndex, #segments do
-		local segment = segments[index]
-		local child = current:FindFirstChild(segment)
-		if child == nil then
-			return nil
-		end
-		current = child
-	end
-
-	return current
-end
 
 local function _CollectNamedBaseParts(container: Instance, markerName: string): { BasePart }
 	local parts = {}
@@ -67,7 +34,9 @@ end
 	@return WorldLayoutService -- The new service instance.
 ]=]
 function WorldLayoutService.new()
-	return setmetatable({}, WorldLayoutService)
+	local self = setmetatable({}, WorldLayoutService)
+	self._mapContext = nil :: any
+	return self
 end
 
 --[=[
@@ -76,8 +45,22 @@ end
 	@param registry any -- Registry instance passed through the lifecycle contract.
 	@param name string -- Registered module name.
 ]=]
-function WorldLayoutService:Init(registry: any, _name: string)
-	-- No runtime dependencies required for explicit part-path lookup.
+function WorldLayoutService:Init(_registry: any, _name: string)
+end
+
+function WorldLayoutService:Start(registry: any, _name: string)
+	self._mapContext = registry:Get("MapContext")
+end
+
+local function _GetZoneContainer(self: any, zoneName: string, missingError: string): Instance
+	local mapContext = self._mapContext
+	assert(mapContext ~= nil, "WorldLayoutService: MapContext dependency is unavailable")
+
+	local zoneResult = mapContext:GetZoneInstance(zoneName)
+	assert(zoneResult.success, tostring(zoneResult.message or zoneResult.type or missingError))
+	assert(zoneResult.value ~= nil, missingError)
+
+	return zoneResult.value
 end
 
 --[=[
@@ -86,8 +69,7 @@ end
 	@return { CFrame } -- The configured spawn points.
 ]=]
 function WorldLayoutService:GetSpawnPoints(): { CFrame }
-	local spawnsContainer = _ResolvePath(WorldConfig.SPAWNS_FOLDER_PATH)
-	assert(spawnsContainer ~= nil, Errors.MISSING_SPAWN_PART)
+	local spawnsContainer = _GetZoneContainer(self, "Spawns", Errors.MISSING_SPAWN_PART)
 
 	local spawnMarkers = _CollectNamedBaseParts(spawnsContainer, WorldConfig.SPAWN_PART_NAME)
 	assert(#spawnMarkers > 0, Errors.INVALID_SPAWN_PART)
@@ -106,8 +88,7 @@ end
 	@return CFrame -- The goal point enemies should path toward.
 ]=]
 function WorldLayoutService:GetGoalPoint(): CFrame
-	local goalsContainer = _ResolvePath(WorldConfig.GOALS_FOLDER_PATH)
-	assert(goalsContainer ~= nil, Errors.MISSING_GOAL_PART)
+	local goalsContainer = _GetZoneContainer(self, "Goals", Errors.MISSING_GOAL_PART)
 
 	local goalMarkers = _CollectNamedBaseParts(goalsContainer, WorldConfig.GOAL_PART_NAME)
 	assert(#goalMarkers > 0, Errors.INVALID_GOAL_PART)

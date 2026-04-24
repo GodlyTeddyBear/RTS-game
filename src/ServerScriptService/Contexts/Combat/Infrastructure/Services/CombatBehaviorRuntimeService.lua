@@ -4,12 +4,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BehaviorConfig = require(ReplicatedStorage.Contexts.Combat.Config.BehaviorConfig)
 local BehaviorSystem = require(ReplicatedStorage.Utilities.BehaviorSystem)
-local Nodes = require(script.Nodes)
+local Nodes = require(script.Parent.Nodes)
 
-local LaneAdvanceExecutor = require(script.Executors.LaneAdvanceExecutor)
-local IdleExecutor = require(script.Executors.IdleExecutor)
-local EnemyAttackStructureExecutor = require(script.Executors.EnemyAttackStructureExecutor)
-local StructureAttackExecutor = require(script.Executors.StructureAttackExecutor)
+local LaneAdvanceExecutor = require(script.Parent.Executors.LaneAdvanceExecutor)
+local IdleExecutor = require(script.Parent.Executors.IdleExecutor)
+local EnemyAttackStructureExecutor = require(script.Parent.Executors.EnemyAttackStructureExecutor)
+local StructureAttackExecutor = require(script.Parent.Executors.StructureAttackExecutor)
 
 local EnemyBehaviorDefinitions = table.freeze({
 	swarm = table.freeze({

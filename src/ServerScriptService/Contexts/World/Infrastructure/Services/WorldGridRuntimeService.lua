@@ -1,6 +1,5 @@
 --!strict
 
-local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local WorldConfig = require(ReplicatedStorage.Contexts.World.Config.WorldConfig)
@@ -29,47 +28,28 @@ function WorldGridRuntimeService.new()
 	self._sidePocketParts = nil :: { BasePart }?
 	self._sidePocketCoordKeySet = nil :: { [string]: boolean }?
 	self._sidePocketResourceByKey = nil :: { [string]: string }?
+	self._mapContext = nil :: any
 	return self
 end
 
 function WorldGridRuntimeService:Init(_registry: any, _name: string)
-	-- No setup needed before first read.
 end
 
-local function _ResolvePath(path: string): Instance?
-	local segments = {}
-	for segment in string.gmatch(path, "[^%.]+") do
-		table.insert(segments, segment)
-	end
-
-	if #segments == 0 then
-		return nil
-	end
-
-	local current: Instance = game
-	local segmentIndex = 1
-	local first = string.lower(segments[1])
-	if first == "game" then
-		segmentIndex = 2
-	elseif first == "workspace" then
-		current = Workspace
-		segmentIndex = 2
-	end
-
-	for index = segmentIndex, #segments do
-		local segment = segments[index]
-		local child = current:FindFirstChild(segment)
-		if child == nil then
-			return nil
-		end
-		current = child
-	end
-
-	return current
+function WorldGridRuntimeService:Start(registry: any, _name: string)
+	self._mapContext = registry:Get("MapContext")
 end
 
-local function _GetGridPart(): BasePart?
-	local gridContainer = _ResolvePath(WorldConfig.GRID_FOLDER_PATH)
+function WorldGridRuntimeService:_GetZoneContainer(zoneName: string): Instance?
+	local mapContext = self._mapContext
+	assert(mapContext ~= nil, "WorldGridRuntimeService: MapContext dependency is unavailable")
+
+	local zoneResult = mapContext:GetZoneInstance(zoneName)
+	assert(zoneResult.success, tostring(zoneResult.message or zoneResult.type or "MapContext zone lookup failed"))
+	return zoneResult.value
+end
+
+function WorldGridRuntimeService:_GetGridPart(): BasePart?
+	local gridContainer = self:_GetZoneContainer("PlacementGrids")
 	if gridContainer == nil then
 		return nil
 	end
@@ -87,9 +67,9 @@ local function _GetGridPart(): BasePart?
 	return nil
 end
 
-local function _GetSidePocketParts(): { BasePart }
+function WorldGridRuntimeService:_GetSidePocketParts(): { BasePart }
 	local parts = {}
-	local sidePocketsContainer = _ResolvePath(WorldConfig.SIDE_POCKETS_PATH)
+	local sidePocketsContainer = self:_GetZoneContainer("SidePockets")
 	if sidePocketsContainer ~= nil then
 		if sidePocketsContainer:IsA("BasePart") then
 			table.insert(parts, sidePocketsContainer)
@@ -97,22 +77,6 @@ local function _GetSidePocketParts(): { BasePart }
 			for _, instance in ipairs(sidePocketsContainer:GetDescendants()) do
 				if instance:IsA("BasePart") then
 					table.insert(parts, instance)
-				end
-			end
-		end
-	end
-
-	-- Fallback discovery to tolerate slight hierarchy drift in Studio.
-	if #parts == 0 then
-		local fallback = Workspace:FindFirstChild("SidePockets", true)
-		if fallback ~= nil then
-			if fallback:IsA("BasePart") then
-				table.insert(parts, fallback)
-			else
-				for _, instance in ipairs(fallback:GetDescendants()) do
-					if instance:IsA("BasePart") then
-						table.insert(parts, instance)
-					end
 				end
 			end
 		end
@@ -173,7 +137,7 @@ function WorldGridRuntimeService:GetGridSpec(): GridSpec
 		return self._cachedGridSpec
 	end
 
-	local gridPart = _GetGridPart()
+	local gridPart = self:_GetGridPart()
 	assert(gridPart ~= nil, MISSING_PART_CODE)
 
 	local spec = _BuildGridSpec(gridPart)
@@ -256,7 +220,7 @@ function WorldGridRuntimeService:_GetSidePocketPartsCached(): { BasePart }
 		return self._sidePocketParts
 	end
 
-	local parts = _GetSidePocketParts()
+	local parts = self:_GetSidePocketParts()
 	self._sidePocketParts = parts
 	return parts
 end
