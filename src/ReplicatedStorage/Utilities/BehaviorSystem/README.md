@@ -51,15 +51,12 @@ Runtime methods:
 - `runtime:RegisterAction(definition)` registers one action definition and executor.
 - `runtime:RegisterActions(definitions)` registers many action definitions.
 - `runtime:GetExecutor(actionId)` returns the registered executor instance for an action id.
-- `runtime:StartPendingAction(entity, actionState, runtimeContext)` starts a pending action generically.
-- `runtime:TryStartPendingAction(entity, actionState, runtimeContext)` returns `Result<TStartActionResult>` with executor defects preserved.
+- `runtime:StartPendingAction(entity, actionState, runtimeContext)` returns `Result<TStartActionResult>` with executor defects preserved.
 - `runtime:CommitStartedAction(actionState, startResult, startedAt?)` commits a started pending action into current action state.
-- `runtime:TickCurrentAction(entity, actionState, runtimeContext)` ticks the current action generically.
-- `runtime:TryTickCurrentAction(entity, actionState, runtimeContext)` returns `Result<TTickActionResult>` with executor defects preserved.
+- `runtime:TickCurrentAction(entity, actionState, runtimeContext)` returns `Result<TTickActionResult>` with executor defects preserved.
 - `runtime:ResolveFinishedAction(actionState, tickResult, finishedAt?)` resolves a terminal tick result back into idle action state.
 - `runtime:OnActionSucceeded(tickResult, actionId?, callback)` runs a callback for successful actions, optionally filtered by action id.
-- `runtime:CancelCurrentAction(entity, actionState, runtimeContext)` cancels the current action generically.
-- `runtime:TryCancelCurrentAction(entity, actionState, runtimeContext)` returns `Result<TCancelActionResult>` with executor defects preserved.
+- `runtime:CancelCurrentAction(entity, actionState, runtimeContext)` returns `Result<TCancelActionResult>` with executor defects preserved.
 
 Validator methods:
 
@@ -230,8 +227,11 @@ local startResult = runtime:StartPendingAction(123, actionState, {
 		CombatService = {},
 	},
 })
+if not startResult.success then
+	error(startResult.message)
+end
 
-runtime:CommitStartedAction(actionState, startResult, os.clock())
+runtime:CommitStartedAction(actionState, startResult.value, os.clock())
 
 local tickResult = runtime:TickCurrentAction(123, actionState, {
 	DeltaTime = 0.1,
@@ -239,12 +239,15 @@ local tickResult = runtime:TickCurrentAction(123, actionState, {
 		CombatService = {},
 	},
 })
+if not tickResult.success then
+	error(tickResult.message)
+end
 
-runtime:OnActionSucceeded(tickResult, "Attack", function(_result)
+runtime:OnActionSucceeded(tickResult.value, "Attack", function(_result)
 	print("Attack finished successfully")
 end)
 
-runtime:ResolveFinishedAction(actionState, tickResult, os.clock())
+runtime:ResolveFinishedAction(actionState, tickResult.value, os.clock())
 ```
 
 ## Runtime Boundary
@@ -258,7 +261,7 @@ Safe runtime methods use `Result` only at the executor boundary:
 
 - `Ok(...)` means executor invocation completed and carries the normal runtime status record.
 - `Defect` means executor code crashed during `Start`, `Tick`, `Cancel`, or `Complete`.
-- Owning contexts using `Try*` methods should branch on `result.success` before interpreting the status record.
+- Owning contexts should branch on `result.success` before interpreting the status record.
 
 `BehaviorSystem` owns:
 

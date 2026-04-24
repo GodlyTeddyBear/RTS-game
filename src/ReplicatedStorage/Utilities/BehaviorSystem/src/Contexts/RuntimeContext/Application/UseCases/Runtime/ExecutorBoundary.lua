@@ -1,5 +1,12 @@
 --!strict
 
+--[=[
+	@class ExecutorBoundary
+	Wraps executor method calls so thrown defects become structured runtime results.
+	@server
+	@client
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -18,6 +25,7 @@ type TStartInvocation = {
 	FailureReason: string?,
 }
 
+-- Build a defect payload that preserves executor metadata and traceback context.
 local function _createDefect(
 	defectType: string,
 	message: string,
@@ -30,6 +38,7 @@ local function _createDefect(
 	return defect
 end
 
+-- Invoke a named executor method behind xpcall so thrown errors stay inside the runtime boundary.
 local function _invokeExecutorMethod(
 	executor: TExecutor,
 	methodName: string,
@@ -59,6 +68,16 @@ local function _invokeExecutorMethod(
 	return Ok(invocationResults)
 end
 
+--[=[
+	Invokes an executor start method and converts thrown defects into a structured result.
+	@within ExecutorBoundary
+	@param executor TExecutor -- Executor instance to invoke
+	@param actionId string -- Action id used for defect metadata
+	@param entity number -- Runtime entity id forwarded to the executor
+	@param actionData any? -- Pending action data forwarded to `Start`
+	@param services TExecutorServices -- Executor service bag forwarded to the executor
+	@return Result<TStartInvocation> -- Structured invocation result or a defect
+]=]
 function ExecutorBoundary.TryStart(
 	executor: TExecutor,
 	actionId: string,
@@ -86,6 +105,16 @@ function ExecutorBoundary.TryStart(
 	})
 end
 
+--[=[
+	Invokes an executor tick method and converts thrown defects into a structured result.
+	@within ExecutorBoundary
+	@param executor TExecutor -- Executor instance to invoke
+	@param actionId string -- Action id used for defect metadata
+	@param entity number -- Runtime entity id forwarded to the executor
+	@param deltaTime number -- Frame delta forwarded to `Tick`
+	@param services TExecutorServices -- Executor service bag forwarded to the executor
+	@return Result<string> -- First returned tick status or a defect
+]=]
 function ExecutorBoundary.TryTick(
 	executor: TExecutor,
 	actionId: string,
@@ -109,6 +138,15 @@ function ExecutorBoundary.TryTick(
 	return Ok(tickResult.value[1])
 end
 
+--[=[
+	Invokes an executor cancel method and converts thrown defects into a structured result.
+	@within ExecutorBoundary
+	@param executor TExecutor -- Executor instance to invoke
+	@param actionId string -- Action id used for defect metadata
+	@param entity number -- Runtime entity id forwarded to the executor
+	@param services TExecutorServices -- Executor service bag forwarded to the executor
+	@return Result<boolean> -- `true` when cancel completes or a defect
+]=]
 function ExecutorBoundary.TryCancel(
 	executor: TExecutor,
 	actionId: string,
@@ -124,6 +162,15 @@ function ExecutorBoundary.TryCancel(
 	return Ok(true)
 end
 
+--[=[
+	Invokes an executor complete method and converts thrown defects into a structured result.
+	@within ExecutorBoundary
+	@param executor TExecutor -- Executor instance to invoke
+	@param actionId string -- Action id used for defect metadata
+	@param entity number -- Runtime entity id forwarded to the executor
+	@param services TExecutorServices -- Executor service bag forwarded to the executor
+	@return Result<boolean> -- `true` when complete succeeds or a defect
+]=]
 function ExecutorBoundary.TryComplete(
 	executor: TExecutor,
 	actionId: string,

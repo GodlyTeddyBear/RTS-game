@@ -1,8 +1,8 @@
 --!strict
 
 --[=[
-	@class BehaviorSystemRuntime
-	Facade that combines behavior-tree building with generic action registration and executor lifecycle dispatch.
+	@class Runtime
+	Facade that combines behavior-tree compilation with action registration and executor lifecycle dispatch.
 	@server
 	@client
 ]=]
@@ -21,13 +21,13 @@ type TBuilderConfig = Types.TBuilderConfig
 type TActionDefinition = Types.TActionDefinition
 type TActionState = Types.TActionState
 type TActionRuntimeContext = Types.TActionRuntimeContext
-type TStartActionResult = Types.TStartActionResult
 type TCommitStartResult = Types.TCommitStartResult
-type TTickActionResult = Types.TTickActionResult
+type TStartActionResult = Types.TStartActionResult
 type TResolveFinishedActionResult = Types.TResolveFinishedActionResult
-type TCancelActionResult = Types.TCancelActionResult
 type TTryStartActionResult = Types.TTryStartActionResult
+type TTickActionResult = Types.TTickActionResult
 type TTryTickActionResult = Types.TTryTickActionResult
+type TCancelActionResult = Types.TCancelActionResult
 type TTryCancelActionResult = Types.TTryCancelActionResult
 
 local Runtime = {}
@@ -40,9 +40,9 @@ local assertExecutor = ActionAssertions.AssertExecutor
 
 --[=[
 	Creates a runtime facade with a configured behavior builder.
-	@within BehaviorSystemRuntime
+	@within Runtime
 	@param config TBuilderConfig -- Condition and command registries used for tree compilation
-	@return BehaviorSystemRuntime -- Runtime facade that can also register and dispatch actions
+	@return Runtime -- Runtime facade that can also register and dispatch actions
 ]=]
 function Runtime.new(config: TBuilderConfig)
 	-- Build the shared definition compiler and initialize action registries
@@ -55,7 +55,7 @@ end
 
 --[=[
 	Validates a symbolic behavior definition against the runtime's registries.
-	@within BehaviorSystemRuntime
+	@within Runtime
 	@param definition TBehaviorDefinitionNode -- Symbolic tree root to validate
 ]=]
 function Runtime:Validate(definition: Types.TBehaviorDefinitionNode)
@@ -64,7 +64,7 @@ end
 
 --[=[
 	Builds a concrete behavior tree from a symbolic definition.
-	@within BehaviorSystemRuntime
+	@within Runtime
 	@param definition TBehaviorDefinitionNode -- Symbolic tree root to compile
 	@return BehaviorTree -- Compiled behavior tree instance
 ]=]
@@ -74,7 +74,7 @@ end
 
 --[=[
 	Registers one action definition and stores its executor instance for runtime dispatch.
-	@within BehaviorSystemRuntime
+	@within Runtime
 	@param definition TActionDefinition -- Action registration contract
 ]=]
 function Runtime:RegisterAction(definition: TActionDefinition)
@@ -98,7 +98,7 @@ end
 
 --[=[
 	Registers a table of action definitions keyed by any stable name.
-	@within BehaviorSystemRuntime
+	@within Runtime
 	@param definitions { [any]: TActionDefinition } -- Action definitions to register
 ]=]
 function Runtime:RegisterActions(definitions: { [any]: TActionDefinition })
@@ -113,7 +113,7 @@ end
 
 --[=[
 	Returns the executor instance registered for the requested action id.
-	@within BehaviorSystemRuntime
+	@within Runtime
 	@param actionId string -- Action id to resolve
 	@return TExecutor? -- Registered executor instance or `nil`
 ]=]
@@ -124,34 +124,15 @@ function Runtime:GetExecutor(actionId: string)
 end
 
 --[=[
-	Starts the pending action described by the supplied action state.
-	The owning context remains responsible for mutating action-state storage after interpreting the result.
-	@within BehaviorSystemRuntime
-	@param entity number -- Runtime entity id whose action should start
-	@param actionState TActionState -- Owning context's action-state table
-	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services and delta time
-	@return TStartActionResult -- Generic dispatch result for the owning context to interpret
-]=]
-function Runtime:StartPendingAction(
-	entity: number,
-	actionState: TActionState,
-	runtimeContext: TActionRuntimeContext
-): TStartActionResult
-	-- Validate the action-state table before delegating to the shared start use case
-	assertActionState(actionState)
-	return StartPendingAction.Execute(entity, actionState, runtimeContext, self._executors)
-end
-
---[=[
-	Starts the pending action through the safe executor-boundary API.
+	Starts the pending action through the executor boundary.
 	Returns `Ok(TStartActionResult)` for normal runtime outcomes and a `Defect` when executor code crashes.
-	@within BehaviorSystemRuntime
+	@within Runtime
 	@param entity number -- Runtime entity id whose action should start
 	@param actionState TActionState -- Owning context's action-state table
 	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services and delta time
 	@return TTryStartActionResult -- Structured result carrying the normal start record or an executor defect
 ]=]
-function Runtime:TryStartPendingAction(
+function Runtime:StartPendingAction(
 	entity: number,
 	actionState: TActionState,
 	runtimeContext: TActionRuntimeContext
@@ -163,7 +144,7 @@ end
 --[=[
 	Commits a successfully started pending action into the owning context's action-state table.
 	This helper performs only the generic pending-to-current transition and does not apply domain-specific consequences.
-	@within BehaviorSystemRuntime
+	@within Runtime
 	@param actionState TActionState -- Owning context's action-state table
 	@param startResult TStartActionResult -- Result returned from `StartPendingAction`
 	@param startedAt any? -- Optional timestamp or transition marker stored on `StartedAt`
@@ -180,34 +161,15 @@ function Runtime:CommitStartedAction(
 end
 
 --[=[
-	Ticks the current action described by the supplied action state.
-	The owning context remains responsible for deciding how to mutate action-state storage after interpreting the result.
-	@within BehaviorSystemRuntime
-	@param entity number -- Runtime entity id whose current action should tick
-	@param actionState TActionState -- Owning context's action-state table
-	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services and delta time
-	@return TTickActionResult -- Generic tick result for the owning context to interpret
-]=]
-function Runtime:TickCurrentAction(
-	entity: number,
-	actionState: TActionState,
-	runtimeContext: TActionRuntimeContext
-): TTickActionResult
-	-- Validate the action-state table before delegating to the shared tick use case
-	assertActionState(actionState)
-	return TickCurrentAction.Execute(entity, actionState, runtimeContext, self._executors)
-end
-
---[=[
-	Ticks the current action through the safe executor-boundary API.
+	Ticks the current action through the executor boundary.
 	Returns `Ok(TTickActionResult)` for normal runtime outcomes and a `Defect` when executor code crashes.
-	@within BehaviorSystemRuntime
+	@within Runtime
 	@param entity number -- Runtime entity id whose current action should tick
 	@param actionState TActionState -- Owning context's action-state table
 	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services and delta time
 	@return TTryTickActionResult -- Structured result carrying the normal tick record or an executor defect
 ]=]
-function Runtime:TryTickCurrentAction(
+function Runtime:TickCurrentAction(
 	entity: number,
 	actionState: TActionState,
 	runtimeContext: TActionRuntimeContext
@@ -219,7 +181,7 @@ end
 --[=[
 	Resolves a finished action into the generic idle state after a terminal tick result.
 	This helper performs only generic current-action cleanup and leaves domain-specific consequences to the owning context.
-	@within BehaviorSystemRuntime
+	@within Runtime
 	@param actionState TActionState -- Owning context's action-state table
 	@param tickResult TTickActionResult -- Result returned from `TickCurrentAction`
 	@param finishedAt any? -- Optional timestamp or transition marker stored on `FinishedAt`
@@ -238,7 +200,7 @@ end
 --[=[
 	Executes a callback when the supplied tick result represents a successful action.
 	When `actionId` is provided, the callback only runs when the successful action id matches.
-	@within BehaviorSystemRuntime
+	@within Runtime
 	@param tickResult TTickActionResult -- Result returned from `TickCurrentAction`
 	@param actionId string? -- Optional action id filter
 	@param callback (tickResult: TTickActionResult) -> () -- Callback invoked on a matching success result
@@ -271,33 +233,15 @@ function Runtime:OnActionSucceeded(
 end
 
 --[=[
-	Cancels the current action described by the supplied action state.
-	@within BehaviorSystemRuntime
-	@param entity number -- Runtime entity id whose current action should cancel
-	@param actionState TActionState -- Owning context's action-state table
-	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services and delta time
-	@return TCancelActionResult -- Generic cancellation result for the owning context to interpret
-]=]
-function Runtime:CancelCurrentAction(
-	entity: number,
-	actionState: TActionState,
-	runtimeContext: TActionRuntimeContext
-): TCancelActionResult
-	-- Validate the action-state table before delegating to the shared cancel use case
-	assertActionState(actionState)
-	return CancelCurrentAction.Execute(entity, actionState, runtimeContext, self._executors)
-end
-
---[=[
-	Cancels the current action through the safe executor-boundary API.
+	Cancels the current action through the executor boundary.
 	Returns `Ok(TCancelActionResult)` for normal runtime outcomes and a `Defect` when executor code crashes.
-	@within BehaviorSystemRuntime
+	@within Runtime
 	@param entity number -- Runtime entity id whose current action should cancel
 	@param actionState TActionState -- Owning context's action-state table
 	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services and delta time
 	@return TTryCancelActionResult -- Structured result carrying the normal cancel record or an executor defect
 ]=]
-function Runtime:TryCancelCurrentAction(
+function Runtime:CancelCurrentAction(
 	entity: number,
 	actionState: TActionState,
 	runtimeContext: TActionRuntimeContext

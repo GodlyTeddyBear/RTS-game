@@ -1,5 +1,12 @@
 --!strict
 
+--[=[
+	@class ResolveFinishedAction
+	Clears the current action after a terminal tick result and restores the idle state.
+	@server
+	@client
+]=]
+
 local ActionStateTransitionSpec = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Specs.ActionStateTransitionSpec)
 local Types = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Types)
 
@@ -9,6 +16,14 @@ type TResolveFinishedActionResult = Types.TResolveFinishedActionResult
 
 local ResolveFinishedAction = {}
 
+--[=[
+	Clears the current action after a terminal tick result and restores the idle state.
+	@within ResolveFinishedAction
+	@param actionState TActionState -- Owning action-state table
+	@param tickResult TTickActionResult -- Result returned from the current-action executor boundary
+	@param finishedAt any? -- Optional timestamp or transition marker stored on `FinishedAt`
+	@return TResolveFinishedActionResult -- Structured resolution result
+]=]
 function ResolveFinishedAction.Execute(
 	actionState: TActionState,
 	tickResult: TTickActionResult,

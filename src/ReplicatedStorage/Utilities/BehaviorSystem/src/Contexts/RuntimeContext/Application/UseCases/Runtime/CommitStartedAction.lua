@@ -1,5 +1,12 @@
 --!strict
 
+--[=[
+	@class CommitStartedAction
+	Commits a pending action start into the current action fields after validation.
+	@server
+	@client
+]=]
+
 local ActionId = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.ActionId)
 local ActionStateTransitionSpec = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Specs.ActionStateTransitionSpec)
 local Types = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Types)
@@ -10,6 +17,14 @@ type TCommitStartResult = Types.TCommitStartResult
 
 local CommitStartedAction = {}
 
+--[=[
+	Commits a pending action start into the current action fields after validation.
+	@within CommitStartedAction
+	@param actionState TActionState -- Owning action-state table
+	@param startResult TStartActionResult -- Result returned from the pending-start executor boundary
+	@param startedAt any? -- Optional timestamp or transition marker stored on `StartedAt`
+	@return TCommitStartResult -- Structured commit result
+]=]
 function CommitStartedAction.Execute(
 	actionState: TActionState,
 	startResult: TStartActionResult,

@@ -1,10 +1,16 @@
 --!strict
 
+--[=[
+	@class TickCurrentAction
+	Ticks the active executor for an action-state and normalizes its terminal status.
+	@server
+	@client
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ActionId = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.ActionId)
 local TickStatus = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.TickStatus)
-local LegacyExecutorResultAdapter = require(script.Parent.LegacyExecutorResultAdapter)
 local ExecutorBoundary = require(script.Parent.ExecutorBoundary)
 local RuntimeContextAdapter = require(script.Parent.RuntimeContextAdapter)
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -20,14 +26,23 @@ type TTryTickActionResult = Types.TTryTickActionResult
 
 local TickCurrentAction = {}
 
+-- Package the tick outcome into the shared runtime result shape.
 local function _createResult(status: string, actionId: string?): TTickActionResult
-	-- Package the tick outcome into the shared runtime result shape
 	return {
 		Status = status,
 		ActionId = actionId,
 	}
 end
 
+--[=[
+	Ticks the current action through the executor boundary and normalizes the result status.
+	@within TickCurrentAction
+	@param entity number -- Runtime entity id whose current action should tick
+	@param actionState TActionState -- Owning action-state table
+	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services and delta time
+	@param executors { [string]: TExecutor } -- Registered executors keyed by action id
+	@return TTryTickActionResult -- Structured tick result or a defect from the executor boundary
+]=]
 function TickCurrentAction.TryExecute(
 	entity: number,
 	actionState: TActionState,
@@ -86,18 +101,6 @@ function TickCurrentAction.TryExecute(
 	end
 
 	return Ok(_createResult("Fail", currentActionId))
-end
-
-function TickCurrentAction.Execute(
-	entity: number,
-	actionState: TActionState,
-	runtimeContext: TActionRuntimeContext,
-	executors: { [string]: TExecutor }
-): TTickActionResult
-	return LegacyExecutorResultAdapter.Tick(
-		TickCurrentAction.TryExecute(entity, actionState, runtimeContext, executors),
-		actionState.CurrentActionId
-	)
 end
 
 return table.freeze(TickCurrentAction)

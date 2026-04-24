@@ -1,8 +1,14 @@
 --!strict
 
+--[=[
+	@class CancelCurrentAction
+	Cancels the active executor for an action-state and returns a structured result.
+	@server
+	@client
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local LegacyExecutorResultAdapter = require(script.Parent.LegacyExecutorResultAdapter)
 local ExecutorBoundary = require(script.Parent.ExecutorBoundary)
 local RuntimeContextAdapter = require(script.Parent.RuntimeContextAdapter)
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -18,6 +24,15 @@ type TTryCancelActionResult = Types.TTryCancelActionResult
 
 local CancelCurrentAction = {}
 
+--[=[
+	Cancels the active executor for an action-state and returns a structured result.
+	@within CancelCurrentAction
+	@param entity number -- Runtime entity id whose current action should cancel
+	@param actionState TActionState -- Owning action-state table
+	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services
+	@param executors { [string]: TExecutor } -- Registered executors keyed by action id
+	@return TTryCancelActionResult -- Structured cancel result or a defect from the executor boundary
+]=]
 function CancelCurrentAction.TryExecute(
 	entity: number,
 	actionState: TActionState,
@@ -53,18 +68,6 @@ function CancelCurrentAction.TryExecute(
 		Status = "Cancelled",
 		ActionId = currentActionId,
 	})
-end
-
-function CancelCurrentAction.Execute(
-	entity: number,
-	actionState: TActionState,
-	runtimeContext: TActionRuntimeContext,
-	executors: { [string]: TExecutor }
-): TCancelActionResult
-	return LegacyExecutorResultAdapter.Cancel(
-		CancelCurrentAction.TryExecute(entity, actionState, runtimeContext, executors),
-		actionState.CurrentActionId
-	)
 end
 
 return table.freeze(CancelCurrentAction)

@@ -1,10 +1,16 @@
 --!strict
 
+--[=[
+	@class StartPendingAction
+	Starts the pending executor for an action-state and returns a structured transition result.
+	@server
+	@client
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ActionId = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.ActionId)
 local ActionStateTransitionSpec = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Specs.ActionStateTransitionSpec)
-local LegacyExecutorResultAdapter = require(script.Parent.LegacyExecutorResultAdapter)
 local ExecutorBoundary = require(script.Parent.ExecutorBoundary)
 local RuntimeContextAdapter = require(script.Parent.RuntimeContextAdapter)
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -20,13 +26,13 @@ type TTryStartActionResult = Types.TTryStartActionResult
 
 local StartPendingAction = {}
 
+-- Package the pending-start outcome into the shared runtime result shape.
 local function _createResult(
 	status: string,
 	actionId: string?,
 	replacedActionId: string?,
 	failureReason: string?
 ): TStartActionResult
-	-- Package the transition outcome into the shared result shape
 	return {
 		Status = status,
 		ActionId = actionId,
@@ -35,6 +41,15 @@ local function _createResult(
 	}
 end
 
+--[=[
+	Attempts to promote the pending action to the current action through the executor boundary.
+	@within StartPendingAction
+	@param entity number -- Runtime entity id whose action should start
+	@param actionState TActionState -- Owning action-state table
+	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services
+	@param executors { [string]: TExecutor } -- Registered executors keyed by action id
+	@return TTryStartActionResult -- Structured start result or a defect from the executor boundary
+]=]
 function StartPendingAction.TryExecute(
 	entity: number,
 	actionState: TActionState,
@@ -94,19 +109,6 @@ function StartPendingAction.TryExecute(
 
 	local status = if replacedActionId ~= nil then "Replaced" else "Started"
 	return Ok(_createResult(status, pendingActionId, replacedActionId, nil))
-end
-
-function StartPendingAction.Execute(
-	entity: number,
-	actionState: TActionState,
-	runtimeContext: TActionRuntimeContext,
-	executors: { [string]: TExecutor }
-): TStartActionResult
-	return LegacyExecutorResultAdapter.Start(
-		StartPendingAction.TryExecute(entity, actionState, runtimeContext, executors),
-		actionState.PendingActionId,
-		actionState.CurrentActionId
-	)
 end
 
 return table.freeze(StartPendingAction)
