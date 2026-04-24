@@ -14,8 +14,10 @@ local Workspace = game:GetService("Workspace")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Registry = require(ReplicatedStorage.Utilities.Registry)
+local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 
 local AnimateEnemyModule = require(script.Parent.AnimateEnemyModule)
+local NPCBillboardService = require(script.Parent.Infrastructure.NPCBillboardService)
 
 local TAG = "[EnemyAnimation]"
 local ANIMATED_ENEMY_TAG = "AnimatedEnemy"
@@ -24,6 +26,7 @@ local ENEMIES_FOLDER_NAME = "Enemies"
 type TTrackedEntry = {
 	Cleanup: (() -> ())?,
 	AncestryConnection: RBXScriptConnection?,
+	BillboardId: string?,
 }
 
 -- [Dependencies]
@@ -43,6 +46,19 @@ local function _IsEnemyModel(instance: Instance): boolean
 	return instance:IsA("Model") and type(instance:GetAttribute("EnemyId")) == "string"
 end
 
+local function _ResolveDisplayName(model: Model): string
+	local enemyRole = model:GetAttribute("EnemyRole")
+	if type(enemyRole) == "string" then
+		local roleConfig = EnemyConfig.ROLES[enemyRole]
+		if roleConfig and type(roleConfig.displayName) == "string" then
+			return roleConfig.displayName
+		end
+		return enemyRole
+	end
+
+	return model.Name
+end
+
 -- [Public API]
 
 --[=[
@@ -59,6 +75,9 @@ function EnemyAnimationController:KnitInit()
 	self._workspaceChildAddedConnection = nil :: RBXScriptConnection?
 	self._tagAddedConnection = nil :: RBXScriptConnection?
 	self._tagRemovedConnection = nil :: RBXScriptConnection?
+	self._npcBillboardService = NPCBillboardService.new()
+
+	registry:Register("NPCBillboardService", self._npcBillboardService, "Infrastructure")
 
 	registry:InitAll()
 end
@@ -73,8 +92,16 @@ function EnemyAnimationController:_TrackModel(model: Model)
 	local entry: TTrackedEntry = {
 		Cleanup = nil,
 		AncestryConnection = nil,
+		BillboardId = nil,
 	}
 	self._tracked[model] = entry
+
+	local enemyId = model:GetAttribute("EnemyId")
+	if type(enemyId) == "string" then
+		local displayName = _ResolveDisplayName(model)
+		self._npcBillboardService:Mount(enemyId, model, displayName)
+		entry.BillboardId = enemyId
+	end
 
 	-- Untrack automatically when the model leaves the DataModel.
 	entry.AncestryConnection = model.AncestryChanged:Connect(function(_, parent)
@@ -119,6 +146,11 @@ function EnemyAnimationController:_UntrackModel(model: Model)
 	if entry.Cleanup then
 		entry.Cleanup()
 		entry.Cleanup = nil
+	end
+
+	if entry.BillboardId then
+		self._npcBillboardService:Unmount(entry.BillboardId)
+		entry.BillboardId = nil
 	end
 
 	self._tracked[model] = nil
@@ -194,7 +226,7 @@ function EnemyAnimationController:KnitStart()
 	end)
 
 	-- Start the client registry after all listeners are wired.
-	registry:StartOrdered({})
+	registry:StartOrdered({ "Infrastructure" })
 end
 
 --[=[
