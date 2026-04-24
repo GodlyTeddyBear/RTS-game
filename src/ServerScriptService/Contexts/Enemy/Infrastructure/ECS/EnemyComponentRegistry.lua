@@ -27,6 +27,8 @@ function EnemyComponentRegistry:_RegisterComponents(_registry: any, _name: strin
 	self:RegisterComponent("CombatActionComponent", "Enemy.CombatAction", "AUTHORITATIVE")
 	self:RegisterComponent("AttackCooldownComponent", "Enemy.AttackCooldown", "AUTHORITATIVE")
 	self:RegisterComponent("BehaviorConfigComponent", "Enemy.BehaviorConfig", "AUTHORITATIVE")
+	self:RegisterComponent("TargetComponent", "Enemy.Target", "AUTHORITATIVE")
+	self:RegisterComponent("LockOnComponent", "Enemy.LockOn", "AUTHORITATIVE")
 	self:RegisterTag("AliveTag", "Enemy.AliveTag")
 	self:RegisterTag("DirtyTag", "Enemy.DirtyTag")
 	self:RegisterTag("GoalReachedTag", "Enemy.GoalReachedTag")

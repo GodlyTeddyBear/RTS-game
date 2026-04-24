@@ -238,6 +238,12 @@ function PlacementContext:DestroyStructureInstance(instanceId: number): Result.R
 	end, "Placement:DestroyStructureInstance")
 end
 
+function PlacementContext:GetStructureInstance(instanceId: number): Result.Result<Model?>
+	return Catch(function()
+		return Ok(self._placementService:GetStructureInstance(instanceId))
+	end, "Placement:GetStructureInstance")
+end
+
 -- [Private Helpers]
 
 --[=[

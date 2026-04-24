@@ -42,6 +42,8 @@ function StructureComponentRegistry:_RegisterComponents(_registry: any, _name: s
 	self:RegisterComponent("CombatActionComponent", "Structure.CombatAction", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] runtime world position and source instance id.
 	self:RegisterComponent("InstanceRefComponent", "Structure.InstanceRef", "AUTHORITATIVE")
+	-- [AUTHORITATIVE] runtime model reference for collision and orientation services.
+	self:RegisterComponent("ModelRefComponent", "Structure.ModelRef", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] stable identity metadata.
 	self:RegisterComponent("IdentityComponent", "Structure.Identity", "AUTHORITATIVE")
 	self:RegisterTag("ActiveTag", "Structure.ActiveTag")

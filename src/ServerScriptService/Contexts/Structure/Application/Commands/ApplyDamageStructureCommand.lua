@@ -52,6 +52,7 @@ function ApplyDamageStructureCommand:Execute(entity: any, amount: number): Resul
 
 		local didDie = self._factory:ApplyDamage(entity, amount)
 		if didDie then
+			self._factory:ClearModelRef(entity)
 			self._factory:DeleteEntity(entity)
 			Try(self._placementContext:DestroyStructureInstance(instanceRef.InstanceId))
 			return Ok(true)

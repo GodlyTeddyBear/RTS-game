@@ -38,6 +38,10 @@ function RegisterStructureCommand:Init(registry: any, _name: string)
 	self._factory = registry:Get("StructureEntityFactory")
 end
 
+function RegisterStructureCommand:Start(registry: any, _name: string)
+	self._placementContext = registry:Get("PlacementContext")
+end
+
 --[=[
 	Validates the record and creates the structure entity.
 	@within RegisterStructureCommand
@@ -51,6 +55,10 @@ function RegisterStructureCommand:Execute(record: StructureRecord): Result.Resul
 
 		-- Create the entity only after the record has been proven valid.
 		local entity = self._factory:CreateStructure(resolved)
+		local modelResult = self._placementContext:GetStructureInstance(resolved.instanceId)
+		if modelResult.success and modelResult.value ~= nil then
+			self._factory:SetModelRef(entity, modelResult.value)
+		end
 
 		-- Emit a milestone for traceability when a structure becomes active.
 		Result.MentionSuccess("Structure:RegisterStructureCommand", "Registered structure entity", {

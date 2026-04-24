@@ -66,6 +66,7 @@ function StructureEntityFactory:_OnInit(_registry: any, _name: string, _componen
 			and self._components.BehaviorTreeComponent ~= nil
 			and self._components.CombatActionComponent ~= nil
 			and self._components.InstanceRefComponent ~= nil
+			and self._components.ModelRefComponent ~= nil
 			and self._components.IdentityComponent ~= nil
 			and self._components.ActiveTag ~= nil,
 		"StructureEntityFactory: missing StructureComponentRegistry components"
@@ -385,6 +386,46 @@ function StructureEntityFactory:GetInstanceRef(entity: number?): TInstanceRefCom
 	local components = self:GetComponentsOrThrow()
 
 	return self:_Get(entity, components.InstanceRefComponent)
+end
+
+function StructureEntityFactory:SetModelRef(entity: number?, model: Model)
+	if entity == nil then
+		return
+	end
+
+	local components = self:GetComponentsOrThrow()
+	self:_Set(entity, components.ModelRefComponent, {
+		model = model,
+	})
+end
+
+function StructureEntityFactory:ClearModelRef(entity: number?)
+	if entity == nil then
+		return
+	end
+
+	local components = self:GetComponentsOrThrow()
+	self:_Remove(entity, components.ModelRefComponent)
+end
+
+function StructureEntityFactory:GetModelRef(entity: number?): { model: Model }?
+	if entity == nil then
+		return nil
+	end
+
+	local components = self:GetComponentsOrThrow()
+	return self:_Get(entity, components.ModelRefComponent)
+end
+
+function StructureEntityFactory:GetEntityByModel(model: Model): number?
+	for _, entity in ipairs(self:QueryActiveEntities()) do
+		local modelRef = self:GetModelRef(entity)
+		if modelRef ~= nil and modelRef.model == model then
+			return entity
+		end
+	end
+
+	return nil
 end
 
 function StructureEntityFactory:GetPosition(entity: number?): Vector3?

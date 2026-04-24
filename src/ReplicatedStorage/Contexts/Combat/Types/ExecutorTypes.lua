@@ -82,6 +82,7 @@ export type TBehaviorConfigComponent = {
 	.StructureContext any -- Structure context public damage API.
 	.CurrentTime number -- Timestamp shared across executor calls for one tick.
 	.HandleGoalReached any -- Command used to resolve goal-reaching enemies.
+	.HitboxService any -- Combat hitbox service for contact-confirmed attacks.
 ]=]
 export type TExecutorServices = {
 	EnemyEntityFactory: any,
@@ -90,6 +91,7 @@ export type TExecutorServices = {
 	StructureContext: any,
 	CurrentTime: number,
 	HandleGoalReached: any,
+	HitboxService: any,
 }
 
 return table.freeze({})

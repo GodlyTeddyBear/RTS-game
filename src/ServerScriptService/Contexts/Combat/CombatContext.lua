@@ -9,6 +9,8 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 
 local CombatLoopService = require(script.Parent.Infrastructure.Services.CombatLoopService)
 local CombatBehaviorRuntimeService = require(script.Parent.Infrastructure.Services.CombatBehaviorRuntimeService)
+local HitboxService = require(script.Parent.Infrastructure.Services.HitboxService)
+local LockOnService = require(script.Parent.Infrastructure.Services.LockOnService)
 local CombatPerceptionService = require(script.Parent.CombatDomain.Services.CombatPerceptionService)
 
 local StartCombat = require(script.Parent.Application.Commands.StartCombat)
@@ -25,6 +27,16 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
 		Name = "CombatBehaviorRuntimeService",
 		Module = CombatBehaviorRuntimeService,
+	},
+	{
+		Name = "HitboxService",
+		Module = HitboxService,
+		CacheAs = "_hitboxService",
+	},
+	{
+		Name = "LockOnService",
+		Module = LockOnService,
+		CacheAs = "_lockOnService",
 	},
 }
 
@@ -167,6 +179,8 @@ function CombatContext:KnitInit()
 	self._commanderContext = nil
 	self._structureContext = nil
 	self._structureEntityFactory = nil
+	self._hitboxService = nil
+	self._lockOnService = nil
 	self._laneWaypoints = {} :: { Vector3 }
 
 	self._runWaveStartedConnection = nil :: any
@@ -189,12 +203,18 @@ function CombatContext:KnitStart()
 	-- Drive BT evaluation and executor updates for every active combat session.
 	CombatBaseContext:RegisterSchedulerSystem("CombatTick", function()
 		local dt = CombatBaseContext:GetSchedulerDeltaTime()
+		local shouldUpdateLockOn = false
 		for userId, activeCombat in pairs(self._combatLoopService:GetActiveCombats()) do
 			if activeCombat.IsPaused then
 				continue
 			end
 
+			shouldUpdateLockOn = true
 			self._processCombatTickCommand:Execute(userId, dt)
+		end
+
+		if shouldUpdateLockOn and self._lockOnService ~= nil then
+			self._lockOnService:UpdateAll(self._enemyEntityFactory:QueryAliveEntities())
 		end
 	end)
 

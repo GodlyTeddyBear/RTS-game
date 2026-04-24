@@ -125,6 +125,15 @@ function PlacementService:DestroyStructure(instanceId: number)
 	self._instanceMap[instanceId] = nil
 end
 
+function PlacementService:GetStructureInstance(instanceId: number): Model?
+	local instance = self._instanceMap[instanceId]
+	if instance ~= nil and instance:IsA("Model") then
+		return instance
+	end
+
+	return nil
+end
+
 --[=[
 	Removes every spawned structure and resets the instance counter.
 	@within PlacementService

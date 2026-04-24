@@ -46,7 +46,13 @@ function EnemyEntityFactory:_GetComponentRegistryName(): string
 end
 
 function EnemyEntityFactory:_OnInit(_registry: any, _name: string, _componentRegistry: any)
-	assert(self._components ~= nil and self._components.AliveTag ~= nil, "EnemyEntityFactory: missing EnemyComponentRegistry components")
+	assert(
+		self._components ~= nil
+			and self._components.AliveTag ~= nil
+			and self._components.TargetComponent ~= nil
+			and self._components.LockOnComponent ~= nil,
+		"EnemyEntityFactory: missing EnemyComponentRegistry components"
+	)
 end
 
 function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFrame: CFrame, waveNumber: number): number
@@ -89,6 +95,15 @@ function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFra
 	})
 	self:_Set(entity, components.BehaviorConfigComponent, {
 		TickInterval = 0.15,
+	})
+	self:_Set(entity, components.TargetComponent, {
+		TargetEntity = nil,
+		TargetKind = "Structure",
+	})
+	self:_Set(entity, components.LockOnComponent, {
+		Attachment0 = nil,
+		Attachment1 = nil,
+		Constraint = nil,
 	})
 	self:_Add(entity, components.AliveTag)
 
@@ -356,6 +371,57 @@ end
 function EnemyEntityFactory:GetPathState(entity: number)
 	self:RequireReady()
 	return self:_Get(entity, self._components.PathStateComponent)
+end
+
+function EnemyEntityFactory:SetTarget(entity: number, targetEntity: number?, targetKind: "Structure" | "Enemy")
+	self:RequireReady()
+	self:_Set(entity, self._components.TargetComponent, {
+		TargetEntity = targetEntity,
+		TargetKind = targetKind,
+	})
+end
+
+function EnemyEntityFactory:ClearTarget(entity: number)
+	self:RequireReady()
+	self:_Set(entity, self._components.TargetComponent, {
+		TargetEntity = nil,
+		TargetKind = "Structure",
+	})
+end
+
+function EnemyEntityFactory:GetTarget(entity: number)
+	self:RequireReady()
+	return self:_Get(entity, self._components.TargetComponent)
+end
+
+function EnemyEntityFactory:SetLockOn(
+	entity: number,
+	lockOn: {
+		Attachment0: Attachment?,
+		Attachment1: Attachment?,
+		Constraint: AlignOrientation?,
+	}
+)
+	self:RequireReady()
+	self:_Set(entity, self._components.LockOnComponent, {
+		Attachment0 = lockOn.Attachment0,
+		Attachment1 = lockOn.Attachment1,
+		Constraint = lockOn.Constraint,
+	})
+end
+
+function EnemyEntityFactory:GetLockOn(entity: number)
+	self:RequireReady()
+	return self:_Get(entity, self._components.LockOnComponent)
+end
+
+function EnemyEntityFactory:ClearLockOn(entity: number)
+	self:RequireReady()
+	self:_Set(entity, self._components.LockOnComponent, {
+		Attachment0 = nil,
+		Attachment1 = nil,
+		Constraint = nil,
+	})
 end
 
 function EnemyEntityFactory:GetModelRef(entity: number)

@@ -35,6 +35,7 @@ end
 function StartCombat:Init(registry: any, _name: string)
 	self._loopService = registry:Get("CombatLoopService")
 	self._behaviorRuntimeService = registry:Get("CombatBehaviorRuntimeService")
+	self._lockOnService = registry:Get("LockOnService")
 end
 
 --[=[
@@ -59,6 +60,8 @@ function StartCombat:_AssignBehaviorTree(entity: number)
 		TickInterval = tickInterval,
 	})
 	self._enemyEntityFactory:ClearAction(entity)
+	self._enemyEntityFactory:ClearTarget(entity)
+	self._lockOnService:AttachConstraint(entity)
 end
 
 function StartCombat:_AssignStructureBehaviorTree(entity: number)

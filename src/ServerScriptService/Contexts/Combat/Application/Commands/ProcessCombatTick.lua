@@ -67,6 +67,7 @@ function ProcessCombatTick:Init(registry: any, _name: string)
 	self._behaviorRuntimeService = registry:Get("CombatBehaviorRuntimeService")
 	self._perceptionService = registry:Get("CombatPerceptionService")
 	self._handleGoalReachedCommand = registry:Get("HandleGoalReached")
+	self._hitboxService = registry:Get("HitboxService")
 end
 
 --[=[
@@ -272,6 +273,7 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 			StructureContext = self._structureContext,
 			CurrentTime = currentTime,
 			HandleGoalReached = self._handleGoalReachedCommand,
+			HitboxService = self._hitboxService,
 		}
 
 		self:_RunBehaviorTreePhase(aliveEntities, currentTime, self._enemyEntityFactory, "Enemy")

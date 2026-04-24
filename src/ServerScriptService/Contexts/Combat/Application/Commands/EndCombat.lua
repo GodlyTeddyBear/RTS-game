@@ -72,6 +72,8 @@ end
 function EndCombat:Init(registry: any, _name: string)
 	self._loopService = registry:Get("CombatLoopService")
 	self._behaviorRuntimeService = registry:Get("CombatBehaviorRuntimeService")
+	self._hitboxService = registry:Get("HitboxService")
+	self._lockOnService = registry:Get("LockOnService")
 end
 
 --[=[
@@ -111,6 +113,7 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 			EnemyContext = self._enemyContext,
 			StructureContext = self._structureContext,
 			CurrentTime = os.clock(),
+			HitboxService = self._hitboxService,
 		}
 
 		-- Cancel each active runtime action before clearing its stored combat state.
@@ -122,6 +125,8 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 				_cloneActionState(self._enemyEntityFactory:GetCombatAction(entity)),
 				services
 			)
+			self._lockOnService:DetachConstraint(entity)
+			self._enemyEntityFactory:ClearTarget(entity)
 			self._enemyEntityFactory:ClearAction(entity)
 		end
 
@@ -135,6 +140,8 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 			)
 			self._structureEntityFactory:ClearAction(entity)
 		end
+
+		self._hitboxService:CleanupAll()
 
 		if targetUserId then
 			self._loopService:StopCombat(targetUserId)
