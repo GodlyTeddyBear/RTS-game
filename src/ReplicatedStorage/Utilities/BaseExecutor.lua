@@ -4,6 +4,7 @@
 	@class BaseExecutor
 	Defines the default executor lifecycle used by combat actions.
 	@server
+	@client
 ]=]
 local BaseExecutor = {}
 BaseExecutor.__index = BaseExecutor

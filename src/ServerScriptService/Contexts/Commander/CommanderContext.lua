@@ -10,21 +10,16 @@
 ]=]
 -- [Dependencies]
 
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local Registry = require(ReplicatedStorage.Utilities.Registry)
+local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
 local CommanderTypes = require(ReplicatedStorage.Contexts.Commander.Types.CommanderTypes)
 local CommanderConfig = require(ReplicatedStorage.Contexts.Commander.Config.CommanderConfig)
 local CommandRegistry = require(ReplicatedStorage.Contexts.Log.CommandRegistry)
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local BlinkServer = require(ReplicatedStorage.Network.Generated.CommanderSyncServer)
-local ProfileManager = require(ServerScriptService.Persistence.ProfileManager)
-local PlayerLifecycleManager = require(ServerScriptService.Persistence.PlayerLifecycleManager)
 
 local CommanderECSWorldService = require(script.Parent.Infrastructure.ECS.CommanderECSWorldService)
 local CommanderComponentRegistry = require(script.Parent.Infrastructure.ECS.CommanderComponentRegistry)
@@ -52,21 +47,84 @@ type SlotKey = CommanderTypes.SlotKey
 
 local DEVELOPER_USER_ID = 205423638
 
+local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "BlinkServer",
+		Instance = BlinkServer,
+	},
+	{
+		Name = "CommanderComponentRegistry",
+		Module = CommanderComponentRegistry,
+	},
+	{
+		Name = "CommanderEntityFactory",
+		Module = CommanderEntityFactory,
+		CacheAs = "_entityFactory",
+	},
+	{
+		Name = "CommanderSyncService",
+		Module = CommanderSyncService,
+		CacheAs = "_syncService",
+	},
+}
+
+local DomainModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "AbilityService",
+		Module = AbilityService,
+	},
+	{
+		Name = "CooldownService",
+		Module = CooldownService,
+	},
+}
+
+local ApplicationModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "UseAbilityCommand",
+		Module = UseAbilityCommand,
+		CacheAs = "_useAbilityCommand",
+	},
+	{
+		Name = "GetCommanderStateQuery",
+		Module = GetCommanderStateQuery,
+		CacheAs = "_getCommanderStateQuery",
+	},
+	{
+		Name = "GetCooldownQuery",
+		Module = GetCooldownQuery,
+		CacheAs = "_getCooldownQuery",
+	},
+}
+
+local CommanderModules: BaseContext.TModuleLayers = {
+	Infrastructure = InfrastructureModules,
+	Domain = DomainModules,
+	Application = ApplicationModules,
+}
+
 local CommanderContext = Knit.CreateService({
 	Name = "CommanderContext",
 	Client = {},
+	WorldService = {
+		Name = "CommanderECSWorldService",
+		Module = CommanderECSWorldService,
+	},
+	Modules = CommanderModules,
+	ProfileLifecycle = {
+		LoaderName = "Commander",
+		OnLoaded = "_HandleProfileLoaded",
+		OnSaving = "_HandleProfileSaving",
+		OnRemoving = "_HandlePlayerRemoving",
+	},
+	Teardown = {
+		Fields = {
+			{ Field = "_syncService", Method = "Destroy" },
+		},
+	},
 })
 
-local function _InitModule(registry: any, moduleName: string)
-	local module = registry:Get(moduleName)
-	if type(module) == "function" then
-		return
-	end
-
-	if module and module.Init and type(module.Init) == "function" then
-		module:Init(registry, moduleName)
-	end
-end
+local CommanderBaseContext = BaseContext.new(CommanderContext)
 
 -- [Initialization]
 
@@ -75,45 +133,10 @@ end
 	@within CommanderContext
 ]=]
 function CommanderContext:KnitInit()
-	local registry = Registry.new("Server")
-	local worldService = CommanderECSWorldService.new()
-
-	registry:Register("BlinkServer", BlinkServer)
-	registry:Register("CommanderECSWorldService", worldService, "Infrastructure")
-	worldService:Init(registry, "CommanderECSWorldService")
-	registry:Register("World", worldService:GetWorld())
-	registry:Register("CommanderComponentRegistry", CommanderComponentRegistry.new(), "Infrastructure")
-	registry:Register("CommanderEntityFactory", CommanderEntityFactory.new(), "Infrastructure")
-	registry:Register("CommanderSyncService", CommanderSyncService.new(), "Infrastructure")
-	registry:Register("AbilityService", AbilityService.new(), "Domain")
-	registry:Register("CooldownService", CooldownService.new(), "Domain")
-	registry:Register("UseAbilityCommand", UseAbilityCommand.new(), "Application")
-	registry:Register("GetCommanderStateQuery", GetCommanderStateQuery.new(), "Application")
-	registry:Register("GetCooldownQuery", GetCooldownQuery.new(), "Application")
-
-	_InitModule(registry, "CommanderECSWorldService")
-	_InitModule(registry, "CommanderComponentRegistry")
-	_InitModule(registry, "CommanderEntityFactory")
-	_InitModule(registry, "CommanderSyncService")
-	_InitModule(registry, "AbilityService")
-	_InitModule(registry, "CooldownService")
-	_InitModule(registry, "UseAbilityCommand")
-	_InitModule(registry, "GetCommanderStateQuery")
-	_InitModule(registry, "GetCooldownQuery")
-
-	self._registry = registry
-	self._syncService = registry:Get("CommanderSyncService")
-	self._entityFactory = registry:Get("CommanderEntityFactory")
-	self._useAbilityCommand = registry:Get("UseAbilityCommand")
-	self._getCommanderStateQuery = registry:Get("GetCommanderStateQuery")
-	self._getCooldownQuery = registry:Get("GetCooldownQuery")
+	CommanderBaseContext:KnitInit()
 	self._godModeEnabledByUserId = {}
 	self._loadedUserIds = {} :: { [number]: true }
-	self._playerRemovingConnection = nil
-	self._profileLoadedConnection = nil
-	self._profileSavingConnection = nil
-
-	PlayerLifecycleManager:RegisterLoader("Commander")
+	CommanderBaseContext:RegisterProfileLoader()
 	self:_RegisterDeveloperLogCommands()
 end
 
@@ -157,14 +180,12 @@ end
 function CommanderContext:_HandleProfileLoaded(player: Player)
 	if self._loadedUserIds[player.UserId] == true then
 		self._syncService:HydrateAndSyncPlayer(player)
-		PlayerLifecycleManager:NotifyLoaded(player, "Commander")
 		return
 	end
 
 	self._entityFactory:CreateOrResetCommander(player.UserId, CommanderConfig.MAX_HP)
 	self._syncService:HydrateAndSyncPlayer(player)
 	self._loadedUserIds[player.UserId] = true
-	PlayerLifecycleManager:NotifyLoaded(player, "Commander")
 end
 
 function CommanderContext:_HandleProfileSaving(player: Player)
@@ -286,25 +307,8 @@ end
 	@within CommanderContext
 ]=]
 function CommanderContext:KnitStart()
-	local events = GameEvents.Events.Persistence
-
-	self._profileLoadedConnection = GameEvents.Bus:On(events.ProfileLoaded, function(player: Player)
-		self:_HandleProfileLoaded(player)
-	end)
-
-	self._profileSavingConnection = GameEvents.Bus:On(events.ProfileSaving, function(player: Player)
-		self:_HandleProfileSaving(player)
-	end)
-
-	self._playerRemovingConnection = Players.PlayerRemoving:Connect(function(player: Player)
-		self:_HandlePlayerRemoving(player)
-	end)
-
-	for _, player in Players:GetPlayers() do
-		if ProfileManager:Has(player) then
-			self:_HandleProfileLoaded(player)
-		end
-	end
+	CommanderBaseContext:KnitStart()
+	CommanderBaseContext:StartProfileLifecycle()
 end
 
 function CommanderContext:ApplyDamage(player: Player, amount: number): Result.Result<number>
@@ -366,22 +370,13 @@ function CommanderContext.Client:UseAbility(player: Player, slotKey: SlotKey)
 end
 
 function CommanderContext:Destroy()
-	if self._syncService then
-		self._syncService:Destroy()
-	end
-
-	if self._profileLoadedConnection then
-		self._profileLoadedConnection:Disconnect()
-	end
-	if self._profileSavingConnection then
-		self._profileSavingConnection:Disconnect()
-	end
-	if self._playerRemovingConnection then
-		self._playerRemovingConnection:Disconnect()
+	local destroyResult = CommanderBaseContext:Destroy()
+	if not destroyResult.success then
+		Result.MentionError("Commander:Destroy", "BaseContext teardown failed", {
+			CauseType = destroyResult.type,
+			CauseMessage = destroyResult.message,
+		}, destroyResult.type)
 	end
 end
 
-WrapContext(CommanderContext, "Commander")
-
 return CommanderContext
-

@@ -7,6 +7,45 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 
 local Ok = Result.Ok
 
+local function _cloneActionState(actionState: any): any
+	if actionState == nil then
+		return {
+			CurrentActionId = nil,
+			ActionState = "Idle",
+			ActionData = nil,
+			PendingActionId = nil,
+			PendingActionData = nil,
+			StartedAt = nil,
+			FinishedAt = nil,
+		}
+	end
+
+	return {
+		CurrentActionId = actionState.CurrentActionId,
+		ActionState = actionState.ActionState or "Idle",
+		ActionData = actionState.ActionData,
+		PendingActionId = actionState.PendingActionId,
+		PendingActionData = actionState.PendingActionData,
+		StartedAt = actionState.StartedAt or actionState.ActionStartedAt,
+		FinishedAt = actionState.FinishedAt,
+	}
+end
+
+local function _cancelRuntimeAction(scope: string, behaviorRuntimeService: any, entity: number, actionState: any, services: any)
+	local cancelResult = behaviorRuntimeService:CancelCurrentAction(entity, actionState, {
+		Services = services,
+	})
+	if cancelResult.success then
+		return
+	end
+
+	Result.MentionError(scope, "Behavior runtime failed while cancelling an active action during cleanup", {
+		Entity = entity,
+		CauseType = cancelResult.type,
+		CauseMessage = cancelResult.message,
+	}, cancelResult.type)
+end
+
 --[=[
 	@class EndCombat
 	Cancels active executors and clears active combat sessions.
@@ -26,13 +65,13 @@ end
 
 --[=[
 	@within EndCombat
-	Resolves the combat loop, executor registry, and enemy factory dependencies.
+	Resolves the combat loop, behavior runtime, and enemy factory dependencies.
 	@param registry any -- Registry instance supplied by the context bootstrap.
 	@param _name string -- Registry key used to register the command.
 ]=]
 function EndCombat:Init(registry: any, _name: string)
 	self._loopService = registry:Get("CombatLoopService")
-	self._executorRegistry = registry:Get("ExecutorRegistry")
+	self._behaviorRuntimeService = registry:Get("CombatBehaviorRuntimeService")
 end
 
 --[=[
@@ -65,7 +104,7 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 			end
 		end
 
-		-- Build the cleanup payload once so each executor gets the same service view.
+		-- Build the cleanup payload once so each runtime cancellation gets the same service view.
 		local services = {
 			EnemyEntityFactory = self._enemyEntityFactory,
 			StructureEntityFactory = self._structureEntityFactory,
@@ -74,14 +113,26 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 			CurrentTime = os.clock(),
 		}
 
-		-- Cancel each alive enemy's registered executor before clearing its action state.
+		-- Cancel each active runtime action before clearing its stored combat state.
 		for _, entity in ipairs(self._enemyEntityFactory:QueryAliveEntities()) do
-			self._executorRegistry:CancelAll(entity, services)
+			_cancelRuntimeAction(
+				"Combat:EndCombat",
+				self._behaviorRuntimeService,
+				entity,
+				_cloneActionState(self._enemyEntityFactory:GetCombatAction(entity)),
+				services
+			)
 			self._enemyEntityFactory:ClearAction(entity)
 		end
 
 		for _, entity in ipairs(self._structureEntityFactory:QueryActiveEntities()) do
-			self._executorRegistry:CancelAll(entity, services)
+			_cancelRuntimeAction(
+				"Combat:EndCombat",
+				self._behaviorRuntimeService,
+				entity,
+				_cloneActionState(self._structureEntityFactory:GetCombatAction(entity)),
+				services
+			)
 			self._structureEntityFactory:ClearAction(entity)
 		end
 

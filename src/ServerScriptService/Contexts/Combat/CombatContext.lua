@@ -2,24 +2,13 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local Registry = require(ReplicatedStorage.Utilities.Registry)
+local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
-local GameEvents = require(ReplicatedStorage.Events.GameEvents)
-
-local ServerScheduler = require(ServerScriptService.Scheduler.ServerScheduler)
 
 local CombatLoopService = require(script.Parent.Infrastructure.Services.CombatLoopService)
-local BehaviorTreeFactory = require(script.Parent.Infrastructure.Services.BehaviorTreeFactory)
-local ExecutorRegistry = require(script.Parent.Executors.Base.ExecutorRegistry)
-local LaneAdvanceExecutor = require(script.Parent.Executors.LaneAdvanceExecutor)
-local IdleExecutor = require(script.Parent.Executors.IdleExecutor)
-local EnemyAttackStructureExecutor = require(script.Parent.Executors.EnemyAttackStructureExecutor)
-local StructureAttackExecutor = require(script.Parent.Executors.StructureAttackExecutor)
-local BehaviorTreeTickPolicy = require(script.Parent.CombatDomain.Policies.BehaviorTreeTickPolicy)
+local CombatBehaviorRuntimeService = require(script.Parent.Infrastructure.Services.CombatBehaviorRuntimeService)
 local WaveCompletionPolicy = require(script.Parent.CombatDomain.Policies.WaveCompletionPolicy)
 local CombatPerceptionService = require(script.Parent.CombatDomain.Services.CombatPerceptionService)
 
@@ -27,6 +16,58 @@ local StartCombat = require(script.Parent.Application.Commands.StartCombat)
 local ProcessCombatTick = require(script.Parent.Application.Commands.ProcessCombatTick)
 local EndCombat = require(script.Parent.Application.Commands.EndCombat)
 local HandleGoalReached = require(script.Parent.Application.Commands.HandleGoalReached)
+
+local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "CombatLoopService",
+		Module = CombatLoopService,
+		CacheAs = "_combatLoopService",
+	},
+	{
+		Name = "CombatBehaviorRuntimeService",
+		Module = CombatBehaviorRuntimeService,
+	},
+}
+
+local DomainModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "WaveCompletionPolicy",
+		Module = WaveCompletionPolicy,
+	},
+	{
+		Name = "CombatPerceptionService",
+		Module = CombatPerceptionService,
+	},
+}
+
+local ApplicationModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "StartCombat",
+		Module = StartCombat,
+		CacheAs = "_startCombatCommand",
+	},
+	{
+		Name = "ProcessCombatTick",
+		Module = ProcessCombatTick,
+		CacheAs = "_processCombatTickCommand",
+	},
+	{
+		Name = "EndCombat",
+		Module = EndCombat,
+		CacheAs = "_endCombatCommand",
+	},
+	{
+		Name = "HandleGoalReached",
+		Module = HandleGoalReached,
+		CacheAs = "_handleGoalReachedCommand",
+	},
+}
+
+local CombatModules: BaseContext.TModuleLayers = {
+	Infrastructure = InfrastructureModules,
+	Domain = DomainModules,
+	Application = ApplicationModules,
+}
 
 --[=[
 	@class CombatContext
@@ -36,26 +77,69 @@ local HandleGoalReached = require(script.Parent.Application.Commands.HandleGoalR
 local CombatContext = Knit.CreateService({
 	Name = "CombatContext",
 	Client = {},
+	Modules = CombatModules,
+	ExternalServices = {
+		{ Name = "EnemyContext", CacheAs = "_enemyContext" },
+		{ Name = "WorldContext", CacheAs = "_worldContext" },
+		{ Name = "CommanderContext", CacheAs = "_commanderContext" },
+		{ Name = "StructureContext", CacheAs = "_structureContext" },
+	},
+	ExternalDependencies = {
+		{
+			Name = "EnemyEntityFactory",
+			From = "EnemyContext",
+			Method = "GetEntityFactory",
+			CacheAs = "_enemyEntityFactory",
+		},
+		{
+			Name = "EnemyGameObjectSyncService",
+			From = "EnemyContext",
+			Method = "GetGameObjectSyncService",
+			CacheAs = "_enemyGameObjectSyncService",
+		},
+		{
+			Name = "EnemyInstanceFactory",
+			From = "EnemyContext",
+			Method = "GetInstanceFactory",
+			CacheAs = "_enemyInstanceFactory",
+		},
+		{
+			Name = "StructureEntityFactory",
+			From = "StructureContext",
+			Method = "GetEntityFactory",
+			CacheAs = "_structureEntityFactory",
+		},
+		{
+			Name = "World",
+			From = "EnemyContext",
+			Method = "GetWorld",
+			CacheAs = "_enemyWorld",
+		},
+		{
+			Name = "Components",
+			From = "EnemyContext",
+			Method = "GetComponents",
+			CacheAs = "_enemyComponents",
+		},
+	},
+	StartOrder = { "Domain", "Infrastructure", "Application" },
+	Teardown = {
+		Before = "_BeforeDestroy",
+		Fields = {
+			{ Field = "_runWaveStartedConnection", Method = "Disconnect" },
+			{ Field = "_runWaveEndedConnection", Method = "Disconnect" },
+			{ Field = "_runEndedConnection", Method = "Disconnect" },
+			{ Field = "_enemySpawnedConnection", Method = "Disconnect" },
+			{ Field = "_playerRemovingConnection", Method = "Disconnect" },
+		},
+	},
 })
+
+local CombatBaseContext = BaseContext.new(CombatContext)
 
 local Catch = Result.Catch
 local Ok = Result.Ok
 local Try = Result.Try
-
--- Unwraps a required context dependency and raises immediately if the registry returned a failure.
-local function _unwrapResult(result: any, label: string)
-	if result.success then
-		return result.value
-	end
-
-	local message = result.message
-	if message == nil then
-		message = result.type or "Unknown error"
-	end
-
-	error(string.format("%s failed: %s", label, tostring(message)))
-	return result.value
-end
 
 -- Sorts lane tiles so the generated waypoint list follows the lane from start to goal.
 local function _sortLaneTiles(laneTiles: { any }): { any }
@@ -76,31 +160,14 @@ end
 	Registers combat infrastructure, policies, and commands before the rest of the server starts ticking.
 ]=]
 function CombatContext:KnitInit()
-	local registry = Registry.new("Server")
-	registry:Register("CombatLoopService", CombatLoopService.new(), "Infrastructure")
-	registry:Register("BehaviorTreeFactory", BehaviorTreeFactory.new(), "Infrastructure")
-	registry:Register("ExecutorRegistry", ExecutorRegistry.new(), "Infrastructure")
-	registry:Register("BehaviorTreeTickPolicy", BehaviorTreeTickPolicy.new(), "Domain")
-	registry:Register("WaveCompletionPolicy", WaveCompletionPolicy.new(), "Domain")
-	registry:Register("CombatPerceptionService", CombatPerceptionService.new(), "Domain")
-	registry:Register("StartCombat", StartCombat.new(), "Application")
-	registry:Register("ProcessCombatTick", ProcessCombatTick.new(), "Application")
-	registry:Register("EndCombat", EndCombat.new(), "Application")
-	registry:Register("HandleGoalReached", HandleGoalReached.new(), "Application")
-	registry:InitAll()
-
-	self._registry = registry
-	self._combatLoopService = registry:Get("CombatLoopService")
-	self._executorRegistry = registry:Get("ExecutorRegistry")
-	self._startCombatCommand = registry:Get("StartCombat")
-	self._processCombatTickCommand = registry:Get("ProcessCombatTick")
-	self._endCombatCommand = registry:Get("EndCombat")
-	self._handleGoalReachedCommand = registry:Get("HandleGoalReached")
+	CombatBaseContext:KnitInit()
 
 	self._enemyContext = nil
 	self._enemyEntityFactory = nil
 	self._enemyGameObjectSyncService = nil
 	self._enemyInstanceFactory = nil
+	self._enemyWorld = nil
+	self._enemyComponents = nil
 	self._worldContext = nil
 	self._commanderContext = nil
 	self._structureContext = nil
@@ -119,85 +186,47 @@ end
 	Resolves dependent contexts, wires event handlers, and registers the heartbeat systems.
 ]=]
 function CombatContext:KnitStart()
-	local enemyContext = Knit.GetService("EnemyContext")
-	local worldContext = Knit.GetService("WorldContext")
-	local commanderContext = Knit.GetService("CommanderContext")
-	local structureContext = Knit.GetService("StructureContext")
-
-	self._enemyContext = enemyContext
-	self._worldContext = worldContext
-	self._commanderContext = commanderContext
-	self._structureContext = structureContext
-
-	self._enemyEntityFactory = _unwrapResult(enemyContext:GetEntityFactory(), "EnemyContext:GetEntityFactory")
-	self._enemyGameObjectSyncService = _unwrapResult(enemyContext:GetGameObjectSyncService(), "EnemyContext:GetGameObjectSyncService")
-	self._enemyInstanceFactory = _unwrapResult(enemyContext:GetInstanceFactory(), "EnemyContext:GetInstanceFactory")
-	self._structureEntityFactory = _unwrapResult(structureContext:GetEntityFactory(), "StructureContext:GetEntityFactory")
-	local enemyWorld = _unwrapResult(enemyContext:GetWorld(), "EnemyContext:GetWorld")
-	local enemyComponents = _unwrapResult(enemyContext:GetComponents(), "EnemyContext:GetComponents")
-
-	self._registry:Register("EnemyContext", enemyContext)
-	self._registry:Register("EnemyEntityFactory", self._enemyEntityFactory)
-	self._registry:Register("EnemyGameObjectSyncService", self._enemyGameObjectSyncService)
-	self._registry:Register("EnemyInstanceFactory", self._enemyInstanceFactory)
-	self._registry:Register("StructureContext", structureContext)
-	self._registry:Register("StructureEntityFactory", self._structureEntityFactory)
-	self._registry:Register("CommanderContext", commanderContext)
-	self._registry:Register("WorldContext", worldContext)
-	self._registry:Register("World", enemyWorld)
-	self._registry:Register("Components", enemyComponents)
-
-	-- Register the executor singletons before the first wave can enqueue actions.
-	local laneAdvanceExecutor = LaneAdvanceExecutor.new()
-	local idleExecutor = IdleExecutor.new()
-	local enemyAttackStructureExecutor = EnemyAttackStructureExecutor.new()
-	local structureAttackExecutor = StructureAttackExecutor.new()
-	self._executorRegistry:Register("LaneAdvance", laneAdvanceExecutor)
-	self._executorRegistry:Register("Idle", idleExecutor)
-	self._executorRegistry:Register("AttackStructure", enemyAttackStructureExecutor)
-	self._executorRegistry:Register("StructureAttack", structureAttackExecutor)
-
-	self._registry:StartOrdered({ "Domain", "Infrastructure", "Application" })
+	CombatBaseContext:KnitStart()
 
 	-- Lane movement sync still runs independently from combat AI ticks.
-	ServerScheduler:RegisterSystem(function()
-		self._enemyGameObjectSyncService:PollPositions()
-	end, "EnemyPositionPoll")
+	CombatBaseContext:RegisterPollSystem("_enemyGameObjectSyncService", "PollPositions", "EnemyPositionPoll")
 
 	-- Drive BT evaluation and executor updates for every active combat session.
-	ServerScheduler:RegisterSystem(function()
-		local dt = ServerScheduler:GetDeltaTime()
+	CombatBaseContext:RegisterSchedulerSystem("CombatTick", function()
+		local dt = CombatBaseContext:GetSchedulerDeltaTime()
 		for userId, activeCombat in pairs(self._combatLoopService:GetActiveCombats()) do
 			if activeCombat.IsPaused then
 				continue
 			end
+
 			self._processCombatTickCommand:Execute(userId, dt)
 		end
-	end, "CombatTick")
+	end)
 
-	self._runWaveStartedConnection = GameEvents.Bus:On(GameEvents.Events.Run.WaveStarted, function(waveNumber: number, isEndless: boolean)
+	CombatBaseContext:OnContextEvent("Run", "WaveStarted", function(waveNumber: number, isEndless: boolean)
 		self:_OnRunWaveStarted(waveNumber, isEndless)
-	end)
+	end, "_runWaveStartedConnection")
 
-	self._runWaveEndedConnection = GameEvents.Bus:On(GameEvents.Events.Run.WaveEnded, function(waveNumber: number)
+	CombatBaseContext:OnContextEvent("Run", "WaveEnded", function(waveNumber: number)
 		self:_OnRunWaveEnded(waveNumber)
-	end)
+	end, "_runWaveEndedConnection")
 
-	self._runEndedConnection = GameEvents.Bus:On(GameEvents.Events.Run.RunEnded, function()
+	CombatBaseContext:OnContextEvent("Run", "RunEnded", function()
 		self:_OnRunEnded()
-	end)
+	end, "_runEndedConnection")
 
-	self._enemySpawnedConnection = GameEvents.Bus:On(
-		GameEvents.Events.Wave.EnemySpawned,
+	CombatBaseContext:OnContextEvent(
+		"Wave",
+		"EnemySpawned",
 		function(entity: number, role: string, waveNumber: number)
 			self:_OnEnemySpawned(entity, role, waveNumber)
-		end
+		end,
+		"_enemySpawnedConnection"
 	)
 
-	self._playerRemovingConnection = Players.PlayerRemoving:Connect(function(player: Player)
+	CombatBaseContext:OnPlayerRemoving(function(player: Player)
 		self:_OnPlayerRemoving(player)
-	end)
-
+	end, "_playerRemovingConnection")
 end
 
 -- Builds the cached waypoint list used by both startup and mid-wave enemy spawns.
@@ -301,33 +330,27 @@ function CombatContext:GetCombatLoopService(): Result.Result<any>
 	return Ok(self._combatLoopService)
 end
 
+function CombatContext:_BeforeDestroy()
+	Catch(function()
+		if self._endCombatCommand then
+			Try(self._endCombatCommand:Execute())
+		end
+		return Ok(nil)
+	end, "Combat:Destroy")
+end
+
 --[=[
 	@within CombatContext
 	Disconnects listeners and stops combat so server shutdown leaves no active tick work behind.
 ]=]
 function CombatContext:Destroy()
-	Catch(function()
-		Try(self._endCombatCommand:Execute())
-		return Ok(nil)
-	end, "Combat:Destroy")
-
-	if self._runWaveStartedConnection then
-		self._runWaveStartedConnection:Disconnect()
-	end
-	if self._runWaveEndedConnection then
-		self._runWaveEndedConnection:Disconnect()
-	end
-	if self._runEndedConnection then
-		self._runEndedConnection:Disconnect()
-	end
-	if self._enemySpawnedConnection then
-		self._enemySpawnedConnection:Disconnect()
-	end
-	if self._playerRemovingConnection then
-		self._playerRemovingConnection:Disconnect()
+	local destroyResult = CombatBaseContext:Destroy()
+	if not destroyResult.success then
+		Result.MentionError("Combat:Destroy", "BaseContext teardown failed", {
+			CauseType = destroyResult.type,
+			CauseMessage = destroyResult.message,
+		}, destroyResult.type)
 	end
 end
-
-WrapContext(CombatContext, "Combat")
 
 return CombatContext

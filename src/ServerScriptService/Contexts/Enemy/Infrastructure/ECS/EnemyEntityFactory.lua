@@ -4,7 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
 
-type TCombatActionState = "None" | "Running" | "Committed"
+type TCombatActionState = "Idle" | "Running" | "Committed"
 
 type TCombatAction = {
 	CurrentActionId: string?,
@@ -12,7 +12,8 @@ type TCombatAction = {
 	ActionData: any?,
 	PendingActionId: string?,
 	PendingActionData: any?,
-	ActionStartedAt: number?,
+	StartedAt: number?,
+	FinishedAt: number?,
 }
 
 --[=[
@@ -31,11 +32,12 @@ end
 local function _buildDefaultAction(): TCombatAction
 	return {
 		CurrentActionId = nil,
-		ActionState = "None",
+		ActionState = "Idle",
 		ActionData = nil,
 		PendingActionId = nil,
 		PendingActionData = nil,
-		ActionStartedAt = nil,
+		StartedAt = nil,
+		FinishedAt = nil,
 	}
 end
 
@@ -178,64 +180,68 @@ function EnemyEntityFactory:GetCombatAction(entity: number)
 	return self:_Get(entity, self._components.CombatActionComponent)
 end
 
+function EnemyEntityFactory:SetCombatAction(entity: number, action: TCombatAction)
+	self:RequireReady()
+	self:_Set(entity, self._components.CombatActionComponent, {
+		CurrentActionId = action.CurrentActionId,
+		ActionState = action.ActionState,
+		ActionData = action.ActionData,
+		PendingActionId = action.PendingActionId,
+		PendingActionData = action.PendingActionData,
+		StartedAt = action.StartedAt,
+		FinishedAt = action.FinishedAt,
+	})
+end
+
 function EnemyEntityFactory:SetPendingAction(entity: number, actionId: string, actionData: any?)
 	self:RequireReady()
 	local action = self:GetCombatAction(entity) or _buildDefaultAction()
-	self:_Set(entity, self._components.CombatActionComponent, {
+	self:SetCombatAction(entity, {
 		CurrentActionId = action.CurrentActionId,
 		ActionState = action.ActionState,
 		ActionData = action.ActionData,
 		PendingActionId = actionId,
 		PendingActionData = actionData,
-		ActionStartedAt = action.ActionStartedAt,
+		StartedAt = action.StartedAt,
+		FinishedAt = action.FinishedAt,
 	})
 end
 
 function EnemyEntityFactory:ClearPendingAction(entity: number)
 	self:RequireReady()
 	local action = self:GetCombatAction(entity) or _buildDefaultAction()
-	self:_Set(entity, self._components.CombatActionComponent, {
+	self:SetCombatAction(entity, {
 		CurrentActionId = action.CurrentActionId,
 		ActionState = action.ActionState,
 		ActionData = action.ActionData,
 		PendingActionId = nil,
 		PendingActionData = nil,
-		ActionStartedAt = action.ActionStartedAt,
+		StartedAt = action.StartedAt,
+		FinishedAt = action.FinishedAt,
 	})
 end
 
 function EnemyEntityFactory:StartAction(entity: number, actionId: string, actionData: any?, currentTime: number)
 	self:RequireReady()
-	self:_Set(entity, self._components.CombatActionComponent, {
+	self:SetCombatAction(entity, {
 		CurrentActionId = actionId,
 		ActionState = "Running",
 		ActionData = actionData,
 		PendingActionId = nil,
 		PendingActionData = nil,
-		ActionStartedAt = currentTime,
+		StartedAt = currentTime,
+		FinishedAt = nil,
 	})
 end
 
 function EnemyEntityFactory:ClearAction(entity: number)
 	self:RequireReady()
-	self:_Set(entity, self._components.CombatActionComponent, _buildDefaultAction())
+	self:SetCombatAction(entity, _buildDefaultAction())
 end
 
 function EnemyEntityFactory:ResetActionState(entity: number)
 	self:RequireReady()
-	local action = self:GetCombatAction(entity)
-	if action == nil then
-		return
-	end
-
-	self:_Set(entity, self._components.CombatActionComponent, {
-		CurrentActionId = action.CurrentActionId,
-		ActionState = "None",
-		ActionData = action.ActionData,
-		PendingActionId = nil,
-		PendingActionData = nil,
-		ActionStartedAt = action.ActionStartedAt,
-	})
+	self:SetCombatAction(entity, _buildDefaultAction())
 end
 
 function EnemyEntityFactory:GetBehaviorConfig(entity: number)

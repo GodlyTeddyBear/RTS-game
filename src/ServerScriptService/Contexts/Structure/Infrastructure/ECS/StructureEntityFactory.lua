@@ -28,11 +28,12 @@ setmetatable(StructureEntityFactory, { __index = BaseECSEntityFactory })
 local function _buildDefaultAction(): TCombatAction
 	return {
 		CurrentActionId = nil,
-		ActionState = "None",
+		ActionState = "Idle",
 		ActionData = nil,
 		PendingActionId = nil,
 		PendingActionData = nil,
-		ActionStartedAt = nil,
+		StartedAt = nil,
+		FinishedAt = nil,
 	}
 end
 
@@ -277,69 +278,64 @@ function StructureEntityFactory:GetCombatAction(entity: number)
 	return self:_Get(entity, components.CombatActionComponent)
 end
 
-function StructureEntityFactory:SetPendingAction(entity: number, actionId: string, actionData: any?)
+function StructureEntityFactory:SetCombatAction(entity: number, action: TCombatAction)
 	local components = self:GetComponentsOrThrow()
 
-	local action = self:GetCombatAction(entity) or _buildDefaultAction()
 	self:_Set(entity, components.CombatActionComponent, {
+		CurrentActionId = action.CurrentActionId,
+		ActionState = action.ActionState,
+		ActionData = action.ActionData,
+		PendingActionId = action.PendingActionId,
+		PendingActionData = action.PendingActionData,
+		StartedAt = action.StartedAt,
+		FinishedAt = action.FinishedAt,
+	})
+end
+
+function StructureEntityFactory:SetPendingAction(entity: number, actionId: string, actionData: any?)
+	local action = self:GetCombatAction(entity) or _buildDefaultAction()
+	self:SetCombatAction(entity, {
 		CurrentActionId = action.CurrentActionId,
 		ActionState = action.ActionState,
 		ActionData = action.ActionData,
 		PendingActionId = actionId,
 		PendingActionData = actionData,
-		ActionStartedAt = action.ActionStartedAt,
+		StartedAt = action.StartedAt,
+		FinishedAt = action.FinishedAt,
 	})
 end
 
 function StructureEntityFactory:ClearPendingAction(entity: number)
-	local components = self:GetComponentsOrThrow()
-
 	local action = self:GetCombatAction(entity) or _buildDefaultAction()
-	self:_Set(entity, components.CombatActionComponent, {
+	self:SetCombatAction(entity, {
 		CurrentActionId = action.CurrentActionId,
 		ActionState = action.ActionState,
 		ActionData = action.ActionData,
 		PendingActionId = nil,
 		PendingActionData = nil,
-		ActionStartedAt = action.ActionStartedAt,
+		StartedAt = action.StartedAt,
+		FinishedAt = action.FinishedAt,
 	})
 end
 
 function StructureEntityFactory:StartAction(entity: number, actionId: string, actionData: any?, currentTime: number)
-	local components = self:GetComponentsOrThrow()
-
-	self:_Set(entity, components.CombatActionComponent, {
+	self:SetCombatAction(entity, {
 		CurrentActionId = actionId,
 		ActionState = "Running",
 		ActionData = actionData,
 		PendingActionId = nil,
 		PendingActionData = nil,
-		ActionStartedAt = currentTime,
+		StartedAt = currentTime,
+		FinishedAt = nil,
 	})
 end
 
 function StructureEntityFactory:ClearAction(entity: number)
-	local components = self:GetComponentsOrThrow()
-
-	self:_Set(entity, components.CombatActionComponent, _buildDefaultAction())
+	self:SetCombatAction(entity, _buildDefaultAction())
 end
 
 function StructureEntityFactory:ResetActionState(entity: number)
-	local action = self:GetCombatAction(entity)
-	if action == nil then
-		return
-	end
-
-	local components = self:GetComponentsOrThrow()
-
-	self:_Set(entity, components.CombatActionComponent, {
-		CurrentActionId = action.CurrentActionId,
-		ActionState = "None",
-		ActionData = action.ActionData,
-		PendingActionId = nil,
-		PendingActionData = nil,
-		ActionStartedAt = action.ActionStartedAt,
-	})
+	self:SetCombatAction(entity, _buildDefaultAction())
 end
 
 function StructureEntityFactory:ApplyDamage(entity: number, amount: number): boolean

@@ -26,7 +26,7 @@ export type TBehaviorTreeComponent = {
 	@within ExecutorTypes
 	Current execution state for a combat action component.
 ]=]
-export type TCombatActionState = "None" | "Running" | "Committed"
+export type TCombatActionState = "Idle" | "Running" | "Committed"
 
 --[=[
 	@interface TCombatActionComponent
@@ -37,7 +37,8 @@ export type TCombatActionState = "None" | "Running" | "Committed"
 	.ActionData any? -- Data attached to the current action.
 	.PendingActionId string? -- Action queued by behavior tree evaluation.
 	.PendingActionData any? -- Data attached to the pending action.
-	.ActionStartedAt number? -- Timestamp when the current action started.
+	.StartedAt number? -- Timestamp when the current action started.
+	.FinishedAt number? -- Timestamp when the current action most recently resolved.
 ]=]
 export type TCombatActionComponent = {
 	CurrentActionId: string?,
@@ -45,7 +46,8 @@ export type TCombatActionComponent = {
 	ActionData: any?,
 	PendingActionId: string?,
 	PendingActionData: any?,
-	ActionStartedAt: number?,
+	StartedAt: number?,
+	FinishedAt: number?,
 }
 
 --[=[

@@ -15,6 +15,39 @@ local Ok = Result.Ok
 local ProcessCombatTick = {}
 ProcessCombatTick.__index = ProcessCombatTick
 
+local function _cloneActionState(actionState: any): any
+	if actionState == nil then
+		return {
+			CurrentActionId = nil,
+			ActionState = "Idle",
+			ActionData = nil,
+			PendingActionId = nil,
+			PendingActionData = nil,
+			StartedAt = nil,
+			FinishedAt = nil,
+		}
+	end
+
+	return {
+		CurrentActionId = actionState.CurrentActionId,
+		ActionState = actionState.ActionState or "Idle",
+		ActionData = actionState.ActionData,
+		PendingActionId = actionState.PendingActionId,
+		PendingActionData = actionState.PendingActionData,
+		StartedAt = actionState.StartedAt or actionState.ActionStartedAt,
+		FinishedAt = actionState.FinishedAt,
+	}
+end
+
+local function _mentionRuntimeFailure(scope: string, message: string, actorType: string, entity: number, failure: any)
+	Result.MentionError(scope, message, {
+		ActorType = actorType,
+		Entity = entity,
+		CauseType = failure.type,
+		CauseMessage = failure.message,
+	}, failure.type)
+end
+
 --[=[
 	@within ProcessCombatTick
 	Creates a new combat tick command.
@@ -26,15 +59,14 @@ end
 
 --[=[
 	@within ProcessCombatTick
-	Resolves the combat loop, BT policy, executor registry, and perception services.
+	Resolves the combat loop, behavior runtime, wave-completion policy, and perception services.
 	@param registry any -- Registry instance supplied by the context bootstrap.
 	@param _name string -- Registry key used to register the command.
 ]=]
 function ProcessCombatTick:Init(registry: any, _name: string)
 	self._loopService = registry:Get("CombatLoopService")
-	self._tickPolicy = registry:Get("BehaviorTreeTickPolicy")
+	self._behaviorRuntimeService = registry:Get("CombatBehaviorRuntimeService")
 	self._waveCompletionPolicy = registry:Get("WaveCompletionPolicy")
-	self._executorRegistry = registry:Get("ExecutorRegistry")
 	self._perceptionService = registry:Get("CombatPerceptionService")
 	self._handleGoalReachedCommand = registry:Get("HandleGoalReached")
 	self._hasSeenAliveByUser = {}
@@ -53,121 +85,159 @@ function ProcessCombatTick:Start(registry: any, _name: string)
 	self._structureContext = registry:Get("StructureContext")
 end
 
--- Runs the behavior tree phase for each alive enemy and updates its last BT tick time.
-function ProcessCombatTick:_RunBehaviorTreePhase(entities: { number }, currentTime: number, factory: any, actorType: string)
+-- Runs the behavior tree phase for each active entity and updates its last behavior tick time.
+function ProcessCombatTick:_RunBehaviorTreePhase(
+	entities: { number },
+	currentTime: number,
+	factory: any,
+	actorType: string
+)
 	for _, entity in ipairs(entities) do
-		local checkResult = self._tickPolicy:CheckFactory(factory, entity, currentTime)
-		if checkResult.success then
-			local behaviorTree = checkResult.value.BehaviorTree
-			local facts = if actorType == "Structure"
-				then self._perceptionService:BuildStructureSnapshot(entity, currentTime)
-				else self._perceptionService:BuildSnapshot(entity, currentTime)
-			local context = {
+		local behaviorTree = self._behaviorRuntimeService:GetReadyBehaviorTree(factory, entity, currentTime)
+		if behaviorTree == nil then
+			continue
+		end
+
+		local facts = if actorType == "Structure"
+			then self._perceptionService:BuildStructureSnapshot(entity, currentTime)
+			else self._perceptionService:BuildSnapshot(entity, currentTime)
+		local context = {
+			Entity = entity,
+			ActionFactory = factory,
+			EnemyEntityFactory = self._enemyEntityFactory,
+			StructureEntityFactory = self._structureEntityFactory,
+			Facts = facts,
+		}
+
+		local didRun, runError = pcall(function()
+			behaviorTree.TreeInstance:run(context)
+		end)
+		if not didRun then
+			Result.MentionError("Combat:ProcessCombatTick", "Behavior tree evaluation failed", {
+				ActorType = actorType,
 				Entity = entity,
-				EnemyEntityFactory = self._enemyEntityFactory,
-				StructureEntityFactory = self._structureEntityFactory,
-				Facts = facts,
-			}
-
-			pcall(function()
-				behaviorTree.TreeInstance:run(context)
-			end)
-
-			factory:UpdateBTLastTickTime(entity, currentTime)
+				CauseMessage = runError,
+			}, "BehaviorTreeRunFailed")
 		end
+
+		factory:UpdateBTLastTickTime(entity, currentTime)
 	end
 end
 
--- Converts pending BT actions into running executors and replaces any current executor that no longer matches.
-function ProcessCombatTick:_RunTransitionPhase(entities: { number }, currentTime: number, services: any, factory: any)
+-- Starts or replaces pending actions through the shared behavior runtime.
+function ProcessCombatTick:_RunTransitionPhase(
+	entities: { number },
+	currentTime: number,
+	services: any,
+	factory: any,
+	actorType: string
+)
 	for _, entity in ipairs(entities) do
-		local action = factory:GetCombatAction(entity)
-		if not action or not action.PendingActionId then
-			continue
-		end
+		local actionState = _cloneActionState(factory:GetCombatAction(entity))
+		local startResult = self._behaviorRuntimeService:StartPendingAction(entity, actionState, {
+			Services = services,
+		})
 
-		if action.ActionState == "Committed" then
-			factory:ClearPendingAction(entity)
-			continue
-		end
-
-		if action.CurrentActionId == action.PendingActionId then
-			factory:ClearPendingAction(entity)
-			continue
-		end
-
-		if action.CurrentActionId then
-			local currentExecutor = self._executorRegistry:Get(action.CurrentActionId)
-			if currentExecutor then
-				pcall(function()
-					currentExecutor:Cancel(entity, services)
-				end)
-			end
-		end
-
-		local nextExecutor = self._executorRegistry:Get(action.PendingActionId)
-		if not nextExecutor then
+		if not startResult.success then
+			_mentionRuntimeFailure(
+				"Combat:ProcessCombatTick",
+				"Behavior runtime failed while starting a pending action",
+				actorType,
+				entity,
+				startResult
+			)
 			factory:ClearAction(entity)
 			continue
 		end
 
-		local startSuccess = false
-		pcall(function()
-			startSuccess = nextExecutor:Start(entity, action.PendingActionData, services)
-		end)
+		local status = startResult.value.Status
+		if status == "NoAction" or status == "Blocked" then
+			continue
+		end
 
-		if not startSuccess then
+		if status == "NoChange" then
+			actionState.PendingActionId = nil
+			actionState.PendingActionData = nil
+			factory:SetCombatAction(entity, actionState)
+			continue
+		end
+
+		if status == "MissingAction" or status == "FailedToStart" then
 			factory:ClearAction(entity)
 			continue
 		end
 
-		factory:StartAction(entity, action.PendingActionId, action.PendingActionData, currentTime)
+		local commitResult = self._behaviorRuntimeService:CommitStartedAction(actionState, startResult.value, currentTime)
+		if commitResult.Status == "Committed" then
+			factory:SetCombatAction(entity, actionState)
+			continue
+		end
+
+		Result.MentionError("Combat:ProcessCombatTick", "Behavior runtime returned an invalid commit transition", {
+			ActorType = actorType,
+			Entity = entity,
+			StartStatus = status,
+			CommitStatus = commitResult.Status,
+		}, "InvalidBehaviorCommit")
+		factory:ClearAction(entity)
 	end
 end
 
--- Ticks active executors and resolves success or failure outcomes.
-function ProcessCombatTick:_RunActionPhase(entities: { number }, dt: number, services: any, factory: any)
+-- Ticks current actions through the shared behavior runtime and resolves terminal results.
+function ProcessCombatTick:_RunActionPhase(
+	entities: { number },
+	dt: number,
+	services: any,
+	factory: any,
+	actorType: string
+)
 	for _, entity in ipairs(entities) do
-		local action = factory:GetCombatAction(entity)
-		if not action or not action.CurrentActionId then
-			continue
-		end
+		local actionState = _cloneActionState(factory:GetCombatAction(entity))
+		local tickResult = self._behaviorRuntimeService:TickCurrentAction(entity, actionState, {
+			DeltaTime = dt,
+			Services = services,
+		})
 
-		if action.ActionState ~= "Running" and action.ActionState ~= "Committed" then
-			continue
-		end
-
-		local executor = self._executorRegistry:Get(action.CurrentActionId)
-		if not executor then
+		if not tickResult.success then
+			_mentionRuntimeFailure(
+				"Combat:ProcessCombatTick",
+				"Behavior runtime failed while ticking the current action",
+				actorType,
+				entity,
+				tickResult
+			)
 			factory:ClearAction(entity)
 			continue
 		end
 
-		local tickStatus = "Fail"
-		pcall(function()
-			tickStatus = executor:Tick(entity, dt, services)
-		end)
-
-		if tickStatus == "Success" then
-			if action.CurrentActionId == "LaneAdvance" then
-				local goalResult = self._handleGoalReachedCommand:Execute(entity)
-				if not goalResult.success then
-					Result.MentionError("Combat:ProcessCombatTick", "Failed goal-reached handling", {
-						EnemyEntity = entity,
-						CauseType = goalResult.type,
-						CauseMessage = goalResult.message,
-					}, goalResult.type)
-				end
+		local runtimeTick = tickResult.value
+		if runtimeTick.Status == "Success" and runtimeTick.ActionId == "LaneAdvance" then
+			local goalResult = self._handleGoalReachedCommand:Execute(entity)
+			if not goalResult.success then
+				Result.MentionError("Combat:ProcessCombatTick", "Failed goal-reached handling", {
+					EnemyEntity = entity,
+					CauseType = goalResult.type,
+					CauseMessage = goalResult.message,
+				}, goalResult.type)
+			else
+				continue
 			end
+		end
 
-			pcall(function()
-				executor:Complete(entity, services)
-			end)
-			factory:ResetActionState(entity)
-		elseif tickStatus == "Fail" then
-			pcall(function()
-				executor:Cancel(entity, services)
-			end)
+		local resolveResult =
+			self._behaviorRuntimeService:ResolveFinishedAction(actionState, runtimeTick, services.CurrentTime)
+		if resolveResult.Status == "Resolved" then
+			factory:SetCombatAction(entity, actionState)
+			continue
+		end
+
+		if resolveResult.Status == "InvalidResult" then
+			Result.MentionError("Combat:ProcessCombatTick", "Behavior runtime returned an invalid resolve transition", {
+				ActorType = actorType,
+				Entity = entity,
+				ActionId = runtimeTick.ActionId,
+				TickStatus = runtimeTick.Status,
+			}, "InvalidBehaviorResolve")
 			factory:ClearAction(entity)
 		end
 	end
@@ -193,14 +263,15 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 			return Ok(false)
 		end
 
-		-- Capture one timestamp so BT gating and action execution stay aligned.
+		-- Capture one timestamp so tree evaluation and runtime dispatch stay aligned.
 		local currentTime = os.clock()
 		local aliveEntities = self._enemyEntityFactory:QueryAliveEntities()
 		local activeStructures = self._structureEntityFactory:QueryActiveEntities()
 		if #aliveEntities > 0 then
 			self._hasSeenAliveByUser[userId] = true
 		end
-		-- Build the service payload shared by executors and completion handling.
+
+		-- Build the shared service bag once so runtime dispatch is consistent across all entities.
 		local services = {
 			EnemyEntityFactory = self._enemyEntityFactory,
 			StructureEntityFactory = self._structureEntityFactory,
@@ -212,10 +283,10 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 
 		self:_RunBehaviorTreePhase(aliveEntities, currentTime, self._enemyEntityFactory, "Enemy")
 		self:_RunBehaviorTreePhase(activeStructures, currentTime, self._structureEntityFactory, "Structure")
-		self:_RunTransitionPhase(aliveEntities, currentTime, services, self._enemyEntityFactory)
-		self:_RunTransitionPhase(activeStructures, currentTime, services, self._structureEntityFactory)
-		self:_RunActionPhase(aliveEntities, dt, services, self._enemyEntityFactory)
-		self:_RunActionPhase(activeStructures, dt, services, self._structureEntityFactory)
+		self:_RunTransitionPhase(aliveEntities, currentTime, services, self._enemyEntityFactory, "Enemy")
+		self:_RunTransitionPhase(activeStructures, currentTime, services, self._structureEntityFactory, "Structure")
+		self:_RunActionPhase(aliveEntities, dt, services, self._enemyEntityFactory, "Enemy")
+		self:_RunActionPhase(activeStructures, dt, services, self._structureEntityFactory, "Structure")
 
 		-- Only emit wave completion after the combat has actually seen enemies on this session.
 		local completion = self._waveCompletionPolicy:Check()

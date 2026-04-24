@@ -4,7 +4,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
-local BehaviorConfig = require(ReplicatedStorage.Contexts.Combat.Config.BehaviorConfig)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
@@ -35,7 +34,7 @@ end
 ]=]
 function StartCombat:Init(registry: any, _name: string)
 	self._loopService = registry:Get("CombatLoopService")
-	self._behaviorTreeFactory = registry:Get("BehaviorTreeFactory")
+	self._behaviorRuntimeService = registry:Get("CombatBehaviorRuntimeService")
 end
 
 --[=[
@@ -53,10 +52,7 @@ end
 function StartCombat:_AssignBehaviorTree(entity: number)
 	local role = self._enemyEntityFactory:GetRole(entity)
 	local roleName = if role and role.role then role.role else "swarm"
-	local tree = self._behaviorTreeFactory:CreateTree(roleName)
-
-	local roleDefaults = BehaviorConfig.DEFAULTS_BY_ROLE[roleName] or BehaviorConfig.DEFAULT
-	local tickInterval = roleDefaults.TickInterval
+	local tree, tickInterval = self._behaviorRuntimeService:BuildEnemyBehaviorTree(roleName)
 
 	self._enemyEntityFactory:SetBehaviorTree(entity, tree, tickInterval)
 	self._enemyEntityFactory:SetBehaviorConfig(entity, {
@@ -66,8 +62,8 @@ function StartCombat:_AssignBehaviorTree(entity: number)
 end
 
 function StartCombat:_AssignStructureBehaviorTree(entity: number)
-	local tree = self._behaviorTreeFactory:CreateStructureTree()
-	self._structureEntityFactory:SetBehaviorTree(entity, tree, BehaviorConfig.DEFAULT.TickInterval)
+	local tree, tickInterval = self._behaviorRuntimeService:BuildStructureBehaviorTree()
+	self._structureEntityFactory:SetBehaviorTree(entity, tree, tickInterval)
 	self._structureEntityFactory:ClearAction(entity)
 end
 

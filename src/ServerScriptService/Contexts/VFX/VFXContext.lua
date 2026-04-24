@@ -13,40 +13,45 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local Registry = require(ReplicatedStorage.Utilities.Registry)
-local GameEvents = require(ReplicatedStorage.Events.GameEvents)
-local Events = GameEvents.Events
+local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 
 local VFXSignalService = require(script.Parent.Infrastructure.Services.VFXSignalService)
+
+local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "ClientSignals",
+		Factory = function(service: any, _baseContext: any)
+			return service.Client
+		end,
+	},
+	{
+		Name = "VFXSignalService",
+		Module = VFXSignalService,
+		CacheAs = "_signalService",
+	},
+}
+
+local VFXModules: BaseContext.TModuleLayers = {
+	Infrastructure = InfrastructureModules,
+}
 
 local VFXContext = Knit.CreateService({
 	Name = "VFXContext",
 	Client = {
 		PlayVFX = Knit.CreateSignal(),
 	},
+	Modules = VFXModules,
 })
 
+local VFXBaseContext = BaseContext.new(VFXContext)
+
 function VFXContext:KnitInit()
-	local registry = Registry.new("Server")
-	self.Registry = registry
-
-	-- Raw value registrations
-	registry:Register("ClientSignals", self.Client)
-
-	-- Infrastructure Services
-	registry:Register("VFXSignalService", VFXSignalService.new(), "Infrastructure")
-
-	registry:InitAll()
-
-	-- Cache refs needed by context handlers
-	self._SignalService = registry:Get("VFXSignalService")
+	VFXBaseContext:KnitInit()
 end
 
 function VFXContext:KnitStart()
-	self.Registry:StartOrdered({ "Infrastructure" })
-
+	VFXBaseContext:KnitStart()
 	self:_ConnectGameEvents()
 	print("[VFXContext] Started")
 end
@@ -59,14 +64,14 @@ end
 	Trigger a VFX on a specific player's client.
 ]]
 function VFXContext:PlayVFXForPlayer(player: Player, effectKey: string, options: { [string]: any }?)
-	self._SignalService:FireToPlayer(player, effectKey, options)
+	self._signalService:FireToPlayer(player, effectKey, options)
 end
 
 --[[
 	Trigger a VFX on all connected clients.
 ]]
 function VFXContext:PlayVFXForAllClients(effectKey: string, options: { [string]: any }?)
-	self._SignalService:FireToAllClients(effectKey, options)
+	self._signalService:FireToAllClients(effectKey, options)
 end
 
 ---

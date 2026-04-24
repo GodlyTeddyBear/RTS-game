@@ -4,9 +4,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Promise = require(ReplicatedStorage.Packages.Promise)
 local PathfindingHelper = require(ReplicatedStorage.Utilities.PathfindingHelper)
+local BaseExecutor = require(ReplicatedStorage.Utilities.BaseExecutor)
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
-
-local BaseExecutor = require(script.Parent.Base.BaseExecutor)
 
 --[=[
 	@class LaneAdvanceExecutor

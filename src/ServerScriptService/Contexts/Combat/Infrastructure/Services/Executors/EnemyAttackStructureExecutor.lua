@@ -1,6 +1,8 @@
 --!strict
 
-local BaseExecutor = require(script.Parent.Base.BaseExecutor)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local BaseExecutor = require(ReplicatedStorage.Utilities.BaseExecutor)
 
 --[=[
 	@class EnemyAttackStructureExecutor

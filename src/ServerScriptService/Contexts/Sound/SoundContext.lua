@@ -15,27 +15,46 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local Registry = require(ReplicatedStorage.Utilities.Registry)
+local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local Events = GameEvents.Events
+
+local SoundSignalService = require(script.Parent.Infrastructure.Services.SoundSignalService)
+
+local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "ClientSignals",
+		Factory = function(service: any, _baseContext: any)
+			return service.Client
+		end,
+	},
+	{
+		Name = "SoundSignalService",
+		Module = SoundSignalService,
+		CacheAs = "_signalService",
+	},
+}
+
+local SoundModules: BaseContext.TModuleLayers = {
+	Infrastructure = InfrastructureModules,
+}
 
 local SoundContext = Knit.CreateService({
 	Name = "SoundContext",
 	Client = {
 		PlaySound = Knit.CreateSignal(),
 	},
+	Modules = SoundModules,
 })
 
-function SoundContext:KnitInit()
-	local registry = Registry.new("Server")
-	self.Registry = registry
+local SoundBaseContext = BaseContext.new(SoundContext)
 
-	registry:InitAll()
+function SoundContext:KnitInit()
+	SoundBaseContext:KnitInit()
 end
 
 function SoundContext:KnitStart()
-	self.Registry:StartAll()
-
+	SoundBaseContext:KnitStart()
 	self:_ConnectGameEvents()
 	print("[SoundContext] Started")
 end
@@ -44,8 +63,8 @@ end
 	Send a sound trigger to a specific player's client.
 	The client's SoundController looks up soundKey in SoundMap for playback.
 ]]
-function SoundContext:PlaySoundForPlayer(player: Player, soundKey: string, options: {}?)
-	self.Client.PlaySound:Fire(player, soundKey, options or {})
+function SoundContext:PlaySoundForPlayer(player: Player, soundKey: string, options: { [string]: any }?)
+	self._signalService:FireToPlayer(player, soundKey, options)
 end
 
 --[[
@@ -70,7 +89,7 @@ function SoundContext:_ConnectGameEvents()
 	end
 end
 
-function SoundContext:_PlayForUser(userId: number, soundKey: string, options: {}?)
+function SoundContext:_PlayForUser(userId: number, soundKey: string, options: { [string]: any }?)
 	local player = Players:GetPlayerByUserId(userId)
 	if player then
 		self:PlaySoundForPlayer(player, soundKey, options)
