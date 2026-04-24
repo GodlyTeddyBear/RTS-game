@@ -11,6 +11,7 @@ MapConfig.ZONE_PATHS = table.freeze({
 	Spawns = "Environment.Zones.Spawns",
 	Goals = "Environment.Zones.Goals",
 	PlacementGrids = "Environment.Zones.PlacementGrids",
+	PlacementProhibited = "Environment.Zones.PlacementProhibited",
 	Lanes = "Environment.Zones.Lanes",
 	SidePockets = "Environment.Zones.SidePockets",
 })

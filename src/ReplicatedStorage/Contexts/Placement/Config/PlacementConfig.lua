@@ -13,9 +13,10 @@ PlacementConfig.STRUCTURE_PLACEMENT_COSTS = table.freeze({
 	turret = 15,
 })
 
--- Phase 2 locks placement to side pads only; lane placement is intentionally disallowed.
-PlacementConfig.VALID_ZONE_TYPES = table.freeze({
-	turret = table.freeze({ "side_pocket" }),
+-- Base disallowed zones are global: placement is allowed by default outside these zones.
+PlacementConfig.BASE_DISALLOWED_ZONE_TYPES = table.freeze({
+	lane = true,
+	blocked = true,
 })
 
 -- Resource-tile requirements stay data-driven for future structures, even in turret-only Phase 2.

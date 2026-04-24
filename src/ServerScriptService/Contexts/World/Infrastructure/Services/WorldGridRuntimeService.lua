@@ -28,6 +28,8 @@ function WorldGridRuntimeService.new()
 	self._sidePocketParts = nil :: { BasePart }?
 	self._sidePocketCoordKeySet = nil :: { [string]: boolean }?
 	self._sidePocketResourceByKey = nil :: { [string]: string }?
+	self._placementProhibitedParts = nil :: { BasePart }?
+	self._placementProhibitedCoordKeySet = nil :: { [string]: boolean }?
 	self._mapContext = nil :: any
 	return self
 end
@@ -85,6 +87,24 @@ function WorldGridRuntimeService:_GetSidePocketParts(): { BasePart }
 	return parts
 end
 
+function WorldGridRuntimeService:_GetPlacementProhibitedParts(): { BasePart }
+	local parts = {}
+	local prohibitedContainer = self:_GetZoneContainer("PlacementProhibited")
+	if prohibitedContainer ~= nil then
+		if prohibitedContainer:IsA("BasePart") then
+			table.insert(parts, prohibitedContainer)
+		else
+			for _, instance in ipairs(prohibitedContainer:GetDescendants()) do
+				if instance:IsA("BasePart") then
+					table.insert(parts, instance)
+				end
+			end
+		end
+	end
+
+	return parts
+end
+
 local function _BuildGridSpec(gridPart: BasePart): GridSpec
 	local tileSize = WorldConfig.TILE_SIZE
 	local gridSize = gridPart.Size
@@ -130,6 +150,8 @@ function WorldGridRuntimeService:ResetCache()
 	self._sidePocketParts = nil
 	self._sidePocketCoordKeySet = nil
 	self._sidePocketResourceByKey = nil
+	self._placementProhibitedParts = nil
+	self._placementProhibitedCoordKeySet = nil
 end
 
 function WorldGridRuntimeService:GetGridSpec(): GridSpec
@@ -225,6 +247,16 @@ function WorldGridRuntimeService:_GetSidePocketPartsCached(): { BasePart }
 	return parts
 end
 
+function WorldGridRuntimeService:_GetPlacementProhibitedPartsCached(): { BasePart }
+	if self._placementProhibitedParts ~= nil then
+		return self._placementProhibitedParts
+	end
+
+	local parts = self:_GetPlacementProhibitedParts()
+	self._placementProhibitedParts = parts
+	return parts
+end
+
 function WorldGridRuntimeService:_ResolveSidePocketPart(worldPos: Vector3, spec: GridSpec): BasePart?
 	local sidePocketParts = self:_GetSidePocketPartsCached()
 	for _, part in ipairs(sidePocketParts) do
@@ -313,13 +345,53 @@ function WorldGridRuntimeService:_GetResolvedSidePocketTiles(spec: GridSpec): ({
 	return coordKeySet, resourceByKey
 end
 
+function WorldGridRuntimeService:_GetResolvedPlacementProhibitedTiles(spec: GridSpec): { [string]: boolean }
+	if self._placementProhibitedCoordKeySet ~= nil then
+		return self._placementProhibitedCoordKeySet
+	end
+
+	local coordKeySet = {} :: { [string]: boolean }
+	local prohibitedParts = self:_GetPlacementProhibitedPartsCached()
+
+	for _, part in ipairs(prohibitedParts) do
+		local matchedAnyTile = false
+
+		for row = 1, spec.gridRows do
+			for col = 1, spec.gridCols do
+				local tileCenter = self:CoordToWorld({
+					row = row,
+					col = col,
+				})
+
+				if _TileOverlapsPartXZ(part, tileCenter, spec) then
+					local coordKey = _GetCoordKey(row, col)
+					coordKeySet[coordKey] = true
+					matchedAnyTile = true
+				end
+			end
+		end
+
+		-- Reconcile marker parts that are near the grid but miss tile overlap.
+		if not matchedAnyTile then
+			local nearestCoord = self:_ResolveNearestEligibleCoord(part.Position, spec)
+			if nearestCoord ~= nil then
+				local coordKey = _GetCoordKey(nearestCoord.row, nearestCoord.col)
+				coordKeySet[coordKey] = true
+			end
+		end
+	end
+
+	self._placementProhibitedCoordKeySet = coordKeySet
+	return coordKeySet
+end
+
 function WorldGridRuntimeService:GetTileDescriptor(row: number, col: number): TileDescriptor?
 	local spec = self:GetGridSpec()
 	if row < 1 or row > spec.gridRows or col < 1 or col > spec.gridCols then
 		return nil
 	end
 
-	local zone: ZoneType = "blocked"
+	local zone: ZoneType = "buildable"
 	local resourceType: string? = nil
 	if row == spec.laneRow then
 		zone = "lane"
@@ -332,9 +404,14 @@ function WorldGridRuntimeService:GetTileDescriptor(row: number, col: number): Ti
 		end
 	end
 
+	local coordKey = _GetCoordKey(row, col)
+	local prohibitedCoordKeySet = self:_GetResolvedPlacementProhibitedTiles(spec)
+	local isPlacementProhibited = prohibitedCoordKeySet[coordKey] == true
+
 	return table.freeze({
 		zone = zone,
 		resourceType = resourceType,
+		isPlacementProhibited = isPlacementProhibited,
 	})
 end
 

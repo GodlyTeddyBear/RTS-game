@@ -92,7 +92,12 @@ function PlaceStructurePolicy:Check(coord: GridCoord, structureType: string): Re
 		occupied = resolvedTile.occupied,
 	})
 
-	Ensure(PlacementSpecs.IsZoneCompatible(structureType, resolvedTile), "IncompatibleTileZone", Errors.INCOMPATIBLE_TILE_ZONE, {
+	Ensure(PlacementSpecs.IsBaseZoneAllowed(resolvedTile), "IncompatibleTileZone", Errors.INCOMPATIBLE_TILE_ZONE, {
+		structureType = structureType,
+		zone = resolvedTile.zone,
+	})
+
+	Ensure(PlacementSpecs.IsNotPlacementProhibited(resolvedTile), "PlacementProhibited", Errors.INCOMPATIBLE_TILE_ZONE, {
 		structureType = structureType,
 		zone = resolvedTile.zone,
 	})

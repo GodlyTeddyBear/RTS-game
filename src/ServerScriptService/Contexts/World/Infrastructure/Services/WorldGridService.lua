@@ -110,6 +110,7 @@ function WorldGridService:Build()
 				zone = descriptor.zone,
 				occupied = false,
 				resourceType = descriptor.resourceType,
+				isPlacementProhibited = descriptor.isPlacementProhibited,
 			}
 		end
 	end
@@ -164,7 +165,7 @@ function WorldGridService:GetAllTiles(): { Tile }
 end
 
 --[=[
-	Returns all unoccupied tiles that are not blocked.
+	Returns all unoccupied tiles that pass base buildability rules.
 	@within WorldGridService
 	@return { Tile } -- The buildable tile list.
 ]=]
@@ -173,7 +174,7 @@ function WorldGridService:GetBuildableTiles(): { Tile }
 	local buildableTiles = {}
 
 	for _, tile in ipairs(self._tiles) do
-		if tile.zone ~= "blocked" and tile.occupied == false then
+		if tile.zone ~= "blocked" and tile.zone ~= "lane" and tile.occupied == false and tile.isPlacementProhibited == false then
 			table.insert(buildableTiles, tile)
 		end
 	end

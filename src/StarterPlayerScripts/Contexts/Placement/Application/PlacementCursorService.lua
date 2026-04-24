@@ -16,6 +16,7 @@ local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 type GridCoord = WorldTypes.GridCoord
 type ZoneType = WorldTypes.ZoneType
 type GridSpec = WorldTypes.GridSpec
+type TileDescriptor = WorldTypes.TileDescriptor
 
 type OccupiedSet = { [string]: boolean }
 
@@ -87,30 +88,39 @@ function PlacementCursorService.GetZone(row: number, col: number): ZoneType?
 end
 
 --[=[
+	Returns the tile descriptor for a coordinate so cursor logic can evaluate prohibited placement markers.
+	@within PlacementCursorService
+	@param row number -- Grid row to inspect.
+	@param col number -- Grid column to inspect.
+	@return WorldTypes.TileDescriptor? -- The resolved descriptor or nil when the coordinate is invalid.
+]=]
+function PlacementCursorService.GetTileDescriptor(row: number, col: number): TileDescriptor?
+	return PlacementGridRuntime.GetTileDescriptor(row, col)
+end
+
+--[=[
 	Returns all unoccupied tiles allowed for the given structure type.
 	@within PlacementCursorService
-	@param structureType string -- Structure identifier used to look up allowed zones.
+	@param structureType string -- Structure identifier used to gate unknown structures.
 	@param occupiedSet OccupiedSet -- Fast lookup table of occupied coordinates.
 	@return { GridCoord } -- Immutable list of valid coordinates for placement.
 ]=]
 function PlacementCursorService.GetValidTiles(structureType: string, occupiedSet: OccupiedSet): { GridCoord }
-	local allowedZones = PlacementConfig.VALID_ZONE_TYPES[structureType]
-	if allowedZones == nil then
+	local placementCost = PlacementConfig.STRUCTURE_PLACEMENT_COSTS[structureType]
+	if placementCost == nil then
 		return table.freeze({})
-	end
-
-	local allowedZoneSet = {}
-	for _, zoneName in ipairs(allowedZones) do
-		allowedZoneSet[zoneName] = true
 	end
 
 	local spec: GridSpec = PlacementGridRuntime.GetGridSpec()
 	local validTiles = {}
 	for row = 1, spec.gridRows do
 		for col = 1, spec.gridCols do
-			local zone = PlacementCursorService.GetZone(row, col)
+			local descriptor = PlacementCursorService.GetTileDescriptor(row, col)
 			local coordKey = _GetCoordKey(row, col)
-			if zone ~= nil and allowedZoneSet[zone] == true and occupiedSet[coordKey] ~= true then
+			local zone = descriptor and descriptor.zone or nil
+			local isZoneDisallowed = zone ~= nil and PlacementConfig.BASE_DISALLOWED_ZONE_TYPES[zone] == true
+			local isPlacementProhibited = descriptor ~= nil and descriptor.isPlacementProhibited == true
+			if descriptor ~= nil and not isZoneDisallowed and not isPlacementProhibited and occupiedSet[coordKey] ~= true then
 				validTiles[#validTiles + 1] = _CloneCoord(row, col)
 			end
 		end

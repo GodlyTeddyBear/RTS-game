@@ -64,6 +64,10 @@ local function StructureCard(props: TStructureCardProps)
 		StrokeThickness = if props.isSelected then Border.Width.Medium else Border.Width.Thin,
 		[React.Event.Activated] = function()
 			if not props.cardData.canAfford then
+				warn(("[PlacementPalette] Cannot select '%s': insufficient energy (%d required)"):format(
+					props.cardData.structureType,
+					props.cardData.energyCost
+				))
 				return
 			end
 			props.onSelect(props.cardData.structureType)

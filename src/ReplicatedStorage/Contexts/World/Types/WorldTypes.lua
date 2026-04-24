@@ -16,11 +16,11 @@ local WorldTypes = {}
 -- [Types]
 
 --[=[
-	@type ZoneType "lane" | "side_pocket" | "blocked"
+	@type ZoneType "lane" | "side_pocket" | "buildable" | "blocked"
 	@within WorldTypes
 	The allowed tile zone categories.
 ]=]
-export type ZoneType = "lane" | "side_pocket" | "blocked"
+export type ZoneType = "lane" | "side_pocket" | "buildable" | "blocked"
 
 --[=[
 	@type ResourceType string
@@ -45,10 +45,12 @@ export type GridCoord = {
 	@within WorldTypes
 	.zone ZoneType -- Tile zone classification.
 	.resourceType ResourceType? -- Resource assigned to side-pocket tiles.
+	.isPlacementProhibited boolean -- Whether placement-prohibited map markers overlap this tile.
 ]=]
 export type TileDescriptor = {
 	zone: ZoneType,
 	resourceType: ResourceType?,
+	isPlacementProhibited: boolean,
 }
 
 --[=[
@@ -80,6 +82,7 @@ export type GridSpec = {
 	.zone ZoneType -- Tile zone classification.
 	.occupied boolean -- Whether the tile is reserved.
 	.resourceType ResourceType? -- Resource assigned to side-pocket tiles.
+	.isPlacementProhibited boolean -- Whether placement-prohibited map markers overlap this tile.
 ]=]
 export type Tile = {
 	coord: GridCoord,
@@ -87,6 +90,7 @@ export type Tile = {
 	zone: ZoneType,
 	occupied: boolean,
 	resourceType: ResourceType?,
+	isPlacementProhibited: boolean,
 }
 
 --[=[

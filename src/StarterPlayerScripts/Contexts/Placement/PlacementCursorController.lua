@@ -118,6 +118,7 @@ function PlacementCursorController:KnitStart()
 			return
 		end
 
+		print("[PlacementDebug] Exit reason: CancelPlacement action fired")
 		self:ExitPlacementMode()
 	end)
 
@@ -130,11 +131,18 @@ function PlacementCursorController:KnitStart()
 end
 
 function PlacementCursorController:TogglePlacementMode(structureType: string)
+	print(("[PlacementDebug] TogglePlacementMode called: structureType=%s state=%s confirming=%s"):format(
+		tostring(structureType),
+		tostring(self._state),
+		tostring(self._confirming)
+	))
+
 	if self._confirming then
 		return
 	end
 
 	if self._state == "Active" and self._structureType == structureType then
+		print("[PlacementDebug] Exit reason: TogglePlacementMode called while already active for same structure")
 		self:ExitPlacementMode()
 		return
 	end
@@ -143,16 +151,41 @@ function PlacementCursorController:TogglePlacementMode(structureType: string)
 end
 
 function PlacementCursorController:EnterPlacementMode(structureType: string)
+	print(("[PlacementDebug] EnterPlacementMode start: structureType=%s"):format(tostring(structureType)))
+
 	if self._confirming then
+		print("[PlacementDebug] EnterPlacementMode aborted: currently confirming")
 		return
 	end
 
 	if self._state == "Active" then
+		print("[PlacementDebug] EnterPlacementMode: exiting previous active session first")
 		self:ExitPlacementMode()
 	end
 
 	local runState = self._runAtom()
+	print(("[PlacementDebug] Current runState=%s"):format(tostring(runState.state)))
 	if runState.state ~= "Prep" then
+		print(("[PlacementDebug] Cannot enter placement mode outside Prep (current state: %s)"):format(tostring(runState.state)))
+		return
+	end
+
+	local occupiedSet = _BuildOccupiedSet(self._placementAtom())
+	local validTilesResultOk, validTilesOrError = pcall(function()
+		return PlacementCursorService.GetValidTiles(structureType, occupiedSet)
+	end)
+	if not validTilesResultOk then
+		print(("[PlacementDebug] GetValidTiles threw error: %s"):format(tostring(validTilesOrError)))
+		return
+	end
+
+	local validTiles = validTilesOrError
+	print(("[PlacementDebug] GetValidTiles result: structureType=%s validTileCount=%d"):format(
+		tostring(structureType),
+		#validTiles
+	))
+	if #validTiles == 0 then
+		print(("[PlacementDebug] No valid tiles found for structureType '%s'"):format(structureType))
 		return
 	end
 
@@ -169,8 +202,6 @@ function PlacementCursorController:EnterPlacementMode(structureType: string)
 
 	self._playerInputController:ToggleContext("Placement", true)
 
-	local occupiedSet = _BuildOccupiedSet(self._placementAtom())
-	local validTiles = PlacementCursorService.GetValidTiles(structureType, occupiedSet)
 	self._validTiles = validTiles
 
 	for _, coord in ipairs(validTiles) do
@@ -179,7 +210,16 @@ function PlacementCursorController:EnterPlacementMode(structureType: string)
 
 	self._highlightPool:ShowValidTiles(validTiles)
 
-	local ghost = PlacementGhostModel.new(structureType)
+	local ghostOk, ghostOrError = pcall(function()
+		return PlacementGhostModel.new(structureType)
+	end)
+	if not ghostOk then
+		print(("[PlacementDebug] Failed to create placement ghost for '%s': %s"):format(structureType, tostring(ghostOrError)))
+		self:ExitPlacementMode()
+		return
+	end
+
+	local ghost = ghostOrError
 	self._ghost = ghost
 	ghost:SetValid(false)
 
@@ -192,13 +232,17 @@ function PlacementCursorController:EnterPlacementMode(structureType: string)
 		self:_OnInputBegan(input, gameProcessed)
 	end), "Disconnect")
 
+	print("[PlacementDebug] EnterPlacementMode success: placement mode is active")
 	self:_UpdateHoverState()
 end
 
 function PlacementCursorController:ExitPlacementMode()
 	if self._state ~= "Active" then
+		print("[PlacementDebug] ExitPlacementMode ignored: not active")
 		return
 	end
+
+	print(("[PlacementDebug] ExitPlacementMode: structureType=%s"):format(tostring(self._structureType)))
 
 	self._state = "Idle"
 	self._confirming = false
@@ -226,6 +270,7 @@ function PlacementCursorController:ExitPlacementMode()
 end
 
 function PlacementCursorController:Destroy()
+	print("[PlacementDebug] Exit reason: PlacementCursorController:Destroy called")
 	self:ExitPlacementMode()
 	self._sessionJanitor:Destroy()
 	self._controllerJanitor:Destroy()
@@ -243,6 +288,7 @@ function PlacementCursorController:_OnRenderStepped()
 	if runState.state ~= self._runState then
 		self._runState = runState.state
 		if runState.state ~= "Prep" then
+			print(("[PlacementDebug] Exit reason: run state changed away from Prep -> %s"):format(tostring(runState.state)))
 			self:ExitPlacementMode()
 			return
 		end
@@ -324,15 +370,24 @@ function PlacementCursorController:_OnInputBegan(input: InputObject, gameProcess
 		return
 	end
 
-	if input.UserInputType == Enum.UserInputType.MouseButton2 then
-		self:ExitPlacementMode()
-	end
 end
 
 function PlacementCursorController:_ConfirmPlacement()
 	if self._confirming or self._hoveredCoord == nil or self._isHoveredValid == false or self._structureType == nil then
+		print(("[PlacementDebug] Confirm blocked: confirming=%s hoveredCoord=%s hoveredValid=%s structureType=%s"):format(
+			tostring(self._confirming),
+			tostring(self._hoveredCoord ~= nil),
+			tostring(self._isHoveredValid),
+			tostring(self._structureType)
+		))
 		return
 	end
+
+	print(("[PlacementDebug] Confirm placement: row=%d col=%d structureType=%s"):format(
+		self._hoveredCoord.row,
+		self._hoveredCoord.col,
+		self._structureType
+	))
 
 	self._confirming = true
 	local sessionId = self._sessionId
@@ -350,7 +405,7 @@ function PlacementCursorController:_ConfirmPlacement()
 	self._confirming = false
 
 	if not ok then
-		warn("[PlacementCursor] PlaceStructure invoke failed")
+		print("[PlacementDebug] PlaceStructure invoke failed")
 		return
 	end
 
@@ -359,14 +414,15 @@ function PlacementCursorController:_ConfirmPlacement()
 	end
 
 	if response.success then
+		print("[PlacementDebug] PlaceStructure success")
 		self:ExitPlacementMode()
 		return
 	end
 
 	if response.errorMessage then
-		warn(("[PlacementCursor] %s"):format(response.errorMessage))
+		print(("[PlacementDebug] PlaceStructure rejected: %s"):format(response.errorMessage))
 	else
-		warn("[PlacementCursor] Placement rejected without an error message")
+		print("[PlacementDebug] Placement rejected without an error message")
 	end
 end
 

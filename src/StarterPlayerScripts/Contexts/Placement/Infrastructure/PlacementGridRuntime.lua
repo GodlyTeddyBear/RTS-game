@@ -29,10 +29,13 @@ local cachedGridSpec: GridSpec? = nil
 local cachedSidePocketParts: { BasePart }? = nil
 local cachedSidePocketCoordKeySet: { [string]: boolean }? = nil
 local cachedSidePocketResourceByKey: { [string]: string }? = nil
+local cachedPlacementProhibitedParts: { BasePart }? = nil
+local cachedPlacementProhibitedCoordKeySet: { [string]: boolean }? = nil
 local GRID_PART_WAIT_TIMEOUT_SECONDS = 30
 local GRID_PART_POLL_INTERVAL_SECONDS = 0.25
 local PLACEMENT_GRIDS_PATH = "Workspace.Map.Game.Environment.Zones.PlacementGrids"
 local SIDE_POCKETS_PATH = "Workspace.Map.Game.Environment.Zones.SidePockets"
+local PLACEMENT_PROHIBITED_PATH = "Workspace.Map.Game.Environment.Zones.PlacementProhibited"
 
 -- [Private Helpers]
 
@@ -61,9 +64,6 @@ local function _ResolvePath(path: string): Instance?
 		local segment = segments[index]
 		local child = current:FindFirstChild(segment)
 		if child == nil then
-			child = current:WaitForChild(segment, 5)
-		end
-		if child == nil then
 			return nil
 		end
 		current = child
@@ -74,6 +74,7 @@ end
 -- Waits for the authoritative placement grid part because the client may initialize before the map finishes loading.
 local function _GetGridPart(): BasePart
 	local deadline = os.clock() + GRID_PART_WAIT_TIMEOUT_SECONDS
+	local lastDebugPrintAt = 0
 
 	repeat
 		local gridContainer = _ResolvePath(PLACEMENT_GRIDS_PATH)
@@ -91,14 +92,36 @@ local function _GetGridPart(): BasePart
 			end
 		end
 
+		-- Fallback for map variants where the zone path differs but the marker name is still canonical.
+		if gridInstance == nil then
+			local fallback = Workspace:FindFirstChild(WorldConfig.GRID_PART_NAME, true)
+			if fallback ~= nil and fallback:IsA("BasePart") then
+				gridInstance = fallback
+			end
+		end
+
 		if gridInstance ~= nil then
+			print(("[PlacementGridDebug] Found grid part '%s'"):format(gridInstance:GetFullName()))
 			return gridInstance
+		end
+
+		local now = os.clock()
+		if now - lastDebugPrintAt >= 1 then
+			lastDebugPrintAt = now
+			print(("[PlacementGridDebug] Waiting for PlacementGrid. strictPathFound=%s fallbackFound=%s"):format(
+				tostring(gridContainer ~= nil),
+				tostring(Workspace:FindFirstChild(WorldConfig.GRID_PART_NAME, true) ~= nil)
+			))
 		end
 
 		task.wait(GRID_PART_POLL_INTERVAL_SECONDS)
 	until os.clock() >= deadline
 
-	error("PlacementGridRuntime: missing PlacementGrid part")
+	error(("PlacementGridRuntime: missing PlacementGrid part after %ds. Path=%s Name=%s"):format(
+		GRID_PART_WAIT_TIMEOUT_SECONDS,
+		PLACEMENT_GRIDS_PATH,
+		WorldConfig.GRID_PART_NAME
+	))
 end
 
 -- Collects authored side-pocket parts so tile zoning can be derived from map markers instead of hardcoded coordinates.
@@ -119,6 +142,40 @@ local function _GetSidePocketParts(): { BasePart }
 
 	if #parts == 0 then
 		local fallback = Workspace:FindFirstChild("SidePockets", true)
+		if fallback ~= nil then
+			if fallback:IsA("BasePart") then
+				table.insert(parts, fallback)
+			else
+				for _, instance in ipairs(fallback:GetDescendants()) do
+					if instance:IsA("BasePart") then
+						table.insert(parts, instance)
+					end
+				end
+			end
+		end
+	end
+
+	return parts
+end
+
+-- Collects authored prohibited-placement parts so build denial can be driven by map markers.
+local function _GetPlacementProhibitedParts(): { BasePart }
+	local parts = {}
+	local container = _ResolvePath(PLACEMENT_PROHIBITED_PATH)
+	if container ~= nil then
+		if container:IsA("BasePart") then
+			table.insert(parts, container)
+		else
+			for _, instance in ipairs(container:GetDescendants()) do
+				if instance:IsA("BasePart") then
+					table.insert(parts, instance)
+				end
+			end
+		end
+	end
+
+	if #parts == 0 then
+		local fallback = Workspace:FindFirstChild("PlacementProhibited", true)
 		if fallback ~= nil then
 			if fallback:IsA("BasePart") then
 				table.insert(parts, fallback)
@@ -194,6 +251,17 @@ local function _GetSidePocketPartsCached(): { BasePart }
 
 	local parts = _GetSidePocketParts()
 	cachedSidePocketParts = parts
+	return parts
+end
+
+-- Returns cached placement-prohibited marker parts.
+local function _GetPlacementProhibitedPartsCached(): { BasePart }
+	if cachedPlacementProhibitedParts ~= nil then
+		return cachedPlacementProhibitedParts
+	end
+
+	local parts = _GetPlacementProhibitedParts()
+	cachedPlacementProhibitedParts = parts
 	return parts
 end
 
@@ -363,6 +431,46 @@ local function _GetResolvedSidePocketTiles(spec: GridSpec): ({ [string]: boolean
 	return coordKeySet, resourceByKey
 end
 
+-- Resolves placement-prohibited tile membership from authored marker parts.
+local function _GetResolvedPlacementProhibitedTiles(spec: GridSpec): { [string]: boolean }
+	if cachedPlacementProhibitedCoordKeySet ~= nil then
+		return cachedPlacementProhibitedCoordKeySet
+	end
+
+	local coordKeySet = {} :: { [string]: boolean }
+
+	for _, part in ipairs(_GetPlacementProhibitedPartsCached()) do
+		local matchedAnyTile = false
+
+		for row = 1, spec.gridRows do
+			for col = 1, spec.gridCols do
+				local tileCenter = PlacementGridRuntime.CoordToWorld({
+					row = row,
+					col = col,
+				})
+
+				if _TileOverlapsPartXZ(part, tileCenter, spec) then
+					local coordKey = _GetCoordKey(row, col)
+					coordKeySet[coordKey] = true
+					matchedAnyTile = true
+				end
+			end
+		end
+
+		-- Reconcile marker parts that are near the grid but miss tile overlap.
+		if not matchedAnyTile then
+			local nearestCoord = _ResolveNearestEligibleCoord(part.Position, spec)
+			if nearestCoord ~= nil then
+				local coordKey = _GetCoordKey(nearestCoord.row, nearestCoord.col)
+				coordKeySet[coordKey] = true
+			end
+		end
+	end
+
+	cachedPlacementProhibitedCoordKeySet = coordKeySet
+	return coordKeySet
+end
+
 --[=[
 	Returns the tile descriptor for a grid coordinate so placement code can filter by zone and resource type.
 	@within PlacementGridRuntime
@@ -376,7 +484,7 @@ function PlacementGridRuntime.GetTileDescriptor(row: number, col: number): TileD
 		return nil
 	end
 
-	local zone: ZoneType = "blocked"
+	local zone: ZoneType = "buildable"
 	local resourceType: string? = nil
 	if row == spec.laneRow then
 		zone = "lane"
@@ -389,9 +497,14 @@ function PlacementGridRuntime.GetTileDescriptor(row: number, col: number): TileD
 		end
 	end
 
+	local coordKey = _GetCoordKey(row, col)
+	local prohibitedCoordKeySet = _GetResolvedPlacementProhibitedTiles(spec)
+	local isPlacementProhibited = prohibitedCoordKeySet[coordKey] == true
+
 	return table.freeze({
 		zone = zone,
 		resourceType = resourceType,
+		isPlacementProhibited = isPlacementProhibited,
 	})
 end
 

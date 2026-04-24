@@ -26,25 +26,19 @@ function PlacementSpecs.IsKnownStructureType(structureType: string): boolean
 	return PlacementConfig.STRUCTURE_PLACEMENT_COSTS[structureType] ~= nil
 end
 
--- Blocked or already-occupied tiles can never accept a placement.
+-- Occupied tiles can never accept a placement.
 function PlacementSpecs.IsTileAvailable(tile: Tile): boolean
-	return tile.zone ~= "blocked" and tile.occupied == false
+	return tile.occupied == false
 end
 
--- Valid zones are data-driven so the policy layer stays generic.
-function PlacementSpecs.IsZoneCompatible(structureType: string, tile: Tile): boolean
-	local validZones = PlacementConfig.VALID_ZONE_TYPES[structureType]
-	if validZones == nil then
-		return false
-	end
+-- Base disallowed zones are data-driven so map-wide rules stay configurable.
+function PlacementSpecs.IsBaseZoneAllowed(tile: Tile): boolean
+	return PlacementConfig.BASE_DISALLOWED_ZONE_TYPES[tile.zone] ~= true
+end
 
-	for _, zone in validZones do
-		if zone == tile.zone then
-			return true
-		end
-	end
-
-	return false
+-- Placement-prohibited markers always deny structure placement.
+function PlacementSpecs.IsNotPlacementProhibited(tile: Tile): boolean
+	return tile.isPlacementProhibited ~= true
 end
 
 -- Requirement is data-driven so future structures can opt into resource-tile constraints.
