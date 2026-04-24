@@ -89,10 +89,11 @@ function PlacementService:SpawnStructure(structureType: string, worldPos: Vector
 	-- Models and parts both support :PivotTo, which keeps the spawn path generic.
 	local spawnModel = self:_ResolveSpawnModel(structureType)
 	spawnModel:PivotTo(CFrame.new(worldPos))
-	spawnModel.Parent = self._folder
 
 	local instanceId = self._nextId
 	self._nextId += 1
+	spawnModel:SetAttribute("PlacementInstanceId", instanceId)
+	spawnModel.Parent = self._folder
 	self._instanceMap[instanceId] = spawnModel
 
 	return Ok(instanceId)

@@ -39,6 +39,15 @@ local PLACEMENT_PROHIBITED_PATH = "Workspace.Map.Game.Environment.Zones.Placemen
 
 -- [Private Helpers]
 
+local function _ResetCache()
+	cachedGridSpec = nil
+	cachedSidePocketParts = nil
+	cachedSidePocketCoordKeySet = nil
+	cachedSidePocketResourceByKey = nil
+	cachedPlacementProhibitedParts = nil
+	cachedPlacementProhibitedCoordKeySet = nil
+end
+
 -- Resolves a dot-path into an instance so the client can find authored world markers without hardcoding references.
 local function _ResolvePath(path: string): Instance?
 	local segments = {}
@@ -241,6 +250,14 @@ function PlacementGridRuntime.GetGridSpec(): GridSpec
 	local spec = _BuildGridSpec(_GetGridPart())
 	cachedGridSpec = spec
 	return spec
+end
+
+--[=[
+	Clears all cached runtime map geometry and marker-derived tile metadata.
+	@within PlacementGridRuntime
+]=]
+function PlacementGridRuntime.ResetCache()
+	_ResetCache()
 end
 
 -- Returns the cached side-pocket part list because authored map markers do not change during play.

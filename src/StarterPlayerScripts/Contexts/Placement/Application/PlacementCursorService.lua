@@ -99,6 +99,14 @@ function PlacementCursorService.GetTileDescriptor(row: number, col: number): Til
 end
 
 --[=[
+	Clears cached client placement-grid runtime metadata so the next lookup uses the active map.
+	@within PlacementCursorService
+]=]
+function PlacementCursorService.ResetRuntimeCache()
+	PlacementGridRuntime.ResetCache()
+end
+
+--[=[
 	Returns all unoccupied tiles allowed for the given structure type.
 	@within PlacementCursorService
 	@param structureType string -- Structure identifier used to gate unknown structures.

@@ -9,6 +9,7 @@ local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
+local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 local PlacementRemoteClient = require(ReplicatedStorage.Network.Generated.PlacementRemoteClient)
 
@@ -39,7 +40,22 @@ local function _BuildOccupiedSet(atom: PlacementAtom?): { [string]: boolean }
 		return occupiedSet
 	end
 
+	local liveInstanceIds = {} :: { [number]: boolean }
+	local placementFolder = Workspace:FindFirstChild(PlacementConfig.PLACEMENT_FOLDER_NAME)
+	if placementFolder ~= nil then
+		for _, instance in ipairs(placementFolder:GetChildren()) do
+			local placementInstanceId = instance:GetAttribute("PlacementInstanceId")
+			if type(placementInstanceId) == "number" then
+				liveInstanceIds[placementInstanceId] = true
+			end
+		end
+	end
+
 	for _, record in ipairs(atom.placements) do
+		if liveInstanceIds[record.instanceId] ~= true then
+			continue
+		end
+
 		occupiedSet[("%d_%d"):format(record.coord.row, record.coord.col)] = true
 	end
 
@@ -169,6 +185,8 @@ function PlacementCursorController:EnterPlacementMode(structureType: string)
 		-- print(("[PlacementDebug] Cannot enter placement mode outside Prep (current state: %s)"):format(tostring(runState.state)))
 		return
 	end
+
+	PlacementCursorService.ResetRuntimeCache()
 
 	local occupiedSet = _BuildOccupiedSet(self._placementAtom())
 	local validTilesResultOk, validTilesOrError = pcall(function()

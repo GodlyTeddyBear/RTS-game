@@ -1,6 +1,7 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local MuchachoHitbox = require(ReplicatedStorage.Utilities.MuchachoHitbox)
@@ -25,11 +26,23 @@ export type THitEntity = {
 	Entity: number,
 }
 
+local function EnsureHitboxFolder(): Folder
+	local existing = Workspace:FindFirstChild("Hitboxes")
+	if existing and existing:IsA("Folder") then
+		return existing :: Folder
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "Hitboxes"
+	folder.Parent = Workspace
+	return folder
+end
+
 function HitboxService.new()
 	local self = setmetatable({}, HitboxService)
 	self._janitors = {} :: { [THitboxHandle]: any }
 	self._hitEntities = {} :: { [THitboxHandle]: { THitEntity } }
 	self._hitEntityKeys = {} :: { [THitboxHandle]: { [string]: boolean } }
+	self._hitboxFolder = EnsureHitboxFolder()
 	return self
 end
 
@@ -195,4 +208,3 @@ function HitboxService:CleanupAll()
 end
 
 return HitboxService
-

@@ -158,13 +158,37 @@ function PlacementContext:KnitStart()
 
 	-- RunEnd is the cleanup boundary for all spawned structures and synced records.
 	self._stateChangedConnection = self._runContext.StateChanged:Connect(
-		function(newState: string, _previousState: string)
-			if newState == "RunEnd" then
-				self._placementService:DestroyAll()
-				self._syncService:ClearAll()
+		function(newState: string, previousState: string)
+			local isRunEndCleanup = newState == "RunEnd"
+			local isFreshRunStartCleanup = previousState == "Idle" and newState == "Prep"
+			if not isRunEndCleanup and not isFreshRunStartCleanup then
+				return
 			end
+
+			self:_ReleaseOccupiedTilesForCurrentPlacements()
+			self._placementService:DestroyAll()
+			self._syncService:ClearAll()
 		end
 	)
+end
+
+function PlacementContext:_ReleaseOccupiedTilesForCurrentPlacements()
+	local placements = self._syncService:GetPlacementsReadOnly()
+
+	for _, record in ipairs(placements) do
+		local occupancyResult = self._worldContext:SetTileOccupied(record.coord, false)
+		if occupancyResult.success and occupancyResult.value == true then
+			continue
+		end
+
+		Result.MentionError("Placement:ReleaseTileOccupancy", "Failed to clear occupied tile at run end", {
+			row = record.coord.row,
+			col = record.coord.col,
+			errorType = occupancyResult.type,
+			errorMessage = occupancyResult.message,
+			occupancyUpdated = occupancyResult.value,
+		}, occupancyResult.type)
+	end
 end
 
 --[=[
