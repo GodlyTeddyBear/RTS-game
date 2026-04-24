@@ -15,6 +15,7 @@ local Commander = {}
 ]=]
 local events = table.freeze({
 	CommanderDied = "Commander.CommanderDied",
+	AbilityUsed = "Commander.AbilityUsed",
 })
 
 --[=[
@@ -24,6 +25,7 @@ local events = table.freeze({
 ]=]
 local schemas: { [string]: { string } } = {
 	[events.CommanderDied] = { "Instance" },
+	[events.AbilityUsed] = { "number", "string" },
 }
 
 Commander.events = events

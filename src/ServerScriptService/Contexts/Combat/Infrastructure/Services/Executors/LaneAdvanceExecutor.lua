@@ -79,7 +79,7 @@ function LaneAdvanceExecutor:_StartPath(entity: number, services: any): boolean
 	end
 
 	services.EnemyEntityFactory:SetPathMoving(entity, true)
-	self:TrackAsyncResource(entity, "PathPromise", PathfindingHelper.RunPath(path, targetPosition), "cancel")
+	self:TrackAsyncResource(entity, "PathPromise", PathfindingHelper.RunPath(path, targetPosition, entity), "cancel")
 	return true
 end
 

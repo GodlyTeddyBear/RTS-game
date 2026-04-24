@@ -9,7 +9,6 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 
 local CombatLoopService = require(script.Parent.Infrastructure.Services.CombatLoopService)
 local CombatBehaviorRuntimeService = require(script.Parent.Infrastructure.Services.CombatBehaviorRuntimeService)
-local WaveCompletionPolicy = require(script.Parent.CombatDomain.Policies.WaveCompletionPolicy)
 local CombatPerceptionService = require(script.Parent.CombatDomain.Services.CombatPerceptionService)
 
 local StartCombat = require(script.Parent.Application.Commands.StartCombat)
@@ -30,10 +29,6 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 }
 
 local DomainModules: { BaseContext.TModuleSpec } = {
-	{
-		Name = "WaveCompletionPolicy",
-		Module = WaveCompletionPolicy,
-	},
 	{
 		Name = "CombatPerceptionService",
 		Module = CombatPerceptionService,

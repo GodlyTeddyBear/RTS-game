@@ -49,4 +49,18 @@ Errors.INSUFFICIENT_ENERGY = "CommanderContext: not enough energy to use this ab
 ]=]
 Errors.COMMANDER_NOT_FOUND = "CommanderContext: commander state not found for player"
 
+--[=[
+	@prop INVALID_RUN_STATE_FOR_ABILITY string
+	@within Errors
+	Returned when an ability is used in a disallowed run state.
+]=]
+Errors.INVALID_RUN_STATE_FOR_ABILITY = "CommanderContext: ability cannot be used in the current run state"
+
+--[=[
+	@prop COMMANDER_ROOT_MISSING string
+	@within Errors
+	Returned when the commander character root cannot be resolved for cast origin.
+]=]
+Errors.COMMANDER_ROOT_MISSING = "CommanderContext: commander character root is unavailable"
+
 return table.freeze(Errors)

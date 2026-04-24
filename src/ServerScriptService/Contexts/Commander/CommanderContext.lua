@@ -27,6 +27,7 @@ local CommanderEntityFactory = require(script.Parent.Infrastructure.ECS.Commande
 local CommanderSyncService = require(script.Parent.Infrastructure.Persistence.CommanderSyncService)
 local AbilityService = require(script.Parent.CommanderDomain.Services.AbilityService)
 local CooldownService = require(script.Parent.CommanderDomain.Services.CooldownService)
+local AbilityUsePolicy = require(script.Parent.CommanderDomain.Policies.AbilityUsePolicy)
 local UseAbilityCommand = require(script.Parent.Application.Commands.UseAbilityCommand)
 local GetCommanderStateQuery = require(script.Parent.Application.Queries.GetCommanderStateQuery)
 local GetCooldownQuery = require(script.Parent.Application.Queries.GetCooldownQuery)
@@ -77,6 +78,10 @@ local DomainModules: { BaseContext.TModuleSpec } = {
 		Name = "CooldownService",
 		Module = CooldownService,
 	},
+	{
+		Name = "AbilityUsePolicy",
+		Module = AbilityUsePolicy,
+	},
 }
 
 local ApplicationModules: { BaseContext.TModuleSpec } = {
@@ -121,6 +126,11 @@ local CommanderContext = Knit.CreateService({
 		Fields = {
 			{ Field = "_syncService", Method = "Destroy" },
 		},
+	},
+	ExternalServices = {
+		{ Name = "EconomyContext" },
+		{ Name = "RunContext" },
+		{ Name = "SummonContext" },
 	},
 })
 

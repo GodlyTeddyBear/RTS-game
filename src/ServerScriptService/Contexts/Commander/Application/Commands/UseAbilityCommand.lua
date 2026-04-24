@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
 local CommanderTypes = require(ReplicatedStorage.Contexts.Commander.Types.CommanderTypes)
 local Errors = require(script.Parent.Parent.Parent.Errors)
+local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
 local Ok = Result.Ok
 local Try = Result.Try
@@ -29,6 +30,20 @@ type UseAbilityResult = {
 local UseAbilityCommand = {}
 UseAbilityCommand.__index = UseAbilityCommand
 
+local function _GetCommanderRootCFrame(player: Player): CFrame?
+	local character = player.Character
+	if character == nil then
+		return nil
+	end
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if rootPart == nil or not rootPart:IsA("BasePart") then
+		return nil
+	end
+
+	return rootPart.CFrame
+end
+
 --[=[
 	Creates a new ability-use command.
 	@within UseAbilityCommand
@@ -39,7 +54,7 @@ function UseAbilityCommand.new()
 end
 
 --[=[
-	Initializes the ability, cooldown, and sync dependencies.
+	Initializes local command dependencies.
 	@within UseAbilityCommand
 	@param registry any -- The dependency registry for this context.
 	@param _name string -- The registered module name.
@@ -47,8 +62,16 @@ end
 function UseAbilityCommand:Init(registry: any, _name: string)
 	self._abilityService = registry:Get("AbilityService")
 	self._cooldownService = registry:Get("CooldownService")
+	self._abilityUsePolicy = registry:Get("AbilityUsePolicy")
 	self._entityFactory = registry:Get("CommanderEntityFactory")
 	self._syncService = registry:Get("CommanderSyncService")
+end
+
+-- Resolves cross-context dependencies after external services are registered in KnitStart.
+function UseAbilityCommand:Start(registry: any, _name: string)
+	self._economyContext = registry:Get("EconomyContext")
+	self._runContext = registry:Get("RunContext")
+	self._summonContext = registry:Get("SummonContext")
 end
 
 --[=[
@@ -59,49 +82,75 @@ end
 	@return Result.Result<UseAbilityResult> -- The accepted slot key.
 ]=]
 function UseAbilityCommand:Execute(player: Player, slotKey: SlotKey): Result.Result<UseAbilityResult>
-	local userId = player.UserId
+	return Result.Catch(function()
+		local userId = player.UserId
 
-	-- Resolve the live commander state before doing any slot validation.
-	Try(fromNilable(
-		self._entityFactory:GetCommanderState(userId),
-		"CommanderNotFound",
-		Errors.COMMANDER_NOT_FOUND,
-		{ userId = userId }
-	))
+		-- Resolve the live commander state before doing any slot validation.
+		Try(fromNilable(
+			self._entityFactory:GetCommanderState(userId),
+			"CommanderNotFound",
+			Errors.COMMANDER_NOT_FOUND,
+			{ userId = userId }
+		))
 
-	-- Resolve the slot definition once so the rest of the command can operate on a frozen record.
-	local slot = Try(fromNilable(
-		self._abilityService:GetSlot(slotKey),
-		"InvalidSlot",
-		Errors.INVALID_SLOT,
-		{ slotKey = tostring(slotKey) }
-	))
+		-- Resolve the slot definition once so the rest of the command can operate on a frozen record.
+		local slot = Try(fromNilable(
+			self._abilityService:GetSlot(slotKey),
+			"InvalidSlot",
+			Errors.INVALID_SLOT,
+			{ slotKey = tostring(slotKey) }
+		))
 
-	-- Reject active cooldowns before any energy-affordability checks or side effects.
-	Ensure(
-		self._cooldownService:IsReady(userId, slot.Key),
-		"AbilityOnCooldown",
-		Errors.ABILITY_ON_COOLDOWN,
-		{ userId = userId, slotKey = slot.Key }
-	)
+		-- Reject active cooldowns before any side effects.
+		Ensure(
+			self._cooldownService:IsReady(userId, slot.Key),
+			"AbilityOnCooldown",
+			Errors.ABILITY_ON_COOLDOWN,
+			{ userId = userId, slotKey = slot.Key }
+		)
 
-	-- Keep the energy check before execution so a future EconomyContext spend can slot in here.
-	Ensure(
-		self._abilityService:CanAffordAbility(userId, slot.Key),
-		"InsufficientEnergy",
-		Errors.INSUFFICIENT_ENERGY,
-		{ userId = userId, slotKey = slot.Key, energyCost = slot.EnergyCost }
-	)
+		local runStateResult = self._runContext:GetState()
+		local runState = Try(runStateResult)
+		Try(self._abilityUsePolicy:CheckCanUseInRunState(slot.Key, runState))
 
-	-- Execute the stub effect and stamp the new cooldown atomically through the sync service.
-	self._abilityService:ExecuteStub(userId, slot.Key)
-	self._entityFactory:SetCooldown(userId, slot.Key, slot.CooldownDuration)
-	self._syncService:SyncCommanderState(userId)
+		if slot.Key == "SummonA" then
+			local castOriginCFrame = Try(fromNilable(
+				_GetCommanderRootCFrame(player),
+				"CommanderRootMissing",
+				Errors.COMMANDER_ROOT_MISSING,
+				{ userId = userId }
+			))
 
-	-- Return the accepted slot key so callers can mirror the successful action.
-	return Ok({
-		slotKey = slot.Key,
-	})
+			Try(self._economyContext:SpendEnergy(player, slot.EnergyCost))
+
+			local spawnResult = self._summonContext:SpawnSwarmDrones(player, slot.Metadata, castOriginCFrame)
+			if not spawnResult.success then
+				local refundResult = self._economyContext:AddResource(player, "Energy", slot.EnergyCost)
+				if not refundResult.success then
+					Result.MentionError("Commander:UseAbility", "Failed to refund energy after summon spawn failure", {
+						UserId = userId,
+						SlotKey = slot.Key,
+						CauseType = refundResult.type,
+						CauseMessage = refundResult.message,
+					}, refundResult.type)
+				end
+			end
+			Try(spawnResult)
+		else
+			-- Non-summon slots remain stubbed until their phase implementations are in scope.
+			self._abilityService:ExecuteStub(userId, slot.Key)
+		end
+
+		self._entityFactory:SetCooldown(userId, slot.Key, slot.CooldownDuration)
+		self._syncService:SyncCommanderState(userId)
+
+		GameEvents.Bus:Emit(GameEvents.Events.Commander.AbilityUsed, userId, slot.Key)
+
+		-- Return the accepted slot key so callers can mirror the successful action.
+		return Ok({
+			slotKey = slot.Key,
+		})
+	end, "Commander:UseAbilityCommand")
 end
 
 return UseAbilityCommand

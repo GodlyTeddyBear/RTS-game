@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Knit = require(ReplicatedStorage.Packages.Knit)
 local React = require(ReplicatedStorage.Packages.React)
 local e = React.createElement
 
@@ -12,6 +13,7 @@ local useAbilityBarHud = require(script.Parent.Parent.Parent.Application.Hooks.u
 
 local function AbilityBar()
 	local abilityHud = useAbilityBarHud()
+	local commanderController = Knit.GetController("CommanderController")
 
 	return e(HStack, {
 		Size = UDim2.fromScale(0.34, 0.075),
@@ -27,6 +29,7 @@ local function AbilityBar()
 			children[slot.key] = e(AbilitySlot, {
 				slotData = slot,
 				onActivate = function()
+					commanderController:UseAbility(slot.key)
 				end,
 				LayoutOrder = index,
 			})

@@ -19,6 +19,19 @@ local CommanderController = Knit.CreateController({
 	Name = "CommanderController",
 })
 
+local function _warnAbilityRejected(slotKey: string, result: any)
+	local errType = if result and result.type then tostring(result.type) else "UnknownErrorType"
+	local message = if result and result.message then tostring(result.message) else "No message"
+	local data = if result and result.data then result.data else nil
+	warn(string.format(
+		"[CommanderController] Ability request rejected slot=%s type=%s message=%s data=%s",
+		slotKey,
+		errType,
+		message,
+		if data then game:GetService("HttpService"):JSONEncode(data) else "nil"
+	))
+end
+
 -- [Initialization]
 
 --[=[
@@ -37,6 +50,7 @@ end
 ]=]
 function CommanderController:KnitStart()
 	self._syncClient:Start()
+	self._commanderContext = Knit.GetService("CommanderContext")
 end
 
 --[=[
@@ -46,6 +60,20 @@ end
 ]=]
 function CommanderController:GetAtom()
 	return self._syncClient:GetAtom()
+end
+
+--[=[
+	Requests a commander ability use through the server context.
+	@within CommanderController
+	@param slotKey string -- Commander slot key to execute.
+	@return any -- Async result of ability request.
+	@yields
+]=]
+function CommanderController:UseAbility(slotKey: string)
+	return self._commanderContext:UseAbility(slotKey)
+		:catch(function(err: any)
+			_warnAbilityRejected(slotKey, err)
+		end)
 end
 
 return CommanderController

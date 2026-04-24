@@ -28,6 +28,7 @@ local ApplyDamageEnemyCommand = require(script.Parent.Application.Commands.Apply
 local CleanupAllEnemiesCommand = require(script.Parent.Application.Commands.CleanupAllEnemies)
 local GetAliveEnemiesQuery = require(script.Parent.Application.Queries.GetAliveEnemiesQuery)
 local GetEnemyCountQuery = require(script.Parent.Application.Queries.GetEnemyCountQuery)
+local GetNearestAliveEnemyQuery = require(script.Parent.Application.Queries.GetNearestAliveEnemyQuery)
 
 local Catch = Result.Catch
 local Ok = Result.Ok
@@ -92,6 +93,11 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		Name = "GetEnemyCountQuery",
 		Module = GetEnemyCountQuery,
 		CacheAs = "_getEnemyCountQuery",
+	},
+	{
+		Name = "GetNearestAliveEnemyQuery",
+		Module = GetNearestAliveEnemyQuery,
+		CacheAs = "_getNearestAliveEnemyQuery",
 	},
 }
 
@@ -251,6 +257,19 @@ function EnemyContext:GetEnemyCount(): Result.Result<number>
 	return Catch(function()
 		return self._getEnemyCountQuery:Execute()
 	end, "Enemy:GetEnemyCount")
+end
+
+--[=[
+	@within EnemyContext
+	Returns the nearest alive enemy to a world position within a search radius.
+	@param position Vector3 -- Search origin.
+	@param maxRange number -- Maximum search distance in studs.
+	@return Result.Result<{ entity: number, cframe: CFrame }?> -- Closest enemy payload or `nil`.
+]=]
+function EnemyContext:GetNearestAliveEnemy(position: Vector3, maxRange: number): Result.Result<{ entity: number, cframe: CFrame }?>
+	return Catch(function()
+		return Ok(self._getNearestAliveEnemyQuery:Execute(position, maxRange))
+	end, "Enemy:GetNearestAliveEnemy")
 end
 
 --[=[

@@ -101,17 +101,17 @@ local function _GetGridPart(): BasePart
 		end
 
 		if gridInstance ~= nil then
-			print(("[PlacementGridDebug] Found grid part '%s'"):format(gridInstance:GetFullName()))
+			-- print(("[PlacementGridDebug] Found grid part '%s'"):format(gridInstance:GetFullName()))
 			return gridInstance
 		end
 
 		local now = os.clock()
 		if now - lastDebugPrintAt >= 1 then
 			lastDebugPrintAt = now
-			print(("[PlacementGridDebug] Waiting for PlacementGrid. strictPathFound=%s fallbackFound=%s"):format(
-				tostring(gridContainer ~= nil),
-				tostring(Workspace:FindFirstChild(WorldConfig.GRID_PART_NAME, true) ~= nil)
-			))
+			-- print(("[PlacementGridDebug] Waiting for PlacementGrid. strictPathFound=%s fallbackFound=%s"):format(
+			-- 	tostring(gridContainer ~= nil),
+			-- 	tostring(Workspace:FindFirstChild(WorldConfig.GRID_PART_NAME, true) ~= nil)
+			-- ))
 		end
 
 		task.wait(GRID_PART_POLL_INTERVAL_SECONDS)

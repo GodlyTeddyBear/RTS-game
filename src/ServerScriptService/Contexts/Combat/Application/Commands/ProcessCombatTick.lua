@@ -3,7 +3,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
-local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
 local Ok = Result.Ok
 
@@ -66,10 +65,8 @@ end
 function ProcessCombatTick:Init(registry: any, _name: string)
 	self._loopService = registry:Get("CombatLoopService")
 	self._behaviorRuntimeService = registry:Get("CombatBehaviorRuntimeService")
-	self._waveCompletionPolicy = registry:Get("WaveCompletionPolicy")
 	self._perceptionService = registry:Get("CombatPerceptionService")
 	self._handleGoalReachedCommand = registry:Get("HandleGoalReached")
-	self._hasSeenAliveByUser = {}
 end
 
 --[=[
@@ -254,7 +251,6 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 	return Result.Catch(function()
 		-- Skip inactive or paused sessions so the scheduler can safely keep iterating.
 		if not self._loopService:IsActive(userId) then
-			self._hasSeenAliveByUser[userId] = nil
 			return Ok(false)
 		end
 
@@ -267,9 +263,6 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 		local currentTime = os.clock()
 		local aliveEntities = self._enemyEntityFactory:QueryAliveEntities()
 		local activeStructures = self._structureEntityFactory:QueryActiveEntities()
-		if #aliveEntities > 0 then
-			self._hasSeenAliveByUser[userId] = true
-		end
 
 		-- Build the shared service bag once so runtime dispatch is consistent across all entities.
 		local services = {
@@ -287,14 +280,6 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 		self:_RunTransitionPhase(activeStructures, currentTime, services, self._structureEntityFactory, "Structure")
 		self:_RunActionPhase(aliveEntities, dt, services, self._enemyEntityFactory, "Enemy")
 		self:_RunActionPhase(activeStructures, dt, services, self._structureEntityFactory, "Structure")
-
-		-- Only emit wave completion after the combat has actually seen enemies on this session.
-		local completion = self._waveCompletionPolicy:Check()
-		if completion.Status == "WaveComplete" and self._hasSeenAliveByUser[userId] then
-			self._loopService:PauseCombat(userId)
-			self._hasSeenAliveByUser[userId] = nil
-			GameEvents.Bus:Emit(GameEvents.Events.Run.WaveEnded, activeCombat.WaveNumber)
-		end
 
 		return Ok(true)
 	end, "Combat:ProcessCombatTick")

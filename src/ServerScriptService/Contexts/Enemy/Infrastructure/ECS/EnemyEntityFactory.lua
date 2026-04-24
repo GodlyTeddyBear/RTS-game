@@ -368,6 +368,54 @@ function EnemyEntityFactory:GetPosition(entity: number)
 	return self:_Get(entity, self._components.PositionComponent)
 end
 
+function EnemyEntityFactory:GetEntityCFrame(entity: number): CFrame?
+	self:RequireReady()
+	local modelRef = self:GetModelRef(entity)
+	if modelRef ~= nil and modelRef.model ~= nil then
+		return modelRef.model:GetPivot()
+	end
+
+	local position = self:GetPosition(entity)
+	if position == nil then
+		return nil
+	end
+
+	return position.cframe
+end
+
+function EnemyEntityFactory:GetNearestAliveEnemy(position: Vector3, maxRange: number): { entity: number, cframe: CFrame }?
+	self:RequireReady()
+
+	local nearestEntity = nil :: number?
+	local nearestCFrame = nil :: CFrame?
+	local nearestDistanceSquared = math.huge
+	local maxRangeSquared = maxRange * maxRange
+
+	for _, entity in ipairs(self:QueryAliveEntities()) do
+		local entityCFrame = self:GetEntityCFrame(entity)
+		if entityCFrame == nil then
+			continue
+		end
+
+		local delta = entityCFrame.Position - position
+		local distanceSquared = delta.X * delta.X + delta.Y * delta.Y + delta.Z * delta.Z
+		if distanceSquared <= maxRangeSquared and distanceSquared < nearestDistanceSquared then
+			nearestDistanceSquared = distanceSquared
+			nearestEntity = entity
+			nearestCFrame = entityCFrame
+		end
+	end
+
+	if nearestEntity == nil or nearestCFrame == nil then
+		return nil
+	end
+
+	return {
+		entity = nearestEntity,
+		cframe = nearestCFrame,
+	}
+end
+
 function EnemyEntityFactory:QueryAliveEntities(): { number }
 	self:RequireReady()
 	return self:CollectQuery(self._components.AliveTag)

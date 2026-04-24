@@ -40,7 +40,7 @@ CommanderConfig.SLOTS = {
 	{
 		key = "SummonA",
 		displayName = "Swarm Drones",
-		energyCost = 20,
+		energyCost = 5,
 		cooldownDuration = 18,
 		metadata = {
 			summonCount = 5,

@@ -71,17 +71,21 @@ end
 	Event-to-sound mapping. Each entry maps a GameEvent to the sound key
 	played on the owning player's client. All events emit userId as arg #1.
 ]]
-local EVENT_SOUND_MAP = {}
+local EVENT_SOUND_MAP = {
+	[Events.Commander.AbilityUsed] = "CommanderAbilityUse",
+}
 
 --[[
 	Connect to all server-side GameEvents that should trigger client sounds.
 ]]
 function SoundContext:_ConnectGameEvents()
+	local workerEvents = Events.Worker
+
 	for event, soundKey in EVENT_SOUND_MAP do
 		GameEvents.Bus:On(event, function(userId: number, ...)
 			local args = { ... }
 			local options = nil
-			if event == Events.Worker.MiningCompleted then
+			if workerEvents and event == workerEvents.MiningCompleted then
 				options = { WorkerId = args[1] }
 			end
 			self:_PlayForUser(userId, soundKey, options)
