@@ -34,8 +34,8 @@ end
 	@param _services any -- Shared executor services for the current tick.
 	@return string -- Always returns `Running`.
 ]=]
-function IdleExecutor:Tick(_entity: number, _dt: number, _services: any): string
-	return "Running"
+function IdleExecutor:OnTick(_entity: number, _dt: number, _services: any): string
+	return self:Running()
 end
 
 return IdleExecutor

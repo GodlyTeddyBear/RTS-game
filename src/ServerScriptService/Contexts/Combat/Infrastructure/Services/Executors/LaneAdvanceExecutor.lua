@@ -25,9 +25,9 @@ function LaneAdvanceExecutor.new()
 	local self = BaseExecutor.new({
 		ActionId = "LaneAdvance",
 		IsCommitted = false,
+		AutoCleanupOnComplete = true,
 	})
 	setmetatable(self, LaneAdvanceExecutor)
-	self._promises = {}
 	return self
 end
 
@@ -79,7 +79,7 @@ function LaneAdvanceExecutor:_StartPath(entity: number, services: any): boolean
 	end
 
 	services.EnemyEntityFactory:SetPathMoving(entity, true)
-	self._promises[entity] = PathfindingHelper.RunPath(path, targetPosition)
+	self:TrackAsyncResource(entity, "PathPromise", PathfindingHelper.RunPath(path, targetPosition), "cancel")
 	return true
 end
 
@@ -92,8 +92,8 @@ end
 	@return boolean -- Whether the action started successfully.
 	@return string? -- Optional failure reason when the action cannot start.
 ]=]
-function LaneAdvanceExecutor:Start(entity: number, _data: any?, services: any): (boolean, string?)
-	if self._promises[entity] then
+function LaneAdvanceExecutor:CanStart(entity: number, _data: any?, services: any): (boolean, string?)
+	if self:GetAsyncResource(entity, "PathPromise") ~= nil then
 		self:Cancel(entity, services)
 	end
 
@@ -113,6 +113,15 @@ function LaneAdvanceExecutor:Start(entity: number, _data: any?, services: any): 
 	return true, nil
 end
 
+function LaneAdvanceExecutor:CanContinue(entity: number, services: any): (boolean, string?)
+	local pathState = services.EnemyEntityFactory:GetPathState(entity)
+	if pathState == nil then
+		return false, "MissingPathState"
+	end
+
+	return true, nil
+end
+
 --[=[
 	@within LaneAdvanceExecutor
 	Advances the current path promise and returns the execution state for this tick.
@@ -121,27 +130,27 @@ end
 	@param services any -- Shared executor services for the current tick.
 	@return string -- Current action status for the executor pipeline.
 ]=]
-function LaneAdvanceExecutor:Tick(entity: number, _dt: number, services: any): string
-	local promise = self._promises[entity]
+function LaneAdvanceExecutor:OnTick(entity: number, _dt: number, services: any): string
+	local promise = self:GetAsyncResource(entity, "PathPromise")
 	if not promise then
 		if self:_StartPath(entity, services) then
-			return "Running"
+			return self:Running()
 		end
-		return "Fail"
+		return self:Fail(entity, "PathStartFailed")
 	end
 
 	local status = promise:getStatus()
 	if status == Promise.Status.Started then
-		return "Running"
+		return self:Running()
 	end
 
-	self._promises[entity] = nil
+	self:ReleaseAsyncResource(entity, "PathPromise", false)
 	services.EnemyEntityFactory:SetPathMoving(entity, false)
 
 	if status == Promise.Status.Resolved then
 		local pathState = services.EnemyEntityFactory:GetPathState(entity)
 		if not pathState then
-			return "Fail"
+			return self:Fail(entity, "MissingPathState")
 		end
 
 		local nextWaypointIndex = pathState.waypointIndex + 1
@@ -149,16 +158,16 @@ function LaneAdvanceExecutor:Tick(entity: number, _dt: number, services: any): s
 
 		local updatedPathState = services.EnemyEntityFactory:GetPathState(entity)
 		if not updatedPathState or nextWaypointIndex > #updatedPathState.waypoints then
-			return "Success"
+			return self:Success()
 		end
 
 		if self:_StartPath(entity, services) then
-			return "Running"
+			return self:Running()
 		end
-		return "Fail"
+		return self:Fail(entity, "PathStartFailed")
 	end
 
-	return "Fail"
+	return self:Fail(entity, "PathPromiseRejected")
 end
 
 --[=[
@@ -167,12 +176,7 @@ end
 	@param entity number -- Enemy entity id being processed.
 	@param services any -- Shared executor services for the current tick.
 ]=]
-function LaneAdvanceExecutor:Cancel(entity: number, services: any)
-	local promise = self._promises[entity]
-	if promise then
-		promise:cancel()
-		self._promises[entity] = nil
-	end
+function LaneAdvanceExecutor:OnCancel(entity: number, services: any)
 	services.EnemyEntityFactory:SetPathMoving(entity, false)
 end
 
@@ -182,8 +186,8 @@ end
 	@param entity number -- Enemy entity id being processed.
 	@param services any -- Shared executor services for the current tick.
 ]=]
-function LaneAdvanceExecutor:Complete(entity: number, services: any)
-	self:Cancel(entity, services)
+function LaneAdvanceExecutor:OnComplete(entity: number, services: any)
+	services.EnemyEntityFactory:SetPathMoving(entity, false)
 end
 
 return LaneAdvanceExecutor

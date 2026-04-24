@@ -48,58 +48,80 @@ local function _isTargetInRange(entity: number, targetStructure: number, service
 	return offset:Dot(offset) <= attackRange * attackRange
 end
 
-function EnemyAttackStructureExecutor:Start(entity: number, data: any?, services: any): (boolean, string?)
-	if type(data) ~= "table" or type(data.TargetStructureEntity) ~= "number" then
-		return false, "MissingTargetStructure"
-	end
-
-	if not services.StructureEntityFactory:IsActive(data.TargetStructureEntity) then
+local function _validateTargetStructure(entity: number, targetStructure: number, services: any): (boolean, string?)
+	if not services.StructureEntityFactory:IsActive(targetStructure) then
 		return false, "InactiveTargetStructure"
 	end
 
-	if not _isTargetInRange(entity, data.TargetStructureEntity, services) then
+	if not _isTargetInRange(entity, targetStructure, services) then
 		return false, "TargetOutOfRange"
 	end
 
 	return true, nil
 end
 
-function EnemyAttackStructureExecutor:Tick(entity: number, _dt: number, services: any): string
-	local targetStructure = _getTargetStructure(entity, services)
-	if targetStructure == nil or not services.StructureEntityFactory:IsActive(targetStructure) then
-		return "Fail"
+function EnemyAttackStructureExecutor:CanStart(entity: number, data: any?, services: any): (boolean, string?)
+	if type(data) ~= "table" or type(data.TargetStructureEntity) ~= "number" then
+		return false, "MissingTargetStructure"
 	end
 
-	if not _isTargetInRange(entity, targetStructure, services) then
-		return "Fail"
+	return _validateTargetStructure(entity, data.TargetStructureEntity, services)
+end
+
+function EnemyAttackStructureExecutor:CanContinue(entity: number, services: any): (boolean, string?)
+	local targetStructure = _getTargetStructure(entity, services)
+	if targetStructure == nil then
+		return false, "MissingTargetStructure"
+	end
+
+	return self:RunGuards(entity, services, {
+		{
+			Reason = "InactiveTargetStructure",
+			Check = function(_guardEntity: number, guardServices: any): boolean
+				return guardServices.StructureEntityFactory:IsActive(targetStructure)
+			end,
+		},
+		{
+			Reason = "TargetOutOfRange",
+			Check = function(guardEntity: number, guardServices: any): boolean
+				return _isTargetInRange(guardEntity, targetStructure, guardServices)
+			end,
+		},
+	})
+end
+
+function EnemyAttackStructureExecutor:OnTick(entity: number, _dt: number, services: any): string
+	local targetStructure = _getTargetStructure(entity, services)
+	if targetStructure == nil then
+		return self:Fail(entity, "MissingTargetStructure")
 	end
 
 	local role = services.EnemyEntityFactory:GetRole(entity)
 	local cooldown = services.EnemyEntityFactory:GetAttackCooldown(entity)
 	if role == nil or cooldown == nil then
-		return "Fail"
+		return self:Fail(entity, "MissingAttackState")
 	end
 
 	if services.CurrentTime - cooldown.LastAttackTime < cooldown.Cooldown then
-		return "Running"
+		return self:Running()
 	end
 
 	local damage = role.damage
 	if type(damage) ~= "number" or damage <= 0 then
-		return "Fail"
+		return self:Fail(entity, "InvalidAttackDamage")
 	end
 
 	local damageResult = services.StructureContext:ApplyDamage(targetStructure, damage)
 	if not damageResult.success then
-		return "Fail"
+		return self:Fail(entity, "ApplyDamageFailed")
 	end
 
 	services.EnemyEntityFactory:SetLastAttackTime(entity, services.CurrentTime)
 	if damageResult.value == true then
-		return "Success"
+		return self:Success()
 	end
 
-	return "Running"
+	return self:Running()
 end
 
 return EnemyAttackStructureExecutor
