@@ -10,7 +10,7 @@ local Ensure = Result.Ensure
 
 --[=[
 	@class DestroyStructureInstanceCommand
-	Destroys a spawned structure model without mutating placement records.
+	Destroys a spawned structure model and clears placement occupancy state.
 	@server
 ]=]
 local DestroyStructureInstanceCommand = {}
@@ -22,6 +22,11 @@ end
 
 function DestroyStructureInstanceCommand:Init(registry: any, _name: string)
 	self._placementService = registry:Get("PlacementService")
+	self._syncService = registry:Get("PlacementSyncService")
+end
+
+function DestroyStructureInstanceCommand:Start(registry: any, _name: string)
+	self._worldContext = registry:Get("WorldContext")
 end
 
 function DestroyStructureInstanceCommand:Execute(instanceId: number): Result.Result<boolean>
@@ -30,7 +35,25 @@ function DestroyStructureInstanceCommand:Execute(instanceId: number): Result.Res
 			InstanceId = instanceId,
 		})
 
+		local removedRecord = self._syncService:RemovePlacementByInstanceId(instanceId)
 		self._placementService:DestroyStructure(instanceId)
+
+		if removedRecord ~= nil then
+			local occupancyResult = self._worldContext:SetTileOccupied(removedRecord.coord, false)
+			Ensure(occupancyResult.success, "OccupancyReleaseFailed", Errors.OCCUPANCY_RELEASE_FAILED, {
+				InstanceId = instanceId,
+				Row = removedRecord.coord.row,
+				Col = removedRecord.coord.col,
+				CauseType = occupancyResult.type,
+				CauseMessage = occupancyResult.message,
+			})
+			Ensure(occupancyResult.value == true, "OccupancyReleaseFailed", Errors.OCCUPANCY_RELEASE_FAILED, {
+				InstanceId = instanceId,
+				Row = removedRecord.coord.row,
+				Col = removedRecord.coord.col,
+			})
+		end
+
 		return Ok(true)
 	end, "Placement:DestroyStructureInstanceCommand")
 end

@@ -251,7 +251,7 @@ function PlacementContext:GetPlacedStructures(): Result.Result<{ StructureRecord
 end
 
 --[=[
-	Destroys a spawned structure model while leaving placement records untouched.
+	Destroys a spawned structure instance and clears its placement occupancy state.
 	@within PlacementContext
 	@param instanceId number -- Runtime structure instance id.
 	@return Result.Result<boolean> -- Whether the runtime instance destroy path completed.

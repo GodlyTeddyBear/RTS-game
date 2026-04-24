@@ -114,6 +114,38 @@ function PlacementSyncService:AddPlacement(record: StructureRecord)
 end
 
 --[=[
+	Removes a placement record by runtime instance id.
+	@within PlacementSyncService
+	@param instanceId number -- Runtime instance id to remove.
+	@return StructureRecord? -- The removed placement record, or nil when not found.
+]=]
+function PlacementSyncService:RemovePlacementByInstanceId(instanceId: number): StructureRecord?
+	local removedRecord = nil :: StructureRecord?
+
+	self.Atom(function(current: PlacementAtom)
+		local removeIndex = nil :: number?
+		for index, record in ipairs(current.placements) do
+			if record.instanceId == instanceId then
+				removeIndex = index
+				removedRecord = deepClone(record)
+				break
+			end
+		end
+
+		if removeIndex == nil then
+			return current
+		end
+
+		local updated = table.clone(current)
+		updated.placements = table.clone(current.placements)
+		table.remove(updated.placements, removeIndex)
+		return updated
+	end)
+
+	return removedRecord
+end
+
+--[=[
 	Clears every placement from the atom.
 	@within PlacementSyncService
 ]=]
