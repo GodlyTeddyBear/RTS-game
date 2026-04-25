@@ -1,6 +1,5 @@
 --!strict
 
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
@@ -31,7 +30,7 @@ end
 
 --[=[
 	@within HandleGoalReached
-	Resolves the enemy and commander dependencies needed for goal cleanup.
+	Resolves the enemy and base dependencies needed for goal cleanup.
 	@param registry any -- Registry instance supplied by the context bootstrap.
 	@param _name string -- Registry key used to register the command.
 ]=]
@@ -46,7 +45,7 @@ end
 function HandleGoalReached:Start()
 	self._enemyContext = self.Registry:Get("EnemyContext")
 	self._entityFactory = self.Registry:Get("EnemyEntityFactory")
-	self._commanderContext = self.Registry:Get("CommanderContext")
+	self._baseContext = self.Registry:Get("BaseContext")
 end
 
 --[=[
@@ -74,12 +73,7 @@ function HandleGoalReached:Execute(entity: any): Result.Result<boolean>
 
 		Try(self._enemyContext:DespawnEnemy(entity))
 
-		-- Damage the active commander if one exists in the current session.
-		local players = Players:GetPlayers()
-		local primaryPlayer = players[1]
-		if primaryPlayer then
-			Try(self._commanderContext:ApplyDamage(primaryPlayer, roleConfig.damage))
-		end
+		Try(self._baseContext:ApplyDamage(roleConfig.damage))
 
 		return Ok(true)
 	end, "Combat:HandleGoalReached")

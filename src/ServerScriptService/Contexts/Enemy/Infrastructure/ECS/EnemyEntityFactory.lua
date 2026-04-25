@@ -404,7 +404,7 @@ function EnemyEntityFactory:GetPathState(entity: number)
 	return self:_Get(entity, self._components.PathStateComponent)
 end
 
-function EnemyEntityFactory:SetTarget(entity: number, targetEntity: number?, targetKind: "Structure" | "Enemy")
+function EnemyEntityFactory:SetTarget(entity: number, targetEntity: number?, targetKind: "Structure" | "Enemy" | "Base")
 	self:RequireReady()
 	self:_Set(entity, self._components.TargetComponent, {
 		TargetEntity = targetEntity,

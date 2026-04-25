@@ -102,6 +102,18 @@ function MapContext:GetSpawnInstance(): Result.Result<BasePart?>
 	end, "Map:GetSpawnInstance")
 end
 
+function MapContext:GetBaseInstance(): Result.Result<Instance?>
+	return Catch(function()
+		return Ok(self._entityFactory:GetBaseInstance())
+	end, "Map:GetBaseInstance")
+end
+
+function MapContext:GetBaseAnchor(): Result.Result<BasePart?>
+	return Catch(function()
+		return Ok(self._entityFactory:GetBaseAnchor())
+	end, "Map:GetBaseAnchor")
+end
+
 function MapContext:Destroy()
 	Catch(function()
 		return self._runtimeMapService:CleanupRuntimeMap()

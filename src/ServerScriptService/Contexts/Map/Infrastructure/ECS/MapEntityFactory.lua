@@ -26,6 +26,32 @@ local function _FindFirstNamedBasePart(root: Instance, markerName: string): Base
 	return nil
 end
 
+local function _FindFirstNamedInstance(root: Instance, markerName: string): Instance?
+	if root.Name == markerName then
+		return root
+	end
+
+	for _, descendant in ipairs(root:GetDescendants()) do
+		if descendant.Name == markerName then
+			return descendant
+		end
+	end
+
+	return nil
+end
+
+local function _ResolveAnchor(instance: Instance): BasePart?
+	if instance:IsA("BasePart") then
+		return instance
+	end
+
+	if instance:IsA("Model") then
+		return instance.PrimaryPart or instance:FindFirstChildWhichIsA("BasePart", true)
+	end
+
+	return instance:FindFirstChildWhichIsA("BasePart", true)
+end
+
 function MapEntityFactory.new()
 	local self = setmetatable(BaseECSEntityFactory.new("Map"), MapEntityFactory)
 	self._mapEntity = nil
@@ -66,7 +92,28 @@ function MapEntityFactory:CreateMapRoot(mapId: string, templateName: string, map
 		self:_CreateZoneEntity(mapEntity, zoneName, zoneInstance)
 	end
 
+	self:_AttachBaseComponent(mapEntity, mapModel)
+
 	return mapEntity
+end
+
+function MapEntityFactory:_AttachBaseComponent(mapEntity: number, mapModel: Model)
+	local components = self:GetComponentsOrThrow()
+	local baseInstance = _FindFirstNamedInstance(mapModel, "Base")
+	if baseInstance == nil then
+		return
+	end
+
+	local anchor = _ResolveAnchor(baseInstance)
+	if anchor == nil then
+		return
+	end
+
+	self:_Set(mapEntity, components.BaseComponent, {
+		Instance = baseInstance,
+		Anchor = anchor,
+	})
+	self:_Add(mapEntity, components.BaseZoneTag)
 end
 
 function MapEntityFactory:_CreateZoneEntity(mapEntity: number, zoneName: string, zoneInstance: Instance)
@@ -207,6 +254,30 @@ function MapEntityFactory:GetSpawnInstance(): BasePart?
 	end
 
 	return nil
+end
+
+function MapEntityFactory:GetBaseInstance(): Instance?
+	self:RequireReady()
+
+	local mapEntity = self._mapEntity
+	if mapEntity == nil then
+		return nil
+	end
+
+	local baseData = self:_Get(mapEntity, self._components.BaseComponent)
+	return baseData and baseData.Instance or nil
+end
+
+function MapEntityFactory:GetBaseAnchor(): BasePart?
+	self:RequireReady()
+
+	local mapEntity = self._mapEntity
+	if mapEntity == nil then
+		return nil
+	end
+
+	local baseData = self:_Get(mapEntity, self._components.BaseComponent)
+	return baseData and baseData.Anchor or nil
 end
 
 function MapEntityFactory:IsRuntimeMapReady(): Result.Result<boolean>

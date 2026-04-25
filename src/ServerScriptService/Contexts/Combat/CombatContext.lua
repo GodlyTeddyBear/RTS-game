@@ -95,9 +95,8 @@ local CombatContext = Knit.CreateService({
 	Modules = CombatModules,
 	ExternalServices = {
 		{ Name = "EnemyContext", CacheAs = "_enemyContext" },
-		{ Name = "WorldContext", CacheAs = "_worldContext" },
-		{ Name = "CommanderContext", CacheAs = "_commanderContext" },
 		{ Name = "StructureContext", CacheAs = "_structureContext" },
+		{ Name = "BaseContext", CacheAs = "_baseContext" },
 	},
 	ExternalDependencies = {
 		{
@@ -123,6 +122,12 @@ local CombatContext = Knit.CreateService({
 			From = "StructureContext",
 			Method = "GetEntityFactory",
 			CacheAs = "_structureEntityFactory",
+		},
+		{
+			Name = "BaseEntityFactory",
+			From = "BaseContext",
+			Method = "GetEntityFactory",
+			CacheAs = "_baseEntityFactory",
 		},
 		{
 			Name = "World",
@@ -170,10 +175,10 @@ function CombatContext:KnitInit()
 	self._enemyInstanceFactory = nil
 	self._enemyWorld = nil
 	self._enemyComponents = nil
-	self._worldContext = nil
-	self._commanderContext = nil
 	self._structureContext = nil
 	self._structureEntityFactory = nil
+	self._baseContext = nil
+	self._baseEntityFactory = nil
 	self._hitboxService = nil
 	self._lockOnService = nil
 	self._goalPosition = nil :: Vector3?
@@ -252,12 +257,12 @@ end
 
 -- Caches the current goal point used by startup and mid-wave enemy spawns.
 function CombatContext:_CacheGoalPosition()
-	local goalPointResult = self._worldContext:GetGoalPoint()
+	local goalPointResult = self._baseContext:GetBaseTargetCFrame()
 
 	assert(
 		goalPointResult.success,
 		string.format(
-			"CombatContext: goal cache failed reading goal point (%s)",
+			"CombatContext: goal cache failed reading base target point (%s)",
 			tostring(goalPointResult.message or goalPointResult.type or "unknown")
 		)
 	)

@@ -8,6 +8,7 @@ local Nodes = require(script.Parent.Nodes)
 
 local GoalAdvanceExecutor = require(script.Parent.Executors.GoalAdvanceExecutor)
 local IdleExecutor = require(script.Parent.Executors.IdleExecutor)
+local EnemyAttackBaseExecutor = require(script.Parent.Executors.EnemyAttackBaseExecutor)
 local EnemyAttackStructureExecutor = require(script.Parent.Executors.EnemyAttackStructureExecutor)
 local StructureAttackExecutor = require(script.Parent.Executors.StructureAttackExecutor)
 
@@ -18,6 +19,12 @@ local EnemyBehaviorDefinitions = table.freeze({
 				Sequence = {
 					"HasStructureTargetInRange",
 					"AttackStructure",
+				},
+			},
+			{
+				Sequence = {
+					"HasBaseTargetInRange",
+					"AttackBase",
 				},
 			},
 			{
@@ -35,6 +42,12 @@ local EnemyBehaviorDefinitions = table.freeze({
 				Sequence = {
 					"HasStructureTargetInRange",
 					"AttackStructure",
+				},
+			},
+			{
+				Sequence = {
+					"HasBaseTargetInRange",
+					"AttackBase",
 				},
 			},
 			{
@@ -92,6 +105,10 @@ function CombatBehaviorRuntimeService.new()
 		AttackStructure = {
 			ActionId = "AttackStructure",
 			CreateExecutor = EnemyAttackStructureExecutor.new,
+		},
+		AttackBase = {
+			ActionId = "AttackBase",
+			CreateExecutor = EnemyAttackBaseExecutor.new,
 		},
 		StructureAttack = {
 			ActionId = "StructureAttack",

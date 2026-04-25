@@ -149,11 +149,13 @@ local RunContext = Knit.CreateService({
 	ExternalServices = {
 		{ Name = "MapContext", CacheAs = "_mapContext" },
 		{ Name = "WorldContext", CacheAs = "_worldContext" },
+		{ Name = "BaseContext", CacheAs = "_baseContext" },
 	},
 	Teardown = {
 		Fields = {
 			{ Field = "_playerAddedConnection", Method = "Disconnect" },
 			{ Field = "_commanderDiedConnection", Method = "Disconnect" },
+			{ Field = "_baseDestroyedConnection", Method = "Disconnect" },
 			{ Field = "_stateChangedConnection", Method = "Disconnect" },
 		},
 	},
@@ -341,6 +343,13 @@ function RunContext:KnitStart()
 			return Ok(nil)
 		end, "Run:OnCommanderDied")
 	end)
+
+	self._baseDestroyedConnection = GameEvents.Bus:On(GameEvents.Events.Base.BaseDestroyed, function()
+		Catch(function()
+			Try(self:NotifyBaseDestroyed())
+			return Ok(nil)
+		end, "Run:OnBaseDestroyed")
+	end)
 end
 
 -- [Public API]
@@ -377,8 +386,10 @@ function RunContext:StartRun(): Result.Result<boolean>
 		Try(self._transitionPolicy:CheckCanStartRun(self._machine:GetState()))
 		Ensure(self._mapContext, "MissingDependency", Errors.MISSING_MAP_CONTEXT)
 		Ensure(self._worldContext, "MissingDependency", Errors.MISSING_WORLD_CONTEXT)
+		Ensure(self._baseContext, "MissingDependency", Errors.MISSING_BASE_CONTEXT)
 		Try(self._mapContext:PrepareRuntimeMap())
 		Try(self._worldContext:RefreshRuntimeGeometry())
+		Try(self._baseContext:PrepareRunBase())
 		-- Teleport first so the prep countdown starts from the correct phase entry point.
 		self:_TeleportPlayersToCFrame(self:_GetPhase2EntryCFrame())
 		return self._startRunCommand:Execute(self._onPrepTimeout)
@@ -462,6 +473,12 @@ function RunContext:NotifyCommanderDeath(): Result.Result<boolean>
 	return Catch(function()
 		return self._notifyCommanderDeathCommand:Execute()
 	end, "Run:NotifyCommanderDeath")
+end
+
+function RunContext:NotifyBaseDestroyed(): Result.Result<boolean>
+	return Catch(function()
+		return self._notifyCommanderDeathCommand:Execute()
+	end, "Run:NotifyBaseDestroyed")
 end
 
 --[=[
@@ -594,6 +611,9 @@ function RunContext:_OnStateChanged(newState: RunState, previousState: RunState)
 	-- Terminal cleanup hooks will be attached here as downstream systems are implemented.
 	if newState == "RunEnd" then
 		Catch(function()
+			if self._baseContext then
+				Try(self._baseContext:CleanupBase())
+			end
 			if self._mapContext then
 				Try(self._mapContext:CleanupRuntimeMap())
 			end

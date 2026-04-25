@@ -79,8 +79,10 @@ end
 function ProcessCombatTick:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
 	self._structureEntityFactory = registry:Get("StructureEntityFactory")
+	self._baseEntityFactory = registry:Get("BaseEntityFactory")
 	self._enemyContext = registry:Get("EnemyContext")
 	self._structureContext = registry:Get("StructureContext")
+	self._baseContext = registry:Get("BaseContext")
 end
 
 -- Runs the behavior tree phase for each active entity and updates its last behavior tick time.
@@ -269,8 +271,10 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 		local services = {
 			EnemyEntityFactory = self._enemyEntityFactory,
 			StructureEntityFactory = self._structureEntityFactory,
+			BaseEntityFactory = self._baseEntityFactory,
 			EnemyContext = self._enemyContext,
 			StructureContext = self._structureContext,
+			BaseContext = self._baseContext,
 			CurrentTime = currentTime,
 			HandleGoalReached = self._handleGoalReachedCommand,
 			HitboxService = self._hitboxService,

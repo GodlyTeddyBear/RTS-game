@@ -37,6 +37,7 @@ end
 function CombatPerceptionService:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
 	self._structureEntityFactory = registry:Get("StructureEntityFactory")
+	self._baseEntityFactory = registry:Get("BaseEntityFactory")
 end
 
 function CombatPerceptionService:_FindNearestStructureInRange(enemyPosition: Vector3, attackRange: number): number?
@@ -87,6 +88,20 @@ function CombatPerceptionService:_FindNearestEnemyInRange(structurePosition: Vec
 	return nearestEnemy
 end
 
+function CombatPerceptionService:_IsBaseInRange(enemyPosition: Vector3, attackRange: number): boolean
+	if self._baseEntityFactory == nil or not self._baseEntityFactory:IsActive() then
+		return false
+	end
+
+	local baseCFrame = self._baseEntityFactory:GetTargetCFrame()
+	if baseCFrame == nil then
+		return false
+	end
+
+	local offset = baseCFrame.Position - enemyPosition
+	return offset:Dot(offset) <= attackRange * attackRange
+end
+
 --[=[
 	@within CombatPerceptionService
 	Returns the perception facts a behavior tree needs to decide the next action.
@@ -112,11 +127,17 @@ function CombatPerceptionService:BuildSnapshot(entity: number, _currentTime: num
 		targetStructureEntity = self:_FindNearestStructureInRange(position.cframe.Position, role.attackRange)
 	end
 
+	local hasBaseTargetInRange = false
+	if targetStructureEntity == nil and role and position and position.cframe and type(role.attackRange) == "number" then
+		hasBaseTargetInRange = self:_IsBaseInRange(position.cframe.Position, role.attackRange)
+	end
+
 	return {
 		HasGoalTarget = hasGoalTarget,
 		HealthPct = healthPct,
 		ShouldFlee = healthPct < FLEE_THRESHOLD,
 		TargetStructureEntity = targetStructureEntity,
+		HasBaseTargetInRange = hasBaseTargetInRange,
 	}
 end
 

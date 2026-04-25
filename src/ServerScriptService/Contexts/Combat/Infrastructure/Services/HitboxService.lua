@@ -19,7 +19,7 @@ type THitboxConfig = {
 }
 
 export type THitboxHandle = string
-export type TEntityKind = "Enemy" | "Structure"
+export type TEntityKind = "Enemy" | "Structure" | "Base"
 
 export type THitEntity = {
 	Kind: TEntityKind,
@@ -53,6 +53,7 @@ end
 function HitboxService:Start()
 	self._enemyEntityFactory = self._registry:Get("EnemyEntityFactory")
 	self._structureEntityFactory = self._registry:Get("StructureEntityFactory")
+	self._baseEntityFactory = self._registry:Get("BaseEntityFactory")
 	self._enemyInstanceFactory = self._registry:Get("EnemyInstanceFactory")
 end
 
@@ -77,6 +78,13 @@ function HitboxService:_ResolveAttackerModel(entity: number, kind: TEntityKind):
 end
 
 function HitboxService:_ResolveTouchedEntity(hitPart: BasePart): THitEntity?
+	if self._baseEntityFactory ~= nil and self._baseEntityFactory:IsPartOfBase(hitPart) then
+		return {
+			Kind = "Base",
+			Entity = 0,
+		}
+	end
+
 	local model = hitPart:FindFirstAncestorOfClass("Model")
 	if model == nil then
 		return nil
@@ -177,6 +185,10 @@ function HitboxService:DidHitTarget(handle: THitboxHandle, targetEntity: number,
 	end
 
 	return hitKeyMap[_buildHitKey(targetKind, targetEntity)] == true
+end
+
+function HitboxService:DidHitBase(handle: THitboxHandle): boolean
+	return self:DidHitTarget(handle, 0, "Base")
 end
 
 function HitboxService:GetHitEntities(handle: THitboxHandle): { THitEntity }

@@ -10,6 +10,7 @@ local Text = require(script.Parent.Parent.Parent.Parent.App.Presentation.Atoms.T
 local HStack = require(script.Parent.Parent.Parent.Parent.App.Presentation.Layouts.HStack)
 local VStack = require(script.Parent.Parent.Parent.Parent.App.Presentation.Layouts.VStack)
 local useRunPhaseHud = require(script.Parent.Parent.Parent.Application.Hooks.useRunPhaseHud)
+local useBaseHud = require(script.Parent.Parent.Parent.Application.Hooks.useBaseHud)
 local useCommanderHud = require(script.Parent.Parent.Parent.Application.Hooks.useCommanderHud)
 local useResourceHud = require(script.Parent.Parent.Parent.Application.Hooks.useResourceHud)
 local AbilityBar = require(script.Parent.AbilityBar)
@@ -29,12 +30,45 @@ local function _ComputeHealthFillScale(hp: number, maxHp: number): number
 	return math.clamp(ratio, 0, 1)
 end
 
+local function _CreateHealthReadout(label: string, hp: number, maxHp: number, color: Color3, order: number)
+	return e(AppFrame, {
+		Size = UDim2.fromScale(1, 0.46),
+		LayoutOrder = order,
+		BackgroundTransparency = 1,
+	}, {
+		Label = e(Text, {
+			Size = UDim2.fromScale(1, 0.45),
+			Position = UDim2.fromScale(0, 0),
+			Text = ("%s: %d / %d"):format(label, hp, maxHp),
+			Variant = "caption",
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Center,
+		}),
+		BarBackground = e(AppFrame, {
+			Size = UDim2.fromScale(1, 0.34),
+			Position = UDim2.fromScale(0, 0.88),
+			AnchorPoint = Vector2.new(0, 1),
+			BackgroundColor3 = Color3.fromRGB(38, 42, 54),
+			BackgroundTransparency = 0.12,
+			CornerRadius = UDim.new(0, 8),
+			ClipsDescendants = true,
+		}, {
+			Fill = e(AppFrame, {
+				Size = UDim2.fromScale(_ComputeHealthFillScale(hp, maxHp), 1),
+				Position = UDim2.fromScale(0, 0),
+				AnchorPoint = Vector2.new(0, 0),
+				BackgroundColor3 = color,
+				CornerRadius = UDim.new(0, 8),
+			}),
+		}),
+	})
+end
+
 local function RunHUD(props: TRunHUDProps)
 	local phaseHud = useRunPhaseHud()
 	local commanderHud = useCommanderHud()
+	local baseHud = useBaseHud()
 	local resourceHud = useResourceHud()
-
-	local hpScale = _ComputeHealthFillScale(commanderHud.hp, commanderHud.maxHp)
 
 	return e(AppFrame, {
 		Size = UDim2.fromScale(1, 1),
@@ -61,37 +95,29 @@ local function RunHUD(props: TRunHUDProps)
 				BackgroundTransparency = 0.2,
 				CornerRadius = UDim.new(0, 10),
 			}, {
-				LeftCluster = e(AppFrame, {
+				LeftCluster = e(VStack, {
 					Size = UDim2.fromScale(0.36, 1),
 					Position = UDim2.fromScale(0.02, 0.5),
 					AnchorPoint = Vector2.new(0, 0.5),
 					BackgroundTransparency = 1,
+					Gap = 2,
+					Align = "Start",
+					Justify = "Center",
 				}, {
-					HealthLabel = e(Text, {
-						Size = UDim2.fromScale(1, 0.38),
-						Position = UDim2.fromScale(0, 0.1),
-						Text = ("Commander HP: %d / %d"):format(commanderHud.hp, commanderHud.maxHp),
-						Variant = "label",
-						TextXAlignment = Enum.TextXAlignment.Left,
-						TextYAlignment = Enum.TextYAlignment.Center,
-					}),
-					HealthBarBackground = e(AppFrame, {
-						Size = UDim2.fromScale(1, 0.28),
-						Position = UDim2.fromScale(0, 0.72),
-						AnchorPoint = Vector2.new(0, 1),
-						BackgroundColor3 = Color3.fromRGB(60, 24, 30),
-						BackgroundTransparency = 0.2,
-						CornerRadius = UDim.new(0, 8),
-						ClipsDescendants = true,
-					}, {
-						HealthBarFill = e(AppFrame, {
-							Size = UDim2.fromScale(hpScale, 1),
-							Position = UDim2.fromScale(0, 0),
-							AnchorPoint = Vector2.new(0, 0),
-							BackgroundColor3 = Color3.fromRGB(214, 67, 74),
-							CornerRadius = UDim.new(0, 8),
-						}),
-					}),
+					CommanderHealth = _CreateHealthReadout(
+						"Commander HP",
+						commanderHud.hp,
+						commanderHud.maxHp,
+						Color3.fromRGB(214, 67, 74),
+						1
+					),
+					BaseHealth = _CreateHealthReadout(
+						"Base HP",
+						baseHud.hp,
+						baseHud.maxHp,
+						Color3.fromRGB(74, 156, 232),
+						2
+					),
 				}),
 				CenterCluster = e(VStack, {
 					Size = UDim2.fromScale(0.28, 0.82),

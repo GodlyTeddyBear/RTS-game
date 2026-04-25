@@ -80,6 +80,7 @@ export type TBehaviorConfigComponent = {
 	.StructureEntityFactory any -- Combat structure entity access facade.
 	.EnemyContext any -- Enemy context public damage API.
 	.StructureContext any -- Structure context public damage API.
+	.BaseContext any -- Base context public damage API.
 	.CurrentTime number -- Timestamp shared across executor calls for one tick.
 	.HandleGoalReached any -- Command used to resolve goal-reaching enemies.
 	.HitboxService any -- Combat hitbox service for contact-confirmed attacks.
@@ -89,6 +90,7 @@ export type TExecutorServices = {
 	StructureEntityFactory: any,
 	EnemyContext: any,
 	StructureContext: any,
+	BaseContext: any,
 	CurrentTime: number,
 	HandleGoalReached: any,
 	HitboxService: any,

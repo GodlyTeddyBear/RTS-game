@@ -30,6 +30,16 @@ local Conditions = {
 			task:fail()
 		end)
 	end,
+	HasBaseTargetInRange = function()
+		return BehaviorSystem.Helpers.CreateConditionTask(function(task, context)
+			if context.Facts.HasBaseTargetInRange then
+				task:success()
+				return
+			end
+
+			task:fail()
+		end)
+	end,
 	HasEnemyTargetInRange = function()
 		return BehaviorSystem.Helpers.CreateConditionTask(function(task, context)
 			if context.Facts.TargetEnemyEntity ~= nil then

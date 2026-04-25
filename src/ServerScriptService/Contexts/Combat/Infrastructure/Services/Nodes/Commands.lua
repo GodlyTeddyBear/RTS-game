@@ -42,6 +42,13 @@ local Commands = {
 			task:success()
 		end)
 	end,
+	AttackBase = function()
+		return BehaviorSystem.Helpers.CreateCommandTask(function(task, context)
+			local actionFactory = _requireActionFactory(context)
+			actionFactory:SetPendingAction(context.Entity, "AttackBase", nil)
+			task:success()
+		end)
+	end,
 	StructureAttack = function()
 		return BehaviorSystem.Helpers.CreateCommandTask(function(task, context)
 			local actionFactory = _requireActionFactory(context)

@@ -8,6 +8,7 @@ MapConfig.WORKSPACE_MAP_CONTAINER_NAME = "Map"
 MapConfig.WORKSPACE_GAME_CONTAINER_NAME = "Game"
 
 MapConfig.ZONE_PATHS = table.freeze({
+	Bases = "Environment.Zones.Bases",
 	Spawns = "Environment.Zones.Spawns",
 	Goals = "Environment.Zones.Goals",
 	PlacementGrids = "Environment.Zones.PlacementGrids",

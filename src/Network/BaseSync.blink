@@ -1,0 +1,33 @@
+option ServerOutput = "Generated/BaseSyncServer.luau"
+option ClientOutput = "Generated/BaseSyncClient.luau"
+
+option RemoteScope = "BASE_SYNC"
+
+struct BaseStatePayload {
+	hp: f64?,
+	maxHp: f64?,
+}
+
+struct InitPayload {
+	base: BaseStatePayload?,
+}
+
+struct PatchPayload {
+	base: BaseStatePayload?,
+}
+
+enum SyncPayload = "type" {
+	init {
+		data: InitPayload?,
+	},
+	patch {
+		data: PatchPayload?,
+	},
+}
+
+event SyncBase {
+	from: Server,
+	type: Reliable,
+	call: SingleAsync,
+	data: SyncPayload,
+}

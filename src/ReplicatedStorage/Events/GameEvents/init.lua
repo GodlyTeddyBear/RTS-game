@@ -38,6 +38,7 @@ local EventValidator = require(script.Parent.EventValidator)
 
 local domainModules = {
 	-- Context-owned events
+	Base = require(script.Contexts.Base),
 	Commander = require(script.Contexts.Commander),
 	Run = require(script.Contexts.Run),
 	Wave = require(script.Contexts.Wave),
