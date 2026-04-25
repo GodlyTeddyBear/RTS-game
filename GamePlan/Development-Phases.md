@@ -8,7 +8,7 @@ Planning contract source: [.codex/documents/methods/PLAN_DEVELOPMENT.md](../.cod
 
 ## Goal
 
-Ship a solo-first Roblox wave-defense v1 that delivers a clear prep -> combat -> payoff loop, transitions into endless mutator pressure, produces a trustworthy score breakdown, and is stable enough for live iteration.
+Ship a solo-first Roblox wave-defense v1 where the player **commands**, **collects resources**, **places structures**, uses **abilities** to fight, and **defends a base** while **developing** between waves — a clear **prep -> combat -> payoff** loop, then transition into **endless mutator pressure**, a **trustworthy score breakdown**, and stability for live iteration.
 
 ## Success Criteria
 
@@ -23,7 +23,7 @@ Ship a solo-first Roblox wave-defense v1 that delivers a clear prep -> combat ->
 ### In Scope
 
 - Solo-first run loop from lobby to results.
-- Commander-based lane defense with prep/combat cadence.
+- Commander-based lane defense: **enemy design goal = destroy the base (command post)**; **player goals = survive and develop**; prep/combat cadence with rest to **build and develop** between waves.
 - Scripted climax then endless waves with mutator escalation.
 - Score pipeline with inspectable breakdown fields.
 - Light meta progression that changes options, not raw stat creep.
@@ -38,11 +38,12 @@ Ship a solo-first Roblox wave-defense v1 that delivers a clear prep -> combat ->
 
 ## Unknowns + Resolution Plan
 
+**Design locks (see [GDD](../docs/GDD.md))** — the following are **no longer** open at roadmap level: **resource names and shape** (Energy + **Ferrium, Ceren, Voltrite**; **Scrap** with **Prep** conversion and tax; soft caps) — GDD **§7**; **climax** as **wave 10** **siege** set piece (**not** a bespoke **boss**), **wave 9** siege **preview** — GDD **§10.3**; **endless mutators** at **2** **active** with **rotation** (period **N** in tuning) — GDD **§10.4**.
+
 | Unknown | Why It Matters | Owner | Resolution Gate | Fallback Default |
 |---|---|---|---|---|
-| Final v1 resource model (count and conversion rules) | Drives economy readability and anti-snowball tuning | Design + EconomyContext owner | End of Phase 0 | Two-to-three resource types max, universal drop conversion with tax |
-| Climax structure (boss vs set piece) | Changes content, scripting, and pacing | Design + Encounter owner | End of Phase 3 | Scripted set piece with no bespoke boss AI |
-| Endless mutator cadence (rotate vs stack) | Affects clarity and score integrity | Design + Runtime systems owner | End of Phase 4 | Fixed-interval rotation + capped stack depth |
+| Economy **numeric** balance (income, costs, Scrap spawns, cap numbers) | Drives feel, prep tension, and anti-snowball in play | Design + EconomyContext owner | **End of Phase 3** (tuning alongside core loop) | GDD **§7** placeholder caps and conversion; iterate from internal playtests |
+| Mutator **rotation period (N)**, **pairing** bans, and extra deck entries beyond the **12** in GDD | Clarity and variety without stacked gotchas | Design + Runtime systems owner | **End of Phase 4** | GDD: suggest **3–5** waves per cycle; keep **2**-active cap; v1 “hard but fair” tone |
 | Score exploit policy thresholds | Required for leaderboard trust | Design + Scoring owner | End of Phase 4 | Disable leaderboard publishing until exploit checks pass |
 | Meta progression depth for v1 | Scope risk and balance risk | Product + Meta owner | End of Phase 5 | Horizontal unlocks only; no flat damage multipliers |
 | Co-op resource/life model | Avoids rework in core loop later | Product + Systems owner | End of Phase 7 planning lock | Shared wave pressure, explicit revive rule, no silent carry-over assumptions |
@@ -107,8 +108,9 @@ This phase plan forces every major loop step (prep, combat, reward, endless, res
 | Contract Area | Required Shape Decision by Gate |
 |---|---|
 | Run state | Enumerated states (`Lobby`, `RunPrep`, `RunCombat`, `Results`) finalized by Phase 1 |
+| Base (command post) | Authoritative **base** id/HP, binding to **base_anchor** (GDD §9), and **run loss** when base HP = 0 — finalized by Phase 1 |
 | Wave script | Hand-authored composition schema finalized by Phase 2 |
-| Resource state | Resource wallet shape + cap/overflow policy finalized by Phase 3 |
+| Resource state | **GDD-locked** names and rules (see **§7**). **Server** wallet schema, validation, and **numeric** **tuning** (income, costs, cap numbers) finalized by **Phase 3** |
 | Score state | Pillar breakdown and audit fields finalized by Phase 4 |
 | Meta state | Profile unlock/loadout schema versioned by Phase 5 |
 
@@ -131,7 +133,7 @@ This phase plan forces every major loop step (prep, combat, reward, endless, res
 | Phase | Objective | Owner Scope | Hard Deliverables | Exit Gate |
 |---|---|---|---|---|
 | 0 Preproduction Lock | Freeze expensive reversals | Design + architecture owners | Economy and scoring specs in GDD, paper vertical slice, cut list, co-op assumptions appendix | Team can explain wave-1 teaching goal and replay motivation without ambiguity |
-| 1 Run Shell | Playable empty run with authority boundaries | Runtime + UI shell owners | Run state machine, commander lifecycle, minimal HUD/results, dev controls, core logging hooks | New player can finish null run without errors |
+| 1 Run Shell | Playable empty run with authority boundaries | Runtime + UI shell owners | Run state machine, **commander + base (command post) lifecycle and loss** on commander or base zero HP, minimal HUD/results, dev controls, core logging hooks | New player can finish null run without errors |
 | 2 Vertical Slice | Prove one fun loop in one lane | Combat + encounter + placement owners | 6 hand-authored waves, one structure, one summon/deployable, prep/combat transitions, reward stub | Playtesters can identify loss reasons without coaching |
 | 3 Core Loop Completion | Fill pre-endless loop quality | Content + onboarding owners | Structure/enemy role expansion, reward pipeline, scripted climax, onboarding beats | Sessions stabilize near target length and losses are tactical, not confusion-driven |
 | 4 Endless + Score | Credible endless and score integrity | Runtime + scoring owners | Endless driver, mutator system, score bus + results breakdown, personal best persistence | Score breakdown answers gain/loss logic for most runs and exploit loops have counters |
@@ -157,6 +159,7 @@ This phase plan forces every major loop step (prep, combat, reward, endless, res
 | Functional | Lobby -> run -> results full cycle | No blockers, clean teardown, repeatable restart | 1 |
 | Functional | Prep placement + combat + reward transition | State transitions are consistent and UI reflects state | 2 |
 | Edge | Commander dies during transition windows | Deterministic run end handling and valid results snapshot | 1-3 |
+| Edge | **Base (command post) HP** reaches zero during wave or prep | Run ends; snapshot and results match GDD **Loss (base)** | 1-3 |
 | Security | Malformed/forged placement request | Server rejects request and logs validation failure | 2-7 |
 | Security | Client attempts score mutation | No score mutation without server event source | 4-7 |
 | Performance | High-wave stress with configured entity cap | Frame stability remains within declared budget envelope | 4-6 |
@@ -166,7 +169,7 @@ This phase plan forces every major loop step (prep, combat, reward, endless, res
 
 | Gate | Validation Checklist | Pass Condition |
 |---|---|---|
-| Phase 0 -> 1 | GDD economy/scoring sections complete, slice paper spec complete, out-of-scope list explicit | All lock artifacts reviewed and approved by owners |
+| Phase 0 -> 1 | GDD v0: **§7** economy, **§8** scoring, **§10** roles/waves/mutators, **§3** onboarding; paper **vertical** slice; out-of-scope explicit | All lock artifacts reviewed and approved by owners |
 | Phase 1 -> 2 | Null run test pass, authority map reviewed, logging hooks verified | 0 critical blocker defects |
 | Phase 2 -> 3 | Vertical slice playtest, loss-readability check, first fun replay check | Majority of internal testers opt for immediate replay |
 | Phase 3 -> 4 | Core loop pacing test, onboarding comprehension test | Target pacing band reached and confusion losses reduced |
@@ -197,6 +200,6 @@ None for roadmap-level planning quality.
 
 ### Follow-up Required Before Phase 1 Starts
 
-- Resolve final resource names and conversion policy text in GDD section 7.
-- Declare owner names for each phase in your internal tracker.
-- Convert phase hard deliverables into ticket IDs with due-gate labels.
+- **GDD §7** — resource **names**, **Scrap** conversion, and cap policy are **set**; implement **per** **Economy** / **Data contracts** (no further naming gate for Phase 1).
+- Declare **owner** names for each phase in your internal **tracker**.
+- Convert phase **hard deliverables** into **ticket** IDs with **due-gate** labels.

@@ -4,12 +4,14 @@
 
 The GDD defines a sci-fi hybrid RTS wave-defense on a single lane. The WorldContext plan (WorldPlan.md) establishes the foundational tile grid, spawn points, goal point, and resource side pockets. EnemyContext is the next layer: it owns enemy entities, their lane movement, health/death lifecycle, death position events for resource-drop systems, target-preference metadata for future structure/extractor attackers, and Workspace model synchronization. No wave spawning logic lives here — that belongs to a future WaveContext. EnemyContext is the raw entity layer that WaveContext will call into.
 
-The import project (src/Imports/) provides a proven structural reference: JECS world + ComponentRegistry + EntityFactory + ModelFactory + SyncService + Application Commands, all wired through a Knit service using the Registry pattern. This plan mirrors that structure, adapted for the RTS lane-defense domain (SimplePath waypoint marching along WorldContext tiles, no player-isolation since there is one shared run, Swarm + Tank roles only in Phase 1).
+**GDD v0 alignment** ([docs/GDD.md](../../docs/GDD.md)) — v1 teaching spine is **six roles** (§10.1): Swarm, **Bruiser** (tank), Disruptor, Artillery, **Siege** (base/Extractors/structures), **Elite** (skirmisher). A Phase 0 / vertical slice may ship fewer roles; ECS/config must allow adding the rest without a context rewrite. **Siege** pressure on **command post** and **Extractors** is a GDD design goal for later content.
+
+The import project (src/Imports/) provides a proven structural reference: JECS world + ComponentRegistry + EntityFactory + ModelFactory + SyncService + Application Commands, all wired through a Knit service using the Registry pattern. This plan mirrors that structure, adapted for the RTS lane-defense domain (SimplePath waypoint marching along WorldContext tiles, no player-isolation since there is one shared run, **Swarm + Bruiser** in the first slice; expand toward full GDD §10.1 as encounter work lands).
 
 **User decisions:**
 - Pathfinding: SimplePath (same as import)
 - Models: R6 models in Workspace at spawn time
-- Enemy roles: Swarm + Tank only (Phase 1)
+- Enemy roles: Swarm + **Bruiser** (tank) in the first implementation slice; GDD v1 full set is **six** roles (see GDD **§10.1**)
 - ECS world: EnemyContext owns its own isolated JECS world
 - GDD update: resource buildings/extractors can be enemy targets later; Phase 1 enemies may still path to the goal, but role/config data must not prevent structure/extractor targeting in later phases.
 

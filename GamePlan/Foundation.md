@@ -4,7 +4,7 @@
 
 ## One-line vision
 
-Sci-fi **hybrid RTS wave defense**: summoner commander, **single lane**, **one resource**, **commander death ends run**, **score** chase into **endless mutator escalation** after the scripted climax. **Solo first**; co-op is a later product phase.
+Sci-fi **hybrid RTS wave defense**: summoner commander, **single lane**, **multiple resource types** (see GDD), **defend a command post (base)** while you **develop** structures and power — **lose if the base falls or the commander dies** — then **score** chase into **endless mutator escalation** after the scripted climax. **Solo first**; co-op is a later product phase.
 
 ## Pillars (from GDD)
 
