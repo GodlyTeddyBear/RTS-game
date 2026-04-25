@@ -141,6 +141,11 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 			self._structureEntityFactory:ClearAction(entity)
 		end
 
+		local structureSyncServiceResult = self._structureContext:GetGameObjectSyncService()
+		if structureSyncServiceResult.success then
+			structureSyncServiceResult.value:SyncAll()
+		end
+
 		self._hitboxService:CleanupAll()
 
 		if targetUserId then

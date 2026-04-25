@@ -24,6 +24,10 @@ local ENEMY_LOCOMOTION_CORE_POSE_FOLDERS = {
 	{ Folder = "run", Pose = "Run" },
 }
 
+local STRUCTURE_CORE_POSE_FOLDERS = {
+	{ Folder = "idle", Pose = "Idle" },
+}
+
 local ALL_POSES = {
 	"Run",
 	"Idle",
@@ -67,6 +71,10 @@ local ENEMY_LOCOMOTION_POSES = {
 	"Idle",
 	"Walk",
 	"Run",
+}
+
+local STRUCTURE_POSES = {
+	"Idle",
 }
 
 local ENEMY_LOCOMOTION_POSE_FALLBACKS = {
@@ -144,6 +152,26 @@ AnimationPresets.EnemyLocomotion = {
 	WarnOnMissingPose = true,
 	WarnOnMissingAnimation = true,
 	UseStateDrivenCorePoses = true,
+}
+
+AnimationPresets.Structure = {
+	Tag = "[AnimateStructure]",
+	DefaultVariant = "Default",
+	CorePoseFolders = STRUCTURE_CORE_POSE_FOLDERS,
+	AllPoses = STRUCTURE_POSES,
+	PoseFallbacks = {},
+	WarnOnMissingPose = true,
+	WarnOnMissingAnimation = true,
+	ActionNameTransform = AnimationClipLoader.ToActionName,
+	ActionStateFallback = function(state: string, validActions: { [string]: boolean }): string?
+		if state ~= "StructureAttack" then
+			return nil
+		end
+		if validActions.Attack then
+			return "Attack"
+		end
+		return nil
+	end,
 }
 
 return AnimationPresets

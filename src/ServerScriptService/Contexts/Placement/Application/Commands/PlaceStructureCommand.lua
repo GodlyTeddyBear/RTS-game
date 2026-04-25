@@ -12,6 +12,7 @@ local Try = Result.Try
 
 type GridCoord = PlacementTypes.GridCoord
 type StructureRecord = PlacementTypes.StructureRecord
+type ResourceCostMap = PlacementTypes.ResourceCostMap
 
 --[=[
 	@class PlaceStructureCommand
@@ -49,19 +50,24 @@ function PlaceStructureCommand:Start(registry: any, _name: string)
 	self._economyContext = registry:Get("EconomyContext")
 end
 
--- Refund the energy spend if a downstream write fails after the deduction already happened.
-function PlaceStructureCommand:_RefundEnergy(player: Player, cost: number, reason: string): Result.Result<nil>
-	local refundResult = self._economyContext:AddResource(player, "Energy", cost)
-	if refundResult.success then
-		return Ok(nil)
+-- Refund every resource spend if a downstream write fails after the deduction already happened.
+function PlaceStructureCommand:_RefundResources(player: Player, costMap: ResourceCostMap, reason: string): Result.Result<nil>
+	for resourceType, amount in costMap do
+		local refundResult = self._economyContext:AddResource(player, resourceType, amount)
+		if refundResult.success then
+			continue
+		end
+
+		return Err("RefundFailed", Errors.REFUND_FAILED, {
+			resourceType = resourceType,
+			amount = amount,
+			reason = reason,
+			refundErrorType = refundResult.type,
+			refundErrorMessage = refundResult.message,
+		})
 	end
 
-	return Err("RefundFailed", Errors.REFUND_FAILED, {
-		cost = cost,
-		reason = reason,
-		refundErrorType = refundResult.type,
-		refundErrorMessage = refundResult.message,
-	})
+	return Ok(nil)
 end
 
 --[=[
@@ -76,19 +82,19 @@ end
 function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structureType: string): Result.Result<{ instanceId: number, record: StructureRecord }>
 	-- Policy resolves the live tile and all gate conditions before any mutation occurs.
 	local decision = Try(self._policy:Check(coord, structureType))
-	local cost = decision.cost
+	local costMap = decision.costMap
 	local tile = decision.tile
 
 	-- Fail before any wallet mutation if the configured runtime template is missing.
 	Try(self._placementService:ValidateTemplate(structureType))
 
-	-- Energy spend happens after all read-only checks so a failure never needs rollback.
-	Try(self._economyContext:SpendEnergy(player, cost))
+	-- Resource spend happens after all read-only checks so malformed requests never mutate the wallet.
+	Try(self._economyContext:SpendResources(player, costMap))
 
 	-- Spawn the physical structure only after the purchase succeeds.
 	local spawnResult = self._placementService:SpawnStructure(structureType, tile.worldPos)
 	if not spawnResult.success then
-		Try(self:_RefundEnergy(player, cost, "SpawnFailed"))
+		Try(self:_RefundResources(player, costMap, "SpawnFailed"))
 		return spawnResult
 	end
 
@@ -98,7 +104,7 @@ function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structu
 	local occupancyResult = self._worldContext:SetTileOccupied(coord, true)
 	if not occupancyResult.success or occupancyResult.value ~= true then
 		self._placementService:DestroyStructure(instanceId)
-		Try(self:_RefundEnergy(player, cost, "OccupancyFailed"))
+		Try(self:_RefundResources(player, costMap, "OccupancyFailed"))
 
 		if not occupancyResult.success then
 			return occupancyResult
@@ -118,6 +124,7 @@ function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structu
 		},
 		structureType = structureType,
 		instanceId = instanceId,
+		ownerUserId = player.UserId,
 		tier = 1,
 		resourceType = tile.resourceType,
 	}

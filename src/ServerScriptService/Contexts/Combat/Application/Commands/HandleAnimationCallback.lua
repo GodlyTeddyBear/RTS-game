@@ -1,5 +1,6 @@
 --!strict
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -62,6 +63,17 @@ local function _resolveActorEntity(self: any, actorId: string, actorKind: string
 	return self._enemyEntityFactory, enemyEntity, "Ready"
 end
 
+local function _resolveActiveCombatOwnerUserId(self: any): number?
+	local primaryPlayer = Players:GetPlayers()[1]
+	if primaryPlayer == nil then
+		return nil
+	end
+	if not self._loopService:IsActive(primaryPlayer.UserId) then
+		return nil
+	end
+	return primaryPlayer.UserId
+end
+
 function HandleAnimationCallback:Execute(
 	player: Player,
 	actorId: string,
@@ -80,6 +92,19 @@ function HandleAnimationCallback:Execute(
 		if not self._loopService:IsActive(player.UserId) then
 			return Err("CombatInactive", "Combat is not active for callback sender", {
 				UserId = player.UserId,
+			})
+		end
+
+		local activeOwnerUserId = _resolveActiveCombatOwnerUserId(self)
+		if activeOwnerUserId == nil then
+			return Err("CombatOwnerNotActive", "Combat callback owner is not available", {
+				UserId = player.UserId,
+			})
+		end
+		if activeOwnerUserId ~= player.UserId then
+			return Err("UnauthorizedCallbackSender", "Combat callback sender does not own the active combat session", {
+				UserId = player.UserId,
+				ActiveOwnerUserId = activeOwnerUserId,
 			})
 		end
 

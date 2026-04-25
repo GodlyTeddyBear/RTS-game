@@ -48,6 +48,16 @@ local function _getTargetEnemy(entity: number, services: any): number?
 	return data.TargetEnemyEntity
 end
 
+local function _RecordActivationSource(entity: number, services: any, source: string)
+	local modelRef = services.StructureEntityFactory:GetModelRef(entity)
+	if modelRef == nil or modelRef.model == nil or modelRef.model.Parent == nil then
+		return
+	end
+
+	modelRef.model:SetAttribute("LastHitboxActivationSource", source)
+	modelRef.model:SetAttribute("LastHitboxActivatedAt", services.CurrentTime)
+end
+
 local function _isTargetInRange(entity: number, targetEnemy: number, services: any): boolean
 	local structurePosition = services.StructureEntityFactory:GetPosition(entity)
 	local enemyPosition = services.EnemyEntityFactory:GetPosition(targetEnemy)
@@ -150,6 +160,9 @@ local function _activateHitboxInternal(
 	self:SetEntityValue(entity, "ActiveHitboxHandle", createResult.handle)
 	self:SetEntityValue(entity, "HitboxStartedAt", services.CurrentTime)
 	self:SetEntityValue(entity, "HitboxActivated", true)
+	self:SetEntityValue(entity, "HitboxActivationTimedOut", source == "ServerTimeoutFallback")
+	self:SetEntityValue(entity, "AttackStartedAt", nil)
+	_RecordActivationSource(entity, services, source)
 	services.StructureEntityFactory:PromoteToCommitted(entity)
 
 	return _activationResult(true, "Activated", source)

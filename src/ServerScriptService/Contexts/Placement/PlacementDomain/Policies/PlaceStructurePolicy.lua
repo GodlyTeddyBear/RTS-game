@@ -15,11 +15,16 @@ local Ensure = Result.Ensure
 
 type GridCoord = PlacementTypes.GridCoord
 type Tile = WorldTypes.Tile
+type ResourceCostMap = PlacementTypes.ResourceCostMap
 
 export type PlacementDecision = {
 	tile: Tile,
-	cost: number,
+	costMap: ResourceCostMap,
 }
+
+local function cloneCostMap(costMap: ResourceCostMap): ResourceCostMap
+	return table.clone(costMap)
+end
 
 --[=[
 	@class PlaceStructurePolicy
@@ -116,14 +121,17 @@ function PlaceStructurePolicy:Check(coord: GridCoord, structureType: string): Re
 		maxStructures = PlacementConfig.MAX_STRUCTURES,
 	})
 
-	local cost = PlacementConfig.STRUCTURE_PLACEMENT_COSTS[structureType]
-	Ensure(cost ~= nil, "UnknownStructureType", Errors.UNKNOWN_STRUCTURE_TYPE, {
+	local costMap = PlacementConfig.STRUCTURE_PLACEMENT_COSTS[structureType]
+	Ensure(costMap ~= nil, "UnknownStructureType", Errors.UNKNOWN_STRUCTURE_TYPE, {
+		structureType = structureType,
+	})
+	Ensure(PlacementSpecs.HasValidCostMap(costMap), "InvalidCostMap", Errors.INVALID_COST_MAP, {
 		structureType = structureType,
 	})
 
 	return Ok({
 		tile = resolvedTile,
-		cost = cost :: number,
+		costMap = cloneCostMap(costMap :: ResourceCostMap),
 	})
 end
 

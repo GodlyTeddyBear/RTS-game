@@ -64,9 +64,9 @@ local function StructureCard(props: TStructureCardProps)
 		StrokeThickness = if props.isSelected then Border.Width.Medium else Border.Width.Thin,
 		[React.Event.Activated] = function()
 			if not props.cardData.canAfford then
-				warn(("[PlacementPalette] Cannot select '%s': insufficient energy (%d required)"):format(
+				warn(("[PlacementPalette] Cannot select '%s': insufficient resources (%s required)"):format(
 					props.cardData.structureType,
-					props.cardData.energyCost
+					props.cardData.costText
 				))
 				return
 			end
@@ -112,7 +112,7 @@ local function StructureCard(props: TStructureCardProps)
 			Cost = e(Text, {
 				Size = UDim2.fromScale(1, 0.34),
 				LayoutOrder = 2,
-				Text = string.format("%d E", props.cardData.energyCost),
+				Text = props.cardData.costText,
 				Variant = "caption",
 				TextColor3 = costColor,
 				TextXAlignment = Enum.TextXAlignment.Center,

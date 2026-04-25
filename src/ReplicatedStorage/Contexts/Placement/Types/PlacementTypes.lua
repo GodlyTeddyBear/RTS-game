@@ -9,6 +9,13 @@
 local PlacementTypes = {}
 
 --[=[
+	@type ResourceCostMap table<string, number>
+	@within PlacementTypes
+	Maps resource names to required placement costs.
+]=]
+export type ResourceCostMap = { [string]: number }
+
+--[=[
 	@interface GridCoord
 	@within PlacementTypes
 	.row number -- Row index in the placement grid.
@@ -25,6 +32,7 @@ export type GridCoord = {
 	.coord GridCoord -- Grid coordinate where the structure sits.
 	.structureType string -- Config key for the structure.
 	.instanceId number -- Runtime instance identifier.
+	.ownerUserId number? -- Player user id that owns this placement; server-only sync transports may omit it.
 	.tier number -- Placement tier used for future upgrade flows.
 	.resourceType string? -- Resource metadata for extractor-style structures.
 ]=]
@@ -32,6 +40,7 @@ export type StructureRecord = {
 	coord: GridCoord,
 	structureType: string,
 	instanceId: number,
+	ownerUserId: number?,
 	tier: number,
 	resourceType: string?,
 }

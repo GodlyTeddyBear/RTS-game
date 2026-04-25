@@ -128,7 +128,16 @@ function PlacementCursorService.GetValidTiles(structureType: string, occupiedSet
 			local zone = descriptor and descriptor.zone or nil
 			local isZoneDisallowed = zone ~= nil and PlacementConfig.BASE_DISALLOWED_ZONE_TYPES[zone] == true
 			local isPlacementProhibited = descriptor ~= nil and descriptor.isPlacementProhibited == true
-			if descriptor ~= nil and not isZoneDisallowed and not isPlacementProhibited and occupiedSet[coordKey] ~= true then
+			local requiresResourceTile = PlacementConfig.REQUIRES_RESOURCE_TILE[structureType] == true
+			local hasRequiredResourceTile = not requiresResourceTile
+				or (descriptor ~= nil and descriptor.zone == "side_pocket" and descriptor.resourceType ~= nil)
+			if
+				descriptor ~= nil
+				and not isZoneDisallowed
+				and not isPlacementProhibited
+				and hasRequiredResourceTile
+				and occupiedSet[coordKey] ~= true
+			then
 				validTiles[#validTiles + 1] = _CloneCoord(row, col)
 			end
 		end

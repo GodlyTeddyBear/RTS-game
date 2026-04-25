@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
+local MiningConfig = require(ReplicatedStorage.Contexts.Mining.Config.MiningConfig)
 
 local PlacementGhostModel = {}
 PlacementGhostModel.__index = PlacementGhostModel
@@ -27,25 +28,66 @@ end
 local function _CreateStructureRegistry()
 	local assetsFolder = ReplicatedStorage:FindFirstChild("Assets")
 	if assetsFolder == nil then
-		return nil
+		return nil, nil
 	end
 
 	local structuresFolder = assetsFolder:FindFirstChild("Structures")
 	if structuresFolder == nil or not structuresFolder:IsA("Folder") then
-		return nil
+		return nil, nil
 	end
 
-	return AssetFetcher.CreateStructureRegistry(structuresFolder)
+	return AssetFetcher.CreateStructureRegistry(structuresFolder), structuresFolder
 end
 
-local structureRegistry = _CreateStructureRegistry()
+local structureRegistry, structuresFolder = _CreateStructureRegistry()
+
+local function _CreateExtractorFallbackModel(): Model
+	local model = Instance.new("Model")
+	model.Name = MiningConfig.EXTRACTOR_STRUCTURE_TYPE
+
+	local base = Instance.new("Part")
+	base.Name = "Base"
+	base.Anchored = true
+	base.CanCollide = false
+	base.Size = Vector3.new(5, 1, 5)
+	base.Color = Color3.fromRGB(78, 83, 92)
+	base.Material = Enum.Material.Metal
+	base.Parent = model
+
+	local core = Instance.new("Part")
+	core.Name = "ExtractorCore"
+	core.Anchored = true
+	core.CanCollide = false
+	core.Size = Vector3.new(2, 4, 2)
+	core.Position = Vector3.new(0, 2.5, 0)
+	core.Color = Color3.fromRGB(202, 170, 76)
+	core.Material = Enum.Material.DiamondPlate
+	core.Parent = model
+
+	model.PrimaryPart = base
+	return model
+end
 
 local function _FindTemplateModel(structureType: string): Model?
-	if structureRegistry == nil then
-		return nil
+	if structureType == MiningConfig.EXTRACTOR_STRUCTURE_TYPE then
+		local typeNode = structuresFolder and structuresFolder:FindFirstChild(structureType) or nil
+		if typeNode == nil then
+			return _CreateExtractorFallbackModel()
+		end
 	end
 
-	return structureRegistry:GetStructureModel(structureType)
+	if structureRegistry ~= nil then
+		local model = structureRegistry:GetStructureModel(structureType)
+		if model ~= nil then
+			return model
+		end
+	end
+
+	if structureType == MiningConfig.EXTRACTOR_STRUCTURE_TYPE then
+		return _CreateExtractorFallbackModel()
+	end
+
+	return nil
 end
 
 function PlacementGhostModel.new(structureType: string)

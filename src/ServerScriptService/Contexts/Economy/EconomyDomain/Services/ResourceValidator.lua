@@ -14,9 +14,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local EconomyConfig = require(ReplicatedStorage.Contexts.Economy.Config.EconomyConfig)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local Errors = require(script.Parent.Parent.Parent.Errors)
+local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTypes)
 
 local Ok = Result.Ok
 local Err = Result.Err
+
+type ResourceCostMap = EconomyTypes.ResourceCostMap
 
 --[=[
 	@class ResourceValidator
@@ -108,6 +111,46 @@ function ResourceValidator:ValidateSpend(resourceType: string, currentBalance: n
 			currentBalance = currentBalance,
 			cost = cost,
 		})
+	end
+
+	return Ok(nil)
+end
+
+--[=[
+	Validates a multi-resource spend map against current wallet balances.
+	@within ResourceValidator
+	@param balances ResourceCostMap -- Current balances by resource name.
+	@param costMap ResourceCostMap -- Requested costs by resource name.
+	@return Result.Result<nil> -- `Ok(nil)` when every requested cost is affordable.
+]=]
+function ResourceValidator:ValidateSpendMap(balances: ResourceCostMap, costMap: ResourceCostMap): Result.Result<nil>
+	if type(costMap) ~= "table" then
+		return Err("InvalidCostMap", Errors.INVALID_COST_MAP)
+	end
+
+	local hasCost = false
+	for resourceType, cost in costMap do
+		if type(resourceType) ~= "string" or not self:_IsKnownResourceType(resourceType) then
+			return Err("UnknownResourceType", Errors.UNKNOWN_RESOURCE_TYPE)
+		end
+
+		if type(cost) ~= "number" or not self:_IsPositiveInteger(cost) then
+			return Err("InvalidAmount", Errors.INVALID_AMOUNT)
+		end
+
+		hasCost = true
+		local currentBalance = balances[resourceType] or 0
+		if currentBalance < cost then
+			return Err("InsufficientResources", Errors.INSUFFICIENT_RESOURCES, {
+				resourceType = resourceType,
+				currentBalance = currentBalance,
+				cost = cost,
+			})
+		end
+	end
+
+	if not hasCost then
+		return Err("InvalidCostMap", Errors.INVALID_COST_MAP)
 	end
 
 	return Ok(nil)

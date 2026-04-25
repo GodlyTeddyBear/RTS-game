@@ -21,6 +21,7 @@ local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.Struct
 local StructureECSWorldService = require(script.Parent.Infrastructure.ECS.StructureECSWorldService)
 local StructureComponentRegistry = require(script.Parent.Infrastructure.ECS.StructureComponentRegistry)
 local StructureEntityFactory = require(script.Parent.Infrastructure.ECS.StructureEntityFactory)
+local StructureGameObjectSyncService = require(script.Parent.Infrastructure.Services.StructureGameObjectSyncService)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
 local RegisterStructureCommand = require(script.Parent.Application.Commands.RegisterStructureCommand)
 local ApplyDamageStructureCommand = require(script.Parent.Application.Commands.ApplyDamageStructureCommand)
@@ -44,6 +45,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "StructureEntityFactory",
 		Module = StructureEntityFactory,
 		CacheAs = "_entityFactory",
+	},
+	{
+		Name = "StructureGameObjectSyncService",
+		Module = StructureGameObjectSyncService,
+		CacheAs = "_gameObjectSyncService",
 	},
 	{
 		Name = "OnStructureAttacked",
@@ -184,12 +190,13 @@ function StructureContext:KnitStart()
 	end)
 
 	StructureBaseContext:RegisterMethodSystem("CombatTick", "_entityFactory", "FlushPendingDeletes")
+	StructureBaseContext:RegisterMethodSystem("CombatTick", "_gameObjectSyncService", "SyncAll")
 end
 
 -- [Private Helpers]
 
 -- Registers a structure record with the ECS world through the application command stack.
-function StructureContext:_RegisterStructure(record: StructureRecord): Result.Result<number>
+function StructureContext:_RegisterStructure(record: StructureRecord): Result.Result<number?>
 	return Catch(function()
 		return self._registerStructureCommand:Execute(record)
 	end, "Structure:RegisterStructure")
@@ -246,6 +253,15 @@ end
 ]=]
 function StructureContext:GetEntityFactory(): Result.Result<any>
 	return Ok(self._entityFactory)
+end
+
+--[=[
+	Returns the structure model sync service for cross-context runtime cleanup.
+	@within StructureContext
+	@return Result.Result<any> -- Structure game object sync service.
+]=]
+function StructureContext:GetGameObjectSyncService(): Result.Result<any>
+	return Ok(self._gameObjectSyncService)
 end
 
 function StructureContext:_BeforeDestroy()

@@ -10,7 +10,13 @@ local PlacementConfig = {}
 
 -- Keep the placement costs frozen so the command layer reads stable pricing.
 PlacementConfig.STRUCTURE_PLACEMENT_COSTS = table.freeze({
-	turret = 15,
+	turret = table.freeze({
+		Energy = 15,
+		Metal = 5,
+	}),
+	Extractor = table.freeze({
+		Energy = 10,
+	}),
 })
 
 -- Base disallowed zones are global: placement is allowed by default outside these zones.
@@ -22,6 +28,7 @@ PlacementConfig.BASE_DISALLOWED_ZONE_TYPES = table.freeze({
 -- Resource-tile requirements stay data-driven for future structures, even in turret-only Phase 2.
 PlacementConfig.REQUIRES_RESOURCE_TILE = table.freeze({
 	turret = false,
+	Extractor = true,
 })
 
 PlacementConfig.MAX_STRUCTURES = 20

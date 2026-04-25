@@ -11,6 +11,7 @@ Errors.INVALID_REQUEST_COORD = "PlacementContext: invalid placement coordinates 
 Errors.INVALID_REQUEST_STRUCTURE_TYPE = "PlacementContext: invalid structure type in request"
 Errors.NOT_PREP_STATE = "PlacementContext: placement only allowed during Prep phase"
 Errors.UNKNOWN_STRUCTURE_TYPE = "PlacementContext: structure type not in config"
+Errors.INVALID_COST_MAP = "PlacementContext: structure cost map is missing or malformed"
 Errors.INVALID_COORD = "PlacementContext: grid coordinate is invalid or out of bounds"
 Errors.TILE_UNAVAILABLE = "PlacementContext: tile is blocked or already occupied"
 Errors.INCOMPATIBLE_TILE_ZONE = "PlacementContext: structure cannot be placed on this tile (zone or prohibited marker)"

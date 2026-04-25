@@ -52,6 +52,13 @@ Errors.PLAYER_NOT_INITIALIZED = "EconomyContext: player wallet not initialized"
 Errors.INSUFFICIENT_RESOURCES = "EconomyContext: insufficient resources"
 
 --[=[
+	@prop INVALID_COST_MAP string
+	@within Errors
+	Returned when a multi-resource spend map is missing or malformed.
+]=]
+Errors.INVALID_COST_MAP = "EconomyContext: resource cost map must contain at least one positive integer cost"
+
+--[=[
 	@prop INVALID_GRANT string
 	@within Errors
 	Returned when a pickup grant payload is missing.

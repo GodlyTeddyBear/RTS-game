@@ -59,6 +59,10 @@ local function _RequestServerCallback(callbackType: string, context: any)
 	context.CombatService.AnimationCallback:Fire(actorId, callbackType, context.ActorKind)
 end
 
+function BaseAction:_RequestServerCallback(callbackType: string, context: any)
+	_RequestServerCallback(callbackType, context)
+end
+
 --[=[
 	Construct a new BaseAction instance.
 
@@ -200,7 +204,7 @@ function BaseAction:OnEvent(name: string, context: any)
 
 		-- Request a server-side action at the exact animation marker frame.
 		if eventDef.ServerCallback then
-			_RequestServerCallback(eventDef.ServerCallback, context)
+			self:_RequestServerCallback(eventDef.ServerCallback, context)
 		end
 	end
 	--print("Playing event", name)

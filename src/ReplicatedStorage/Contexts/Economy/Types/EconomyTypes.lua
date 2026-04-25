@@ -32,6 +32,13 @@ export type ResourceType = "Energy" | string
 export type ZoneResourceMap = { [string]: number }
 
 --[=[
+	@type ResourceCostMap table<string, number>
+	@within EconomyTypes
+	Maps resource names to required spend amounts.
+]=]
+export type ResourceCostMap = { [string]: number }
+
+--[=[
 	@interface ProfileRunStats
 	@within EconomyTypes
 	.TotalRuns number -- Number of completed runs recorded for the player.

@@ -17,6 +17,7 @@ local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTyp
 
 type ResourceWallet = EconomyTypes.ResourceWallet
 type ProfileRunStats = EconomyTypes.ProfileRunStats
+type ResourceCostMap = EconomyTypes.ResourceCostMap
 
 -- [Private Helpers]
 
@@ -161,6 +162,34 @@ function ResourceSyncService:SubtractResource(userId: number, resourceType: stri
 	end)
 end
 
+--[=[
+	Subtracts a validated multi-resource cost map from a player's wallet in one atom mutation.
+	@within ResourceSyncService
+	@param userId number -- The player user id.
+	@param costMap ResourceCostMap -- Costs by resource type.
+]=]
+function ResourceSyncService:SubtractResources(userId: number, costMap: ResourceCostMap)
+	self.Atom(function(current)
+		local wallet = current[userId]
+		if wallet == nil then
+			return current
+		end
+
+		local updated = table.clone(current)
+		updated[userId] = cloneWallet(wallet)
+
+		for resourceType, cost in costMap do
+			if resourceType == "Energy" then
+				updated[userId].energy -= cost
+			else
+				updated[userId].resources[resourceType] = (updated[userId].resources[resourceType] or 0) - cost
+			end
+		end
+
+		return updated
+	end)
+end
+
 -- Returns a deep-cloned balance so callers cannot mutate the atom in place.
 --[=[
 	Reads a resource balance for a player.
@@ -190,6 +219,31 @@ end
 ]=]
 function ResourceSyncService:GetWallet(userId: number): ResourceWallet?
 	return self:GetReadOnly(userId)
+end
+
+--[=[
+	Reads the current balances needed to validate a cost map.
+	@within ResourceSyncService
+	@param userId number -- The player user id.
+	@param costMap ResourceCostMap -- Resource keys to read.
+	@return ResourceCostMap? -- Current balances by requested resource type, or nil if uninitialized.
+]=]
+function ResourceSyncService:GetBalancesForCostMap(userId: number, costMap: ResourceCostMap): ResourceCostMap?
+	local wallet = self:GetReadOnly(userId)
+	if wallet == nil then
+		return nil
+	end
+
+	local balances = {}
+	for resourceType in costMap do
+		if resourceType == "Energy" then
+			balances[resourceType] = wallet.energy
+		else
+			balances[resourceType] = wallet.resources[resourceType] or 0
+		end
+	end
+
+	return balances
 end
 
 -- Removes the player entry from the atom so the next run starts from a clean slate.

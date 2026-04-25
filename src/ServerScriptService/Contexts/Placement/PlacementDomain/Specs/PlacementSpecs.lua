@@ -8,6 +8,7 @@ local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 
 type RunState = RunTypes.RunState
 type Tile = WorldTypes.Tile
+type ResourceCostMap = { [string]: number }
 
 --[=[
 	@class PlacementSpecs
@@ -54,6 +55,25 @@ end
 -- Capacity is enforced here so commands can fail before any mutation work begins.
 function PlacementSpecs.HasCapacity(currentCount: number): boolean
 	return currentCount < PlacementConfig.MAX_STRUCTURES
+end
+
+function PlacementSpecs.HasValidCostMap(costMap: ResourceCostMap?): boolean
+	if type(costMap) ~= "table" then
+		return false
+	end
+
+	local hasCost = false
+	for resourceType, amount in costMap do
+		if type(resourceType) ~= "string" or type(amount) ~= "number" then
+			return false
+		end
+		if amount <= 0 or math.floor(amount) ~= amount then
+			return false
+		end
+		hasCost = true
+	end
+
+	return hasCost
 end
 
 return table.freeze(PlacementSpecs)

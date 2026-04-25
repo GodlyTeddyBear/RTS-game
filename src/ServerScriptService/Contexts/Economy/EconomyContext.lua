@@ -25,6 +25,7 @@ local ResourceSyncService = require(script.Parent.Infrastructure.Persistence.Res
 local EconomyPersistenceService = require(script.Parent.Infrastructure.Persistence.EconomyPersistenceService)
 local AddResourceCommand = require(script.Parent.Application.Commands.AddResourceCommand)
 local SpendResourceCommand = require(script.Parent.Application.Commands.SpendResourceCommand)
+local SpendResourcesCommand = require(script.Parent.Application.Commands.SpendResourcesCommand)
 local RecordWaveClearCommand = require(script.Parent.Application.Commands.RecordWaveClearCommand)
 local RecordRunCompletedCommand = require(script.Parent.Application.Commands.RecordRunCompletedCommand)
 local GetResourceBalanceQuery = require(script.Parent.Application.Queries.GetResourceBalanceQuery)
@@ -38,6 +39,7 @@ local Ensure = Result.Ensure
 
 type ResourceWallet = EconomyTypes.ResourceWallet
 type ProfileRunStats = EconomyTypes.ProfileRunStats
+type ResourceCostMap = EconomyTypes.ResourceCostMap
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
@@ -73,6 +75,11 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		Name = "SpendResourceCommand",
 		Module = SpendResourceCommand,
 		CacheAs = "_spendResourceCommand",
+	},
+	{
+		Name = "SpendResourcesCommand",
+		Module = SpendResourcesCommand,
+		CacheAs = "_spendResourcesCommand",
 	},
 	{
 		Name = "RecordWaveClearCommand",
@@ -405,6 +412,20 @@ function EconomyContext:SpendEnergy(player: Player, cost: number): Result.Result
 		Ensure(player, "InvalidPlayer", Errors.INVALID_PLAYER)
 		return self._spendResourceCommand:Execute(player.UserId, "Energy", cost)
 	end, "Economy:SpendEnergy")
+end
+
+--[=[
+	Spends multiple resources from a player's wallet atomically after validating every balance.
+	@within EconomyContext
+	@param player Player -- The player spending resources.
+	@param costMap ResourceCostMap -- Costs by resource type.
+	@return Result.Result<nil> -- `Ok(nil)` when every spend succeeds.
+]=]
+function EconomyContext:SpendResources(player: Player, costMap: ResourceCostMap): Result.Result<nil>
+	return Catch(function()
+		Ensure(player, "InvalidPlayer", Errors.INVALID_PLAYER)
+		return self._spendResourcesCommand:Execute(player.UserId, costMap)
+	end, "Economy:SpendResources")
 end
 
 --[=[

@@ -23,7 +23,7 @@ local EconomyConfig = {}
 	The wallet assigned at the start of each run.
 ]=]
 EconomyConfig.STARTING_WALLET = {
-	energy = 20,
+	energy = 25,
 	resources = {},
 }
 

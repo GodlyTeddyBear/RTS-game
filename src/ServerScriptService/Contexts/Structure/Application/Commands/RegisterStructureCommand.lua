@@ -4,9 +4,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
+local StructureSpecs = require(script.Parent.Parent.Parent.StructureDomain.Specs.StructureSpecs)
+local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
 local Try = Result.Try
+local Ensure = Result.Ensure
 
 type StructureRecord = PlacementTypes.StructureRecord
 
@@ -36,6 +39,7 @@ end
 function RegisterStructureCommand:Init(registry: any, _name: string)
 	self._policy = registry:Get("RegisterStructurePolicy")
 	self._factory = registry:Get("StructureEntityFactory")
+	self._syncService = registry:Get("StructureGameObjectSyncService")
 end
 
 function RegisterStructureCommand:Start(registry: any, _name: string)
@@ -46,10 +50,16 @@ end
 	Validates the record and creates the structure entity.
 	@within RegisterStructureCommand
 	@param record StructureRecord -- The placement record to register.
-	@return Result.Result<number> -- The ECS entity id for the new structure.
+	@return Result.Result<number?> -- The ECS entity id for combat structures, or nil for non-combat placements.
 ]=]
-function RegisterStructureCommand:Execute(record: StructureRecord): Result.Result<number>
+function RegisterStructureCommand:Execute(record: StructureRecord): Result.Result<number?>
 	return Result.Catch(function()
+		Ensure(type(record) == "table", "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
+
+		if not StructureSpecs.IsValidStructureType(record.structureType) then
+			return Ok(nil)
+		end
+
 		-- Resolve the canonical structure data before mutating the ECS world.
 		local resolved = Try(self._policy:Check(record))
 
@@ -58,6 +68,7 @@ function RegisterStructureCommand:Execute(record: StructureRecord): Result.Resul
 		local modelResult = self._placementContext:GetStructureInstance(resolved.instanceId)
 		if modelResult.success and modelResult.value ~= nil then
 			self._factory:SetModelRef(entity, modelResult.value)
+			self._syncService:RegisterEntity(entity, modelResult.value)
 		end
 
 		-- Emit a milestone for traceability when a structure becomes active.
