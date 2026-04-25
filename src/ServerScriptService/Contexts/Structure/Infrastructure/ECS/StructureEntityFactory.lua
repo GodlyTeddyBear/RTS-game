@@ -293,6 +293,27 @@ function StructureEntityFactory:SetCombatAction(entity: number, action: TCombatA
 	})
 end
 
+function StructureEntityFactory:PromoteToCommitted(entity: number)
+	local action = self:GetCombatAction(entity)
+	if action == nil or action.CurrentActionId == nil then
+		return
+	end
+
+	if action.ActionState == "Committed" then
+		return
+	end
+
+	self:SetCombatAction(entity, {
+		CurrentActionId = action.CurrentActionId,
+		ActionState = "Committed",
+		ActionData = action.ActionData,
+		PendingActionId = action.PendingActionId,
+		PendingActionData = action.PendingActionData,
+		StartedAt = action.StartedAt,
+		FinishedAt = action.FinishedAt,
+	})
+end
+
 function StructureEntityFactory:SetPendingAction(entity: number, actionId: string, actionData: any?)
 	local action = self:GetCombatAction(entity) or _buildDefaultAction()
 	self:SetCombatAction(entity, {
@@ -421,6 +442,17 @@ function StructureEntityFactory:GetEntityByModel(model: Model): number?
 	for _, entity in ipairs(self:QueryActiveEntities()) do
 		local modelRef = self:GetModelRef(entity)
 		if modelRef ~= nil and modelRef.model == model then
+			return entity
+		end
+	end
+
+	return nil
+end
+
+function StructureEntityFactory:GetEntityByStructureId(structureId: string): number?
+	for _, entity in ipairs(self:QueryActiveEntities()) do
+		local identity = self:GetIdentity(entity)
+		if identity ~= nil and identity.StructureId == structureId then
 			return entity
 		end
 	end

@@ -13,7 +13,15 @@ local function _SetAttributeIfChanged(model: Model, attributeName: string, value
 	model:SetAttribute(attributeName, value)
 end
 
-local function _ComputeAnimationState(pathState: any, role: any): string
+local function _ComputeAnimationState(pathState: any, role: any, combatAction: any): string
+	if
+		combatAction ~= nil
+		and combatAction.CurrentActionId == "AttackStructure"
+		and (combatAction.ActionState == "Running" or combatAction.ActionState == "Committed")
+	then
+		return "AttackStructure"
+	end
+
 	if not pathState or pathState.isMoving ~= true then
 		return "Idle"
 	end
@@ -89,6 +97,7 @@ function EnemyGameObjectSyncService:_SyncEntity(entity: any, explicitModel: Mode
 	local health = self.EnemyEntityFactory:GetHealth(entity)
 	local role = self.EnemyEntityFactory:GetRole(entity)
 	local pathState = self.EnemyEntityFactory:GetPathState(entity)
+	local combatAction = self.EnemyEntityFactory:GetCombatAction(entity)
 
 	if health then
 		model:SetAttribute("Health", health.current)
@@ -101,9 +110,9 @@ function EnemyGameObjectSyncService:_SyncEntity(entity: any, explicitModel: Mode
 		model:SetAttribute("TargetPreference", role.targetPreference)
 	end
 
-	local nextAnimationState = _ComputeAnimationState(pathState, role)
+	local nextAnimationState = _ComputeAnimationState(pathState, role, combatAction)
 	_SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
-	_SetAttributeIfChanged(model, "AnimationLooping", true)
+	_SetAttributeIfChanged(model, "AnimationLooping", nextAnimationState ~= "AttackStructure")
 
 	model:SetAttribute("Alive", self.World:has(entity, self.Components.AliveTag))
 	model:SetAttribute("GoalReached", self.World:has(entity, self.Components.GoalReachedTag))

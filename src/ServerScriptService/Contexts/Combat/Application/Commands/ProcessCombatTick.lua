@@ -209,7 +209,7 @@ function ProcessCombatTick:_RunActionPhase(
 		end
 
 		local runtimeTick = tickResult.value
-		if runtimeTick.Status == "Success" and runtimeTick.ActionId == "LaneAdvance" then
+		if runtimeTick.Status == "Success" and runtimeTick.ActionId == "GoalAdvance" then
 			local goalResult = self._handleGoalReachedCommand:Execute(entity)
 			if not goalResult.success then
 				Result.MentionError("Combat:ProcessCombatTick", "Failed goal-reached handling", {

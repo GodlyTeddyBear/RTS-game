@@ -24,6 +24,8 @@ export type TActionContext = {
 	VFXService: any,
 	ResolveTargetInstance: (() -> Instance?)?,
 	CombatService: any?,
+	ActorId: string?,
+	ActorKind: "Enemy" | "Structure"?,
 	NPCId: string?,
 }
 

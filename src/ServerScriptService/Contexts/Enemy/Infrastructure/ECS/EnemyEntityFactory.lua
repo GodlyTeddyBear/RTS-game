@@ -79,8 +79,7 @@ function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFra
 		targetPreference = roleConfig.targetPreference,
 	})
 	self:_Set(entity, components.PathStateComponent, {
-		waypointIndex = 1,
-		waypoints = {},
+		goalPosition = nil,
 		isMoving = false,
 	})
 	self:_Set(entity, components.IdentityComponent, {
@@ -116,7 +115,7 @@ function EnemyEntityFactory:SetModelRef(entity: number, model: Model)
 	self:_Add(entity, self._components.DirtyTag)
 end
 
-function EnemyEntityFactory:SetWaypoints(entity: number, waypoints: { Vector3 })
+function EnemyEntityFactory:SetGoalPosition(entity: number, goalPosition: Vector3)
 	self:RequireReady()
 	local state = self:GetPathState(entity)
 	if state == nil then
@@ -124,10 +123,23 @@ function EnemyEntityFactory:SetWaypoints(entity: number, waypoints: { Vector3 })
 	end
 
 	self:_Set(entity, self._components.PathStateComponent, {
-		waypointIndex = 1,
-		waypoints = table.clone(waypoints),
+		goalPosition = goalPosition,
 		isMoving = false,
 	})
+end
+
+function EnemyEntityFactory:ClearGoalPosition(entity: number)
+	self:RequireReady()
+	local state = self:GetPathState(entity)
+	if state == nil then
+		return
+	end
+
+	self:_Set(entity, self._components.PathStateComponent, {
+		goalPosition = nil,
+		isMoving = false,
+	})
+	self:_Add(entity, self._components.DirtyTag)
 end
 
 function EnemyEntityFactory:SetPathMoving(entity: number, isMoving: boolean)
@@ -141,25 +153,10 @@ function EnemyEntityFactory:SetPathMoving(entity: number, isMoving: boolean)
 	end
 
 	self:_Set(entity, self._components.PathStateComponent, {
-		waypointIndex = state.waypointIndex,
-		waypoints = state.waypoints,
+		goalPosition = state.goalPosition,
 		isMoving = isMoving,
 	})
 	self:_Add(entity, self._components.DirtyTag)
-end
-
-function EnemyEntityFactory:SetWaypointIndex(entity: number, waypointIndex: number)
-	self:RequireReady()
-	local state = self:GetPathState(entity)
-	if state == nil then
-		return
-	end
-
-	self:_Set(entity, self._components.PathStateComponent, {
-		waypointIndex = waypointIndex,
-		waypoints = state.waypoints,
-		isMoving = state.isMoving,
-	})
 end
 
 function EnemyEntityFactory:SetBehaviorTree(entity: number, treeInstance: any, tickInterval: number)
@@ -200,6 +197,28 @@ function EnemyEntityFactory:SetCombatAction(entity: number, action: TCombatActio
 	self:_Set(entity, self._components.CombatActionComponent, {
 		CurrentActionId = action.CurrentActionId,
 		ActionState = action.ActionState,
+		ActionData = action.ActionData,
+		PendingActionId = action.PendingActionId,
+		PendingActionData = action.PendingActionData,
+		StartedAt = action.StartedAt,
+		FinishedAt = action.FinishedAt,
+	})
+end
+
+function EnemyEntityFactory:PromoteToCommitted(entity: number)
+	self:RequireReady()
+	local action = self:GetCombatAction(entity)
+	if action == nil or action.CurrentActionId == nil then
+		return
+	end
+
+	if action.ActionState == "Committed" then
+		return
+	end
+
+	self:SetCombatAction(entity, {
+		CurrentActionId = action.CurrentActionId,
+		ActionState = "Committed",
 		ActionData = action.ActionData,
 		PendingActionId = action.PendingActionId,
 		PendingActionData = action.PendingActionData,
@@ -366,6 +385,18 @@ end
 function EnemyEntityFactory:GetIdentity(entity: number)
 	self:RequireReady()
 	return self:_Get(entity, self._components.IdentityComponent)
+end
+
+function EnemyEntityFactory:GetEntityByEnemyId(enemyId: string): number?
+	self:RequireReady()
+	for _, entity in ipairs(self:QueryAliveEntities()) do
+		local identity = self:GetIdentity(entity)
+		if identity ~= nil and identity.enemyId == enemyId then
+			return entity
+		end
+	end
+
+	return nil
 end
 
 function EnemyEntityFactory:GetPathState(entity: number)

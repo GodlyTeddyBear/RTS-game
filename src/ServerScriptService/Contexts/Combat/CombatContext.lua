@@ -17,6 +17,7 @@ local StartCombat = require(script.Parent.Application.Commands.StartCombat)
 local ProcessCombatTick = require(script.Parent.Application.Commands.ProcessCombatTick)
 local EndCombat = require(script.Parent.Application.Commands.EndCombat)
 local HandleGoalReached = require(script.Parent.Application.Commands.HandleGoalReached)
+local HandleAnimationCallback = require(script.Parent.Application.Commands.HandleAnimationCallback)
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
@@ -68,6 +69,11 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		Module = HandleGoalReached,
 		CacheAs = "_handleGoalReachedCommand",
 	},
+	{
+		Name = "HandleAnimationCallback",
+		Module = HandleAnimationCallback,
+		CacheAs = "_handleAnimationCallbackCommand",
+	},
 }
 
 local CombatModules: BaseContext.TModuleLayers = {
@@ -83,7 +89,9 @@ local CombatModules: BaseContext.TModuleLayers = {
 ]=]
 local CombatContext = Knit.CreateService({
 	Name = "CombatContext",
-	Client = {},
+	Client = {
+		AnimationCallback = Knit.CreateSignal(),
+	},
 	Modules = CombatModules,
 	ExternalServices = {
 		{ Name = "EnemyContext", CacheAs = "_enemyContext" },
@@ -138,6 +146,7 @@ local CombatContext = Knit.CreateService({
 			{ Field = "_runEndedConnection", Method = "Disconnect" },
 			{ Field = "_enemySpawnedConnection", Method = "Disconnect" },
 			{ Field = "_playerRemovingConnection", Method = "Disconnect" },
+			{ Field = "_animationCallbackConnection", Method = "Disconnect" },
 		},
 	},
 })
@@ -147,20 +156,6 @@ local CombatBaseContext = BaseContext.new(CombatContext)
 local Catch = Result.Catch
 local Ok = Result.Ok
 local Try = Result.Try
-
--- Sorts lane tiles so the generated waypoint list follows the lane from start to goal.
-local function _sortLaneTiles(laneTiles: { any }): { any }
-	local cloned = table.clone(laneTiles)
-	table.sort(cloned, function(a, b)
-		local aCoord = a.coord
-		local bCoord = b.coord
-		if aCoord.row == bCoord.row then
-			return aCoord.col < bCoord.col
-		end
-		return aCoord.row < bCoord.row
-	end)
-	return cloned
-end
 
 --[=[
 	@within CombatContext
@@ -181,13 +176,14 @@ function CombatContext:KnitInit()
 	self._structureEntityFactory = nil
 	self._hitboxService = nil
 	self._lockOnService = nil
-	self._laneWaypoints = {} :: { Vector3 }
+	self._goalPosition = nil :: Vector3?
 
 	self._runWaveStartedConnection = nil :: any
 	self._runWaveEndedConnection = nil :: any
 	self._runEndedConnection = nil :: any
 	self._enemySpawnedConnection = nil :: any
 	self._playerRemovingConnection = nil :: any
+	self._animationCallbackConnection = nil :: any
 end
 
 --[=[
@@ -242,45 +238,39 @@ function CombatContext:KnitStart()
 	CombatBaseContext:OnPlayerRemoving(function(player: Player)
 		self:_OnPlayerRemoving(player)
 	end, "_playerRemovingConnection")
+
+	self._animationCallbackConnection =
+		self.Client.AnimationCallback:Connect(function(
+			player: Player,
+			actorId: string,
+			callbackType: string,
+			actorKind: "Enemy" | "Structure"?
+		)
+			self._handleAnimationCallbackCommand:Execute(player, actorId, callbackType, actorKind)
+		end)
 end
 
--- Builds the cached waypoint list used by both startup and mid-wave enemy spawns.
-function CombatContext:_CacheLaneWaypoints()
-	local laneTilesResult = self._worldContext:GetLaneTiles()
+-- Caches the current goal point used by startup and mid-wave enemy spawns.
+function CombatContext:_CacheGoalPosition()
 	local goalPointResult = self._worldContext:GetGoalPoint()
 
 	assert(
-		laneTilesResult.success,
-		string.format(
-			"CombatContext: lane waypoint cache failed reading lane tiles (%s)",
-			tostring(laneTilesResult.message or laneTilesResult.type or "unknown")
-		)
-	)
-	assert(
 		goalPointResult.success,
 		string.format(
-			"CombatContext: lane waypoint cache failed reading goal point (%s)",
+			"CombatContext: goal cache failed reading goal point (%s)",
 			tostring(goalPointResult.message or goalPointResult.type or "unknown")
 		)
 	)
 
-	local laneTiles = _sortLaneTiles(laneTilesResult.value)
 	local goalPoint = goalPointResult.value
-	local waypointHeight = goalPoint.Position.Y
-	local waypoints = table.create(#laneTiles + 1)
-
-	for _, tile in ipairs(laneTiles) do
-		table.insert(waypoints, Vector3.new(tile.worldPos.X, waypointHeight, tile.worldPos.Z))
-	end
-
-	table.insert(waypoints, goalPoint.Position)
-	self._laneWaypoints = waypoints
+	self._goalPosition = goalPoint.Position
 end
 
 -- Starts combat for the active run wave and assigns behavior trees to existing enemies.
 function CombatContext:_OnRunWaveStarted(waveNumber: number, isEndless: boolean)
 	Catch(function()
-		self:_CacheLaneWaypoints()
+		self:_CacheGoalPosition()
+		self:_AssignGoalPositionToAliveEnemies()
 		Try(self._startCombatCommand:Execute(waveNumber, isEndless))
 		return Ok(nil)
 	end, "Combat:OnRunWaveStarted")
@@ -290,6 +280,7 @@ end
 function CombatContext:_OnRunEnded()
 	Catch(function()
 		Try(self._endCombatCommand:Execute())
+		self._goalPosition = nil
 		return Ok(nil)
 	end, "Combat:OnRunEnded")
 end
@@ -299,27 +290,40 @@ function CombatContext:_OnRunWaveEnded(_waveNumber: number)
 	Catch(function()
 		Try(self._endCombatCommand:Execute())
 		Try(self._enemyContext:CleanupAll())
+		self._goalPosition = nil
 		return Ok(nil)
 	end, "Combat:OnRunWaveEnded")
 end
 
--- Assigns lane waypoints to spawned enemies and backfills their behavior tree state if combat is already active.
+function CombatContext:_AssignGoalPositionToAliveEnemies()
+	local goalPosition = self._goalPosition
+	if goalPosition == nil then
+		return
+	end
+
+	for _, entity in ipairs(self._enemyEntityFactory:QueryAliveEntities()) do
+		self._enemyEntityFactory:SetGoalPosition(entity, goalPosition)
+	end
+end
+
+-- Assigns the current goal target to spawned enemies and backfills their behavior tree state if combat is already active.
 function CombatContext:_OnEnemySpawned(entity: number, _role: string, _waveNumber: number)
-	if #self._laneWaypoints == 0 then
+	if self._goalPosition == nil then
 		pcall(function()
-			self:_CacheLaneWaypoints()
+			self:_CacheGoalPosition()
 		end)
 	end
 
-	if #self._laneWaypoints > 0 then
+	local goalPosition = self._goalPosition
+	if goalPosition ~= nil then
 		local success, err = pcall(function()
-			self._enemyEntityFactory:SetWaypoints(entity, self._laneWaypoints)
+			self._enemyEntityFactory:SetGoalPosition(entity, goalPosition)
 		end)
 		if not success then
-			Result.MentionError("Combat:OnEnemySpawned", "Failed to assign lane waypoints", {
+			Result.MentionError("Combat:OnEnemySpawned", "Failed to assign goal position", {
 				EnemyEntity = entity,
 				CauseMessage = err,
-			}, "WaypointAssignmentFailed")
+			}, "GoalAssignmentFailed")
 			return
 		end
 	end

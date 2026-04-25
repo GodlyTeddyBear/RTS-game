@@ -35,8 +35,7 @@ export type RoleComponent = {
 }
 
 export type PathStateComponent = {
-	waypointIndex: number,
-	waypoints: { Vector3 },
+	goalPosition: Vector3?,
 	isMoving: boolean,
 }
 

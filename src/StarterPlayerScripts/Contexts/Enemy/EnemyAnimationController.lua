@@ -14,10 +14,12 @@ local Workspace = game:GetService("Workspace")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Registry = require(ReplicatedStorage.Utilities.Registry)
+local ActionRegistry = require(ReplicatedStorage.Utilities.ActionSystem.ActionRegistry)
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 
 local AnimateEnemyModule = require(script.Parent.AnimateEnemyModule)
 local NPCBillboardService = require(script.Parent.Infrastructure.NPCBillboardService)
+local AttackAction = require(script.Parent.Actions.AttackAction)
 
 local TAG = "[EnemyAnimation]"
 local ANIMATED_ENEMY_TAG = "AnimatedEnemy"
@@ -66,6 +68,9 @@ end
 	Initializes the client registry and tracking state before any enemy models are observed.
 ]=]
 function EnemyAnimationController:KnitInit()
+	local attackAction = AttackAction.new()
+	ActionRegistry.Register("AttackStructure", attackAction)
+
 	local registry = Registry.new("Client")
 	self.Registry = registry
 
@@ -76,6 +81,7 @@ function EnemyAnimationController:KnitInit()
 	self._tagAddedConnection = nil :: RBXScriptConnection?
 	self._tagRemovedConnection = nil :: RBXScriptConnection?
 	self._npcBillboardService = NPCBillboardService.new()
+	self._combatService = nil
 
 	registry:Register("NPCBillboardService", self._npcBillboardService, "Infrastructure")
 
@@ -110,10 +116,27 @@ function EnemyAnimationController:_TrackModel(model: Model)
 		end
 	end)
 
+	local function buildContext(): any
+		local combatService = self._combatService
+		local base = {
+			Model = nil,
+			CombatService = combatService,
+			ActorKind = "Enemy",
+		}
+
+		return setmetatable(base, {
+			__index = function(_, key)
+				if key == "ActorId" or key == "NPCId" then
+					local resolvedEnemyId = model:GetAttribute("EnemyId")
+					return if type(resolvedEnemyId) == "string" then resolvedEnemyId else nil
+				end
+				return nil
+			end,
+		})
+	end
+
 	-- Attach the shared enemy locomotion animation driver and retain its cleanup handle.
-	AnimateEnemyModule.setup(model, {
-		Model = model,
-	})
+	AnimateEnemyModule.setup(model, buildContext())
 		:andThen(function(cleanup)
 			local tracked = self._tracked[model]
 			if tracked == nil then
@@ -190,6 +213,7 @@ end
 ]=]
 function EnemyAnimationController:KnitStart()
 	local registry = self.Registry
+	self._combatService = Knit.GetService("CombatContext")
 
 	-- Track enemies that arrive through the replicated animation tag.
 	self._tagAddedConnection = CollectionService:GetInstanceAddedSignal(ANIMATED_ENEMY_TAG):Connect(function(instance)

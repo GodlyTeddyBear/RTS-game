@@ -10,9 +10,9 @@ local BehaviorSystem = require(ReplicatedStorage.Utilities.BehaviorSystem)
 	@server
 ]=]
 local Conditions = {
-	HasWaypoints = function()
+	HasGoalTarget = function()
 		return BehaviorSystem.Helpers.CreateConditionTask(function(task, context)
-			if context.Facts.HasWaypoints then
+			if context.Facts.HasGoalTarget then
 				task:success()
 				return
 			end

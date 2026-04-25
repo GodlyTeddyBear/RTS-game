@@ -19,10 +19,10 @@ end
 	@server
 ]=]
 local Commands = {
-	LaneAdvance = function()
+	GoalAdvance = function()
 		return BehaviorSystem.Helpers.CreateCommandTask(function(task, context)
 			local actionFactory = _requireActionFactory(context)
-			actionFactory:SetPendingAction(context.Entity, "LaneAdvance", nil)
+			actionFactory:SetPendingAction(context.Entity, "GoalAdvance", nil)
 			task:success()
 		end)
 	end,

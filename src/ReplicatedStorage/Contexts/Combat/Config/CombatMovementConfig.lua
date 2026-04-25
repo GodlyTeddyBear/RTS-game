@@ -9,16 +9,9 @@
 local CombatMovementConfig = {}
 
 --[=[
-	@prop WAYPOINT_ARRIVAL_THRESHOLD number
-	@within CombatMovementConfig
-	Distance threshold used to treat an enemy as having reached a waypoint.
-]=]
-CombatMovementConfig.WAYPOINT_ARRIVAL_THRESHOLD = 2
-
---[=[
 	@prop AGENT_PARAMS_BY_ROLE table
 	@within CombatMovementConfig
-	Role-specific SimplePath agent settings used by lane movement.
+	Role-specific SimplePath agent settings used by goal movement.
 ]=]
 CombatMovementConfig.AGENT_PARAMS_BY_ROLE = table.freeze({
 	swarm = table.freeze({

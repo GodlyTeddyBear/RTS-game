@@ -100,11 +100,7 @@ function CombatPerceptionService:BuildSnapshot(entity: number, _currentTime: num
 	local role = self._enemyEntityFactory:GetRole(entity)
 	local position = self._enemyEntityFactory:GetPosition(entity)
 
-	local hasWaypoints = pathState ~= nil and pathState.waypoints ~= nil and #pathState.waypoints > 0
-	local isAtGoal = false
-	if hasWaypoints and pathState then
-		isAtGoal = pathState.waypointIndex > #pathState.waypoints
-	end
+	local hasGoalTarget = pathState ~= nil and pathState.goalPosition ~= nil
 
 	local healthPct = 1
 	if health and health.max > 0 then
@@ -117,8 +113,7 @@ function CombatPerceptionService:BuildSnapshot(entity: number, _currentTime: num
 	end
 
 	return {
-		HasWaypoints = hasWaypoints,
-		IsAtGoal = isAtGoal,
+		HasGoalTarget = hasGoalTarget,
 		HealthPct = healthPct,
 		ShouldFlee = healthPct < FLEE_THRESHOLD,
 		TargetStructureEntity = targetStructureEntity,

@@ -50,12 +50,13 @@ local BaseAction = {}
 BaseAction.__index = BaseAction
 
 local function _RequestServerCallback(callbackType: string, context: any)
-	if not context.CombatService or not context.NPCId then
+	local actorId = context.ActorId or context.NPCId
+	if not context.CombatService or type(actorId) ~= "string" then
 		return
 	end
 
 	--print("[BaseAction] Requested server callback:", callbackType, "npcId:", context.NPCId)
-	context.CombatService.AnimationCallback:Fire(context.NPCId, callbackType)
+	context.CombatService.AnimationCallback:Fire(actorId, callbackType, context.ActorKind)
 end
 
 --[=[
