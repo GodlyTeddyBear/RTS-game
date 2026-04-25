@@ -16,6 +16,12 @@ export type TExtractorRecord = {
 	amountPerCycle: number,
 }
 
+export type TResourceNodeRecord = {
+	nodeId: string,
+	instance: BasePart,
+	resourceType: string,
+}
+
 export type TOwnerComponent = {
 	UserId: number,
 }
@@ -32,6 +38,15 @@ export type TTimingComponent = {
 
 export type TInstanceRefComponent = {
 	InstanceId: number,
+}
+
+export type TResourceNodeComponent = {
+	NodeId: string,
+	ResourceType: string,
+}
+
+export type TNodeInstanceComponent = {
+	Instance: BasePart,
 }
 
 return table.freeze(MiningTypes)

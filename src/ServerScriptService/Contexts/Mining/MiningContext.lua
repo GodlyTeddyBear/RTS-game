@@ -18,6 +18,7 @@ local MiningECSWorldService = require(script.Parent.Infrastructure.ECS.MiningECS
 local MiningComponentRegistry = require(script.Parent.Infrastructure.ECS.MiningComponentRegistry)
 local MiningEntityFactory = require(script.Parent.Infrastructure.ECS.MiningEntityFactory)
 local ExtractorMiningSystem = require(script.Parent.Infrastructure.Services.ExtractorMiningSystem)
+local ResourceNodeRegistryService = require(script.Parent.Infrastructure.Services.ResourceNodeRegistryService)
 local RegisterExtractorCommand = require(script.Parent.Application.Commands.RegisterExtractorCommand)
 local CleanupAllExtractorsCommand = require(script.Parent.Application.Commands.CleanupAllExtractorsCommand)
 
@@ -40,6 +41,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "ExtractorMiningSystem",
 		Module = ExtractorMiningSystem,
 		CacheAs = "_extractorMiningSystem",
+	},
+	{
+		Name = "ResourceNodeRegistryService",
+		Module = ResourceNodeRegistryService,
+		CacheAs = "_resourceNodeRegistryService",
 	},
 }
 
@@ -70,9 +76,10 @@ local MiningContext = Knit.CreateService({
 	},
 	Modules = MiningModules,
 	ExternalServices = {
+		{ Name = "MapContext", CacheAs = "_mapContext" },
 		{ Name = "PlacementContext", CacheAs = "_placementContext" },
 		{ Name = "RunContext", CacheAs = "_runContext" },
-		{ Name = "EconomyContext" },
+		{ Name = "EconomyContext", CacheAs = "_economyContext" },
 	},
 	Teardown = {
 		Before = "_BeforeDestroy",
@@ -106,26 +113,45 @@ function MiningContext:KnitStart()
 		end
 	end)
 
-	self._runStateChangedConnection = self._runContext.StateChanged:Connect(function(newState: RunState, previousState: RunState)
-		local isRunEndCleanup = newState == "RunEnd"
-		local isFreshRunStartCleanup = previousState == "Idle" and newState == "Prep"
-		if not isRunEndCleanup and not isFreshRunStartCleanup then
-			return
-		end
+	self._runStateChangedConnection = self._runContext.StateChanged:Connect(
+		function(newState: RunState, previousState: RunState)
+			local isRunEndCleanup = newState == "RunEnd"
+			local isFreshRunStartCleanup = previousState == "Idle" and newState == "Prep"
+			if not isRunEndCleanup and not isFreshRunStartCleanup then
+				return
+			end
 
-		local result = self:_CleanupAll()
-		if not result.success then
-			Result.MentionError("Mining:RunCleanup", "Failed to cleanup extractors", {
-				CauseType = result.type,
-				CauseMessage = result.message,
-			}, result.type)
+			local result = self:_CleanupAll()
+			if not result.success then
+				Result.MentionError("Mining:RunCleanup", "Failed to cleanup mining entities", {
+					CauseType = result.type,
+					CauseMessage = result.message,
+				}, result.type)
+				return
+			end
+
+			if isFreshRunStartCleanup then
+				local registerNodesResult = self:_RegisterResourceNodes()
+				if not registerNodesResult.success then
+					Result.MentionError("Mining:OnRunPrep", "Failed to register resource nodes", {
+						CauseType = registerNodesResult.type,
+						CauseMessage = registerNodesResult.message,
+					}, registerNodesResult.type)
+				end
+			end
 		end
-	end)
+	)
 
 	MiningBaseContext:RegisterSchedulerSystem("CombatTick", function()
 		self._extractorMiningSystem:Tick(MiningBaseContext:GetSchedulerDeltaTime())
 		self._entityFactory:FlushPendingDeletes()
 	end)
+end
+
+function MiningContext:_RegisterResourceNodes(): Result.Result<number>
+	return Catch(function()
+		return self._resourceNodeRegistryService:RegisterNodesFromMapZone()
+	end, "Mining:RegisterResourceNodes")
 end
 
 function MiningContext:_RegisterExtractor(record: StructureRecord): Result.Result<number?>

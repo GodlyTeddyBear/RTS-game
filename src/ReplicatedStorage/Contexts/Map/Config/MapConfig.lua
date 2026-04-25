@@ -14,6 +14,7 @@ MapConfig.ZONE_PATHS = table.freeze({
 	PlacementProhibited = "Environment.Zones.PlacementProhibited",
 	Lanes = "Environment.Zones.Lanes",
 	SidePockets = "Environment.Zones.SidePockets",
+	Resources = "Environment.Zones.Resources",
 })
 
 MapConfig.REQUIRED_ZONES = table.freeze({
@@ -22,6 +23,7 @@ MapConfig.REQUIRED_ZONES = table.freeze({
 	"PlacementGrids",
 	"Lanes",
 	"SidePockets",
+	"Resources",
 })
 
 return table.freeze(MapConfig)

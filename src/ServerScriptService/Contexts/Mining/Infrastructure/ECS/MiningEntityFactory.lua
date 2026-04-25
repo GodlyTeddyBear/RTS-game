@@ -6,10 +6,13 @@ local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFa
 local MiningTypes = require(ReplicatedStorage.Contexts.Mining.Types.MiningTypes)
 
 type TExtractorRecord = MiningTypes.TExtractorRecord
+type TResourceNodeRecord = MiningTypes.TResourceNodeRecord
 type TOwnerComponent = MiningTypes.TOwnerComponent
 type TResourceComponent = MiningTypes.TResourceComponent
 type TTimingComponent = MiningTypes.TTimingComponent
 type TInstanceRefComponent = MiningTypes.TInstanceRefComponent
+type TResourceNodeComponent = MiningTypes.TResourceNodeComponent
+type TNodeInstanceComponent = MiningTypes.TNodeInstanceComponent
 
 local MiningEntityFactory = {}
 MiningEntityFactory.__index = MiningEntityFactory
@@ -30,7 +33,10 @@ function MiningEntityFactory:_OnInit(_registry: any, _name: string, _componentRe
 			and self._components.ResourceComponent ~= nil
 			and self._components.TimingComponent ~= nil
 			and self._components.InstanceRefComponent ~= nil
-			and self._components.ActiveTag ~= nil,
+			and self._components.ResourceNodeComponent ~= nil
+			and self._components.NodeInstanceComponent ~= nil
+			and self._components.ExtractorActiveTag ~= nil
+			and self._components.ResourceNodeTag ~= nil,
 		"MiningEntityFactory: missing MiningComponentRegistry components"
 	)
 end
@@ -57,7 +63,24 @@ function MiningEntityFactory:CreateExtractor(record: TExtractorRecord): number
 		InstanceId = record.instanceId,
 	} :: TInstanceRefComponent)
 
-	self:_Add(entity, components.ActiveTag)
+	self:_Add(entity, components.ExtractorActiveTag)
+	return entity
+end
+
+function MiningEntityFactory:CreateResourceNode(record: TResourceNodeRecord): number
+	local components = self:GetComponentsOrThrow()
+	local entity = self:_CreateEntity()
+
+	self:_Set(entity, components.ResourceNodeComponent, {
+		NodeId = record.nodeId,
+		ResourceType = record.resourceType,
+	} :: TResourceNodeComponent)
+
+	self:_Set(entity, components.NodeInstanceComponent, {
+		Instance = record.instance,
+	} :: TNodeInstanceComponent)
+
+	self:_Add(entity, components.ResourceNodeTag)
 	return entity
 end
 
@@ -91,7 +114,45 @@ end
 
 function MiningEntityFactory:QueryActiveEntities(): { number }
 	local components = self:GetComponentsOrThrow()
-	return self:CollectQuery(components.ActiveTag)
+	return self:CollectQuery(components.ExtractorActiveTag)
+end
+
+function MiningEntityFactory:GetResourceNode(entity: number): TResourceNodeComponent?
+	local components = self:GetComponentsOrThrow()
+	return self:_Get(entity, components.ResourceNodeComponent)
+end
+
+function MiningEntityFactory:GetNodeInstance(entity: number): BasePart?
+	local components = self:GetComponentsOrThrow()
+	local nodeInstance = self:_Get(entity, components.NodeInstanceComponent) :: TNodeInstanceComponent?
+	return if nodeInstance == nil then nil else nodeInstance.Instance
+end
+
+function MiningEntityFactory:QueryResourceNodes(): { number }
+	local components = self:GetComponentsOrThrow()
+	return self:CollectQuery(components.ResourceNodeTag)
+end
+
+function MiningEntityFactory:QueryResourceNodesByType(resourceType: string): { number }
+	local matches = {}
+	for _, entity in ipairs(self:QueryResourceNodes()) do
+		local resourceNode = self:GetResourceNode(entity)
+		if resourceNode ~= nil and resourceNode.ResourceType == resourceType then
+			table.insert(matches, entity)
+		end
+	end
+	return matches
+end
+
+function MiningEntityFactory:FindResourceNodeByInstance(instance: BasePart): number?
+	for _, entity in ipairs(self:QueryResourceNodes()) do
+		local nodeInstance = self:GetNodeInstance(entity)
+		if nodeInstance == instance then
+			return entity
+		end
+	end
+
+	return nil
 end
 
 function MiningEntityFactory:DeleteEntity(entity: number?)
@@ -100,15 +161,27 @@ function MiningEntityFactory:DeleteEntity(entity: number?)
 	end
 
 	local components = self:GetComponentsOrThrow()
-	if self:_Has(entity, components.ActiveTag) then
-		self:_Remove(entity, components.ActiveTag)
+	if self:_Has(entity, components.ExtractorActiveTag) then
+		self:_Remove(entity, components.ExtractorActiveTag)
+	end
+
+	if self:_Has(entity, components.ResourceNodeTag) then
+		self:_Remove(entity, components.ResourceNodeTag)
 	end
 
 	self:MarkForDestruction(entity)
 end
 
 function MiningEntityFactory:DeleteAll()
+	local allEntities = {}
 	for _, entity in ipairs(self:QueryActiveEntities()) do
+		table.insert(allEntities, entity)
+	end
+	for _, entity in ipairs(self:QueryResourceNodes()) do
+		table.insert(allEntities, entity)
+	end
+
+	for _, entity in ipairs(allEntities) do
 		self:DeleteEntity(entity)
 	end
 end

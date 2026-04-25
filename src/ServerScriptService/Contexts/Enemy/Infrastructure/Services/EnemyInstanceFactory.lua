@@ -1,10 +1,12 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local BaseInstanceFactory = require(ReplicatedStorage.Utilities.BaseInstanceFactory)
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
+local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
 
 type TCreateEnemyInstanceOptions = {
 	role: string,
@@ -151,6 +153,7 @@ function EnemyInstanceFactory:_PrepareInstance(instance: Instance, _entityId: nu
 	end
 
 	assert(model.PrimaryPart ~= nil, "Enemy model missing PrimaryPart: " .. model.Name)
+	EntityCollisionService:ApplyModel(model)
 end
 
 function EnemyInstanceFactory:_BuildRevealIdentityOptions(

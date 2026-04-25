@@ -8,5 +8,9 @@ Errors.INVALID_RESOURCE_TYPE = "MiningContext: extractor resource type is invali
 Errors.INVALID_INSTANCE_ID = "MiningContext: extractor instance id is invalid"
 Errors.INVALID_INTERVAL = "MiningContext: extractor interval must be positive"
 Errors.INVALID_AMOUNT = "MiningContext: extractor amount must be a positive integer"
+Errors.MISSING_RESOURCE_ZONE = "MiningContext: resources zone is missing from the runtime map"
+Errors.INVALID_RESOURCE_ZONE = "MiningContext: resources zone instance is invalid"
+Errors.INVALID_RESOURCE_NODE = "MiningContext: resource node part is invalid"
+Errors.UNKNOWN_RESOURCE_NODE_TYPE = "MiningContext: resource node part name must match a known resource type"
 
 return table.freeze(Errors)

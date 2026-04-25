@@ -20,7 +20,12 @@ function MiningComponentRegistry:_RegisterComponents(_registry: any, _name: stri
 	self:RegisterComponent("TimingComponent", "Mining.Timing", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] placement runtime instance metadata.
 	self:RegisterComponent("InstanceRefComponent", "Mining.InstanceRef", "AUTHORITATIVE")
-	self:RegisterTag("ActiveTag", "Mining.ActiveTag")
+	-- [AUTHORITATIVE] resource-node identity and resource classification.
+	self:RegisterComponent("ResourceNodeComponent", "Mining.ResourceNode", "AUTHORITATIVE")
+	-- [AUTHORITATIVE] runtime resource-node instance reference.
+	self:RegisterComponent("NodeInstanceComponent", "Mining.NodeInstance", "AUTHORITATIVE")
+	self:RegisterTag("ExtractorActiveTag", "Mining.ExtractorActiveTag")
+	self:RegisterTag("ResourceNodeTag", "Mining.ResourceNodeTag")
 end
 
 return MiningComponentRegistry
