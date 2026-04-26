@@ -40,6 +40,7 @@ local domainModules = {
 	-- Context-owned events
 	Base = require(script.Contexts.Base),
 	Commander = require(script.Contexts.Commander),
+	Forge = require(script.Contexts.Forge),
 	Run = require(script.Contexts.Run),
 	Wave = require(script.Contexts.Wave),
 

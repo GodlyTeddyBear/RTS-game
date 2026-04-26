@@ -17,7 +17,7 @@ local TankBehavior = table.freeze({
 		{
 			Sequence = {
 				"HasGoalTarget",
-				"GoalAdvance",
+				"Advance",
 			},
 		},
 		"Idle",

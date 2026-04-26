@@ -17,7 +17,7 @@ local SwarmBehavior = table.freeze({
 		{
 			Sequence = {
 				"HasGoalTarget",
-				"GoalAdvance",
+				"Advance",
 			},
 		},
 		"Idle",

@@ -19,10 +19,10 @@ end
 	@server
 ]=]
 local Commands = {
-	GoalAdvance = function()
+	Advance = function()
 		return BehaviorSystem.Helpers.CreateCommandTask(function(task, context)
 			local actionFactory = _requireActionFactory(context)
-			actionFactory:SetPendingAction(context.Entity, "GoalAdvance", nil)
+			actionFactory:SetPendingAction(context.Entity, "Advance", nil)
 			task:success()
 		end)
 	end,
