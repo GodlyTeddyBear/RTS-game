@@ -57,7 +57,15 @@ export type ResultTypeRegistry = {
 	MissingPath: string,
 }
 
-function Core.Apply(Result: any)
+local Types = table.freeze({
+	RuntimeError = "RuntimeError",
+	MultipleErrors = "MultipleErrors",
+	MissingPath = "MissingPath",
+})
+
+Core.Types = Types
+
+function Core.CreateMeta(Result: any)
 	local ResultMeta = {}
 	ResultMeta.__index = ResultMeta
 
@@ -178,60 +186,7 @@ function Core.Apply(Result: any)
 		return default
 	end
 
-	Result.Types = table.freeze({
-		RuntimeError = "RuntimeError",
-		MultipleErrors = "MultipleErrors",
-		MissingPath = "MissingPath",
-	})
-
-	--[=[
-		Wraps a success value into a Result.
-		@within Result
-	]=]
-	function Result.Ok<T>(value: T): Ok<T>
-		return setmetatable({
-			_isResult = true,
-			success = true,
-			value = value,
-		}, ResultMeta) :: any
-	end
-
-	--[=[
-		Wraps an expected business failure into a Result.
-		@within Result
-	]=]
-	function Result.Err(errType: string, message: string, data: { [string]: any }?): Err
-		return setmetatable({
-			_isResult = true,
-			success = false,
-			type = errType,
-			message = message,
-			data = data,
-		}, ResultMeta) :: any
-	end
-
-	--[=[
-		Wraps an unexpected runtime crash into a defect Result.
-		@within Result
-	]=]
-	function Result.Defect(message: string, traceback: string?): Err
-		return setmetatable({
-			_isResult = true,
-			success = false,
-			isDefect = true,
-			type = Result.Types.RuntimeError,
-			message = message,
-			traceback = traceback,
-		}, ResultMeta) :: any
-	end
-
-	--[=[
-		Returns whether a value is a Result object.
-		@within Result
-	]=]
-	function Result.isResult(value: any): boolean
-		return type(value) == "table" and value._isResult == true
-	end
+	return ResultMeta
 end
 
 return Core

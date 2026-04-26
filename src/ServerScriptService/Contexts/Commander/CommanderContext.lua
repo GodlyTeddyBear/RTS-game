@@ -232,13 +232,8 @@ function CommanderContext:_RegisterDeveloperLogCommands()
 				end
 			end
 
-			return true, string.format(
-				"userId=%d hp=%d/%d activeCooldowns=%d",
-				userId,
-				state.hp,
-				state.maxHp,
-				cooldownCount
-			)
+			return true,
+				string.format("userId=%d hp=%d/%d activeCooldowns=%d", userId, state.hp, state.maxHp, cooldownCount)
 		end,
 	})
 
@@ -281,7 +276,8 @@ function CommanderContext:_RegisterDeveloperLogCommands()
 			else
 				local parsed = _parseBooleanDirective(enabledParam)
 				if parsed == nil then
-					return false, string.format("Invalid enabled value '%s'. Use true/false/toggle.", tostring(enabledParam))
+					return false,
+						string.format("Invalid enabled value '%s'. Use true/false/toggle.", tostring(enabledParam))
 				end
 				nextEnabled = parsed
 			end
@@ -326,23 +322,27 @@ function CommanderContext:ApplyDamage(player: Player, amount: number): Result.Re
 		Ensure(player, "InvalidPlayer", Errors.INVALID_PLAYER)
 		Ensure(amount > 0, "InvalidDamageAmount", Errors.INVALID_DAMAGE_AMOUNT, { amount = amount })
 
-		local previousState = Try(fromNilable(
-			self._getCommanderStateQuery:Execute(player.UserId),
-			"CommanderNotFound",
-			Errors.COMMANDER_NOT_FOUND,
-			{ userId = player.UserId }
-		)) :: CommanderState
+		local previousState = Try(
+			fromNilable(
+				self._getCommanderStateQuery:Execute(player.UserId),
+				"CommanderNotFound",
+				Errors.COMMANDER_NOT_FOUND,
+				{ userId = player.UserId }
+			)
+		) :: CommanderState
 
 		if self:IsGodModeEnabled(player.UserId) then
 			return Ok(previousState.hp)
 		end
 
-		local nextHp = Try(fromNilable(
-			self._entityFactory:ApplyDamage(player.UserId, amount),
-			"CommanderNotFound",
-			Errors.COMMANDER_NOT_FOUND,
-			{ userId = player.UserId }
-		))
+		local nextHp = Try(
+			fromNilable(
+				self._entityFactory:ApplyDamage(player.UserId, amount),
+				"CommanderNotFound",
+				Errors.COMMANDER_NOT_FOUND,
+				{ userId = player.UserId }
+			)
+		)
 		self._syncService:SyncCommanderState(player.UserId)
 
 		if previousState.hp > 0 and nextHp <= 0 then

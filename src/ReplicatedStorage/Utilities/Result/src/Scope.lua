@@ -45,48 +45,42 @@ local function flushScope(scope: Scope)
 	(scope :: ScopeInternal)._janitor:Cleanup()
 end
 
-function ScopeModule.Apply(Result: any)
-	--[=[
-		Runs a function with a cleanup scope that always flushes on exit.
-		@within Result
-	]=]
-	function Result.scoped(fn: (scope: Scope) -> Core.Result<any>): Core.Result<any>
-		local scope = newScope()
-		local ok, result = xpcall(fn, function(thrown)
-			if type(thrown) == "table" and (thrown :: any)._isResult then
-				return thrown
-			end
-			return Result.Defect(tostring(thrown), debug.traceback(nil, 2))
-		end, scope)
-		flushScope(scope)
-		if not ok then
-			return result :: any
+local function scoped(Result: any, fn: (scope: Scope) -> Core.Result<any>): Core.Result<any>
+	local scope = newScope()
+	local ok, result = xpcall(fn, function(thrown)
+		if type(thrown) == "table" and (thrown :: any)._isResult then
+			return thrown
 		end
-		if not Result.isResult(result) then
-			return Result.Ok(result)
-		end
+		return Result.Defect(tostring(thrown), debug.traceback(nil, 2))
+	end, scope)
+	flushScope(scope)
+	if not ok then
 		return result :: any
 	end
-
-	--[=[
-		Acquires one resource, uses it, and guarantees release through a scope.
-		@within Result
-	]=]
-	function Result.acquireRelease<T, U>(
-		acquire: () -> Core.Result<T>,
-		release: (resource: T) -> (),
-		use: (resource: T) -> Core.Result<U>
-	): Core.Result<U>
-		local acquireResult = acquire()
-		if not acquireResult.success then
-			return acquireResult :: any
-		end
-		local resource = (acquireResult :: Core.Ok<T>).value
-		return Result.scoped(function(scope: Scope)
-			scope:add(resource, release)
-			return use(resource)
-		end)
+	if not Result.isResult(result) then
+		return Result.Ok(result)
 	end
+	return result :: any
 end
 
-return ScopeModule
+local function acquireRelease<T, U>(
+	Result: any,
+	acquire: () -> Core.Result<T>,
+	release: (resource: T) -> (),
+	use: (resource: T) -> Core.Result<U>
+): Core.Result<U>
+	local acquireResult = acquire()
+	if not acquireResult.success then
+		return acquireResult :: any
+	end
+	local resource = (acquireResult :: Core.Ok<T>).value
+	return scoped(Result, function(scope: Scope)
+		scope:add(resource, release)
+		return use(resource)
+	end)
+end
+
+ScopeModule.scoped = scoped
+ScopeModule.acquireRelease = acquireRelease
+
+return table.freeze(ScopeModule)

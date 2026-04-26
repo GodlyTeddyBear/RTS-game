@@ -18,8 +18,9 @@ export type Ok<T> = Result.Ok<T>
 export type Err = Result.Err
 export type Result<T> = Result.Result<T>
 export type ResultChain = Result.ResultChain
-export type ResultModule = Result.ResultModule
 export type ResultTypeRegistry = Result.ResultTypeRegistry
+export type ErrorLogger = Result.ErrorLogger
+export type MilestoneLogger = Result.MilestoneLogger
 export type Scope = Result.Scope
 
 return Result

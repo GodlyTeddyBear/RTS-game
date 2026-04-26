@@ -13,8 +13,14 @@ type StateChangedConnection = {
 }
 
 type StateChangedSignal<TState> = {
-	Connect: (self: StateChangedSignal<TState>, callback: (newState: TState, previousState: TState) -> ()) -> StateChangedConnection,
-	Once: (self: StateChangedSignal<TState>, callback: (newState: TState, previousState: TState) -> ()) -> StateChangedConnection,
+	Connect: (
+		self: StateChangedSignal<TState>,
+		callback: (newState: TState, previousState: TState) -> ()
+	) -> StateChangedConnection,
+	Once: (
+		self: StateChangedSignal<TState>,
+		callback: (newState: TState, previousState: TState) -> ()
+	) -> StateChangedConnection,
 	Fire: (self: StateChangedSignal<TState>, newState: TState, previousState: TState) -> (),
 	Wait: (self: StateChangedSignal<TState>) -> (TState, TState),
 	DisconnectAll: (self: StateChangedSignal<TState>) -> (),

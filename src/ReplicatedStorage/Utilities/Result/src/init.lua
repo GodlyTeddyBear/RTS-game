@@ -15,6 +15,8 @@ export type Err = Core.Err
 export type Result<T> = Core.Result<T>
 export type ResultChain = Core.ResultChain
 export type ResultTypeRegistry = Core.ResultTypeRegistry
+export type ErrorLogger = Logging.ErrorLogger
+export type MilestoneLogger = Logging.MilestoneLogger
 export type Scope = ScopeModule.Scope
 
 type TimeoutPromise = any
@@ -174,82 +176,274 @@ type TimeoutPromise = any
 	Acquires one resource, uses it, and guarantees release through a scope.
 ]=]
 
+local Result = {}
+local ResultMeta = Core.CreateMeta(Result)
+Result.Types = Core.Types
+
 --[=[
-	@interface ResultModule
+	Wraps a success value into a Result.
 	@within Result
-	.Types ResultTypeRegistry -- Common built-in Result error type names.
-	.Ok function -- Wraps a success value.
-	.Err function -- Wraps an expected business failure.
-	.Defect function -- Wraps an unexpected runtime failure.
-	.isResult function -- Returns whether a value is a Result object.
-	.Try function -- Unwraps `Ok` or throws the failure.
-	.Ensure function -- Throws `Err` when the condition is falsy.
-	.RequirePath function -- Walks nested string keys or throws `MissingPath`.
-	.TryAll function -- Accumulates multiple Results into one.
-	.fromNilable function -- Converts a nil-able value into a Result.
-	.fromPcall function -- Converts a `pcall`-style operation into a Result.
-	.Catch function -- Runs the error boundary and always returns a Result.
-	.sandbox function -- Wraps a Result so it can be inspected as inert data.
-	.unsandbox function -- Re-activates a sandboxed Result.
-	.zip function -- Combines two successful Results.
-	.zipWith function -- Combines two successful Results with a merge function.
-	.traverse function -- Maps a Result-returning function over a list.
-	.retry function -- Retries a Result-returning function.
-	.timeout function -- Runs a yielding function with a timeout.
-	.race function -- Resolves with the first Result to finish.
-	.all function -- Resolves with all concurrent Results.
-	.guard function -- Exits the current `gen` block early.
-	.gen function -- Runs a function in a coroutine so `guard` can return early.
-	.scoped function -- Runs work with guaranteed cleanup.
-	.acquireRelease function -- Single-resource acquire/use/release helper.
 ]=]
-export type ResultModule = {
-	Types: ResultTypeRegistry,
-	Ok: <T>(value: T) -> Ok<T>,
-	Err: (errType: string, message: string, data: { [string]: any }?) -> Err,
-	Defect: (message: string, traceback: string?) -> Err,
-	isResult: (value: any) -> boolean,
-	Try: <T>(result: Result<T>) -> T,
-	Ensure: <T>(condition: T, errType: string, message: string, data: { [string]: any }?) -> T,
-	RequirePath: (root: any, ...string) -> any,
-	TryAll: (...Result<any>) -> Result<{ any }>,
-	fromNilable: (value: any, errType: string, message: string, data: { [string]: any }?) -> Result<any>,
-	fromPcall: (errType: string, fn: (...any) -> ...any, ...any) -> Result<any>,
-	Catch: <T>(
-		fn: (...any) -> Result<T> | any?,
-		label: string,
-		failureHandler: ((err: Err) -> ())?,
-		...any
-	) -> Result<T>,
-	sandbox: (result: Result<any>) -> Ok<Result<any>>,
-	unsandbox: (sandboxed: Ok<Result<any>>) -> Result<any>,
-	zip: (resultA: Result<any>, resultB: Result<any>) -> Result<any>,
-	zipWith: (resultA: Result<any>, resultB: Result<any>, fn: (any, any) -> any) -> Result<any>,
-	traverse: (items: { any }, fn: (any) -> Result<any>) -> Result<any>,
-	retry: (fn: () -> Result<any>, options: { maxAttempts: number, delay: number? }) -> Result<any>,
-	timeout: (fn: () -> Result<any>, seconds: number, errType: string?) -> TimeoutPromise,
-	race: (fns: { () -> Result<any> }) -> TimeoutPromise,
-	all: (fns: { () -> Result<any> }) -> TimeoutPromise,
-	guard: (condition: any, returnValue: any?) -> (),
-	gen: <T>(fn: (...any) -> T, ...any) -> T,
-	scoped: (fn: (scope: Scope) -> Result<any>) -> Result<any>,
-	acquireRelease: <T, U>(
-		acquire: () -> Result<T>,
-		release: (resource: T) -> (),
-		use: (resource: T) -> Result<U>
-	) -> Result<U>,
-}
+function Result.Ok<T>(value: T): Ok<T>
+	return setmetatable({
+		_isResult = true,
+		success = true,
+		value = value,
+	}, ResultMeta) :: any
+end
 
-local Result: ResultModule = {} ::ResultModule
+--[=[
+	Wraps an expected business failure into a Result.
+	@within Result
+]=]
+function Result.Err(errType: string, message: string, data: { [string]: any }?): Err
+	return setmetatable({
+		_isResult = true,
+		success = false,
+		type = errType,
+		message = message,
+		data = data,
+	}, ResultMeta) :: any
+end
 
-Core.Apply(Result)
-local log = Logging.Apply(Result)
-Throwable.Apply(Result)
-Boundary.Apply(Result, log)
-Inspection.Apply(Result)
-Combinators.Apply(Result)
-Async.Apply(Result)
-ControlFlow.Apply(Result)
-ScopeModule.Apply(Result)
+--[=[
+	Wraps an unexpected runtime crash into a defect Result.
+	@within Result
+]=]
+function Result.Defect(message: string, traceback: string?): Err
+	return setmetatable({
+		_isResult = true,
+		success = false,
+		isDefect = true,
+		type = Result.Types.RuntimeError,
+		message = message,
+		traceback = traceback,
+	}, ResultMeta) :: any
+end
+
+--[=[
+	Returns whether a value is a Result object.
+	@within Result
+]=]
+function Result.isResult(value: any): boolean
+	return type(value) == "table" and value._isResult == true
+end
+
+--[=[
+	Registers the error log handler used by `Catch` and `MentionError`.
+	@within Result
+]=]
+function Result.SetLogger(fn: ErrorLogger)
+	Logging.SetLogger(fn)
+end
+
+--[=[
+	Registers the success milestone log handler.
+	@within Result
+]=]
+function Result.SetSuccessLogger(fn: MilestoneLogger)
+	Logging.SetSuccessLogger(fn)
+end
+
+--[=[
+	Registers the event milestone log handler.
+	@within Result
+]=]
+function Result.SetEventLogger(fn: MilestoneLogger)
+	Logging.SetEventLogger(fn)
+end
+
+--[=[
+	Records a success milestone if a success logger is registered.
+	@within Result
+]=]
+function Result.MentionSuccess(label: string, message: string, data: { [string]: any }?)
+	Logging.MentionSuccess(label, message, data)
+end
+
+--[=[
+	Records an event milestone if an event logger is registered.
+	@within Result
+]=]
+function Result.MentionEvent(label: string, message: string, data: { [string]: any }?)
+	Logging.MentionEvent(label, message, data)
+end
+
+--[=[
+	Records an issue through the standard error logger without returning a Result.
+	@within Result
+]=]
+function Result.MentionError(label: string, message: string, data: { [string]: any }?, errType: string?)
+	Logging.MentionError(label, message, data, errType)
+end
+
+--[=[
+	Unwraps `Ok` or throws the failure for the nearest `Catch`.
+	@within Result
+]=]
+function Result.Try<T>(result: Result<T>): T
+	return Throwable.Try(result)
+end
+
+--[=[
+	Returns a truthy condition or throws a structured `Err`.
+	@within Result
+]=]
+function Result.Ensure<T>(condition: T, errType: string, message: string, data: { [string]: any }?): T
+	return Throwable.Ensure(Result, condition, errType, message, data)
+end
+
+--[=[
+	Walks nested string keys or throws `MissingPath`.
+	@within Result
+]=]
+function Result.RequirePath(root: any, ...: string): any
+	return Throwable.RequirePath(Result, root, ...)
+end
+
+--[=[
+	Accumulates multiple Results into one success or a `MultipleErrors` failure.
+	@within Result
+]=]
+function Result.TryAll(...: Result<any>): Result<{ any }>
+	return Boundary.TryAll(Result, ...)
+end
+
+--[=[
+	Converts a nil-able value into `Ok(value)` or `Err`.
+	@within Result
+]=]
+function Result.fromNilable(value: any, errType: string, message: string, data: { [string]: any }?): Result<any>
+	return Boundary.fromNilable(Result, value, errType, message, data)
+end
+
+--[=[
+	Converts a `pcall`-style operation into a Result.
+	@within Result
+]=]
+function Result.fromPcall(errType: string, fn: (...any) -> ...any, ...: any): Result<any>
+	return Boundary.fromPcall(Result, errType, fn, ...)
+end
+
+--[=[
+	Runs the error boundary, logs failures, and always returns a Result.
+	@within Result
+]=]
+function Result.Catch<T>(
+	fn: (...any) -> Result<T> | any?,
+	label: string,
+	failureHandler: ((err: Err) -> ())?,
+	...: any
+): Result<T>
+	return Boundary.Catch(Result, Logging.log, fn, label, failureHandler, ...)
+end
+
+--[=[
+	Wraps a Result in `Ok` so it can be inspected as inert data.
+	@within Result
+]=]
+function Result.sandbox(result: Result<any>): Ok<Result<any>>
+	return Inspection.sandbox(Result, result)
+end
+
+--[=[
+	Unwraps a sandboxed Result back into the active error channel.
+	@within Result
+]=]
+function Result.unsandbox(sandboxed: Ok<Result<any>>): Result<any>
+	return Inspection.unsandbox(sandboxed)
+end
+
+--[=[
+	Combines two successful Results into `Ok({ valueA, valueB })`.
+	@within Result
+]=]
+function Result.zip(resultA: Result<any>, resultB: Result<any>): Result<any>
+	return Combinators.zip(Result, resultA, resultB)
+end
+
+--[=[
+	Combines two successful Results with a merge function.
+	@within Result
+]=]
+function Result.zipWith(resultA: Result<any>, resultB: Result<any>, fn: (any, any) -> any): Result<any>
+	return Combinators.zipWith(Result, resultA, resultB, fn)
+end
+
+--[=[
+	Maps a Result-returning function over a list and accumulates failures.
+	@within Result
+]=]
+function Result.traverse(items: { any }, fn: (any) -> Result<any>): Result<any>
+	return Combinators.traverse(Result, items, fn)
+end
+
+--[=[
+	Retries a Result-returning function until success, defect, or max attempts.
+	@within Result
+]=]
+function Result.retry(fn: () -> Result<any>, options: { maxAttempts: number, delay: number? }): Result<any>
+	return Combinators.retry(Result, fn, options)
+end
+
+--[=[
+	Runs a yielding function and resolves with a timeout `Err` if it takes too long.
+	@within Result
+]=]
+function Result.timeout(fn: () -> Result<any>, seconds: number, errType: string?): TimeoutPromise
+	return Async.timeout(Result, fn, seconds, errType)
+end
+
+--[=[
+	Runs yielding functions concurrently and resolves with the first Result.
+	@within Result
+]=]
+function Result.race(fns: { () -> Result<any> }): TimeoutPromise
+	return Async.race(Result, fns)
+end
+
+--[=[
+	Runs yielding functions concurrently and resolves with all Results.
+	@within Result
+]=]
+function Result.all(fns: { () -> Result<any> }): TimeoutPromise
+	return Async.all(Result, fns)
+end
+
+--[=[
+	Exits the current `gen` block early when the condition is falsy.
+	@within Result
+]=]
+function Result.guard(condition: any, returnValue: any?)
+	ControlFlow.guard(condition, returnValue)
+end
+
+--[=[
+	Runs a function in a coroutine so `guard` can return early.
+	@within Result
+]=]
+function Result.gen<T>(fn: (...any) -> T, ...: any): T
+	return ControlFlow.gen(fn, ...)
+end
+
+--[=[
+	Runs a function with a cleanup scope that always flushes on exit.
+	@within Result
+]=]
+function Result.scoped(fn: (scope: Scope) -> Result<any>): Result<any>
+	return ScopeModule.scoped(Result, fn)
+end
+
+--[=[
+	Acquires one resource, uses it, and guarantees release through a scope.
+	@within Result
+]=]
+function Result.acquireRelease<T, U>(
+	acquire: () -> Result<T>,
+	release: (resource: T) -> (),
+	use: (resource: T) -> Result<U>
+): Result<U>
+	return ScopeModule.acquireRelease(Result, acquire, release, use)
+end
 
 return table.freeze(Result)
