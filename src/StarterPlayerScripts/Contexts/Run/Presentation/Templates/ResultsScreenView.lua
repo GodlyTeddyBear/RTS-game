@@ -13,6 +13,8 @@ export type TResultsScreenViewProps = {
 	containerRef: { current: Frame? },
 	waveNumber: number,
 	score: number,
+	isRestarting: boolean,
+	playAgainText: string,
 	onPlayAgain: () -> (),
 }
 
@@ -28,7 +30,6 @@ local function ResultsScreenView(props: TResultsScreenViewProps)
 		BorderSizePixel = 0,
 	}, {
 		Content = e("Frame", {
-			Name = "Content",
 			Size = UDim2.fromScale(0.46, 0.42),
 			Position = UDim2.fromScale(0.5, 0.5),
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -74,10 +75,17 @@ local function ResultsScreenView(props: TResultsScreenViewProps)
 				}),
 				PlayAgain = e(Button, {
 					Size = UDim2.fromScale(0.42, 0.2),
-					Text = "Play Again",
+					Text = props.playAgainText,
 					Variant = "primary",
 					[React.Event.Activated] = props.onPlayAgain,
 				}),
+				Status = props.isRestarting and e(Text, {
+					Size = UDim2.fromScale(1, 0.12),
+					Text = "Preparing your next run...",
+					Variant = "caption",
+					TextXAlignment = Enum.TextXAlignment.Center,
+					TextYAlignment = Enum.TextYAlignment.Center,
+				}) or nil,
 			}),
 		}),
 	})

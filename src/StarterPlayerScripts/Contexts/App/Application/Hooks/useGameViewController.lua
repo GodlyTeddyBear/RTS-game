@@ -258,7 +258,7 @@ local function useGameViewController(): TGameViewController
 			return
 		end
 
-		if previousState == "RunEnd" and currentState == "Idle" then
+		if navigation.CurrentScreen == RESULTS_SCREEN and currentState ~= "RunEnd" then
 			if navigation.CurrentScreen ~= GAME_SCREEN then
 				actionsRef.current.reset(GAME_SCREEN)
 			end

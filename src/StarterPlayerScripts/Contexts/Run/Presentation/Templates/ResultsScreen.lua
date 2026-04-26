@@ -17,6 +17,8 @@ local function ResultsScreen()
 		containerRef = anim.containerRef,
 		waveNumber = controller.waveNumber,
 		score = controller.score,
+		isRestarting = controller.isRestarting,
+		playAgainText = controller.playAgainText,
 		onPlayAgain = controller.onPlayAgain,
 	})
 end

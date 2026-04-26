@@ -10,12 +10,15 @@ local React = require(ReplicatedStorage.Packages.React)
 local e = React.createElement
 
 local useGameViewController = require(script.Parent.Parent.Parent.Application.Hooks.useGameViewController)
+local useScreenTransition = require(script.Parent.Parent.Parent.Application.Hooks.useScreenTransition)
 local GameViewView = require(script.Parent.GameViewView)
 
 local function GameView()
 	local controller = useGameViewController()
+	local anim = useScreenTransition("Simple")
 
 	return e(GameViewView, {
+		containerRef = anim.containerRef,
 		isMenuOpen = controller.isMenuOpen,
 		isHudEnabled = controller.isHudEnabled,
 		isRunActive = controller.isRunActive,
