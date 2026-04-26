@@ -2,7 +2,7 @@
 
 --[=[
 	@class WorldLayoutService
-	Resolves authoritative spawn and goal positions from world configuration.
+	Resolves authoritative spawn positions from world configuration.
 	@server
 ]=]
 local WorldLayoutService = {}
@@ -80,20 +80,6 @@ function WorldLayoutService:GetSpawnPoints(): { CFrame }
 	return table.freeze({
 		spawnInstance.CFrame,
 	})
-end
-
---[=[
-	Returns the commander goal point.
-	@within WorldLayoutService
-	@return CFrame -- The goal point enemies should path toward.
-]=]
-function WorldLayoutService:GetGoalPoint(): CFrame
-	local goalsContainer = _GetZoneContainer(self, "Goals", Errors.MISSING_GOAL_PART)
-
-	local goalMarkers = _CollectNamedBaseParts(goalsContainer, WorldConfig.GOAL_PART_NAME)
-	assert(#goalMarkers > 0, Errors.INVALID_GOAL_PART)
-	local goalInstance = goalMarkers[1]
-	return goalInstance.CFrame
 end
 
 return WorldLayoutService

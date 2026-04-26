@@ -13,6 +13,4 @@ return table.freeze({
 	INVALID_PLACEMENT_GRID_DIMENSIONS = "WorldContext: invalid PlacementGrid dimensions",
 	MISSING_SPAWN_PART = "WorldContext: missing Spawns runtime zone or Spawn marker",
 	INVALID_SPAWN_PART = "WorldContext: Spawns runtime zone must contain a BasePart named Spawn",
-	MISSING_GOAL_PART = "WorldContext: missing Goals runtime zone or Goal marker",
-	INVALID_GOAL_PART = "WorldContext: Goals runtime zone must contain a BasePart named Goal",
 })

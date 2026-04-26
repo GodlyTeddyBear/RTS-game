@@ -17,6 +17,18 @@ return table.freeze({
 		Success = "rbxassetid://78813992373956",
 	}),
 	SFX = table.freeze({
+		-- Phase 2 gameplay cues. Reuse existing IDs until bespoke assets are sourced.
+		EnemySpawn = "rbxassetid://122491880786027",
+		EnemyHit = "rbxassetid://140462043853173",
+		EnemyDeath = "rbxassetid://136398605613669",
+		BaseHit = "rbxassetid://113295635662652",
+		BaseDestroyed = "rbxassetid://99283032437257",
+		PlacementSuccess = "rbxassetid://136993031050456",
+		PlacementInvalid = "rbxassetid://134722801683376",
+		WaveStart = "rbxassetid://137884319678560",
+		WaveClear = "rbxassetid://117806862877011",
+		AbilityUse = "rbxassetid://95235663185086",
+		CommanderAbilityUse = "rbxassetid://95235663185086",
 		ChoppingHit = "rbxassetid://9113226115",
 		MiningHit = "rbxassetid://9116676206",
 		MiningComplete = "rbxassetid://117793859307433",

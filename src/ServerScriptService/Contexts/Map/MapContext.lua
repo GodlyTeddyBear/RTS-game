@@ -90,12 +90,6 @@ function MapContext:GetZoneInstance(zoneName: string): Result.Result<Instance?>
 	end, "Map:GetZoneInstance")
 end
 
-function MapContext:GetGoalInstance(): Result.Result<BasePart?>
-	return Catch(function()
-		return Ok(self._entityFactory:GetGoalInstance())
-	end, "Map:GetGoalInstance")
-end
-
 function MapContext:GetSpawnInstance(): Result.Result<BasePart?>
 	return Catch(function()
 		return Ok(self._entityFactory:GetSpawnInstance())

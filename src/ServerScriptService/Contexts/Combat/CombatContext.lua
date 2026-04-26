@@ -97,7 +97,6 @@ local CombatContext = Knit.CreateService({
 		{ Name = "EnemyContext", CacheAs = "_enemyContext" },
 		{ Name = "StructureContext", CacheAs = "_structureContext" },
 		{ Name = "BaseContext", CacheAs = "_baseContext" },
-		{ Name = "WorldContext", CacheAs = "_worldContext" },
 	},
 	ExternalDependencies = {
 		{
@@ -182,7 +181,6 @@ function CombatContext:KnitInit()
 	self._structureEntityFactory = nil
 	self._baseContext = nil
 	self._baseEntityFactory = nil
-	self._worldContext = nil
 	self._hitboxService = nil
 	self._lockOnService = nil
 	self._goalPosition = nil :: Vector3?
@@ -273,15 +271,6 @@ function CombatContext:_CacheGoalPosition()
 
 	local baseTarget = baseTargetResult.value
 	local approachDirection = -baseTarget.LookVector
-
-	local laneGoalResult = self._worldContext:GetGoalPoint()
-	if laneGoalResult.success and laneGoalResult.value ~= nil then
-		local laneOffset = laneGoalResult.value.Position - baseTarget.Position
-		if laneOffset.Magnitude > 0.001 then
-			approachDirection = laneOffset.Unit
-		end
-	end
-
 	self._goalPosition = baseTarget.Position + approachDirection * BASE_APPROACH_DISTANCE
 end
 

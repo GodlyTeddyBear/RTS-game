@@ -130,16 +130,6 @@ function MapEntityFactory:_CreateZoneEntity(mapEntity: number, zoneName: string,
 	self:_Add(zoneEntity, JECS.pair(components.ChildOf, mapEntity))
 	world:set(zoneEntity, JECS.Name, ("MapZone:%s"):format(zoneName))
 
-	if zoneName == "Goals" then
-		local goalMarker = _FindFirstNamedBasePart(zoneInstance, "Goal")
-		if goalMarker ~= nil then
-			self:_Set(zoneEntity, components.GoalComponent, {
-				Instance = goalMarker,
-			})
-			self:_Add(zoneEntity, components.GoalZoneTag)
-		end
-	end
-
 	if zoneName == "Spawns" then
 		local spawnMarker = _FindFirstNamedBasePart(zoneInstance, "Spawn")
 		if spawnMarker ~= nil then
@@ -148,13 +138,6 @@ function MapEntityFactory:_CreateZoneEntity(mapEntity: number, zoneName: string,
 			})
 			self:_Add(zoneEntity, components.SpawnZoneTag)
 		end
-	end
-
-	if zoneName == "Goal" and zoneInstance:IsA("BasePart") then
-		self:_Set(zoneEntity, components.GoalComponent, {
-			Instance = zoneInstance,
-		})
-		self:_Add(zoneEntity, components.GoalZoneTag)
 	end
 
 	if zoneName == "Spawn" and zoneInstance:IsA("BasePart") then
@@ -208,29 +191,6 @@ function MapEntityFactory:GetZoneInstance(zoneName: string): Instance?
 
 	local zoneData = self:_Get(zoneEntity, self._components.ZoneComponent)
 	return zoneData and zoneData.Instance or nil
-end
-
-function MapEntityFactory:GetGoalInstance(): BasePart?
-	self:RequireReady()
-
-	local mapEntity = self._mapEntity
-	if mapEntity == nil then
-		return nil
-	end
-
-	local components = self:GetComponentsOrThrow()
-	local world = self:_GetWorldUnsafe()
-	for _, zoneEntity in ipairs(self:CollectQuery(components.GoalZoneTag)) do
-		local parentEntity = world:target(zoneEntity, components.ChildOf)
-		if parentEntity == mapEntity then
-			local goalData = self:_Get(zoneEntity, components.GoalComponent)
-			if goalData and goalData.Instance then
-				return goalData.Instance
-			end
-		end
-	end
-
-	return nil
 end
 
 function MapEntityFactory:GetSpawnInstance(): BasePart?

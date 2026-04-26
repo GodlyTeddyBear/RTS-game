@@ -3,7 +3,7 @@
 --[[
     Module: WorldContext
     Purpose: Owns the server bridge for authoritative world queries and tile occupancy updates.
-    Used In System: Called by other server contexts that need world layout, spawn, goal, or occupancy data.
+    Used In System: Called by other server contexts that need world layout, spawn, or occupancy data.
     High-Level Flow: Initialize grid services -> cache query adapters -> expose Result-wrapped context methods.
     Boundaries: Owns orchestration only; does not own grid math, layout derivation, or placement policy decisions.
 ]]
@@ -22,7 +22,6 @@ local Errors = require(script.Parent.Errors)
 
 local GetTileQuery = require(script.Parent.Application.Queries.GetTileQuery)
 local GetSpawnPointsQuery = require(script.Parent.Application.Queries.GetSpawnPointsQuery)
-local GetGoalPointQuery = require(script.Parent.Application.Queries.GetGoalPointQuery)
 local GetBuildableTilesQuery = require(script.Parent.Application.Queries.GetBuildableTilesQuery)
 local GetExtractionTilesQuery = require(script.Parent.Application.Queries.GetExtractionTilesQuery)
 local GetLaneTilesQuery = require(script.Parent.Application.Queries.GetLaneTilesQuery)
@@ -60,13 +59,6 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 			return GetSpawnPointsQuery.new(baseContext:GetRegistry():Get("WorldLayoutService"))
 		end,
 		CacheAs = "_getSpawnPointsQuery",
-	},
-	{
-		Name = "GetGoalPointQuery",
-		Factory = function(_service: any, baseContext: any)
-			return GetGoalPointQuery.new(baseContext:GetRegistry():Get("WorldLayoutService"))
-		end,
-		CacheAs = "_getGoalPointQuery",
 	},
 	{
 		Name = "GetBuildableTilesQuery",
@@ -119,7 +111,6 @@ type Tile = WorldTypes.Tile
 type WorldContextService = typeof(WorldContext) & {
 	_getTileQuery: any,
 	_getSpawnPointsQuery: any,
-	_getGoalPointQuery: any,
 	_getBuildableTilesQuery: any,
 	_getExtractionTilesQuery: any,
 	_getLaneTilesQuery: any,
@@ -171,17 +162,6 @@ function WorldContext.GetSpawnPoints(self: WorldContextService): Result.Result<{
 	return Catch(function()
 		return Ok(self._getSpawnPointsQuery:Execute())
 	end, "World:GetSpawnPoints")
-end
-
---[=[
-	Returns the goal point that enemies path toward.
-	@within WorldContext
-	@return Result.Result<CFrame?> -- Goal point wrapped in `Result`.
-]=]
-function WorldContext.GetGoalPoint(self: WorldContextService): Result.Result<CFrame?>
-	return Catch(function()
-		return Ok(self._getGoalPointQuery:Execute())
-	end, "World:GetGoalPoint")
 end
 
 --[=[

@@ -46,16 +46,9 @@ WorldConfig.SIDE_POCKET_COLUMN_INTERVAL = 4
 WorldConfig.SPAWN_PART_NAME = "Spawn"
 
 --[=[
-	@prop GOAL_PART_NAME string
-	@within WorldConfig
-	Marker part name used inside the runtime map `Goals` zone.
-]=]
-WorldConfig.GOAL_PART_NAME = "Goal"
-
---[=[
 	@prop LANE_POINT_Y_OFFSET number
 	@within WorldConfig
-	Vertical offset (from lane tile centers) used by spawn/goal points.
+	Vertical offset from lane tile centers used by derived lane endpoints.
 ]=]
 WorldConfig.LANE_POINT_Y_OFFSET = 2
 

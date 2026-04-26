@@ -17,10 +17,6 @@ export type ZoneComponent = {
 	Instance: Instance,
 }
 
-export type GoalComponent = {
-	Instance: BasePart,
-}
-
 export type SpawnComponent = {
 	Instance: BasePart,
 }
@@ -30,7 +26,6 @@ export type BaseComponent = {
 	Anchor: BasePart,
 }
 
-export type GoalZoneTag = boolean
 export type SpawnZoneTag = boolean
 export type BaseZoneTag = boolean
 
