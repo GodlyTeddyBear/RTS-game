@@ -4,73 +4,16 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BehaviorConfig = require(ReplicatedStorage.Contexts.Combat.Config.BehaviorConfig)
 local BehaviorSystem = require(ReplicatedStorage.Utilities.BehaviorSystem)
-local Nodes = require(script.Parent.Nodes)
+local Nodes = require(script.Parent.Parent.BehaviorSystem.Nodes)
+local ExecutorDefinitions = require(script.Parent.Parent.BehaviorSystem.Executors)
 
-local GoalAdvanceExecutor = require(script.Parent.Executors.GoalAdvanceExecutor)
-local IdleExecutor = require(script.Parent.Executors.IdleExecutor)
-local EnemyAttackBaseExecutor = require(script.Parent.Executors.EnemyAttackBaseExecutor)
-local EnemyAttackStructureExecutor = require(script.Parent.Executors.EnemyAttackStructureExecutor)
-local StructureAttackExecutor = require(script.Parent.Executors.StructureAttackExecutor)
+local SwarmBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.SwarmBehavior)
+local TankBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.TankBehavior)
+local StructureBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.StructureBehavior)
 
 local EnemyBehaviorDefinitions = table.freeze({
-	swarm = table.freeze({
-		Priority = {
-			{
-				Sequence = {
-					"HasStructureTargetInRange",
-					"AttackStructure",
-				},
-			},
-			{
-				Sequence = {
-					"HasBaseTargetInRange",
-					"AttackBase",
-				},
-			},
-			{
-				Sequence = {
-					"HasGoalTarget",
-					"GoalAdvance",
-				},
-			},
-			"Idle",
-		},
-	}),
-	tank = table.freeze({
-		Priority = {
-			{
-				Sequence = {
-					"HasStructureTargetInRange",
-					"AttackStructure",
-				},
-			},
-			{
-				Sequence = {
-					"HasBaseTargetInRange",
-					"AttackBase",
-				},
-			},
-			{
-				Sequence = {
-					"HasGoalTarget",
-					"GoalAdvance",
-				},
-			},
-			"Idle",
-		},
-	}),
-})
-
-local StructureBehaviorDefinition = table.freeze({
-	Priority = {
-		{
-			Sequence = {
-				"HasEnemyTargetInRange",
-				"StructureAttack",
-			},
-		},
-		"Idle",
-	},
+	swarm = SwarmBehavior,
+	tank = TankBehavior,
 })
 
 --[=[
@@ -93,28 +36,7 @@ function CombatBehaviorRuntimeService.new()
 		Commands = Nodes.Commands,
 	})
 
-	self._runtime:RegisterActions({
-		GoalAdvance = {
-			ActionId = "GoalAdvance",
-			CreateExecutor = GoalAdvanceExecutor.new,
-		},
-		Idle = {
-			ActionId = "Idle",
-			CreateExecutor = IdleExecutor.new,
-		},
-		AttackStructure = {
-			ActionId = "AttackStructure",
-			CreateExecutor = EnemyAttackStructureExecutor.new,
-		},
-		AttackBase = {
-			ActionId = "AttackBase",
-			CreateExecutor = EnemyAttackBaseExecutor.new,
-		},
-		StructureAttack = {
-			ActionId = "StructureAttack",
-			CreateExecutor = StructureAttackExecutor.new,
-		},
-	})
+	self._runtime:RegisterActions(ExecutorDefinitions)
 
 	return self
 end
@@ -125,8 +47,7 @@ end
 	@param _registry any -- Registry instance supplied by the context bootstrap.
 	@param _name string -- Registry key used to register the service.
 ]=]
-function CombatBehaviorRuntimeService:Init(_registry: any, _name: string)
-end
+function CombatBehaviorRuntimeService:Init(_registry: any, _name: string) end
 
 local function _resolveEnemyRole(roleName: string): string
 	local normalizedRole = string.lower(roleName)
@@ -159,7 +80,7 @@ end
 	@return number -- Tick interval used for structure AI.
 ]=]
 function CombatBehaviorRuntimeService:BuildStructureBehaviorTree(): (any, number)
-	return self._runtime:BuildTree(StructureBehaviorDefinition), BehaviorConfig.DEFAULT.TickInterval
+	return self._runtime:BuildTree(StructureBehavior), BehaviorConfig.DEFAULT.TickInterval
 end
 
 --[=[

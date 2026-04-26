@@ -13,16 +13,21 @@ type THitboxActivationResult = {
 	source: string,
 }
 
-local EnemyAttackBaseExecutor = {}
-EnemyAttackBaseExecutor.__index = EnemyAttackBaseExecutor
-setmetatable(EnemyAttackBaseExecutor, { __index = BaseExecutor })
+--[=[
+	@class AttackStructureExecutor
+	Resolves enemy melee attacks against active structure entities.
+	@server
+]=]
+local AttackStructureExecutor = {}
+AttackStructureExecutor.__index = AttackStructureExecutor
+setmetatable(AttackStructureExecutor, { __index = BaseExecutor })
 
-function EnemyAttackBaseExecutor.new()
+function AttackStructureExecutor.new()
 	local self = BaseExecutor.new({
-		ActionId = "AttackBase",
+		ActionId = "AttackStructure",
 		IsCommitted = false,
 	})
-	return setmetatable(self, EnemyAttackBaseExecutor)
+	return setmetatable(self, AttackStructureExecutor)
 end
 
 local function _activationResult(success: boolean, reason: string, source: string): THitboxActivationResult
@@ -33,11 +38,21 @@ local function _activationResult(success: boolean, reason: string, source: strin
 	}
 end
 
-local function _isBaseInRange(entity: number, services: any): boolean
+local function _getTargetStructure(entity: number, services: any): number?
+	local action = services.EnemyEntityFactory:GetCombatAction(entity)
+	local data = action and action.ActionData
+	if type(data) ~= "table" or type(data.TargetStructureEntity) ~= "number" then
+		return nil
+	end
+
+	return data.TargetStructureEntity
+end
+
+local function _isTargetInRange(entity: number, targetStructure: number, services: any): boolean
 	local enemyPosition = services.EnemyEntityFactory:GetPosition(entity)
+	local structurePosition = services.StructureEntityFactory:GetPosition(targetStructure)
 	local role = services.EnemyEntityFactory:GetRole(entity)
-	local baseCFrame = services.BaseEntityFactory:GetTargetCFrame()
-	if enemyPosition == nil or role == nil or baseCFrame == nil then
+	if enemyPosition == nil or structurePosition == nil or role == nil then
 		return false
 	end
 
@@ -46,24 +61,37 @@ local function _isBaseInRange(entity: number, services: any): boolean
 		return false
 	end
 
-	local offset = baseCFrame.Position - enemyPosition.cframe.Position
+	local offset = structurePosition - enemyPosition.cframe.Position
 	return offset:Dot(offset) <= attackRange * attackRange
 end
 
-function EnemyAttackBaseExecutor:CanStart(entity: number, _data: any?, services: any): (boolean, string?)
-	if not services.BaseEntityFactory:IsActive() then
-		return false, "InactiveBase"
+local function _validateTargetStructure(entity: number, targetStructure: number, services: any): (boolean, string?)
+	if not services.StructureEntityFactory:IsActive(targetStructure) then
+		return false, "InactiveTargetStructure"
 	end
 
-	if not _isBaseInRange(entity, services) then
-		return false, "BaseOutOfRange"
+	if not _isTargetInRange(entity, targetStructure, services) then
+		return false, "TargetOutOfRange"
 	end
 
 	return true, nil
 end
 
-function EnemyAttackBaseExecutor:OnStart(entity: number, _data: any?, services: any)
-	services.EnemyEntityFactory:SetTarget(entity, nil, "Base")
+function AttackStructureExecutor:CanStart(entity: number, data: any?, services: any): (boolean, string?)
+	if type(data) ~= "table" or type(data.TargetStructureEntity) ~= "number" then
+		return false, "MissingTargetStructure"
+	end
+
+	return _validateTargetStructure(entity, data.TargetStructureEntity, services)
+end
+
+function AttackStructureExecutor:OnStart(entity: number, data: any?, services: any)
+	local targetStructure = type(data) == "table" and data.TargetStructureEntity or nil
+	if type(targetStructure) ~= "number" then
+		return
+	end
+
+	services.EnemyEntityFactory:SetTarget(entity, targetStructure, "Structure")
 	self:SetEntityValue(entity, "HitboxActivated", false)
 	self:SetEntityValue(entity, "HitboxActivationTimedOut", false)
 	self:SetEntityValue(entity, "ActivationWindowStartedAt", nil)
@@ -72,18 +100,23 @@ function EnemyAttackBaseExecutor:OnStart(entity: number, _data: any?, services: 
 	self:SetEntityValue(entity, "HitboxStartedAt", nil)
 end
 
-function EnemyAttackBaseExecutor:CanContinue(entity: number, services: any): (boolean, string?)
+function AttackStructureExecutor:CanContinue(entity: number, services: any): (boolean, string?)
+	local targetStructure = _getTargetStructure(entity, services)
+	if targetStructure == nil then
+		return false, "MissingTargetStructure"
+	end
+
 	return self:RunGuards(entity, services, {
 		{
-			Reason = "InactiveBase",
+			Reason = "InactiveTargetStructure",
 			Check = function(_guardEntity: number, guardServices: any): boolean
-				return guardServices.BaseEntityFactory:IsActive()
+				return guardServices.StructureEntityFactory:IsActive(targetStructure)
 			end,
 		},
 		{
-			Reason = "BaseOutOfRange",
+			Reason = "TargetOutOfRange",
 			Check = function(guardEntity: number, guardServices: any): boolean
-				return _isBaseInRange(guardEntity, guardServices)
+				return _isTargetInRange(guardEntity, targetStructure, guardServices)
 			end,
 		},
 	})
@@ -108,12 +141,12 @@ local function _activateHitboxInternal(
 		return _activationResult(false, "AlreadyActivated", source)
 	end
 
-	local activatedHitbox = services.HitboxService:CreateAttackHitbox(entity, "Enemy", HitboxConfig.AttackStructure)
-	if not activatedHitbox.success or activatedHitbox.handle == nil then
-		return _activationResult(false, activatedHitbox.reason or "HitboxCreateFailed", source)
+	local createResult = services.HitboxService:CreateAttackHitbox(entity, "Enemy", HitboxConfig.AttackStructure)
+	if not createResult.success or createResult.handle == nil then
+		return _activationResult(false, createResult.reason or "HitboxCreateFailed", source)
 	end
 
-	self:SetEntityValue(entity, "ActiveHitboxHandle", activatedHitbox.handle)
+	self:SetEntityValue(entity, "ActiveHitboxHandle", createResult.handle)
 	self:SetEntityValue(entity, "HitboxStartedAt", services.CurrentTime)
 	self:SetEntityValue(entity, "HitboxActivated", true)
 	self:SetEntityValue(entity, "ActivationWindowStartedAt", nil)
@@ -123,11 +156,20 @@ local function _activateHitboxInternal(
 	return _activationResult(true, "Activated", source)
 end
 
-function EnemyAttackBaseExecutor:TryActivateHitboxFromTimeout(entity: number, services: any): THitboxActivationResult
+function AttackStructureExecutor:ActivateHitbox(entity: number, services: any): THitboxActivationResult
+	return _activateHitboxInternal(self, entity, services, "AnimationCallback")
+end
+
+function AttackStructureExecutor:TryActivateHitboxFromTimeout(entity: number, services: any): THitboxActivationResult
 	return _activateHitboxInternal(self, entity, services, "ServerTimeoutFallback")
 end
 
-function EnemyAttackBaseExecutor:OnTick(entity: number, _dt: number, services: any): string
+function AttackStructureExecutor:OnTick(entity: number, _dt: number, services: any): string
+	local targetStructure = _getTargetStructure(entity, services)
+	if targetStructure == nil then
+		return self:Fail(entity, "MissingTargetStructure")
+	end
+
 	local role = services.EnemyEntityFactory:GetRole(entity)
 	local cooldown = services.EnemyEntityFactory:GetAttackCooldown(entity)
 	if role == nil or cooldown == nil then
@@ -168,18 +210,21 @@ function EnemyAttackBaseExecutor:OnTick(entity: number, _dt: number, services: a
 		return self:Fail(entity, "MissingHitboxHandle")
 	end
 
-	if services.HitboxService:DidHitBase(activeHitboxHandle) then
+	if services.HitboxService:DidHitTarget(activeHitboxHandle, targetStructure, "Structure") then
 		services.HitboxService:DestroyHitbox(activeHitboxHandle)
 		self:ClearEntityValue(entity, "ActiveHitboxHandle")
 		self:ClearEntityValue(entity, "HitboxStartedAt")
 		self:SetEntityValue(entity, "HitLanded", true)
 
-		local damageResult = services.BaseContext:ApplyDamage(damage)
+		local damageResult = services.StructureContext:ApplyDamage(targetStructure, damage)
 		if not damageResult.success then
 			return self:Fail(entity, "ApplyDamageFailed")
 		end
 
-		return self:Success()
+		if damageResult.value == true then
+			return self:Success()
+		end
+		return self:Running()
 	end
 
 	local startedAt = self:GetEntityValue(entity, "HitboxStartedAt")
@@ -200,7 +245,7 @@ function EnemyAttackBaseExecutor:OnTick(entity: number, _dt: number, services: a
 	return self:Running()
 end
 
-function EnemyAttackBaseExecutor:OnCancel(entity: number, services: any)
+function AttackStructureExecutor:OnCancel(entity: number, services: any)
 	local activeHitboxHandle = self:GetEntityValue(entity, "ActiveHitboxHandle")
 	if type(activeHitboxHandle) == "string" then
 		services.HitboxService:DestroyHitbox(activeHitboxHandle)
@@ -215,8 +260,8 @@ function EnemyAttackBaseExecutor:OnCancel(entity: number, services: any)
 	services.EnemyEntityFactory:ClearTarget(entity)
 end
 
-function EnemyAttackBaseExecutor:OnComplete(entity: number, services: any)
+function AttackStructureExecutor:OnComplete(entity: number, services: any)
 	self:OnCancel(entity, services)
 end
 
-return EnemyAttackBaseExecutor
+return AttackStructureExecutor

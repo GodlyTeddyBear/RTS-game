@@ -9,6 +9,8 @@ Working plans and **phase checklists** for the RTS project. The living design sp
 |---------------|------|
 | [Phase0/](Phase0/) | Early scoped plans (e.g. enemy context). |
 | [Phase2/Phase2CompletionChecklist.md](Phase2/Phase2CompletionChecklist.md) | **Vertical slice** exit checklist (6 waves, one structure, base + dual loss, etc.). |
+| [Phase2/Phase2StudioVsBlenderProduction.md](Phase2/Phase2StudioVsBlenderProduction.md) | **Phase 2 art** — Studio vs Blender scope, model list, animation folder/event contracts. |
+| [Phase2/Phase2EnvironmentDesign.md](Phase2/Phase2EnvironmentDesign.md) | **Phase 2 environment** — sci-fi agri farmland theme, GDD zones → landscape, patch language, Studio kit. |
 | [Phase3/Phase3Plan.md](Phase3/Phase3Plan.md) | **Core loop completion** — scope, in/out, exit criteria vs Development-Phases Phase 3. |
 | [Phase3/Phase3CompletionChecklist.md](Phase3/Phase3CompletionChecklist.md) | Pass/fail checkboxes for Phase 3. |
 | [Phase4/Phase4Plan.md](Phase4/Phase4Plan.md) | **Endless + score** — mutators, score bus, results breakdown, PB, exploit policy. |
