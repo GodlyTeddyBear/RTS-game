@@ -97,6 +97,7 @@ local CombatContext = Knit.CreateService({
 		{ Name = "EnemyContext", CacheAs = "_enemyContext" },
 		{ Name = "StructureContext", CacheAs = "_structureContext" },
 		{ Name = "BaseContext", CacheAs = "_baseContext" },
+		{ Name = "WorldContext", CacheAs = "_worldContext" },
 	},
 	ExternalDependencies = {
 		{
@@ -162,6 +163,8 @@ local Catch = Result.Catch
 local Ok = Result.Ok
 local Try = Result.Try
 
+local BASE_APPROACH_DISTANCE = 4
+
 --[=[
 	@within CombatContext
 	Registers combat infrastructure, policies, and commands before the rest of the server starts ticking.
@@ -179,6 +182,7 @@ function CombatContext:KnitInit()
 	self._structureEntityFactory = nil
 	self._baseContext = nil
 	self._baseEntityFactory = nil
+	self._worldContext = nil
 	self._hitboxService = nil
 	self._lockOnService = nil
 	self._goalPosition = nil :: Vector3?
@@ -257,18 +261,28 @@ end
 
 -- Caches the current goal point used by startup and mid-wave enemy spawns.
 function CombatContext:_CacheGoalPosition()
-	local goalPointResult = self._baseContext:GetBaseTargetCFrame()
+	local baseTargetResult = self._baseContext:GetBaseTargetCFrame()
 
 	assert(
-		goalPointResult.success,
+		baseTargetResult.success,
 		string.format(
 			"CombatContext: goal cache failed reading base target point (%s)",
-			tostring(goalPointResult.message or goalPointResult.type or "unknown")
+			tostring(baseTargetResult.message or baseTargetResult.type or "unknown")
 		)
 	)
 
-	local goalPoint = goalPointResult.value
-	self._goalPosition = goalPoint.Position
+	local baseTarget = baseTargetResult.value
+	local approachDirection = -baseTarget.LookVector
+
+	local laneGoalResult = self._worldContext:GetGoalPoint()
+	if laneGoalResult.success and laneGoalResult.value ~= nil then
+		local laneOffset = laneGoalResult.value.Position - baseTarget.Position
+		if laneOffset.Magnitude > 0.001 then
+			approachDirection = laneOffset.Unit
+		end
+	end
+
+	self._goalPosition = baseTarget.Position + approachDirection * BASE_APPROACH_DISTANCE
 end
 
 -- Starts combat for the active run wave and assigns behavior trees to existing enemies.

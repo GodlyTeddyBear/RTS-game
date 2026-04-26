@@ -3,13 +3,10 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
-local Signal = require(ReplicatedStorage.Packages.Signal)
+local StateMachine = require(ReplicatedStorage.Utilities.StateMachine)
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 
 local Errors = require(script.Parent.Parent.Parent.Errors)
-
-local Ok = Result.Ok
-local Err = Result.Err
 
 type RunState = RunTypes.RunState
 local LEGAL_TRANSITIONS: { [RunState]: { [RunState]: boolean } } = {
@@ -64,11 +61,15 @@ RunStateMachine.__index = RunStateMachine
 ]=]
 function RunStateMachine.new()
 	local self = setmetatable({}, RunStateMachine)
-	-- Seed the authoritative run snapshot before any application command mutates it.
-	self._state = "Idle" :: RunState
+	self._machine = StateMachine.new({
+		InitialState = "Idle" :: RunState,
+		Transitions = LEGAL_TRANSITIONS,
+		ErrorType = "IllegalTransition",
+		ErrorMessage = Errors.ILLEGAL_TRANSITION,
+	})
 	self._waveNumber = 0
 	-- Expose transition listeners so RunContext can bridge state changes to sync.
-	self.StateChanged = Signal.new()
+	self.StateChanged = self._machine.StateChanged
 	return self
 end
 
@@ -87,7 +88,7 @@ end
 	@return RunState -- The current state.
 ]=]
 function RunStateMachine:GetState(): RunState
-	return self._state
+	return self._machine:GetState()
 end
 
 --[=[
@@ -124,19 +125,7 @@ end
 	@return Result<RunState> -- The accepted state or an illegal-transition error.
 ]=]
 function RunStateMachine:Transition(newState: RunState): Result.Result<RunState>
-	-- Validate the requested edge before mutating shared state.
-	local previousState = self._state
-	local legalTargets = LEGAL_TRANSITIONS[previousState]
-	if not legalTargets[newState] then
-		return Err("IllegalTransition", Errors.ILLEGAL_TRANSITION, {
-			From = previousState,
-			To = newState,
-		})
-	end
-
-	self._state = newState
-	self.StateChanged:Fire(newState, previousState)
-	return Ok(newState)
+	return self._machine:Transition(newState)
 end
 
 --[=[
@@ -144,7 +133,7 @@ end
 	@within RunStateMachine
 ]=]
 function RunStateMachine:Destroy()
-	self.StateChanged:Destroy()
+	self._machine:Destroy()
 end
 
 return RunStateMachine
