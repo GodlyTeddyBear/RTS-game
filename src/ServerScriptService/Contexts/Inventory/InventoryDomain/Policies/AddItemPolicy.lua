@@ -30,9 +30,9 @@ function AddItemPolicy:Check(userId: number, itemId: string, quantity: number): 
 
 	local itemData = ItemConfig[itemId]
 	local hasAvailableStack = false
-	if itemData and itemData.stackable then
+	if itemData and itemData.Stackable then
 		for _, slot in pairs(inventoryState.Slots) do
-			if slot.ItemId == itemId and slot.Quantity < itemData.maxStack then
+			if slot.ItemId == itemId and slot.Quantity < itemData.MaxStack then
 				hasAvailableStack = true
 				break
 			end

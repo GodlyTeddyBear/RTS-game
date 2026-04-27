@@ -1,6 +1,9 @@
 --!strict
 
-local Types = require(script.Parent.AnimationTypes)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Types = require(ReplicatedStorage.Contexts.Animation.Types.AnimationTypes)
+local AnimationPoseFilter = require(script.Parent.AnimationPoseFilter)
 
 type TAnimationPreset = Types.TAnimationPreset
 type TAnimInfo = Types.TAnimInfo
@@ -14,6 +17,22 @@ end
 local AnimationClipLoader = {
 	ToActionName = _ToActionName,
 }
+
+local POSE_TO_FOLDER = table.freeze({
+	Run = "run",
+	Idle = "idle",
+	Walk = "walk",
+	GettingUp = "idle",
+	FallingDown = "fall",
+	Freefall = "fall",
+	FellOff = "fall",
+	Jumping = "jump",
+	Landed = "idle",
+	Seated = "sit",
+	Swimming = "swim",
+	Climbing = "climb",
+	SwimIdle = "swimidle",
+})
 
 local function _LoadTrack(
 	animator: Animator,
@@ -64,6 +83,29 @@ local function _FindVariantAnimation(animationsFolder: Folder, variant: string, 
 	return _FindAnimationInSlot(_FindChildCaseInsensitive(variantFolder, folderName))
 end
 
+local function _GetDefaultClip(registry: any, animationsFolder: Folder, folderName: string): Animation?
+	local defaultAnimation = _FindVariantAnimation(animationsFolder, "Default", folderName)
+	if defaultAnimation then
+		return defaultAnimation
+	end
+
+	if registry:Exists("Default", folderName) then
+		return registry:Get("Default", folderName)
+	end
+
+	return nil
+end
+
+local function _ResolveFolderNameForPose(pose: string, preset: TAnimationPreset): string?
+	for _, entry in preset.CorePoseFolders do
+		if entry.Pose == pose then
+			return entry.Folder
+		end
+	end
+
+	return POSE_TO_FOLDER[pose]
+end
+
 function AnimationClipLoader.GetVariantClip(
 	model: Model,
 	registry: any,
@@ -99,6 +141,38 @@ function AnimationClipLoader.GetVariantClip(
 	return nil
 end
 
+function AnimationClipLoader.ReconcileMissingCoreAnimations(
+	model: Model,
+	registry: any,
+	animator: Animator,
+	animationsFolder: Folder,
+	coreAnimations: { [string]: { TAnimInfo } },
+	preset: TAnimationPreset
+)
+	for _, pose in preset.AllPoses do
+		if coreAnimations[pose] ~= nil or not AnimationPoseFilter.IsPoseAllowed(preset, pose) then
+			continue
+		end
+
+		local folderName = _ResolveFolderNameForPose(pose, preset)
+		if type(folderName) ~= "string" or folderName == "" then
+			if preset.WarnOnMissingPose == true then
+				warn(preset.Tag, model.Name, "- pose", pose, ": no folder mapping for reconcile")
+			end
+			continue
+		end
+
+		local defaultAnimation = _GetDefaultClip(registry, animationsFolder, folderName)
+		if defaultAnimation then
+			coreAnimations[pose] = {
+				_LoadTrack(animator, defaultAnimation, Enum.AnimationPriority.Core, true),
+			}
+		elseif preset.WarnOnMissingPose == true then
+			warn(preset.Tag, model.Name, "- pose", pose, ": missing in Default/", folderName)
+		end
+	end
+end
+
 function AnimationClipLoader.BuildCoreAnimations(
 	model: Model,
 	registry: any,
@@ -127,12 +201,16 @@ function AnimationClipLoader.EnsurePoseFallbacks(
 	preset: TAnimationPreset
 )
 	for _, pose in preset.AllPoses do
+		if not AnimationPoseFilter.IsPoseAllowed(preset, pose) then
+			continue
+		end
+
 		if coreAnimations[pose] then
 			continue
 		end
 
 		local fallbackPose = preset.PoseFallbacks[pose]
-		if fallbackPose and coreAnimations[fallbackPose] then
+		if fallbackPose and AnimationPoseFilter.IsPoseAllowed(preset, fallbackPose) and coreAnimations[fallbackPose] then
 			coreAnimations[pose] = coreAnimations[fallbackPose]
 		elseif preset.WarnOnMissingPose == true then
 			if fallbackPose then
@@ -212,6 +290,7 @@ function AnimationClipLoader.Load(
 	preset: TAnimationPreset
 ): TLoadedClips
 	local coreAnimations = AnimationClipLoader.BuildCoreAnimations(model, registry, variant, animator, animationsFolder, preset)
+	AnimationClipLoader.ReconcileMissingCoreAnimations(model, registry, animator, animationsFolder, coreAnimations, preset)
 	AnimationClipLoader.EnsurePoseFallbacks(model, coreAnimations, preset)
 
 	local actions, emotes = AnimationClipLoader.BuildActionsAndEmotes(

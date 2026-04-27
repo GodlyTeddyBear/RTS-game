@@ -4,22 +4,18 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SimpleAnimateCore = require(ReplicatedStorage.Utilities.SimpleAnimate.Core)
 local SimpleAnimateAction = require(ReplicatedStorage.Utilities.SimpleAnimate.Action)
-local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
-local Janitor = require(ReplicatedStorage.Packages.Janitor)
-local Promise = require(ReplicatedStorage.Packages.Promise)
 
-local AnimationClipLoader = require(script.Parent.AnimationClipLoader)
-local AnimationRigResolver = require(script.Parent.AnimationRigResolver)
-local AnimationStatePlayer = require(script.Parent.AnimationStatePlayer)
-local EmoteCommandBinder = require(script.Parent.EmoteCommandBinder)
-local LeanSystem = require(script.Parent.LeanSystem)
-local AnimationPoseFilter = require(script.Parent.AnimationPoseFilter)
 local Types = require(ReplicatedStorage.Contexts.Animation.Types.AnimationTypes)
+local EmoteCommandBinder = require(script.Parent.Parent.Parent.Infrastructure.EmoteCommandBinder)
+local BindAnimationStateCommand = require(script.Parent.BindAnimationStateCommand)
+local AnimationClipLoader = require(script.Parent.Parent.Parent.Infrastructure.AnimationClipLoader)
+local AnimationPoseFilter = require(script.Parent.Parent.Parent.Infrastructure.AnimationPoseFilter)
 
 type TAnimationPreset = Types.TAnimationPreset
 type TActionEntry = Types.TActionEntry
 
-local AnimationDriver = {}
+local LoadAnimationVariantCommand = {}
+LoadAnimationVariantCommand.__index = LoadAnimationVariantCommand
 
 local function _Log(preset: TAnimationPreset, ...)
 	if preset.Debug ~= true then
@@ -103,7 +99,13 @@ local function _CleanupJanitor(janitor: any)
 	end
 end
 
-local function _LoadVariant(
+function LoadAnimationVariantCommand.new()
+	local self = setmetatable({}, LoadAnimationVariantCommand)
+	self._bindAnimationStateCommand = BindAnimationStateCommand.new()
+	return self
+end
+
+function LoadAnimationVariantCommand:Execute(
 	model: Model,
 	registry: any,
 	animator: Animator,
@@ -137,7 +139,7 @@ local function _LoadVariant(
 		_RegisterActions(action, loaded.Emotes)
 
 		_AttachCleanup(controllerJanitor, core, action, _BuildAllKeys(loaded.Actions, loaded.Emotes))
-		AnimationStatePlayer.Bind(
+		self._bindAnimationStateCommand:Execute(
 			model,
 			controllerJanitor,
 			action,
@@ -158,67 +160,4 @@ local function _LoadVariant(
 	end
 end
 
-local function _ResolveAnimationsFolder(model: Model, preset: TAnimationPreset)
-	if preset.UseDirectAnimationsFolder == true then
-		return AnimationRigResolver.ResolveDirectAnimationsFolder(model, preset.AnimationsFolder :: Folder, preset.Tag)
-	end
-	return AnimationRigResolver.ResolveObjectValueAnimationsFolder(model, preset.Tag)
-end
-
-function AnimationDriver.setup(model: Model, preset: TAnimationPreset, context: any)
-	local ctx = context or {}
-	ctx.Model = model
-	ctx = table.freeze(ctx)
-
-	return Promise.all({
-		AnimationRigResolver.ResolveRig(model, preset.Tag),
-		_ResolveAnimationsFolder(model, preset),
-	})
-		:andThen(function(results)
-			local rig = results[1]
-			local animationsFolder = results[2] :: Folder
-
-			return AnimationRigResolver.WaitForHierarchyReplication(model, animationsFolder, preset.Tag):andThen(function()
-				return rig, animationsFolder
-			end)
-		end)
-		:andThen(function(rig, animationsFolder: Folder)
-			local registry = AssetFetcher.CreateAnimationRegistry(animationsFolder)
-			local lifetimeJanitor = Janitor.new()
-			local controllerJanitor = Janitor.new()
-
-			lifetimeJanitor:Add(LeanSystem.start(model), true)
-
-			lifetimeJanitor:Add(function()
-				_CleanupJanitor(controllerJanitor)
-			end, true)
-			lifetimeJanitor:Add(
-				model.AncestryChanged:Connect(function()
-					if not model.Parent then
-						_CleanupJanitor(lifetimeJanitor)
-					end
-				end),
-				"Disconnect"
-			)
-
-			if preset.ReloadOnVariantChanged == true and preset.VariantAttribute then
-				lifetimeJanitor:Add(
-					model:GetAttributeChangedSignal(preset.VariantAttribute):Connect(function()
-						_LoadVariant(model, registry, rig.Animator, animationsFolder, controllerJanitor, ctx, preset)
-					end),
-					"Disconnect"
-				)
-			end
-
-			_LoadVariant(model, registry, rig.Animator, animationsFolder, controllerJanitor, ctx, preset)
-
-			return function()
-				_CleanupJanitor(lifetimeJanitor)
-			end
-		end)
-		:catch(function(err)
-			warn(preset.Tag, model.Name, "- Setup failed:", tostring(err))
-		end)
-end
-
-return AnimationDriver
+return LoadAnimationVariantCommand

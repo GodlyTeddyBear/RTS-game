@@ -79,9 +79,9 @@ end
 
 local function _CreateSlotRow(slot: TInventorySlot): TInventorySlotRow
 	local itemData = ItemConfig[slot.ItemId]
-	local itemName = if itemData then itemData.name else slot.ItemId
-	local rarity = if itemData then itemData.rarity else "Common"
-	local category = if itemData then itemData.category else slot.Category
+	local itemName = if itemData then itemData.Name else slot.ItemId
+	local rarity = if itemData then itemData.Rarity else "Common"
+	local category = if itemData then itemData.Category else slot.Category
 
 	return table.freeze({
 		SlotIndex = slot.SlotIndex,

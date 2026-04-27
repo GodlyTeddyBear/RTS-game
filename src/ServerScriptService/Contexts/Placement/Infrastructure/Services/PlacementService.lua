@@ -1,10 +1,12 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 local Workspace = game:GetService("Workspace")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
 local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
+local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
 local MiningConfig = require(ReplicatedStorage.Contexts.Mining.Config.MiningConfig)
 local Errors = require(script.Parent.Parent.Parent.Errors)
@@ -21,6 +23,18 @@ type SpawnedStructure = Model
 ]=]
 local PlacementService = {}
 PlacementService.__index = PlacementService
+
+local function _BuildBottomAlignedPivot(model: Model, targetWorldPos: Vector3): CFrame
+	local currentPivot = model:GetPivot()
+	local boundsCFrame, boundsSize = model:GetBoundingBox()
+
+	local currentBottomY = boundsCFrame.Position.Y - (boundsSize.Y * 0.5)
+	local yOffset = targetWorldPos.Y - currentBottomY
+	local targetPivotPosition = Vector3.new(targetWorldPos.X, currentPivot.Position.Y + yOffset, targetWorldPos.Z)
+
+	local pivotRotation = currentPivot - currentPivot.Position
+	return CFrame.new(targetPivotPosition) * pivotRotation
+end
 
 --[=[
 	Creates a new placement service.
@@ -198,12 +212,13 @@ function PlacementService:SpawnStructure(structureType: string, worldPos: Vector
 	-- Models and parts both support :PivotTo, which keeps the spawn path generic.
 	local spawnModel = self:_ResolveSpawnModel(structureType)
 	_PrepareStructureAnimationRuntime(spawnModel, self._animationsFolder)
-	spawnModel:PivotTo(CFrame.new(worldPos))
+	spawnModel:PivotTo(_BuildBottomAlignedPivot(spawnModel, worldPos))
 
 	local instanceId = self._nextId
 	self._nextId += 1
 	spawnModel:SetAttribute("PlacementInstanceId", instanceId)
 	spawnModel.Parent = self._folder
+	EntityCollisionService:ApplyStructureModel(spawnModel)
 	self._instanceMap[instanceId] = spawnModel
 
 	return Ok(instanceId)

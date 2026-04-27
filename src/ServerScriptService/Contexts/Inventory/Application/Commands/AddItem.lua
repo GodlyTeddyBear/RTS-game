@@ -51,7 +51,7 @@ end
 
 function AddItem:_StackOntoExistingSlots(playerInventory: any, itemId: string, quantity: number): ({ [number]: number }, number)
 	local itemData = ItemConfig[itemId]
-	local maxStack = itemData.maxStack
+	local maxStack = itemData.MaxStack
 	local remaining = quantity
 	local updatedSlots: { [number]: number } = {}
 
@@ -88,7 +88,7 @@ end
 
 function AddItem:_FillNewSlots(inventoryCopy: any, itemId: string, remaining: number): ({ [number]: any }, number)
 	local itemData = ItemConfig[itemId]
-	local maxStack = itemData.maxStack
+	local maxStack = itemData.MaxStack
 	local newSlots: { [number]: any } = {}
 
 	while remaining > 0 do
@@ -102,7 +102,7 @@ function AddItem:_FillNewSlots(inventoryCopy: any, itemId: string, remaining: nu
 			SlotIndex = availableSlot,
 			ItemId = itemId,
 			Quantity = toAdd,
-			Category = itemData.category,
+			Category = itemData.Category,
 		}
 		newSlots[availableSlot] = slotData
 		inventoryCopy.Slots[availableSlot] = slotData

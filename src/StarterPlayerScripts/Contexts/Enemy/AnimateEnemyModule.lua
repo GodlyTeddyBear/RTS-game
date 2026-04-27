@@ -5,10 +5,11 @@
 	Purpose: Bridges enemy locomotion models to the shared client animation driver preset.
 	Used In System: Called by EnemyAnimationController when a replicated enemy model becomes trackable.
 	Boundaries: Owns animation driver setup only; does not own model discovery, tracking, or cleanup lifecycle.
-]]
+]] 
 
-local AnimationDriver = require(script.Parent.Parent.Animation.Infrastructure.AnimationDriver)
-local AnimationPresets = require(script.Parent.Parent.Animation.Infrastructure.AnimationPresets)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Knit = require(ReplicatedStorage.Packages.Knit)
 
 -- [Dependencies]
 --[=[
@@ -17,6 +18,16 @@ local AnimationPresets = require(script.Parent.Parent.Animation.Infrastructure.A
 	@client
 ]=]
 local AnimateEnemyModule = {}
+
+local animationController = nil
+
+local function _GetAnimationController()
+	if animationController == nil then
+		animationController = Knit.GetController("AnimationController")
+	end
+
+	return animationController
+end
 
 -- [Public API]
 
@@ -28,7 +39,7 @@ local AnimateEnemyModule = {}
 	@return Promise -- Promise that resolves with the cleanup handle from the shared animation driver.
 ]=]
 function AnimateEnemyModule.setup(model: Model, context: any)
-	return AnimationDriver.setup(model, AnimationPresets.EnemyLocomotion, context)
+	return _GetAnimationController():Setup(model, "EnemyLocomotion", context)
 end
 
 return AnimateEnemyModule

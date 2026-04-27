@@ -15,18 +15,21 @@ export type TActionEntry = {
 	AnimInfos: { TAnimInfo },
 }
 
-export type TRig = {
-	Humanoid: Humanoid,
-	Animator: Animator,
-}
-
 export type TLoadedClips = {
 	CoreAnimations: { [string]: { TAnimInfo } },
 	Actions: { TActionEntry },
 	Emotes: { TActionEntry },
 }
 
+export type TPoseFilterMode = "Whitelist" | "Blacklist"
+export type TPresetId = "Player" | "Worker" | "CombatNPC" | "EnemyLocomotion" | "Structure"
+
+export type TAnimationPresetOptions = {
+	AnimationsFolder: Folder?,
+}
+
 export type TAnimationPreset = {
+	Id: TPresetId,
 	Tag: string,
 	Debug: boolean?,
 	AnimationsFolder: Folder?,
@@ -36,6 +39,8 @@ export type TAnimationPreset = {
 	CorePoseFolders: { TPoseFolder },
 	AllPoses: { string },
 	PoseFallbacks: { [string]: string },
+	PoseFilterMode: TPoseFilterMode?,
+	PoseFilter: { [string]: boolean }?,
 	EnableEmotes: boolean?,
 	EmoteFolders: { [string]: boolean }?,
 	WarnOnMissingPose: boolean?,

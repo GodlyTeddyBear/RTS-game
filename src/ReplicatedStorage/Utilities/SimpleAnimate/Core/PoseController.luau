@@ -144,8 +144,14 @@ end
     @param pose PoseType - The pose to get an animation for
     @return AnimationTrack - A randomly selected animation track for the pose
 ]]
-function PoseController:GetRandomCoreAnim(pose: PoseType): AnimationTrack
-	return randomWeighted(self._anims[pose])
+function PoseController:GetRandomCoreAnim(pose: PoseType): (AnimationTrack?, number?, Types.AnimInfo?)
+	local animInfos = self._anims[pose]
+	if type(animInfos) ~= "table" or #animInfos == 0 then
+		warn("[SimpleAnimate] Missing core animations for pose:", pose, "on rig:", self._rig:GetFullName())
+		return nil, nil, nil
+	end
+
+	return randomWeighted(animInfos)
 end
 
 --[[
@@ -177,6 +183,9 @@ function PoseController:PlayCoreAnimation(pose: PoseType, looped: boolean?, spee
 	looped = if looped == nil then true else looped
 
 	local newTrack, numInfo, info = self:GetRandomCoreAnim(pose)
+	if not newTrack or not info or not numInfo then
+		return nil
+	end
 	self:StopCoreAnimations(self._lastInfo.stopFadeTime or 0.1)
 
 	newTrack:Play(info.fadeTime or 0.1, 1, info.speed or speed)

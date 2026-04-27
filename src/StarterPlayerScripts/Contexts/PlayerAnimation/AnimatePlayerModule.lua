@@ -1,12 +1,23 @@
 --!strict
 
-local AnimationDriver = require(script.Parent.Parent.Animation.Infrastructure.AnimationDriver)
-local AnimationPresets = require(script.Parent.Parent.Animation.Infrastructure.AnimationPresets)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Knit = require(ReplicatedStorage.Packages.Knit)
 
 local AnimatePlayerModule = {}
 
+local animationController = nil
+
+local function _GetAnimationController()
+	if animationController == nil then
+		animationController = Knit.GetController("AnimationController")
+	end
+
+	return animationController
+end
+
 function AnimatePlayerModule.setup(character: Model, animationsFolder: Folder, context: any)
-	return AnimationDriver.setup(character, AnimationPresets.Player(animationsFolder), context)
+	return _GetAnimationController():SetupWithFolder(character, "Player", animationsFolder, context)
 end
 
 return AnimatePlayerModule

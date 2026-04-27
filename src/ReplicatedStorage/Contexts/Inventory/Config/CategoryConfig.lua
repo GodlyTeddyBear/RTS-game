@@ -1,16 +1,16 @@
 --!strict
 
 export type CategorySettings = {
-	maxStack: number,
-	totalCapacity: number,
-	displayOrder: number,
+	MaxStack: number,
+	TotalCapacity: number,
+	DisplayOrder: number,
 }
 
 local CategoryConfig: { [string]: CategorySettings } = {
 	Material = {
-		maxStack = 100,
-		totalCapacity = 200,
-		displayOrder = 1,
+		MaxStack = 100,
+		TotalCapacity = 200,
+		DisplayOrder = 1,
 	},
 }
 

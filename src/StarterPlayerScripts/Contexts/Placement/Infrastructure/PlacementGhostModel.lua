@@ -12,6 +12,18 @@ PlacementGhostModel.__index = PlacementGhostModel
 local VALID_COLOR = Color3.fromRGB(0, 200, 100)
 local INVALID_COLOR = Color3.fromRGB(200, 50, 50)
 
+local function _BuildBottomAlignedPivot(model: Model, targetWorldPos: Vector3): CFrame
+	local currentPivot = model:GetPivot()
+	local boundsCFrame, boundsSize = model:GetBoundingBox()
+
+	local currentBottomY = boundsCFrame.Position.Y - (boundsSize.Y * 0.5)
+	local yOffset = targetWorldPos.Y - currentBottomY
+	local targetPivotPosition = Vector3.new(targetWorldPos.X, currentPivot.Position.Y + yOffset, targetWorldPos.Z)
+
+	local pivotRotation = currentPivot - currentPivot.Position
+	return CFrame.new(targetPivotPosition) * pivotRotation
+end
+
 local function _ApplyGhostStyle(model: Model)
 	for _, descendant in ipairs(model:GetDescendants()) do
 		if descendant:IsA("BasePart") then
@@ -113,7 +125,7 @@ function PlacementGhostModel.new(structureType: string)
 end
 
 function PlacementGhostModel:MoveTo(worldPos: Vector3)
-	self._model:PivotTo(CFrame.new(worldPos))
+	self._model:PivotTo(_BuildBottomAlignedPivot(self._model, worldPos))
 end
 
 function PlacementGhostModel:SetValid(isValid: boolean)

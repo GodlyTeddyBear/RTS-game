@@ -4,7 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ActionRegistry = require(ReplicatedStorage.Utilities.ActionSystem.ActionRegistry)
 local ActionEventRouter = require(ReplicatedStorage.Utilities.ActionSystem.ActionEventRouter)
-local Types = require(script.Parent.AnimationTypes)
+local Types = require(ReplicatedStorage.Contexts.Animation.Types.AnimationTypes)
 
 type TAnimationPreset = Types.TAnimationPreset
 

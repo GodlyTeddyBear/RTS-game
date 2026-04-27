@@ -29,13 +29,13 @@ function InventorySlot.new(itemId: string, quantity: number, slotIndex: number)
 	assert(itemData, "Item with id '" .. itemId .. "' not found in ItemConfig")
 
 	-- Validate quantity doesn't exceed maxStack
-	assert(quantity <= itemData.maxStack, "Quantity (" .. quantity .. ") exceeds maxStack (" .. itemData.maxStack .. ")")
+	assert(quantity <= itemData.MaxStack, "Quantity (" .. quantity .. ") exceeds maxStack (" .. itemData.MaxStack .. ")")
 
 	local self = setmetatable({}, InventorySlot)
 	self.ItemId = itemId
 	self.Quantity = quantity
 	self.SlotIndex = slotIndex
-	self.Category = itemData.category
+	self.Category = itemData.Category
 
 	return table.freeze(self)
 end
@@ -83,7 +83,7 @@ end
 ]=]
 function InventorySlot:IsAtCapacity(): boolean
 	local itemData = ItemConfig[self.ItemId]
-	return self.Quantity >= itemData.maxStack
+	return self.Quantity >= itemData.MaxStack
 end
 
 return InventorySlot
