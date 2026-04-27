@@ -5,6 +5,7 @@ local Workspace = game:GetService("Workspace")
 
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local MuchachoHitbox = require(ReplicatedStorage.Utilities.MuchachoHitbox)
+local Result = require(ReplicatedStorage.Utilities.Result)
 
 local HitboxService = {}
 HitboxService.__index = HitboxService
@@ -116,6 +117,10 @@ function HitboxService:CreateAttackHitbox(
 ): { success: boolean, handle: THitboxHandle?, reason: string? }
 	local model = self:_ResolveAttackerModel(attackerEntity, attackerKind)
 	if model == nil then
+		Result.MentionError("Combat:HitboxService", "Attack hitbox spawn skipped because attacker model was missing", {
+			AttackerEntity = attackerEntity,
+			AttackerKind = attackerKind,
+		}, "MissingModelRef")
 		return {
 			success = false,
 			reason = "MissingModelRef",
@@ -124,6 +129,11 @@ function HitboxService:CreateAttackHitbox(
 
 	local primaryPart = model.PrimaryPart
 	if primaryPart == nil then
+		Result.MentionError("Combat:HitboxService", "Attack hitbox spawn skipped because attacker primary part was missing", {
+			AttackerEntity = attackerEntity,
+			AttackerKind = attackerKind,
+			ModelName = model.Name,
+		}, "MissingPrimaryPart")
 		return {
 			success = false,
 			reason = "MissingPrimaryPart",
@@ -171,6 +181,20 @@ function HitboxService:CreateAttackHitbox(
 	end), "Disconnect")
 
 	hitbox:Start()
+	Result.MentionSuccess("Combat:HitboxService", "Spawned attack hitbox", {
+		AttackerEntity = attackerEntity,
+		AttackerKind = attackerKind,
+		Handle = handle,
+		ModelName = model.Name,
+		PrimaryPartName = primaryPart.Name,
+		Visualizer = config.Visualize,
+		FolderName = self._hitboxFolder.Name,
+		Shape = tostring(config.Shape),
+		SizeX = config.Size.X,
+		SizeY = config.Size.Y,
+		SizeZ = config.Size.Z,
+		OffsetPosition = tostring(config.Offset.Position),
+	})
 
 	return {
 		success = true,

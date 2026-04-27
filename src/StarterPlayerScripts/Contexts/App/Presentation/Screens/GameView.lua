@@ -28,6 +28,9 @@ local function GameView()
 		onExitGame = controller.onExitGame,
 		onStartPhase2 = controller.onStartPhase2,
 		onStructureSelected = controller.onStructureSelected,
+		isInventoryOpen = controller.isInventoryOpen,
+		onToggleInventory = controller.onToggleInventory,
+		onCloseInventory = controller.onCloseInventory,
 		playerUsername = controller.playerUsername,
 		playerLevel = controller.playerLevel,
 	})

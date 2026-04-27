@@ -134,6 +134,14 @@ function HandleAnimationCallback:Execute(
 				ActorKind = actorKind,
 			})
 		end
+
+		-- Attack executors promote themselves to Committed immediately after a successful
+		-- activation. Late duplicate animation markers or client fallback callbacks should
+		-- become harmless no-ops instead of noisy warnings.
+		if action.ActionState == "Committed" then
+			return Ok(true)
+		end
+
 		if action.ActionState ~= "Running" then
 			return Err("ActionStateNotRunning", "Callback actor is not in callback-eligible action state", {
 				ActionState = action.ActionState,

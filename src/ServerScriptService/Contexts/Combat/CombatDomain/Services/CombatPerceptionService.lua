@@ -47,6 +47,69 @@ function CombatPerceptionService:Start(registry: any, _name: string)
 	self._baseEntityFactory = registry:Get("BaseEntityFactory")
 end
 
+type TTargetKind = "Base" | "Structure" | "Enemy"
+
+local function _resolveModelReferencePoint(model: Model): Vector3
+	local boundsCFrame, _ = model:GetBoundingBox()
+	return boundsCFrame.Position
+end
+
+function CombatPerceptionService:_ResolveTargetRaycastData(targetKind: TTargetKind, targetEntity: number?): (Instance?, Vector3?)
+	if targetKind == "Base" then
+		if self._baseEntityFactory == nil or not self._baseEntityFactory:IsActive() then
+			return nil, nil
+		end
+
+		local baseRef = self._baseEntityFactory:GetInstanceRef()
+		if baseRef == nil then
+			return nil, nil
+		end
+
+		if baseRef.Instance:IsA("Model") then
+			return baseRef.Instance, _resolveModelReferencePoint(baseRef.Instance)
+		end
+		if baseRef.Instance:IsA("BasePart") then
+			return baseRef.Instance, baseRef.Instance.Position
+		end
+
+		return baseRef.Instance, baseRef.Anchor.Position
+	end
+
+	if targetKind == "Structure" then
+		if targetEntity == nil or self._structureEntityFactory == nil then
+			return nil, nil
+		end
+		if not self._structureEntityFactory:IsActive(targetEntity) then
+			return nil, nil
+		end
+
+		local modelRef = self._structureEntityFactory:GetModelRef(targetEntity)
+		if modelRef == nil or modelRef.model == nil or modelRef.model.Parent == nil then
+			return nil, nil
+		end
+
+		return modelRef.model, _resolveModelReferencePoint(modelRef.model)
+	end
+
+	if targetKind == "Enemy" then
+		if targetEntity == nil or self._enemyEntityFactory == nil then
+			return nil, nil
+		end
+		if not self._enemyEntityFactory:IsAlive(targetEntity) then
+			return nil, nil
+		end
+
+		local modelRef = self._enemyEntityFactory:GetModelRef(targetEntity)
+		if modelRef == nil or modelRef.model == nil or modelRef.model.Parent == nil then
+			return nil, nil
+		end
+
+		return modelRef.model, _resolveModelReferencePoint(modelRef.model)
+	end
+
+	return nil, nil
+end
+
 function CombatPerceptionService:_FindNearestStructureInRange(enemyPosition: Vector3, attackRange: number): number?
 	if self._structureEntityFactory == nil then
 		return nil
@@ -65,8 +128,10 @@ function CombatPerceptionService:_FindNearestStructureInRange(enemyPosition: Vec
 		local offset = structurePosition - enemyPosition
 		local distanceSq = offset:Dot(offset)
 		if distanceSq <= maxDistanceSq and distanceSq < nearestDistanceSq then
-			nearestDistanceSq = distanceSq
-			nearestStructure = structureEntity
+			if self:IsTargetInRange(enemyPosition, attackRange, "Structure", structureEntity) then
+				nearestDistanceSq = distanceSq
+				nearestStructure = structureEntity
+			end
 		end
 	end
 
@@ -87,8 +152,10 @@ function CombatPerceptionService:_FindNearestEnemyInRange(structurePosition: Vec
 		local offset = position.cframe.Position - structurePosition
 		local distanceSq = offset:Dot(offset)
 		if distanceSq <= maxDistanceSq and distanceSq < nearestDistanceSq then
-			nearestDistanceSq = distanceSq
-			nearestEnemy = enemyEntity
+			if self:IsTargetInRange(structurePosition, attackRange, "Enemy", enemyEntity) then
+				nearestDistanceSq = distanceSq
+				nearestEnemy = enemyEntity
+			end
 		end
 	end
 
@@ -149,27 +216,14 @@ function CombatPerceptionService:IsTargetInRangeByRaycast(
 	return hitDistance <= attackRange
 end
 
-function CombatPerceptionService:IsBaseInRange(enemyPosition: Vector3, attackRange: number): boolean
-	if self._baseEntityFactory == nil or not self._baseEntityFactory:IsActive() then
-		return false
-	end
-
-	local baseRef = self._baseEntityFactory:GetInstanceRef()
-	if baseRef == nil then
-		return false
-	end
-
-	local baseReferencePoint = nil :: Vector3?
-	if baseRef.Instance:IsA("Model") then
-		local boundsCFrame, _ = baseRef.Instance:GetBoundingBox()
-		baseReferencePoint = boundsCFrame.Position
-	elseif baseRef.Instance:IsA("BasePart") then
-		baseReferencePoint = baseRef.Instance.Position
-	else
-		baseReferencePoint = baseRef.Anchor.Position
-	end
-
-	return self:IsTargetInRangeByRaycast(enemyPosition, baseRef.Instance, baseReferencePoint, attackRange)
+function CombatPerceptionService:IsTargetInRange(
+	position: Vector3,
+	attackRange: number,
+	targetKind: TTargetKind,
+	targetEntity: number?
+): boolean
+	local targetInstance, targetReferencePoint = self:_ResolveTargetRaycastData(targetKind, targetEntity)
+	return self:IsTargetInRangeByRaycast(position, targetInstance, targetReferencePoint, attackRange)
 end
 
 --[=[
@@ -199,7 +253,7 @@ function CombatPerceptionService:BuildSnapshot(entity: number, _currentTime: num
 
 	local hasBaseTargetInRange = false
 	if targetStructureEntity == nil and role and position and position.cframe and type(role.attackRange) == "number" then
-		hasBaseTargetInRange = self:IsBaseInRange(position.cframe.Position, role.attackRange)
+		hasBaseTargetInRange = self:IsTargetInRange(position.cframe.Position, role.attackRange, "Base", nil)
 	end
 
 	return {

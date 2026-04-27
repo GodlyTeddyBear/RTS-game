@@ -72,6 +72,7 @@ end
 function EndCombat:Init(registry: any, _name: string)
 	self._loopService = registry:Get("CombatLoopService")
 	self._behaviorRuntimeService = registry:Get("CombatBehaviorRuntimeService")
+	self._combatHitResolutionService = registry:Get("CombatHitResolutionService")
 	self._hitboxService = registry:Get("HitboxService")
 	self._lockOnService = registry:Get("LockOnService")
 end
@@ -114,6 +115,7 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 			StructureContext = self._structureContext,
 			CurrentTime = os.clock(),
 			HitboxService = self._hitboxService,
+			CombatHitResolutionService = self._combatHitResolutionService,
 		}
 
 		-- Cancel each active runtime action before clearing its stored combat state.
@@ -147,6 +149,7 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 		end
 
 		self._hitboxService:CleanupAll()
+		self._combatHitResolutionService:CleanupAll()
 
 		if targetUserId then
 			self._loopService:StopCombat(targetUserId)

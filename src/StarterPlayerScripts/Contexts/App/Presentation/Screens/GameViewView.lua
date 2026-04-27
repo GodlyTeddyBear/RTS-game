@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local React = require(ReplicatedStorage.Packages.React)
 local e = React.createElement
 local RunPresentation = require(script.Parent.Parent.Parent.Parent.Run.Presentation)
+local InventoryPresentation = require(script.Parent.Parent.Parent.Parent.Inventory.Presentation)
 local Button = require(script.Parent.Parent.Atoms.Button)
 local Text = require(script.Parent.Parent.Atoms.Text)
 local VStack = require(script.Parent.Parent.Layouts.VStack)
@@ -24,6 +25,9 @@ type TGameViewViewProps = {
 	onExitGame: () -> (),
 	onStartPhase2: () -> (),
 	onStructureSelected: (string) -> (),
+	isInventoryOpen: boolean,
+	onToggleInventory: () -> (),
+	onCloseInventory: () -> (),
 	playerUsername: string,
 	playerLevel: number,
 }
@@ -47,7 +51,14 @@ local function GameViewView(props: TGameViewViewProps)
 		}, {
 			RunHUD = props.isHudEnabled and props.isRunActive and e(RunPresentation.RunHUD, {
 				onStructureSelected = props.onStructureSelected,
+				onToggleInventory = props.onToggleInventory,
 			}) or nil,
+			InventoryPopup = props.isHudEnabled and props.isRunActive and props.isInventoryOpen and e(
+				InventoryPresentation.InventoryPopup,
+				{
+					onClose = props.onCloseInventory,
+				}
+			) or nil,
 			Phase2Launch = (not props.isRunActive) and e("Frame", {
 			Size = UDim2.fromScale(1, 1),
 			BackgroundColor3 = Color3.fromRGB(10, 14, 24),

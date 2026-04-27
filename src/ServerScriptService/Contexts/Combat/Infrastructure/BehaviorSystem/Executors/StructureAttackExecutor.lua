@@ -59,14 +59,17 @@ end
 
 local function _isTargetInRange(entity: number, targetEnemy: number, services: any): boolean
 	local structurePosition = services.StructureEntityFactory:GetPosition(entity)
-	local enemyPosition = services.EnemyEntityFactory:GetPosition(targetEnemy)
 	local attackStats = services.StructureEntityFactory:GetAttackStats(entity)
-	if structurePosition == nil or enemyPosition == nil or attackStats == nil then
+	if structurePosition == nil or attackStats == nil then
 		return false
 	end
 
-	local offset = enemyPosition.cframe.Position - structurePosition
-	return offset:Dot(offset) <= attackStats.AttackRange * attackStats.AttackRange
+	return services.CombatPerceptionService:IsTargetInRange(
+		structurePosition,
+		attackStats.AttackRange,
+		"Enemy",
+		targetEnemy
+	)
 end
 
 local function _validateTargetEnemy(entity: number, targetEnemy: number, services: any): (boolean, string?)

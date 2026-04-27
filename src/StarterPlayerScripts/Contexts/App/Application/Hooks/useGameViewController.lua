@@ -50,6 +50,9 @@ type TValueRef<T> = { current: T }
 	.onExitGame () -> () -- Exit to the Game screen and close the menu.
 	.onStartPhase2 () -> () -- Request the server to teleport into the Phase 2 map and start the run.
 	.onStructureSelected (structureType: string) -> () -- Temporary placement selection callback for Phase 2 HUD wiring.
+	.isInventoryOpen boolean -- Whether the Run HUD inventory popup is currently displayed.
+	.onToggleInventory () -> () -- Toggle the Run HUD inventory popup.
+	.onCloseInventory () -> () -- Close the Run HUD inventory popup.
 	.isRunActive boolean -- Whether the run lifecycle is currently in an active gameplay state.
 	.playerUsername string -- The current player's username.
 	.playerLevel number -- The current player's level.
@@ -64,6 +67,9 @@ export type TGameViewController = {
 	onExitGame: () -> (),
 	onStartPhase2: () -> (),
 	onStructureSelected: (string) -> (),
+	isInventoryOpen: boolean,
+	onToggleInventory: () -> (),
+	onCloseInventory: () -> (),
 	isRunActive: boolean,
 	playerUsername: string,
 	playerLevel: number,
@@ -197,6 +203,20 @@ local function _CreateStructureSelectedHandler(placementCursorActions: TPlacemen
 	end
 end
 
+local function _CreateToggleInventoryHandler(setIsInventoryOpen: TSetBooleanState): () -> ()
+	return function()
+		setIsInventoryOpen(function(prev: boolean): boolean
+			return not prev
+		end)
+	end
+end
+
+local function _CreateCloseInventoryHandler(setIsInventoryOpen: TSetBooleanState): () -> ()
+	return function()
+		setIsInventoryOpen(false)
+	end
+end
+
 local function _IsRunActive(stateName: string): boolean
 	return stateName == "Prep"
 		or stateName == "Wave"
@@ -218,6 +238,7 @@ local function useGameViewController(): TGameViewController
 	local soundActions = useSoundActions()
 	local placementCursorActions = usePlacementCursorActions()
 	local isMenuOpen, setIsMenuOpen = useState(false)
+	local isInventoryOpen, setIsInventoryOpen = useState(false)
 	local actionsRef = useRef(actions)
 	local soundActionsRef = useRef(soundActions)
 	local pendingNavigationRef = useRef(nil :: thread?)
@@ -238,6 +259,7 @@ local function useGameViewController(): TGameViewController
 		end
 
 		setIsMenuOpen(false)
+		setIsInventoryOpen(false)
 		_CancelPendingNavigation(pendingNavigationRef)
 	end, { hudVisibility.IsGameHudEnabled })
 
@@ -251,6 +273,7 @@ local function useGameViewController(): TGameViewController
 		end
 
 		if currentState == "RunEnd" then
+			setIsInventoryOpen(false)
 			_CancelPendingNavigation(pendingNavigationRef)
 			if navigation.CurrentScreen ~= RESULTS_SCREEN then
 				actionsRef.current.navigate(RESULTS_SCREEN)
@@ -287,6 +310,12 @@ local function useGameViewController(): TGameViewController
 	local onStructureSelected = useMemo(function()
 		return _CreateStructureSelectedHandler(placementCursorActions)
 	end, { placementCursorActions })
+	local onToggleInventory = useMemo(function()
+		return _CreateToggleInventoryHandler(setIsInventoryOpen)
+	end, {})
+	local onCloseInventory = useMemo(function()
+		return _CreateCloseInventoryHandler(setIsInventoryOpen)
+	end, {})
 
 	return {
 		isMenuOpen = isMenuOpen,
@@ -298,6 +327,9 @@ local function useGameViewController(): TGameViewController
 		onExitGame = onExitGame,
 		onStartPhase2 = onStartPhase2,
 		onStructureSelected = onStructureSelected,
+		isInventoryOpen = isInventoryOpen,
+		onToggleInventory = onToggleInventory,
+		onCloseInventory = onCloseInventory,
 		isRunActive = _IsRunActive(runState.state),
 		playerUsername = playerUsername,
 		playerLevel = playerLevel,

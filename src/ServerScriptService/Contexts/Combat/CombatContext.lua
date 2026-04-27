@@ -9,6 +9,7 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 
 local CombatLoopService = require(script.Parent.Infrastructure.Services.CombatLoopService)
 local CombatBehaviorRuntimeService = require(script.Parent.Infrastructure.Services.CombatBehaviorRuntimeService)
+local CombatHitResolutionService = require(script.Parent.Infrastructure.Services.CombatHitResolutionService)
 local HitboxService = require(script.Parent.Infrastructure.Services.HitboxService)
 local LockOnService = require(script.Parent.Infrastructure.Services.LockOnService)
 local ProjectileService = require(script.Parent.Infrastructure.Services.ProjectileService)
@@ -29,6 +30,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
 		Name = "CombatBehaviorRuntimeService",
 		Module = CombatBehaviorRuntimeService,
+	},
+	{
+		Name = "CombatHitResolutionService",
+		Module = CombatHitResolutionService,
+		CacheAs = "_combatHitResolutionService",
 	},
 	{
 		Name = "HitboxService",
@@ -187,6 +193,7 @@ function CombatContext:KnitInit()
 	self._baseContext = nil
 	self._baseEntityFactory = nil
 	self._hitboxService = nil
+	self._combatHitResolutionService = nil
 	self._lockOnService = nil
 	self._projectileService = nil
 	self._goalPosition = nil :: Vector3?

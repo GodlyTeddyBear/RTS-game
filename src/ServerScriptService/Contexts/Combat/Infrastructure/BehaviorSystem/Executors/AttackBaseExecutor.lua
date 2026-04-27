@@ -33,7 +33,17 @@ local function _activationResult(success: boolean, reason: string, source: strin
 	}
 end
 
-local function _isBaseInRange(entity: number, services: any): boolean
+local function _recordActivationSource(entity: number, services: any, source: string)
+	local modelRef = services.EnemyEntityFactory:GetModelRef(entity)
+	if modelRef == nil or modelRef.model == nil or modelRef.model.Parent == nil then
+		return
+	end
+
+	modelRef.model:SetAttribute("LastHitboxActivationSource", source)
+	modelRef.model:SetAttribute("LastHitboxActivatedAt", services.CurrentTime)
+end
+
+local function _isTargetInRange(entity: number, services: any): boolean
 	local enemyPosition = services.EnemyEntityFactory:GetPosition(entity)
 	local role = services.EnemyEntityFactory:GetRole(entity)
 	if enemyPosition == nil or role == nil then
@@ -45,7 +55,7 @@ local function _isBaseInRange(entity: number, services: any): boolean
 		return false
 	end
 
-	return services.CombatPerceptionService:IsBaseInRange(enemyPosition.cframe.Position, attackRange)
+	return services.CombatPerceptionService:IsTargetInRange(enemyPosition.cframe.Position, attackRange, "Base", nil)
 end
 
 function AttackBaseExecutor:CanStart(entity: number, _data: any?, services: any): (boolean, string?)
@@ -53,7 +63,7 @@ function AttackBaseExecutor:CanStart(entity: number, _data: any?, services: any)
 		return false, "InactiveBase"
 	end
 
-	if not _isBaseInRange(entity, services) then
+	if not _isTargetInRange(entity, services) then
 		return false, "BaseOutOfRange"
 	end
 
@@ -62,15 +72,21 @@ end
 
 function AttackBaseExecutor:OnStart(entity: number, _data: any?, services: any)
 	services.EnemyEntityFactory:SetTarget(entity, nil, "Base")
+	self:SetEntityValue(entity, "AwaitingHitboxActivation", false)
 	self:SetEntityValue(entity, "HitboxActivated", false)
 	self:SetEntityValue(entity, "HitboxActivationTimedOut", false)
-	self:SetEntityValue(entity, "ActivationWindowStartedAt", nil)
+	self:SetEntityValue(entity, "AttackStartedAt", nil)
 	self:SetEntityValue(entity, "HitLanded", false)
 	self:SetEntityValue(entity, "ActiveHitboxHandle", nil)
 	self:SetEntityValue(entity, "HitboxStartedAt", nil)
+	self:SetEntityValue(entity, "PendingHitboxActivation", false)
 end
 
 function AttackBaseExecutor:CanContinue(entity: number, services: any): (boolean, string?)
+	if self:GetEntityValue(entity, "HitboxActivated") == true then
+		return true, nil
+	end
+
 	return self:RunGuards(entity, services, {
 		{
 			Reason = "InactiveBase",
@@ -81,7 +97,7 @@ function AttackBaseExecutor:CanContinue(entity: number, services: any): (boolean
 		{
 			Reason = "BaseOutOfRange",
 			Check = function(guardEntity: number, guardServices: any): boolean
-				return _isBaseInRange(guardEntity, guardServices)
+				return _isTargetInRange(guardEntity, guardServices)
 			end,
 		},
 	})
@@ -93,12 +109,9 @@ local function _activateHitboxInternal(
 	services: any,
 	source: string
 ): THitboxActivationResult
-	local cooldown = services.EnemyEntityFactory:GetAttackCooldown(entity)
-	if cooldown == nil then
-		return _activationResult(false, "MissingAttackState", source)
-	end
-	if services.CurrentTime - cooldown.LastAttackTime < cooldown.Cooldown then
-		return _activationResult(false, "CooldownNotReady", source)
+	if self:GetEntityValue(entity, "AwaitingHitboxActivation") ~= true then
+		self:SetEntityValue(entity, "PendingHitboxActivation", true)
+		return _activationResult(true, "QueuedBeforeActivationWindow", source)
 	end
 
 	local activated = self:GetEntityValue(entity, "HitboxActivated")
@@ -114,9 +127,13 @@ local function _activateHitboxInternal(
 	self:SetEntityValue(entity, "ActiveHitboxHandle", activatedHitbox.handle)
 	self:SetEntityValue(entity, "HitboxStartedAt", services.CurrentTime)
 	self:SetEntityValue(entity, "HitboxActivated", true)
-	self:SetEntityValue(entity, "ActivationWindowStartedAt", nil)
+	self:SetEntityValue(entity, "HitboxActivationTimedOut", source == "ServerTimeoutFallback")
+	self:SetEntityValue(entity, "AwaitingHitboxActivation", false)
+	self:SetEntityValue(entity, "AttackStartedAt", nil)
+	self:SetEntityValue(entity, "PendingHitboxActivation", false)
 	services.EnemyEntityFactory:SetLastAttackTime(entity, services.CurrentTime)
 	services.EnemyEntityFactory:PromoteToCommitted(entity)
+	_recordActivationSource(entity, services, source)
 
 	return _activationResult(true, "Activated", source)
 end
@@ -143,14 +160,28 @@ function AttackBaseExecutor:OnTick(entity: number, _dt: number, services: any): 
 
 	local activated = self:GetEntityValue(entity, "HitboxActivated") == true
 	if not activated then
-		if services.CurrentTime - cooldown.LastAttackTime < cooldown.Cooldown then
+		if self:GetEntityValue(entity, "AwaitingHitboxActivation") ~= true then
+			if services.CurrentTime - cooldown.LastAttackTime < cooldown.Cooldown then
+				return self:Running()
+			end
+
+			self:SetEntityValue(entity, "AwaitingHitboxActivation", true)
+			self:SetEntityValue(entity, "HitboxActivationTimedOut", false)
+			self:SetEntityValue(entity, "AttackStartedAt", services.CurrentTime)
+
+			if self:GetEntityValue(entity, "PendingHitboxActivation") == true then
+				local activation = self:ActivateHitbox(entity, services)
+				if not activation.success then
+					return self:Fail(entity, activation.reason)
+				end
+			end
+
 			return self:Running()
 		end
 
-		local activationWindowStartedAt = self:GetEntityValue(entity, "ActivationWindowStartedAt")
+		local activationWindowStartedAt = self:GetEntityValue(entity, "AttackStartedAt")
 		if type(activationWindowStartedAt) ~= "number" then
-			self:SetEntityValue(entity, "ActivationWindowStartedAt", services.CurrentTime)
-			return self:Running()
+			return self:Fail(entity, "MissingAttackStartTime")
 		end
 
 		local timedOut = self:GetEntityValue(entity, "HitboxActivationTimedOut") == true
@@ -170,18 +201,12 @@ function AttackBaseExecutor:OnTick(entity: number, _dt: number, services: any): 
 		return self:Fail(entity, "MissingHitboxHandle")
 	end
 
-	if services.HitboxService:DidHitBase(activeHitboxHandle) then
-		services.HitboxService:DestroyHitbox(activeHitboxHandle)
-		self:ClearEntityValue(entity, "ActiveHitboxHandle")
-		self:ClearEntityValue(entity, "HitboxStartedAt")
+	local resolutionResult = services.CombatHitResolutionService:ResolveEnemyMeleeHits(activeHitboxHandle, entity, damage)
+	if not resolutionResult.success then
+		return self:Fail(entity, "ApplyDamageFailed")
+	end
+	if resolutionResult.value.AppliedHits > 0 then
 		self:SetEntityValue(entity, "HitLanded", true)
-
-		local damageResult = services.BaseContext:ApplyDamage(damage)
-		if not damageResult.success then
-			return self:Fail(entity, "ApplyDamageFailed")
-		end
-
-		return self:Success()
 	end
 
 	local startedAt = self:GetEntityValue(entity, "HitboxStartedAt")
@@ -191,6 +216,7 @@ function AttackBaseExecutor:OnTick(entity: number, _dt: number, services: any): 
 
 	if services.CurrentTime - startedAt >= HitboxConfig.AttackStructure.MaxDuration then
 		services.HitboxService:DestroyHitbox(activeHitboxHandle)
+		services.CombatHitResolutionService:ClearResolvedHits(activeHitboxHandle)
 		self:ClearEntityValue(entity, "ActiveHitboxHandle")
 		self:ClearEntityValue(entity, "HitboxStartedAt")
 		if self:GetEntityValue(entity, "HitLanded") == true then
@@ -206,14 +232,17 @@ function AttackBaseExecutor:OnCancel(entity: number, services: any)
 	local activeHitboxHandle = self:GetEntityValue(entity, "ActiveHitboxHandle")
 	if type(activeHitboxHandle) == "string" then
 		services.HitboxService:DestroyHitbox(activeHitboxHandle)
+		services.CombatHitResolutionService:ClearResolvedHits(activeHitboxHandle)
 	end
 
 	self:ClearEntityValue(entity, "ActiveHitboxHandle")
 	self:ClearEntityValue(entity, "HitboxStartedAt")
+	self:ClearEntityValue(entity, "AwaitingHitboxActivation")
 	self:ClearEntityValue(entity, "HitboxActivated")
 	self:ClearEntityValue(entity, "HitboxActivationTimedOut")
-	self:ClearEntityValue(entity, "ActivationWindowStartedAt")
+	self:ClearEntityValue(entity, "AttackStartedAt")
 	self:ClearEntityValue(entity, "HitLanded")
+	self:ClearEntityValue(entity, "PendingHitboxActivation")
 	services.EnemyEntityFactory:ClearTarget(entity)
 end
 

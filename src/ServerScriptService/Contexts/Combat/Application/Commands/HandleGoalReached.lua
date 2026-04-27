@@ -52,7 +52,7 @@ end
 
 --[=[
 	@within HandleGoalReached
-	Marks the enemy as resolved, emits wave death events, and applies base damage.
+	Marks the enemy as resolved, emits wave death events, despawns it, and applies base damage when in range.
 	@param entity any -- Enemy entity id that reached the goal.
 	@return Result.Result<boolean> -- Success confirmation or a typed combat error.
 ]=]
@@ -64,7 +64,6 @@ function HandleGoalReached:Execute(entity: any): Result.Result<boolean>
 		local identity = self._entityFactory:GetIdentity(entity)
 		Ensure(identity ~= nil, "InvalidEnemyEntity", Errors.INVALID_ENEMY_ENTITY)
 
-		-- Read the enemy role so the commander damage can use the configured role tuning.
 		local roleConfig = EnemyConfig.ROLES[identity.role]
 		Ensure(roleConfig ~= nil, "InvalidRole", Errors.INVALID_ROLE)
 
@@ -72,16 +71,14 @@ function HandleGoalReached:Execute(entity: any): Result.Result<boolean>
 		Ensure(deathCFrame ~= nil, "InvalidEnemyEntity", Errors.INVALID_ENEMY_ENTITY)
 		Ensure(self._baseEntityFactory:IsActive(), "InactiveBase", Errors.INACTIVE_BASE)
 
-		if not self._combatPerceptionService:IsBaseInRange(deathCFrame.Position, roleConfig.attackRange) then
+		if not self._combatPerceptionService:IsTargetInRange(deathCFrame.Position, roleConfig.attackRange, "Base", nil) then
 			return Ok(false)
 		end
 
-		-- Emit the death event before despawning so downstream listeners can capture the final position.
 		self._entityFactory:MarkGoalReached(entity)
 		GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.role, identity.waveNumber, deathCFrame)
 
 		Try(self._enemyContext:DespawnEnemy(entity))
-
 		Try(self._baseContext:ApplyDamage(roleConfig.damage))
 
 		return Ok(true)

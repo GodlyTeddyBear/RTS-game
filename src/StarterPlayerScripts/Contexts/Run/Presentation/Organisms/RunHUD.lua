@@ -6,6 +6,7 @@ local React = require(ReplicatedStorage.Packages.React)
 local e = React.createElement
 
 local AppFrame = require(script.Parent.Parent.Parent.Parent.App.Presentation.Atoms.Frame)
+local Button = require(script.Parent.Parent.Parent.Parent.App.Presentation.Atoms.Button)
 local Text = require(script.Parent.Parent.Parent.Parent.App.Presentation.Atoms.Text)
 local HStack = require(script.Parent.Parent.Parent.Parent.App.Presentation.Layouts.HStack)
 local VStack = require(script.Parent.Parent.Parent.Parent.App.Presentation.Layouts.VStack)
@@ -19,6 +20,7 @@ local PrepTimerBar = require(script.Parent.PrepTimerBar)
 
 export type TRunHUDProps = {
 	onStructureSelected: ((string) -> ())?,
+	onToggleInventory: (() -> ())?,
 }
 
 local function _ComputeHealthFillScale(hp: number, maxHp: number): number
@@ -81,6 +83,15 @@ local function RunHUD(props: TRunHUDProps)
 		}),
 		PrepTimerBar = e(PrepTimerBar),
 		AbilityBar = e(AbilityBar),
+		InventoryButton = props.onToggleInventory and e(Button, {
+			Size = UDim2.fromScale(0.1, 0.045),
+			Position = UDim2.fromScale(0.93, 0.84),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Text = "Inventory",
+			Variant = "secondary",
+			TextScaled = true,
+			[React.Event.Activated] = props.onToggleInventory,
+		}) or nil,
 		Bar = e(AppFrame, {
 			Size = UDim2.fromScale(1, 0.12),
 			Position = UDim2.fromScale(0.5, 0.99),

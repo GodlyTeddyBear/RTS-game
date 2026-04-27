@@ -78,23 +78,29 @@ export type TBehaviorConfigComponent = {
 	Shared runtime services passed into combat executors.
 	.EnemyEntityFactory any -- Combat enemy entity access facade.
 	.StructureEntityFactory any -- Combat structure entity access facade.
+	.BaseEntityFactory any -- Combat base entity access facade.
+	.CombatPerceptionService any -- Shared target range authority for combat target checks.
 	.EnemyContext any -- Enemy context public damage API.
 	.StructureContext any -- Structure context public damage API.
 	.BaseContext any -- Base context public damage API.
 	.CurrentTime number -- Timestamp shared across executor calls for one tick.
 	.HandleGoalReached any -- Command used to resolve goal-reaching enemies.
 	.HitboxService any -- Combat hitbox service for contact-confirmed attacks.
+	.CombatHitResolutionService any -- Shared melee hit resolution service.
 	.ProjectileService any -- Combat projectile service for server-authoritative ranged attacks.
 ]=]
 export type TExecutorServices = {
 	EnemyEntityFactory: any,
 	StructureEntityFactory: any,
+	BaseEntityFactory: any,
+	CombatPerceptionService: any,
 	EnemyContext: any,
 	StructureContext: any,
 	BaseContext: any,
 	CurrentTime: number,
 	HandleGoalReached: any,
 	HitboxService: any,
+	CombatHitResolutionService: any,
 	ProjectileService: any,
 }
 
