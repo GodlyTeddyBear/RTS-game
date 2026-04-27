@@ -36,8 +36,7 @@ end
 local function _isBaseInRange(entity: number, services: any): boolean
 	local enemyPosition = services.EnemyEntityFactory:GetPosition(entity)
 	local role = services.EnemyEntityFactory:GetRole(entity)
-	local baseCFrame = services.BaseEntityFactory:GetTargetCFrame()
-	if enemyPosition == nil or role == nil or baseCFrame == nil then
+	if enemyPosition == nil or role == nil then
 		return false
 	end
 
@@ -46,8 +45,7 @@ local function _isBaseInRange(entity: number, services: any): boolean
 		return false
 	end
 
-	local offset = baseCFrame.Position - enemyPosition.cframe.Position
-	return offset:Dot(offset) <= attackRange * attackRange
+	return services.CombatPerceptionService:IsBaseInRange(enemyPosition.cframe.Position, attackRange)
 end
 
 function AttackBaseExecutor:CanStart(entity: number, _data: any?, services: any): (boolean, string?)
@@ -125,6 +123,10 @@ end
 
 function AttackBaseExecutor:TryActivateHitboxFromTimeout(entity: number, services: any): THitboxActivationResult
 	return _activateHitboxInternal(self, entity, services, "ServerTimeoutFallback")
+end
+
+function AttackBaseExecutor:ActivateHitbox(entity: number, services: any): THitboxActivationResult
+	return _activateHitboxInternal(self, entity, services, "AnimationCallback")
 end
 
 function AttackBaseExecutor:OnTick(entity: number, _dt: number, services: any): string

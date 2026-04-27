@@ -44,13 +44,18 @@ function AdvanceExecutor:_StartPath(entity: number, services: any): boolean
 
 	local path = PathfindingHelper.CreatePath(entity, {
 		EnemyEntityFactory = services.EnemyEntityFactory,
-	}, self:_GetAgentParams(entity, services))
+	}, self:_GetAgentParams(entity, services), CombatMovementConfig.PATHFINDING)
 	if path == nil then
 		return false
 	end
 
 	services.EnemyEntityFactory:SetPathMoving(entity, true)
-	self:TrackAsyncResource(entity, "PathPromise", PathfindingHelper.RunPath(path, pathState.goalPosition, entity), "cancel")
+	self:TrackAsyncResource(
+		entity,
+		"PathPromise",
+		PathfindingHelper.RunPath(path, pathState.goalPosition, entity, CombatMovementConfig.PATHFINDING),
+		"cancel"
+	)
 	return true
 end
 

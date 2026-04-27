@@ -6,6 +6,7 @@ MapConfig.RUNTIME_MAP_NAME = "Map"
 MapConfig.TEMPLATE_NAME = "Default"
 MapConfig.WORKSPACE_MAP_CONTAINER_NAME = "Map"
 MapConfig.WORKSPACE_GAME_CONTAINER_NAME = "Game"
+MapConfig.RUNTIME_MAP_TARGET_POSITION = Vector3.new(300, 0, 500)
 
 MapConfig.ZONE_PATHS = table.freeze({
 	Bases = "Environment.Zones.Bases",

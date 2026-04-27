@@ -11,6 +11,7 @@ local Err = Result.Err
 local SUPPORTED_CALLBACK_TYPE = "ActivateHitbox"
 
 local ATTACK_ACTIONS = table.freeze({
+	AttackBase = true,
 	AttackStructure = true,
 	StructureAttack = true,
 })
@@ -38,8 +39,10 @@ end
 function HandleAnimationCallback:Start(registry: any, _name: string)
 	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
 	self._structureEntityFactory = registry:Get("StructureEntityFactory")
+	self._baseEntityFactory = registry:Get("BaseEntityFactory")
 	self._enemyContext = registry:Get("EnemyContext")
 	self._structureContext = registry:Get("StructureContext")
+	self._baseContext = registry:Get("BaseContext")
 end
 
 local function _resolveActorEntity(self: any, actorId: string, actorKind: string?): (any, number?, string)
@@ -152,8 +155,10 @@ function HandleAnimationCallback:Execute(
 		local activation = executor:ActivateHitbox(entity, {
 			EnemyEntityFactory = self._enemyEntityFactory,
 			StructureEntityFactory = self._structureEntityFactory,
+			BaseEntityFactory = self._baseEntityFactory,
 			EnemyContext = self._enemyContext,
 			StructureContext = self._structureContext,
+			BaseContext = self._baseContext,
 			CurrentTime = os.clock(),
 			HandleGoalReached = self._handleGoalReached,
 			HitboxService = self._hitboxService,

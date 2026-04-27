@@ -17,12 +17,12 @@ CombatMovementConfig.AGENT_PARAMS_BY_ROLE = table.freeze({
 	swarm = table.freeze({
 		AgentRadius = 1.5,
 		AgentHeight = 5,
-		AgentCanJump = false,
+		AgentCanJump = true,
 	}),
 	tank = table.freeze({
 		AgentRadius = 2.5,
 		AgentHeight = 6,
-		AgentCanJump = false,
+		AgentCanJump = true,
 	}),
 })
 
@@ -35,6 +35,20 @@ CombatMovementConfig.DEFAULT_AGENT_PARAMS = table.freeze({
 	AgentRadius = 2,
 	AgentHeight = 5,
 	AgentCanJump = true,
+})
+
+--[=[
+	@prop PATHFINDING table
+	@within CombatMovementConfig
+	Runtime SimplePath options used by combat movement.
+]=]
+CombatMovementConfig.PATHFINDING = table.freeze({
+	VisualizeSimplePath = true,
+	DebugTarget = false,
+	InitialRunDelaySeconds = 0.1,
+	RetryComputationErrors = true,
+	ReconcileTargetYOnWaypointFailure = true,
+	MaxTargetYReconcileAttempts = 1,
 })
 
 return table.freeze(CombatMovementConfig)

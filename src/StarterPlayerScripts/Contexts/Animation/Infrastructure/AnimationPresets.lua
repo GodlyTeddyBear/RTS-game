@@ -152,6 +152,24 @@ AnimationPresets.EnemyLocomotion = {
 	WarnOnMissingPose = true,
 	WarnOnMissingAnimation = true,
 	UseStateDrivenCorePoses = true,
+	ActionStateFallback = function(state: string, validActions: { [string]: boolean }): string?
+		if validActions[state] then
+			return nil
+		end
+		if state == "AttackBase" and validActions.AttackStructure then
+			return "AttackStructure"
+		end
+		if state == "AttackBase" and validActions.attackstructure then
+			return "attackstructure"
+		end
+		if (state == "AttackBase" or state == "AttackStructure") and validActions.Attack then
+			return "Attack"
+		end
+		if (state == "AttackBase" or state == "AttackStructure") and validActions.attack then
+			return "attack"
+		end
+		return nil
+	end,
 }
 
 AnimationPresets.Structure = {

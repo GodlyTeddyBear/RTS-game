@@ -1,6 +1,13 @@
 --!strict
 
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Result = require(ReplicatedStorage.Utilities.Result)
+
 local FLEE_THRESHOLD = 0.2
+local RANGE_RAYCAST_PADDING = 0.05
+local RAYCAST_LOG_THROTTLE_SECONDS = 1
+local _lastRaycastLogAt = 0
 
 --[=[
 	@class CombatPerceptionService
@@ -88,18 +95,81 @@ function CombatPerceptionService:_FindNearestEnemyInRange(structurePosition: Vec
 	return nearestEnemy
 end
 
-function CombatPerceptionService:_IsBaseInRange(enemyPosition: Vector3, attackRange: number): boolean
+function CombatPerceptionService:IsTargetInRangeByRaycast(
+	position: Vector3,
+	targetInstance: Instance?,
+	targetReferencePoint: Vector3?,
+	attackRange: number
+): boolean
+	if targetInstance == nil or targetReferencePoint == nil then
+		return false
+	end
+
+	if type(attackRange) ~= "number" or attackRange <= 0 then
+		return false
+	end
+
+	local direction = targetReferencePoint - position
+	local directionMagnitude = direction.Magnitude
+	if directionMagnitude <= 0 then
+		return true
+	end
+
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Include
+	raycastParams.FilterDescendantsInstances = { targetInstance }
+	raycastParams.IgnoreWater = true
+	raycastParams.RespectCanCollide = false
+
+	local raycastResult = Workspace:Raycast(
+		position,
+		direction.Unit * (directionMagnitude + RANGE_RAYCAST_PADDING),
+		raycastParams
+	)
+	if raycastResult == nil then
+		local now = os.clock()
+		if now - _lastRaycastLogAt >= RAYCAST_LOG_THROTTLE_SECONDS then
+			_lastRaycastLogAt = now
+			Result.MentionError("CombatPerceptionService:IsTargetInRangeByRaycast", "Failed raycast against target instance", {
+				PositionX = position.X,
+				PositionY = position.Y,
+				PositionZ = position.Z,
+				ReferenceX = targetReferencePoint.X,
+				ReferenceY = targetReferencePoint.Y,
+				ReferenceZ = targetReferencePoint.Z,
+				AttackRange = attackRange,
+				TargetName = targetInstance.Name,
+				TargetClass = targetInstance.ClassName,
+			}, "TargetRangeRaycastMiss")
+		end
+		return false
+	end
+
+	local hitDistance = (raycastResult.Position - position).Magnitude
+	return hitDistance <= attackRange
+end
+
+function CombatPerceptionService:IsBaseInRange(enemyPosition: Vector3, attackRange: number): boolean
 	if self._baseEntityFactory == nil or not self._baseEntityFactory:IsActive() then
 		return false
 	end
 
-	local baseCFrame = self._baseEntityFactory:GetTargetCFrame()
-	if baseCFrame == nil then
+	local baseRef = self._baseEntityFactory:GetInstanceRef()
+	if baseRef == nil then
 		return false
 	end
 
-	local offset = baseCFrame.Position - enemyPosition
-	return offset:Dot(offset) <= attackRange * attackRange
+	local baseReferencePoint = nil :: Vector3?
+	if baseRef.Instance:IsA("Model") then
+		local boundsCFrame, _ = baseRef.Instance:GetBoundingBox()
+		baseReferencePoint = boundsCFrame.Position
+	elseif baseRef.Instance:IsA("BasePart") then
+		baseReferencePoint = baseRef.Instance.Position
+	else
+		baseReferencePoint = baseRef.Anchor.Position
+	end
+
+	return self:IsTargetInRangeByRaycast(enemyPosition, baseRef.Instance, baseReferencePoint, attackRange)
 end
 
 --[=[
@@ -129,7 +199,7 @@ function CombatPerceptionService:BuildSnapshot(entity: number, _currentTime: num
 
 	local hasBaseTargetInRange = false
 	if targetStructureEntity == nil and role and position and position.cframe and type(role.attackRange) == "number" then
-		hasBaseTargetInRange = self:_IsBaseInRange(position.cframe.Position, role.attackRange)
+		hasBaseTargetInRange = self:IsBaseInRange(position.cframe.Position, role.attackRange)
 	end
 
 	return {

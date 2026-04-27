@@ -12,5 +12,8 @@ Errors.MISSING_RESOURCE_ZONE = "MiningContext: resources zone is missing from th
 Errors.INVALID_RESOURCE_ZONE = "MiningContext: resources zone instance is invalid"
 Errors.INVALID_RESOURCE_NODE = "MiningContext: resource node part is invalid"
 Errors.UNKNOWN_RESOURCE_NODE_TYPE = "MiningContext: resource node part name must match a known resource type"
+Errors.INVALID_PLAYER = "MiningContext: player is invalid"
+Errors.UNREGISTERED_RESOURCE_NODE = "MiningContext: resource node is not registered"
+Errors.RESOURCE_GATHER_COOLDOWN = "MiningContext: resource node was gathered too recently"
 
 return table.freeze(Errors)

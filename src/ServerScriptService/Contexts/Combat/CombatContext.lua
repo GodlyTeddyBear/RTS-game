@@ -169,8 +169,6 @@ local Catch = Result.Catch
 local Ok = Result.Ok
 local Try = Result.Try
 
-local BASE_APPROACH_DISTANCE = 4
-
 --[=[
 	@within CombatContext
 	Registers combat infrastructure, policies, and commands before the rest of the server starts ticking.
@@ -278,8 +276,7 @@ function CombatContext:_CacheGoalPosition()
 	)
 
 	local baseTarget = baseTargetResult.value
-	local approachDirection = -baseTarget.LookVector
-	self._goalPosition = baseTarget.Position + approachDirection * BASE_APPROACH_DISTANCE
+	self._goalPosition = baseTarget.Position
 end
 
 -- Starts combat for the active run wave and assigns behavior trees to existing enemies.

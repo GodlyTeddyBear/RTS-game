@@ -10,6 +10,7 @@ local Errors = require(script.Parent.Parent.Parent.Errors)
 local Ok = Result.Ok
 local Err = Result.Err
 local Ensure = Result.Ensure
+local fromPcall = Result.fromPcall
 
 type ZoneMap = { [string]: Instance }
 
@@ -57,6 +58,24 @@ local function _ExtractModel(instance: Instance?): Model?
 	return nil
 end
 
+local function _BuildCFrameWithPosition(source: CFrame, targetPosition: Vector3): CFrame
+	local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = source:GetComponents()
+	return CFrame.new(
+		targetPosition.X,
+		targetPosition.Y,
+		targetPosition.Z,
+		r00,
+		r01,
+		r02,
+		r10,
+		r11,
+		r12,
+		r20,
+		r21,
+		r22
+	)
+end
+
 function RuntimeMapService.new()
 	local self = setmetatable({}, RuntimeMapService)
 	self._entityFactory = nil
@@ -75,6 +94,12 @@ function RuntimeMapService:CreateOrReplaceRuntimeMap(): Result.Result<boolean>
 	end
 
 	local runtimeMapModel = templateResult.value
+	local relocateResult = self:_RelocateRuntimeMap(runtimeMapModel)
+	if not relocateResult.success then
+		runtimeMapModel:Destroy()
+		return relocateResult
+	end
+
 	local zonesResult = self:_DiscoverZones(runtimeMapModel)
 	if not zonesResult.success then
 		runtimeMapModel:Destroy()
@@ -163,6 +188,42 @@ function RuntimeMapService:_DiscoverZones(runtimeMapModel: Model): Result.Result
 	end
 
 	return Ok(zonesByName)
+end
+
+function RuntimeMapService:_RelocateRuntimeMap(runtimeMapModel: Model): Result.Result<boolean>
+	local targetPositionResult = self:_ResolveRuntimeMapTargetPosition()
+	if not targetPositionResult.success then
+		return targetPositionResult
+	end
+
+	local targetPosition = targetPositionResult.value
+	local pivotResult = fromPcall("RelocateRuntimeMapFailed", function()
+		local currentPivot = runtimeMapModel:GetPivot()
+		local targetPivot = _BuildCFrameWithPosition(currentPivot, targetPosition)
+		runtimeMapModel:PivotTo(targetPivot)
+	end)
+	if not pivotResult.success then
+		return Err("RelocateRuntimeMapFailed", Errors.FAILED_TO_RELOCATE_RUNTIME_MAP, {
+			CauseMessage = pivotResult.message,
+		})
+	end
+
+	return Ok(true)
+end
+
+function RuntimeMapService:_ResolveRuntimeMapTargetPosition(configuredPositionOverride: any?): Result.Result<Vector3>
+	local configuredPosition = configuredPositionOverride
+	if configuredPosition == nil then
+		configuredPosition = MapConfig.RUNTIME_MAP_TARGET_POSITION
+	end
+
+	if typeof(configuredPosition) ~= "Vector3" then
+		return Err("InvalidRuntimeMapTargetPosition", Errors.INVALID_RUNTIME_MAP_TARGET_POSITION, {
+			ConfigValueType = typeof(configuredPosition),
+		})
+	end
+
+	return Ok(configuredPosition)
 end
 
 function RuntimeMapService:GetActiveRuntimeModel(): Model?

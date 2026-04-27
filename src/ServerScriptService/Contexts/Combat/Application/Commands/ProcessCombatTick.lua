@@ -273,6 +273,7 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 			EnemyEntityFactory = self._enemyEntityFactory,
 			StructureEntityFactory = self._structureEntityFactory,
 			BaseEntityFactory = self._baseEntityFactory,
+			CombatPerceptionService = self._perceptionService,
 			EnemyContext = self._enemyContext,
 			StructureContext = self._structureContext,
 			BaseContext = self._baseContext,

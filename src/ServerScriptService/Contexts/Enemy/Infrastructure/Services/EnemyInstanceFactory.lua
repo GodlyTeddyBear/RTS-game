@@ -153,6 +153,7 @@ function EnemyInstanceFactory:_PrepareInstance(instance: Instance, _entityId: nu
 	end
 
 	assert(model.PrimaryPart ~= nil, "Enemy model missing PrimaryPart: " .. model.Name)
+	model.PrimaryPart.Anchored = false
 	EntityCollisionService:ApplyModel(model)
 end
 

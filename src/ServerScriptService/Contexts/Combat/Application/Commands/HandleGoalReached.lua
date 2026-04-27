@@ -19,19 +19,6 @@ local Try = Result.Try
 local HandleGoalReached = {}
 HandleGoalReached.__index = HandleGoalReached
 
-local function _isWithinBaseDamageRange(enemyCFrame: CFrame?, baseCFrame: CFrame?, attackRange: any): boolean
-	if enemyCFrame == nil or baseCFrame == nil then
-		return false
-	end
-
-	if type(attackRange) ~= "number" or attackRange <= 0 then
-		return false
-	end
-
-	local offset = baseCFrame.Position - enemyCFrame.Position
-	return offset:Dot(offset) <= attackRange * attackRange
-end
-
 --[=[
 	@within HandleGoalReached
 	Creates a new goal-resolution command.
@@ -60,6 +47,7 @@ function HandleGoalReached:Start()
 	self._entityFactory = self.Registry:Get("EnemyEntityFactory")
 	self._baseContext = self.Registry:Get("BaseContext")
 	self._baseEntityFactory = self.Registry:Get("BaseEntityFactory")
+	self._combatPerceptionService = self.Registry:Get("CombatPerceptionService")
 end
 
 --[=[
@@ -82,11 +70,9 @@ function HandleGoalReached:Execute(entity: any): Result.Result<boolean>
 
 		local deathCFrame = self._entityFactory:GetDeathCFrame(entity)
 		Ensure(deathCFrame ~= nil, "InvalidEnemyEntity", Errors.INVALID_ENEMY_ENTITY)
+		Ensure(self._baseEntityFactory:IsActive(), "InactiveBase", Errors.INACTIVE_BASE)
 
-		local baseCFrame = self._baseEntityFactory:GetTargetCFrame()
-		Ensure(baseCFrame ~= nil, "InactiveBase", Errors.INACTIVE_BASE)
-
-		if not _isWithinBaseDamageRange(deathCFrame, baseCFrame, roleConfig.attackRange) then
+		if not self._combatPerceptionService:IsBaseInRange(deathCFrame.Position, roleConfig.attackRange) then
 			return Ok(false)
 		end
 

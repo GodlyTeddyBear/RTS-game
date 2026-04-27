@@ -19,8 +19,10 @@ local MiningComponentRegistry = require(script.Parent.Infrastructure.ECS.MiningC
 local MiningEntityFactory = require(script.Parent.Infrastructure.ECS.MiningEntityFactory)
 local ExtractorMiningSystem = require(script.Parent.Infrastructure.Services.ExtractorMiningSystem)
 local ResourceNodeRegistryService = require(script.Parent.Infrastructure.Services.ResourceNodeRegistryService)
+local ResourceGatherInteractionService = require(script.Parent.Infrastructure.Services.ResourceGatherInteractionService)
 local RegisterExtractorCommand = require(script.Parent.Application.Commands.RegisterExtractorCommand)
 local CleanupAllExtractorsCommand = require(script.Parent.Application.Commands.CleanupAllExtractorsCommand)
+local GatherResourceCommand = require(script.Parent.Application.Commands.GatherResourceCommand)
 
 local Catch = Result.Catch
 
@@ -47,6 +49,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Module = ResourceNodeRegistryService,
 		CacheAs = "_resourceNodeRegistryService",
 	},
+	{
+		Name = "ResourceGatherInteractionService",
+		Module = ResourceGatherInteractionService,
+		CacheAs = "_resourceGatherInteractionService",
+	},
 }
 
 local ApplicationModules: { BaseContext.TModuleSpec } = {
@@ -59,6 +66,11 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		Name = "CleanupAllExtractorsCommand",
 		Module = CleanupAllExtractorsCommand,
 		CacheAs = "_cleanupAllExtractorsCommand",
+	},
+	{
+		Name = "GatherResourceCommand",
+		Module = GatherResourceCommand,
+		CacheAs = "_gatherResourceCommand",
 	},
 }
 
@@ -86,6 +98,8 @@ local MiningContext = Knit.CreateService({
 		Fields = {
 			{ Field = "_structurePlacedConnection", Method = "Disconnect" },
 			{ Field = "_runStateChangedConnection", Method = "Disconnect" },
+			{ Field = "_resourceNodeClickedConnection", Method = "Disconnect" },
+			{ Field = "_resourceGatherInteractionService", Method = "Destroy" },
 		},
 	},
 })
@@ -96,6 +110,7 @@ function MiningContext:KnitInit()
 	MiningBaseContext:KnitInit()
 	self._structurePlacedConnection = nil :: RBXScriptConnection?
 	self._runStateChangedConnection = nil :: RBXScriptConnection?
+	self._resourceNodeClickedConnection = nil :: RBXScriptConnection?
 end
 
 function MiningContext:KnitStart()
@@ -121,6 +136,8 @@ function MiningContext:KnitStart()
 				return
 			end
 
+			self._resourceGatherInteractionService:Cleanup()
+
 			local result = self:_CleanupAll()
 			if not result.success then
 				Result.MentionError("Mining:RunCleanup", "Failed to cleanup mining entities", {
@@ -137,8 +154,34 @@ function MiningContext:KnitStart()
 						CauseType = registerNodesResult.type,
 						CauseMessage = registerNodesResult.message,
 					}, registerNodesResult.type)
+					return
+				end
+
+				local attachResult = self:_AttachResourceGatherInteractions()
+				if not attachResult.success then
+					Result.MentionError("Mining:OnRunPrep", "Failed to attach resource gather interactions", {
+						CauseType = attachResult.type,
+						CauseMessage = attachResult.message,
+					}, attachResult.type)
 				end
 			end
+		end
+	)
+
+	self._resourceNodeClickedConnection = self._resourceGatherInteractionService.ResourceNodeClicked:Connect(
+		function(player: Player, resourcePart: BasePart)
+			local result = self:_GatherResourceFromNode(player, resourcePart)
+			if result.success then
+				return
+			end
+
+			Result.MentionError("Mining:ManualGather", "Failed to gather resource", {
+				CauseType = result.type,
+				CauseMessage = result.message,
+				PlayerUserId = player.UserId,
+				PartName = resourcePart.Name,
+				PartPath = resourcePart:GetFullName(),
+			}, result.type)
 		end
 	)
 
@@ -154,6 +197,18 @@ function MiningContext:_RegisterResourceNodes(): Result.Result<number>
 	end, "Mining:RegisterResourceNodes")
 end
 
+function MiningContext:_AttachResourceGatherInteractions(): Result.Result<number>
+	return Catch(function()
+		return self._resourceGatherInteractionService:AttachToRegisteredNodes()
+	end, "Mining:AttachResourceGatherInteractions")
+end
+
+function MiningContext:_GatherResourceFromNode(player: Player, resourcePart: BasePart): Result.Result<nil>
+	return Catch(function()
+		return self._gatherResourceCommand:Execute(player, resourcePart)
+	end, "Mining:GatherResourceFromNode")
+end
+
 function MiningContext:_RegisterExtractor(record: StructureRecord): Result.Result<number?>
 	return Catch(function()
 		return self._registerExtractorCommand:Execute(record)
@@ -167,6 +222,8 @@ function MiningContext:_CleanupAll(): Result.Result<boolean>
 end
 
 function MiningContext:_BeforeDestroy()
+	self._resourceGatherInteractionService:Cleanup()
+
 	local cleanupResult = self:_CleanupAll()
 	if cleanupResult.success then
 		return

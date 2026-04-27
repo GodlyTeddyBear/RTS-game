@@ -203,6 +203,7 @@ function EnemyEntityFactory:SetCombatAction(entity: number, action: TCombatActio
 		StartedAt = action.StartedAt,
 		FinishedAt = action.FinishedAt,
 	})
+	self:_Add(entity, self._components.DirtyTag)
 end
 
 function EnemyEntityFactory:PromoteToCommitted(entity: number)

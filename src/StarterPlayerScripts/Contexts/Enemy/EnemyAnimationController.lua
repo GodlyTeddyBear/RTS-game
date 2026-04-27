@@ -70,6 +70,7 @@ end
 function EnemyAnimationController:KnitInit()
 	local attackAction = AttackAction.new()
 	ActionRegistry.Register("AttackStructure", attackAction)
+	ActionRegistry.Register("AttackBase", attackAction)
 
 	local registry = Registry.new("Client")
 	self.Registry = registry

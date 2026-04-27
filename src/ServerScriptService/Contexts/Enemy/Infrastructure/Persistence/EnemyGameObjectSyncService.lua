@@ -16,10 +16,10 @@ end
 local function _ComputeAnimationState(pathState: any, role: any, combatAction: any): string
 	if
 		combatAction ~= nil
-		and combatAction.CurrentActionId == "AttackStructure"
+		and (combatAction.CurrentActionId == "AttackStructure" or combatAction.CurrentActionId == "AttackBase")
 		and (combatAction.ActionState == "Running" or combatAction.ActionState == "Committed")
 	then
-		return "AttackStructure"
+		return combatAction.CurrentActionId
 	end
 
 	if not pathState or pathState.isMoving ~= true then
@@ -112,7 +112,7 @@ function EnemyGameObjectSyncService:_SyncEntity(entity: any, explicitModel: Mode
 
 	local nextAnimationState = _ComputeAnimationState(pathState, role, combatAction)
 	_SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
-	_SetAttributeIfChanged(model, "AnimationLooping", nextAnimationState ~= "AttackStructure")
+	_SetAttributeIfChanged(model, "AnimationLooping", nextAnimationState ~= "AttackStructure" and nextAnimationState ~= "AttackBase")
 
 	model:SetAttribute("Alive", self.World:has(entity, self.Components.AliveTag))
 	model:SetAttribute("GoalReached", self.World:has(entity, self.Components.GoalReachedTag))

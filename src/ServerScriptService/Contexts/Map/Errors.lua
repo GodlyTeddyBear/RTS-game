@@ -13,6 +13,8 @@ return table.freeze({
 	MISSING_WORKSPACE_GAME_CONTAINER = "MapContext: Workspace.Map.Game container is missing",
 	MAP_TEMPLATE_NOT_FOUND = "MapContext: map template model not found",
 	MAP_TEMPLATE_INVALID = "MapContext: map template is not a Model",
+	INVALID_RUNTIME_MAP_TARGET_POSITION = "MapContext: runtime map target position must be a Vector3",
+	FAILED_TO_RELOCATE_RUNTIME_MAP = "MapContext: failed to relocate runtime map to target position",
 	REQUIRED_ZONE_MISSING = "MapContext: required zone marker missing on runtime map",
 	RUNTIME_MAP_NOT_READY = "MapContext: runtime map is not prepared",
 })

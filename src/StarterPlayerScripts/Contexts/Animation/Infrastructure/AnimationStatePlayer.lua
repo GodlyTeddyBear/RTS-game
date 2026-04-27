@@ -151,6 +151,12 @@ function AnimationStatePlayer.Bind(
 
 	local function applyState(state: string)
 		if useStateDrivenCorePoses then
+			if validActions[state] or (preset.ActionStateFallback and ActionRegistry.Get(state) and preset.ActionStateFallback(state, validActions) ~= nil) then
+				stopActive()
+				playState(state)
+				return
+			end
+
 			local nextState = state
 			if not validCoreStates[nextState] then
 				nextState = "Idle"
