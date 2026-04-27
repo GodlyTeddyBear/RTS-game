@@ -43,6 +43,8 @@
 | [.codex/documents/methods/frontend/HOOK_VIEWMODEL_CONTRACTS.md](.codex/documents/methods/frontend/HOOK_VIEWMODEL_CONTRACTS.md) | Frontend hook and ViewModel method contracts. |
 | [.codex/documents/methods/frontend/TEMPLATE_ORGANISM_CONTRACTS.md](.codex/documents/methods/frontend/TEMPLATE_ORGANISM_CONTRACTS.md) | Frontend template/organism composition and animation boundary contracts. |
 | [.codex/documents/methods/frontend/CONTROLLER_INFRA_CONTRACTS.md](.codex/documents/methods/frontend/CONTROLLER_INFRA_CONTRACTS.md) | Frontend controller side-effect and infrastructure boundary contracts. |
+| [.codex/documents/methods/frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md](.codex/documents/methods/frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md) | Client context method contracts for non-render controller/application/infrastructure boundaries. |
+| [.codex/documents/architecture/frontend/CLIENT_CONTEXTS_NON_PRESENTATION.md](.codex/documents/architecture/frontend/CLIENT_CONTEXTS_NON_PRESENTATION.md) | Non-render client context architecture for controllers, application commands/queries, and infrastructure runtime boundaries. |
 | [.codex/documents/methods/ECS/COMPONENT_RULES.md](.codex/documents/methods/ECS/COMPONENT_RULES.md) | ECS component rules: pure data, authority labels (Authoritative/Derived), frozen registries, tags. |
 | [.codex/documents/methods/ECS/ENTITY_FACTORY_RULES.md](.codex/documents/methods/ECS/ENTITY_FACTORY_RULES.md) | Entity factory rules: only JECS mutation surface, typed accessors, deferred destruction. |
 | [.codex/documents/methods/ECS/SYSTEM_RULES.md](.codex/documents/methods/ECS/SYSTEM_RULES.md) | System rules: stateless, read/write declaration, single owner per authoritative component, one phase. |

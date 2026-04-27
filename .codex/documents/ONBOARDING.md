@@ -38,6 +38,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 → Use `roblox-plan` skill; default to the plan-development format, and use `plan-mode2` only for explicit legacy requests
 ### "I need to understand the frontend architecture"
 → Start with [architecture/frontend/FRONTEND.md](architecture/frontend/FRONTEND.md)
+â†’ Then [architecture/frontend/CLIENT_CONTEXTS_NON_PRESENTATION.md](architecture/frontend/CLIENT_CONTEXTS_NON_PRESENTATION.md) for client context controller/application/infrastructure boundaries
 → Then [architecture/frontend/HOOKS.md](architecture/frontend/HOOKS.md) for read/write hook separation
 → Then [architecture/frontend/DESIGN.md](architecture/frontend/DESIGN.md) for visual style, cards/panels, hierarchy, and interaction states
 → Then [architecture/frontend/UDIM_LAYOUT_RULES.md](architecture/frontend/UDIM_LAYOUT_RULES.md) for scale-vs-offset UI layout rules
@@ -45,6 +46,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 
 ### "I need low-level frontend method contracts"
 → Start with [methods/METHODS_INDEX.md](methods/METHODS_INDEX.md)
+â†’ Then [methods/frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md](methods/frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md) for controller/application/infrastructure method boundaries in non-render client contexts
 → Then [methods/frontend/SYNC_HOOK_STATE_PAYLOAD_CONTRACTS.md](methods/frontend/SYNC_HOOK_STATE_PAYLOAD_CONTRACTS.md) for sync payload handling and atom ownership boundaries
 → Then [methods/frontend/HOOK_VIEWMODEL_CONTRACTS.md](methods/frontend/HOOK_VIEWMODEL_CONTRACTS.md) for hook and ViewModel boundaries
 → Then [methods/frontend/TEMPLATE_ORGANISM_CONTRACTS.md](methods/frontend/TEMPLATE_ORGANISM_CONTRACTS.md) for template/organism composition contracts
@@ -126,6 +128,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 | [architecture/backend/SYSTEMS.md](architecture/backend/SYSTEMS.md) | JECS, ProfileStore, debug config, libraries |
 | [architecture/frontend/FRONTEND.md](architecture/frontend/FRONTEND.md) | Frontend overview and feature slice structure |
 | [architecture/frontend/LAYERS.md](architecture/frontend/LAYERS.md) | Infrastructure, Application, Presentation layers |
+| [architecture/frontend/CLIENT_CONTEXTS_NON_PRESENTATION.md](architecture/frontend/CLIENT_CONTEXTS_NON_PRESENTATION.md) | Non-render client context architecture for controllers, application commands/queries, and infrastructure runtime boundaries |
 | [architecture/frontend/COMPONENTS.md](architecture/frontend/COMPONENTS.md) | Atomic Design hierarchy and extraction rules |
 | [architecture/frontend/HOOKS.md](architecture/frontend/HOOKS.md) | Read/write hook separation, ViewModels, Selectors |
 | [architecture/frontend/DESIGN.md](architecture/frontend/DESIGN.md) | Visual style creation, cards/panels, hierarchy, chrome, and interaction states |
@@ -162,6 +165,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 | [methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md](methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md) | Policy/spec contracts, candidate ownership, and restore-path rules |
 | [methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md](methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md) | Infrastructure Result boundaries, lifecycle ownership, and sync placement rules |
 | [methods/frontend/SYNC_HOOK_STATE_PAYLOAD_CONTRACTS.md](methods/frontend/SYNC_HOOK_STATE_PAYLOAD_CONTRACTS.md) | Sync payload handling, infrastructure atom ownership, and read/write hook boundaries |
+| [methods/frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md](methods/frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md) | Controller/application/infrastructure method contracts for non-render client contexts |
 | [methods/frontend/HOOK_VIEWMODEL_CONTRACTS.md](methods/frontend/HOOK_VIEWMODEL_CONTRACTS.md) | Read/write hook separation and ViewModel contracts for frontend methods |
 | [methods/frontend/TEMPLATE_ORGANISM_CONTRACTS.md](methods/frontend/TEMPLATE_ORGANISM_CONTRACTS.md) | Template/organism composition contracts and animation guardrails |
 | [methods/frontend/CONTROLLER_INFRA_CONTRACTS.md](methods/frontend/CONTROLLER_INFRA_CONTRACTS.md) | Controller side-effect ownership and frontend infrastructure boundaries |

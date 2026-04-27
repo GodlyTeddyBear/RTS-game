@@ -9,86 +9,32 @@ local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
-local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 local PlacementRemoteClient = require(ReplicatedStorage.Network.Generated.PlacementRemoteClient)
 
-local PlacementCursorService = require(script.Parent.Application.PlacementCursorService)
-local PlacementGhostModel = require(script.Parent.Infrastructure.PlacementGhostModel)
-local PlacementHighlightPool = require(script.Parent.Infrastructure.PlacementHighlightPool)
+local PlacementCursorGridService = require(script.Parent.Infrastructure.Services.PlacementCursorGridService)
+local PlacementGhostModel = require(script.Parent.Infrastructure.Services.PlacementGhostModel)
+local PlacementHighlightPool = require(script.Parent.Infrastructure.Services.PlacementHighlightPool)
+
+local BuildOccupiedSetQuery = require(script.Parent.Application.Queries.BuildOccupiedSetQuery)
+local BuildPlacementSignatureQuery = require(script.Parent.Application.Queries.BuildPlacementSignatureQuery)
+local GetMouseWorldPositionQuery = require(script.Parent.Application.Queries.GetMouseWorldPositionQuery)
+local GetValidTilesQuery = require(script.Parent.Application.Queries.GetValidTilesQuery)
+
+local ExitPlacementModeCommand = require(script.Parent.Application.Commands.ExitPlacementModeCommand)
+local EnterPlacementModeCommand = require(script.Parent.Application.Commands.EnterPlacementModeCommand)
+local TogglePlacementModeCommand = require(script.Parent.Application.Commands.TogglePlacementModeCommand)
+local RefreshValidTilesCommand = require(script.Parent.Application.Commands.RefreshValidTilesCommand)
+local UpdateHoverStateCommand = require(script.Parent.Application.Commands.UpdateHoverStateCommand)
+local ConfirmPlacementCommand = require(script.Parent.Application.Commands.ConfirmPlacementCommand)
 
 type GridCoord = PlacementTypes.GridCoord
 type PlacementAtom = PlacementTypes.PlacementAtom
-type PlaceResponse = PlacementTypes.PlaceResponse
 type RunState = RunTypes.RunState
 
 local PlacementCursorController = Knit.CreateController({
 	Name = "PlacementCursorController",
 })
-
-local function _GetCoordKey(coord: GridCoord?): string?
-	if coord == nil then
-		return nil
-	end
-
-	return ("%d_%d"):format(coord.row, coord.col)
-end
-
-local function _BuildOccupiedSet(atom: PlacementAtom?): { [string]: boolean }
-	local occupiedSet = {}
-	if atom == nil then
-		return occupiedSet
-	end
-
-	local liveInstanceIds = {} :: { [number]: boolean }
-	local placementFolder = Workspace:FindFirstChild(PlacementConfig.PLACEMENT_FOLDER_NAME)
-	if placementFolder ~= nil then
-		for _, instance in ipairs(placementFolder:GetChildren()) do
-			local placementInstanceId = instance:GetAttribute("PlacementInstanceId")
-			if type(placementInstanceId) == "number" then
-				liveInstanceIds[placementInstanceId] = true
-			end
-		end
-	end
-
-	for _, record in ipairs(atom.placements) do
-		if liveInstanceIds[record.instanceId] ~= true then
-			continue
-		end
-
-		occupiedSet[("%d_%d"):format(record.coord.row, record.coord.col)] = true
-	end
-
-	return occupiedSet
-end
-
-local function _BuildPlacementSignature(atom: PlacementAtom?): string
-	if atom == nil then
-		return ""
-	end
-
-	local parts = table.create(#atom.placements)
-	for index, record in ipairs(atom.placements) do
-		parts[index] = ("%d:%d:%s:%d"):format(record.coord.row, record.coord.col, record.structureType, record.instanceId)
-	end
-
-	return table.concat(parts, "|")
-end
-
-local function _GetMouseWorldPosition(camera: Camera): Vector3?
-	local mouseLocation = UserInputService:GetMouseLocation()
-	local ray = camera:ViewportPointToRay(mouseLocation.X, mouseLocation.Y, 0)
-	if math.abs(ray.Direction.Y) < 1e-5 then
-		return nil
-	end
-
-	local t = -ray.Origin.Y / ray.Direction.Y
-	if t < 0 then
-		return nil
-	end
-
-	return ray.Origin + ray.Direction * t
-end
 
 function PlacementCursorController:KnitInit()
 	self._controllerJanitor = Janitor.new()
@@ -119,6 +65,33 @@ function PlacementCursorController:KnitInit()
 	self._placementCancelledSignal = Instance.new("BindableEvent")
 	self.PlacementCancelled = self._placementCancelledSignal.Event
 	self._controllerJanitor:Add(self._placementCancelledSignal, "Destroy")
+
+	self._buildOccupiedSetQuery = BuildOccupiedSetQuery.new()
+	self._buildPlacementSignatureQuery = BuildPlacementSignatureQuery.new()
+	self._getMouseWorldPositionQuery = GetMouseWorldPositionQuery.new()
+	self._getValidTilesQuery = GetValidTilesQuery.new(PlacementCursorGridService)
+
+	self._exitPlacementModeCommand = ExitPlacementModeCommand.new()
+	self._enterPlacementModeCommand = EnterPlacementModeCommand.new(
+		self._exitPlacementModeCommand,
+		self._buildOccupiedSetQuery,
+		self._buildPlacementSignatureQuery,
+		self._getValidTilesQuery
+	)
+	self._togglePlacementModeCommand = TogglePlacementModeCommand.new(
+		self._enterPlacementModeCommand,
+		self._exitPlacementModeCommand
+	)
+	self._refreshValidTilesCommand = RefreshValidTilesCommand.new(
+		self._buildOccupiedSetQuery,
+		self._buildPlacementSignatureQuery,
+		self._getValidTilesQuery
+	)
+	self._updateHoverStateCommand = UpdateHoverStateCommand.new(
+		self._getMouseWorldPositionQuery,
+		PlacementCursorGridService
+	)
+	self._confirmPlacementCommand = ConfirmPlacementCommand.new(self._exitPlacementModeCommand)
 end
 
 function PlacementCursorController:KnitStart()
@@ -129,12 +102,33 @@ function PlacementCursorController:KnitStart()
 	self._placementAtom = self._placementController:GetAtom()
 	self._runAtom = self._runController:GetAtom()
 
+	self._commandDeps = {
+		placementAtom = self._placementAtom,
+		runAtom = self._runAtom,
+		playerInputController = self._playerInputController,
+		placementRemoteClient = PlacementRemoteClient,
+		ghostModelModule = PlacementGhostModel,
+		gridService = PlacementCursorGridService,
+		runService = RunService,
+		userInputService = UserInputService,
+		workspace = Workspace,
+		janitorFactory = Janitor,
+		onRenderStepped = function()
+			self:_OnRenderStepped()
+		end,
+		onInputBegan = function(input: InputObject, gameProcessed: boolean)
+			self:_OnInputBegan(input, gameProcessed)
+		end,
+		updateHoverState = function()
+			self:_UpdateHoverState()
+		end,
+	}
+
 	self._cancelPlacementUnbind = self._playerInputController:BindAction("CancelPlacement", function(gameProcessed: boolean, _data: any)
 		if gameProcessed or self._confirming then
 			return
 		end
 
-		-- print("[PlacementDebug] Exit reason: CancelPlacement action fired")
 		self:ExitPlacementMode()
 	end)
 
@@ -147,148 +141,18 @@ function PlacementCursorController:KnitStart()
 end
 
 function PlacementCursorController:TogglePlacementMode(structureType: string)
-	-- print(("[PlacementDebug] TogglePlacementMode called: structureType=%s state=%s confirming=%s"):format(
-	-- 	tostring(structureType),
-	-- 	tostring(self._state),
-	-- 	tostring(self._confirming)
-	-- ))
-
-	if self._confirming then
-		return
-	end
-
-	if self._state == "Active" and self._structureType == structureType then
-		-- print("[PlacementDebug] Exit reason: TogglePlacementMode called while already active for same structure")
-		self:ExitPlacementMode()
-		return
-	end
-
-	self:EnterPlacementMode(structureType)
+	self._togglePlacementModeCommand:Execute(self, self._commandDeps, structureType)
 end
 
 function PlacementCursorController:EnterPlacementMode(structureType: string)
-	-- print(("[PlacementDebug] EnterPlacementMode start: structureType=%s"):format(tostring(structureType)))
-
-	if self._confirming then
-		-- print("[PlacementDebug] EnterPlacementMode aborted: currently confirming")
-		return
-	end
-
-	if self._state == "Active" then
-		-- print("[PlacementDebug] EnterPlacementMode: exiting previous active session first")
-		self:ExitPlacementMode()
-	end
-
-	local runState = self._runAtom()
-	-- print(("[PlacementDebug] Current runState=%s"):format(tostring(runState.state)))
-	if runState.state ~= "Prep" then
-		-- print(("[PlacementDebug] Cannot enter placement mode outside Prep (current state: %s)"):format(tostring(runState.state)))
-		return
-	end
-
-	PlacementCursorService.ResetRuntimeCache()
-
-	local occupiedSet = _BuildOccupiedSet(self._placementAtom())
-	local validTilesResultOk, validTilesOrError = pcall(function()
-		return PlacementCursorService.GetValidTiles(structureType, occupiedSet)
-	end)
-	if not validTilesResultOk then
-		-- print(("[PlacementDebug] GetValidTiles threw error: %s"):format(tostring(validTilesOrError)))
-		return
-	end
-
-	local validTiles = validTilesOrError
-	-- print(("[PlacementDebug] GetValidTiles result: structureType=%s validTileCount=%d"):format(
-	-- 	tostring(structureType),
-	-- 	#validTiles
-	-- ))
-	if #validTiles == 0 then
-		-- print(("[PlacementDebug] No valid tiles found for structureType '%s'"):format(structureType))
-		return
-	end
-
-	self._state = "Active"
-	self._structureType = structureType
-	self._confirming = false
-	self._hoveredCoord = nil
-	self._hoveredKey = nil
-	self._isHoveredValid = false
-	self._runState = runState.state
-	self._placementSignature = _BuildPlacementSignature(self._placementAtom())
-	self._validTileSet = {}
-	self._sessionId += 1
-
-	self._playerInputController:ToggleContext("Placement", true)
-
-	self._validTiles = validTiles
-
-	for _, coord in ipairs(validTiles) do
-		self._validTileSet[_GetCoordKey(coord)] = true
-	end
-
-	self._highlightPool:ShowValidTiles(validTiles)
-
-	local ghostOk, ghostOrError = pcall(function()
-		return PlacementGhostModel.new(structureType)
-	end)
-	if not ghostOk then
-		-- print(("[PlacementDebug] Failed to create placement ghost for '%s': %s"):format(structureType, tostring(ghostOrError)))
-		self:ExitPlacementMode()
-		return
-	end
-
-	local ghost = ghostOrError
-	self._ghost = ghost
-	ghost:SetValid(false)
-
-	self._sessionJanitor:Destroy()
-	self._sessionJanitor = Janitor.new()
-	self._sessionJanitor:Add(RunService.RenderStepped:Connect(function()
-		self:_OnRenderStepped()
-	end), "Disconnect")
-	self._sessionJanitor:Add(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-		self:_OnInputBegan(input, gameProcessed)
-	end), "Disconnect")
-
-	-- print("[PlacementDebug] EnterPlacementMode success: placement mode is active")
-	self:_UpdateHoverState()
+	self._enterPlacementModeCommand:Execute(self, self._commandDeps, structureType)
 end
 
 function PlacementCursorController:ExitPlacementMode()
-	if self._state ~= "Active" then
-		-- print("[PlacementDebug] ExitPlacementMode ignored: not active")
-		return
-	end
-
-	-- print(("[PlacementDebug] ExitPlacementMode: structureType=%s"):format(tostring(self._structureType)))
-
-	self._state = "Idle"
-	self._confirming = false
-	self._structureType = nil
-	self._hoveredCoord = nil
-	self._hoveredKey = nil
-	self._isHoveredValid = false
-	self._validTiles = table.freeze({})
-	self._validTileSet = {}
-	self._placementSignature = ""
-
-	self._playerInputController:ToggleContext("Placement", false)
-
-	self._sessionJanitor:Destroy()
-	self._sessionJanitor = Janitor.new()
-
-	self._highlightPool:HideAll()
-
-	if self._ghost ~= nil then
-		self._ghost:Destroy()
-		self._ghost = nil
-	end
-
-	self._placementCancelledSignal:Fire()
+	self._exitPlacementModeCommand:Execute(self, self._commandDeps)
 end
 
 function PlacementCursorController:Destroy()
-	-- print("[PlacementDebug] Exit reason: PlacementCursorController:Destroy called")
 	self:ExitPlacementMode()
 	self._sessionJanitor:Destroy()
 	self._controllerJanitor:Destroy()
@@ -306,76 +170,22 @@ function PlacementCursorController:_OnRenderStepped()
 	if runState.state ~= self._runState then
 		self._runState = runState.state
 		if runState.state ~= "Prep" then
-			-- print(("[PlacementDebug] Exit reason: run state changed away from Prep -> %s"):format(tostring(runState.state)))
 			self:ExitPlacementMode()
 			return
 		end
 	end
 
 	local placementAtom = self._placementAtom()
-	local placementSignature = _BuildPlacementSignature(placementAtom)
+	local placementSignature = self._buildPlacementSignatureQuery:Execute(placementAtom)
 	if placementSignature ~= self._placementSignature then
-		self._placementSignature = placementSignature
-
-		local occupiedSet = _BuildOccupiedSet(placementAtom)
-		local validTiles = PlacementCursorService.GetValidTiles(self._structureType or "", occupiedSet)
-		self._validTiles = validTiles
-		self._validTileSet = {}
-		for _, coord in ipairs(validTiles) do
-			self._validTileSet[_GetCoordKey(coord)] = true
-		end
-		self._highlightPool:ShowValidTiles(validTiles)
+		self._refreshValidTilesCommand:Execute(self, placementAtom)
 	end
 
 	self:_UpdateHoverState()
 end
 
 function PlacementCursorController:_UpdateHoverState()
-	if self._state ~= "Active" or self._ghost == nil or self._confirming then
-		return
-	end
-
-	local camera = Workspace.CurrentCamera
-	if camera == nil then
-		return
-	end
-
-	local worldPos = _GetMouseWorldPosition(camera)
-	if worldPos == nil then
-		self._ghost:SetValid(false)
-		if self._hoveredKey ~= nil then
-			self._highlightPool:SetHovered(self._hoveredCoord.row, self._hoveredCoord.col, false)
-			self._hoveredCoord = nil
-			self._hoveredKey = nil
-			self._isHoveredValid = false
-		end
-		return
-	end
-
-	local hoveredCoord = PlacementCursorService.WorldToCoord(worldPos)
-	local hoveredKey = _GetCoordKey(hoveredCoord)
-	local isHoveredValid = hoveredCoord ~= nil and self._validTileSet[hoveredKey] == true
-
-	if hoveredKey ~= self._hoveredKey then
-		if self._hoveredCoord ~= nil then
-			self._highlightPool:SetHovered(self._hoveredCoord.row, self._hoveredCoord.col, false)
-		end
-
-		self._hoveredCoord = hoveredCoord
-		self._hoveredKey = hoveredKey
-
-		if hoveredCoord ~= nil then
-			self._highlightPool:SetHovered(hoveredCoord.row, hoveredCoord.col, true)
-			self._ghost:MoveTo(PlacementCursorService.CoordToWorld(hoveredCoord.row, hoveredCoord.col))
-		end
-	end
-
-	if hoveredCoord ~= nil then
-		self._ghost:MoveTo(PlacementCursorService.CoordToWorld(hoveredCoord.row, hoveredCoord.col))
-	end
-
-	self._isHoveredValid = isHoveredValid
-	self._ghost:SetValid(isHoveredValid)
+	self._updateHoverStateCommand:Execute(self, self._commandDeps)
 end
 
 function PlacementCursorController:_OnInputBegan(input: InputObject, gameProcessed: boolean)
@@ -387,61 +197,10 @@ function PlacementCursorController:_OnInputBegan(input: InputObject, gameProcess
 		self:_ConfirmPlacement()
 		return
 	end
-
 end
 
 function PlacementCursorController:_ConfirmPlacement()
-	if self._confirming or self._hoveredCoord == nil or self._isHoveredValid == false or self._structureType == nil then
-		-- print(("[PlacementDebug] Confirm blocked: confirming=%s hoveredCoord=%s hoveredValid=%s structureType=%s"):format(
-		-- 	tostring(self._confirming),
-		-- 	tostring(self._hoveredCoord ~= nil),
-		-- 	tostring(self._isHoveredValid),
-		-- 	tostring(self._structureType)
-		-- ))
-		return
-	end
-
-	-- print(("[PlacementDebug] Confirm placement: row=%d col=%d structureType=%s"):format(
-	-- 	self._hoveredCoord.row,
-	-- 	self._hoveredCoord.col,
-	-- 	self._structureType
-	-- ))
-
-	self._confirming = true
-	local sessionId = self._sessionId
-
-	local request = {
-		coord_row = self._hoveredCoord.row,
-		coord_col = self._hoveredCoord.col,
-		structureType = self._structureType,
-	}
-
-	local ok, response = pcall(function(): PlaceResponse
-		return PlacementRemoteClient.PlaceStructure.Invoke(request)
-	end)
-
-	self._confirming = false
-
-	if not ok then
-		-- print("[PlacementDebug] PlaceStructure invoke failed")
-		return
-	end
-
-	if sessionId ~= self._sessionId or self._state ~= "Active" then
-		return
-	end
-
-	if response.success then
-		-- print("[PlacementDebug] PlaceStructure success")
-		self:ExitPlacementMode()
-		return
-	end
-
-	-- if response.errorMessage then
-	-- 	print(("[PlacementDebug] PlaceStructure rejected: %s"):format(response.errorMessage))
-	-- else
-	-- 	print("[PlacementDebug] Placement rejected without an error message")
-	-- end
+	self._confirmPlacementCommand:Execute(self, self._commandDeps)
 end
 
 return PlacementCursorController

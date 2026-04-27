@@ -20,6 +20,7 @@ Low-level method contracts for implementation work. These documents convert back
 ---
 ## Frontend Contracts
 
+- [frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md](frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md) - Client context method contracts for non-render controller/application/infrastructure boundaries.
 - [frontend/HOOK_VIEWMODEL_CONTRACTS.md](frontend/HOOK_VIEWMODEL_CONTRACTS.md) - Read/write hook separation and ViewModel method contracts.
 - [frontend/TEMPLATE_ORGANISM_CONTRACTS.md](frontend/TEMPLATE_ORGANISM_CONTRACTS.md) - Template/organism composition boundaries and animation guardrails.
 - [frontend/CONTROLLER_INFRA_CONTRACTS.md](frontend/CONTROLLER_INFRA_CONTRACTS.md) - Controller side-effect ownership and infrastructure boundary rules.

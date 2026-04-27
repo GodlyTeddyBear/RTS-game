@@ -12,7 +12,7 @@ Boundaries: Does not own placement validation, spawning, or server-authoritative
 
 local Knit = require(game:GetService("ReplicatedStorage").Packages.Knit)
 local PlacementTypes = require(game:GetService("ReplicatedStorage").Contexts.Placement.Types.PlacementTypes)
-local PlacementSyncClient = require(script.Parent.Infrastructure.PlacementSyncClient)
+local PlacementSyncClient = require(script.Parent.Infrastructure.Persistence.PlacementSyncClient)
 
 type PlacementAtom = PlacementTypes.PlacementAtom
 

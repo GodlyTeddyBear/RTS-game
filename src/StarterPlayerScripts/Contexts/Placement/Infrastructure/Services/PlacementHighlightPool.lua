@@ -1,6 +1,6 @@
 --!strict
 
-local PlacementCursorService = require(script.Parent.Parent.Application.PlacementCursorService)
+local PlacementCursorGridService = require(script.Parent.PlacementCursorGridService)
 local PlacementGridRuntime = require(script.Parent.PlacementGridRuntime)
 
 type GridCoord = {
@@ -31,7 +31,7 @@ local function _CreateHighlightPart(parent: Instance, coord: GridCoord): Part
 	part.Color = VALID_COLOR
 	part.Transparency = 0.5
 	part.Size = Vector3.new(gridSpec.tileSize, 0.05, gridSpec.tileSize)
-	part.CFrame = CFrame.new(PlacementCursorService.CoordToWorld(coord.row, coord.col) + Vector3.new(0, 0.025, 0))
+	part.CFrame = CFrame.new(PlacementCursorGridService.CoordToWorld(coord.row, coord.col) + Vector3.new(0, 0.025, 0))
 	part.Parent = parent
 	return part
 end

@@ -14,6 +14,7 @@ This is the root document for frontend architecture. Read this first, then follo
 ## Documents
 
 - [LAYERS.md](LAYERS.md) - 3-layer architecture: Infrastructure, Application, Presentation
+- [CLIENT_CONTEXTS_NON_PRESENTATION.md](CLIENT_CONTEXTS_NON_PRESENTATION.md) - Non-render client context architecture: controllers, application commands/queries, and infrastructure runtime boundaries
 - [COMPONENTS.md](COMPONENTS.md) - Atomic Design hierarchy: Atoms, Molecules, Organisms, Templates
 - [HOOKS.md](HOOKS.md) - Read/write hook separation, ViewModels, Selectors
 - [DESIGN.md](DESIGN.md) - Visual style creation, cards/panels, hierarchy, chrome, and interaction states
