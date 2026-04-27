@@ -3,11 +3,10 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BaseExecutor = require(ReplicatedStorage.Utilities.BaseExecutor)
-local HitboxConfig = require(ReplicatedStorage.Contexts.Combat.Config.HitboxConfig)
 
 local ACTIVATION_TIMEOUT_SECONDS = 0.2
 
-type THitboxActivationResult = {
+type TProjectileActivationResult = {
 	success: boolean,
 	reason: string,
 	source: string,
@@ -30,7 +29,7 @@ function StructureAttackExecutor.new()
 	return setmetatable(self, StructureAttackExecutor)
 end
 
-local function _activationResult(success: boolean, reason: string, source: string): THitboxActivationResult
+local function _activationResult(success: boolean, reason: string, source: string): TProjectileActivationResult
 	return {
 		success = success,
 		reason = reason,
@@ -54,8 +53,8 @@ local function _RecordActivationSource(entity: number, services: any, source: st
 		return
 	end
 
-	modelRef.model:SetAttribute("LastHitboxActivationSource", source)
-	modelRef.model:SetAttribute("LastHitboxActivatedAt", services.CurrentTime)
+	modelRef.model:SetAttribute("LastProjectileActivationSource", source)
+	modelRef.model:SetAttribute("LastProjectileActivatedAt", services.CurrentTime)
 end
 
 local function _isTargetInRange(entity: number, targetEnemy: number, services: any): boolean
@@ -102,12 +101,11 @@ function StructureAttackExecutor:OnStart(entity: number, data: any?, services: a
 
 	services.StructureEntityFactory:SetTarget(entity, targetEnemy)
 	self:SetEntityValue(entity, "AwaitingHitboxActivation", false)
-	self:SetEntityValue(entity, "HitboxActivated", false)
-	self:SetEntityValue(entity, "HitboxActivationTimedOut", false)
+	self:SetEntityValue(entity, "ProjectileActivated", false)
+	self:SetEntityValue(entity, "ProjectileActivationTimedOut", false)
 	self:SetEntityValue(entity, "AttackStartedAt", nil)
-	self:SetEntityValue(entity, "HitLanded", false)
-	self:SetEntityValue(entity, "ActiveHitboxHandle", nil)
-	self:SetEntityValue(entity, "HitboxStartedAt", nil)
+	self:SetEntityValue(entity, "ActiveProjectileId", nil)
+	self:SetEntityValue(entity, "ProjectileStartedAt", nil)
 end
 
 function StructureAttackExecutor:CanContinue(entity: number, services: any): (boolean, string?)
@@ -143,24 +141,39 @@ local function _activateHitboxInternal(
 	entity: number,
 	services: any,
 	source: string
-): THitboxActivationResult
+): TProjectileActivationResult
 	if self:GetEntityValue(entity, "AwaitingHitboxActivation") ~= true then
 		return _activationResult(false, "NotAwaitingActivation", source)
 	end
 
-	if self:GetEntityValue(entity, "HitboxActivated") == true then
+	if self:GetEntityValue(entity, "ProjectileActivated") == true then
 		return _activationResult(false, "AlreadyActivated", source)
 	end
 
-	local createResult = services.HitboxService:CreateAttackHitbox(entity, "Structure", HitboxConfig.StructureAttack)
-	if not createResult.success or createResult.handle == nil then
-		return _activationResult(false, createResult.reason or "HitboxCreateFailed", source)
+	local targetEnemy = _getTargetEnemy(entity, services)
+	if targetEnemy == nil then
+		return _activationResult(false, "MissingTargetEnemy", source)
 	end
 
-	self:SetEntityValue(entity, "ActiveHitboxHandle", createResult.handle)
-	self:SetEntityValue(entity, "HitboxStartedAt", services.CurrentTime)
-	self:SetEntityValue(entity, "HitboxActivated", true)
-	self:SetEntityValue(entity, "HitboxActivationTimedOut", source == "ServerTimeoutFallback")
+	local attackStats = services.StructureEntityFactory:GetAttackStats(entity)
+	if attackStats == nil then
+		return _activationResult(false, "MissingAttackState", source)
+	end
+
+	local fireResult = services.ProjectileService:FireStructureBullet({
+		StructureEntity = entity,
+		TargetEnemyEntity = targetEnemy,
+		Damage = attackStats.AttackDamage,
+		MaxDistance = attackStats.AttackRange,
+	})
+	if not fireResult.success or fireResult.projectileId == nil then
+		return _activationResult(false, fireResult.reason or "ProjectileFireFailed", source)
+	end
+
+	self:SetEntityValue(entity, "ActiveProjectileId", fireResult.projectileId)
+	self:SetEntityValue(entity, "ProjectileStartedAt", services.CurrentTime)
+	self:SetEntityValue(entity, "ProjectileActivated", true)
+	self:SetEntityValue(entity, "ProjectileActivationTimedOut", source == "ServerTimeoutFallback")
 	self:SetEntityValue(entity, "AttackStartedAt", nil)
 	_RecordActivationSource(entity, services, source)
 	services.StructureEntityFactory:PromoteToCommitted(entity)
@@ -168,11 +181,11 @@ local function _activateHitboxInternal(
 	return _activationResult(true, "Activated", source)
 end
 
-function StructureAttackExecutor:ActivateHitbox(entity: number, services: any): THitboxActivationResult
+function StructureAttackExecutor:ActivateHitbox(entity: number, services: any): TProjectileActivationResult
 	return _activateHitboxInternal(self, entity, services, "AnimationCallback")
 end
 
-function StructureAttackExecutor:TryActivateHitboxFromTimeout(entity: number, services: any): THitboxActivationResult
+function StructureAttackExecutor:TryActivateHitboxFromTimeout(entity: number, services: any): TProjectileActivationResult
 	return _activateHitboxInternal(self, entity, services, "ServerTimeoutFallback")
 end
 
@@ -197,22 +210,21 @@ function StructureAttackExecutor:OnTick(entity: number, dt: number, services: an
 
 		services.StructureEntityFactory:SetCooldownElapsed(entity, 0)
 		self:SetEntityValue(entity, "AwaitingHitboxActivation", true)
-		self:SetEntityValue(entity, "HitboxActivated", false)
-		self:SetEntityValue(entity, "HitboxActivationTimedOut", false)
+		self:SetEntityValue(entity, "ProjectileActivated", false)
+		self:SetEntityValue(entity, "ProjectileActivationTimedOut", false)
 		self:SetEntityValue(entity, "AttackStartedAt", services.CurrentTime)
-		self:SetEntityValue(entity, "HitLanded", false)
 		return self:Running()
 	end
 
-	if self:GetEntityValue(entity, "HitboxActivated") ~= true then
+	if self:GetEntityValue(entity, "ProjectileActivated") ~= true then
 		local startedAt = self:GetEntityValue(entity, "AttackStartedAt")
 		if type(startedAt) ~= "number" then
 			return self:Fail(entity, "MissingAttackStartTime")
 		end
 
-		local timedOut = self:GetEntityValue(entity, "HitboxActivationTimedOut") == true
+		local timedOut = self:GetEntityValue(entity, "ProjectileActivationTimedOut") == true
 		if not timedOut and services.CurrentTime - startedAt >= ACTIVATION_TIMEOUT_SECONDS then
-			self:SetEntityValue(entity, "HitboxActivationTimedOut", true)
+			self:SetEntityValue(entity, "ProjectileActivationTimedOut", true)
 			local activation = self:TryActivateHitboxFromTimeout(entity, services)
 			if not activation.success then
 				return self:Fail(entity, activation.reason)
@@ -222,59 +234,16 @@ function StructureAttackExecutor:OnTick(entity: number, dt: number, services: an
 		return self:Running()
 	end
 
-	local activeHitboxHandle = self:GetEntityValue(entity, "ActiveHitboxHandle")
-	if type(activeHitboxHandle) ~= "string" then
-		return self:Fail(entity, "MissingHitboxHandle")
-	end
-
-	if services.HitboxService:DidHitTarget(activeHitboxHandle, targetEnemy, "Enemy") then
-		services.HitboxService:DestroyHitbox(activeHitboxHandle)
-		self:ClearEntityValue(entity, "ActiveHitboxHandle")
-		self:ClearEntityValue(entity, "HitboxStartedAt")
-		self:SetEntityValue(entity, "HitLanded", true)
-
-		local damageResult = services.EnemyContext:ApplyDamage(targetEnemy, attackStats.AttackDamage)
-		if not damageResult.success then
-			return self:Fail(entity, "ApplyDamageFailed")
-		end
-
-		if damageResult.value == true then
-			return self:Success()
-		end
-		return self:Running()
-	end
-
-	local startedAt = self:GetEntityValue(entity, "HitboxStartedAt")
-	if type(startedAt) ~= "number" then
-		return self:Fail(entity, "MissingHitboxStartTime")
-	end
-
-	if services.CurrentTime - startedAt >= HitboxConfig.StructureAttack.MaxDuration then
-		services.HitboxService:DestroyHitbox(activeHitboxHandle)
-		self:ClearEntityValue(entity, "ActiveHitboxHandle")
-		self:ClearEntityValue(entity, "HitboxStartedAt")
-		if self:GetEntityValue(entity, "HitLanded") == true then
-			return self:Success()
-		end
-		return self:Fail(entity, "HitboxExpired")
-	end
-
-	return self:Running()
+	return self:Success()
 end
 
 function StructureAttackExecutor:OnCancel(entity: number, services: any)
-	local activeHitboxHandle = self:GetEntityValue(entity, "ActiveHitboxHandle")
-	if type(activeHitboxHandle) == "string" then
-		services.HitboxService:DestroyHitbox(activeHitboxHandle)
-	end
-
-	self:ClearEntityValue(entity, "ActiveHitboxHandle")
-	self:ClearEntityValue(entity, "HitboxStartedAt")
+	self:ClearEntityValue(entity, "ActiveProjectileId")
+	self:ClearEntityValue(entity, "ProjectileStartedAt")
 	self:ClearEntityValue(entity, "AwaitingHitboxActivation")
-	self:ClearEntityValue(entity, "HitboxActivated")
-	self:ClearEntityValue(entity, "HitboxActivationTimedOut")
+	self:ClearEntityValue(entity, "ProjectileActivated")
+	self:ClearEntityValue(entity, "ProjectileActivationTimedOut")
 	self:ClearEntityValue(entity, "AttackStartedAt")
-	self:ClearEntityValue(entity, "HitLanded")
 	services.StructureEntityFactory:SetTarget(entity, nil)
 end
 

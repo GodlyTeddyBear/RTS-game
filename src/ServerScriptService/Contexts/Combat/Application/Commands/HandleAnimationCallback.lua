@@ -31,6 +31,7 @@ function HandleAnimationCallback:Init(registry: any, _name: string)
 	self._loopService = registry:Get("CombatLoopService")
 	self._runtimeService = registry:Get("CombatBehaviorRuntimeService")
 	self._hitboxService = registry:Get("HitboxService")
+	self._projectileService = registry:Get("ProjectileService")
 	self._handleGoalReached = registry:Get("HandleGoalReached")
 end
 
@@ -156,6 +157,7 @@ function HandleAnimationCallback:Execute(
 			CurrentTime = os.clock(),
 			HandleGoalReached = self._handleGoalReached,
 			HitboxService = self._hitboxService,
+			ProjectileService = self._projectileService,
 		})
 
 		if type(activation) ~= "table" or activation.success ~= true then

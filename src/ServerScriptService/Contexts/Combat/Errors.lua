@@ -17,5 +17,8 @@ Errors.COMBAT_NOT_ACTIVE = "CombatContext: combat is not active"
 Errors.INACTIVE_BASE = "CombatContext: base is not active"
 Errors.INVALID_STRUCTURE_ATTACK_PAYLOAD = "CombatContext: invalid structure attack payload"
 Errors.INVALID_STRUCTURE_ATTACK_DAMAGE = "CombatContext: invalid structure attack damage"
+Errors.MISSING_PROJECTILE_ORIGIN = "CombatContext: projectile origin is missing"
+Errors.MISSING_PROJECTILE_TARGET = "CombatContext: projectile target is missing"
+Errors.PROJECTILE_FIRE_FAILED = "CombatContext: projectile fire failed"
 
 return table.freeze(Errors)

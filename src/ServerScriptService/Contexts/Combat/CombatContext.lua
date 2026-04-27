@@ -11,6 +11,7 @@ local CombatLoopService = require(script.Parent.Infrastructure.Services.CombatLo
 local CombatBehaviorRuntimeService = require(script.Parent.Infrastructure.Services.CombatBehaviorRuntimeService)
 local HitboxService = require(script.Parent.Infrastructure.Services.HitboxService)
 local LockOnService = require(script.Parent.Infrastructure.Services.LockOnService)
+local ProjectileService = require(script.Parent.Infrastructure.Services.ProjectileService)
 local CombatPerceptionService = require(script.Parent.CombatDomain.Services.CombatPerceptionService)
 
 local StartCombat = require(script.Parent.Application.Commands.StartCombat)
@@ -38,6 +39,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "LockOnService",
 		Module = LockOnService,
 		CacheAs = "_lockOnService",
+	},
+	{
+		Name = "ProjectileService",
+		Module = ProjectileService,
+		CacheAs = "_projectileService",
 	},
 }
 
@@ -152,6 +158,7 @@ local CombatContext = Knit.CreateService({
 			{ Field = "_enemySpawnedConnection", Method = "Disconnect" },
 			{ Field = "_playerRemovingConnection", Method = "Disconnect" },
 			{ Field = "_animationCallbackConnection", Method = "Disconnect" },
+			{ Field = "_projectileService", Method = "Destroy" },
 		},
 	},
 })
@@ -183,6 +190,7 @@ function CombatContext:KnitInit()
 	self._baseEntityFactory = nil
 	self._hitboxService = nil
 	self._lockOnService = nil
+	self._projectileService = nil
 	self._goalPosition = nil :: Vector3?
 
 	self._runWaveStartedConnection = nil :: any
