@@ -21,6 +21,8 @@ This is the root document for backend architecture. Read this first, then follow
 - [KNIT.md](KNIT.md) - Knit service framework, auto-discovery, lifecycle, client remotes
 - [ERROR_HANDLING.md](ERROR_HANDLING.md) - Success/data pattern, assertions vs validation, logging format, error constants
 - [STATE_SYNC.md](STATE_SYNC.md) - Deep clone rules, nested table sync, centralized mutation pattern
+- [ECS_OVERVIEW.md](ECS_OVERVIEW.md) - ECS roles, boundaries, sync placement, and persistence linkage
+- [UTILITY_USE.md](UTILITY_USE.md) - Shared utility usage, ECS helper boundaries, and placement guidance
 - [SYSTEMS.md](SYSTEMS.md) - JECS, ProfileStore, key libraries
 
 ---

@@ -10,6 +10,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 → Start with [architecture/backend/BACKEND.md](architecture/backend/BACKEND.md)
 → Then [architecture/backend/DDD.md](architecture/backend/DDD.md) for layer rules and constructor injection
 → Then [architecture/backend/ERROR_HANDLING.md](architecture/backend/ERROR_HANDLING.md) for the success/error pattern
+→ Then [architecture/backend/UTILITY_USE.md](architecture/backend/UTILITY_USE.md) for shared utility placement and ECS-helper boundaries
 
 ### "I need low-level backend method contracts"
 → Start with [methods/METHODS_INDEX.md](methods/METHODS_INDEX.md)
@@ -25,6 +26,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 ### "I need to work with ECS entities, systems, or persistence"
 → Start with [methods/ECS/COMPONENT_RULES.md](methods/ECS/COMPONENT_RULES.md) for authority labels and component shape
 → Then [methods/ECS/ENTITY_FACTORY_RULES.md](methods/ECS/ENTITY_FACTORY_RULES.md) for the only JECS mutation surface
+→ Then [architecture/backend/ECS_OVERVIEW.md](architecture/backend/ECS_OVERVIEW.md) for the high-level ECS role map and boundary summary
 → Then [methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md](methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md) for entity vs instance vs sync ownership
 → Then [methods/ECS/SYSTEM_RULES.md](methods/ECS/SYSTEM_RULES.md) for statelessness and read/write ownership
 → Then [methods/ECS/WORLD_ISOLATION_RULES.md](methods/ECS/WORLD_ISOLATION_RULES.md) for per-context world boundaries
