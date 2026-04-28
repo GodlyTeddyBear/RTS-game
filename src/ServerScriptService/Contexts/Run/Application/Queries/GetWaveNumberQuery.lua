@@ -1,5 +1,9 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
+
+
 --[=[
 	@class GetWaveNumberQuery
 	Reads the current authoritative wave number.
@@ -7,6 +11,7 @@
 ]=]
 local GetWaveNumberQuery = {}
 GetWaveNumberQuery.__index = GetWaveNumberQuery
+setmetatable(GetWaveNumberQuery, BaseQuery)
 
 --[=[
 	Creates a new wave-number query.
@@ -14,7 +19,8 @@ GetWaveNumberQuery.__index = GetWaveNumberQuery
 	@return GetWaveNumberQuery -- The new query instance.
 ]=]
 function GetWaveNumberQuery.new()
-	return setmetatable({}, GetWaveNumberQuery)
+	local self = BaseQuery.new("Run", "GetWaveNumber")
+	return setmetatable(self, GetWaveNumberQuery)
 end
 
 --[=[
@@ -24,7 +30,9 @@ end
 	@param name string -- The registered module name.
 ]=]
 function GetWaveNumberQuery:Init(registry: any, _name: string)
-	self._machine = registry:Get("RunStateMachine")
+	self:_RequireDependencies(registry, {
+		_machine = "RunStateMachine"
+	})
 end
 
 --[=[
@@ -37,3 +45,5 @@ function GetWaveNumberQuery:Execute(): number
 end
 
 return GetWaveNumberQuery
+
+

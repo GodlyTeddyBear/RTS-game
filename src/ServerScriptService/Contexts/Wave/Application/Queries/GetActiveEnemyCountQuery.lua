@@ -1,5 +1,9 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
+
+
 --[=[
 	@class GetActiveEnemyCountQuery
 	Reads the current number of active enemies in the wave session.
@@ -7,6 +11,7 @@
 ]=]
 local GetActiveEnemyCountQuery = {}
 GetActiveEnemyCountQuery.__index = GetActiveEnemyCountQuery
+setmetatable(GetActiveEnemyCountQuery, BaseQuery)
 
 --[=[
 	Creates a new active-enemy query.
@@ -14,7 +19,8 @@ GetActiveEnemyCountQuery.__index = GetActiveEnemyCountQuery
 	@return GetActiveEnemyCountQuery -- The new query instance.
 ]=]
 function GetActiveEnemyCountQuery.new()
-	return setmetatable({}, GetActiveEnemyCountQuery)
+	local self = BaseQuery.new("Wave", "GetActiveEnemyCount")
+	return setmetatable(self, GetActiveEnemyCountQuery)
 end
 
 --[=[
@@ -24,7 +30,9 @@ end
 	@param name string -- The registered module name.
 ]=]
 function GetActiveEnemyCountQuery:Init(registry: any, _name: string)
-	self._state = registry:Get("WaveEntityFactory")
+	self:_RequireDependencies(registry, {
+		_state = "WaveEntityFactory"
+	})
 end
 
 --[=[
@@ -38,3 +46,5 @@ function GetActiveEnemyCountQuery:Execute(): number
 end
 
 return GetActiveEnemyCountQuery
+
+

@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
 
@@ -13,15 +14,19 @@ local Ok = Result.Ok
 ]=]
 local HandleWaveEndedCommand = {}
 HandleWaveEndedCommand.__index = HandleWaveEndedCommand
+setmetatable(HandleWaveEndedCommand, BaseCommand)
 
 function HandleWaveEndedCommand.new()
-	return setmetatable({}, HandleWaveEndedCommand)
+	local self = BaseCommand.new("Wave", "HandleWaveEnded")
+	return setmetatable(self, HandleWaveEndedCommand)
 end
 
 function HandleWaveEndedCommand:Init(registry: any, _name: string)
-	self._scheduler = registry:Get("WaveSpawnScheduler")
-	self._state = registry:Get("WaveEntityFactory")
-	self._lifecycle = registry:Get("WaveLifecycleService")
+	self:_RequireDependencies(registry, {
+		_scheduler = "WaveSpawnScheduler",
+		_state = "WaveEntityFactory",
+		_lifecycle = "WaveLifecycleService"
+	})
 end
 
 function HandleWaveEndedCommand:Execute(waveNumber: number): Result.Result<boolean>
@@ -39,3 +44,5 @@ function HandleWaveEndedCommand:Execute(waveNumber: number): Result.Result<boole
 end
 
 return HandleWaveEndedCommand
+
+

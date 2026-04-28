@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -21,6 +22,7 @@ type ResourceCostMap = PlacementTypes.ResourceCostMap
 ]=]
 local PlaceStructureCommand = {}
 PlaceStructureCommand.__index = PlaceStructureCommand
+setmetatable(PlaceStructureCommand, BaseCommand)
 
 --[=[
 	Creates a new placement command wrapper.
@@ -29,7 +31,8 @@ PlaceStructureCommand.__index = PlaceStructureCommand
 ]=]
 -- The command is composed from injected collaborators; no constructor arguments are needed.
 function PlaceStructureCommand.new()
-	return setmetatable({}, PlaceStructureCommand)
+	local self = BaseCommand.new("Placement", "PlaceStructure")
+	return setmetatable(self, PlaceStructureCommand)
 end
 
 --[=[
@@ -40,9 +43,11 @@ end
 ]=]
 -- Resolve the policy, write services, and cross-context dependencies once.
 function PlaceStructureCommand:Init(registry: any, _name: string)
-	self._policy = registry:Get("PlaceStructurePolicy")
-	self._placementService = registry:Get("PlacementService")
-	self._syncService = registry:Get("PlacementSyncService")
+	self:_RequireDependencies(registry, {
+		_policy = "PlaceStructurePolicy",
+		_placementService = "PlacementService",
+		_syncService = "PlacementSyncService"
+	})
 end
 
 function PlaceStructureCommand:Start(registry: any, _name: string)
@@ -147,3 +152,5 @@ function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structu
 end
 
 return PlaceStructureCommand
+
+

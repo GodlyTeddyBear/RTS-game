@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
 local Try = Result.Try
@@ -13,6 +14,7 @@ local Try = Result.Try
 ]=]
 local NotifyClimaxCompleteCommand = {}
 NotifyClimaxCompleteCommand.__index = NotifyClimaxCompleteCommand
+setmetatable(NotifyClimaxCompleteCommand, BaseCommand)
 
 --[=[
 	Creates a new climax-complete command.
@@ -20,7 +22,8 @@ NotifyClimaxCompleteCommand.__index = NotifyClimaxCompleteCommand
 	@return NotifyClimaxCompleteCommand -- The new command instance.
 ]=]
 function NotifyClimaxCompleteCommand.new()
-	return setmetatable({}, NotifyClimaxCompleteCommand)
+	local self = BaseCommand.new("Run", "NotifyClimaxComplete")
+	return setmetatable(self, NotifyClimaxCompleteCommand)
 end
 
 --[=[
@@ -30,9 +33,11 @@ end
 	@param name string -- The registered module name.
 ]=]
 function NotifyClimaxCompleteCommand:Init(registry: any, _name: string)
-	self._machine = registry:Get("RunStateMachine")
-	self._timer = registry:Get("RunTimerService")
-	self._transitionPolicy = registry:Get("RunTransitionPolicy")
+	self:_RequireDependencies(registry, {
+		_machine = "RunStateMachine",
+		_timer = "RunTimerService",
+		_transitionPolicy = "RunTransitionPolicy"
+	})
 end
 
 --[=[
@@ -57,3 +62,5 @@ function NotifyClimaxCompleteCommand:Execute(onWaveTimeout: () -> ()): Result.Re
 end
 
 return NotifyClimaxCompleteCommand
+
+

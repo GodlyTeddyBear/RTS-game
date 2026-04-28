@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
 local Try = Result.Try
@@ -13,6 +14,7 @@ local Try = Result.Try
 ]=]
 local OnWaveTimeoutCommand = {}
 OnWaveTimeoutCommand.__index = OnWaveTimeoutCommand
+setmetatable(OnWaveTimeoutCommand, BaseCommand)
 
 --[=[
 	Creates a new wave-timeout command.
@@ -20,7 +22,8 @@ OnWaveTimeoutCommand.__index = OnWaveTimeoutCommand
 	@return OnWaveTimeoutCommand -- The new command instance.
 ]=]
 function OnWaveTimeoutCommand.new()
-	return setmetatable({}, OnWaveTimeoutCommand)
+	local self = BaseCommand.new("Run", "OnWaveTimeout")
+	return setmetatable(self, OnWaveTimeoutCommand)
 end
 
 --[=[
@@ -30,8 +33,10 @@ end
 	@param name string -- The registered module name.
 ]=]
 function OnWaveTimeoutCommand:Init(registry: any, _name: string)
-	self._machine = registry:Get("RunStateMachine")
-	self._timer = registry:Get("RunTimerService")
+	self:_RequireDependencies(registry, {
+		_machine = "RunStateMachine",
+		_timer = "RunTimerService"
+	})
 end
 
 --[=[
@@ -55,3 +60,5 @@ function OnWaveTimeoutCommand:Execute(onResolutionTimeout: () -> ()): Result.Res
 end
 
 return OnWaveTimeoutCommand
+
+

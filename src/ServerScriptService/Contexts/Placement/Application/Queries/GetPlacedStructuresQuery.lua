@@ -2,6 +2,8 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
+
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 
 type StructureRecord = PlacementTypes.StructureRecord
@@ -13,6 +15,7 @@ type StructureRecord = PlacementTypes.StructureRecord
 ]=]
 local GetPlacedStructuresQuery = {}
 GetPlacedStructuresQuery.__index = GetPlacedStructuresQuery
+setmetatable(GetPlacedStructuresQuery, BaseQuery)
 
 --[=[
 	Creates a new placement query wrapper.
@@ -21,7 +24,8 @@ GetPlacedStructuresQuery.__index = GetPlacedStructuresQuery
 ]=]
 -- The query is a thin read-only wrapper, so construction has no dependencies.
 function GetPlacedStructuresQuery.new()
-	return setmetatable({}, GetPlacedStructuresQuery)
+	local self = BaseQuery.new("Placement", "GetPlacedStructures")
+	return setmetatable(self, GetPlacedStructuresQuery)
 end
 
 --[=[
@@ -32,7 +36,9 @@ end
 ]=]
 -- Resolve the sync service once so the query can stay a pure read path.
 function GetPlacedStructuresQuery:Init(registry: any, _name: string)
-	self._syncService = registry:Get("PlacementSyncService")
+	self:_RequireDependencies(registry, {
+		_syncService = "PlacementSyncService"
+	})
 end
 
 --[=[
@@ -46,3 +52,5 @@ function GetPlacedStructuresQuery:Execute(): { StructureRecord }
 end
 
 return GetPlacedStructuresQuery
+
+

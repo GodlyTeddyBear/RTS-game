@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
 local Try = Result.Try
@@ -13,6 +14,7 @@ local Try = Result.Try
 ]=]
 local OnPrepTimeoutCommand = {}
 OnPrepTimeoutCommand.__index = OnPrepTimeoutCommand
+setmetatable(OnPrepTimeoutCommand, BaseCommand)
 
 --[=[
 	Creates a new prep-timeout command.
@@ -20,7 +22,8 @@ OnPrepTimeoutCommand.__index = OnPrepTimeoutCommand
 	@return OnPrepTimeoutCommand -- The new command instance.
 ]=]
 function OnPrepTimeoutCommand.new()
-	return setmetatable({}, OnPrepTimeoutCommand)
+	local self = BaseCommand.new("Run", "OnPrepTimeout")
+	return setmetatable(self, OnPrepTimeoutCommand)
 end
 
 --[=[
@@ -30,8 +33,10 @@ end
 	@param name string -- The registered module name.
 ]=]
 function OnPrepTimeoutCommand:Init(registry: any, _name: string)
-	self._machine = registry:Get("RunStateMachine")
-	self._timer = registry:Get("RunTimerService")
+	self:_RequireDependencies(registry, {
+		_machine = "RunStateMachine",
+		_timer = "RunTimerService"
+	})
 end
 
 --[=[
@@ -55,3 +60,5 @@ function OnPrepTimeoutCommand:Execute(onWaveTimeout: () -> ()): Result.Result<ni
 end
 
 return OnPrepTimeoutCommand
+
+

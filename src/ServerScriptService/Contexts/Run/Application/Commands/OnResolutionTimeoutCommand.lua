@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local RunConfig = require(ReplicatedStorage.Contexts.Run.Config.RunConfig)
 
 local Ok = Result.Ok
@@ -14,6 +15,7 @@ local Try = Result.Try
 ]=]
 local OnResolutionTimeoutCommand = {}
 OnResolutionTimeoutCommand.__index = OnResolutionTimeoutCommand
+setmetatable(OnResolutionTimeoutCommand, BaseCommand)
 
 --[=[
 	Creates a new resolution-timeout command.
@@ -21,7 +23,8 @@ OnResolutionTimeoutCommand.__index = OnResolutionTimeoutCommand
 	@return OnResolutionTimeoutCommand -- The new command instance.
 ]=]
 function OnResolutionTimeoutCommand.new()
-	return setmetatable({}, OnResolutionTimeoutCommand)
+	local self = BaseCommand.new("Run", "OnResolutionTimeout")
+	return setmetatable(self, OnResolutionTimeoutCommand)
 end
 
 --[=[
@@ -31,8 +34,10 @@ end
 	@param name string -- The registered module name.
 ]=]
 function OnResolutionTimeoutCommand:Init(registry: any, _name: string)
-	self._machine = registry:Get("RunStateMachine")
-	self._timer = registry:Get("RunTimerService")
+	self:_RequireDependencies(registry, {
+		_machine = "RunStateMachine",
+		_timer = "RunTimerService"
+	})
 end
 
 --[=[
@@ -62,3 +67,5 @@ function OnResolutionTimeoutCommand:Execute(onPrepTimeout: () -> ()): Result.Res
 end
 
 return OnResolutionTimeoutCommand
+
+

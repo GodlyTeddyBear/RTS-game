@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
 
@@ -13,6 +14,7 @@ local Ok = Result.Ok
 ]=]
 local HandleRunEndedCommand = {}
 HandleRunEndedCommand.__index = HandleRunEndedCommand
+setmetatable(HandleRunEndedCommand, BaseCommand)
 
 --[=[
 	Creates a new run-ended handler command.
@@ -20,7 +22,8 @@ HandleRunEndedCommand.__index = HandleRunEndedCommand
 	@return HandleRunEndedCommand -- The new command instance.
 ]=]
 function HandleRunEndedCommand.new()
-	return setmetatable({}, HandleRunEndedCommand)
+	local self = BaseCommand.new("Wave", "HandleRunEnded")
+	return setmetatable(self, HandleRunEndedCommand)
 end
 
 --[=[
@@ -30,9 +33,11 @@ end
 	@param name string -- The registered module name.
 ]=]
 function HandleRunEndedCommand:Init(registry: any, _name: string)
-	self._scheduler = registry:Get("WaveSpawnScheduler")
-	self._state = registry:Get("WaveEntityFactory")
-	self._lifecycle = registry:Get("WaveLifecycleService")
+	self:_RequireDependencies(registry, {
+		_scheduler = "WaveSpawnScheduler",
+		_state = "WaveEntityFactory",
+		_lifecycle = "WaveLifecycleService"
+	})
 end
 
 --[=[
@@ -48,3 +53,5 @@ function HandleRunEndedCommand:Execute(): Result.Result<nil>
 end
 
 return HandleRunEndedCommand
+
+

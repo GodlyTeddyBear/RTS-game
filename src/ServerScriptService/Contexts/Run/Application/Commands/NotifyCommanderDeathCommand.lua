@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
 local Try = Result.Try
@@ -13,6 +14,7 @@ local Try = Result.Try
 ]=]
 local NotifyCommanderDeathCommand = {}
 NotifyCommanderDeathCommand.__index = NotifyCommanderDeathCommand
+setmetatable(NotifyCommanderDeathCommand, BaseCommand)
 
 --[=[
 	Creates a new commander-death command.
@@ -20,7 +22,8 @@ NotifyCommanderDeathCommand.__index = NotifyCommanderDeathCommand
 	@return NotifyCommanderDeathCommand -- The new command instance.
 ]=]
 function NotifyCommanderDeathCommand.new()
-	return setmetatable({}, NotifyCommanderDeathCommand)
+	local self = BaseCommand.new("Run", "NotifyCommanderDeath")
+	return setmetatable(self, NotifyCommanderDeathCommand)
 end
 
 --[=[
@@ -30,9 +33,11 @@ end
 	@param name string -- The registered module name.
 ]=]
 function NotifyCommanderDeathCommand:Init(registry: any, _name: string)
-	self._machine = registry:Get("RunStateMachine")
-	self._timer = registry:Get("RunTimerService")
-	self._transitionPolicy = registry:Get("RunTransitionPolicy")
+	self:_RequireDependencies(registry, {
+		_machine = "RunStateMachine",
+		_timer = "RunTimerService",
+		_transitionPolicy = "RunTransitionPolicy"
+	})
 end
 
 --[=[
@@ -55,3 +60,5 @@ function NotifyCommanderDeathCommand:Execute(): Result.Result<boolean>
 end
 
 return NotifyCommanderDeathCommand
+
+

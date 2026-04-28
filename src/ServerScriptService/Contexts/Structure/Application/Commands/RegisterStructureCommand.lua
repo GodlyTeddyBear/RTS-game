@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 local StructureSpecs = require(script.Parent.Parent.Parent.StructureDomain.Specs.StructureSpecs)
 local Errors = require(script.Parent.Parent.Parent.Errors)
@@ -20,6 +21,7 @@ type StructureRecord = PlacementTypes.StructureRecord
 ]=]
 local RegisterStructureCommand = {}
 RegisterStructureCommand.__index = RegisterStructureCommand
+setmetatable(RegisterStructureCommand, BaseCommand)
 
 --[=[
 	Creates a new registration command wrapper.
@@ -27,7 +29,8 @@ RegisterStructureCommand.__index = RegisterStructureCommand
 	@return RegisterStructureCommand -- The new command instance.
 ]=]
 function RegisterStructureCommand.new()
-	return setmetatable({}, RegisterStructureCommand)
+	local self = BaseCommand.new("Structure", "RegisterStructure")
+	return setmetatable(self, RegisterStructureCommand)
 end
 
 --[=[
@@ -37,10 +40,12 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function RegisterStructureCommand:Init(registry: any, _name: string)
-	self._policy = registry:Get("RegisterStructurePolicy")
-	self._factory = registry:Get("StructureEntityFactory")
-	self._instanceFactory = registry:Get("StructureInstanceFactory")
-	self._syncService = registry:Get("StructureGameObjectSyncService")
+	self:_RequireDependencies(registry, {
+		_policy = "RegisterStructurePolicy",
+		_factory = "StructureEntityFactory",
+		_instanceFactory = "StructureInstanceFactory",
+		_syncService = "StructureGameObjectSyncService"
+	})
 end
 
 --[=[
@@ -83,3 +88,5 @@ function RegisterStructureCommand:Execute(record: StructureRecord): Result.Resul
 end
 
 return RegisterStructureCommand
+
+

@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
@@ -15,14 +16,18 @@ local Ensure = Result.Ensure
 ]=]
 local DestroyStructureInstanceCommand = {}
 DestroyStructureInstanceCommand.__index = DestroyStructureInstanceCommand
+setmetatable(DestroyStructureInstanceCommand, BaseCommand)
 
 function DestroyStructureInstanceCommand.new()
-	return setmetatable({}, DestroyStructureInstanceCommand)
+	local self = BaseCommand.new("Placement", "DestroyStructureInstance")
+	return setmetatable(self, DestroyStructureInstanceCommand)
 end
 
 function DestroyStructureInstanceCommand:Init(registry: any, _name: string)
-	self._placementService = registry:Get("PlacementService")
-	self._syncService = registry:Get("PlacementSyncService")
+	self:_RequireDependencies(registry, {
+		_placementService = "PlacementService",
+		_syncService = "PlacementSyncService"
+	})
 end
 
 function DestroyStructureInstanceCommand:Start(registry: any, _name: string)
@@ -59,3 +64,5 @@ function DestroyStructureInstanceCommand:Execute(instanceId: number): Result.Res
 end
 
 return DestroyStructureInstanceCommand
+
+

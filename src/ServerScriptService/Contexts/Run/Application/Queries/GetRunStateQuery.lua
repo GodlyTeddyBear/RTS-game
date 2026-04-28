@@ -2,6 +2,8 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
+
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 
 type RunState = RunTypes.RunState
@@ -13,6 +15,7 @@ type RunState = RunTypes.RunState
 ]=]
 local GetRunStateQuery = {}
 GetRunStateQuery.__index = GetRunStateQuery
+setmetatable(GetRunStateQuery, BaseQuery)
 
 --[=[
 	Creates a new run-state query.
@@ -20,7 +23,8 @@ GetRunStateQuery.__index = GetRunStateQuery
 	@return GetRunStateQuery -- The new query instance.
 ]=]
 function GetRunStateQuery.new()
-	return setmetatable({}, GetRunStateQuery)
+	local self = BaseQuery.new("Run", "GetRunState")
+	return setmetatable(self, GetRunStateQuery)
 end
 
 --[=[
@@ -30,7 +34,9 @@ end
 	@param name string -- The registered module name.
 ]=]
 function GetRunStateQuery:Init(registry: any, _name: string)
-	self._machine = registry:Get("RunStateMachine")
+	self:_RequireDependencies(registry, {
+		_machine = "RunStateMachine"
+	})
 end
 
 --[=[
@@ -43,3 +49,5 @@ function GetRunStateQuery:Execute(): RunState
 end
 
 return GetRunStateQuery
+
+

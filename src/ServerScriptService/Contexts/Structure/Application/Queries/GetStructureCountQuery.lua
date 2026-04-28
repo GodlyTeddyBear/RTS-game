@@ -1,5 +1,9 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
+
+
 --[=[
 	@class GetStructureCountQuery
 	Returns the number of active structure entities.
@@ -7,6 +11,7 @@
 ]=]
 local GetStructureCountQuery = {}
 GetStructureCountQuery.__index = GetStructureCountQuery
+setmetatable(GetStructureCountQuery, BaseQuery)
 
 --[=[
 	Creates a new structure-count query wrapper.
@@ -14,7 +19,8 @@ GetStructureCountQuery.__index = GetStructureCountQuery
 	@return GetStructureCountQuery -- The new query instance.
 ]=]
 function GetStructureCountQuery.new()
-	return setmetatable({}, GetStructureCountQuery)
+	local self = BaseQuery.new("Structure", "GetStructureCount")
+	return setmetatable(self, GetStructureCountQuery)
 end
 
 --[=[
@@ -24,7 +30,9 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function GetStructureCountQuery:Init(registry: any, _name: string)
-	self._factory = registry:Get("StructureEntityFactory")
+	self:_RequireDependencies(registry, {
+		_factory = "StructureEntityFactory"
+	})
 end
 
 --[=[
@@ -37,3 +45,5 @@ function GetStructureCountQuery:Execute(): number
 end
 
 return GetStructureCountQuery
+
+

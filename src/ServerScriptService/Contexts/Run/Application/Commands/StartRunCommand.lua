@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
 local Try = Result.Try
@@ -13,6 +14,7 @@ local Try = Result.Try
 ]=]
 local StartRunCommand = {}
 StartRunCommand.__index = StartRunCommand
+setmetatable(StartRunCommand, BaseCommand)
 
 --[=[
 	Creates a new start-run command.
@@ -20,7 +22,8 @@ StartRunCommand.__index = StartRunCommand
 	@return StartRunCommand -- The new command instance.
 ]=]
 function StartRunCommand.new()
-	return setmetatable({}, StartRunCommand)
+	local self = BaseCommand.new("Run", "StartRun")
+	return setmetatable(self, StartRunCommand)
 end
 
 --[=[
@@ -30,9 +33,11 @@ end
 	@param name string -- The registered module name.
 ]=]
 function StartRunCommand:Init(registry: any, _name: string)
-	self._machine = registry:Get("RunStateMachine")
-	self._timer = registry:Get("RunTimerService")
-	self._transitionPolicy = registry:Get("RunTransitionPolicy")
+	self:_RequireDependencies(registry, {
+		_machine = "RunStateMachine",
+		_timer = "RunTimerService",
+		_transitionPolicy = "RunTransitionPolicy"
+	})
 end
 
 --[=[
@@ -58,3 +63,5 @@ function StartRunCommand:Execute(onPrepTimeout: () -> ()): Result.Result<boolean
 end
 
 return StartRunCommand
+
+

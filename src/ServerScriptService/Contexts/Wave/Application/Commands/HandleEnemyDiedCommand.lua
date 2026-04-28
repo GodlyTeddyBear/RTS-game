@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -17,6 +18,7 @@ local Ensure = Result.Ensure
 ]=]
 local HandleEnemyDiedCommand = {}
 HandleEnemyDiedCommand.__index = HandleEnemyDiedCommand
+setmetatable(HandleEnemyDiedCommand, BaseCommand)
 
 --[=[
 	Creates a new enemy-death handler command.
@@ -24,7 +26,8 @@ HandleEnemyDiedCommand.__index = HandleEnemyDiedCommand
 	@return HandleEnemyDiedCommand -- The new command instance.
 ]=]
 function HandleEnemyDiedCommand.new()
-	return setmetatable({}, HandleEnemyDiedCommand)
+	local self = BaseCommand.new("Wave", "HandleEnemyDied")
+	return setmetatable(self, HandleEnemyDiedCommand)
 end
 
 --[=[
@@ -34,10 +37,12 @@ end
 	@param name string -- The registered module name.
 ]=]
 function HandleEnemyDiedCommand:Init(registry: any, _name: string)
-	self._scheduler = registry:Get("WaveSpawnScheduler")
-	self._state = registry:Get("WaveEntityFactory")
-	self._lifecycle = registry:Get("WaveLifecycleService")
-	self._counting = registry:Get("WaveCountingService")
+	self:_RequireDependencies(registry, {
+		_scheduler = "WaveSpawnScheduler",
+		_state = "WaveEntityFactory",
+		_lifecycle = "WaveLifecycleService",
+		_counting = "WaveCountingService"
+	})
 end
 
 -- Returns true when the current state can be closed out after a death update.
@@ -107,3 +112,5 @@ function HandleEnemyDiedCommand:Execute(
 end
 
 return HandleEnemyDiedCommand
+
+

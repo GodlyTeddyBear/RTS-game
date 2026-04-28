@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local SummonConfig = require(ReplicatedStorage.Contexts.Summon.Config.SummonConfig)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -11,13 +12,17 @@ local Ensure = Result.Ensure
 
 local SpawnSwarmDronesCommand = {}
 SpawnSwarmDronesCommand.__index = SpawnSwarmDronesCommand
+setmetatable(SpawnSwarmDronesCommand, BaseCommand)
 
 function SpawnSwarmDronesCommand.new()
-	return setmetatable({}, SpawnSwarmDronesCommand)
+	local self = BaseCommand.new("Summon", "SpawnSwarmDrones")
+	return setmetatable(self, SpawnSwarmDronesCommand)
 end
 
 function SpawnSwarmDronesCommand:Init(registry: any, _name: string)
-	self._runtimeService = registry:Get("SummonRuntimeService")
+	self:_RequireDependencies(registry, {
+		_runtimeService = "SummonRuntimeService"
+	})
 end
 
 local function _toPositiveInt(value: any, fallback: number): number
@@ -62,3 +67,5 @@ function SpawnSwarmDronesCommand:Execute(
 end
 
 return SpawnSwarmDronesCommand
+
+

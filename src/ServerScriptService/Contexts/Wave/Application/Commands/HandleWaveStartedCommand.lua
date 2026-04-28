@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local RunConfig = require(ReplicatedStorage.Contexts.Run.Config.RunConfig)
 
 local Errors = require(script.Parent.Parent.Parent.Errors)
@@ -18,6 +19,7 @@ local Ensure = Result.Ensure
 ]=]
 local HandleWaveStartedCommand = {}
 HandleWaveStartedCommand.__index = HandleWaveStartedCommand
+setmetatable(HandleWaveStartedCommand, BaseCommand)
 
 --[=[
 	Creates a new wave-start handler command.
@@ -25,7 +27,8 @@ HandleWaveStartedCommand.__index = HandleWaveStartedCommand
 	@return HandleWaveStartedCommand -- The new command instance.
 ]=]
 function HandleWaveStartedCommand.new()
-	return setmetatable({}, HandleWaveStartedCommand)
+	local self = BaseCommand.new("Wave", "HandleWaveStarted")
+	return setmetatable(self, HandleWaveStartedCommand)
 end
 
 --[=[
@@ -35,12 +38,14 @@ end
 	@param name string -- The registered module name.
 ]=]
 function HandleWaveStartedCommand:Init(registry: any, _name: string)
-	self._scheduler = registry:Get("WaveSpawnScheduler")
-	self._composition = registry:Get("WaveCompositionService")
-	self._state = registry:Get("WaveEntityFactory")
-	self._lifecycle = registry:Get("WaveLifecycleService")
-	self._counting = registry:Get("WaveCountingService")
-	self._scaling = registry:Get("EndlessScalingService")
+	self:_RequireDependencies(registry, {
+		_scheduler = "WaveSpawnScheduler",
+		_composition = "WaveCompositionService",
+		_state = "WaveEntityFactory",
+		_lifecycle = "WaveLifecycleService",
+		_counting = "WaveCountingService",
+		_scaling = "EndlessScalingService"
+	})
 end
 
 -- Returns true when the wave can finish immediately after state mutation.
@@ -116,3 +121,5 @@ function HandleWaveStartedCommand:Execute(
 end
 
 return HandleWaveStartedCommand
+
+

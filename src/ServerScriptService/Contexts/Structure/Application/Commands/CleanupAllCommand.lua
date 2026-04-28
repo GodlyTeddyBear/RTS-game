@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
 
@@ -13,6 +14,7 @@ local Ok = Result.Ok
 ]=]
 local CleanupAllCommand = {}
 CleanupAllCommand.__index = CleanupAllCommand
+setmetatable(CleanupAllCommand, BaseCommand)
 
 --[=[
 	Creates a new cleanup command wrapper.
@@ -20,7 +22,8 @@ CleanupAllCommand.__index = CleanupAllCommand
 	@return CleanupAllCommand -- The new command instance.
 ]=]
 function CleanupAllCommand.new()
-	return setmetatable({}, CleanupAllCommand)
+	local self = BaseCommand.new("Structure", "CleanupAll")
+	return setmetatable(self, CleanupAllCommand)
 end
 
 --[=[
@@ -30,8 +33,10 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function CleanupAllCommand:Init(registry: any, _name: string)
-	self._factory = registry:Get("StructureEntityFactory")
-	self._instanceFactory = registry:Get("StructureInstanceFactory")
+	self:_RequireDependencies(registry, {
+		_factory = "StructureEntityFactory",
+		_instanceFactory = "StructureInstanceFactory"
+	})
 end
 
 --[=[
@@ -50,3 +55,5 @@ function CleanupAllCommand:Execute(): Result.Result<boolean>
 end
 
 return CleanupAllCommand
+
+

@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
 local Try = Result.Try
@@ -13,6 +14,7 @@ local Try = Result.Try
 ]=]
 local NotifyWaveClearedCommand = {}
 NotifyWaveClearedCommand.__index = NotifyWaveClearedCommand
+setmetatable(NotifyWaveClearedCommand, BaseCommand)
 
 --[=[
 	Creates a new wave-cleared command.
@@ -20,7 +22,8 @@ NotifyWaveClearedCommand.__index = NotifyWaveClearedCommand
 	@return NotifyWaveClearedCommand -- The new command instance.
 ]=]
 function NotifyWaveClearedCommand.new()
-	return setmetatable({}, NotifyWaveClearedCommand)
+	local self = BaseCommand.new("Run", "NotifyWaveCleared")
+	return setmetatable(self, NotifyWaveClearedCommand)
 end
 
 --[=[
@@ -30,9 +33,11 @@ end
 	@param name string -- The registered module name.
 ]=]
 function NotifyWaveClearedCommand:Init(registry: any, _name: string)
-	self._machine = registry:Get("RunStateMachine")
-	self._timer = registry:Get("RunTimerService")
-	self._transitionPolicy = registry:Get("RunTransitionPolicy")
+	self:_RequireDependencies(registry, {
+		_machine = "RunStateMachine",
+		_timer = "RunTimerService",
+		_transitionPolicy = "RunTransitionPolicy"
+	})
 end
 
 --[=[
@@ -57,3 +62,5 @@ function NotifyWaveClearedCommand:Execute(onResolutionTimeout: () -> ()): Result
 end
 
 return NotifyWaveClearedCommand
+
+

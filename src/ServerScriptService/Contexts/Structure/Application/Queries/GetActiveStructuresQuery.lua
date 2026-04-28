@@ -1,5 +1,9 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
+
+
 --[=[
 	@class GetActiveStructuresQuery
 	Returns the active structure entities as a dense array.
@@ -7,6 +11,7 @@
 ]=]
 local GetActiveStructuresQuery = {}
 GetActiveStructuresQuery.__index = GetActiveStructuresQuery
+setmetatable(GetActiveStructuresQuery, BaseQuery)
 
 --[=[
 	Creates a new active-structure query wrapper.
@@ -14,7 +19,8 @@ GetActiveStructuresQuery.__index = GetActiveStructuresQuery
 	@return GetActiveStructuresQuery -- The new query instance.
 ]=]
 function GetActiveStructuresQuery.new()
-	return setmetatable({}, GetActiveStructuresQuery)
+	local self = BaseQuery.new("Structure", "GetActiveStructures")
+	return setmetatable(self, GetActiveStructuresQuery)
 end
 
 --[=[
@@ -24,7 +30,9 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function GetActiveStructuresQuery:Init(registry: any, _name: string)
-	self._factory = registry:Get("StructureEntityFactory")
+	self:_RequireDependencies(registry, {
+		_factory = "StructureEntityFactory"
+	})
 end
 
 --[=[
@@ -37,3 +45,5 @@ function GetActiveStructuresQuery:Execute(): { number }
 end
 
 return GetActiveStructuresQuery
+
+

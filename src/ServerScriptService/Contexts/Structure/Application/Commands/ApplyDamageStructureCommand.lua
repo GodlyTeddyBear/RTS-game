@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
@@ -16,14 +17,18 @@ local Try = Result.Try
 ]=]
 local ApplyDamageStructureCommand = {}
 ApplyDamageStructureCommand.__index = ApplyDamageStructureCommand
+setmetatable(ApplyDamageStructureCommand, BaseCommand)
 
 function ApplyDamageStructureCommand.new()
-	return setmetatable({}, ApplyDamageStructureCommand)
+	local self = BaseCommand.new("Structure", "ApplyDamageStructure")
+	return setmetatable(self, ApplyDamageStructureCommand)
 end
 
 function ApplyDamageStructureCommand:Init(registry: any, _name: string)
-	self._factory = registry:Get("StructureEntityFactory")
-	self._instanceFactory = registry:Get("StructureInstanceFactory")
+	self:_RequireDependencies(registry, {
+		_factory = "StructureEntityFactory",
+		_instanceFactory = "StructureInstanceFactory"
+	})
 end
 
 function ApplyDamageStructureCommand:Start(registry: any, _name: string)
@@ -65,3 +70,5 @@ function ApplyDamageStructureCommand:Execute(entity: any, amount: number): Resul
 end
 
 return ApplyDamageStructureCommand
+
+
