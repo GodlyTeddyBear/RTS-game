@@ -85,6 +85,15 @@ return function(BaseExecutor)
 
 	--[=[
 		@within BaseExecutor
+		Runs action-specific forced-removal logic when the action owner is being removed from runtime.
+		@param _entity number -- Entity id being processed.
+		@param _services any -- Shared executor services for the current tick.
+	]=]
+	function BaseExecutor:OnDeath(_entity: number, _services: any)
+	end
+
+	--[=[
+		@within BaseExecutor
 		Starts an action and reports whether execution can continue.
 		@param _entity number -- Enemy entity id being processed.
 		@param _data any? -- Action payload supplied by the behavior tree.
@@ -146,5 +155,17 @@ return function(BaseExecutor)
 			self:CancelTrackedTasks(_entity)
 			self:ClearEntityState(_entity)
 		end
+	end
+
+	--[=[
+		@within BaseExecutor
+		Handles forced actor removal by running death-specific cleanup and always clearing tracked executor state.
+		@param _entity number -- Entity id being processed.
+		@param _services any -- Shared executor services for the current tick.
+	]=]
+	function BaseExecutor:Death(_entity: number, _services: any)
+		self:OnDeath(_entity, _services)
+		self:CancelTrackedTasks(_entity)
+		self:ClearEntityState(_entity)
 	end
 end

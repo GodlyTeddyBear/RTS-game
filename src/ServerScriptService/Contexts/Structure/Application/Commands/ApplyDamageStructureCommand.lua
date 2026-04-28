@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Errors = require(script.Parent.Parent.Parent.Errors)
@@ -58,6 +59,7 @@ function ApplyDamageStructureCommand:Execute(entity: any, amount: number): Resul
 
 		local didDie = self._factory:ApplyDamage(entity, amount)
 		if didDie then
+			GameEvents.Bus:Emit(GameEvents.Events.Combat.ActorRemoving, "Structure", entity)
 			self._instanceFactory:DestroyInstance(entity)
 			self._factory:ClearModelRef(entity)
 			self._factory:DeleteEntity(entity)

@@ -71,6 +71,24 @@ local function _isTargetInRange(entity: number, services: any): boolean
 	return services.CombatPerceptionService:IsTargetInRange(enemyPosition.CFrame.Position, attackRange, "Base", nil)
 end
 
+local function _cleanupAttackBaseState(self: any, entity: number, services: any)
+	local activeHitboxHandle = self:GetEntityValue(entity, "ActiveHitboxHandle")
+	if type(activeHitboxHandle) == "string" then
+		services.HitboxService:DestroyHitbox(activeHitboxHandle)
+		services.CombatHitResolutionService:ClearResolvedHits(activeHitboxHandle)
+	end
+
+	self:ClearEntityValue(entity, "ActiveHitboxHandle")
+	self:ClearEntityValue(entity, "HitboxStartedAt")
+	self:ClearEntityValue(entity, "AwaitingHitboxActivation")
+	self:ClearEntityValue(entity, "HitboxActivated")
+	self:ClearEntityValue(entity, "HitboxActivationTimedOut")
+	self:ClearEntityValue(entity, "AttackStartedAt")
+	self:ClearEntityValue(entity, "HitLanded")
+	self:ClearEntityValue(entity, "PendingHitboxActivation")
+	services.EnemyEntityFactory:ClearTarget(entity)
+end
+
 --[=[
 	@within AttackBaseExecutor
 	Verifies the base is active and in range before the executor starts.
@@ -295,21 +313,7 @@ end
 	@param services any -- Shared runtime services for the executor tick.
 ]=]
 function AttackBaseExecutor:OnCancel(entity: number, services: any)
-	local activeHitboxHandle = self:GetEntityValue(entity, "ActiveHitboxHandle")
-	if type(activeHitboxHandle) == "string" then
-		services.HitboxService:DestroyHitbox(activeHitboxHandle)
-		services.CombatHitResolutionService:ClearResolvedHits(activeHitboxHandle)
-	end
-
-	self:ClearEntityValue(entity, "ActiveHitboxHandle")
-	self:ClearEntityValue(entity, "HitboxStartedAt")
-	self:ClearEntityValue(entity, "AwaitingHitboxActivation")
-	self:ClearEntityValue(entity, "HitboxActivated")
-	self:ClearEntityValue(entity, "HitboxActivationTimedOut")
-	self:ClearEntityValue(entity, "AttackStartedAt")
-	self:ClearEntityValue(entity, "HitLanded")
-	self:ClearEntityValue(entity, "PendingHitboxActivation")
-	services.EnemyEntityFactory:ClearTarget(entity)
+	_cleanupAttackBaseState(self, entity, services)
 end
 
 --[=[
@@ -319,7 +323,11 @@ end
 	@param services any -- Shared runtime services for the executor tick.
 ]=]
 function AttackBaseExecutor:OnComplete(entity: number, services: any)
-	self:OnCancel(entity, services)
+	_cleanupAttackBaseState(self, entity, services)
+end
+
+function AttackBaseExecutor:OnDeath(entity: number, services: any)
+	_cleanupAttackBaseState(self, entity, services)
 end
 
 return AttackBaseExecutor

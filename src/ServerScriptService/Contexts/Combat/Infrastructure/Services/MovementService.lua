@@ -249,7 +249,6 @@ function MovementService:_TickBoids(entity: number, movementState: TBoidsMovemen
 	end
 
 	humanoid:Move(moveDirection)
-	humanoid.AutoRotate = moveDirection.Magnitude > 0.1
 	movementState.PreviousVelocity = moveDirection
 	self._enemyEntityFactory:SetPathMoving(entity, true)
 	return "Running", nil

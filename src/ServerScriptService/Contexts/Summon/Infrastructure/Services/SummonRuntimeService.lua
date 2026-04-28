@@ -42,7 +42,7 @@ local function _makeDronePart(ownerUserId: number): BasePart
 	return part
 end
 
-local function _resolveTarget(enemyContext: any, fromPosition: Vector3, maxRange: number): { entity: number, CFrame: CFrame }?
+local function _resolveTarget(enemyContext: any, fromPosition: Vector3, maxRange: number): { Entity: number, CFrame: CFrame }?
 	local nearestResult = enemyContext:GetNearestAliveEnemy(fromPosition, maxRange)
 	if not nearestResult.success then
 		return nil
@@ -142,7 +142,7 @@ function SummonRuntimeService:Tick(dt: number, currentTime: number, enemyContext
 			end
 
 			if distanceToTarget <= combat.AttackRange and (currentTime - combat.LastAttackAt) >= combat.AttackInterval then
-				local damageResult = enemyContext:ApplyDamage(target.entity, combat.DamagePerHit)
+				local damageResult = enemyContext:ApplyDamage(target.Entity, combat.DamagePerHit)
 				if damageResult.success then
 					self._entityFactory:SetLastAttackAt(entity, currentTime)
 				end

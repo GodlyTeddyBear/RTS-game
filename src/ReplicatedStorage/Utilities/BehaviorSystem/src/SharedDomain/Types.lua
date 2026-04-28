@@ -114,6 +114,7 @@ export type TExecutor = {
 	Tick: (self: TExecutor, entity: number, dt: number, services: TExecutorServices) -> string,
 	Cancel: (self: TExecutor, entity: number, services: TExecutorServices) -> (),
 	Complete: (self: TExecutor, entity: number, services: TExecutorServices) -> (),
+	Death: (self: TExecutor, entity: number, services: TExecutorServices) -> (),
 }
 
 --[=[
@@ -213,6 +214,18 @@ export type TCancelActionResult = {
 }
 
 --[=[
+	Result returned when handling forced actor removal through the shared dispatcher.
+	@within BehaviorSystemTypes
+	@interface TDeathActionResult
+	.Status string -- `NoCurrentAction`, `MissingAction`, or `Handled`
+	.ActionId string? -- Action id involved in the death handling.
+]=]
+export type TDeathActionResult = {
+	Status: string,
+	ActionId: string?,
+}
+
+--[=[
 	Result returned by the safe executor-boundary start API.
 	@within BehaviorSystemTypes
 	@type TTryStartActionResult Result.Result<TStartActionResult>
@@ -232,5 +245,12 @@ export type TTryTickActionResult = Result.Result<TTickActionResult>
 	@type TTryCancelActionResult Result.Result<TCancelActionResult>
 ]=]
 export type TTryCancelActionResult = Result.Result<TCancelActionResult>
+
+--[=[
+	Result returned by the safe executor-boundary death API.
+	@within BehaviorSystemTypes
+	@type TTryDeathActionResult Result.Result<TDeathActionResult>
+]=]
+export type TTryDeathActionResult = Result.Result<TDeathActionResult>
 
 return table.freeze(Types)

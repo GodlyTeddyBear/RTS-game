@@ -84,6 +84,16 @@ local function _validateTargetEnemy(entity: number, targetEnemy: number, service
 	return true, nil
 end
 
+local function _cleanupStructureAttackState(self: any, entity: number, services: any)
+	self:ClearEntityValue(entity, "ActiveProjectileId")
+	self:ClearEntityValue(entity, "ProjectileStartedAt")
+	self:ClearEntityValue(entity, "AwaitingHitboxActivation")
+	self:ClearEntityValue(entity, "ProjectileActivated")
+	self:ClearEntityValue(entity, "ProjectileActivationTimedOut")
+	self:ClearEntityValue(entity, "AttackStartedAt")
+	services.StructureEntityFactory:SetTarget(entity, nil)
+end
+
 function StructureAttackExecutor:CanStart(entity: number, data: any?, services: any): (boolean, string?)
 	if not services.StructureEntityFactory:IsActive(entity) then
 		return false, "InactiveStructure"
@@ -241,17 +251,15 @@ function StructureAttackExecutor:OnTick(entity: number, dt: number, services: an
 end
 
 function StructureAttackExecutor:OnCancel(entity: number, services: any)
-	self:ClearEntityValue(entity, "ActiveProjectileId")
-	self:ClearEntityValue(entity, "ProjectileStartedAt")
-	self:ClearEntityValue(entity, "AwaitingHitboxActivation")
-	self:ClearEntityValue(entity, "ProjectileActivated")
-	self:ClearEntityValue(entity, "ProjectileActivationTimedOut")
-	self:ClearEntityValue(entity, "AttackStartedAt")
-	services.StructureEntityFactory:SetTarget(entity, nil)
+	_cleanupStructureAttackState(self, entity, services)
 end
 
 function StructureAttackExecutor:OnComplete(entity: number, services: any)
-	self:OnCancel(entity, services)
+	_cleanupStructureAttackState(self, entity, services)
+end
+
+function StructureAttackExecutor:OnDeath(entity: number, services: any)
+	_cleanupStructureAttackState(self, entity, services)
 end
 
 return StructureAttackExecutor

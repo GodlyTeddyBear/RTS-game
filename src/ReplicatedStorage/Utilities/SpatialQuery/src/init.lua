@@ -46,6 +46,7 @@ SpatialQuery.ContainsPointInBox = Queries.ContainsPointInBox
 SpatialQuery.ContainsPointInRadius = Queries.ContainsPointInRadius
 SpatialQuery.DistanceSquared = Queries.DistanceSquared
 SpatialQuery.IsWithinRange = Queries.IsWithinRange
+SpatialQuery.IsWithinRaycastRange = Queries.IsWithinRaycastRange
 SpatialQuery.HasLineOfSight = Queries.HasLineOfSight
 SpatialQuery.IsTargetVisibleInRange = Queries.IsTargetVisibleInRange
 

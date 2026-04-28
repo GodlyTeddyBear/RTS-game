@@ -192,4 +192,28 @@ function ExecutorBoundary.TryComplete(
 	return Ok(true)
 end
 
+--[=[
+	Invokes an executor death method and converts thrown defects into a structured result.
+	@within ExecutorBoundary
+	@param executor TExecutor -- Executor instance to invoke
+	@param actionId string -- Action id used for defect metadata
+	@param entity number -- Runtime entity id forwarded to the executor
+	@param services TExecutorServices -- Executor service bag forwarded to the executor
+	@return Result<boolean> -- `true` when death handling succeeds or a defect
+]=]
+function ExecutorBoundary.TryDeath(
+	executor: TExecutor,
+	actionId: string,
+	entity: number,
+	services: TExecutorServices
+): Result.Result<boolean>
+	local deathResult =
+		_invokeExecutorMethod(executor, "Death", ExecutorDefectTypes.ExecutorDeathDefect, actionId, entity, services)
+	if not deathResult.success then
+		return deathResult
+	end
+
+	return Ok(true)
+end
+
 return table.freeze(ExecutorBoundary)

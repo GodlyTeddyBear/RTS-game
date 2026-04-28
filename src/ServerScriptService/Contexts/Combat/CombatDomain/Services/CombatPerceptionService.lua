@@ -1,13 +1,10 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Result = require(ReplicatedStorage.Utilities.Result)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 
 local FLEE_THRESHOLD = 0.2
 local RANGE_RAYCAST_PADDING = 0.05
-local RAYCAST_LOG_THROTTLE_SECONDS = 1
-local _lastRaycastLogAt = 0
 
 --[=[
 	@class CombatPerceptionService
@@ -32,8 +29,7 @@ end
 	@param _registry any -- Registry instance supplied by the context bootstrap.
 	@param _name string -- Registry key used to register the service.
 ]=]
-function CombatPerceptionService:Init(_registry: any, _name: string)
-end
+function CombatPerceptionService:Init(_registry: any, _name: string) end
 
 --[=[
 	@within CombatPerceptionService
@@ -54,7 +50,10 @@ local function _resolveModelReferencePoint(model: Model): Vector3
 	return boundsCFrame.Position
 end
 
-function CombatPerceptionService:_ResolveTargetRaycastData(targetKind: TTargetKind, targetEntity: number?): (Instance?, Vector3?)
+function CombatPerceptionService:_ResolveTargetRaycastData(
+	targetKind: TTargetKind,
+	targetEntity: number?
+): (Instance?, Vector3?)
 	if targetKind == "Base" then
 		if self._baseEntityFactory == nil or not self._baseEntityFactory:IsActive() then
 			return nil, nil
@@ -181,36 +180,18 @@ function CombatPerceptionService:IsTargetInRangeByRaycast(
 		return true
 	end
 
-	if not SpatialQuery.IsWithinRange(position, targetReferencePoint, attackRange + RANGE_RAYCAST_PADDING) then
-		return false
-	end
-
 	local visibilityOptions = SpatialQuery.MergeOptions(
 		SpatialQuery.Presets.CharactersOnly,
 		SpatialQuery.Presets.IncludeInstances({ targetInstance })
 	)
 
-	local raycastResult = SpatialQuery.RaycastTo(position, targetReferencePoint, visibilityOptions)
-	if raycastResult == nil then
-		local now = os.clock()
-		if now - _lastRaycastLogAt >= RAYCAST_LOG_THROTTLE_SECONDS then
-			_lastRaycastLogAt = now
-			Result.MentionError("CombatPerceptionService:IsTargetInRangeByRaycast", "Failed raycast against target instance", {
-				PositionX = position.X,
-				PositionY = position.Y,
-				PositionZ = position.Z,
-				ReferenceX = targetReferencePoint.X,
-				ReferenceY = targetReferencePoint.Y,
-				ReferenceZ = targetReferencePoint.Z,
-				AttackRange = attackRange,
-				TargetName = targetInstance.Name,
-				TargetClass = targetInstance.ClassName,
-			}, "TargetRangeRaycastMiss")
-		end
-		return false
-	end
-
-	return SpatialQuery.IsWithinRange(position, raycastResult.Position, attackRange)
+	return SpatialQuery.IsWithinRaycastRange(
+		position,
+		targetReferencePoint,
+		attackRange,
+		visibilityOptions,
+		RANGE_RAYCAST_PADDING
+	)
 end
 
 function CombatPerceptionService:IsTargetInRange(
@@ -249,7 +230,13 @@ function CombatPerceptionService:BuildSnapshot(entity: number, _currentTime: num
 	end
 
 	local hasBaseTargetInRange = false
-	if targetStructureEntity == nil and role and position and position.CFrame and type(role.AttackRange) == "number" then
+	if
+		targetStructureEntity == nil
+		and role
+		and position
+		and position.CFrame
+		and type(role.AttackRange) == "number"
+	then
 		hasBaseTargetInRange = self:IsTargetInRange(position.CFrame.Position, role.AttackRange, "Base", nil)
 	end
 

@@ -160,7 +160,7 @@ function ResourceGatherInteractionService:_AttachToPart(resourcePart: BasePart):
 end
 
 -- Reuses an existing click detector when possible and normalizes its activation distance.
-local function _GetOrCreateClickDetector(resourcePart: BasePart): ClickDetector
+function ResourceGatherInteractionService:_GetOrCreateClickDetector(resourcePart: BasePart): ClickDetector
 	local existing = resourcePart:FindFirstChild(CLICK_DETECTOR_NAME)
 	if existing ~= nil and not existing:IsA("ClickDetector") then
 		existing:Destroy()

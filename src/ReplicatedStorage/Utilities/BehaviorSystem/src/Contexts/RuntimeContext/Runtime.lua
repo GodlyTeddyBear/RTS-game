@@ -15,6 +15,7 @@ local CommitStartedAction = require(script.Parent.Application.UseCases.Runtime.C
 local TickCurrentAction = require(script.Parent.Application.UseCases.Runtime.TickCurrentAction)
 local ResolveFinishedAction = require(script.Parent.Application.UseCases.Runtime.ResolveFinishedAction)
 local CancelCurrentAction = require(script.Parent.Application.UseCases.Runtime.CancelCurrentAction)
+local HandleCurrentActionDeath = require(script.Parent.Application.UseCases.Runtime.HandleCurrentActionDeath)
 local Types = require(script.Parent.Parent.Parent.SharedDomain.Types)
 
 type TBuilderConfig = Types.TBuilderConfig
@@ -29,6 +30,8 @@ type TTickActionResult = Types.TTickActionResult
 type TTryTickActionResult = Types.TTryTickActionResult
 type TCancelActionResult = Types.TCancelActionResult
 type TTryCancelActionResult = Types.TTryCancelActionResult
+type TDeathActionResult = Types.TDeathActionResult
+type TTryDeathActionResult = Types.TTryDeathActionResult
 
 local Runtime = {}
 Runtime.__index = Runtime
@@ -248,6 +251,24 @@ function Runtime:CancelCurrentAction(
 ): TTryCancelActionResult
 	assertActionState(actionState)
 	return CancelCurrentAction.TryExecute(entity, actionState, runtimeContext, self._executors)
+end
+
+--[=[
+	Handles forced actor removal through the executor boundary.
+	Returns `Ok(TDeathActionResult)` for normal runtime outcomes and a `Defect` when executor code crashes.
+	@within Runtime
+	@param entity number -- Runtime entity id whose current action owner is being removed
+	@param actionState TActionState -- Owning context's action-state table
+	@param runtimeContext TActionRuntimeContext -- Context bag used to derive executor services
+	@return TTryDeathActionResult -- Structured result carrying the normal death record or an executor defect
+]=]
+function Runtime:HandleCurrentActionDeath(
+	entity: number,
+	actionState: TActionState,
+	runtimeContext: TActionRuntimeContext
+): TTryDeathActionResult
+	assertActionState(actionState)
+	return HandleCurrentActionDeath.TryExecute(entity, actionState, runtimeContext, self._executors)
 end
 
 return table.freeze(Runtime)

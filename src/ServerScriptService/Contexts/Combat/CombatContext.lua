@@ -31,6 +31,7 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
 		Name = "CombatBehaviorRuntimeService",
 		Module = CombatBehaviorRuntimeService,
+		CacheAs = "_combatBehaviorRuntimeService",
 	},
 	{
 		Name = "CombatHitResolutionService",
@@ -169,6 +170,7 @@ local CombatContext = Knit.CreateService({
 			{ Field = "_runWaveEndedConnection", Method = "Disconnect" },
 			{ Field = "_runEndedConnection", Method = "Disconnect" },
 			{ Field = "_enemySpawnedConnection", Method = "Disconnect" },
+			{ Field = "_combatActorRemovingConnection", Method = "Disconnect" },
 			{ Field = "_playerRemovingConnection", Method = "Disconnect" },
 			{ Field = "_animationCallbackConnection", Method = "Disconnect" },
 			{ Field = "_projectileService", Method = "Destroy" },
@@ -181,6 +183,30 @@ local CombatBaseContext = BaseContext.new(CombatContext)
 local Catch = Result.Catch
 local Ok = Result.Ok
 local Try = Result.Try
+
+local function _cloneActionState(actionState: any): any
+	if actionState == nil then
+		return {
+			CurrentActionId = nil,
+			ActionState = "Idle",
+			ActionData = nil,
+			PendingActionId = nil,
+			PendingActionData = nil,
+			StartedAt = nil,
+			FinishedAt = nil,
+		}
+	end
+
+	return {
+		CurrentActionId = actionState.CurrentActionId,
+		ActionState = actionState.ActionState or "Idle",
+		ActionData = actionState.ActionData,
+		PendingActionId = actionState.PendingActionId,
+		PendingActionData = actionState.PendingActionData,
+		StartedAt = actionState.StartedAt or actionState.ActionStartedAt,
+		FinishedAt = actionState.FinishedAt,
+	}
+end
 
 --[=[
 	@within CombatContext
@@ -199,17 +225,13 @@ function CombatContext:KnitInit()
 	self._structureEntityFactory = nil
 	self._baseContext = nil
 	self._baseEntityFactory = nil
-	self._hitboxService = nil
-	self._combatHitResolutionService = nil
-	self._lockOnService = nil
-	self._movementService = nil
-	self._projectileService = nil
 	self._goalPosition = nil :: Vector3?
 
 	self._runWaveStartedConnection = nil :: any
 	self._runWaveEndedConnection = nil :: any
 	self._runEndedConnection = nil :: any
 	self._enemySpawnedConnection = nil :: any
+	self._combatActorRemovingConnection = nil :: any
 	self._playerRemovingConnection = nil :: any
 	self._animationCallbackConnection = nil :: any
 end
@@ -261,6 +283,15 @@ function CombatContext:KnitStart()
 			self:_OnEnemySpawned(entity, role, waveNumber)
 		end,
 		"_enemySpawnedConnection"
+	)
+
+	CombatBaseContext:OnContextEvent(
+		"Combat",
+		"ActorRemoving",
+		function(actorKind: string, entity: number)
+			self:_OnCombatActorRemoving(actorKind, entity)
+		end,
+		"_combatActorRemovingConnection"
 	)
 
 	CombatBaseContext:OnPlayerRemoving(function(player: Player)
@@ -366,6 +397,50 @@ function CombatContext:_OnPlayerRemoving(_player: Player)
 	if #Players:GetPlayers() <= 1 then
 		self:_OnRunEnded()
 	end
+end
+
+function CombatContext:_OnCombatActorRemoving(actorKind: string, entity: number)
+	Catch(function()
+		local factory = nil
+		if actorKind == "Enemy" then
+			factory = self._enemyEntityFactory
+		elseif actorKind == "Structure" then
+			factory = self._structureEntityFactory
+		else
+			return Ok(nil)
+		end
+
+		local actionState = _cloneActionState(factory:GetCombatAction(entity))
+		local deathResult = self._combatBehaviorRuntimeService:HandleCurrentActionDeath(entity, actionState, {
+			Services = {
+				EnemyEntityFactory = self._enemyEntityFactory,
+				StructureEntityFactory = self._structureEntityFactory,
+				BaseEntityFactory = self._baseEntityFactory,
+				EnemyContext = self._enemyContext,
+				StructureContext = self._structureContext,
+				BaseContext = self._baseContext,
+				CurrentTime = os.clock(),
+				HandleGoalReached = self._handleGoalReachedCommand,
+				HitboxService = self._hitboxService,
+				MovementService = self._movementService,
+				CombatHitResolutionService = self._combatHitResolutionService,
+				ProjectileService = self._projectileService,
+			},
+		})
+
+		if not deathResult.success then
+			Result.MentionError("Combat:OnActorRemoving", "Behavior runtime failed while handling actor removal", {
+				ActorKind = actorKind,
+				Entity = entity,
+				CauseType = deathResult.type,
+				CauseMessage = deathResult.message,
+			}, deathResult.type)
+			return Ok(nil)
+		end
+
+		factory:ClearAction(entity)
+		return Ok(nil)
+	end, "Combat:OnActorRemoving")
 end
 
 --[=[

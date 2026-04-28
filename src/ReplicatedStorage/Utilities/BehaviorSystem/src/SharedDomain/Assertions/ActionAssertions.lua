@@ -32,6 +32,7 @@ function ActionAssertions.AssertExecutor(executor: any, actionId: string)
 	_assert(type(executor.Tick) == "function", ("BehaviorSystem action '%s' executor.Tick must be a function"):format(actionId))
 	_assert(type(executor.Cancel) == "function", ("BehaviorSystem action '%s' executor.Cancel must be a function"):format(actionId))
 	_assert(type(executor.Complete) == "function", ("BehaviorSystem action '%s' executor.Complete must be a function"):format(actionId))
+	_assert(type(executor.Death) == "function", ("BehaviorSystem action '%s' executor.Death must be a function"):format(actionId))
 end
 
 --[=[

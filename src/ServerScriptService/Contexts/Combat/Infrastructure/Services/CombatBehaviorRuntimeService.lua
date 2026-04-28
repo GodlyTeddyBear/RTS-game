@@ -128,6 +128,10 @@ function CombatBehaviorRuntimeService:CancelCurrentAction(entity: number, action
 	return self._runtime:CancelCurrentAction(entity, actionState, runtimeContext)
 end
 
+function CombatBehaviorRuntimeService:HandleCurrentActionDeath(entity: number, actionState: any, runtimeContext: any)
+	return self._runtime:HandleCurrentActionDeath(entity, actionState, runtimeContext)
+end
+
 function CombatBehaviorRuntimeService:GetExecutor(actionId: string)
 	return self._runtime:GetExecutor(actionId)
 end

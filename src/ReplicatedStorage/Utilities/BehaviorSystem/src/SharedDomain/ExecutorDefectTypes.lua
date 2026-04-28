@@ -5,6 +5,7 @@ local ExecutorDefectTypes = table.freeze({
 	ExecutorTickDefect = "ExecutorTickDefect",
 	ExecutorCancelDefect = "ExecutorCancelDefect",
 	ExecutorCompleteDefect = "ExecutorCompleteDefect",
+	ExecutorDeathDefect = "ExecutorDeathDefect",
 })
 
 return ExecutorDefectTypes

@@ -159,6 +159,41 @@ function Queries.IsWithinRange(a: Vector3, b: Vector3, range: number): boolean
 end
 
 --[=[
+    Casts toward a target point and checks range against the surface hit point.
+    @within SpatialQueryQueries
+    @param origin Vector3 -- Ray origin.
+    @param target Vector3 -- Aim point used to choose the ray direction.
+    @param maxRange number -- Maximum allowed distance to the raycast hit point.
+    @param options TQueryOptions? -- Query configuration to apply.
+    @param rangePadding number? -- Extra range tolerance added after a surface hit.
+    @return boolean -- Whether the first raycast hit is within range.
+]=]
+function Queries.IsWithinRaycastRange(
+	origin: Vector3,
+	target: Vector3,
+	maxRange: number,
+	options: TQueryOptions?,
+	rangePadding: number?
+): boolean
+	if not Shared.IsPositiveNumber(maxRange) then
+		return false
+	end
+
+	local direction = target - origin
+	if direction.Magnitude <= Shared.EPSILON then
+		return true
+	end
+
+	local raycastResult = Queries.RaycastTo(origin, target, options)
+	if raycastResult == nil then
+		return false
+	end
+
+	local padding = rangePadding or 0
+	return Queries.IsWithinRange(origin, raycastResult.Position, maxRange + padding)
+end
+
+--[=[
     Checks whether a target is visible from an origin point.
     @within SpatialQueryQueries
     @param origin Vector3 -- Ray origin.

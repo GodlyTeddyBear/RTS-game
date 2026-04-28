@@ -90,6 +90,24 @@ local function _validateTargetStructure(entity: number, targetStructure: number,
 	return true, nil
 end
 
+local function _cleanupAttackStructureState(self: any, entity: number, services: any)
+	local activeHitboxHandle = self:GetEntityValue(entity, "ActiveHitboxHandle")
+	if type(activeHitboxHandle) == "string" then
+		services.HitboxService:DestroyHitbox(activeHitboxHandle)
+		services.CombatHitResolutionService:ClearResolvedHits(activeHitboxHandle)
+	end
+
+	self:ClearEntityValue(entity, "ActiveHitboxHandle")
+	self:ClearEntityValue(entity, "HitboxStartedAt")
+	self:ClearEntityValue(entity, "AwaitingHitboxActivation")
+	self:ClearEntityValue(entity, "HitboxActivated")
+	self:ClearEntityValue(entity, "HitboxActivationTimedOut")
+	self:ClearEntityValue(entity, "AttackStartedAt")
+	self:ClearEntityValue(entity, "HitLanded")
+	self:ClearEntityValue(entity, "PendingHitboxActivation")
+	services.EnemyEntityFactory:ClearTarget(entity)
+end
+
 function AttackStructureExecutor:CanStart(entity: number, data: any?, services: any): (boolean, string?)
 	if type(data) ~= "table" or type(data.TargetStructureEntity) ~= "number" then
 		return false, "MissingTargetStructure"
@@ -272,25 +290,15 @@ function AttackStructureExecutor:OnTick(entity: number, _dt: number, services: a
 end
 
 function AttackStructureExecutor:OnCancel(entity: number, services: any)
-	local activeHitboxHandle = self:GetEntityValue(entity, "ActiveHitboxHandle")
-	if type(activeHitboxHandle) == "string" then
-		services.HitboxService:DestroyHitbox(activeHitboxHandle)
-		services.CombatHitResolutionService:ClearResolvedHits(activeHitboxHandle)
-	end
-
-	self:ClearEntityValue(entity, "ActiveHitboxHandle")
-	self:ClearEntityValue(entity, "HitboxStartedAt")
-	self:ClearEntityValue(entity, "AwaitingHitboxActivation")
-	self:ClearEntityValue(entity, "HitboxActivated")
-	self:ClearEntityValue(entity, "HitboxActivationTimedOut")
-	self:ClearEntityValue(entity, "AttackStartedAt")
-	self:ClearEntityValue(entity, "HitLanded")
-	self:ClearEntityValue(entity, "PendingHitboxActivation")
-	services.EnemyEntityFactory:ClearTarget(entity)
+	_cleanupAttackStructureState(self, entity, services)
 end
 
 function AttackStructureExecutor:OnComplete(entity: number, services: any)
-	self:OnCancel(entity, services)
+	_cleanupAttackStructureState(self, entity, services)
+end
+
+function AttackStructureExecutor:OnDeath(entity: number, services: any)
+	_cleanupAttackStructureState(self, entity, services)
 end
 
 return AttackStructureExecutor
