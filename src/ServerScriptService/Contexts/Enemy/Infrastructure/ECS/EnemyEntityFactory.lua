@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local CombatECSEntityFactory = require(ReplicatedStorage.Utilities.CombatECSEntityFactory)
+local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 
 --[=[
 	@class EnemyEntityFactory
@@ -285,27 +286,29 @@ end
 function EnemyEntityFactory:GetNearestAliveEnemy(position: Vector3, maxRange: number): { entity: number, CFrame: CFrame }?
 	self:RequireReady()
 
-	local nearestEntity = nil :: number?
-	local nearestCFrame = nil :: CFrame?
-	local nearestDistanceSquared = math.huge
-	local maxRangeSquared = maxRange * maxRange
+	local nearestEntity = SpatialQuery.FindBestCandidate(
+		position,
+		self:QueryAliveEntities(),
+		function(entity: number): Vector3?
+			local entityCFrame = self:GetEntityCFrame(entity)
+			if entityCFrame == nil then
+				return nil
+			end
 
-	for _, entity in ipairs(self:QueryAliveEntities()) do
-		local entityCFrame = self:GetEntityCFrame(entity)
-		if entityCFrame == nil then
-			continue
-		end
+			return entityCFrame.Position
+		end,
+		function(_entity: number, distance: number): number?
+			return -distance
+		end,
+		maxRange
+	)
 
-		local delta = entityCFrame.Position - position
-		local distanceSquared = delta.X * delta.X + delta.Y * delta.Y + delta.Z * delta.Z
-		if distanceSquared <= maxRangeSquared and distanceSquared < nearestDistanceSquared then
-			nearestDistanceSquared = distanceSquared
-			nearestEntity = entity
-			nearestCFrame = entityCFrame
-		end
+	if nearestEntity == nil then
+		return nil
 	end
 
-	if nearestEntity == nil or nearestCFrame == nil then
+	local nearestCFrame = self:GetEntityCFrame(nearestEntity)
+	if nearestCFrame == nil then
 		return nil
 	end
 

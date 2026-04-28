@@ -1,8 +1,8 @@
 --!strict
 
-local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
+local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 
 local FLEE_THRESHOLD = 0.2
 local RANGE_RAYCAST_PADDING = 0.05
@@ -177,22 +177,20 @@ function CombatPerceptionService:IsTargetInRangeByRaycast(
 	end
 
 	local direction = targetReferencePoint - position
-	local directionMagnitude = direction.Magnitude
-	if directionMagnitude <= 0 then
+	if direction.Magnitude <= 0 then
 		return true
 	end
 
-	local raycastParams = RaycastParams.new()
-	raycastParams.FilterType = Enum.RaycastFilterType.Include
-	raycastParams.FilterDescendantsInstances = { targetInstance }
-	raycastParams.IgnoreWater = true
-	raycastParams.RespectCanCollide = false
+	if not SpatialQuery.IsWithinRange(position, targetReferencePoint, attackRange + RANGE_RAYCAST_PADDING) then
+		return false
+	end
 
-	local raycastResult = Workspace:Raycast(
-		position,
-		direction.Unit * (directionMagnitude + RANGE_RAYCAST_PADDING),
-		raycastParams
+	local visibilityOptions = SpatialQuery.MergeOptions(
+		SpatialQuery.Presets.CharactersOnly,
+		SpatialQuery.Presets.IncludeInstances({ targetInstance })
 	)
+
+	local raycastResult = SpatialQuery.RaycastTo(position, targetReferencePoint, visibilityOptions)
 	if raycastResult == nil then
 		local now = os.clock()
 		if now - _lastRaycastLogAt >= RAYCAST_LOG_THROTTLE_SECONDS then
@@ -212,8 +210,7 @@ function CombatPerceptionService:IsTargetInRangeByRaycast(
 		return false
 	end
 
-	local hitDistance = (raycastResult.Position - position).Magnitude
-	return hitDistance <= attackRange
+	return SpatialQuery.IsWithinRange(position, raycastResult.Position, attackRange)
 end
 
 function CombatPerceptionService:IsTargetInRange(

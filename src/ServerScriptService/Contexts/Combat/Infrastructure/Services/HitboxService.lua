@@ -6,6 +6,7 @@ local Workspace = game:GetService("Workspace")
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local MuchachoHitbox = require(ReplicatedStorage.Utilities.MuchachoHitbox)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 
 local HitboxService = {}
 HitboxService.__index = HitboxService
@@ -149,10 +150,7 @@ function HitboxService:CreateAttackHitbox(
 	hitbox.Visualizer = config.Visualize
 	hitbox.AutoDestroy = false
 
-	local overlapParams = OverlapParams.new()
-	overlapParams.FilterType = Enum.RaycastFilterType.Exclude
-	overlapParams.FilterDescendantsInstances = { model }
-	hitbox.OverlapParams = overlapParams
+	hitbox.OverlapParams = SpatialQuery.BuildOverlapParams(SpatialQuery.Presets.ExcludeModel(model))
 
 	local handle: THitboxHandle = hitbox.Key
 	local janitor = Janitor.new()

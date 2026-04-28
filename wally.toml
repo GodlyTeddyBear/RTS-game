@@ -37,6 +37,8 @@ OmrezKeyBind = "omrezkeypie/omrezkeybind@0.2.2"
 Jabby = "alicesaidhi/jabby@0.5.1"
 Wcs = "cheetiedotpy/wcs@2.4.0"
 Roquest = "prooheckcp/roquest@>0.0.0, <10.0.0"
+ZonePlus = "essentiallyblue/zoneplus@3.2.2"
+
 
 [server-dependencies]
 Profilestore = "lm-loleris/profilestore@1.0.3"

@@ -1,5 +1,8 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
+
 --[=[
 	@class StructureTargetingSystem
 	Acquires the nearest alive enemy for every active structure each tick.
@@ -79,19 +82,17 @@ function StructureTargetingSystem:Tick()
 			continue
 		end
 
-		local nearestEnemy = nil :: number?
-		local nearestDistanceSq = math.huge
-		local maxDistanceSq = attackStats.AttackRange * attackStats.AttackRange
-
-		-- Pick the closest enemy inside range so the attack system always sees one canonical target.
-		for enemyEntity, enemyPos in pairs(enemyPositionByEntity) do
-			local offset = enemyPos - instanceRef.WorldPos
-			local distanceSq = offset:Dot(offset)
-			if distanceSq <= maxDistanceSq and distanceSq < nearestDistanceSq then
-				nearestDistanceSq = distanceSq
-				nearestEnemy = enemyEntity
-			end
-		end
+		local nearestEnemy = SpatialQuery.FindBestCandidate(
+			instanceRef.WorldPos,
+			aliveEnemiesResult.value,
+			function(enemyEntity: number): Vector3?
+				return enemyPositionByEntity[enemyEntity]
+			end,
+			function(_enemyEntity: number, distance: number): number?
+				return -distance
+			end,
+			attackStats.AttackRange
+		)
 
 		self._factory:SetTarget(structureEntity, nearestEnemy)
 	end
