@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ItemConfig = require(ReplicatedStorage.Contexts.Inventory.Config.ItemConfig)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -13,15 +14,19 @@ local Ensure = Result.Ensure
 
 local AddItem = {}
 AddItem.__index = AddItem
+setmetatable(AddItem, BaseCommand)
 
 function AddItem.new()
-	return setmetatable({}, AddItem)
+	local self = BaseCommand.new("Inventory", "AddItem")
+	return setmetatable(self, AddItem)
 end
 
 function AddItem:Init(registry: any, _name: string)
-	self.AddItemPolicy = registry:Get("AddItemPolicy")
-	self.SlotManagementService = registry:Get("SlotManagementService")
-	self.SyncService = registry:Get("InventorySyncService")
+	self:_RequireDependencies(registry, {
+		AddItemPolicy = "AddItemPolicy",
+		SlotManagementService = "SlotManagementService",
+		SyncService = "InventorySyncService",
+	})
 end
 
 function AddItem:Execute(userId: number, itemId: string, quantity: number): Result.Result<any>

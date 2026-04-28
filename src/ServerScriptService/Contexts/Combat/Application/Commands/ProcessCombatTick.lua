@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
 
@@ -13,6 +14,7 @@ local Ok = Result.Ok
 ]=]
 local ProcessCombatTick = {}
 ProcessCombatTick.__index = ProcessCombatTick
+setmetatable(ProcessCombatTick, BaseCommand)
 
 local function _cloneActionState(actionState: any): any
 	if actionState == nil then
@@ -53,7 +55,8 @@ end
 	@return ProcessCombatTick -- Command instance used to advance combat.
 ]=]
 function ProcessCombatTick.new()
-	return setmetatable({}, ProcessCombatTick)
+	local self = BaseCommand.new("Combat", "ProcessCombatTick")
+	return setmetatable(self, ProcessCombatTick)
 end
 
 --[=[
@@ -63,14 +66,16 @@ end
 	@param _name string -- Registry key used to register the command.
 ]=]
 function ProcessCombatTick:Init(registry: any, _name: string)
-	self._loopService = registry:Get("CombatLoopService")
-	self._behaviorRuntimeService = registry:Get("CombatBehaviorRuntimeService")
-	self._combatHitResolutionService = registry:Get("CombatHitResolutionService")
-	self._perceptionService = registry:Get("CombatPerceptionService")
-	self._handleGoalReachedCommand = registry:Get("HandleGoalReached")
-	self._hitboxService = registry:Get("HitboxService")
-	self._movementService = registry:Get("MovementService")
-	self._projectileService = registry:Get("ProjectileService")
+	self:_RequireDependencies(registry, {
+		_loopService = "CombatLoopService",
+		_behaviorRuntimeService = "CombatBehaviorRuntimeService",
+		_combatHitResolutionService = "CombatHitResolutionService",
+		_perceptionService = "CombatPerceptionService",
+		_handleGoalReachedCommand = "HandleGoalReached",
+		_hitboxService = "HitboxService",
+		_movementService = "MovementService",
+		_projectileService = "ProjectileService",
+	})
 end
 
 --[=[
@@ -80,12 +85,14 @@ end
 	@param _name string -- Registry key used to register the command.
 ]=]
 function ProcessCombatTick:Start(registry: any, _name: string)
-	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
-	self._structureEntityFactory = registry:Get("StructureEntityFactory")
-	self._baseEntityFactory = registry:Get("BaseEntityFactory")
-	self._enemyContext = registry:Get("EnemyContext")
-	self._structureContext = registry:Get("StructureContext")
-	self._baseContext = registry:Get("BaseContext")
+	self:_RequireDependencies(registry, {
+		_enemyEntityFactory = "EnemyEntityFactory",
+		_structureEntityFactory = "StructureEntityFactory",
+		_baseEntityFactory = "BaseEntityFactory",
+		_enemyContext = "EnemyContext",
+		_structureContext = "StructureContext",
+		_baseContext = "BaseContext",
+	})
 end
 
 -- Runs the behavior tree phase for each active entity and updates its last behavior tick time.
@@ -308,7 +315,7 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 		self:_RunActionPhase(activeStructures, dt, services, self._structureEntityFactory, "Structure")
 
 		return Ok(true)
-	end, "Combat:ProcessCombatTick")
+	end, self:_Label())
 end
 
 return ProcessCombatTick

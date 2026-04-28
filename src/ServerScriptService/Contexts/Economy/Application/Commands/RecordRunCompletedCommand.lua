@@ -9,6 +9,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTypes)
 
@@ -26,6 +27,7 @@ type ProfileRunStats = EconomyTypes.ProfileRunStats
 ]=]
 local RecordRunCompletedCommand = {}
 RecordRunCompletedCommand.__index = RecordRunCompletedCommand
+setmetatable(RecordRunCompletedCommand, BaseCommand)
 
 --[=[
 	Creates a new run-complete command.
@@ -33,7 +35,8 @@ RecordRunCompletedCommand.__index = RecordRunCompletedCommand
 	@return RecordRunCompletedCommand -- The new command instance.
 ]=]
 function RecordRunCompletedCommand.new()
-	return setmetatable({}, RecordRunCompletedCommand)
+	local self = BaseCommand.new("Economy", "RecordRunCompletedCommand")
+	return setmetatable(self, RecordRunCompletedCommand)
 end
 
 --[=[
@@ -43,8 +46,10 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function RecordRunCompletedCommand:Init(registry: any, _name: string)
-	self._persistenceService = registry:Get("EconomyPersistenceService")
-	self._syncService = registry:Get("ResourceSyncService")
+	self:_RequireDependencies(registry, {
+		_persistenceService = "EconomyPersistenceService",
+		_syncService = "ResourceSyncService",
+	})
 end
 
 -- [Public API]

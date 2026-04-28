@@ -9,6 +9,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
@@ -16,6 +17,7 @@ local Ensure = Result.Ensure
 
 local GetBaseTargetCFrameQuery = {}
 GetBaseTargetCFrameQuery.__index = GetBaseTargetCFrameQuery
+setmetatable(GetBaseTargetCFrameQuery, BaseQuery)
 
 --[=[
     Create a new base-target query.
@@ -23,7 +25,8 @@ GetBaseTargetCFrameQuery.__index = GetBaseTargetCFrameQuery
     @return GetBaseTargetCFrameQuery -- Query instance.
 ]=]
 function GetBaseTargetCFrameQuery.new()
-	return setmetatable({}, GetBaseTargetCFrameQuery)
+	local self = BaseQuery.new("Base", "GetBaseTargetCFrameQuery")
+	return setmetatable(self, GetBaseTargetCFrameQuery)
 end
 
 --[=[
@@ -33,7 +36,7 @@ end
     @param _name string -- Module name supplied by the BaseContext framework.
 ]=]
 function GetBaseTargetCFrameQuery:Init(registry: any, _name: string)
-	self._entityFactory = registry:Get("BaseEntityFactory")
+	self:_RequireDependency(registry, "_entityFactory", "BaseEntityFactory")
 end
 
 --[=[

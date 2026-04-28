@@ -9,6 +9,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTypes)
 local Errors = require(script.Parent.Parent.Parent.Errors)
@@ -21,14 +22,18 @@ type ResourceCostMap = EconomyTypes.ResourceCostMap
 
 local SpendResourcesCommand = {}
 SpendResourcesCommand.__index = SpendResourcesCommand
+setmetatable(SpendResourcesCommand, BaseCommand)
 
 function SpendResourcesCommand.new()
-	return setmetatable({}, SpendResourcesCommand)
+	local self = BaseCommand.new("Economy", "SpendResourcesCommand")
+	return setmetatable(self, SpendResourcesCommand)
 end
 
 function SpendResourcesCommand:Init(registry: any, _name: string)
-	self._validator = registry:Get("ResourceValidator")
-	self._syncService = registry:Get("ResourceSyncService")
+	self:_RequireDependencies(registry, {
+		_validator = "ResourceValidator",
+		_syncService = "ResourceSyncService",
+	})
 end
 
 function SpendResourcesCommand:Execute(userId: number, costMap: ResourceCostMap): Result.Result<nil>

@@ -21,7 +21,7 @@ export type BaseZoneTag = MapTypes.BaseZoneTag
 ]=]
 local MapComponentRegistry = {}
 MapComponentRegistry.__index = MapComponentRegistry
-setmetatable(MapComponentRegistry, BaseECSComponentRegistry)
+setmetatable(MapComponentRegistry, { __index = BaseECSComponentRegistry })
 
 --[=[
 	Creates the Map ECS component registry.

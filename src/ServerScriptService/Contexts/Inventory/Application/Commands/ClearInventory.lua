@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -10,13 +11,15 @@ local Ensure = Result.Ensure
 
 local ClearInventory = {}
 ClearInventory.__index = ClearInventory
+setmetatable(ClearInventory, BaseCommand)
 
 function ClearInventory.new()
-	return setmetatable({}, ClearInventory)
+	local self = BaseCommand.new("Inventory", "ClearInventory")
+	return setmetatable(self, ClearInventory)
 end
 
 function ClearInventory:Init(registry: any, _name: string)
-	self.SyncService = registry:Get("InventorySyncService")
+	self:_RequireDependency(registry, "SyncService", "InventorySyncService")
 end
 
 function ClearInventory:Execute(userId: number): Result.Result<any>

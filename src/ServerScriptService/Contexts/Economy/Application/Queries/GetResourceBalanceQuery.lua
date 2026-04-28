@@ -7,6 +7,9 @@
 	Boundaries: Owns query orchestration only; does not own sync mutation or validation.
 ]]
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
+
 --[=[
 	@class GetResourceBalanceQuery
 	Reads a single resource balance from the economy sync service.
@@ -14,6 +17,7 @@
 ]=]
 local GetResourceBalanceQuery = {}
 GetResourceBalanceQuery.__index = GetResourceBalanceQuery
+setmetatable(GetResourceBalanceQuery, BaseQuery)
 
 -- [Initialization]
 
@@ -23,7 +27,8 @@ GetResourceBalanceQuery.__index = GetResourceBalanceQuery
 	@return GetResourceBalanceQuery -- The new query instance.
 ]=]
 function GetResourceBalanceQuery.new()
-	return setmetatable({}, GetResourceBalanceQuery)
+	local self = BaseQuery.new("Economy", "GetResourceBalanceQuery")
+	return setmetatable(self, GetResourceBalanceQuery)
 end
 
 -- [Public API]
@@ -36,7 +41,7 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function GetResourceBalanceQuery:Init(registry: any, _name: string)
-	self._syncService = registry:Get("ResourceSyncService")
+	self:_RequireDependency(registry, "_syncService", "ResourceSyncService")
 end
 
 --[=[

@@ -9,6 +9,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTypes)
 local Errors = require(script.Parent.Parent.Parent.Errors)
@@ -27,6 +28,7 @@ type ProfileRunStats = EconomyTypes.ProfileRunStats
 ]=]
 local RecordWaveClearCommand = {}
 RecordWaveClearCommand.__index = RecordWaveClearCommand
+setmetatable(RecordWaveClearCommand, BaseCommand)
 
 --[=[
 	Creates a new wave-clear command.
@@ -34,7 +36,8 @@ RecordWaveClearCommand.__index = RecordWaveClearCommand
 	@return RecordWaveClearCommand -- The new command instance.
 ]=]
 function RecordWaveClearCommand.new()
-	return setmetatable({}, RecordWaveClearCommand)
+	local self = BaseCommand.new("Economy", "RecordWaveClearCommand")
+	return setmetatable(self, RecordWaveClearCommand)
 end
 
 --[=[
@@ -44,8 +47,10 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function RecordWaveClearCommand:Init(registry: any, _name: string)
-	self._persistenceService = registry:Get("EconomyPersistenceService")
-	self._syncService = registry:Get("ResourceSyncService")
+	self:_RequireDependencies(registry, {
+		_persistenceService = "EconomyPersistenceService",
+		_syncService = "ResourceSyncService",
+	})
 end
 
 -- [Public API]

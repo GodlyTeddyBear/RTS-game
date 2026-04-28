@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local Ok = Result.Ok
@@ -13,6 +14,7 @@ local Ok = Result.Ok
 ]=]
 local CleanupAllExtractorsCommand = {}
 CleanupAllExtractorsCommand.__index = CleanupAllExtractorsCommand
+setmetatable(CleanupAllExtractorsCommand, BaseCommand)
 
 -- Creates the cleanup command wrapper.
 --[=[
@@ -21,7 +23,8 @@ CleanupAllExtractorsCommand.__index = CleanupAllExtractorsCommand
     @return CleanupAllExtractorsCommand -- The new command instance.
 ]=]
 function CleanupAllExtractorsCommand.new()
-	return setmetatable({}, CleanupAllExtractorsCommand)
+	local self = BaseCommand.new("Mining", "CleanupAllExtractorsCommand")
+	return setmetatable(self, CleanupAllExtractorsCommand)
 end
 
 -- Resolves the mining entity factory during init.
@@ -32,7 +35,7 @@ end
     @param _name string -- The registered module name.
 ]=]
 function CleanupAllExtractorsCommand:Init(registry: any, _name: string)
-	self._factory = registry:Get("MiningEntityFactory")
+	self:_RequireDependency(registry, "_factory", "MiningEntityFactory")
 end
 
 -- Deletes all mining entities and flushes deferred removals.

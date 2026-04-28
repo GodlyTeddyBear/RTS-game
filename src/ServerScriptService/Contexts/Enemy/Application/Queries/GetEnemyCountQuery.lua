@@ -1,4 +1,6 @@
 --!strict
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
 
 --[=[
 	@class GetEnemyCountQuery
@@ -7,13 +9,15 @@
 ]=]
 local GetEnemyCountQuery = {}
 GetEnemyCountQuery.__index = GetEnemyCountQuery
+setmetatable(GetEnemyCountQuery, BaseQuery)
 
 function GetEnemyCountQuery.new()
-	return setmetatable({}, GetEnemyCountQuery)
+	local self = BaseQuery.new("Enemy", "GetEnemyCountQuery")
+	return setmetatable(self, GetEnemyCountQuery)
 end
 
 function GetEnemyCountQuery:Init(registry: any, _name: string)
-	self._entityFactory = registry:Get("EnemyEntityFactory")
+	self:_RequireDependency(registry, "_entityFactory", "EnemyEntityFactory")
 end
 
 function GetEnemyCountQuery:Execute(): number

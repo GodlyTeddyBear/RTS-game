@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local Ok = Result.Ok
@@ -14,14 +15,18 @@ local Try = Result.Try
 ]=]
 local CleanupAllEnemies = {}
 CleanupAllEnemies.__index = CleanupAllEnemies
+setmetatable(CleanupAllEnemies, BaseCommand)
 
 function CleanupAllEnemies.new()
-	return setmetatable({}, CleanupAllEnemies)
+	local self = BaseCommand.new("Enemy", "CleanupAllEnemies")
+	return setmetatable(self, CleanupAllEnemies)
 end
 
 function CleanupAllEnemies:Init(registry: any, _name: string)
-	self._entityFactory = registry:Get("EnemyEntityFactory")
-	self._despawnEnemyCommand = registry:Get("DespawnEnemyCommand")
+	self:_RequireDependencies(registry, {
+		_entityFactory = "EnemyEntityFactory",
+		_despawnEnemyCommand = "DespawnEnemyCommand",
+	})
 end
 
 function CleanupAllEnemies:Execute(): Result.Result<boolean>

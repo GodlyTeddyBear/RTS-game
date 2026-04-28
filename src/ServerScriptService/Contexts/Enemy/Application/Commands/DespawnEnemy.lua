@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -15,14 +16,18 @@ local Ensure = Result.Ensure
 ]=]
 local DespawnEnemy = {}
 DespawnEnemy.__index = DespawnEnemy
+setmetatable(DespawnEnemy, BaseCommand)
 
 function DespawnEnemy.new()
-	return setmetatable({}, DespawnEnemy)
+	local self = BaseCommand.new("Enemy", "DespawnEnemy")
+	return setmetatable(self, DespawnEnemy)
 end
 
 function DespawnEnemy:Init(registry: any, _name: string)
-	self._entityFactory = registry:Get("EnemyEntityFactory")
-	self._instanceFactory = registry:Get("EnemyInstanceFactory")
+	self:_RequireDependencies(registry, {
+		_entityFactory = "EnemyEntityFactory",
+		_instanceFactory = "EnemyInstanceFactory",
+	})
 end
 
 function DespawnEnemy:Execute(entity: any): Result.Result<boolean>

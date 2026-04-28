@@ -4,6 +4,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
@@ -16,6 +17,7 @@ local Ensure = Result.Ensure
 ]=]
 local StartCombat = {}
 StartCombat.__index = StartCombat
+setmetatable(StartCombat, BaseCommand)
 
 --[=[
 	@within StartCombat
@@ -23,7 +25,8 @@ StartCombat.__index = StartCombat
 	@return StartCombat -- Command instance used to begin combat sessions.
 ]=]
 function StartCombat.new()
-	return setmetatable({}, StartCombat)
+	local self = BaseCommand.new("Combat", "StartCombat")
+	return setmetatable(self, StartCombat)
 end
 
 --[=[
@@ -33,9 +36,11 @@ end
 	@param _name string -- Registry key used to register the command.
 ]=]
 function StartCombat:Init(registry: any, _name: string)
-	self._loopService = registry:Get("CombatLoopService")
-	self._behaviorRuntimeService = registry:Get("CombatBehaviorRuntimeService")
-	self._lockOnService = registry:Get("LockOnService")
+	self:_RequireDependencies(registry, {
+		_loopService = "CombatLoopService",
+		_behaviorRuntimeService = "CombatBehaviorRuntimeService",
+		_lockOnService = "LockOnService",
+	})
 end
 
 --[=[
@@ -45,8 +50,10 @@ end
 	@param _name string -- Registry key used to register the command.
 ]=]
 function StartCombat:Start(registry: any, _name: string)
-	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
-	self._structureEntityFactory = registry:Get("StructureEntityFactory")
+	self:_RequireDependencies(registry, {
+		_enemyEntityFactory = "EnemyEntityFactory",
+		_structureEntityFactory = "StructureEntityFactory",
+	})
 end
 
 -- Builds and stores the role-specific behavior tree for one enemy entity.
@@ -110,7 +117,7 @@ function StartCombat:Execute(waveNumber: number, isEndless: boolean): Result.Res
 		end
 
 		return Ok(true)
-	end, "Combat:StartCombat")
+	end, self:_Label())
 end
 
 return StartCombat

@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CommanderTypes = require(ReplicatedStorage.Contexts.Commander.Types.CommanderTypes)
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
 
 type SlotKey = CommanderTypes.SlotKey
 
@@ -13,6 +14,7 @@ type SlotKey = CommanderTypes.SlotKey
 ]=]
 local GetCooldownQuery = {}
 GetCooldownQuery.__index = GetCooldownQuery
+setmetatable(GetCooldownQuery, BaseQuery)
 
 --[=[
 	Creates a new cooldown query.
@@ -20,7 +22,8 @@ GetCooldownQuery.__index = GetCooldownQuery
 	@return GetCooldownQuery -- The new query instance.
 ]=]
 function GetCooldownQuery.new()
-	return setmetatable({}, GetCooldownQuery)
+	local self = BaseQuery.new("Commander", "GetCooldownQuery")
+	return setmetatable(self, GetCooldownQuery)
 end
 
 --[=[
@@ -30,7 +33,7 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function GetCooldownQuery:Init(registry: any, _name: string)
-	self._cooldownService = registry:Get("CooldownService")
+	self:_RequireDependency(registry, "_cooldownService", "CooldownService")
 end
 
 --[=[

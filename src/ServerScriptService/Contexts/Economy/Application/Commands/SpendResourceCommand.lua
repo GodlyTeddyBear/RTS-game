@@ -9,6 +9,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -25,6 +26,7 @@ local Try = Result.Try
 ]=]
 local SpendResourceCommand = {}
 SpendResourceCommand.__index = SpendResourceCommand
+setmetatable(SpendResourceCommand, BaseCommand)
 
 -- Creates the spend-resource command with no constructor dependencies.
 --[=[
@@ -33,7 +35,8 @@ SpendResourceCommand.__index = SpendResourceCommand
 	@return SpendResourceCommand -- The new command instance.
 ]=]
 function SpendResourceCommand.new()
-	return setmetatable({}, SpendResourceCommand)
+	local self = BaseCommand.new("Economy", "SpendResourceCommand")
+	return setmetatable(self, SpendResourceCommand)
 end
 
 -- [Public API]
@@ -46,8 +49,10 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function SpendResourceCommand:Init(registry: any, _name: string)
-	self._validator = registry:Get("ResourceValidator")
-	self._syncService = registry:Get("ResourceSyncService")
+	self:_RequireDependencies(registry, {
+		_validator = "ResourceValidator",
+		_syncService = "ResourceSyncService",
+	})
 end
 
 -- Checks the live balance first, then validates the request, then mutates the wallet.

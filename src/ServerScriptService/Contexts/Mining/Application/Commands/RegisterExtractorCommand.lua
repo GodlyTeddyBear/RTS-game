@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local MiningConfig = require(ReplicatedStorage.Contexts.Mining.Config.MiningConfig)
 local MiningTypes = require(ReplicatedStorage.Contexts.Mining.Types.MiningTypes)
@@ -22,6 +23,7 @@ type TExtractorRecord = MiningTypes.TExtractorRecord
 ]=]
 local RegisterExtractorCommand = {}
 RegisterExtractorCommand.__index = RegisterExtractorCommand
+setmetatable(RegisterExtractorCommand, BaseCommand)
 
 -- Creates the command wrapper.
 --[=[
@@ -30,7 +32,8 @@ RegisterExtractorCommand.__index = RegisterExtractorCommand
     @return RegisterExtractorCommand -- The new command instance.
 ]=]
 function RegisterExtractorCommand.new()
-	return setmetatable({}, RegisterExtractorCommand)
+	local self = BaseCommand.new("Mining", "RegisterExtractorCommand")
+	return setmetatable(self, RegisterExtractorCommand)
 end
 
 -- Resolves the mining entity factory during init.
@@ -41,7 +44,7 @@ end
     @param _name string -- The registered module name.
 ]=]
 function RegisterExtractorCommand:Init(registry: any, _name: string)
-	self._factory = registry:Get("MiningEntityFactory")
+	self:_RequireDependency(registry, "_factory", "MiningEntityFactory")
 end
 
 -- Validates a placement record and registers an extractor when the structure matches the mining extractor type.

@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -11,14 +12,18 @@ local Ensure = Result.Ensure
 
 local RemoveItem = {}
 RemoveItem.__index = RemoveItem
+setmetatable(RemoveItem, BaseCommand)
 
 function RemoveItem.new()
-	return setmetatable({}, RemoveItem)
+	local self = BaseCommand.new("Inventory", "RemoveItem")
+	return setmetatable(self, RemoveItem)
 end
 
 function RemoveItem:Init(registry: any, _name: string)
-	self.RemoveItemPolicy = registry:Get("RemoveItemPolicy")
-	self.SyncService = registry:Get("InventorySyncService")
+	self:_RequireDependencies(registry, {
+		RemoveItemPolicy = "RemoveItemPolicy",
+		SyncService = "InventorySyncService",
+	})
 end
 
 function RemoveItem:Execute(userId: number, slotIndex: number, quantity: number): Result.Result<any>

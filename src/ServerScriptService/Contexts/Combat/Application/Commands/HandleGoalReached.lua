@@ -1,10 +1,10 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
@@ -18,6 +18,7 @@ local Try = Result.Try
 ]=]
 local HandleGoalReached = {}
 HandleGoalReached.__index = HandleGoalReached
+setmetatable(HandleGoalReached, BaseCommand)
 
 --[=[
 	@within HandleGoalReached
@@ -25,7 +26,8 @@ HandleGoalReached.__index = HandleGoalReached
 	@return HandleGoalReached -- Command instance used to resolve goal-reaching enemies.
 ]=]
 function HandleGoalReached.new()
-	return setmetatable({}, HandleGoalReached)
+	local self = BaseCommand.new("Combat", "HandleGoalReached")
+	return setmetatable(self, HandleGoalReached)
 end
 
 --[=[
@@ -35,19 +37,20 @@ end
 	@param _name string -- Registry key used to register the command.
 ]=]
 function HandleGoalReached:Init(registry: any, _name: string)
-	self.Registry = registry
+	self:_RequireDependency(registry, "_combatPerceptionService", "CombatPerceptionService")
 end
 
 --[=[
 	@within HandleGoalReached
 	Caches the enemy and commander contexts after the registry is fully initialized.
 ]=]
-function HandleGoalReached:Start()
-	self._enemyContext = self.Registry:Get("EnemyContext")
-	self._entityFactory = self.Registry:Get("EnemyEntityFactory")
-	self._baseContext = self.Registry:Get("BaseContext")
-	self._baseEntityFactory = self.Registry:Get("BaseEntityFactory")
-	self._combatPerceptionService = self.Registry:Get("CombatPerceptionService")
+function HandleGoalReached:Start(registry: any, _name: string)
+	self:_RequireDependencies(registry, {
+		_enemyContext = "EnemyContext",
+		_entityFactory = "EnemyEntityFactory",
+		_baseContext = "BaseContext",
+		_baseEntityFactory = "BaseEntityFactory",
+	})
 end
 
 --[=[
@@ -80,13 +83,13 @@ function HandleGoalReached:Execute(entity: any): Result.Result<boolean>
 
 		-- Mark the enemy resolved, emit the wave event, and apply the resulting base damage.
 		self._entityFactory:MarkGoalReached(entity)
-		GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.Role, identity.WaveNumber, deathCFrame)
+		self:_EmitGameEvent("Wave", "EnemyDied", identity.Role, identity.WaveNumber, deathCFrame)
 
 		Try(self._enemyContext:DespawnEnemy(entity))
 		Try(self._baseContext:ApplyDamage(roleConfig.Damage))
 
 		return Ok(true)
-	end, "Combat:HandleGoalReached")
+	end, self:_Label())
 end
 
 return HandleGoalReached

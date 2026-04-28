@@ -9,6 +9,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local BaseConfig = require(ReplicatedStorage.Contexts.Base.Config.BaseConfig)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -18,6 +19,7 @@ local Try = Result.Try
 
 local PrepareRunBaseCommand = {}
 PrepareRunBaseCommand.__index = PrepareRunBaseCommand
+setmetatable(PrepareRunBaseCommand, BaseCommand)
 
 --[=[
     Create a new prepare-run command.
@@ -25,7 +27,8 @@ PrepareRunBaseCommand.__index = PrepareRunBaseCommand
     @return PrepareRunBaseCommand -- Command instance.
 ]=]
 function PrepareRunBaseCommand.new()
-	return setmetatable({}, PrepareRunBaseCommand)
+	local self = BaseCommand.new("Base", "PrepareRunBaseCommand")
+	return setmetatable(self, PrepareRunBaseCommand)
 end
 
 --[=[
@@ -35,8 +38,10 @@ end
     @param _name string -- Module name supplied by the BaseContext framework.
 ]=]
 function PrepareRunBaseCommand:Init(registry: any, _name: string)
-	self._entityFactory = registry:Get("BaseEntityFactory")
-	self._syncService = registry:Get("BaseSyncService")
+	self:_RequireDependencies(registry, {
+		_entityFactory = "BaseEntityFactory",
+		_syncService = "BaseSyncService",
+	})
 end
 
 --[=[
@@ -46,7 +51,7 @@ end
     @param _name string -- Module name supplied by the BaseContext framework.
 ]=]
 function PrepareRunBaseCommand:Start(registry: any, _name: string)
-	self._mapContext = registry:Get("MapContext")
+	self:_RequireDependency(registry, "_mapContext", "MapContext")
 end
 
 --[=[
@@ -69,7 +74,7 @@ function PrepareRunBaseCommand:Execute(): Result.Result<boolean>
 		self._syncService:HydrateAllPlayers()
 
 		return Ok(true)
-	end, "Base:PrepareRunBaseCommand")
+	end, self:_Label())
 end
 
 return PrepareRunBaseCommand

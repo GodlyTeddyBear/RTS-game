@@ -4,6 +4,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
 local Err = Result.Err
@@ -23,26 +24,32 @@ local ATTACK_ACTIONS = table.freeze({
 ]=]
 local HandleAnimationCallback = {}
 HandleAnimationCallback.__index = HandleAnimationCallback
+setmetatable(HandleAnimationCallback, BaseCommand)
 
 function HandleAnimationCallback.new()
-	return setmetatable({}, HandleAnimationCallback)
+	local self = BaseCommand.new("Combat", "HandleAnimationCallback")
+	return setmetatable(self, HandleAnimationCallback)
 end
 
 function HandleAnimationCallback:Init(registry: any, _name: string)
-	self._loopService = registry:Get("CombatLoopService")
-	self._runtimeService = registry:Get("CombatBehaviorRuntimeService")
-	self._hitboxService = registry:Get("HitboxService")
-	self._projectileService = registry:Get("ProjectileService")
-	self._handleGoalReached = registry:Get("HandleGoalReached")
+	self:_RequireDependencies(registry, {
+		_loopService = "CombatLoopService",
+		_runtimeService = "CombatBehaviorRuntimeService",
+		_hitboxService = "HitboxService",
+		_projectileService = "ProjectileService",
+		_handleGoalReached = "HandleGoalReached",
+	})
 end
 
 function HandleAnimationCallback:Start(registry: any, _name: string)
-	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
-	self._structureEntityFactory = registry:Get("StructureEntityFactory")
-	self._baseEntityFactory = registry:Get("BaseEntityFactory")
-	self._enemyContext = registry:Get("EnemyContext")
-	self._structureContext = registry:Get("StructureContext")
-	self._baseContext = registry:Get("BaseContext")
+	self:_RequireDependencies(registry, {
+		_enemyEntityFactory = "EnemyEntityFactory",
+		_structureEntityFactory = "StructureEntityFactory",
+		_baseEntityFactory = "BaseEntityFactory",
+		_enemyContext = "EnemyContext",
+		_structureContext = "StructureContext",
+		_baseContext = "BaseContext",
+	})
 end
 
 local function _resolveActorEntity(self: any, actorId: string, actorKind: string?): (any, number?, string)
@@ -191,7 +198,7 @@ function HandleAnimationCallback:Execute(
 		end
 
 		return Ok(true)
-	end, "Combat:HandleAnimationCallback")
+	end, self:_Label())
 end
 
 return HandleAnimationCallback

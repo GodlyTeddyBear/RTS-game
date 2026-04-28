@@ -9,11 +9,13 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
 
 local CleanupBaseCommand = {}
 CleanupBaseCommand.__index = CleanupBaseCommand
+setmetatable(CleanupBaseCommand, BaseCommand)
 
 --[=[
     Create a new cleanup command.
@@ -21,7 +23,8 @@ CleanupBaseCommand.__index = CleanupBaseCommand
     @return CleanupBaseCommand -- Command instance.
 ]=]
 function CleanupBaseCommand.new()
-	return setmetatable({}, CleanupBaseCommand)
+	local self = BaseCommand.new("Base", "CleanupBaseCommand")
+	return setmetatable(self, CleanupBaseCommand)
 end
 
 --[=[
@@ -31,9 +34,11 @@ end
     @param _name string -- Module name supplied by the BaseContext framework.
 ]=]
 function CleanupBaseCommand:Init(registry: any, _name: string)
-	self._entityFactory = registry:Get("BaseEntityFactory")
-	self._syncService = registry:Get("BaseSyncService")
-	self._applyDamageCommand = registry:Get("ApplyDamageBaseCommand")
+	self:_RequireDependencies(registry, {
+		_entityFactory = "BaseEntityFactory",
+		_syncService = "BaseSyncService",
+		_applyDamageCommand = "ApplyDamageBaseCommand",
+	})
 end
 
 --[=[
@@ -47,7 +52,7 @@ function CleanupBaseCommand:Execute(): Result.Result<boolean>
 		self._syncService:ClearState()
 		self._applyDamageCommand:ResetDeathEmission()
 		return Ok(true)
-	end, "Base:CleanupBaseCommand")
+	end, self:_Label())
 end
 
 return CleanupBaseCommand

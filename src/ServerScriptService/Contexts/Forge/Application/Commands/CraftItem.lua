@@ -2,6 +2,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Errors = require(script.Parent.Parent.Parent.Errors)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Ok, Err, Try, Ensure = Result.Ok, Result.Err, Result.Try, Result.Ensure
 local MentionSuccess = Result.MentionSuccess
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
@@ -15,6 +16,7 @@ local Events = GameEvents.Events
 ]=]
 local CraftItem = {}
 CraftItem.__index = CraftItem
+setmetatable(CraftItem, BaseCommand)
 
 --[=[
 	@function CraftItem.new
@@ -23,7 +25,8 @@ CraftItem.__index = CraftItem
 	@return CraftItem
 ]=]
 function CraftItem.new()
-	return setmetatable({}, CraftItem)
+	local self = BaseCommand.new("Forge", "CraftItem")
+	return setmetatable(self, CraftItem)
 end
 
 --[=[
@@ -34,8 +37,7 @@ end
 	@param _name string -- Service name (unused)
 ]=]
 function CraftItem:Init(registry: any, _name: string)
-	self._registry = registry
-	self.CraftPolicy = registry:Get("CraftPolicy")
+	self:_RequireDependency(registry, "CraftPolicy", "CraftPolicy")
 end
 
 --[=[
@@ -43,9 +45,9 @@ end
 	@within CraftItem
 	Start the command: resolve InventoryContext cross-context dependency after all services have initialized.
 ]=]
-function CraftItem:Start()
+function CraftItem:Start(registry: any, _name: string)
 	-- Cross-context dependency available after KnitStart registers it
-	self.InventoryContext = self._registry:Get("InventoryContext")
+	self:_RequireDependency(registry, "InventoryContext", "InventoryContext")
 end
 
 --[=[

@@ -4,7 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local Registry = require(ReplicatedStorage.Utilities.Registry)
+local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local LogRetentionConfig = require(ReplicatedStorage.Contexts.Log.Config.LogRetentionConfig)
 local LogCommandTypes = require(ReplicatedStorage.Contexts.Log.Types.LogCommandTypes)
@@ -32,24 +32,45 @@ export type LogEntry = {
 }
 type CommandExecutionResult = LogCommandTypes.CommandExecutionResult
 
+local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "BlinkServer",
+		Instance = BlinkServer,
+	},
+	{
+		Name = "LogSyncService",
+		Module = LogSyncService,
+		CacheAs = "_logSyncService",
+	},
+}
+
+local LogModules: BaseContext.TModuleLayers = {
+	Infrastructure = InfrastructureModules,
+}
+
 local LogContext = Knit.CreateService({
 	Name = "LogContext",
 	Client = {},
+	Modules = LogModules,
+	Teardown = {
+		Fields = {
+			{ Field = "_playerAddedConnection", Method = "Disconnect" },
+		},
+	},
 })
+
+local LogBaseContext = BaseContext.new(LogContext)
 
 ---
 -- Knit Lifecycle
 ---
 
 function LogContext:KnitInit()
+	LogBaseContext:KnitInit()
+
 	self._nextId = 1
 	self._developerUserId = DEVELOPER_USER_ID
-
-	local registry = Registry.new("Log")
-	registry:Register("BlinkServer", BlinkServer)
-	registry:Register("LogSyncService", LogSyncService.new(), "Infrastructure")
-	registry:InitAll()
-	self._logSyncService = registry:Get("LogSyncService")
+	self._playerAddedConnection = nil :: RBXScriptConnection?
 
 	Result.SetLogger(function(level: string, label: string, err: any)
 		self:_Push(level, label, err, nil)
@@ -65,17 +86,13 @@ function LogContext:KnitInit()
 end
 
 function LogContext:KnitStart()
-	Players.PlayerAdded:Connect(function(player: Player)
+	LogBaseContext:KnitStart()
+
+	self._playerAddedConnection = LogBaseContext:HandleExistingAndAddedPlayers(function(player: Player)
 		if player.UserId == self._developerUserId then
 			self._logSyncService:HydrateDeveloper(player)
 		end
-	end)
-
-	-- Hydrate if developer is already in the server
-	local developerPlayer = Players:GetPlayerByUserId(self._developerUserId)
-	if developerPlayer then
-		self._logSyncService:HydrateDeveloper(developerPlayer)
-	end
+	end, "_playerAddedConnection")
 end
 
 ---

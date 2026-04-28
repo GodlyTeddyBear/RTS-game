@@ -10,6 +10,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTypes)
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
 
 type ResourceWallet = EconomyTypes.ResourceWallet
 
@@ -20,6 +21,7 @@ type ResourceWallet = EconomyTypes.ResourceWallet
 ]=]
 local GetResourceWalletQuery = {}
 GetResourceWalletQuery.__index = GetResourceWalletQuery
+setmetatable(GetResourceWalletQuery, BaseQuery)
 
 -- [Initialization]
 
@@ -29,7 +31,8 @@ GetResourceWalletQuery.__index = GetResourceWalletQuery
 	@return GetResourceWalletQuery -- The new query instance.
 ]=]
 function GetResourceWalletQuery.new()
-	return setmetatable({}, GetResourceWalletQuery)
+	local self = BaseQuery.new("Economy", "GetResourceWalletQuery")
+	return setmetatable(self, GetResourceWalletQuery)
 end
 
 -- [Public API]
@@ -42,7 +45,7 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function GetResourceWalletQuery:Init(registry: any, _name: string)
-	self._syncService = registry:Get("ResourceSyncService")
+	self:_RequireDependency(registry, "_syncService", "ResourceSyncService")
 end
 
 --[=[

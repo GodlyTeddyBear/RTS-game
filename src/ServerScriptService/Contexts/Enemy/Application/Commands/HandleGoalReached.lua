@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local Errors = require(script.Parent.Parent.Parent.Errors)
@@ -18,14 +19,18 @@ local Try = Result.Try
 ]=]
 local HandleGoalReached = {}
 HandleGoalReached.__index = HandleGoalReached
+setmetatable(HandleGoalReached, BaseCommand)
 
 function HandleGoalReached.new()
-	return setmetatable({}, HandleGoalReached)
+	local self = BaseCommand.new("Enemy", "HandleGoalReached")
+	return setmetatable(self, HandleGoalReached)
 end
 
 function HandleGoalReached:Init(registry: any, _name: string)
-	self._entityFactory = registry:Get("EnemyEntityFactory")
-	self._despawnEnemyCommand = registry:Get("DespawnEnemyCommand")
+	self:_RequireDependencies(registry, {
+		_entityFactory = "EnemyEntityFactory",
+		_despawnEnemyCommand = "DespawnEnemyCommand",
+	})
 end
 
 function HandleGoalReached:Execute(entity: any, primaryPlayer: Player?, commanderContext: any): Result.Result<boolean>

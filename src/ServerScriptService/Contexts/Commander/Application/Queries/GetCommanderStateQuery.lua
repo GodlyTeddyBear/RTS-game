@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CommanderTypes = require(ReplicatedStorage.Contexts.Commander.Types.CommanderTypes)
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
 
 type CommanderState = CommanderTypes.CommanderState
 
@@ -13,6 +14,7 @@ type CommanderState = CommanderTypes.CommanderState
 ]=]
 local GetCommanderStateQuery = {}
 GetCommanderStateQuery.__index = GetCommanderStateQuery
+setmetatable(GetCommanderStateQuery, BaseQuery)
 
 --[=[
 	Creates a new commander-state query.
@@ -20,7 +22,8 @@ GetCommanderStateQuery.__index = GetCommanderStateQuery
 	@return GetCommanderStateQuery -- The new query instance.
 ]=]
 function GetCommanderStateQuery.new()
-	return setmetatable({}, GetCommanderStateQuery)
+	local self = BaseQuery.new("Commander", "GetCommanderStateQuery")
+	return setmetatable(self, GetCommanderStateQuery)
 end
 
 --[=[
@@ -30,7 +33,7 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function GetCommanderStateQuery:Init(registry: any, _name: string)
-	self._entityFactory = registry:Get("CommanderEntityFactory")
+	self:_RequireDependency(registry, "_entityFactory", "CommanderEntityFactory")
 end
 
 --[=[

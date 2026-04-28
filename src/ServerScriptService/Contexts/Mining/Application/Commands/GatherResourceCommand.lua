@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local MiningConfig = require(ReplicatedStorage.Contexts.Mining.Config.MiningConfig)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local MiningSpecs = require(script.Parent.Parent.Parent.MiningDomain.Specs.MiningSpecs)
@@ -19,6 +20,7 @@ local Ensure = Result.Ensure
 ]=]
 local GatherResourceCommand = {}
 GatherResourceCommand.__index = GatherResourceCommand
+setmetatable(GatherResourceCommand, BaseCommand)
 
 -- Creates the manual-gather command wrapper.
 --[=[
@@ -27,7 +29,8 @@ GatherResourceCommand.__index = GatherResourceCommand
     @return GatherResourceCommand -- The new command instance.
 ]=]
 function GatherResourceCommand.new()
-	return setmetatable({}, GatherResourceCommand)
+	local self = BaseCommand.new("Mining", "GatherResourceCommand")
+	return setmetatable(self, GatherResourceCommand)
 end
 
 -- Resolves the mining interaction service during init.
@@ -38,7 +41,7 @@ end
     @param _name string -- The registered module name.
 ]=]
 function GatherResourceCommand:Init(registry: any, _name: string)
-	self._interactionService = registry:Get("ResourceGatherInteractionService")
+	self:_RequireDependency(registry, "_interactionService", "ResourceGatherInteractionService")
 end
 
 -- Resolves the economy context once external services are available.
@@ -49,7 +52,7 @@ end
     @param _name string -- The registered module name.
 ]=]
 function GatherResourceCommand:Start(registry: any, _name: string)
-	self._economyContext = registry:Get("EconomyContext")
+	self:_RequireDependency(registry, "_economyContext", "EconomyContext")
 end
 
 -- Validates the click request and awards manual gather resources when the cooldown allows it.

@@ -1,4 +1,6 @@
 --!strict
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
 
 --[=[
 	@class GetGoalReachedEnemiesQuery
@@ -7,13 +9,15 @@
 ]=]
 local GetGoalReachedEnemiesQuery = {}
 GetGoalReachedEnemiesQuery.__index = GetGoalReachedEnemiesQuery
+setmetatable(GetGoalReachedEnemiesQuery, BaseQuery)
 
 function GetGoalReachedEnemiesQuery.new()
-	return setmetatable({}, GetGoalReachedEnemiesQuery)
+	local self = BaseQuery.new("Enemy", "GetGoalReachedEnemiesQuery")
+	return setmetatable(self, GetGoalReachedEnemiesQuery)
 end
 
 function GetGoalReachedEnemiesQuery:Init(registry: any, _name: string)
-	self._entityFactory = registry:Get("EnemyEntityFactory")
+	self:_RequireDependency(registry, "_entityFactory", "EnemyEntityFactory")
 end
 
 function GetGoalReachedEnemiesQuery:Execute(): { number }

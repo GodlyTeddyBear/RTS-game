@@ -10,7 +10,7 @@ local BaseECSComponentRegistry = require(ReplicatedStorage.Utilities.BaseECSComp
 ]=]
 local EnemyComponentRegistry = {}
 EnemyComponentRegistry.__index = EnemyComponentRegistry
-setmetatable(EnemyComponentRegistry, BaseECSComponentRegistry)
+setmetatable(EnemyComponentRegistry, { __index = BaseECSComponentRegistry })
 
 function EnemyComponentRegistry.new()
 	return setmetatable(BaseECSComponentRegistry.new("Enemy"), EnemyComponentRegistry)

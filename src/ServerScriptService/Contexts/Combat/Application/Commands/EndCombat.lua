@@ -4,6 +4,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
 
@@ -53,6 +54,7 @@ end
 ]=]
 local EndCombat = {}
 EndCombat.__index = EndCombat
+setmetatable(EndCombat, BaseCommand)
 
 --[=[
 	@within EndCombat
@@ -60,7 +62,8 @@ EndCombat.__index = EndCombat
 	@return EndCombat -- Command instance used to end combat sessions.
 ]=]
 function EndCombat.new()
-	return setmetatable({}, EndCombat)
+	local self = BaseCommand.new("Combat", "EndCombat")
+	return setmetatable(self, EndCombat)
 end
 
 --[=[
@@ -70,12 +73,14 @@ end
 	@param _name string -- Registry key used to register the command.
 ]=]
 function EndCombat:Init(registry: any, _name: string)
-	self._loopService = registry:Get("CombatLoopService")
-	self._behaviorRuntimeService = registry:Get("CombatBehaviorRuntimeService")
-	self._combatHitResolutionService = registry:Get("CombatHitResolutionService")
-	self._hitboxService = registry:Get("HitboxService")
-	self._lockOnService = registry:Get("LockOnService")
-	self._movementService = registry:Get("MovementService")
+	self:_RequireDependencies(registry, {
+		_loopService = "CombatLoopService",
+		_behaviorRuntimeService = "CombatBehaviorRuntimeService",
+		_combatHitResolutionService = "CombatHitResolutionService",
+		_hitboxService = "HitboxService",
+		_lockOnService = "LockOnService",
+		_movementService = "MovementService",
+	})
 end
 
 --[=[
@@ -85,10 +90,12 @@ end
 	@param _name string -- Registry key used to register the command.
 ]=]
 function EndCombat:Start(registry: any, _name: string)
-	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
-	self._structureEntityFactory = registry:Get("StructureEntityFactory")
-	self._enemyContext = registry:Get("EnemyContext")
-	self._structureContext = registry:Get("StructureContext")
+	self:_RequireDependencies(registry, {
+		_enemyEntityFactory = "EnemyEntityFactory",
+		_structureEntityFactory = "StructureEntityFactory",
+		_enemyContext = "EnemyContext",
+		_structureContext = "StructureContext",
+	})
 end
 
 --[=[
@@ -161,7 +168,7 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 		end
 
 		return Ok(true)
-	end, "Combat:EndCombat")
+	end, self:_Label())
 end
 
 return EndCombat

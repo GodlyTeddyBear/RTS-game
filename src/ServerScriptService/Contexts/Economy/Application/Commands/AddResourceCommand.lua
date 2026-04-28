@@ -9,6 +9,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -25,6 +26,7 @@ local Try = Result.Try
 ]=]
 local AddResourceCommand = {}
 AddResourceCommand.__index = AddResourceCommand
+setmetatable(AddResourceCommand, BaseCommand)
 
 -- Creates the add-resource command with no constructor dependencies.
 --[=[
@@ -33,7 +35,8 @@ AddResourceCommand.__index = AddResourceCommand
 	@return AddResourceCommand -- The new command instance.
 ]=]
 function AddResourceCommand.new()
-	return setmetatable({}, AddResourceCommand)
+	local self = BaseCommand.new("Economy", "AddResourceCommand")
+	return setmetatable(self, AddResourceCommand)
 end
 
 -- [Public API]
@@ -46,8 +49,10 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function AddResourceCommand:Init(registry: any, _name: string)
-	self._validator = registry:Get("ResourceValidator")
-	self._syncService = registry:Get("ResourceSyncService")
+	self:_RequireDependencies(registry, {
+		_validator = "ResourceValidator",
+		_syncService = "ResourceSyncService",
+	})
 end
 
 -- Validates first, then applies the capped grant so no partial mutation occurs on bad input.

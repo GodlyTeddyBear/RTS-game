@@ -3,9 +3,9 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local CommanderTypes = require(ReplicatedStorage.Contexts.Commander.Types.CommanderTypes)
 local Errors = require(script.Parent.Parent.Parent.Errors)
-local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
 local Ok = Result.Ok
 local Try = Result.Try
@@ -29,6 +29,7 @@ type UseAbilityResult = {
 ]=]
 local UseAbilityCommand = {}
 UseAbilityCommand.__index = UseAbilityCommand
+setmetatable(UseAbilityCommand, BaseCommand)
 
 local function _GetCommanderRootCFrame(player: Player): CFrame?
 	local character = player.Character
@@ -50,7 +51,8 @@ end
 	@return UseAbilityCommand -- The new command instance.
 ]=]
 function UseAbilityCommand.new()
-	return setmetatable({}, UseAbilityCommand)
+	local self = BaseCommand.new("Commander", "UseAbilityCommand")
+	return setmetatable(self, UseAbilityCommand)
 end
 
 --[=[
@@ -60,18 +62,22 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function UseAbilityCommand:Init(registry: any, _name: string)
-	self._abilityService = registry:Get("AbilityService")
-	self._cooldownService = registry:Get("CooldownService")
-	self._abilityUsePolicy = registry:Get("AbilityUsePolicy")
-	self._entityFactory = registry:Get("CommanderEntityFactory")
-	self._syncService = registry:Get("CommanderSyncService")
+	self:_RequireDependencies(registry, {
+		_abilityService = "AbilityService",
+		_cooldownService = "CooldownService",
+		_abilityUsePolicy = "AbilityUsePolicy",
+		_entityFactory = "CommanderEntityFactory",
+		_syncService = "CommanderSyncService",
+	})
 end
 
 -- Resolves cross-context dependencies after external services are registered in KnitStart.
 function UseAbilityCommand:Start(registry: any, _name: string)
-	self._economyContext = registry:Get("EconomyContext")
-	self._runContext = registry:Get("RunContext")
-	self._summonContext = registry:Get("SummonContext")
+	self:_RequireDependencies(registry, {
+		_economyContext = "EconomyContext",
+		_runContext = "RunContext",
+		_summonContext = "SummonContext",
+	})
 end
 
 --[=[
@@ -144,13 +150,13 @@ function UseAbilityCommand:Execute(player: Player, slotKey: SlotKey): Result.Res
 		self._entityFactory:SetCooldown(userId, slot.Key, slot.CooldownDuration)
 		self._syncService:SyncCommanderState(userId)
 
-		GameEvents.Bus:Emit(GameEvents.Events.Commander.AbilityUsed, userId, slot.Key)
+		self:_EmitContextEvent("AbilityUsed", userId, slot.Key)
 
 		-- Return the accepted slot key so callers can mirror the successful action.
 		return Ok({
 			slotKey = slot.Key,
 		})
-	end, "Commander:UseAbilityCommand")
+	end, self:_Label())
 end
 
 return UseAbilityCommand

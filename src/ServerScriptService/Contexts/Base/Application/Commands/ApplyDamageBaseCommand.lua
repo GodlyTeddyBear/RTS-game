@@ -8,8 +8,8 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
@@ -17,6 +17,7 @@ local Ensure = Result.Ensure
 
 local ApplyDamageBaseCommand = {}
 ApplyDamageBaseCommand.__index = ApplyDamageBaseCommand
+setmetatable(ApplyDamageBaseCommand, BaseCommand)
 
 --[=[
     Create a new apply-damage command.
@@ -24,7 +25,8 @@ ApplyDamageBaseCommand.__index = ApplyDamageBaseCommand
     @return ApplyDamageBaseCommand -- Command instance.
 ]=]
 function ApplyDamageBaseCommand.new()
-	return setmetatable({}, ApplyDamageBaseCommand)
+	local self = BaseCommand.new("Base", "ApplyDamageBaseCommand")
+	return setmetatable(self, ApplyDamageBaseCommand)
 end
 
 --[=[
@@ -34,8 +36,10 @@ end
     @param _name string -- Module name supplied by the BaseContext framework.
 ]=]
 function ApplyDamageBaseCommand:Init(registry: any, _name: string)
-	self._entityFactory = registry:Get("BaseEntityFactory")
-	self._syncService = registry:Get("BaseSyncService")
+	self:_RequireDependencies(registry, {
+		_entityFactory = "BaseEntityFactory",
+		_syncService = "BaseSyncService",
+	})
 	self._hasEmittedDeath = false
 end
 
@@ -60,11 +64,11 @@ function ApplyDamageBaseCommand:Execute(amount: number): Result.Result<boolean>
 
 		if previousHealth.Hp > 0 and didDie and not self._hasEmittedDeath then
 			self._hasEmittedDeath = true
-			GameEvents.Bus:Emit(GameEvents.Events.Base.BaseDestroyed)
+			self:_EmitContextEvent("BaseDestroyed")
 		end
 
 		return Ok(didDie)
-	end, "Base:ApplyDamageBaseCommand")
+	end, self:_Label())
 end
 
 --[=[

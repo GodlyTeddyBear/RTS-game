@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -17,14 +18,18 @@ local Try = Result.Try
 ]=]
 local ApplyDamageEnemy = {}
 ApplyDamageEnemy.__index = ApplyDamageEnemy
+setmetatable(ApplyDamageEnemy, BaseCommand)
 
 function ApplyDamageEnemy.new()
-	return setmetatable({}, ApplyDamageEnemy)
+	local self = BaseCommand.new("Enemy", "ApplyDamageEnemy")
+	return setmetatable(self, ApplyDamageEnemy)
 end
 
 function ApplyDamageEnemy:Init(registry: any, _name: string)
-	self._entityFactory = registry:Get("EnemyEntityFactory")
-	self._despawnEnemyCommand = registry:Get("DespawnEnemyCommand")
+	self:_RequireDependencies(registry, {
+		_entityFactory = "EnemyEntityFactory",
+		_despawnEnemyCommand = "DespawnEnemyCommand",
+	})
 end
 
 function ApplyDamageEnemy:Execute(entity: any, amount: number): Result.Result<boolean>
