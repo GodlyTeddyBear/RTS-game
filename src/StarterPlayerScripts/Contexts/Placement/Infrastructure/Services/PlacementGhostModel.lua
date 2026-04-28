@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
+local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local MiningConfig = require(ReplicatedStorage.Contexts.Mining.Config.MiningConfig)
 
 local PlacementGhostModel = {}
@@ -21,19 +22,6 @@ PlacementGhostModel.__index = PlacementGhostModel
 
 local VALID_COLOR = Color3.fromRGB(0, 200, 100)
 local INVALID_COLOR = Color3.fromRGB(200, 50, 50)
-
--- Computes a pivot that keeps the model bottom aligned to the hovered world position.
-local function _BuildBottomAlignedPivot(model: Model, targetWorldPos: Vector3): CFrame
-	local currentPivot = model:GetPivot()
-	local boundsCFrame, boundsSize = model:GetBoundingBox()
-
-	local currentBottomY = boundsCFrame.Position.Y - (boundsSize.Y * 0.5)
-	local yOffset = targetWorldPos.Y - currentBottomY
-	local targetPivotPosition = Vector3.new(targetWorldPos.X, currentPivot.Position.Y + yOffset, targetWorldPos.Z)
-
-	local pivotRotation = currentPivot - currentPivot.Position
-	return CFrame.new(targetPivotPosition) * pivotRotation
-end
 
 -- Applies the translucent, non-interactive ghost styling to every visible part.
 local function _ApplyGhostStyle(model: Model)
@@ -154,7 +142,7 @@ end
 
 -- Moves the ghost so its bottom face stays anchored to the hovered world position.
 function PlacementGhostModel:MoveTo(worldPos: Vector3)
-	self._model:PivotTo(_BuildBottomAlignedPivot(self._model, worldPos))
+	ModelPlus.MoveBottomAligned(self._model, worldPos)
 end
 
 -- Tints the ghost to communicate whether the hovered tile is currently valid.

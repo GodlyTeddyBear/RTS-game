@@ -5,6 +5,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local BaseInstanceFactory = require(ReplicatedStorage.Utilities.BaseInstanceFactory)
+local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
 local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
 
@@ -17,18 +18,6 @@ type TCreateStructureInstanceOptions = {
 local StructureInstanceFactory = {}
 StructureInstanceFactory.__index = StructureInstanceFactory
 setmetatable(StructureInstanceFactory, { __index = BaseInstanceFactory })
-
-local function _BuildBottomAlignedPivot(model: Model, targetWorldPos: Vector3): CFrame
-	local currentPivot = model:GetPivot()
-	local boundsCFrame, boundsSize = model:GetBoundingBox()
-
-	local currentBottomY = boundsCFrame.Position.Y - (boundsSize.Y * 0.5)
-	local yOffset = targetWorldPos.Y - currentBottomY
-	local targetPivotPosition = Vector3.new(targetWorldPos.X, currentPivot.Position.Y + yOffset, targetWorldPos.Z)
-
-	local pivotRotation = currentPivot - currentPivot.Position
-	return CFrame.new(targetPivotPosition) * pivotRotation
-end
 
 local function _EnsureAnimationsFolderValue(model: Model, animationsFolder: Folder?)
 	local animationsFolderRef = model:FindFirstChild("AnimationsFolder")
@@ -120,7 +109,7 @@ function StructureInstanceFactory:_PrepareInstance(instance: Instance, _entityId
 	model:SetAttribute("PlacementInstanceId", options.instanceId)
 
 	_PrepareStructureAnimationRuntime(model, self._animationsFolder)
-	model:PivotTo(_BuildBottomAlignedPivot(model, options.worldPos))
+	ModelPlus.MoveBottomAligned(model, options.worldPos)
 	EntityCollisionService:ApplyStructureModel(model)
 end
 
