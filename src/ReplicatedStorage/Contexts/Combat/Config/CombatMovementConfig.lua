@@ -43,7 +43,7 @@ CombatMovementConfig.DEFAULT_AGENT_PARAMS = table.freeze({
 	Runtime SimplePath options used by combat movement.
 ]=]
 CombatMovementConfig.PATHFINDING = table.freeze({
-	VisualizeSimplePath = true,
+	VisualizeSimplePath = false,
 	DebugTarget = false,
 	InitialRunDelaySeconds = 0.1,
 	RetryComputationErrors = true,

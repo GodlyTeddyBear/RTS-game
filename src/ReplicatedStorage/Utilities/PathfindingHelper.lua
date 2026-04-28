@@ -1,24 +1,22 @@
---[[
-	PathfindingHelper - Shared utility for SimplePath lifecycle management.
+--[=[
+    @class PathfindingHelper
+    Shared utility for creating and running `SimplePath` instances while keeping
+    lifecycle management, cleanup, and runtime guards out of movement contexts.
 
-	Used by movement systems to create and run SimplePath instances. Keeps pathfinding
-	plumbing out of individual context files.
-
-	RunPath returns a Promise that:
-		- Resolves when Reached fires
-		- Rejects when Error or Blocked fires
-		- Cleans up (Stop + Destroy) on cancel or settlement
-
-	Callers store the returned Promise and check its status each Tick via
-	Promise.Status (Started = running, Resolved = reached, Rejected = failed).
-	Cancelling the Promise stops and destroys the path immediately.
-]]
+    Flow: validate entity model -> create path -> run path -> settle or cancel.
+    This module owns path setup and promise coordination only; it does not own
+    movement policy or entity construction.
+    @server
+    @client
+]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SimplePath = require(ReplicatedStorage.Utilities.SimplePath)
 local Promise = require(ReplicatedStorage.Packages.Promise)
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local Result = require(ReplicatedStorage.Utilities.Result)
+
+-- ── Constants ────────────────────────────────────────────────────────────────
 
 local DEFAULT_AGENT_PARAMS = {
 	AgentRadius = 2,
@@ -41,6 +39,9 @@ local _lastGuardLogByKey: { [string]: number } = {}
 
 local PathfindingHelper = {}
 
+-- ── Private ──────────────────────────────────────────────────────────────────
+
+-- Resolves the context factory that can provide a model reference for path setup.
 local function _resolveFactory(services: any): any?
 	if not services then
 		return nil
@@ -49,6 +50,7 @@ local function _resolveFactory(services: any): any?
 	return services.EntityFactory or services.NPCEntityFactory or services.EnemyEntityFactory
 end
 
+-- Throttles repeated guard logs so the same invalid path request does not spam diagnostics.
 local function _throttledGuardLog(entityKey: string, reason: string, data: { [string]: any }?)
 	local now = os.clock()
 	local logKey = string.format("%s:%s", entityKey, reason)
@@ -61,22 +63,26 @@ local function _throttledGuardLog(entityKey: string, reason: string, data: { [st
 	Result.MentionError("PathfindingHelper", "Path request rejected by runtime guard", data, reason)
 end
 
+-- Normalizes `SimplePath` failures into a warning that is safe to log.
 local function _warnPathRunFailure(entity: any?, err: any)
 	local function toLogString(value: any): string
 		if type(value) ~= "table" then
 			return tostring(value)
 		end
 
+		-- Prefer the nested message when `SimplePath` wraps the error payload.
 		local nestedMessage = value.message
 		if nestedMessage ~= nil and type(nestedMessage) ~= "table" then
 			return tostring(nestedMessage)
 		end
 
+		-- Fall back to the nested error field for other wrapper shapes.
 		local nestedError = value.error
 		if nestedError ~= nil and type(nestedError) ~= "table" then
 			return tostring(nestedError)
 		end
 
+		-- Flatten scalar fields so the warning still carries useful context.
 		local parts = {}
 		for key, nestedValue in pairs(value) do
 			if type(nestedValue) ~= "table" then
@@ -102,6 +108,7 @@ local function _warnPathRunFailure(entity: any?, err: any)
 	warn(string.format("[PathfindingHelper] RunPath rejected for entity=%s reason=%s", entityLabel, tostring(err)))
 end
 
+-- Returns the configured path option or its default value when no override exists.
 local function _resolvePathOption(options: { [string]: any }?, key: string): any
 	if options ~= nil and options[key] ~= nil then
 		return options[key]
@@ -110,6 +117,7 @@ local function _resolvePathOption(options: { [string]: any }?, key: string): any
 	return DEFAULT_PATH_OPTIONS[key]
 end
 
+-- Formats a `Vector3` for debug output and guard logs.
 local function _formatVector3(value: Vector3?): string
 	if value == nil then
 		return "nil"
@@ -118,6 +126,7 @@ local function _formatVector3(value: Vector3?): string
 	return string.format("(%.2f, %.2f, %.2f)", value.X, value.Y, value.Z)
 end
 
+-- Builds structured position debug data for error reporting.
 local function _buildPositionDebug(prefix: string, value: Vector3?): { [string]: any }
 	if value == nil then
 		return {
@@ -133,6 +142,7 @@ local function _buildPositionDebug(prefix: string, value: Vector3?): { [string]:
 	}
 end
 
+-- Merges debug payloads into one table so Result logging receives a flat shape.
 local function _mergeDebugData(...: { [string]: any }): { [string]: any }
 	local result = {}
 	for _, data in ipairs({ ... }) do
@@ -143,6 +153,7 @@ local function _mergeDebugData(...: { [string]: any }): { [string]: any }
 	return result
 end
 
+-- Reads the agent start position from a live path when the model is still available.
 local function _getStartPosition(path: any): Vector3?
 	if type(path) ~= "table" then
 		return nil
@@ -153,10 +164,12 @@ local function _getStartPosition(path: any): Vector3?
 	return if primaryPart ~= nil then primaryPart.Position else nil
 end
 
+-- Reconciles target Y to the agent's current Y so path retries stay on valid terrain.
 local function _ReconcileTargetYToStart(targetPosition: Vector3, startPosition: Vector3): Vector3
 	return Vector3.new(targetPosition.X, startPosition.Y, targetPosition.Z)
 end
 
+-- Captures the path status and waypoint count without assuming the path is readable.
 local function _GetPathComputationSnapshot(path: any): { StatusName: string, WaypointCount: number? }
 	local statusName = "Unknown"
 	local waypointCount = nil :: number?
@@ -168,10 +181,12 @@ local function _GetPathComputationSnapshot(path: any): { StatusName: string, Way
 		}
 	end
 
+	-- Read the path status defensively because the underlying object can disappear mid-run.
 	pcall(function()
 		statusName = path._path.Status.Name
 	end)
 
+	-- Count waypoints defensively for the same reason.
 	pcall(function()
 		waypointCount = #path._path:GetWaypoints()
 	end)
@@ -182,10 +197,12 @@ local function _GetPathComputationSnapshot(path: any): { StatusName: string, Way
 	}
 end
 
+-- Detects the computation-failure shape that can be recovered by Y reconciliation.
 local function _isWaypointComputationFailure(snapshot: { StatusName: string, WaypointCount: number? }): boolean
 	return snapshot.StatusName == "NoPath" or (snapshot.WaypointCount ~= nil and snapshot.WaypointCount < 2)
 end
 
+-- Emits a structured debug record for target scheduling and retry behavior.
 local function _debugPathTarget(
 	path: any,
 	entity: any?,
@@ -226,6 +243,7 @@ local function _debugPathTarget(
 	)
 end
 
+-- Builds the failure payload used by both blocked and error path settlements.
 local function _buildPathFailure(
 	path: any,
 	fallbackReason: string,
@@ -251,6 +269,7 @@ local function _buildPathFailure(
 	)
 end
 
+-- Validates that the entity can provide a live model and primary part for path creation.
 local function _validateEntityModel(entity: any, services: any): (any?, any?, string?)
 	local factory = _resolveFactory(services)
 	if not factory then
@@ -279,6 +298,7 @@ local function _validateEntityModel(entity: any, services: any): (any?, any?, st
 	return modelRef, model, nil
 end
 
+-- Validates that the path object still has a live agent model before running.
 local function _validatePathRunnable(path: any): (boolean, string)
 	if type(path) ~= "table" then
 		return false, "InvalidPathObject"
@@ -301,16 +321,24 @@ local function _validatePathRunnable(path: any): (boolean, string)
 	return true, "Ok"
 end
 
---[[
-	Create a SimplePath for an entity's model.
-	Returns the Path instance or nil if the model is missing/invalid.
-]]
+-- ── Public ───────────────────────────────────────────────────────────────────
+
+--[=[
+    Creates a `SimplePath` for the supplied entity model when all prerequisites are available.
+    @within PathfindingHelper
+    @param entity any -- Entity whose model should be used as the path agent.
+    @param services any -- Service container that provides an entity factory.
+    @param agentParams { [string]: any }? -- Optional path agent parameters.
+    @param options { [string]: any }? -- Optional path behavior overrides.
+    @return any? -- The constructed path or `nil` when validation fails.
+]=]
 function PathfindingHelper.CreatePath(
 	entity: any,
 	services: any,
 	agentParams: { [string]: any }?,
 	options: { [string]: any }?
 ): any?
+	-- Validate the entity model before constructing a path.
 	local modelRef, model, failureReason = _validateEntityModel(entity, services)
 	if not modelRef or not model or failureReason then
 		_throttledGuardLog(tostring(entity), failureReason or "MissingModel", {
@@ -319,6 +347,7 @@ function PathfindingHelper.CreatePath(
 		return nil
 	end
 
+	-- Construct the path with the configured agent parameters.
 	local success, path = pcall(function()
 		return SimplePath.new(model, agentParams or DEFAULT_AGENT_PARAMS)
 	end)
@@ -330,17 +359,23 @@ function PathfindingHelper.CreatePath(
 		return nil
 	end
 
+	-- Apply visualization only when the caller explicitly enables it.
 	path.Visualize = _resolvePathOption(options, "VisualizeSimplePath") == true
 	return path
 end
 
---[[
-	Run a path to targetPosition.
-	Returns a Promise that resolves on Reached, rejects on Error/Blocked,
-	and stops + destroys the path on cancel or settlement.
-]]
+--[=[
+    Runs a path toward the supplied target and settles a promise when the path succeeds or fails.
+    @within PathfindingHelper
+    @param path any -- Path object created by `CreatePath`.
+    @param targetPosition Vector3 -- Target world position to navigate to.
+    @param entity any? -- Entity associated with the path for diagnostics.
+    @param options { [string]: any }? -- Optional runtime and retry overrides.
+    @return any -- Promise that resolves when the path reaches the target.
+]=]
 function PathfindingHelper.RunPath(path: any, targetPosition: Vector3, entity: any?, options: { [string]: any }?): any
 	local pathPromise = Promise.new(function(resolve, reject, onCancel)
+		-- Set up cancellation-safe cleanup before wiring any callbacks.
 		local janitor: any? = Janitor.new()
 		local entityKey = tostring(entity ~= nil and entity or "UnknownEntity")
 		local retryThread: thread? = nil
@@ -350,6 +385,7 @@ function PathfindingHelper.RunPath(path: any, targetPosition: Vector3, entity: a
 		local activeTargetPosition = targetPosition
 		local latestReconciledTargetPosition = nil :: Vector3?
 
+		-- Destroy the path and cancel deferred retries exactly once.
 		local function cleanup()
 			if janitor then
 				local current = janitor
@@ -358,6 +394,7 @@ function PathfindingHelper.RunPath(path: any, targetPosition: Vector3, entity: a
 			end
 		end
 
+		-- Schedule a run immediately or after a delay, optionally reusing a reconciled target.
 		local function scheduleRun(
 			delaySeconds: number,
 			nextTargetPosition: Vector3?,
@@ -415,6 +452,7 @@ function PathfindingHelper.RunPath(path: any, targetPosition: Vector3, entity: a
 			runNow()
 		end
 
+		-- Validate the target and runnable path before wiring listeners.
 		local currentJanitor = janitor
 		if not currentJanitor then
 			reject("MissingJanitor")
@@ -461,6 +499,7 @@ function PathfindingHelper.RunPath(path: any, targetPosition: Vector3, entity: a
 			return
 		end
 
+		-- Wire lifecycle events so success, failure, and cancellation all settle cleanly.
 		currentJanitor:Add(path.Reached:Connect(function()
 			cleanup()
 			resolve()
@@ -471,16 +510,19 @@ function PathfindingHelper.RunPath(path: any, targetPosition: Vector3, entity: a
 			local failure = _buildPathFailure(path, tostring(errorType or "PathError"), entity, activeTargetPosition)
 			local isComputationError = failure.message == SimplePath.ErrorType.ComputationError
 			local maxReconcileAttempts = tonumber(_resolvePathOption(options, "MaxTargetYReconcileAttempts")) or 0
+			-- Only reconcile Y when the path failed to compute a viable waypoint set.
 			local canReconcileTargetY = _resolvePathOption(options, "ReconcileTargetYOnWaypointFailure") == true
 				and isComputationError
 				and _isWaypointComputationFailure(snapshot)
 				and targetYReconcileAttempts < maxReconcileAttempts
+			-- Retry the original target once for transient computation errors.
 			local shouldRetry = _resolvePathOption(options, "RetryComputationErrors") == true
 				and targetYReconcileAttempts == 0
 				and failure.message == SimplePath.ErrorType.ComputationError
 				and computationErrorRetries < COMPUTATION_ERROR_RETRY_COUNT
 
 			if canReconcileTargetY then
+				-- Reuse the agent's current Y so the retry uses a walkable target height.
 				local startPosition = _getStartPosition(path)
 				if startPosition ~= nil then
 					targetYReconcileAttempts += 1
@@ -496,11 +538,13 @@ function PathfindingHelper.RunPath(path: any, targetPosition: Vector3, entity: a
 			end
 
 			if shouldRetry then
+				-- Re-run with the same target after a short delay to absorb transient failures.
 				computationErrorRetries += 1
 				scheduleRun(_resolvePathOption(options, "InitialRunDelaySeconds"))
 				return
 			end
 
+			-- Emit one structured guard record before rejecting the promise.
 			_throttledGuardLog(entityKey, failure.message, {
 				Entity = entity,
 				StartPositionText = failure.StartPositionText,
@@ -520,16 +564,19 @@ function PathfindingHelper.RunPath(path: any, targetPosition: Vector3, entity: a
 			reject(failure)
 		end))
 
+		-- A blocked path settles as a failure because the caller needs a fresh route decision.
 		currentJanitor:Add(path.Blocked:Connect(function()
 			local failure = _buildPathFailure(path, "PathBlocked", entity, targetPosition, false)
 			cleanup()
 			reject(failure)
 		end))
 
+		-- Register cancellation cleanup so stopped promises tear down the path.
 		onCancel(function()
 			cleanup()
 		end)
 
+		-- Start the initial run using the configured delay.
 		scheduleRun(_resolvePathOption(options, "InitialRunDelaySeconds"), nil, false, nil)
 	end)
 
