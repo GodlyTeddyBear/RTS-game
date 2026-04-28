@@ -1,18 +1,21 @@
 # Domain-Driven Design (DDD)
 
-## Three Layers
+## Overview
 
 Every bounded context has exactly three layers with strict dependency rules:
 
-```
+```text
 Application Layer
-      ↓
+      ^
 Domain Layer
-      ↓
+      ^
 Infrastructure Layer
 ```
 
-A lower layer never depends on a layer above it.
+- A lower layer never depends on a layer above it.
+- The Domain layer owns pure business logic.
+- The Application layer orchestrates domain and infrastructure work.
+- The Infrastructure layer owns technical implementation details.
 
 ---
 
@@ -20,16 +23,19 @@ A lower layer never depends on a layer above it.
 
 ### Domain Layer (`[ContextName]Domain/`)
 
-- Pure business logic — no framework knowledge, no side effects
-- **Services**: Validators, calculators — receive read-only input, return result objects
-- **Specs**: Composable eligibility rules — module-level constants, pure predicates
-- **Policies**: Fetch state from Infrastructure, build candidates, evaluate specs — see [POLICIES_AND_SPECS.md](POLICIES_AND_SPECS.md)
-- **ValueObjects**: Immutable self-validating domain concepts
-- Never modifies input parameters
-- No dependencies on JECS, ProfileStore, Knit, or any external system (Policies may depend on Infrastructure for reads)
+- Pure business logic.
+- No framework knowledge.
+- No side effects.
+- **Services**: validators and calculators that receive read-only input and return result objects.
+- **Specs**: composable eligibility rules, module-level constants, and pure predicates.
+- **Policies**: fetch state from Infrastructure, build candidates, and evaluate specs; see [POLICIES_AND_SPECS.md](POLICIES_AND_SPECS.md).
+- **ValueObjects**: immutable self-validating domain concepts.
+- Never modifies input parameters.
+- No dependencies on JECS, ProfileStore, Knit, or any external system.
+- Policies may depend on Infrastructure for reads.
 
 ```lua
--- Domain service returns a result object, never mutates
+-- Domain service returns a result object and never mutates input.
 function Calculator:Execute(target)
     local newValue = math.max(0, target.Value - 10)
     return { TargetId = target.Id, NewValue = newValue }
@@ -38,72 +44,76 @@ end
 
 ### Application Layer (`Application/Services/`)
 
-- Orchestrates domain + infrastructure services
-- Calls domain services to calculate/validate, then infrastructure to persist/sync
-- Returns `(success: boolean, data/error)` tuples consistently
-- Logs errors at the source with full context — **this is the only layer that logs**
+- Orchestrates domain and infrastructure services.
+- Calls domain services to calculate or validate, then infrastructure to persist or sync.
+- Returns `Result<T>` values consistently.
+- Logs errors at the source with full context; this is the only layer that logs.
 
 ```lua
 function CreateItemService:Execute(userId, itemId, quantity)
-    local success, errors = self.Validator:ValidateItemCreation(itemId, quantity)
-    if not success then
-        return false, table.concat(errors, ", ")
+    local validation = self.Validator:ValidateItemCreation(itemId, quantity)
+    if validation:Fail() then
+        return Result.Err(validation:Error())
     end
+
     local entityId = self.Factory:CreateItem(itemId, quantity)
     self.SyncService:AddItemToUser(userId, entityId, itemId, quantity)
-    return true, entityId
+    return Result.Ok(entityId)
 end
 ```
 
 ### Infrastructure Layer (`Infrastructure/`)
 
-- Technical implementation: JECS entity creation, ProfileStore persistence, Charm atom sync
-- Provides centralized mutation methods — **all atom updates go through here**
-- Never called by Domain layer
+- Technical implementation: JECS entity creation, ProfileStore persistence, Charm atom sync, and ECS game-object sync.
+- Provides centralized mutation methods; all atom updates go through here.
+- Never called by the Domain layer.
 - Organized into three subfolders:
-  - **`ECS/`** — JECS world singletons, component registries, entity factories
-  - **`Persistence/`** — ProfileStore read/write and Charm atom sync services
-  - **`Services/`** — Everything else (Roblox instance manipulation, game logic)
+  - `ECS/` for JECS world singletons, component registries, and entity factories.
+  - `Persistence/` for ProfileStore read/write, Charm atom sync services, and ECS game-object sync services.
+  - `Services/` for everything else, including Roblox instance manipulation and game logic.
 
 ---
 
 ## Bounded Context Structure
 
-```
+```text
 Contexts/
-└── [ContextName]/
-    ├── [ContextName]Context.lua     # Knit service — pure pass-through bridge
-    ├── Application/
-    │   ├── Commands/                # Write operations (full DDD stack)
-    │   └── Queries/                 # Read operations (Infrastructure only)
-    ├── [ContextName]Domain/
-    │   ├── Services/                # Validators, calculators (Commands only)
-    │   ├── Specs/                   # Composable eligibility rules
-    │   ├── Policies/                # State fetch + spec evaluation
-    │   └── ValueObjects/            # Immutable domain objects
-    ├── Infrastructure/
-    │   ├── ECS/                     # JECS world, component registries, entity factories
-    │   ├── Persistence/             # ProfileStore, Charm atom sync
-    │   └── Services/                # Roblox instance work, game logic services
-    ├── Config/                      # Configuration constants
-    └── Errors.lua                   # Centralized error message constants
+`-- [ContextName]/
+    |-- [ContextName]Context.lua     # Knit service - pure pass-through bridge
+    |-- Application/
+    |   |-- Commands/                # Write operations (full DDD stack)
+    |   `-- Queries/                 # Read operations (Infrastructure only)
+    |-- [ContextName]Domain/
+    |   |-- Services/                # Validators, calculators (Commands only)
+    |   |-- Specs/                   # Composable eligibility rules
+    |   |-- Policies/                # State fetch + spec evaluation
+    |   `-- ValueObjects/            # Immutable domain objects
+    |-- Infrastructure/
+    |   |-- ECS/                     # JECS world, component registries, entity factories
+    |   |-- Persistence/             # ProfileStore, Charm atom sync, ECS game-object sync
+    |   `-- Services/                # Roblox instance work, game logic services
+    |-- Config/                      # Configuration constants
+    `-- Errors.lua                   # Centralized error message constants
 ```
 
-See [CQRS.md](CQRS.md) for the Command/Query separation rules.
+See [CQRS.md](CQRS.md) for the command/query separation rules.
 
 ### Adding a New Bounded Context
 
-1. Create `src/ServerScriptService/Contexts/[ContextName]/`
-2. Create subdirectories: `Application/Commands/`, `Application/Queries/`, `[ContextName]Domain/Services/`, `[ContextName]Domain/ValueObjects/`, `Infrastructure/ECS/`, `Infrastructure/Persistence/`, `Infrastructure/Services/`, `Config/` (only create the Infrastructure subfolders the context needs)
-3. Create `[ContextName]Context.lua` — main Knit service entry point
-4. Create `Errors.lua` — centralized error constants
-5. Knit auto-discovers and loads all services
+1. Create `src/ServerScriptService/Contexts/[ContextName]/`.
+2. Create subdirectories: `Application/Commands/`, `Application/Queries/`, `[ContextName]Domain/Services/`, `[ContextName]Domain/ValueObjects/`, `Infrastructure/ECS/`, `Infrastructure/Persistence/`, `Infrastructure/Services/`, and `Config/`. Only create the Infrastructure subfolders the context needs.
+3. Create `[ContextName]Context.lua` as the main Knit service entry point with a `BaseContext` wrapper.
+4. Create `Errors.lua` for centralized error constants.
+5. Declare the context-owned module layers and wire `BaseContext.new(<ContextService>)`.
+6. Knit auto-discovers and loads all services.
 
 ---
 
 ## Constructor Injection
 
-Services receive all dependencies via `.new()`. This enforces layer separation and makes services testable.
+- Services receive all dependencies via `.new()`.
+- This enforces layer separation and makes services testable.
+- Never reach into global state to get dependencies; always inject them.
 
 ```lua
 local CreateItemService = {}
@@ -111,29 +121,32 @@ CreateItemService.__index = CreateItemService
 
 function CreateItemService.new(validator, factory, syncService)
     local self = setmetatable({}, CreateItemService)
-    self.Validator = validator       -- Domain service
-    self.Factory = factory           -- Infrastructure service
-    self.SyncService = syncService   -- Infrastructure service
+    self.Validator = validator -- Domain service
+    self.Factory = factory -- Infrastructure service
+    self.SyncService = syncService -- Infrastructure service
     return self
 end
 ```
-
-Never reach into global state to get dependencies — always inject them.
 
 ---
 
 ## Immutable Domain Services
 
-Domain services must be pure functions. They return result objects describing what should change; they never mutate state.
+- Domain services must be pure functions.
+- They return result objects describing what should change.
+- They never mutate state.
+- The Application layer receives the result and applies it via the sync service.
 
 **Wrong:**
+
 ```lua
 function Calculator:Execute(target)
-    target.Value = target.Value - 10  -- Direct mutation of input!
+    target.Value = target.Value - 10 -- Direct mutation of input.
 end
 ```
 
 **Correct:**
+
 ```lua
 function Calculator:Execute(target)
     local newValue = math.max(0, target.Value - 10)
@@ -141,13 +154,14 @@ function Calculator:Execute(target)
 end
 ```
 
-The Application layer receives the result and applies it via the sync service.
-
 ---
 
 ## Value Objects
 
-Immutable domain objects that encapsulate validation. Use `assert()` in the constructor — they represent preconditions that should never fail in correct code.
+- Value objects are immutable domain objects that encapsulate validation.
+- Use `assert()` in the constructor; they represent preconditions that should never fail in correct code.
+- Use them for primitive values with validation rules, domain concepts that are not entities, and values that need business logic.
+- Do not use them for complex entities with multiple responsibilities or mutable state that changes over time.
 
 ```lua
 local UserId = {}
@@ -169,20 +183,13 @@ end
 return UserId
 ```
 
-**Use when:**
-- Primitive values with validation rules (names, IDs)
-- Domain concepts that aren't entities (coordinates, amounts)
-- Values that need business logic (stat calculations, damage modifiers)
-
-**Don't use when:**
-- Complex entities with multiple responsibilities
-- Mutable state that changes over time
-
 ---
 
-## Context Layer (Pass-Through)
+## Context Layer
 
-The `[ContextName]Context.lua` Knit service is a pure bridge — it delegates to Application services and never logs or adds logic.
+- The `[ContextName]Context.lua` Knit service is a pure bridge.
+- It delegates to Application services.
+- It never logs or adds logic.
 
 ```lua
 function Context:DoSomething(userId: number, data: any): (boolean, TResult | string)
@@ -196,18 +203,21 @@ See [ERROR_HANDLING.md](ERROR_HANDLING.md) for why logging belongs only in the A
 
 ## Cross-Context Communication
 
-Cross-context calls (calling another context's public method) follow the same Result contract as intra-context calls.
+- Cross-context calls follow the same `Result` contract as intra-context calls.
+- Inside a `Catch` boundary, use `Try()` for both Application `Execute()` calls and cross-context public method calls that return `Result<T>`.
 
-**Intra-context** — calling your own Application services inside a `Catch` block:
+**Intra-context** - calling your own Application services inside a `Catch` block:
+
 ```lua
--- Application services return Result — use Try() to propagate failures
+-- Application services return Result - use Try() to propagate failures.
 return Catch(function()
     local lotId = Try(self.SpawnLotService:Execute(player, cframe))
     return Result.Ok({ LotId = lotId })
 end, handler)
 ```
 
-**Cross-context** — calling another context's method:
+**Cross-context** - calling another context's method:
+
 ```lua
 -- Other contexts expose Result-returning public methods.
 -- Use Try() to propagate failures across context boundaries.
@@ -218,6 +228,5 @@ return Catch(function()
 end, handler)
 ```
 
-**Why this works:** each context method owns a `Catch` and returns `Result<T>`. Callers can compose context operations with `Try()` and keep typed `Err` propagation end-to-end.
-
-**Rule: inside a `Catch` boundary, use `Try()` for both Application `Execute()` calls and cross-context public method calls that return `Result<T>`.**
+- Each context method owns a `Catch` and returns `Result<T>`.
+- Callers can compose context operations with `Try()` and keep typed `Err` propagation end to end.

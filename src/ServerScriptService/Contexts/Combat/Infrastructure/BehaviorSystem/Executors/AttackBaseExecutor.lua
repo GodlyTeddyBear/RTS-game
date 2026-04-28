@@ -13,10 +13,20 @@ type THitboxActivationResult = {
 	source: string,
 }
 
+--[=[
+	@class AttackBaseExecutor
+	Drives enemy base attacks, hitbox activation, and cleanup for the combat behavior tree.
+	@server
+]=]
 local AttackBaseExecutor = {}
 AttackBaseExecutor.__index = AttackBaseExecutor
 setmetatable(AttackBaseExecutor, BaseExecutor)
 
+--[=[
+	@within AttackBaseExecutor
+	Creates a combat executor configured to attack the base target.
+	@return AttackBaseExecutor -- Executor instance used by the behavior tree.
+]=]
 function AttackBaseExecutor.new()
 	local self = BaseExecutor.new({
 		ActionId = "AttackBase",
@@ -25,6 +35,7 @@ function AttackBaseExecutor.new()
 	return setmetatable(self, AttackBaseExecutor)
 end
 
+-- Converts an activation attempt into a stable result payload for the runtime.
 local function _activationResult(success: boolean, reason: string, source: string): THitboxActivationResult
 	return {
 		success = success,
@@ -33,6 +44,7 @@ local function _activationResult(success: boolean, reason: string, source: strin
 	}
 end
 
+-- Records where the activation came from so debugging and fallback timing stay visible in Studio.
 local function _recordActivationSource(entity: number, services: any, source: string)
 	local modelRef = services.EnemyEntityFactory:GetModelRef(entity)
 	if modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
@@ -43,6 +55,7 @@ local function _recordActivationSource(entity: number, services: any, source: st
 	modelRef.Model:SetAttribute("LastHitboxActivatedAt", services.CurrentTime)
 end
 
+-- Checks whether the attacker can currently reach the base target.
 local function _isTargetInRange(entity: number, services: any): boolean
 	local enemyPosition = services.EnemyEntityFactory:GetPosition(entity)
 	local role = services.EnemyEntityFactory:GetRole(entity)
@@ -58,6 +71,15 @@ local function _isTargetInRange(entity: number, services: any): boolean
 	return services.CombatPerceptionService:IsTargetInRange(enemyPosition.CFrame.Position, attackRange, "Base", nil)
 end
 
+--[=[
+	@within AttackBaseExecutor
+	Verifies the base is active and in range before the executor starts.
+	@param entity number -- Enemy entity id being evaluated.
+	@param _data any? -- Unused action payload.
+	@param services any -- Shared runtime services for the executor tick.
+	@return boolean -- Whether the executor can start.
+	@return string? -- Failure reason when the executor cannot start.
+]=]
 function AttackBaseExecutor:CanStart(entity: number, _data: any?, services: any): (boolean, string?)
 	if not services.BaseEntityFactory:IsActive() then
 		return false, "InactiveBase"
@@ -70,6 +92,13 @@ function AttackBaseExecutor:CanStart(entity: number, _data: any?, services: any)
 	return true, nil
 end
 
+--[=[
+	@within AttackBaseExecutor
+	Clears per-attack runtime state and points the enemy at the base.
+	@param entity number -- Enemy entity id being started.
+	@param _data any? -- Unused action payload.
+	@param services any -- Shared runtime services for the executor tick.
+]=]
 function AttackBaseExecutor:OnStart(entity: number, _data: any?, services: any)
 	services.EnemyEntityFactory:SetTarget(entity, nil, "Base")
 	self:SetEntityValue(entity, "AwaitingHitboxActivation", false)
@@ -82,6 +111,14 @@ function AttackBaseExecutor:OnStart(entity: number, _data: any?, services: any)
 	self:SetEntityValue(entity, "PendingHitboxActivation", false)
 end
 
+--[=[
+	@within AttackBaseExecutor
+	Keeps the attack branch alive only while the base remains reachable or the hitbox is already live.
+	@param entity number -- Enemy entity id being evaluated.
+	@param services any -- Shared runtime services for the executor tick.
+	@return boolean -- Whether the executor can continue.
+	@return string? -- Failure reason when the executor can no longer continue.
+]=]
 function AttackBaseExecutor:CanContinue(entity: number, services: any): (boolean, string?)
 	if self:GetEntityValue(entity, "HitboxActivated") == true then
 		return true, nil
@@ -103,6 +140,7 @@ function AttackBaseExecutor:CanContinue(entity: number, services: any): (boolean
 	})
 end
 
+-- Creates the base hitbox after the animation or server timeout opens the activation window.
 local function _activateHitboxInternal(
 	self: any,
 	entity: number,
@@ -138,14 +176,36 @@ local function _activateHitboxInternal(
 	return _activationResult(true, "Activated", source)
 end
 
+--[=[
+	@within AttackBaseExecutor
+	Activates the hitbox from the server timeout fallback when the animation callback never arrives.
+	@param entity number -- Enemy entity id to activate.
+	@param services any -- Shared runtime services for the executor tick.
+	@return THitboxActivationResult -- Activation result for the timeout fallback.
+]=]
 function AttackBaseExecutor:TryActivateHitboxFromTimeout(entity: number, services: any): THitboxActivationResult
 	return _activateHitboxInternal(self, entity, services, "ServerTimeoutFallback")
 end
 
+--[=[
+	@within AttackBaseExecutor
+	Activates the hitbox from the animation callback when the attack marker fires on time.
+	@param entity number -- Enemy entity id to activate.
+	@param services any -- Shared runtime services for the executor tick.
+	@return THitboxActivationResult -- Activation result for the animation callback.
+]=]
 function AttackBaseExecutor:ActivateHitbox(entity: number, services: any): THitboxActivationResult
 	return _activateHitboxInternal(self, entity, services, "AnimationCallback")
 end
 
+--[=[
+	@within AttackBaseExecutor
+	Advances the attack state machine, resolves hit damage, and retires the hitbox when it expires.
+	@param entity number -- Enemy entity id being ticked.
+	@param _dt number -- Frame delta time for the current tick.
+	@param services any -- Shared runtime services for the executor tick.
+	@return string -- Executor status string.
+]=]
 function AttackBaseExecutor:OnTick(entity: number, _dt: number, services: any): string
 	local role = services.EnemyEntityFactory:GetRole(entity)
 	local cooldown = services.EnemyEntityFactory:GetAttackCooldown(entity)
@@ -228,6 +288,12 @@ function AttackBaseExecutor:OnTick(entity: number, _dt: number, services: any): 
 	return self:Running()
 end
 
+--[=[
+	@within AttackBaseExecutor
+	Tears down any live hitbox and clears transient attack state when the executor is canceled.
+	@param entity number -- Enemy entity id being canceled.
+	@param services any -- Shared runtime services for the executor tick.
+]=]
 function AttackBaseExecutor:OnCancel(entity: number, services: any)
 	local activeHitboxHandle = self:GetEntityValue(entity, "ActiveHitboxHandle")
 	if type(activeHitboxHandle) == "string" then
@@ -246,6 +312,12 @@ function AttackBaseExecutor:OnCancel(entity: number, services: any)
 	services.EnemyEntityFactory:ClearTarget(entity)
 end
 
+--[=[
+	@within AttackBaseExecutor
+	Reuses the cancel path so completed attacks leave no stale state behind.
+	@param entity number -- Enemy entity id being completed.
+	@param services any -- Shared runtime services for the executor tick.
+]=]
 function AttackBaseExecutor:OnComplete(entity: number, services: any)
 	self:OnCancel(entity, services)
 end

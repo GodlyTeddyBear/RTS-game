@@ -51,21 +51,28 @@ end
 
 -- Builds and stores the role-specific behavior tree for one enemy entity.
 function StartCombat:_AssignBehaviorTree(entity: number)
+	-- Resolve the enemy's role so the runtime can pick the correct behavior tree.
 	local role = self._enemyEntityFactory:GetRole(entity)
 	local roleName = if role and role.role then role.role else "swarm"
 	local tree, tickInterval = self._behaviorRuntimeService:BuildEnemyBehaviorTree(roleName)
 
+	-- Replace any stale combat state before the entity re-enters the tick loop.
 	self._enemyEntityFactory:SetBehaviorTree(entity, tree, tickInterval)
 	self._enemyEntityFactory:SetBehaviorConfig(entity, {
 		TickInterval = tickInterval,
 	})
 	self._enemyEntityFactory:ClearAction(entity)
 	self._enemyEntityFactory:ClearTarget(entity)
+
+	-- Reattach lock-on so newly started combat faces the current target immediately.
 	self._lockOnService:AttachConstraint(entity)
 end
 
 function StartCombat:_AssignStructureBehaviorTree(entity: number)
+	-- Build the shared structure behavior tree once per active structure.
 	local tree, tickInterval = self._behaviorRuntimeService:BuildStructureBehaviorTree()
+
+	-- Clear stale action state before the structure resumes combat ticks.
 	self._structureEntityFactory:SetBehaviorTree(entity, tree, tickInterval)
 	self._structureEntityFactory:ClearAction(entity)
 end
@@ -96,6 +103,7 @@ function StartCombat:Execute(waveNumber: number, isEndless: boolean): Result.Res
 			self:_AssignBehaviorTree(entity)
 		end
 
+		-- Apply the same combat tree setup to structures so both actor types enter the wave together.
 		local activeStructures = self._structureEntityFactory:QueryActiveEntities()
 		for _, entity in ipairs(activeStructures) do
 			self:_AssignStructureBehaviorTree(entity)

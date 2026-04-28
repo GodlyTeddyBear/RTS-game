@@ -1,32 +1,29 @@
 # Frontend Design
 
-- This document defines how to create the visual style of frontend UI.
-- It applies before implementation: screens should have an intentional appearance plan before components are built.
-- This does not replace layer, hook, or component placement rules.
-- Use this with `FRONTEND.md`, `COMPONENTS.md`, `ANIMATION_PATTERN.md`, and `UDIM_LAYOUT_RULES.md`.
+This document defines how to create the visual style of frontend UI.
+
+- Apply it before implementation so screens have an intentional appearance plan before components are built.
+- It does not replace layer, hook, or component placement rules.
+- Use it with `FRONTEND.md`, `COMPONENTS.md`, `ANIMATION_PATTERN.md`, and `UDIM_LAYOUT_RULES.md`.
 
 ---
 
 ## Style Creation Process
 
-Start with concept, not tokens.
-
-For every new screen or feature UI, define:
-
-- Player-facing purpose of the screen
-- Primary action or primary information
-- Emotional role: command center, inventory, combat, log, market, upgrade, alert, etc.
-- Hierarchy: what should be seen first, second, and last
-- Interaction model: inspect, select, compare, confirm, navigate, manage, or monitor
-
-Choose surfaces, accents, spacing, and motion only after that concept is clear.
+- Start with concept, not tokens.
+- For every new screen or feature UI, define:
+  - Player-facing purpose of the screen
+  - Primary action or primary information
+  - Emotional role: command center, inventory, combat, log, market, upgrade, alert, etc.
+  - Hierarchy: what should be seen first, second, and last
+  - Interaction model: inspect, select, compare, confirm, navigate, manage, or monitor
+- Choose surfaces, accents, spacing, and motion only after that concept is clear.
 
 ---
 
 ## Visual Direction
 
-Use tactical RTS/game UI, not generic app UI.
-
+- Use tactical RTS/game UI, not generic app UI.
 - Prefer near-black surfaces, warm gold metallic strokes, strong readable panels, compact information density, and purposeful highlights.
 - UI should feel like an in-game command interface: structured, decisive, and readable under pressure.
 - Avoid default gray boxes, flat utility dashboards, randomly themed feature screens, and decoration that does not support hierarchy.
@@ -35,15 +32,13 @@ Use tactical RTS/game UI, not generic app UI.
 
 ## Cards And Panels
 
-Cards are strictly limited.
-
+- Cards are strictly limited.
 - Use cards for repeated items, selectable entries, inventory slots, compact summaries, modal choices, or functional framed panels.
 - Do not use cards as the default way to lay out an entire screen.
 - Do not put cards inside cards.
 - Prefer full-screen bands, anchored panels, split functional regions, list rows, slots, tabs, and command bars for major structure.
 - Frame a surface only when the boundary helps the player understand grouping, selection, containment, or interaction.
-
-If everything is a card, nothing has hierarchy.
+- If everything is a card, nothing has hierarchy.
 
 ---
 
@@ -60,8 +55,7 @@ If everything is a card, nothing has hierarchy.
 
 ## Depth, Chrome, And Decoration
 
-Use purposeful chrome.
-
+- Use purposeful chrome.
 - Gold strokes, gradients, bevel-like highlights, shadows, and glows should communicate importance, selection, rarity, danger, progress, or interactability.
 - Avoid decorative effects that compete with gameplay information.
 - Major panels may use stronger chrome; secondary controls should be quieter.
@@ -71,16 +65,15 @@ Use purposeful chrome.
 
 ## Token Use
 
-After choosing the visual concept, implement it with existing tokens first:
-
-- `ColorTokens`
-- `GradientTokens`
-- `SpacingTokens`
-- `BorderTokens`
-- `TypographyTokens`
-- `AnimationTokens`
-
-Hardcoded colors, spacing, radii, and animation values need a clear reason. Add new tokens only for values expected to recur across multiple UI pieces or features.
+- After choosing the visual concept, implement it with existing tokens first:
+  - `ColorTokens`
+  - `GradientTokens`
+  - `SpacingTokens`
+  - `BorderTokens`
+  - `TypographyTokens`
+  - `AnimationTokens`
+- Hardcoded colors, spacing, radii, and animation values need a clear reason.
+- Add new tokens only for values expected to recur across multiple UI pieces or features.
 
 ---
 
@@ -95,7 +88,7 @@ Hardcoded colors, spacing, radii, and animation values need a clear reason. Add 
 
 ## Interaction States
 
-- Interactive elements need clear default, hover, pressed, selected, disabled, and loading/error states where relevant.
+- Interactive elements need clear default, hover, pressed, selected, disabled, and loading or error states where relevant.
 - Hover and press motion must not resize or shift neighboring layout.
 - Selected state should be stronger and more persistent than hover.
 - Destructive, expensive, or irreversible actions need stronger visual distinction than ordinary navigation.

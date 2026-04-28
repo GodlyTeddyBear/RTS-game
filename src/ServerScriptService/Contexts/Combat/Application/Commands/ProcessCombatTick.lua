@@ -95,11 +95,13 @@ function ProcessCombatTick:_RunBehaviorTreePhase(
 	actorType: string
 )
 	for _, entity in ipairs(entities) do
+		-- Skip entities without a ready tree so the tick loop only evaluates valid combatants.
 		local behaviorTree = self._behaviorRuntimeService:GetReadyBehaviorTree(factory, entity, currentTime)
 		if behaviorTree == nil then
 			continue
 		end
 
+		-- Build the perception snapshot that the behavior tree uses to make its decision.
 		local facts = if actorType == "Structure"
 			then self._perceptionService:BuildStructureSnapshot(entity, currentTime)
 			else self._perceptionService:BuildSnapshot(entity, currentTime)
@@ -135,11 +137,13 @@ function ProcessCombatTick:_RunTransitionPhase(
 	actorType: string
 )
 	for _, entity in ipairs(entities) do
+		-- Read the current action state once so transition handling works on a stable snapshot.
 		local actionState = _cloneActionState(factory:GetCombatAction(entity))
 		local startResult = self._behaviorRuntimeService:StartPendingAction(entity, actionState, {
 			Services = services,
 		})
 
+		-- Drop entities that the runtime rejected before mutating any stored action state.
 		if not startResult.success then
 			_mentionRuntimeFailure(
 				"Combat:ProcessCombatTick",
@@ -152,11 +156,13 @@ function ProcessCombatTick:_RunTransitionPhase(
 			continue
 		end
 
+		-- Preserve no-change and blocked transitions without disturbing the current action state.
 		local status = startResult.value.Status
 		if status == "NoAction" or status == "Blocked" then
 			continue
 		end
 
+		-- Clear pending fields when the runtime reports that nothing should advance yet.
 		if status == "NoChange" then
 			actionState.PendingActionId = nil
 			actionState.PendingActionData = nil
@@ -164,11 +170,13 @@ function ProcessCombatTick:_RunTransitionPhase(
 			continue
 		end
 
+		-- Remove invalid or failed transitions so the entity can re-enter a clean decision state.
 		if status == "MissingAction" or status == "FailedToStart" then
 			factory:ClearAction(entity)
 			continue
 		end
 
+		-- Commit the transition only after the runtime confirms the new action can start.
 		local commitResult = self._behaviorRuntimeService:CommitStartedAction(actionState, startResult.value, currentTime)
 		if commitResult.Status == "Committed" then
 			factory:SetCombatAction(entity, actionState)
@@ -194,12 +202,14 @@ function ProcessCombatTick:_RunActionPhase(
 	actorType: string
 )
 	for _, entity in ipairs(entities) do
+		-- Tick a cloned action state so runtime mutations stay isolated until the result is accepted.
 		local actionState = _cloneActionState(factory:GetCombatAction(entity))
 		local tickResult = self._behaviorRuntimeService:TickCurrentAction(entity, actionState, {
 			DeltaTime = dt,
 			Services = services,
 		})
 
+		-- Clear entities whose current action can no longer progress this frame.
 		if not tickResult.success then
 			_mentionRuntimeFailure(
 				"Combat:ProcessCombatTick",
@@ -212,6 +222,7 @@ function ProcessCombatTick:_RunActionPhase(
 			continue
 		end
 
+		-- Route completed advance actions through the goal handler before resolving the runtime result.
 		local runtimeTick = tickResult.value
 		if runtimeTick.Status == "Success" and runtimeTick.ActionId == "Advance" then
 			local goalResult = self._handleGoalReachedCommand:Execute(entity)
@@ -226,6 +237,7 @@ function ProcessCombatTick:_RunActionPhase(
 			end
 		end
 
+		-- Commit finished actions only after the runtime returns a valid resolution transition.
 		local resolveResult =
 			self._behaviorRuntimeService:ResolveFinishedAction(actionState, runtimeTick, services.CurrentTime)
 		if resolveResult.Status == "Resolved" then
@@ -285,6 +297,7 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 			ProjectileService = self._projectileService,
 		}
 
+		-- Run the three combat phases in order so evaluation, transition, and action ticks stay aligned.
 		self:_RunBehaviorTreePhase(aliveEntities, currentTime, self._enemyEntityFactory, "Enemy")
 		self:_RunBehaviorTreePhase(activeStructures, currentTime, self._structureEntityFactory, "Structure")
 		self:_RunTransitionPhase(aliveEntities, currentTime, services, self._enemyEntityFactory, "Enemy")

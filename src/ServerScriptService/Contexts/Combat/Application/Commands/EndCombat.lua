@@ -132,6 +132,7 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 			self._enemyEntityFactory:ClearAction(entity)
 		end
 
+		-- Clear structure actions separately because they use the same runtime but a different factory.
 		for _, entity in ipairs(self._structureEntityFactory:QueryActiveEntities()) do
 			_cancelRuntimeAction(
 				"Combat:EndCombat",
@@ -143,6 +144,7 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 			self._structureEntityFactory:ClearAction(entity)
 		end
 
+		-- Sync structure visuals before the shared cleanup tears down hitboxes and combat state.
 		local structureSyncServiceResult = self._structureContext:GetGameObjectSyncService()
 		if structureSyncServiceResult.success then
 			structureSyncServiceResult.value:SyncAll()

@@ -56,4 +56,11 @@ local function _BuildActionDefinitions(): { [string]: any }
 	return table.freeze(actionDefinitions)
 end
 
-return _BuildActionDefinitions()
+--[=[
+	@class CombatBehaviorExecutors
+	Discovers and registers the combat behavior executors exposed in this folder.
+	@server
+]=]
+local Executors = _BuildActionDefinitions()
+
+return Executors

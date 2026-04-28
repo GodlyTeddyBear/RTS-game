@@ -1,5 +1,11 @@
 --!strict
 
+--[=[
+    @class BaseContext
+    Knit service that wires the Base context application, ECS, sync, and teardown surface.
+    @server
+]=]
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -23,6 +29,8 @@ local Catch = Result.Catch
 local Ok = Result.Ok
 
 type BaseState = BaseTypes.BaseState
+
+-- â”€â”€ Initialization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
@@ -99,11 +107,21 @@ local BaseContextService = Knit.CreateService({
 
 local BaseBaseContext = BaseContext.new(BaseContextService)
 
+-- â”€â”€ Public â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+--[=[
+    Reset runtime-only state before the shared BaseContext wrapper starts.
+    @within BaseContext
+]=]
 function BaseContextService:KnitInit()
 	BaseBaseContext:KnitInit()
 	self._playerAddedConnection = nil :: RBXScriptConnection?
 end
 
+--[=[
+    Start player hydration after the shared BaseContext wrapper is ready.
+    @within BaseContext
+]=]
 function BaseContextService:KnitStart()
 	BaseBaseContext:KnitStart()
 	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
@@ -111,40 +129,69 @@ function BaseContextService:KnitStart()
 	end)
 end
 
+--[=[
+    @within BaseContext
+    @return Result.Result<boolean> -- Whether the prepare step succeeded.
+]=]
 function BaseContextService:PrepareRunBase(): Result.Result<boolean>
 	return Catch(function()
 		return self._prepareRunBaseCommand:Execute()
 	end, "Base:PrepareRunBase")
 end
 
+--[=[
+    @within BaseContext
+    @return Result.Result<boolean> -- Whether the cleanup step succeeded.
+]=]
 function BaseContextService:CleanupBase(): Result.Result<boolean>
 	return Catch(function()
 		return self._cleanupBaseCommand:Execute()
 	end, "Base:CleanupBase")
 end
 
+--[=[
+    @within BaseContext
+    @param amount number -- Damage to apply to the base.
+    @return Result.Result<boolean> -- Whether the base died from the hit.
+]=]
 function BaseContextService:ApplyDamage(amount: number): Result.Result<boolean>
 	return Catch(function()
 		return self._applyDamageBaseCommand:Execute(amount)
 	end, "Base:ApplyDamage")
 end
 
+--[=[
+    @within BaseContext
+    @return Result.Result<BaseState?> -- Read-only base state snapshot when the base exists.
+]=]
 function BaseContextService:GetBaseState(): Result.Result<BaseState?>
 	return Catch(function()
 		return self._getBaseStateQuery:Execute()
 	end, "Base:GetBaseState")
 end
 
+--[=[
+    @within BaseContext
+    @return Result.Result<CFrame> -- Current target CFrame for the active base.
+]=]
 function BaseContextService:GetBaseTargetCFrame(): Result.Result<CFrame>
 	return Catch(function()
 		return self._getBaseTargetCFrameQuery:Execute()
 	end, "Base:GetBaseTargetCFrame")
 end
 
+--[=[
+    @within BaseContext
+    @return Result.Result<any> -- Cached base entity factory instance.
+]=]
 function BaseContextService:GetEntityFactory(): Result.Result<any>
 	return Ok(self._entityFactory)
 end
 
+--[=[
+    Run base cleanup before tearing down the wrapped BaseContext.
+    @within BaseContext
+]=]
 function BaseContextService:Destroy()
 	local cleanupResult = self:CleanupBase()
 	if not cleanupResult.success then

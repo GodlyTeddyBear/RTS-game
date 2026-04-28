@@ -2,13 +2,14 @@
 
 This document is the high-level reference for how ECS is structured in this codebase, what each ECS-related class owns, and where sync and persistence responsibilities live.
 
-Use this alongside:
-- [SYSTEMS.md](SYSTEMS.md) for JECS and ProfileStore runtime context
-- [STATE_SYNC.md](STATE_SYNC.md) for sync placement and cloning rules
-- [../methods/ECS/WORLD_ISOLATION_RULES.md](../methods/ECS/WORLD_ISOLATION_RULES.md) for world ownership
-- [../methods/ECS/ENTITY_FACTORY_RULES.md](../methods/ECS/ENTITY_FACTORY_RULES.md) for factory boundaries
-- [../methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md](../methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md) for entity, instance, and sync ownership split
-- [../methods/ECS/ECS_PERSISTENCE_RULES.md](../methods/ECS/ECS_PERSISTENCE_RULES.md) for ECS-to-ProfileStore persistence
+## Related Docs
+
+- [SYSTEMS.md](SYSTEMS.md) for JECS and ProfileStore runtime context.
+- [STATE_SYNC.md](STATE_SYNC.md) for sync placement and cloning rules.
+- [../methods/ECS/WORLD_ISOLATION_RULES.md](../methods/ECS/WORLD_ISOLATION_RULES.md) for world ownership.
+- [../methods/ECS/ENTITY_FACTORY_RULES.md](../methods/ECS/ENTITY_FACTORY_RULES.md) for factory boundaries.
+- [../methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md](../methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md) for entity, instance, and sync ownership split.
+- [../methods/ECS/ECS_PERSISTENCE_RULES.md](../methods/ECS/ECS_PERSISTENCE_RULES.md) for ECS-to-ProfileStore persistence.
 
 ---
 
@@ -49,7 +50,7 @@ Important placement rule:
 - `Infrastructure/Persistence/` holds runtime sync services and ProfileStore persistence services.
 - If a service mutates replicated runtime atoms or syncs ECS state into instances, it belongs in `Infrastructure/Persistence/`, not `Infrastructure/Services/`.
 
-This repo uses `Persistence/` as the home for both persistence bridges and object-sync services because both are part of the infrastructure state bridge layer.
+- This repo uses `Persistence/` as the home for both persistence bridges and object-sync services because both are part of the infrastructure state bridge layer.
 
 ---
 

@@ -1,73 +1,101 @@
 # Error Handling
 
+## Overview
+- Use `Result` for operations that can genuinely fail at runtime.
+- Use plain Lua when `nil` is valid absence or when a precondition already guarantees success.
+- Keep error logging at the Application layer; Context code should only wrap work in `Catch`.
+- Store error strings in per-context `Errors.lua` files.
+
+---
+
+## Core Rules
+- `Err` represents expected business failure.
+- `Defect` represents an unexpected crash and is created automatically by `Catch` in most cases.
+- `Catch` is the outer boundary for a context method and always returns `Result<T>`.
+- `Try` unwraps a `Result` inside `Catch`.
+- `Ensure` is the inline guard for application code and replaces `if` / `return Err` blocks.
+- `TryAll` accumulates validation failures instead of short-circuiting.
+- `fromNilable` should be used whenever `nil` is a real failure.
+- Public server-to-server context methods should return `Result<T>` so callers can keep propagating failures.
+- `.Client` methods should call `Catch` only when they invoke `Execute` directly.
+- Do not inline error strings.
+
+---
+
 ## Primitives
 
-### Constructors (return Result — chainable)
-
+### Constructors
 | Function | Purpose |
-|----------|---------|
+|---|---|
 | `Ok(value)` | Wraps a success value |
 | `Err(type, message, data?)` | Wraps an expected business failure with structured context |
-| `Defect(message, traceback?)` | Wraps an unexpected crash — bypasses `orElse`, logged as error. Created automatically by `Catch`; rarely used directly |
+| `Defect(message, traceback?)` | Wraps an unexpected crash; bypasses `orElse` and is logged as an error |
 | `TryAll(...)` | Accumulates multiple Results; `Ok` with all values or `Err` with all failures. Defects dominate and short-circuit |
-| `fromPcall(errType, fn, ...)` | Converts a Roblox pcall-style API call into a Result |
-| `fromNilable(value, errType, msg, data?)` | Converts a nil-able value into a Result; `Ok(value)` if non-nil, `Err` if nil |
-| `Catch(fn, label, failureHandler?, ...)` | `xpcall` boundary — logs on failure, calls optional handler, always returns `Result<T>` |
+| `fromPcall(errType, fn, ...)` | Converts a Roblox `pcall`-style API call into a Result |
+| `fromNilable(value, errType, msg, data?)` | Converts a nil-able value into a Result |
+| `Catch(fn, label, failureHandler?, ...)` | `xpcall` boundary that logs on failure, calls an optional handler, and always returns `Result<T>` |
 
-### Throwable (use inside Catch — return plain values, throw on failure)
+### Throwable
+- Use inside `Catch`.
+- Return plain values and throw on failure.
 
 | Function | Purpose |
-|----------|---------|
+|---|---|
 | `Try(result)` | Unwraps `Ok` or throws the `Err` as an exception |
-| `Ensure(condition, type, msg, data?)` | Asserts a condition or throws `Err` — inline guard replacing `if/return Err` blocks |
+| `Ensure(condition, type, msg, data?)` | Asserts a condition or throws `Err`; inline guard replacing `if` / `return Err` blocks |
 | `RequirePath(root, ...)` | Walks nested string keys on a table; throws `Err("MissingPath")` if any key is nil |
 
-### Chainable methods (return Result — can continue chaining)
+### Chainable methods
+- Return `Result`.
+- Can continue chaining.
 
 | Method | Purpose |
-|--------|---------|
-| `result:andThen(fn)` | Transforms `Ok` value — fn must return a `Result`. Passes `Err` through unchanged |
-| `result:orElse(fn)` | Recovers from business `Err` — fn receives the `Err`, must return a `Result`. Passes `Ok` and defects through |
-| `result:tapError(fn)` | Side-effect on any failure (`Err` or `Defect`); result passes through unchanged |
-| `result:tap(fn)` | Side-effect on `Ok` value only; result passes through unchanged |
-| `result:tapBoth(onOk, onErr)` | Side-effect on any outcome; result passes through unchanged |
-| `result:mapError(fn)` | Transforms business `Err` — fn must return an `Err`. Passes `Ok` and defects through |
-| `result:filter(pred, type, msg, data?)` | Converts `Ok` to `Err` if predicate is falsy; passes `Err` and defects through |
-| `result:filterOrElse(pred, fn)` | Like `filter` but builds the `Err` from the rejected value via fn |
+|---|---|
+| `result:andThen(fn)` | Transforms an `Ok` value; `fn` must return a `Result` |
+| `result:orElse(fn)` | Recovers from business `Err`; `fn` receives the `Err` and must return a `Result` |
+| `result:tapError(fn)` | Side effect on any failure (`Err` or `Defect`) |
+| `result:tap(fn)` | Side effect on `Ok` only |
+| `result:tapBoth(onOk, onErr)` | Side effect on any outcome |
+| `result:mapError(fn)` | Transforms business `Err`; `fn` must return an `Err` |
+| `result:filter(pred, type, msg, data?)` | Converts `Ok` to `Err` if the predicate is falsy |
+| `result:filterOrElse(pred, fn)` | Like `filter` but builds the `Err` from the rejected value |
 
-### Terminal methods (return plain values — end the chain)
+### Terminal methods
+- Return plain values and end the Result chain.
 
 | Method | Purpose |
-|--------|---------|
-| `result:map(fn)` | Unwraps `Ok` + applies fn; throws on `Err` (like `Try` + transform). Exits the Result system |
-| `result:unwrapOr(default)` | Extracts `Ok` value or returns default. Safe, never throws. Exits the Result system |
+|---|---|
+| `result:map(fn)` | Unwraps `Ok` and applies `fn`; throws on `Err` |
+| `result:unwrapOr(default)` | Extracts the `Ok` value or returns the default |
 
 ### Combinators
-
 | Function | Purpose |
-|----------|---------|
+|---|---|
 | `Result.zip(resultA, resultB)` | Combines two Results into `Ok({a, b})`; short-circuits on first failure |
-| `Result.zipWith(resultA, resultB, fn)` | Like `zip` but merges both Ok values via fn instead of a table |
-| `Result.traverse(items, fn)` | Maps fn over a list and accumulates all Results (like `TryAll` over a mapped list) |
+| `Result.zipWith(resultA, resultB, fn)` | Like `zip` but merges both `Ok` values via `fn` |
+| `Result.traverse(items, fn)` | Maps `fn` over a list and accumulates all Results |
 | `Result.retry(fn, options)` | Retries a function up to `maxAttempts` times with optional `delay`; only retries on business `Err` |
 
-### Async (return Promises — bridge between Result and Promise systems)
+### Async
+- Return Promises.
+- Bridge between Result and Promise systems.
 
 | Function | Purpose |
-|----------|---------|
+|---|---|
 | `Result.timeout(fn, seconds, errType?)` | Runs a yielding function; resolves with `Err` if it exceeds the duration |
 | `Result.race(fns)` | Runs multiple yielding functions; resolves with the first Result to finish |
 | `Result.all(fns)` | Runs multiple yielding functions concurrently; collects all Results into `Ok({...})` |
 
-### Structured resource management (guaranteed cleanup on any outcome)
+### Structured resource management
+- Guarantees cleanup on any outcome.
 
 | Function / Method | Purpose |
-|-------------------|---------|
-| `Result.scoped(fn)` | Runs fn with a `Scope`; flushes all registered cleanup via Janitor on exit — whether fn returned `Ok`, `Err`, or `Defect` |
-| `Result.acquireRelease(acquire, release, use)` | Acquires a resource, uses it, then releases it — `release` always runs, even on failure |
+|---|---|
+| `Result.scoped(fn)` | Runs `fn` with a `Scope`; flushes all registered cleanup via Janitor on exit, whether `fn` returned `Ok`, `Err`, or `Defect` |
+| `Result.acquireRelease(acquire, release, use)` | Acquires a resource, uses it, then releases it; `release` always runs, even on failure |
 | `scope:add(resource, cleanupFn)` | Registers any resource with a custom cleanup function |
-| `scope:addJanitorItem(obj, methodName?)` | Registers any Janitor-trackable object (Instance, connection, etc.) |
-| `scope:addPromise(promise)` | Registers a Promise — cancelled automatically if the scope exits before it resolves |
+| `scope:addJanitorItem(obj, methodName?)` | Registers any Janitor-trackable object |
+| `scope:addPromise(promise)` | Registers a Promise and cancels it automatically if the scope exits before it resolves |
 
 Use `scoped` when an operation acquires multiple resources with different lifetimes. Use `acquireRelease` for the common single-resource acquire/use/release pattern.
 
@@ -87,79 +115,71 @@ Result.scoped(function(scope)
     local file = Try(openFile("export.csv"))
     scope:add(file, function(f) f:Close() end)
 
-    scope:addPromise(loadAssetsAsync())  -- cancelled if scope exits early
+    scope:addPromise(loadAssetsAsync()) -- cancelled if scope exits early
 
     return exportData(conn, file)
 end)
 ```
 
 ### Inspection
+| Function | Purpose |
+|---|---|
+| `Result.sandbox(result)` | Wraps any Result in `Ok`; makes it inert so `andThen`, `orElse`, and `Try` will not react to it |
+| `Result.unsandbox(sandboxed)` | Unwraps back into the error channel; propagation resumes |
+
+### Control flow
+- Pure control flow only; no error handling.
 
 | Function | Purpose |
-|----------|---------|
-| `Result.sandbox(result)` | Wraps any Result in `Ok` — makes it inert so `andThen`/`orElse`/`Try` won't react to it |
-| `Result.unsandbox(sandboxed)` | Unwraps back into the error channel — propagation resumes |
-
-### Control flow (pure control flow — no error handling)
-
-| Function | Purpose |
-|----------|---------|
+|---|---|
 | `Result.guard(condition, returnValue?)` | Exits the current `gen` block early if condition is falsy |
-| `Result.gen(fn, ...)` | Runs fn in a coroutine; returns fn's return value or `guard`'s `returnValue` on early exit |
+| `Result.gen(fn, ...)` | Runs `fn` in a coroutine; returns `fn`'s return value or `guard`'s `returnValue` on early exit |
 
 ---
 
 ## Layer Responsibilities
 
-### Infrastructure — return `Result` only when failure is real
-
-Infrastructure uses `Result` when an operation crosses a runtime boundary that can genuinely fail. In-memory reads and pure mutations use plain Lua returns.
-
-**Use `Result` for:**
-- External system calls — DataStore, HTTP, workspace traversal, JECS operations that can throw
-- Conditional failure on mutable state — e.g. profile data missing when it must exist
-- Multi-step mutations that can partially fail
+### Infrastructure
+- Return `Result` only when failure is real.
+- Use `Result` for external calls such as DataStore, HTTP, workspace traversal, and JECS operations that can throw.
+- Use `Result` for conditional failure on mutable state when missing data is a real failure.
+- Use `Result` for multi-step mutations that can partially fail.
+- Use plain Lua for in-memory reads where `nil` is valid absence.
+- Use plain Lua for pure mutations when the Policy layer already guaranteed preconditions.
 
 ```lua
--- External call — can fail at runtime
+-- External call: can fail at runtime
 function QuestPersistenceService:Load(player): Result<TQuestState>
     return fromPcall("DataStoreFailed", DataStore.GetAsync, DataStore, key)
 end
 
 -- Profile missing is a real failure, not a valid "not found"
--- Use fromNilable to convert nil → Err in one line (even a single nil check)
+-- Use fromNilable to convert nil -> Err in one line.
 function QuestPersistenceService:Save(player, state): Result<boolean>
-    local data = fromNilable(ProfileManager:GetData(player), "PersistenceFailed", "No profile data")
-    Try(data)
-    -- or inline: local data = Try(fromNilable(...))
-    data.value.Quest = deepClone(state)
+    local data = Try(fromNilable(ProfileManager:GetData(player), "PersistenceFailed", "No profile data"))
+    data.Quest = deepClone(state)
     return Ok(true)
 end
 ```
 
-Use `fromNilable` whenever a value may be nil and nil is a real failure — even for a single check. Prefer it over a manual `if not x then return Err(...) end` + `return Ok(x)` pair.
-
-**Use plain Lua for:**
-- In-memory reads where `nil` is a valid "not found" state
-- Pure mutations where the Policy has already guaranteed preconditions
-- Existence checks and simple lookups
-
 ```lua
--- nil means "unclaimed" — not an error
+-- nil means "unclaimed" - not an error
 function LotAreaRegistry:GetClaimant(areaName): Player?
     return self._areas[areaName] and self._areas[areaName].ClaimedBy or nil
 end
 
--- Preconditions guaranteed by Policy — mutation always succeeds
+-- Preconditions guaranteed by Policy - mutation always succeeds
 function LotAreaRegistry:SetClaim(areaName, player)
     self._areas[areaName].ClaimedBy = player
 end
 ```
 
-The Policy layer above Infrastructure uses `Ensure` to handle nil from plain returns. Infrastructure does not need to wrap valid absence in `Err`.
+- The Policy layer above Infrastructure uses `Ensure` to handle nil from plain returns.
+- Infrastructure does not need to wrap valid absence in `Err`.
 
-### Domain — return `Result`
-Validators return `Ok` or `Err`. Use `TryAll` to accumulate all validation errors instead of short-circuiting.
+### Domain
+- Return `Result`.
+- Validators should use `TryAll` to accumulate all validation errors before returning.
 
 ```lua
 function WorkerValidator:ValidateHiring(workerType: string): Result<nil>
@@ -170,20 +190,18 @@ function WorkerValidator:ValidateHiring(workerType: string): Result<nil>
 end
 ```
 
-### Application — use `Try` / `Ensure`, return `Result`
-Commands and queries use `Try` to unwrap Results and `Ensure` for inline condition guards. Any failure throws immediately and propagates up to the nearest `Catch`. No logging here.
-
-- `Try(result)` — unwrap a Result from a service call
-- `Ensure(condition, type, msg)` — assert an inline condition (replaces if/return Err blocks)
-
-`Ensure` accepts any truthy condition — pass the value directly rather than comparing to nil:
+### Application
+- Use `Try` to unwrap Results.
+- Use `Ensure` for inline condition guards.
+- Return `Ok(value)` on success.
+- Do not log in Application methods.
 
 ```lua
--- Correct — truthy check, no explicit nil comparison needed
+-- Correct: truthy check, no explicit nil comparison needed
 Ensure(player, "PlayerNotFound", Errors.PLAYER_NOT_FOUND)
 Ensure(data, "PersistenceFailed", Errors.NO_PROFILE_DATA)
 
--- Avoid — redundant nil comparison
+-- Avoid: redundant nil comparison
 Ensure(player ~= nil, "PlayerNotFound", Errors.PLAYER_NOT_FOUND)
 ```
 
@@ -194,12 +212,15 @@ function HireWorker:Execute(userId: number, workerType: string): Result<string>
     local entity = self.EntityFactory:CreateWorker(userId, workerType)
     Try(self.PersistenceService:SaveWorkerEntity(entity))
     self.SyncService:CreateWorker(userId, workerType)
+    local workerId = entity.Id
     return Ok(workerId)
 end
 ```
 
-### Context — own a `Catch`, handler only logs
-Every context method owns a `Catch`. The handler logs with the context label. `Catch` always returns `Result<T>` — propagation is automatic by return value. Use `Try()` inside the fn when you need to unwrap a success value to continue work.
+### Context
+- Own a `Catch(fn, "Context:Method")` for each context method, or return `Ok(value)` directly for simple getters.
+- Let the `Catch` label handle logging; do not add manual `warn()` calls.
+- Return `Result<T>` from public server-to-server context methods so upstream callers can compose with `Try()` and preserve typed failures.
 
 ```lua
 -- Server-to-server: Err flows up automatically through return values
@@ -213,22 +234,22 @@ end
 -- Caller: Err from SpawnWave flows through automatically
 function CombatContext:StartCombat(combatId: number): Result<nil>
     return Catch(function()
-        return NPCContext:SpawnWave(combatId)  -- Err propagates by return value
+        return NPCContext:SpawnWave(combatId)
     end, "Combat:StartCombat")
 end
 
--- Tick loops / event callbacks: terminal — just ignore the returned Result
+-- Tick loops / event callbacks: terminal - just ignore the returned Result
 function CombatContext:_OnTick()
     Catch(function()
         Try(self.ProcessTickService:Execute())
         return Ok(nil)
     end, "Combat:Tick")
-    -- Catch returns Err, caller ignores it — no output, no crash
 end
 ```
 
-### Getter methods — skip `Catch`, return `Ok(value)` directly
-Simple getters that access init-time fields cannot fail. No `Catch` needed.
+### Getter methods
+- Skip `Catch` when the method only reads init-time fields and cannot fail.
+- Return `Ok(self.Field)` directly.
 
 ```lua
 function NPCContext:GetWorld(): Result<any>
@@ -236,7 +257,8 @@ function NPCContext:GetWorld(): Result<any>
 end
 ```
 
-Callers in `KnitStart` (not inside a Catch) should still handle Result explicitly:
+- Callers in `KnitStart` that are not inside `Catch` should still handle the `Result` explicitly.
+
 ```lua
 local worldResult = NPCContext:GetWorld()
 if not worldResult.success then
@@ -245,20 +267,11 @@ end
 registry:Register("World", worldResult.value)
 ```
 
-### Public context methods — propagate `Result`, do not unwrap
-Public server-to-server context methods should return `Result<T>` so upstream callers can compose with `Try()` and preserve typed failures.
+### Context `.Client` methods
+- Treat `.Client` methods as server methods that return to the client through Knit's remote transport.
+- Call `Catch` directly when the method invokes `Execute`.
+- Delegate to `self.Server:Method()` without an extra `Catch` when the server method already owns the boundary.
 
-`result:unwrapOr(default)` is for terminal boundaries only:
-- Private event/tick callbacks that intentionally swallow failures
-- Non-critical fallback reads where defaulting is explicitly desired
-- Client/UI edge handling
-
-Avoid `unwrapOr` in public context APIs because it converts failures into silent defaults and breaks propagation.
-
-### Context `.Client` methods — own a `Catch` only when calling `Execute` directly
-`.Client` methods are server methods — they run on the server and return to the client via Knit's remote transport. `WrapContext` wraps them and rejects the client promise on `Err`.
-
-**Call `Execute` directly → own a `Catch`:**
 ```lua
 function WorkerContext.Client:HireWorker(player: Player, workerType: string)
     local userId = player.UserId
@@ -268,15 +281,14 @@ function WorkerContext.Client:HireWorker(player: Player, workerType: string)
 end
 ```
 
-**Delegate to a server method → no `Catch` needed** (the server method's `Catch` already runs):
 ```lua
 function QuestContext.Client:DepartOnQuest(player, zoneId, partyAdventurerIds)
     return self.Server:DepartOnQuest(player, zoneId, partyAdventurerIds)
 end
 ```
 
-### Client Controller — terminal boundary
-The client's promise `:catch` is the end of the chain.
+### Client controller
+- Treat the client's promise `:catch` as the terminal boundary.
 
 ```lua
 KnitService:StartCombat(combatId)
@@ -290,27 +302,26 @@ KnitService:StartCombat(combatId)
 
 ---
 
-## Propagation Chain
-
+## Result Flow
+```text
+Infrastructure  ->  return Result
+Application     ->  Try propagates (throws inside Catch's xpcall)
+Context method  ->  Catch logs, returns Err (never throws)
+Caller Catch    ->  detects Err via not result.success, returns Err
+Knit remote     ->  WrapContext unwraps Ok or rejects promise on Err
+Client :catch   ->  terminal boundary
 ```
-Infrastructure  →  return Result
-Application     →  Try propagates (throws inside Catch's xpcall)
-Context method  →  Catch logs, returns Err (never throws)
-Caller Catch    →  detects Err via not result.success, logs its label, returns Err
-Knit remote     →  WrapContext unwraps Ok or rejects promise on Err
-Client :catch   →  terminal boundary
-```
 
-Each context in the chain logs its own label. The structured `Err` (type + message) flows upward by return value, never by exception.
+- Each context in the chain logs its own label.
+- The structured `Err` (type + message) flows upward by return value, never by exception.
 
 ---
 
 ## Result Chaining
 
-Results support method-style chaining via `:andThen`, `:orElse`, and `:unwrapOr`. Use these **outside** a `Catch` boundary when the result is optional, has a fallback, or needs transforming at the call site. Inside a `Catch`, prefer `Try()` for the linear happy path.
-
-### `:andThen(fn)` — transform the Ok value, stay in Result system
-fn receives the unwrapped value and **must return a Result**.
+### `:andThen(fn)`
+- Transform the `Ok` value and stay in the Result system.
+- `fn` must return a `Result`.
 
 ```lua
 -- Extract a field from a fetched profile
@@ -320,8 +331,9 @@ local coinsResult = self.ProfileService:GetProfile(userId)
     end)
 ```
 
-### `:orElse(fn)` — recover from Err, continue normally
-fn receives the Err and **must return a Result** (Ok to recover, Err to re-fail).
+### `:orElse(fn)`
+- Recover from a business `Err` and continue normally.
+- `fn` receives the `Err` and must return a `Result`.
 
 ```lua
 -- Re-label a cross-context error at the boundary
@@ -337,8 +349,9 @@ local profile = self.ProfileService:GetProfile(userId)
     end)
 ```
 
-### `:unwrapOr(default)` — extract value or use default, exits Result system
-Returns a plain value, not a Result. No `Try()` needed after this.
+### `:unwrapOr(default)`
+- Extract the value or use a default.
+- Exits the Result system.
 
 ```lua
 -- Optional data with sensible fallback
@@ -346,24 +359,25 @@ local multiplier = self.ConfigService:GetMultiplier(userId):unwrapOr(1)
 local savedState = self.PersistenceService:Load(player):unwrapOr({})
 ```
 
-### When to chain vs when to `Try`
-
+### When to chain vs `Try`
 | Situation | Use |
-|-----------|-----|
+|---|---|
 | Inside `Catch`, happy path must succeed | `Try(result)` |
 | Inside `Catch`, inline condition guard | `Ensure(cond, type, msg)` |
 | Result is optional with a fallback value | `result:unwrapOr(default)` |
 | Need to transform before propagating | `result:andThen(fn)` then `Try()` |
-| Need to re-label error at context boundary | `result:orElse(fn)` then `Try()` |
+| Need to relabel an error at a context boundary | `result:orElse(fn)` then `Try()` |
 
-**Do NOT chain off `Try()`** — `Try()` returns a plain value, not a Result.
+- Do not chain off `Try()`; it returns a plain value, not a Result.
 
 ---
 
 ## Assertions vs Validation
 
-### `assert()` — programmer errors only
-Used in Value Objects and constructors. Represents a contract violation, not a user input failure.
+### `assert()`
+- Use for programmer errors only.
+- Use inside Value Objects and constructors.
+- Treat failures as contract violations, not user input failures.
 
 ```lua
 function ItemName.new(value: string)
@@ -373,8 +387,8 @@ function ItemName.new(value: string)
 end
 ```
 
-### `Err` — expected failures
-Used anywhere a failure is a normal outcome (validation, missing data, capacity limits).
+### `Err`
+- Use for expected failures such as validation, missing data, and capacity limits.
 
 ```lua
 function InventoryValidator:ValidateAddItem(itemId: string, quantity: number): Result<nil>
@@ -388,45 +402,35 @@ end
 ---
 
 ## Centralized Error Constants
-
-Store all error strings in a per-context `Errors.lua`. Never write error strings inline.
+- Store all error strings in a per-context `Errors.lua`.
+- Never write error strings inline.
 
 ```lua
 -- Contexts/Inventory/Errors.lua
 return table.freeze({
-    INVALID_ITEM_ID   = "Item ID does not exist",
-    INVALID_QUANTITY  = "Quantity must be greater than zero",
-    INVENTORY_FULL    = "Inventory has reached max capacity",
+    INVALID_ITEM_ID = "Item ID does not exist",
+    INVALID_QUANTITY = "Quantity must be greater than zero",
+    INVENTORY_FULL = "Inventory has reached max capacity",
 })
 ```
 
 ---
 
-## Negative Space Checklist
+## Checklist
+- [ ] `Ok`, `Err`, `Defect`, `Try`, `Ensure`, and `Catch` are used with the right boundary.
+- [ ] Infrastructure returns plain Lua for valid absence and pure mutations.
+- [ ] Infrastructure uses `Result` only when failure is real.
+- [ ] Application unwraps with `Try` and guards with `Ensure`.
+- [ ] Context methods own a `Catch`, or return `Ok(value)` directly for simple getters.
+- [ ] Public context methods propagate `Result` instead of unwrapping.
+- [ ] `.Client` methods only add `Catch` when they call `Execute` directly.
+- [ ] Error strings live in `Errors.lua` and are not inlined.
 
-**Value Objects:**
-- [ ] `assert()` all preconditions with clear messages
-- [ ] `table.freeze()` the result
+---
 
-**Domain Services (Validators):**
-- [ ] Return `Result` — `Ok(nil)` or `Err(type, message)`
-- [ ] Use `TryAll` to accumulate all errors before returning
-
-**Application Services:**
-- [ ] Use `Try` to unwrap Results, `Ensure` for inline condition guards — no `if/return Err` blocks
-- [ ] Return `Ok(value)` on success
-- [ ] No logging
-
-**Context Methods:**
-- [ ] Own a `Catch(fn, "Context:Method")` (or return `Ok(value)` directly for simple getters)
-- [ ] `Catch` logs automatically via the label — no manual `warn()` needed
-- [ ] Callers detect propagation via `not result.success` on the returned `Result`
-- [ ] Public server-to-server methods return `Result<T>` (no `unwrapOr` fallback in method return path)
-
-**Context `.Client` Methods:**
-- [ ] Call `Execute` directly → wrap in `Catch(fn, "Context.Client:Method")`
-- [ ] Delegate to `self.Server:Method()` → no `Catch` needed
-
-**Client Controllers:**
-- [ ] Use `:andThen` / `:catch` on the Knit promise
-- [ ] `:catch` is the terminal boundary — no re-throw
+## Related Docs
+- [BACKEND.md](BACKEND.md) - backend layer overview and routing
+- [CQRS.md](CQRS.md) - command and query structure in the application layer
+- [DDD.md](DDD.md) - DDD layer rules and bounded-context structure
+- [STATE_SYNC.md](STATE_SYNC.md) - deep clone rules and centralized mutation pattern
+- [SYSTEMS.md](SYSTEMS.md) - runtime systems, persistence flow, and library references

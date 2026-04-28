@@ -1,23 +1,42 @@
 # Hooks, ViewModels, and Selectors
 
-## Read/Write Hook Separation
+This document defines how frontend hooks, ViewModels, and selectors are structured.
 
-Every feature has two distinct hook types. They must always be separate files.
+- Read and write hooks must stay separate.
+- ViewModels transform raw atom data into frozen UI-ready tables.
+- Selectors extract only the slice of state a component needs.
+- Controller hooks own orchestration, side effects, and screen-level coordination.
+
+---
+
+## Related Docs
+
+- [LAYERS.md](LAYERS.md) for frontend layer boundaries.
+- [COMPONENTS.md](COMPONENTS.md) for what belongs in Presentation.
+- [ANTI_PATTERNS.md](ANTI_PATTERNS.md) for the mistakes this document is designed to prevent.
+- [ANIMATION_PATTERN.md](ANIMATION_PATTERN.md) for animation-heavy controller splits.
+
+---
+
+## Hook Types
+
+Every feature has two distinct hook types, and they must always be separate files.
 
 | | Read Hook | Write Hook |
 |---|---|---|
-| Purpose | Subscribe to state, return current values | Expose mutation functions |
-| Subscribes to atom? | Yes — `ReactCharm.useAtom()` | No — never subscribes |
+| Purpose | Subscribe to state and return current values | Expose mutation functions |
+| Subscribes to atom? | Yes, via `ReactCharm.useAtom()` | No, never subscribes |
 | Causes re-renders? | Yes, on state change | No |
 | Returns | Current state | Table of functions |
 
-**Why separate?** A hook that both subscribes and mutates causes the component to re-render every time it calls a mutation, even if the state didn't change from the component's perspective.
+- A hook that both subscribes and mutates causes the component to re-render every time it calls a mutation, even if the state did not change from the component's perspective.
 
 ---
 
 ## Read Hooks
 
-Subscribe to an atom and return state reactively. The component re-renders whenever the atom changes.
+- Read hooks subscribe to an atom and return state reactively.
+- The component re-renders whenever the atom changes.
 
 ```lua
 -- Counter/Application/Hooks/useCounter.lua
@@ -40,7 +59,9 @@ return useCounter
 
 ## Write Hooks
 
-Return a table of mutation functions. Do **not** subscribe to the atom — this keeps the hook from triggering re-renders.
+- Write hooks return a table of mutation functions.
+- Write hooks do not subscribe to the atom.
+- This keeps the hook from triggering re-renders.
 
 ```lua
 -- Counter/Application/Hooks/useCounterActions.lua
@@ -75,7 +96,8 @@ end
 return useCounterActions
 ```
 
-For write hooks that call backend services:
+Write hooks that call backend services should still return mutation functions rather than subscribing to atoms.
+
 ```lua
 function useFeatureActions()
     local service = Knit.GetService("FeatureContext")
@@ -91,7 +113,10 @@ end
 
 ## ViewModels
 
-ViewModels transform raw atom data into a frozen, UI-ready table. No mutations — input in, formatted output out.
+- ViewModels transform raw atom data into a frozen, UI-ready table.
+- ViewModels do not mutate input.
+- ViewModels handle all string formatting, calculations, and derived values.
+- ViewModels have no side effects.
 
 ```lua
 -- Counter/Application/ViewModels/CounterViewModel.lua
@@ -117,13 +142,8 @@ function CounterViewModel.fromAtomData(atomData)
 end
 ```
 
-**Rules:**
-- Takes raw atom data as input
-- Returns a `table.freeze()`d table — never mutate it
-- Handles all string formatting, calculations, and derived values
-- No side effects
+ViewModels are constructed in Templates using `React.useMemo`.
 
-ViewModels are constructed in Templates using `React.useMemo`:
 ```lua
 local viewModel = React.useMemo(function()
     return CounterViewModel.fromAtomData(counterState)
@@ -134,7 +154,9 @@ end, { counterState })
 
 ## Selectors
 
-For complex atoms, use selector functions to extract only the relevant slice of state. This avoids re-rendering a component when unrelated parts of a large atom change.
+- Use selector functions for complex atoms.
+- Selectors extract only the relevant slice of state.
+- This avoids re-rendering a component when unrelated parts of a large atom change.
 
 ```lua
 -- Select only a specific counter by ID from a large atom
@@ -147,19 +169,26 @@ end
 
 ## Hooks Folder Organization
 
-As the `Hooks/` folder grows, group hooks by concern using sub-folders. The flat layout is fine for small features; sub-folders apply once a category has 2+ hooks.
+- Group hooks by concern using sub-folders as the `Hooks/` folder grows.
+- A flat layout is fine for small features.
+- Start using sub-folders once a category has 2+ hooks.
 
-```
+```text
 Application/Hooks/
-  Sounds/           ← sound-triggered hooks (useShopSounds, useCombatSounds)
-  Animations/       ← animation orchestration hooks (useShopDetailPanelController)
-  use[Feature]ScreenController.lua   ← orchestrator (stays at top level)
-  use[Feature]Actions.lua            ← write hook
-  use[Feature].lua                   ← read hook
-  use[Feature]Inventory.lua          ← proxy hooks to other contexts
+  Sounds/                        <- sound-triggered hooks (useShopSounds, useCombatSounds)
+  Animations/                    <- animation orchestration hooks (useShopDetailPanelController)
+  use[Feature]ScreenController.lua <- orchestrator (stays at top level)
+  use[Feature]Actions.lua        <- write hook
+  use[Feature].lua               <- read hook
+  use[Feature]Inventory.lua      <- proxy hooks to other contexts
 ```
 
-**Sounds hooks** (`Hooks/Sounds/`): Wrap `useSoundActions` calls for a specific feature. Collect all sound callbacks (tab switch, purchase, sell, etc.) into one hook and return them as named functions. The screen controller calls the sound hook and delegates sound side-effects to it — it does not call `useSoundActions` directly.
+### Sounds Hooks
+
+- Sounds hooks wrap `useSoundActions` calls for a specific feature.
+- Collect all sound callbacks, such as tab switch, purchase, and sell, into one hook and return them as named functions.
+- The screen controller calls the sounds hook and delegates sound side effects to it.
+- The screen controller does not call `useSoundActions` directly.
 
 ```lua
 -- Shop/Application/Hooks/Sounds/useShopSounds.lua
@@ -173,20 +202,22 @@ local function useShopSounds(): TShopSounds
 end
 ```
 
-**Animation hooks** (`Hooks/Animations/`): Own refs, springs, hover springs, reduced-motion checks, and `useCountUp` values for a specific animated organism. Consumed by the organism's thin wrapper component; not by the screen controller. See `ANIMATION_PATTERN.md`.
+### Animation Hooks
+
+- Animation hooks own refs, springs, hover springs, reduced-motion checks, and `useCountUp` values for a specific animated organism.
+- Animated organisms consume them through a thin wrapper component, not through the screen controller.
+- See [ANIMATION_PATTERN.md](ANIMATION_PATTERN.md).
 
 ---
 
 ## Screen Controller Hooks
 
-For screen-level orchestration, create a dedicated hook such as `useGameViewController`.
-
-Pattern:
-- Screen template (`Presentation/Screens/[Screen].lua`) stays focused on composition.
-- Controller hook (`Application/Hooks/use[Screen]Controller.lua`) owns local screen state and side effects.
+- For screen-level orchestration, create a dedicated hook such as `useGameViewController`.
+- The screen template stays focused on composition.
+- The controller hook owns local screen state and side effects.
 - Keep hook bodies thin by moving behavior into module-level helper functions.
+- Use this when screens start accumulating nested handlers, delayed navigation, or chained side effects.
 
-Example shape:
 ```lua
 -- Presentation/Screens/GameView.lua
 local controller = useGameViewController()
@@ -210,39 +241,32 @@ local function useGameViewController()
 end
 ```
 
-Use this when screens start accumulating nested handlers, delayed navigation, or chained side effects.
-
 ---
 
-## UI Controller Hooks (Animation + Interaction)
+## UI Controller Hooks
 
-UI orchestration hooks are valid in the Application layer even when they are not domain/business hooks.
-
-Use these for:
-- animation orchestration (`useSpring`, `useHoverSpring`, reduced-motion behavior)
-- refs and imperatively animated targets
-- stable callback composition passed to pure view components
-
-Recommended split for animated organisms:
-- wrapper component in Presentation (`SidePanel.lua`)
-- UI controller hook in Application (`useSidePanelController.lua`)
-- pure view in Presentation (`SidePanelView.lua`)
-
-Rules:
+- UI orchestration hooks are valid in the Application layer even when they are not domain or business hooks.
+- Use these for animation orchestration, refs, imperatively animated targets, and stable callback composition passed to pure view components.
 - Keep orchestration hooks free of render trees.
 - Keep view components free of orchestration hooks.
-- Prefer stable callbacks and cleanup for delayed tasks/animations.
+- Prefer stable callbacks and cleanup for delayed tasks or animations.
+
+Recommended split for animated organisms:
+
+- Wrapper component in Presentation (`SidePanel.lua`)
+- UI controller hook in Application (`useSidePanelController.lua`)
+- Pure view in Presentation (`SidePanelView.lua`)
 
 ---
 
 ## New Feature Checklist
 
-- [ ] `[Feature]/Application/Hooks/use[Feature].lua` — read hook
-- [ ] `[Feature]/Application/Hooks/use[Feature]Actions.lua` — write hook
-- [ ] `[Feature]/Application/ViewModels/[Entity]ViewModel.lua` — data transform
+- [ ] `[Feature]/Application/Hooks/use[Feature].lua` - read hook
+- [ ] `[Feature]/Application/Hooks/use[Feature]Actions.lua` - write hook
+- [ ] `[Feature]/Application/ViewModels/[Entity]ViewModel.lua` - data transform
 - [ ] Read and write hooks are in separate files
 - [ ] Write hook does not call `ReactCharm.useAtom()`
 - [ ] ViewModel returns a frozen table
-- [ ] Sound side-effects are in `Hooks/Sounds/use[Feature]Sounds.lua`, not inline in the screen controller
+- [ ] Sound side effects are in `Hooks/Sounds/use[Feature]Sounds.lua`, not inline in the screen controller
 - [ ] Animation orchestration for animated organisms is in `Hooks/Animations/use[Component]Controller.lua`
-- [ ] Screen controller does not call `useSoundActions` directly — delegates to a sounds hook
+- [ ] Screen controller does not call `useSoundActions` directly and delegates to a sounds hook

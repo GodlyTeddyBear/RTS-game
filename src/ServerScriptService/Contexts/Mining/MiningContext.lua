@@ -1,11 +1,15 @@
 --!strict
 
---[[
-	Module: MiningContext
-	Purpose: Owns server-authoritative extractor production for resource-tile placements.
-	Used In System: Listens to PlacementContext structure placements and grants run-only resources through EconomyContext.
-	Boundaries: Owns extractor runtime ECS and scheduling only; Economy owns wallet balances and Placement owns structure spawning.
-]]
+--[=[
+    @class MiningContext
+    Owns the server-authoritative mining runtime for extractors, resource-node registration, and manual gather wiring.
+
+    `PlacementContext` notifies this context when extractor structures are placed.
+    `RunContext` drives cleanup and resource-node reattachment at run transitions.
+    `CombatTick` advances extractor production while gather interactions remain owned by the mining services.
+    Owns mining orchestration only; Economy owns balances and Placement owns structure spawning.
+    @server
+]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -28,6 +32,8 @@ local Catch = Result.Catch
 
 type StructureRecord = PlacementTypes.StructureRecord
 type RunState = "Idle" | "Prep" | "Wave" | "Resolution" | "Climax" | "Endless" | "RunEnd"
+
+-- â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
@@ -79,6 +85,8 @@ local MiningModules: BaseContext.TModuleLayers = {
 	Application = ApplicationModules,
 }
 
+-- â”€â”€ Initialization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 local MiningContext = Knit.CreateService({
 	Name = "MiningContext",
 	Client = {},
@@ -106,6 +114,12 @@ local MiningContext = Knit.CreateService({
 
 local MiningBaseContext = BaseContext.new(MiningContext)
 
+-- â”€â”€ Public â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+--[=[
+    Resets the wrapped `BaseContext` and clears cached connection handles before startup.
+    @within MiningContext
+]=]
 function MiningContext:KnitInit()
 	MiningBaseContext:KnitInit()
 	self._structurePlacedConnection = nil :: RBXScriptConnection?
@@ -113,9 +127,14 @@ function MiningContext:KnitInit()
 	self._resourceNodeClickedConnection = nil :: RBXScriptConnection?
 end
 
+--[=[
+    Wires the mining runtime to placement, run-state, gather, and combat-tick events.
+    @within MiningContext
+]=]
 function MiningContext:KnitStart()
 	MiningBaseContext:KnitStart()
 
+	-- Register extractors when placement produces a new structure record.
 	self._structurePlacedConnection = self._placementContext.StructurePlaced:Connect(function(record: StructureRecord)
 		local result = self:_RegisterExtractor(record)
 		if not result.success then
@@ -128,16 +147,20 @@ function MiningContext:KnitStart()
 		end
 	end)
 
+	-- Reset mining runtime state when a new run begins or the current run ends.
 	self._runStateChangedConnection = self._runContext.StateChanged:Connect(
 		function(newState: RunState, previousState: RunState)
+			-- Only the run-end cleanup and fresh-run prep transitions need mining teardown.
 			local isRunEndCleanup = newState == "RunEnd"
 			local isFreshRunStartCleanup = previousState == "Idle" and newState == "Prep"
 			if not isRunEndCleanup and not isFreshRunStartCleanup then
 				return
 			end
 
+			-- Clear any active gather wiring before tearing down runtime entities.
 			self._resourceGatherInteractionService:Cleanup()
 
+			-- Remove all mining entities so the next phase starts from a clean world state.
 			local result = self:_CleanupAll()
 			if not result.success then
 				Result.MentionError("Mining:RunCleanup", "Failed to cleanup mining entities", {
@@ -148,6 +171,7 @@ function MiningContext:KnitStart()
 			end
 
 			if isFreshRunStartCleanup then
+				-- Rebuild resource-node entities from the active map zone for the new run.
 				local registerNodesResult = self:_RegisterResourceNodes()
 				if not registerNodesResult.success then
 					Result.MentionError("Mining:OnRunPrep", "Failed to register resource nodes", {
@@ -157,6 +181,7 @@ function MiningContext:KnitStart()
 					return
 				end
 
+				-- Reattach gather interactions after the node registry has been rebuilt.
 				local attachResult = self:_AttachResourceGatherInteractions()
 				if not attachResult.success then
 					Result.MentionError("Mining:OnRunPrep", "Failed to attach resource gather interactions", {
@@ -168,6 +193,7 @@ function MiningContext:KnitStart()
 		end
 	)
 
+	-- Forward manual resource clicks into the gather command and report failures.
 	self._resourceNodeClickedConnection = self._resourceGatherInteractionService.ResourceNodeClicked:Connect(
 		function(player: Player, resourcePart: BasePart)
 			local result = self:_GatherResourceFromNode(player, resourcePart)
@@ -185,11 +211,14 @@ function MiningContext:KnitStart()
 		end
 	)
 
+	-- Advance extractor production on the combat tick and flush deferred entity deletes afterward.
 	MiningBaseContext:RegisterSchedulerSystem("CombatTick", function()
 		self._extractorMiningSystem:Tick(MiningBaseContext:GetSchedulerDeltaTime())
 		self._entityFactory:FlushPendingDeletes()
 	end)
 end
+
+-- â”€â”€ Private â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function MiningContext:_RegisterResourceNodes(): Result.Result<number>
 	return Catch(function()
@@ -221,6 +250,7 @@ function MiningContext:_CleanupAll(): Result.Result<boolean>
 	end, "Mining:CleanupAll")
 end
 
+-- Cleans up gather wiring before the wrapped BaseContext tears down shared services.
 function MiningContext:_BeforeDestroy()
 	self._resourceGatherInteractionService:Cleanup()
 
@@ -235,6 +265,12 @@ function MiningContext:_BeforeDestroy()
 	}, cleanupResult.type)
 end
 
+-- â”€â”€ Public â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+--[=[
+    Shuts down the wrapped `BaseContext` and reports teardown failures.
+    @within MiningContext
+]=]
 function MiningContext:Destroy()
 	local destroyResult = MiningBaseContext:Destroy()
 	if destroyResult.success then

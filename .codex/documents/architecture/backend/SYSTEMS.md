@@ -4,11 +4,15 @@
 
 Game entities (characters, items, NPCs, etc.) are managed by a JECS world. Services that create or manage entities belong in the **Infrastructure layer** and must respect DDD boundaries - Domain and Application layers do not interact with JECS directly.
 
+For the ECS role split and ownership boundaries, see [ECS_OVERVIEW.md](ECS_OVERVIEW.md).
+
 ---
 
 ## ProfileStore (Data Persistence)
 
 Player data is persisted server-side using ProfileStore.
+
+ECS-to-ProfileStore bridging is documented in [ECS_PERSISTENCE_RULES.md](../../methods/ECS/ECS_PERSISTENCE_RULES.md).
 
 **Runtime ownership:**
 - `src/ServerScriptService/Persistence/ProfileInit.server.lua` creates the ProfileStore and boots SessionManager.
@@ -49,46 +53,6 @@ GameEvents.Bus:Emit(GameEvents.Events.Persistence.ProfileLoaded, player)
 
 ---
 
-## Debug Logging
-
-Debug logging is toggled via config without affecting functionality.
-
-**Master switch** (`ReplicatedStorage/Config/DebugConfig.lua`):
-```lua
-return table.freeze({
-    ENABLED = false,  -- Set true to enable all debug logs
-})
-```
-
-**Context-specific config** (`[Context]/Config/DebugConfig.lua`):
-```lua
-return table.freeze({
-    CONTEXT_ENABLED = true,
-    SERVICE_NAME = true,
-    MILESTONE = true,
-})
-```
-
-**Usage:**
-```lua
-local DebugLogger = require(script.Parent.Parent.Config.DebugLogger)
-
-function Service.new(validator)
-    local self = setmetatable({}, Service)
-    self.Validator = validator
-    self.DebugLogger = DebugLogger.new()
-    return self
-end
-
-function Service:Execute(userId: number)
-    local success, errors = self.Validator:Validate(userId)
-    self.DebugLogger:Log("Service", "Validation", "userId: " .. userId .. " result: " .. tostring(success))
-    return true, result
-end
-```
-
----
-
 ## Key Libraries
 
 | Library | Version | Purpose |
@@ -102,6 +66,18 @@ end
 | Janitor / Trove | - | Resource cleanup |
 | Jest / Testez | - | Testing frameworks |
 | Selene | - | Lua linting |
+
+## Shared Utilities
+
+Common backend and ECS utilities live in `ReplicatedStorage/Utilities/` and are described in [UTILITY_USE.md](UTILITY_USE.md).
+
+Base-class style utilities are a valid pattern here when they provide shared technical behavior without owning a context lifecycle. For example, `BaseAction` is a reusable action base class that centralizes marker dispatch, null checking, and callback routing while leaving subclass-specific logic in the derived class.
+
+Use this pattern when the utility:
+- exposes a small shared API surface
+- owns reusable technical behavior
+- lets subclasses override narrow hooks
+- does not become a feature service or lifecycle owner
 
 ---
 

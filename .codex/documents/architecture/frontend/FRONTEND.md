@@ -56,7 +56,10 @@ StarterPlayerScripts/
     |       `-- App.lua               # Root component
     |
     `-- [FeatureName]/                # Feature slice
-        |-- [FeatureName]Controller.lua  # Optional Knit controller
+        |-- [FeatureName]Controller.lua  # Single-controller feature slice
+        |-- Controllers/                # Optional multi-controller feature slice
+        |   |-- [FeatureName]Controller.lua
+        |   `-- [FeatureName]PlacementController.lua
         |-- Infrastructure/           # State atoms, sync clients
         |-- Application/
         |   |-- Hooks/                # Read hooks, write hooks, orchestration hooks
@@ -76,6 +79,7 @@ StarterPlayerScripts/
 ## Key Principles
 
 - **One feature = one feature slice** (Counter, Party, Inventory, Combat, etc.)
+- **A client context may own one controller or many controllers** - both `[Feature]Controller.lua` and `Controllers/` layouts are valid
 - **Read hooks != Write hooks** - never mix state subscription with mutation in the same hook
 - **No business logic in components** - ViewModels handle all data transformation
 - **Design concept before UI implementation** - define visual role, hierarchy, surfaces, and interaction model before building screens
@@ -87,6 +91,7 @@ StarterPlayerScripts/
 - **Sound side-effects belong in `Hooks/Sounds/`** - screen controllers delegate to a sounds hook, never call `useSoundActions` directly
 - **Feature-local molecules are valid** - extract named sub-regions from organisms into `Presentation/Molecules/` without requiring cross-feature reuse
 - **Grid/list organisms own their child-building logic** - templates pass data props to a grid organism; they do not construct children inline
+- **Controller folders mirror backend context grouping when useful** - keep controller orchestration close to the feature slice, and use subfolders when the context has multiple controllers
 
 ---
 

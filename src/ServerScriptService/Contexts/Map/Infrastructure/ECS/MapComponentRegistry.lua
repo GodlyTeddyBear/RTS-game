@@ -23,10 +23,16 @@ local MapComponentRegistry = {}
 MapComponentRegistry.__index = MapComponentRegistry
 setmetatable(MapComponentRegistry, BaseECSComponentRegistry)
 
+--[=[
+	Creates the Map ECS component registry.
+	@within MapComponentRegistry
+	@return MapComponentRegistry -- The new component registry instance.
+]=]
 function MapComponentRegistry.new()
 	return setmetatable(BaseECSComponentRegistry.new("Map"), MapComponentRegistry)
 end
 
+-- Registers the authoritative component and tag set used by the Map context.
 function MapComponentRegistry:_RegisterComponents(_registry: any, _name: string)
 	-- [AUTHORITATIVE] Runtime map root metadata.
 	self:RegisterComponent("MapRootComponent", "Map.MapRoot", "AUTHORITATIVE")

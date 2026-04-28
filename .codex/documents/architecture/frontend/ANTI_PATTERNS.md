@@ -1,10 +1,16 @@
 # Anti-Patterns
 
-## 1. Business Logic in Components
+This document collects the frontend mistakes this repo wants to avoid. Use it with [COMPONENTS.md](COMPONENTS.md), [DESIGN.md](DESIGN.md), and [HOOKS.md](HOOKS.md).
 
-Components are for rendering only. Calculations, formatting, and service calls belong in ViewModels and hooks.
+---
+
+## 1. Business Logic In Components
+
+- Components are for rendering only.
+- Calculations, formatting, and service calls belong in ViewModels and hooks.
 
 **Wrong:**
+
 ```lua
 function CounterCard(props)
     local counter = useCounter()
@@ -17,10 +23,11 @@ end
 ```
 
 **Correct:**
+
 ```lua
 function CounterCard(props)
     -- ViewModel handles transformation
-    local viewModel = props.viewModel  -- passed in from Template
+    local viewModel = props.viewModel -- passed in from Template
     -- Write hook handles service calls
     local actions = useCounterActions()
 end
@@ -28,23 +35,26 @@ end
 
 ---
 
-## 2. Direct Atom Mutations in Components
+## 2. Direct Atom Mutations In Components
 
-Components never read or write atoms directly. Use hooks.
+- Components never read or write atoms directly.
+- Use hooks instead.
 
 **Wrong:**
+
 ```lua
 function IncrementButton()
     local counterAtom = require(Infrastructure.CounterAtom)
     local onClick = function()
         local current = counterAtom()
-        current.Count = current.Count + 1  -- Direct mutation!
+        current.Count = current.Count + 1 -- Direct mutation!
         counterAtom(current)
     end
 end
 ```
 
 **Correct:**
+
 ```lua
 function IncrementButton(props)
     -- actions come from a write hook, passed via props
@@ -58,15 +68,18 @@ end
 
 ## 3. Premature Component Extraction
 
-Don't move a component to `App/Presentation/Atoms/` the first time you write it. Wait until it's genuinely needed in 3+ features.
+- Do not move a component to `App/Presentation/Atoms/` the first time you write it.
+- Wait until it is genuinely needed in 3+ features.
 
 **Wrong:**
+
 ```lua
 -- Created for Counter, immediately put in global atoms
-App/Presentation/Atoms/CounterButton.lua  -- Only used in Counter!
+App/Presentation/Atoms/CounterButton.lua -- Only used in Counter!
 ```
 
 **Correct:**
+
 ```lua
 -- 1st use: keep feature-local
 Counter/Presentation/Organisms/CounterButton.lua
@@ -82,9 +95,12 @@ App/Presentation/Atoms/Button.lua
 
 ## 4. Feature Coupling Through Imports
 
-Features are independent. One feature must never import from another.
+- Features are independent.
+- One feature must never import from another.
+- Use the global `App` layer for shared state, or let the backend provide combined data via a sync atom.
 
 **Wrong:**
+
 ```lua
 -- Counter importing from Party
 local PartyList = require(StarterPlayerScripts.Contexts.Party.Presentation.Organisms.PartyList)
@@ -96,39 +112,42 @@ Use the global `App` layer for shared state, or let the backend provide combined
 
 ---
 
-## 5. Mixing Read and Write in One Hook
+## 5. Mixing Read And Write In One Hook
 
-A hook that both subscribes to state and exposes mutations causes the component to re-render on every mutation call, regardless of whether the displayed data changed.
+- A hook that both subscribes to state and exposes mutations causes the component to re-render on every mutation call, regardless of whether the displayed data changed.
 
 **Wrong:**
+
 ```lua
 function useCounterData()
-    local state = ReactCharm.useAtom(counterAtom)  -- Subscribes
+    local state = ReactCharm.useAtom(counterAtom) -- Subscribes
     return state, {
-        increment = function() ... end              -- Also mutates
+        increment = function() ... end -- Also mutates
     }
 end
 ```
 
 **Correct:**
+
 ```lua
 -- Separate files, separate concerns
 function useCounter()
-    return ReactCharm.useAtom(counterAtom)  -- Read only
+    return ReactCharm.useAtom(counterAtom) -- Read only
 end
 
 function useCounterActions()
-    return { increment = function() ... end }  -- Write only, no subscription
+    return { increment = function() ... end } -- Write only, no subscription
 end
 ```
 
 ---
 
-## 6. Skipping the ViewModel
+## 6. Skipping The ViewModel
 
-Passing raw atom state directly to a component and letting the component format it is business logic in the Presentation layer.
+- Passing raw atom state directly to a component and letting the component format it is business logic in the Presentation layer.
 
 **Wrong:**
+
 ```lua
 -- Template passes raw state
 local state = useCounter()
@@ -136,11 +155,12 @@ React.createElement(CounterDisplay, { state = state })
 
 -- Component formats it
 function CounterDisplay(props)
-    local text = "Count: " .. tostring(props.state.Count)  -- Formatting in component!
+    local text = "Count: " .. tostring(props.state.Count) -- Formatting in component!
 end
 ```
 
 **Correct:**
+
 ```lua
 -- Template builds ViewModel
 local state = useCounter()
@@ -152,17 +172,19 @@ React.createElement(CounterDisplay, { viewModel = viewModel })
 
 -- Component just renders
 function CounterDisplay(props)
-    local text = props.viewModel.DisplayCount  -- Already formatted
+    local text = props.viewModel.DisplayCount -- Already formatted
 end
 ```
 
 ---
 
-## 7. Side Effects in Presentational Components
+## 7. Side Effects In Presentational Components
 
-Molecules/organisms should not call action hooks that trigger side effects (sound, navigation sequencing, delayed transitions). They should emit intent via props.
+- Molecules and organisms should not call action hooks that trigger side effects such as sound, navigation sequencing, or delayed transitions.
+- They should emit intent via props.
 
 **Wrong:**
+
 ```lua
 function MenuList(props)
     local soundActions = useSoundActions()
@@ -176,6 +198,7 @@ end
 ```
 
 **Correct:**
+
 ```lua
 function MenuList(props)
     return React.createElement(MenuItem, {
@@ -187,6 +210,7 @@ end
 ```
 
 Controller hook handles side effects:
+
 ```lua
 function useGameViewController()
     return {
@@ -202,9 +226,11 @@ end
 
 ## 8. Unused Props Across Component Boundaries
 
-Passing props that are never read creates misleading APIs and maintenance overhead.
+- Passing props that are never read creates misleading APIs and maintenance overhead.
+- Keep prop contracts minimal and truthful.
 
 **Wrong:**
+
 ```lua
 -- Parent passes IsOpen and OnClose
 React.createElement(SidePanel, {
@@ -221,11 +247,10 @@ end
 ```
 
 **Correct:**
+
 ```lua
 React.createElement(SidePanel, {
     OnNavigateFromMenu = onNavigateFromMenu,
     OnExitGame = onExitGame,
 })
 ```
-
-Keep prop contracts minimal and truthful.

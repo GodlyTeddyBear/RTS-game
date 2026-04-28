@@ -1,26 +1,33 @@
 # Components (Atomic Design)
 
-Components follow Atomic Design — smaller primitives compose into larger structures. The hierarchy determines where a component lives and when it can be extracted to a global location.
+Components follow Atomic Design: smaller primitives compose into larger structures. The hierarchy determines where a component lives and when it can be extracted to a global location.
 
-```
-Templates (Full screens) — always feature-local
+---
+
+## Hierarchy
+
+```text
+Templates (Full screens) - always feature-local
     ↓ uses
-Organisms (Feature-specific complex components) — always feature-local
+Organisms (Feature-specific complex components) - always feature-local
     ↓ uses
-Molecules (Named sub-regions) — feature-local first, global only after 3+ features
+Molecules (Named sub-regions) - feature-local first, global only after 3+ features
     ↓ uses
-Atoms (Primitives) — global in App/
+Atoms (Primitives) - global in App/
     ↓ uses
-Layouts (Structural containers) — global in App/
+Layouts (Structural containers) - global in App/
 ```
 
 ---
 
-## Atoms — `App/Presentation/Atoms/`
+## Atoms
 
-Standalone UI primitives with no business logic. Button, Text, Frame, Icon.
+`App/Presentation/Atoms/`
 
-**Extraction rule**: Only move to `App/Presentation/Atoms/` after a component is used across **3+ different features**. Keep it feature-local until then.
+- Atoms are standalone UI primitives with no business logic.
+- Examples: `Button`, `Text`, `Frame`, `Icon`.
+- Only move a component to `App/Presentation/Atoms/` after it is used across 3+ different features.
+- Keep it feature-local until then.
 
 ```lua
 -- App/Presentation/Atoms/Button.lua
@@ -42,17 +49,21 @@ end
 
 ---
 
-## Molecules — `[Feature]/Presentation/Molecules/` or `App/Presentation/Molecules/`
+## Molecules
 
-Compositions of atoms that represent a self-contained named sub-region of a component. Examples: `QuantitySelector`, `ItemIconDisplay`, `RarityLabel`.
+`[Feature]/Presentation/Molecules/` or `App/Presentation/Molecules/`
 
-**Feature-local first**: Molecules do not need to be reused across features to justify extraction. Extract a molecule from an organism whenever a clearly named, cohesive region becomes large enough to obscure the organism's intent. The test: if you can give the region a meaningful name and it has its own props contract, it is a molecule.
-
-Place the molecule in `[Feature]/Presentation/Molecules/` until it is used in 3+ features. At that point, move it to `App/Presentation/Molecules/`.
+- Molecules are compositions of atoms that represent a self-contained named sub-region of a component.
+- Examples: `QuantitySelector`, `ItemIconDisplay`, `RarityLabel`.
+- Molecules do not need to be reused across features to justify extraction.
+- Extract a molecule from an organism whenever a clearly named, cohesive region becomes large enough to obscure the organism's intent.
+- The test is simple: if you can give the region a meaningful name and it has its own props contract, it is a molecule.
+- Place the molecule in `[Feature]/Presentation/Molecules/` until it is used in 3+ features.
+- Move it to `App/Presentation/Molecules/` only after that.
 
 ```lua
 -- Shop/Presentation/Molecules/QuantitySelector.lua
--- Extracted from ShopDetailPanelView — self-contained +/- controls with cost label
+-- Extracted from ShopDetailPanelView - self-contained +/- controls with cost label
 local function QuantitySelector(props: TQuantitySelectorProps)
     return e("Frame", { ... }, {
         AddButton = ...,
@@ -63,21 +74,29 @@ local function QuantitySelector(props: TQuantitySelectorProps)
 end
 ```
 
-**Extraction rule for `App/`**: Only after used in 3+ different features.
+- Only export molecules to `App/` after they are used in 3+ different features.
 
 ---
 
-## Layouts — `App/Presentation/Layouts/`
+## Layouts
 
-Structural containers with no visual styling — FlexLayout, GridLayout, ScrollLayout. Pure layout logic, no content.
+`App/Presentation/Layouts/`
+
+- Layouts are structural containers with no visual styling.
+- Examples: `FlexLayout`, `GridLayout`, `ScrollLayout`.
+- Layouts are pure layout logic and contain no content.
 
 ---
 
-## Organisms — `[Feature]/Presentation/Organisms/`
+## Organisms
 
-Complex feature-specific components that combine atoms and molecules. Always feature-local — organisms are never shared. Extract sub-regions into molecules when the organism grows beyond ~60 lines in its return block.
+`[Feature]/Presentation/Organisms/`
 
-Organisms that own a grid, list, or scrollable container with complex child-building logic should be extracted as dedicated organisms (e.g. `ShopGrid`) rather than building children inline in the template. The template passes data props; the organism owns the layout and child construction.
+- Organisms are complex feature-specific components that combine atoms and molecules.
+- Organisms are always feature-local and are never shared.
+- Extract sub-regions into molecules when the organism grows beyond about 60 lines in its return block.
+- If an organism owns a grid, list, or scrollable container with complex child-building logic, extract that logic into a dedicated organism instead of building children inline in the template.
+- The template passes data props; the organism owns the layout and child construction.
 
 ```lua
 -- Counter/Presentation/Organisms/CounterDisplay.lua
@@ -97,13 +116,16 @@ end
 
 ---
 
-## Templates — `[Feature]/Presentation/Templates/`
+## Templates
 
-Full screens or major layout sections. **Always feature-local — never shared.**
+`[Feature]/Presentation/Templates/`
 
-Templates are the primary place where feature-level hooks are called and ViewModels are constructed. They pass the resulting data down to organisms via props.
-
-Exception: for animation-heavy organisms, a thin wrapper component may call a UI controller hook (for example `useSidePanelController`) and pass the result to a pure `*View` component. See `SCREEN_TEMPLATES.md` and `ANIMATION_PATTERN.md`.
+- Templates are full screens or major layout sections.
+- Templates are always feature-local and never shared.
+- Templates are the primary place where feature-level hooks are called and ViewModels are constructed.
+- Templates pass the resulting data down to organisms via props.
+- For animation-heavy organisms, a thin wrapper component may call a UI controller hook, such as `useSidePanelController`, and pass the result to a pure `*View` component.
+- See `SCREEN_TEMPLATES.md` and `ANIMATION_PATTERN.md`.
 
 ```lua
 -- Counter/Presentation/Templates/CounterScreen.lua
@@ -124,12 +146,13 @@ end
 
 ---
 
-## Sizing and Positioning Conventions
+## Sizing And Positioning
 
 - Follow `UDIM_LAYOUT_RULES.md` for the source of truth on scale-vs-offset layout.
 - Use `UDim2.fromScale` for structural sizes and positions.
 - Reserve offset values for decorative pixel details such as `UICorner`, `UIStroke`, small polish values, or explicitly approved asset details.
-- Prefer `AnchorPoint = Vector2.new(0.5, 0.5)` for centered structural elements. Use other anchor points only when the component's alignment contract requires it.
+- Prefer `AnchorPoint = Vector2.new(0.5, 0.5)` for centered structural elements.
+- Use other anchor points only when the component's alignment contract requires it.
 - Position via scale, not pixel offset.
 
 ```lua
@@ -152,11 +175,11 @@ CloseButton = e("TextButton", {
 
 ## Extraction Decision Tree
 
-```
+```text
 Is this a clearly named sub-region of an organism (icon area, quantity controls, rarity label)?
   → Extract to [Feature]/Presentation/Molecules/ even if only used once
 
-Is this molecule used in 1–2 features?
+Is this molecule used in 1-2 features?
   → Keep it in [Feature]/Presentation/Molecules/
 
 Is this molecule/atom used in 3+ features?
@@ -166,4 +189,5 @@ Is this a grid/list/container with complex child-building logic inside a templat
   → Extract to [Feature]/Presentation/Organisms/ and pass data props from the template
 ```
 
-When in doubt, keep it local. Premature extraction to `App/` creates coupling — but extraction within a feature is always encouraged for readability.
+- When in doubt, keep it local.
+- Premature extraction to `App/` creates coupling, but extraction within a feature is always encouraged for readability.

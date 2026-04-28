@@ -8,11 +8,13 @@ Defines the structure and dependency rules for client context modules that own r
 
 - This document governs controller, application, and infrastructure modules in client contexts.
 - A context may contain one controller or multiple controllers.
+- Controller placement may use either a single root controller file or a `Controllers/` folder with multiple controller modules.
+- Controller folder grouping may mirror backend context folder grouping when that improves clarity.
 - Layer intent matches server-side separation:
-- Application owns orchestration and use-case flow.
-- Infrastructure owns technical IO and runtime clients.
+  - Application owns orchestration and use-case flow.
+  - Infrastructure owns technical IO and runtime clients.
 - Canonical method contract:
-- [../../methods/frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md](../../methods/frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md)
+  - [../../methods/frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md](../../methods/frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md)
 
 ---
 
@@ -21,10 +23,11 @@ Defines the structure and dependency rules for client context modules that own r
 ### Controller Layout
 
 - Allowed controller layouts:
-- `[Context]/[Context]Controller.lua`
-- `[Context]/Controllers/*.lua`
+  - `[Context]/[Context]Controller.lua`
+  - `[Context]/Controllers/*.lua`
 - Multiple controllers in the same context are valid.
 - Controllers own context lifecycle entrypoints, coordination wiring, and boundary calls into application modules.
+- Use controller subfolders when a context has multiple orchestration concerns that would otherwise be crowded into one file.
 
 ### Application Layer
 
@@ -41,7 +44,7 @@ Defines the structure and dependency rules for client context modules that own r
 ### Dependency Direction
 
 - Dependency flow is one-way:
-- `Controllers -> Application -> Infrastructure -> ReplicatedStorage`
+  - `Controllers -> Application -> Infrastructure -> ReplicatedStorage`
 - Upward imports are prohibited.
 
 ---

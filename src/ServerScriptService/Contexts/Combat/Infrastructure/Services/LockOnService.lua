@@ -2,22 +2,43 @@
 
 local Workspace = game:GetService("Workspace")
 
+--[=[
+	@class LockOnService
+	Owns orientation constraints that keep enemies facing their current target.
+	@server
+]=]
 local LockOnService = {}
 LockOnService.__index = LockOnService
 
+--[=[
+	@within LockOnService
+	Creates a new lock-on service with no active constraints.
+	@return LockOnService -- Service instance used to manage facing constraints.
+]=]
 function LockOnService.new()
 	return setmetatable({}, LockOnService)
 end
 
+--[=[
+	@within LockOnService
+	Resolves the entity factories used to read attacker and target transforms.
+	@param registry any -- Registry instance supplied by the context bootstrap.
+	@param _name string -- Registry key used to register the service.
+]=]
 function LockOnService:Init(registry: any, _name: string)
 	self._registry = registry
 end
 
+--[=[
+	@within LockOnService
+	Stores the combat factories needed to create and update facing constraints.
+]=]
 function LockOnService:Start()
 	self._enemyEntityFactory = self._registry:Get("EnemyEntityFactory")
 	self._structureEntityFactory = self._registry:Get("StructureEntityFactory")
 end
 
+-- Projects the target vector onto the ground plane so lock-on rotation stays horizontal.
 local function _flatLookAt(fromPosition: Vector3, toPosition: Vector3): CFrame?
 	local direction = Vector3.new(toPosition.X - fromPosition.X, 0, toPosition.Z - fromPosition.Z)
 	if direction.Magnitude < 0.01 then
@@ -27,6 +48,11 @@ local function _flatLookAt(fromPosition: Vector3, toPosition: Vector3): CFrame?
 	return CFrame.lookAt(fromPosition, fromPosition + direction)
 end
 
+--[=[
+	@within LockOnService
+	Creates and stores the orientation constraint used to keep an enemy facing its target.
+	@param entity number -- Enemy entity id to attach the constraint to.
+]=]
 function LockOnService:AttachConstraint(entity: number)
 	local existing = self._enemyEntityFactory:GetLockOn(entity)
 	if existing ~= nil and existing.Constraint ~= nil and existing.Constraint.Parent ~= nil then
@@ -70,6 +96,11 @@ function LockOnService:AttachConstraint(entity: number)
 	})
 end
 
+--[=[
+	@within LockOnService
+	Tears down the orientation constraint and attachments for one enemy.
+	@param entity number -- Enemy entity id to detach.
+]=]
 function LockOnService:DetachConstraint(entity: number)
 	local lockOn = self._enemyEntityFactory:GetLockOn(entity)
 	if lockOn == nil then
@@ -89,6 +120,11 @@ function LockOnService:DetachConstraint(entity: number)
 	self._enemyEntityFactory:ClearLockOn(entity)
 end
 
+--[=[
+	@within LockOnService
+	Updates every active lock-on constraint to face the current target for the frame.
+	@param entities { number } -- Enemy entity ids to update.
+]=]
 function LockOnService:UpdateAll(entities: { number })
 	for _, entity in ipairs(entities) do
 		local lockOn = self._enemyEntityFactory:GetLockOn(entity)

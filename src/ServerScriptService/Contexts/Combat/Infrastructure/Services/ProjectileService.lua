@@ -76,6 +76,7 @@ function ProjectileService:Start()
 end
 
 function ProjectileService:FireStructureBullet(request: TStructureBulletRequest): TFireResult
+	-- Resolve the firing position and target before allocating any projectile state.
 	local originCFrame = self:_ResolveStructureMuzzleCFrame(request.StructureEntity)
 	if originCFrame == nil then
 		return {
@@ -100,6 +101,7 @@ function ProjectileService:FireStructureBullet(request: TStructureBulletRequest)
 		}
 	end
 
+	-- Build the shot only after the direction is known so the cast cannot start invalid.
 	local projectileId = self:_NextProjectileId()
 	local behavior = self:_BuildBehaviorForShot(request)
 	local cast = self._caster:Fire(originCFrame.Position, direction.Unit, ProjectileConfig.Bullet.Speed, behavior)
@@ -121,9 +123,11 @@ function ProjectileService:FireStructureBullet(request: TStructureBulletRequest)
 end
 
 function ProjectileService:CleanupAll()
+	-- Clone the active cast map so termination can mutate the live table safely.
 	local activeCasts = table.clone(self._activeCasts)
 
 	for _, cast in pairs(activeCasts) do
+		-- Terminate only casts that still own an update connection.
 		if cast.StateInfo ~= nil and cast.StateInfo.UpdateConnection ~= nil then
 			pcall(function()
 				cast:Terminate()
@@ -133,13 +137,16 @@ function ProjectileService:CleanupAll()
 end
 
 function ProjectileService:Destroy()
+	-- Reuse the cleanup path so cast teardown stays consistent with combat shutdown.
 	self:CleanupAll()
 
+	-- Disconnect event listeners before releasing cached cosmetic parts.
 	for _, connection in ipairs(self._connections) do
 		connection:Disconnect()
 	end
 	table.clear(self._connections)
 
+	-- Dispose the cache last so any queued cast teardown can still return parts safely.
 	if self._bulletCache ~= nil then
 		self._bulletCache:Dispose()
 		self._bulletCache = nil
@@ -147,6 +154,7 @@ function ProjectileService:Destroy()
 end
 
 function ProjectileService:_ConnectCaster()
+	-- Keep the cosmetic bullet aligned with the simulated ray segment as it advances.
 	table.insert(self._connections, self._caster.LengthChanged:Connect(function(
 		_cast: any,
 		lastPoint: Vector3,
@@ -164,6 +172,7 @@ function ProjectileService:_ConnectCaster()
 		cosmeticBulletObject.CFrame = CFrame.lookAt(lastPoint, lastPoint + rayDirection) * offset
 	end))
 
+	-- Forward hit events into the damage pipeline and clean up terminated casts.
 	table.insert(self._connections, self._caster.RayHit:Connect(function(cast: any, raycastResult: RaycastResult)
 		self:_HandleRayHit(cast, raycastResult)
 	end))

@@ -96,7 +96,8 @@ local CombatModules: BaseContext.TModuleLayers = {
 
 --[=[
 	@class CombatContext
-	Coordinates combat start, tick, cleanup, and enemy goal resolution for the lane-defense run.
+	Owns combat session orchestration, tick wiring, and lifecycle cleanup for the lane-defense run.
+	Flow: resolve dependencies -> start wave/session -> drive combat ticks -> stop and clean up.
 	@server
 ]=]
 local CombatContext = Knit.CreateService({

@@ -1,5 +1,11 @@
 --!strict
 
+--[=[
+    @class Errors
+    Error strings used by the Base context command and query layer.
+    @server
+]=]
+
 return table.freeze({
 	INVALID_DAMAGE_AMOUNT = "Base damage amount must be a positive number.",
 	BASE_NOT_FOUND = "Base entity was not found.",

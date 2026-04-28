@@ -85,6 +85,7 @@ function HandleAnimationCallback:Execute(
 	actorKind: "Enemy" | "Structure"?
 ): Result.Result<boolean>
 	return Result.Catch(function()
+		-- Reject malformed callback payloads before touching any combat state.
 		if type(actorId) ~= "string" or actorId == "" then
 			return Err("InvalidActorId", "Animation callback actorId must be a non-empty string")
 		end
@@ -99,6 +100,7 @@ function HandleAnimationCallback:Execute(
 			})
 		end
 
+		-- Confirm the callback sender owns the active combat session.
 		local activeOwnerUserId = _resolveActiveCombatOwnerUserId(self)
 		if activeOwnerUserId == nil then
 			return Err("CombatOwnerNotActive", "Combat callback owner is not available", {
@@ -112,6 +114,7 @@ function HandleAnimationCallback:Execute(
 			})
 		end
 
+		-- Resolve the actor entity and confirm the current action can accept hitbox activation.
 		local factory, entity, resolutionReason = _resolveActorEntity(self, actorId, actorKind)
 		if factory == nil or entity == nil then
 			return Err(resolutionReason, "Callback actor resolution failed", {
@@ -120,6 +123,7 @@ function HandleAnimationCallback:Execute(
 			})
 		end
 
+		-- Skip duplicate callbacks once the action has already committed.
 		local action = factory:GetCombatAction(entity)
 		if action == nil or type(action.CurrentActionId) ~= "string" then
 			return Err("MissingCurrentActionId", "Callback actor has no running action", {
@@ -142,6 +146,7 @@ function HandleAnimationCallback:Execute(
 			return Ok(true)
 		end
 
+		-- Route the callback into the executor only while the action is still running.
 		if action.ActionState ~= "Running" then
 			return Err("ActionStateNotRunning", "Callback actor is not in callback-eligible action state", {
 				ActionState = action.ActionState,
@@ -151,6 +156,7 @@ function HandleAnimationCallback:Execute(
 			})
 		end
 
+		-- Build the runtime service bag once so activation sees the same dependencies as the tick loop.
 		local executor = self._runtimeService:GetExecutor(action.CurrentActionId)
 		if executor == nil or type(executor.ActivateHitbox) ~= "function" then
 			return Err("ExecutorCannotActivateHitbox", "Current action executor does not expose ActivateHitbox", {
@@ -160,6 +166,7 @@ function HandleAnimationCallback:Execute(
 			})
 		end
 
+		-- Ask the executor to activate the hitbox and normalize its response for the caller.
 		local activation = executor:ActivateHitbox(entity, {
 			EnemyEntityFactory = self._enemyEntityFactory,
 			StructureEntityFactory = self._structureEntityFactory,
