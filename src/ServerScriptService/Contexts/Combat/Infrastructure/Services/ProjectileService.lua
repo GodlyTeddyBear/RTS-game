@@ -4,7 +4,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local FastCast = require(ReplicatedStorage.Utilities.FastCastRedux)
+local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local PartCache = require(ReplicatedStorage.Utilities.PartCache)
+local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 local ProjectileConfig = require(ReplicatedStorage.Contexts.Combat.Config.ProjectileConfig)
 
 local PROJECTILE_FOLDER_NAME = "Projectiles"
@@ -211,10 +213,6 @@ function ProjectileService:_BuildBehaviorForShot(request: TStructureBulletReques
 end
 
 function ProjectileService:_BuildRaycastParams(structureEntity: number): RaycastParams
-	local raycastParams = RaycastParams.new()
-	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-	raycastParams.IgnoreWater = true
-
 	local excludedInstances = {}
 	local modelRef = self._structureEntityFactory:GetModelRef(structureEntity)
 	if modelRef ~= nil and modelRef.Model ~= nil then
@@ -224,8 +222,14 @@ function ProjectileService:_BuildRaycastParams(structureEntity: number): Raycast
 		table.insert(excludedInstances, self._projectileFolder)
 	end
 
-	raycastParams.FilterDescendantsInstances = excludedInstances
-	return raycastParams
+	local raycastOptions = SpatialQuery.MergeOptions(
+		SpatialQuery.CreateRaycastOptions({
+			IgnoreWater = true,
+		}),
+		SpatialQuery.WithExcludedInstances(excludedInstances)
+	)
+
+	return SpatialQuery.BuildRaycastParams(raycastOptions)
 end
 
 function ProjectileService:_CanPierce(cast: any, raycastResult: RaycastResult): boolean
@@ -306,7 +310,7 @@ function ProjectileService:_ResolveStructureMuzzleCFrame(structureEntity: number
 		return modelRef.Model.PrimaryPart.CFrame
 	end
 
-	return modelRef.Model:GetPivot()
+	return ModelPlus.GetPivot(modelRef.Model)
 end
 
 function ProjectileService:_BuildBulletCache(config: TBulletConfig): any?

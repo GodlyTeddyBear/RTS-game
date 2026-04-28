@@ -16,6 +16,7 @@ local Workspace = game:GetService("Workspace")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
+local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 local RunConfig = require(ReplicatedStorage.Contexts.Run.Config.RunConfig)
@@ -231,7 +232,7 @@ local function _ResolveSpawnCFrame(markerName: string, fallbackCFrame: CFrame): 
 	end
 
 	if marker:IsA("Model") then
-		return marker:GetPivot()
+		return ModelPlus.GetPivot(marker)
 	end
 
 	return fallbackCFrame

@@ -11,6 +11,7 @@ local Debris = game:GetService("Debris")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
+local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 
 local VFXEngine = {}
 VFXEngine.__index = VFXEngine
@@ -170,7 +171,7 @@ local function _ResolveAttachmentTarget(parent: Instance): (BasePart?, CFrame?)
 		local targetModel = parent :: Model
 		local targetPart = targetModel.PrimaryPart or targetModel:FindFirstChildWhichIsA("BasePart", true)
 		local ok, pivotCFrame = pcall(function()
-			return targetModel:GetPivot()
+			return ModelPlus.GetPivot(targetModel)
 		end)
 		if ok then
 			return targetPart, pivotCFrame

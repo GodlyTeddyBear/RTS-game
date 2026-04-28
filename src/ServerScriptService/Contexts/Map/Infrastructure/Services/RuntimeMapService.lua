@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
+local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local MapConfig = require(ReplicatedStorage.Contexts.Map.Config.MapConfig)
 local Errors = require(script.Parent.Parent.Parent.Errors)
@@ -61,24 +62,6 @@ local function _ExtractModel(instance: Instance?): Model?
 	end
 
 	return nil
-end
-
-local function _BuildCFrameWithPosition(source: CFrame, targetPosition: Vector3): CFrame
-	local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = source:GetComponents()
-	return CFrame.new(
-		targetPosition.X,
-		targetPosition.Y,
-		targetPosition.Z,
-		r00,
-		r01,
-		r02,
-		r10,
-		r11,
-		r12,
-		r20,
-		r21,
-		r22
-	)
 end
 
 --[=[
@@ -244,8 +227,7 @@ function RuntimeMapService:_RelocateRuntimeMap(runtimeMapModel: Model): Result.R
 	-- Preserve the current orientation while moving the clone to the configured runtime position.
 	local targetPosition = targetPositionResult.value
 	local pivotResult = fromPcall("RelocateRuntimeMapFailed", function()
-		local currentPivot = runtimeMapModel:GetPivot()
-		local targetPivot = _BuildCFrameWithPosition(currentPivot, targetPosition)
+		local targetPivot = ModelPlus.BuildPivotAtPosition(runtimeMapModel, targetPosition)
 		runtimeMapModel:PivotTo(targetPivot)
 	end)
 	if not pivotResult.success then

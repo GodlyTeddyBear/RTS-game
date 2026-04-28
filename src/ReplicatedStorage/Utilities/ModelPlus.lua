@@ -18,6 +18,7 @@ local _SnapScalar: (value: number, step: number) -> number
 local _GetYawFromRotation: (rotation: CFrame) -> number
 
 local ModelPlus = {}
+local MIN_DIRECTION_MAGNITUDE = 1e-5
 
 -- ── Public ────────────────────────────────────────────────────────────────
 
@@ -115,6 +116,58 @@ end
 function ModelPlus.BuildPivotAtPosition(model: Model, worldPos: Vector3): CFrame
 	local pivotRotation = ModelPlus.GetRotation(model)
 	return _BuildPivotWithPositionAndRotation(worldPos, pivotRotation)
+end
+
+--[=[
+    Build a pivot that exactly matches a supplied CFrame.
+    @within ModelPlus
+    @param model Model -- The model to reposition.
+    @param targetCFrame CFrame -- The target pivot transform.
+    @return CFrame -- The new pivot CFrame.
+    @error string -- Thrown when `model` is nil.
+]=]
+function ModelPlus.BuildPivotFromCFrame(model: Model, targetCFrame: CFrame): CFrame
+	_AssertModel(model)
+	return _BuildPivotWithPositionAndRotation(targetCFrame.Position, _GetPivotRotation(targetCFrame))
+end
+
+--[=[
+    Build a CFrame that preserves rotation and replaces only translation.
+    @within ModelPlus
+    @param sourceCFrame CFrame -- The source transform whose rotation should be preserved.
+    @param targetPosition Vector3 -- The replacement world position.
+    @return CFrame -- The rebuilt transform.
+]=]
+function ModelPlus.BuildCFrameAtPosition(sourceCFrame: CFrame, targetPosition: Vector3): CFrame
+	return _BuildPivotWithPositionAndRotation(targetPosition, _GetPivotRotation(sourceCFrame))
+end
+
+--[=[
+    Build a look-at CFrame from one world position toward another.
+    @within ModelPlus
+    @param position Vector3 -- The world position to place the transform at.
+    @param lookAtPosition Vector3 -- The world position to face.
+    @return CFrame? -- The look-at CFrame, or `nil` when the direction is degenerate.
+]=]
+function ModelPlus.BuildLookAtCFrame(position: Vector3, lookAtPosition: Vector3): CFrame?
+	local direction = lookAtPosition - position
+	if direction.Magnitude <= MIN_DIRECTION_MAGNITUDE then
+		return nil
+	end
+
+	return CFrame.lookAt(position, lookAtPosition)
+end
+
+--[=[
+    Build a horizontal look-at CFrame by flattening the target direction onto the XZ plane.
+    @within ModelPlus
+    @param fromPosition Vector3 -- The world position to place the transform at.
+    @param toPosition Vector3 -- The world position to face toward on the ground plane.
+    @return CFrame? -- The flattened look-at CFrame, or `nil` when the direction is degenerate.
+]=]
+function ModelPlus.BuildFlatLookAtCFrame(fromPosition: Vector3, toPosition: Vector3): CFrame?
+	local flatTarget = Vector3.new(toPosition.X, fromPosition.Y, toPosition.Z)
+	return ModelPlus.BuildLookAtCFrame(fromPosition, flatTarget)
 end
 
 --[=[
@@ -283,6 +336,17 @@ end
 ]=]
 function ModelPlus.MoveToPosition(model: Model, worldPos: Vector3)
 	model:PivotTo(ModelPlus.BuildPivotAtPosition(model, worldPos))
+end
+
+--[=[
+    Move a model to an exact target CFrame.
+    @within ModelPlus
+    @param model Model -- The model to move.
+    @param targetCFrame CFrame -- The target pivot transform.
+    @error string -- Thrown when `model` is nil.
+]=]
+function ModelPlus.MoveToCFrame(model: Model, targetCFrame: CFrame)
+	model:PivotTo(ModelPlus.BuildPivotFromCFrame(model, targetCFrame))
 end
 
 --[=[

@@ -1,6 +1,7 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 
 local FLEE_THRESHOLD = 0.2
@@ -46,8 +47,7 @@ end
 type TTargetKind = "Base" | "Structure" | "Enemy"
 
 local function _resolveModelReferencePoint(model: Model): Vector3
-	local boundsCFrame, _ = model:GetBoundingBox()
-	return boundsCFrame.Position
+	return ModelPlus.GetCenterPosition(model)
 end
 
 function CombatPerceptionService:_ResolveTargetRaycastData(
@@ -114,51 +114,44 @@ function CombatPerceptionService:_FindNearestStructureInRange(enemyPosition: Vec
 		return nil
 	end
 
-	local nearestStructure = nil :: number?
-	local nearestDistanceSq = math.huge
-	local maxDistanceSq = attackRange * attackRange
-
-	for _, structureEntity in ipairs(self._structureEntityFactory:QueryActiveEntities()) do
-		local structurePosition = self._structureEntityFactory:GetPosition(structureEntity)
-		if structurePosition == nil then
-			continue
-		end
-
-		local offset = structurePosition - enemyPosition
-		local distanceSq = offset:Dot(offset)
-		if distanceSq <= maxDistanceSq and distanceSq < nearestDistanceSq then
-			if self:IsTargetInRange(enemyPosition, attackRange, "Structure", structureEntity) then
-				nearestDistanceSq = distanceSq
-				nearestStructure = structureEntity
+	return SpatialQuery.FindBestCandidate(
+		enemyPosition,
+		self._structureEntityFactory:QueryActiveEntities(),
+		function(structureEntity: number): Vector3?
+			return self._structureEntityFactory:GetPosition(structureEntity)
+		end,
+		function(structureEntity: number, distance: number): number?
+			if not self:IsTargetInRange(enemyPosition, attackRange, "Structure", structureEntity) then
+				return nil
 			end
-		end
-	end
 
-	return nearestStructure
+			return -distance
+		end,
+		attackRange
+	)
 end
 
 function CombatPerceptionService:_FindNearestEnemyInRange(structurePosition: Vector3, attackRange: number): number?
-	local nearestEnemy = nil :: number?
-	local nearestDistanceSq = math.huge
-	local maxDistanceSq = attackRange * attackRange
-
-	for _, enemyEntity in ipairs(self._enemyEntityFactory:QueryAliveEntities()) do
-		local position = self._enemyEntityFactory:GetPosition(enemyEntity)
-		if position == nil then
-			continue
-		end
-
-		local offset = position.CFrame.Position - structurePosition
-		local distanceSq = offset:Dot(offset)
-		if distanceSq <= maxDistanceSq and distanceSq < nearestDistanceSq then
-			if self:IsTargetInRange(structurePosition, attackRange, "Enemy", enemyEntity) then
-				nearestDistanceSq = distanceSq
-				nearestEnemy = enemyEntity
+	return SpatialQuery.FindBestCandidate(
+		structurePosition,
+		self._enemyEntityFactory:QueryAliveEntities(),
+		function(enemyEntity: number): Vector3?
+			local position = self._enemyEntityFactory:GetPosition(enemyEntity)
+			if position == nil then
+				return nil
 			end
-		end
-	end
 
-	return nearestEnemy
+			return position.CFrame.Position
+		end,
+		function(enemyEntity: number, distance: number): number?
+			if not self:IsTargetInRange(structurePosition, attackRange, "Enemy", enemyEntity) then
+				return nil
+			end
+
+			return -distance
+		end,
+		attackRange
+	)
 end
 
 function CombatPerceptionService:IsTargetInRangeByRaycast(

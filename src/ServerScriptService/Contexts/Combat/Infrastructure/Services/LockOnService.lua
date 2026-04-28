@@ -1,6 +1,9 @@
 --!strict
 
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 
 --[=[
 	@class LockOnService
@@ -37,16 +40,6 @@ function LockOnService:Start()
 	self._enemyEntityFactory = self._registry:Get("EnemyEntityFactory")
 	self._structureEntityFactory = self._registry:Get("StructureEntityFactory")
 	self._baseEntityFactory = self._registry:Get("BaseEntityFactory")
-end
-
--- Projects the target vector onto the ground plane so lock-on rotation stays horizontal.
-local function _flatLookAt(fromPosition: Vector3, toPosition: Vector3): CFrame?
-	local direction = Vector3.new(toPosition.X - fromPosition.X, 0, toPosition.Z - fromPosition.Z)
-	if direction.Magnitude < 0.01 then
-		return nil
-	end
-
-	return CFrame.lookAt(fromPosition, fromPosition + direction)
 end
 
 local function _setHumanoidAutoRotate(humanoid: Humanoid?, enabled: boolean)
@@ -220,7 +213,7 @@ function LockOnService:UpdateAll(entities: { number })
 			continue
 		end
 
-		local lookAt = _flatLookAt(selfCFrame.Position, targetPosition)
+		local lookAt = ModelPlus.BuildFlatLookAtCFrame(selfCFrame.Position, targetPosition)
 		if lookAt == nil then
 			constraint.Enabled = false
 			_setHumanoidAutoRotate(humanoid, true)

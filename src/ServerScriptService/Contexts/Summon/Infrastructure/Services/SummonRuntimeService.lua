@@ -3,7 +3,9 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
+local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 local SummonConfig = require(ReplicatedStorage.Contexts.Summon.Config.SummonConfig)
 
 local SummonRuntimeService = {}
@@ -79,7 +81,7 @@ function SummonRuntimeService:SpawnSwarmDrones(player: Player, castOriginCFrame:
 		local offset = _computeSpawnOffset(index)
 		local spawnPosition = castOriginCFrame.Position + offset
 		local lookAt = castOriginCFrame.LookVector
-		local spawnCFrame = CFrame.lookAt(spawnPosition, spawnPosition + lookAt)
+		local spawnCFrame = ModelPlus.BuildLookAtCFrame(spawnPosition, spawnPosition + lookAt) or castOriginCFrame
 		local now = os.clock()
 		local entity = self._entityFactory:CreateDrone(ownerUserId, spawnCFrame, now, {
 			summonCount = summonCount,
@@ -141,7 +143,10 @@ function SummonRuntimeService:Tick(dt: number, currentTime: number, enemyContext
 				distanceToTarget = (targetPosition - nextPosition).Magnitude
 			end
 
-			if distanceToTarget <= combat.AttackRange and (currentTime - combat.LastAttackAt) >= combat.AttackInterval then
+			if
+				SpatialQuery.IsWithinRange(nextPosition, targetPosition, combat.AttackRange)
+				and (currentTime - combat.LastAttackAt) >= combat.AttackInterval
+			then
 				local damageResult = enemyContext:ApplyDamage(target.Entity, combat.DamagePerHit)
 				if damageResult.success then
 					self._entityFactory:SetLastAttackAt(entity, currentTime)
@@ -149,7 +154,8 @@ function SummonRuntimeService:Tick(dt: number, currentTime: number, enemyContext
 			end
 		end
 
-		local nextCFrame = CFrame.lookAt(nextPosition, nextPosition + positionCFrame.LookVector)
+		local nextCFrame = ModelPlus.BuildLookAtCFrame(nextPosition, nextPosition + positionCFrame.LookVector)
+			or ModelPlus.BuildCFrameAtPosition(positionCFrame, nextPosition)
 		self._entityFactory:SetPosition(entity, nextCFrame)
 
 		local instanceRef = self._entityFactory:GetInstanceRef(entity)

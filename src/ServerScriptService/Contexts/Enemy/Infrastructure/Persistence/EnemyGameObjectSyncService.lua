@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BaseGameObjectSyncService = require(ReplicatedStorage.Utilities.BaseGameObjectSyncService)
+local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 
 local RUN_SPEED_THRESHOLD = 17
 
@@ -67,7 +68,7 @@ function EnemyGameObjectSyncService:_ClearDirty(entity: number)
 end
 
 function EnemyGameObjectSyncService:_PollEntity(entity: number, model: Model)
-	self:GetEntityFactoryOrThrow():UpdatePosition(entity, model:GetPivot())
+	self:GetEntityFactoryOrThrow():UpdatePosition(entity, ModelPlus.GetPivot(model))
 end
 
 function EnemyGameObjectSyncService:_SyncEntity(entity: number, model: Model)
