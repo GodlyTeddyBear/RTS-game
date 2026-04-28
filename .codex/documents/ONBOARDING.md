@@ -25,6 +25,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 ### "I need to work with ECS entities, systems, or persistence"
 → Start with [methods/ECS/COMPONENT_RULES.md](methods/ECS/COMPONENT_RULES.md) for authority labels and component shape
 → Then [methods/ECS/ENTITY_FACTORY_RULES.md](methods/ECS/ENTITY_FACTORY_RULES.md) for the only JECS mutation surface
+→ Then [methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md](methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md) for entity vs instance vs sync ownership
 → Then [methods/ECS/SYSTEM_RULES.md](methods/ECS/SYSTEM_RULES.md) for statelessness and read/write ownership
 → Then [methods/ECS/WORLD_ISOLATION_RULES.md](methods/ECS/WORLD_ISOLATION_RULES.md) for per-context world boundaries
 → Then [methods/ECS/PHASE_AND_EXECUTION_RULES.md](methods/ECS/PHASE_AND_EXECUTION_RULES.md) for tick phase order and deferred flushes
@@ -65,7 +66,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 
 ### "I need to migrate a context or ECS layer to base classes"
 -> Read [methods/backend/BASE_CONTEXT_CONTRACTS.md](methods/backend/BASE_CONTEXT_CONTRACTS.md) for BaseContext migration rules
--> Read the relevant ECS method contracts for world, component, factory, system, phase, and instance-reveal boundaries
+-> Read the relevant ECS method contracts for world, component, entity-factory, runtime-object, system, phase, and instance-reveal boundaries
 -> Use the `roblox-migrate-context-ecs` skill to migrate context registry wiring, ECS infrastructure, and ECS-backed runtime instance services to the shared base classes
 
 ### "I'm adding a new frontend feature"
@@ -171,6 +172,7 @@ A map of this project's knowledge base. Read this first to know where to look.
 | [methods/frontend/CONTROLLER_INFRA_CONTRACTS.md](methods/frontend/CONTROLLER_INFRA_CONTRACTS.md) | Controller side-effect ownership and frontend infrastructure boundaries |
 | [methods/ECS/COMPONENT_RULES.md](methods/ECS/COMPONENT_RULES.md) | ECS component rules: pure data, Authoritative/Derived labels, frozen registries |
 | [methods/ECS/ENTITY_FACTORY_RULES.md](methods/ECS/ENTITY_FACTORY_RULES.md) | Entity factory rules: only JECS mutation surface, typed accessors, deferred destruction |
+| [methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md](methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md) | Runtime ownership split for entity factories, instance factories, and game-object sync services |
 | [methods/ECS/SYSTEM_RULES.md](methods/ECS/SYSTEM_RULES.md) | System rules: stateless, read/write declaration, single owner per authoritative component |
 | [methods/ECS/WORLD_ISOLATION_RULES.md](methods/ECS/WORLD_ISOLATION_RULES.md) | World isolation rules: one world per bounded context, Infrastructure-only JECS access |
 | [methods/ECS/PHASE_AND_EXECUTION_RULES.md](methods/ECS/PHASE_AND_EXECUTION_RULES.md) | Phase rules: Input→Logic→Sync→Render order, deferred flush, Derived writes in Sync only |

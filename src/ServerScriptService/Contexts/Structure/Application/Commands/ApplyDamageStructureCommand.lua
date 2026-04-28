@@ -23,6 +23,7 @@ end
 
 function ApplyDamageStructureCommand:Init(registry: any, _name: string)
 	self._factory = registry:Get("StructureEntityFactory")
+	self._instanceFactory = registry:Get("StructureInstanceFactory")
 end
 
 function ApplyDamageStructureCommand:Start(registry: any, _name: string)
@@ -52,6 +53,7 @@ function ApplyDamageStructureCommand:Execute(entity: any, amount: number): Resul
 
 		local didDie = self._factory:ApplyDamage(entity, amount)
 		if didDie then
+			self._instanceFactory:DestroyInstance(entity)
 			self._factory:ClearModelRef(entity)
 			self._factory:DeleteEntity(entity)
 			Try(self._placementContext:DestroyStructureInstance(instanceRef.InstanceId))

@@ -1,15 +1,12 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local BaseGameObjectSyncService = require(ReplicatedStorage.Utilities.BaseGameObjectSyncService)
+
 local StructureGameObjectSyncService = {}
 StructureGameObjectSyncService.__index = StructureGameObjectSyncService
-
-local function _SetAttributeIfChanged(model: Model, attributeName: string, value: any)
-	if model:GetAttribute(attributeName) == value then
-		return
-	end
-
-	model:SetAttribute(attributeName, value)
-end
+setmetatable(StructureGameObjectSyncService, { __index = BaseGameObjectSyncService })
 
 local function _ComputeAnimationState(combatAction: any): string
 	if
@@ -24,63 +21,44 @@ local function _ComputeAnimationState(combatAction: any): string
 end
 
 function StructureGameObjectSyncService.new()
-	return setmetatable({}, StructureGameObjectSyncService)
+	return setmetatable(BaseGameObjectSyncService.new("Structure"), StructureGameObjectSyncService)
 end
 
-function StructureGameObjectSyncService:Init(registry: any, _name: string)
-	self._factory = registry:Get("StructureEntityFactory")
+function StructureGameObjectSyncService:_GetComponentRegistryName(): string
+	return "StructureComponentRegistry"
 end
 
-function StructureGameObjectSyncService:RegisterEntity(entity: number, model: Model?)
-	local resolvedModel = model
-	if resolvedModel == nil then
-		local modelRef = self._factory:GetModelRef(entity)
-		if modelRef and modelRef.Model then
-			resolvedModel = modelRef.Model
-		end
-	end
-
-	if resolvedModel == nil then
-		return
-	end
-
-	self:_SyncEntity(entity, resolvedModel)
+function StructureGameObjectSyncService:_GetEntityFactoryName(): string
+	return "StructureEntityFactory"
 end
 
-function StructureGameObjectSyncService:SyncAll()
-	for _, entity in ipairs(self._factory:QueryActiveEntities()) do
-		self:_SyncEntity(entity)
-	end
+function StructureGameObjectSyncService:_GetInstanceFactoryName(): string?
+	return "StructureInstanceFactory"
 end
 
-function StructureGameObjectSyncService:_SyncEntity(entity: number, explicitModel: Model?)
-	local resolvedModel = explicitModel
-	if resolvedModel == nil then
-		local modelRef = self._factory:GetModelRef(entity)
-		if modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
-			return
-		end
-		resolvedModel = modelRef.Model
-	end
+function StructureGameObjectSyncService:_QueryAllEntities(): { number }
+	return self:GetEntityFactoryOrThrow():QueryActiveEntities()
+end
 
-	local model = resolvedModel
-	local identity = self._factory:GetIdentity(entity)
-	local health = self._factory:GetHealth(entity)
-	local combatAction = self._factory:GetCombatAction(entity)
+function StructureGameObjectSyncService:_SyncEntity(entity: number, model: Model)
+	local factory = self:GetEntityFactoryOrThrow()
+	local identity = factory:GetIdentity(entity)
+	local health = factory:GetHealth(entity)
+	local combatAction = factory:GetCombatAction(entity)
 
 	if identity ~= nil then
-		_SetAttributeIfChanged(model, "StructureId", identity.StructureId)
-		_SetAttributeIfChanged(model, "StructureType", identity.StructureType)
+		self:SetAttributeIfChanged(model, "StructureId", identity.StructureId)
+		self:SetAttributeIfChanged(model, "StructureType", identity.StructureType)
 	end
 
 	if health ~= nil then
-		_SetAttributeIfChanged(model, "Health", health.Current)
-		_SetAttributeIfChanged(model, "MaxHealth", health.Max)
+		self:SetAttributeIfChanged(model, "Health", health.Current)
+		self:SetAttributeIfChanged(model, "MaxHealth", health.Max)
 	end
 
 	local nextAnimationState = _ComputeAnimationState(combatAction)
-	_SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
-	_SetAttributeIfChanged(model, "AnimationLooping", nextAnimationState ~= "StructureAttack")
+	self:SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
+	self:SetAttributeIfChanged(model, "AnimationLooping", nextAnimationState ~= "StructureAttack")
 end
 
 return StructureGameObjectSyncService

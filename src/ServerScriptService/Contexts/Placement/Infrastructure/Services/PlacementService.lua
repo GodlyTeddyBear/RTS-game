@@ -9,6 +9,7 @@ local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
 local MiningConfig = require(ReplicatedStorage.Contexts.Mining.Config.MiningConfig)
+local StructureSpecs = require(ServerScriptService.Contexts.Structure.StructureDomain.Specs.StructureSpecs)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
@@ -209,6 +210,12 @@ end
 ]=]
 -- Clone the configured template, place it at the tile position, and remember the runtime id.
 function PlacementService:SpawnStructure(structureType: string, worldPos: Vector3): Result.Result<number>
+	if StructureSpecs.IsValidStructureType(structureType) then
+		local instanceId = self._nextId
+		self._nextId += 1
+		return Ok(instanceId)
+	end
+
 	-- Models and parts both support :PivotTo, which keeps the spawn path generic.
 	local spawnModel = self:_ResolveSpawnModel(structureType)
 	_PrepareStructureAnimationRuntime(spawnModel, self._animationsFolder)

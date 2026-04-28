@@ -21,6 +21,7 @@ local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.Struct
 local StructureECSWorldService = require(script.Parent.Infrastructure.ECS.StructureECSWorldService)
 local StructureComponentRegistry = require(script.Parent.Infrastructure.ECS.StructureComponentRegistry)
 local StructureEntityFactory = require(script.Parent.Infrastructure.ECS.StructureEntityFactory)
+local StructureInstanceFactory = require(script.Parent.Infrastructure.Services.StructureInstanceFactory)
 local StructureGameObjectSyncService = require(script.Parent.Infrastructure.Services.StructureGameObjectSyncService)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
 local RegisterStructureCommand = require(script.Parent.Application.Commands.RegisterStructureCommand)
@@ -45,6 +46,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "StructureEntityFactory",
 		Module = StructureEntityFactory,
 		CacheAs = "_entityFactory",
+	},
+	{
+		Name = "StructureInstanceFactory",
+		Module = StructureInstanceFactory,
+		CacheAs = "_instanceFactory",
 	},
 	{
 		Name = "StructureGameObjectSyncService",
@@ -175,8 +181,10 @@ function StructureContext:KnitStart()
 	end)
 
 	-- Tear down all structures when the run ends so the next session starts clean.
-	self._runStateChangedConnection = self._runContext.StateChanged:Connect(function(newState: RunState, _previousState: RunState)
-		if newState ~= "RunEnd" then
+	self._runStateChangedConnection = self._runContext.StateChanged:Connect(function(newState: RunState, previousState: RunState)
+		local isRunEndCleanup = newState == "RunEnd"
+		local isFreshRunStartCleanup = previousState == "Idle" and newState == "Prep"
+		if not isRunEndCleanup and not isFreshRunStartCleanup then
 			return
 		end
 
@@ -253,6 +261,10 @@ end
 ]=]
 function StructureContext:GetEntityFactory(): Result.Result<any>
 	return Ok(self._entityFactory)
+end
+
+function StructureContext:GetInstanceFactory(): Result.Result<any>
+	return Ok(self._instanceFactory)
 end
 
 --[=[

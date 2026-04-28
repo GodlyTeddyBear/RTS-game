@@ -39,11 +39,8 @@ end
 function RegisterStructureCommand:Init(registry: any, _name: string)
 	self._policy = registry:Get("RegisterStructurePolicy")
 	self._factory = registry:Get("StructureEntityFactory")
+	self._instanceFactory = registry:Get("StructureInstanceFactory")
 	self._syncService = registry:Get("StructureGameObjectSyncService")
-end
-
-function RegisterStructureCommand:Start(registry: any, _name: string)
-	self._placementContext = registry:Get("PlacementContext")
 end
 
 --[=[
@@ -65,11 +62,14 @@ function RegisterStructureCommand:Execute(record: StructureRecord): Result.Resul
 
 		-- Create the entity only after the record has been proven valid.
 		local entity = self._factory:CreateStructure(resolved)
-		local modelResult = self._placementContext:GetStructureInstance(resolved.instanceId)
-		if modelResult.success and modelResult.value ~= nil then
-			self._factory:SetModelRef(entity, modelResult.value)
-			self._syncService:RegisterEntity(entity, modelResult.value)
-		end
+		local model = self._instanceFactory:CreateStructureInstance(
+			entity,
+			resolved.structureType,
+			resolved.instanceId,
+			resolved.worldPos
+		)
+		self._factory:SetModelRef(entity, model)
+		self._syncService:RegisterEntity(entity, model)
 
 		-- Emit a milestone for traceability when a structure becomes active.
 		Result.MentionSuccess("Structure:RegisterStructureCommand", "Registered structure entity", {

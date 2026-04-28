@@ -11,6 +11,7 @@
 - Factories expose typed getter and setter methods per component — callers never touch raw component IDs
 - A factory owns exactly one entity type
 - Derived factories use the shared base helper surface for standard JECS operations (`_CreateEntity`, `_Set`, `_Add`, `_Remove`, `_Get`, `_Has`) instead of calling raw world mutation methods directly
+- Storing `ModelRef` or `Transform` components does not make the entity factory the live model owner - see [RUNTIME_OBJECT_BOUNDARIES.md](RUNTIME_OBJECT_BOUNDARIES.md)
 
 
 ---
@@ -40,6 +41,8 @@ world:set(entity, components.Health, { current = 100, max = 100 })
 ## Reads and Writes
 
 Factories expose typed getter and setter methods. No caller ever accesses a raw component ID. Raw world access inside a factory is reserved for JECS features not yet wrapped by the shared base helper surface, and those cases should be rare and intentional.
+
+When a factory stores `ModelRef`, that component is an ECS lookup convenience. Runtime instance lifecycle, reveal ownership, and instance cleanup still belong to the instance factory layer defined in [RUNTIME_OBJECT_BOUNDARIES.md](RUNTIME_OBJECT_BOUNDARIES.md).
 
 ```lua
 -- CORRECT: typed accessors

@@ -36,6 +36,20 @@ Low-level method contracts for implementation work. These documents convert back
 
 
 ---
+## ECS Contracts
+
+- [ECS/COMPONENT_RULES.md](ECS/COMPONENT_RULES.md) - ECS component rules: pure data, Authoritative/Derived labels, frozen registries.
+- [ECS/ENTITY_FACTORY_RULES.md](ECS/ENTITY_FACTORY_RULES.md) - Entity factory rules: only JECS mutation surface, typed accessors, deferred destruction.
+- [ECS/RUNTIME_OBJECT_BOUNDARIES.md](ECS/RUNTIME_OBJECT_BOUNDARIES.md) - Runtime ownership split for entity factories, instance factories, and game-object sync services.
+- [ECS/SYSTEM_RULES.md](ECS/SYSTEM_RULES.md) - System rules: stateless, read/write declaration, single owner per authoritative component.
+- [ECS/WORLD_ISOLATION_RULES.md](ECS/WORLD_ISOLATION_RULES.md) - World isolation rules: one world per bounded context, Infrastructure-only JECS access.
+- [ECS/PHASE_AND_EXECUTION_RULES.md](ECS/PHASE_AND_EXECUTION_RULES.md) - Phase rules: Inputâ†’Logicâ†’Syncâ†’Render order, deferred flush, Derived writes in Sync only.
+- [ECS/TAG_RULES.md](ECS/TAG_RULES.md) - ECS tag rules: binary state markers, world:entity() creation, PascalCaseTag naming.
+- [ECS/INSTANCE_REVEAL_RULES.md](ECS/INSTANCE_REVEAL_RULES.md) - Instance reveal rules: Attributes and CollectionService tags as the serverâ†’client discovery channel.
+- [ECS/ECS_PERSISTENCE_RULES.md](ECS/ECS_PERSISTENCE_RULES.md) - ECS persistence rules: ECSâ†”ProfileStore bridge, Save/Load/Delete shape, serialization and lifecycle.
+
+
+---
 ## Planning Standards
 
 - [PLAN_DEVELOPMENT.md](PLAN_DEVELOPMENT.md) - Required output contract, quality rubric, and approval gates for GDD + implementation planning.

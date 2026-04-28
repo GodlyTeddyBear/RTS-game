@@ -31,6 +31,7 @@ end
 ]=]
 function CleanupAllCommand:Init(registry: any, _name: string)
 	self._factory = registry:Get("StructureEntityFactory")
+	self._instanceFactory = registry:Get("StructureInstanceFactory")
 end
 
 --[=[
@@ -41,6 +42,7 @@ end
 function CleanupAllCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
 		-- Bulk cleanup stays centralized in the entity factory so teardown remains atomic.
+		self._instanceFactory:DestroyAll()
 		self._factory:DeleteAll()
 		self._factory:FlushPendingDeletes()
 		return Ok(true)
