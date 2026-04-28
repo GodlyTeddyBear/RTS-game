@@ -4,7 +4,7 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
-local GameEvents = require(ReplicatedStorage.Events.GameEvents)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
@@ -18,16 +18,20 @@ local Ensure = Result.Ensure
 ]=]
 local SpawnEnemy = {}
 SpawnEnemy.__index = SpawnEnemy
+setmetatable(SpawnEnemy, BaseCommand)
 
 function SpawnEnemy.new()
-	return setmetatable({}, SpawnEnemy)
+	local self = BaseCommand.new("Enemy", "SpawnEnemy")
+	return setmetatable(self, SpawnEnemy)
 end
 
 function SpawnEnemy:Init(registry: any, _name: string)
-	self._spawnPolicy = registry:Get("EnemySpawnPolicy")
-	self._entityFactory = registry:Get("EnemyEntityFactory")
-	self._instanceFactory = registry:Get("EnemyInstanceFactory")
-	self._syncService = registry:Get("EnemyGameObjectSyncService")
+	self:_RequireDependencies(registry, {
+		_spawnPolicy = "EnemySpawnPolicy",
+		_entityFactory = "EnemyEntityFactory",
+		_instanceFactory = "EnemyInstanceFactory",
+		_syncService = "EnemyGameObjectSyncService",
+	})
 end
 
 function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: number): Result.Result<number>
@@ -45,10 +49,10 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 		model:PivotTo(spawnCFrame)
 		self._entityFactory:SetModelRef(entity, model)
 		self._syncService:RegisterEntity(entity, model)
-		GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemySpawned, entity, role, waveNumber)
+		self:_EmitGameEvent("Wave", "EnemySpawned", entity, role, waveNumber)
 
 		return Ok(entity)
-	end, "Enemy:SpawnEnemy", function()
+	end, self:_Label(), function()
 		if entity then
 			self._instanceFactory:DestroyInstance(entity)
 		end

@@ -8,17 +8,19 @@
 ]=]
 local EnemyTypes = {}
 
-export type EnemyRole = "swarm" | "tank"
+export type EnemyRole = "Swarm" | "Tank"
+export type EnemyMovementMode = "Path" | "Boids" | "Any"
+export type EnemyTargetPreference = "Goal"
 
 export type EnemyIdentity = {
-	enemyId: string,
-	role: EnemyRole,
-	waveNumber: number,
+	EnemyId: string,
+	Role: EnemyRole,
+	WaveNumber: number,
 }
 
 export type HealthComponent = {
-	current: number,
-	max: number,
+	Current: number,
+	Max: number,
 }
 
 export type TransformComponent = {
@@ -26,21 +28,39 @@ export type TransformComponent = {
 }
 
 export type RoleComponent = {
-	role: EnemyRole,
-	moveSpeed: number,
-	damage: number,
-	attackRange: number,
-	attackCooldown: number,
-	targetPreference: string,
+	Role: EnemyRole,
+	MoveSpeed: number,
+	Damage: number,
+	AttackRange: number,
+	AttackCooldown: number,
+	TargetPreference: EnemyTargetPreference,
 }
 
 export type PathStateComponent = {
-	goalPosition: Vector3?,
-	isMoving: boolean,
+	GoalPosition: Vector3?,
+	IsMoving: boolean,
 }
 
 export type ModelRefComponent = {
 	Model: Model,
+}
+
+export type EnemyRoleConfig = {
+	DisplayName: string,
+	MaxHp: number,
+	Damage: number,
+	AttackRange: number,
+	AttackCooldown: number,
+	MoveSpeed: number,
+	TargetPreference: EnemyTargetPreference,
+	ModelScale: Vector3,
+	ModelColor: Color3,
+	MovementMode: EnemyMovementMode,
+}
+
+export type EnemyConfig = {
+	Roles: { [EnemyRole]: EnemyRoleConfig },
+	Phase2AllowedRoles: { [EnemyRole]: boolean },
 }
 
 export type PositionComponent = TransformComponent

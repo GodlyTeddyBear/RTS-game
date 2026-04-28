@@ -65,7 +65,7 @@ function HandleGoalReached:Execute(entity: any): Result.Result<boolean>
 		local identity = self._entityFactory:GetIdentity(entity)
 		Ensure(identity ~= nil, "InvalidEnemyEntity", Errors.INVALID_ENEMY_ENTITY)
 
-		local roleConfig = EnemyConfig.ROLES[identity.role]
+		local roleConfig = EnemyConfig.Roles[identity.Role]
 		Ensure(roleConfig ~= nil, "InvalidRole", Errors.INVALID_ROLE)
 
 		-- Confirm the death position and base state before applying any damage.
@@ -74,16 +74,16 @@ function HandleGoalReached:Execute(entity: any): Result.Result<boolean>
 		Ensure(self._baseEntityFactory:IsActive(), "InactiveBase", Errors.INACTIVE_BASE)
 
 		-- Skip damage if the death point is outside the base's attack range.
-		if not self._combatPerceptionService:IsTargetInRange(deathCFrame.Position, roleConfig.attackRange, "Base", nil) then
+		if not self._combatPerceptionService:IsTargetInRange(deathCFrame.Position, roleConfig.AttackRange, "Base", nil) then
 			return Ok(false)
 		end
 
 		-- Mark the enemy resolved, emit the wave event, and apply the resulting base damage.
 		self._entityFactory:MarkGoalReached(entity)
-		GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.role, identity.waveNumber, deathCFrame)
+		GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.Role, identity.WaveNumber, deathCFrame)
 
 		Try(self._enemyContext:DespawnEnemy(entity))
-		Try(self._baseContext:ApplyDamage(roleConfig.damage))
+		Try(self._baseContext:ApplyDamage(roleConfig.Damage))
 
 		return Ok(true)
 	end, "Combat:HandleGoalReached")

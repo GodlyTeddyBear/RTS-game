@@ -27,11 +27,11 @@ local function _ComputeAnimationState(pathState: any, role: any, combatAction: a
 		return combatAction.CurrentActionId
 	end
 
-	if not pathState or pathState.isMoving ~= true then
+	if not pathState or pathState.IsMoving ~= true then
 		return "Idle"
 	end
 
-	if role and type(role.moveSpeed) == "number" and role.moveSpeed >= RUN_SPEED_THRESHOLD then
+	if role and type(role.MoveSpeed) == "number" and role.MoveSpeed >= RUN_SPEED_THRESHOLD then
 		return "Run"
 	end
 
@@ -81,14 +81,14 @@ function EnemyGameObjectSyncService:_SyncEntity(entity: number, model: Model)
 	local combatAction = entityFactory:GetCombatAction(entity)
 
 	if health then
-		self:SetAttributeIfChanged(model, "Health", health.current)
-		self:SetAttributeIfChanged(model, "MaxHealth", health.max)
+		self:SetAttributeIfChanged(model, "Health", health.Current)
+		self:SetAttributeIfChanged(model, "MaxHealth", health.Max)
 	end
 
 	if role then
-		self:SetAttributeIfChanged(model, "MoveSpeed", role.moveSpeed)
-		self:SetAttributeIfChanged(model, "Damage", role.damage)
-		self:SetAttributeIfChanged(model, "TargetPreference", role.targetPreference)
+		self:SetAttributeIfChanged(model, "MoveSpeed", role.MoveSpeed)
+		self:SetAttributeIfChanged(model, "Damage", role.Damage)
+		self:SetAttributeIfChanged(model, "TargetPreference", role.TargetPreference)
 	end
 
 	local nextAnimationState = _ComputeAnimationState(pathState, role, combatAction)

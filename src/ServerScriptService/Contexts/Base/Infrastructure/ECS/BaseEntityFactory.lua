@@ -70,8 +70,8 @@ function BaseEntityFactory:CreateOrResetBase(baseId: string, maxHp: number, inst
 		BaseId = baseId,
 	} :: IdentityComponent)
 	self:_Set(entity, self._components.HealthComponent, {
-		hp = maxHp,
-		maxHp = maxHp,
+		Hp = maxHp,
+		MaxHp = maxHp,
 	} :: HealthComponent)
 	self:_Set(entity, self._components.InstanceRefComponent, {
 		Instance = instance,
@@ -119,8 +119,8 @@ function BaseEntityFactory:GetBaseState(): BaseState?
 	end
 
 	return {
-		hp = health.hp,
-		maxHp = health.maxHp,
+		Hp = health.Hp,
+		MaxHp = health.MaxHp,
 	}
 end
 
@@ -215,10 +215,10 @@ function BaseEntityFactory:ApplyDamage(amount: number): boolean
 		return false
 	end
 
-	local nextHp = math.max(0, health.hp - amount)
+	local nextHp = math.max(0, health.Hp - amount)
 	self:_Set(entity, self._components.HealthComponent, {
-		hp = nextHp,
-		maxHp = health.maxHp,
+		Hp = nextHp,
+		MaxHp = health.MaxHp,
 	} :: HealthComponent)
 
 	return nextHp <= 0

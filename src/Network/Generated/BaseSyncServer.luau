@@ -158,11 +158,11 @@ local Queue: any = {
 
 local SerdesEvent = "?"
 local SerdesThread: thread?
-export type BaseStatePayload = { hp: number?, maxHp: number? }
-export type InitPayload = { base: { hp: number?, maxHp: number? }? }
-export type PatchPayload = { base: { hp: number?, maxHp: number? }? }
-export type SyncPayload = { type: "init", data: { base: { hp: number?, maxHp: number? }? }? } | { type: "patch", data: { base: { hp: number?, maxHp: number? }? }? }
-local function WriteEVENT_SyncBase(Value: { type: "init", data: { base: { hp: number?, maxHp: number? }? }? } | { type: "patch", data: { base: { hp: number?, maxHp: number? }? }? }): ()
+export type BaseStatePayload = { Hp: number?, MaxHp: number? }
+export type InitPayload = { base: { Hp: number?, MaxHp: number? }? }
+export type PatchPayload = { base: { Hp: number?, MaxHp: number? }? }
+export type SyncPayload = { type: "init", data: { base: { Hp: number?, MaxHp: number? }? }? } | { type: "patch", data: { base: { Hp: number?, MaxHp: number? }? }? }
+local function WriteEVENT_SyncBase(Value: { type: "init", data: { base: { Hp: number?, MaxHp: number? }? }? } | { type: "patch", data: { base: { Hp: number?, MaxHp: number? }? }? }): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
@@ -178,17 +178,17 @@ local function WriteEVENT_SyncBase(Value: { type: "init", data: { base: { hp: nu
 			if Value.data.base ~= nil then
 				-- Allocate BLOCK: 2 bytes
 				local BLOCK_START = Allocate(2)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.base.hp ~= nil and 1 or 0)
-				if Value.data.base.hp ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.base.Hp ~= nil and 1 or 0)
+				if Value.data.base.Hp ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.base.hp)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.base.Hp)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.base.maxHp ~= nil and 1 or 0)
-				if Value.data.base.maxHp ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.base.MaxHp ~= nil and 1 or 0)
+				if Value.data.base.MaxHp ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.base.maxHp)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.base.MaxHp)
 				end
 			end
 		end
@@ -204,17 +204,17 @@ local function WriteEVENT_SyncBase(Value: { type: "init", data: { base: { hp: nu
 			if Value.data.base ~= nil then
 				-- Allocate BLOCK: 2 bytes
 				local BLOCK_START = Allocate(2)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.base.hp ~= nil and 1 or 0)
-				if Value.data.base.hp ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.base.Hp ~= nil and 1 or 0)
+				if Value.data.base.Hp ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.base.hp)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.base.Hp)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.base.maxHp ~= nil and 1 or 0)
-				if Value.data.base.maxHp ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.base.MaxHp ~= nil and 1 or 0)
+				if Value.data.base.MaxHp ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.base.maxHp)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.base.MaxHp)
 				end
 			end
 		end
@@ -319,12 +319,12 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	SyncBase = {
-		Fire = function(Player: Player, Value: { type: "init", data: { base: { hp: number?, maxHp: number? }? }? } | { type: "patch", data: { base: { hp: number?, maxHp: number? }? }? }): ()
+		Fire = function(Player: Player, Value: { type: "init", data: { base: { Hp: number?, MaxHp: number? }? }? } | { type: "patch", data: { base: { Hp: number?, MaxHp: number? }? }? }): ()
 			Load(PlayersMap[Player])
 			WriteEVENT_SyncBase(Value)
 			PlayersMap[Player] = Save()
 		end,
-		FireAll = function(Value: { type: "init", data: { base: { hp: number?, maxHp: number? }? }? } | { type: "patch", data: { base: { hp: number?, maxHp: number? }? }? }): ()
+		FireAll = function(Value: { type: "init", data: { base: { Hp: number?, MaxHp: number? }? }? } | { type: "patch", data: { base: { Hp: number?, MaxHp: number? }? }? }): ()
 			Load()
 			WriteEVENT_SyncBase(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -336,7 +336,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireList = function(List: {Player}, Value: { type: "init", data: { base: { hp: number?, maxHp: number? }? }? } | { type: "patch", data: { base: { hp: number?, maxHp: number? }? }? }): ()
+		FireList = function(List: {Player}, Value: { type: "init", data: { base: { Hp: number?, MaxHp: number? }? }? } | { type: "patch", data: { base: { Hp: number?, MaxHp: number? }? }? }): ()
 			Load()
 			WriteEVENT_SyncBase(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -348,7 +348,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireExcept = function(Except: Player, Value: { type: "init", data: { base: { hp: number?, maxHp: number? }? }? } | { type: "patch", data: { base: { hp: number?, maxHp: number? }? }? }): ()
+		FireExcept = function(Except: Player, Value: { type: "init", data: { base: { Hp: number?, MaxHp: number? }? }? } | { type: "patch", data: { base: { Hp: number?, MaxHp: number? }? }? }): ()
 			Load()
 			WriteEVENT_SyncBase(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances

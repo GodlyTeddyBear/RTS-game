@@ -236,21 +236,21 @@ function CombatPerceptionService:BuildSnapshot(entity: number, _currentTime: num
 	local role = self._enemyEntityFactory:GetRole(entity)
 	local position = self._enemyEntityFactory:GetPosition(entity)
 
-	local hasGoalTarget = pathState ~= nil and pathState.goalPosition ~= nil
+	local hasGoalTarget = pathState ~= nil and pathState.GoalPosition ~= nil
 
 	local healthPct = 1
-	if health and health.max > 0 then
-		healthPct = math.clamp(health.current / health.max, 0, 1)
+	if health and health.Max > 0 then
+		healthPct = math.clamp(health.Current / health.Max, 0, 1)
 	end
 
 	local targetStructureEntity = nil :: number?
-	if role and position and position.CFrame and type(role.attackRange) == "number" then
-		targetStructureEntity = self:_FindNearestStructureInRange(position.CFrame.Position, role.attackRange)
+	if role and position and position.CFrame and type(role.AttackRange) == "number" then
+		targetStructureEntity = self:_FindNearestStructureInRange(position.CFrame.Position, role.AttackRange)
 	end
 
 	local hasBaseTargetInRange = false
-	if targetStructureEntity == nil and role and position and position.CFrame and type(role.attackRange) == "number" then
-		hasBaseTargetInRange = self:IsTargetInRange(position.CFrame.Position, role.attackRange, "Base", nil)
+	if targetStructureEntity == nil and role and position and position.CFrame and type(role.AttackRange) == "number" then
+		hasBaseTargetInRange = self:IsTargetInRange(position.CFrame.Position, role.AttackRange, "Base", nil)
 	end
 
 	return {

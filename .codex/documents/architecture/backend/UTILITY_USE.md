@@ -2,7 +2,7 @@
 
 This document defines how shared utilities should be used in this codebase, when they belong in `ReplicatedStorage/Utilities/`, and how to decide whether a helper is a shared utility or a context-owned service.
 
-Use this as the default reference when introducing or reviewing a helper such as `ModelPlus`, `SpatialQuery`, `Specification`, or `BaseContext`.
+Use this as the default reference when introducing or reviewing a helper such as `ModelPlus`, `SpatialQuery`, `Specification`, `BaseContext`, `BaseApplication`, or `BasePersistenceService`.
 
 ---
 
@@ -33,6 +33,8 @@ Use this as the default reference when introducing or reviewing a helper such as
 Examples of utility-style modules in this project:
 
 - `BaseContext`
+- `BaseApplication` (`BaseCommand` / `BaseQuery`)
+- `BasePersistenceService`
 - `Result`
 - `Specification`
 - `AssetFetcher`
@@ -59,6 +61,9 @@ Examples of utility-style modules in this project:
 - Shared helpers used by backend infrastructure code.
 - Examples: registry helpers, asset fetchers, and wrapper utilities.
 - These should still avoid owning full feature flow.
+- `BaseApplication` and `BasePersistenceService` are infrastructure helpers:
+  - `BaseApplication` standardizes dependency and event-name resolution for commands and queries.
+  - `BasePersistenceService` standardizes profile-path read/write helpers and Result-based persistence failures.
 
 ---
 
@@ -70,6 +75,7 @@ Examples of utility-style modules in this project:
 - Utilities should not own JECS world lifetime.
 - Utilities should not own instance creation or cleanup.
 - Utilities should not own persistence lifecycle.
+- Utilities may provide persistence helper methods, but context infrastructure still owns lifecycle wiring.
 - Utilities should not replace a context service when the behavior belongs to a specific bounded context.
 - If a helper starts owning orchestration, move it into the appropriate context layer or service folder.
 
@@ -91,6 +97,26 @@ Do not use a utility when the module:
 - creates or destroys ECS entities
 - creates or destroys live instances
 - reads or writes `profile.Data`
+
+Use `BaseApplication` (`BaseCommand` / `BaseQuery`) when:
+
+- multiple commands or queries in a context need consistent dependency registration and GameEvents resolution
+- the helper stays technical and reusable across contexts
+
+Do not use `BaseApplication` when:
+
+- the module starts encoding context-specific domain eligibility, branching, or orchestration
+- event ownership and wiring belongs in a context runtime service instead of command/query helpers
+
+Use `BasePersistenceService` when:
+
+- infrastructure persistence modules need shared profile-path traversal and explicit Result-based boundary behavior
+- contexts still own profile lifecycle wiring (`ProfileLoaded`, `ProfileSaving`, loader registration)
+
+Do not use `BasePersistenceService` when:
+
+- the module starts owning lifecycle events directly
+- policy/spec/domain decisions are embedded into the persistence helper
 
 ---
 
@@ -133,6 +159,8 @@ Not a utility:
 - Do not place feature-specific orchestration in a utility module.
 - Do not use a utility to bypass ECS, persistence, or context boundaries.
 - Do not let a utility own lifecycle that should belong to a context service.
+- Do not let `BasePersistenceService` own profile lifecycle event wiring.
+- Do not add domain policy/spec logic to `BaseApplication` or `BasePersistenceService`.
 - Do not treat a shared helper as an excuse to mix responsibilities.
 
 ---
@@ -143,6 +171,8 @@ Not a utility:
 - A utility owns the lifecycle of ECS entities, live instances, or persisted data.
 - A utility becomes context-specific but remains in `ReplicatedStorage/Utilities/`.
 - A caller uses a utility as a substitute for a proper ECS or persistence owner.
+- `BaseApplication` contains domain-rule branching or command/query orchestration beyond shared helper behavior.
+- `BasePersistenceService` subscribes to lifecycle events or bypasses explicit context-owned load/save boundaries.
 
 ---
 

@@ -9,9 +9,9 @@ local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
 
 type TCreateEnemyInstanceOptions = {
-	role: string,
-	enemyId: string,
-	waveNumber: number,
+	Role: string,
+	EnemyId: string,
+	WaveNumber: number,
 }
 
 type ECSRevealOptions = {
@@ -65,7 +65,7 @@ function EnemyInstanceFactory:_OnInit(_registry: any, _name: string)
 end
 
 function EnemyInstanceFactory:_CreateFallbackModel(role: string, enemyId: string): Model
-	local roleConfig = EnemyConfig.ROLES[role]
+	local roleConfig = EnemyConfig.Roles[role]
 	assert(roleConfig ~= nil, "Unknown enemy role: " .. tostring(role))
 
 	local model = Instance.new("Model")
@@ -73,8 +73,8 @@ function EnemyInstanceFactory:_CreateFallbackModel(role: string, enemyId: string
 
 	local rootPart = Instance.new("Part")
 	rootPart.Name = "HumanoidRootPart"
-	rootPart.Size = roleConfig.modelScale
-	rootPart.Color = roleConfig.modelColor
+	rootPart.Size = roleConfig.ModelScale
+	rootPart.Color = roleConfig.ModelColor
 	rootPart.Material = Enum.Material.SmoothPlastic
 	rootPart.Anchored = false
 	rootPart.CanCollide = false
@@ -82,9 +82,9 @@ function EnemyInstanceFactory:_CreateFallbackModel(role: string, enemyId: string
 	rootPart.Parent = model
 
 	local humanoid = Instance.new("Humanoid")
-	humanoid.MaxHealth = roleConfig.maxHp
-	humanoid.Health = roleConfig.maxHp
-	humanoid.WalkSpeed = roleConfig.moveSpeed
+	humanoid.MaxHealth = roleConfig.MaxHp
+	humanoid.Health = roleConfig.MaxHp
+	humanoid.WalkSpeed = roleConfig.MoveSpeed
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	humanoid.Parent = model
 
@@ -93,8 +93,8 @@ function EnemyInstanceFactory:_CreateFallbackModel(role: string, enemyId: string
 end
 
 function EnemyInstanceFactory:_CreateInstanceForEntity(_entityId: number, options: TCreateEnemyInstanceOptions): Instance
-	local role = options.role
-	local enemyId = options.enemyId
+	local role = options.Role
+	local enemyId = options.EnemyId
 	local assetRegistry = self:_GetAssetRegistry()
 
 	if assetRegistry ~= nil and assetRegistry:EnemyModelExists(role) then
@@ -112,11 +112,11 @@ end
 function EnemyInstanceFactory:_PrepareInstance(instance: Instance, _entityId: number, options: TCreateEnemyInstanceOptions)
 	assert(instance:IsA("Model"), "EnemyInstanceFactory requires Model instances")
 
-	local roleConfig = EnemyConfig.ROLES[options.role]
-	assert(roleConfig ~= nil, "Unknown enemy role: " .. tostring(options.role))
+	local roleConfig = EnemyConfig.Roles[options.Role]
+	assert(roleConfig ~= nil, "Unknown enemy role: " .. tostring(options.Role))
 
 	local model = instance :: Model
-	model.Name = "Enemy_" .. options.role .. "_" .. options.enemyId
+	model.Name = "Enemy_" .. options.Role .. "_" .. options.EnemyId
 
 	local animationsFolderRef = model:FindFirstChild("AnimationsFolder")
 	if animationsFolderRef ~= nil and not animationsFolderRef:IsA("ObjectValue") then
@@ -140,9 +140,9 @@ function EnemyInstanceFactory:_PrepareInstance(instance: Instance, _entityId: nu
 		humanoid.Parent = model
 	end
 
-	humanoid.MaxHealth = roleConfig.maxHp
-	humanoid.Health = roleConfig.maxHp
-	humanoid.WalkSpeed = roleConfig.moveSpeed
+	humanoid.MaxHealth = roleConfig.MaxHp
+	humanoid.Health = roleConfig.MaxHp
+	humanoid.WalkSpeed = roleConfig.MoveSpeed
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 
 	if model.PrimaryPart == nil then
@@ -163,9 +163,9 @@ function EnemyInstanceFactory:_BuildRevealIdentityOptions(
 	options: TCreateEnemyInstanceOptions
 ): ECSRevealOptions?
 	return {
-		EntityType = options.role,
-		SourceId = options.enemyId,
-		ScopeId = tostring(options.waveNumber),
+		EntityType = options.Role,
+		SourceId = options.EnemyId,
+		ScopeId = tostring(options.WaveNumber),
 		Namespace = "Enemy",
 	}
 end
@@ -176,9 +176,9 @@ function EnemyInstanceFactory:_BuildRevealAttributes(
 	options: TCreateEnemyInstanceOptions
 ): { [string]: any }?
 	return {
-		EnemyId = options.enemyId,
-		EnemyRole = options.role,
-		WaveNumber = options.waveNumber,
+		EnemyId = options.EnemyId,
+		EnemyRole = options.Role,
+		WaveNumber = options.WaveNumber,
 	}
 end
 
@@ -194,9 +194,9 @@ end
 
 function EnemyInstanceFactory:CreateEnemyInstance(entity: number, role: string, enemyId: string, waveNumber: number): Model
 	local instance = self:_CreateBoundInstance(entity, {
-		role = role,
-		enemyId = enemyId,
-		waveNumber = waveNumber,
+		Role = role,
+		EnemyId = enemyId,
+		WaveNumber = waveNumber,
 	})
 
 	assert(instance:IsA("Model"), "EnemyInstanceFactory requires Model instances")

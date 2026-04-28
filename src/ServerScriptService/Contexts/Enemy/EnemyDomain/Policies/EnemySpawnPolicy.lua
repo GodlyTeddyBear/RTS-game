@@ -23,7 +23,7 @@ end
 
 function EnemySpawnPolicy:Check(role: string, spawnCFrame: CFrame): Result.Result<boolean>
 	if not EnemySpecs.IsValidRole(role) then
-		return Err("InvalidRole", Errors.INVALID_ROLE, { role = role })
+		return Err("InvalidRole", Errors.INVALID_ROLE, { Role = role })
 	end
 
 	if not EnemySpecs.HasValidSpawnCFrame(spawnCFrame) then

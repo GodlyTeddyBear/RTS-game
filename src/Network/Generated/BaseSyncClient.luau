@@ -158,11 +158,11 @@ local Queue: any = {
 local SerdesEvent = "?"
 local SerdesThread: thread?
 Queue.Reliable[0] = table.create(256)
-export type BaseStatePayload = { hp: number?, maxHp: number? }
-export type InitPayload = { base: { hp: number?, maxHp: number? }? }
-export type PatchPayload = { base: { hp: number?, maxHp: number? }? }
-export type SyncPayload = { type: "init", data: { base: { hp: number?, maxHp: number? }? }? } | { type: "patch", data: { base: { hp: number?, maxHp: number? }? }? }
-local function ReadEVENT_SyncBase(): ({ type: "init", data: { base: { hp: number?, maxHp: number? }? }? } | { type: "patch", data: { base: { hp: number?, maxHp: number? }? }? })
+export type BaseStatePayload = { Hp: number?, MaxHp: number? }
+export type InitPayload = { base: { Hp: number?, MaxHp: number? }? }
+export type PatchPayload = { base: { Hp: number?, MaxHp: number? }? }
+export type SyncPayload = { type: "init", data: { base: { Hp: number?, MaxHp: number? }? }? } | { type: "patch", data: { base: { Hp: number?, MaxHp: number? }? }? }
+local function ReadEVENT_SyncBase(): ({ type: "init", data: { base: { Hp: number?, MaxHp: number? }? }? } | { type: "patch", data: { base: { Hp: number?, MaxHp: number? }? }? })
 	-- Read BLOCK: 1 bytes
 	local BLOCK_START = Read(1)
 	local Tag = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
@@ -182,12 +182,12 @@ local function ReadEVENT_SyncBase(): ({ type: "init", data: { base: { hp: number
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 					-- Read BLOCK: 8 bytes
 					local BLOCK_START = Read(8)
-					Value.data.base.hp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+					Value.data.base.Hp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 				end
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
 					-- Read BLOCK: 8 bytes
 					local BLOCK_START = Read(8)
-					Value.data.base.maxHp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+					Value.data.base.MaxHp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 				end
 			end
 		end
@@ -207,12 +207,12 @@ local function ReadEVENT_SyncBase(): ({ type: "init", data: { base: { hp: number
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 					-- Read BLOCK: 8 bytes
 					local BLOCK_START = Read(8)
-					Value.data.base.hp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+					Value.data.base.Hp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 				end
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
 					-- Read BLOCK: 8 bytes
 					local BLOCK_START = Read(8)
-					Value.data.base.maxHp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+					Value.data.base.MaxHp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 				end
 			end
 		end
@@ -272,7 +272,7 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
 		if Index == 0 then
-			local Value: { type: "init", data: { base: { hp: number?, maxHp: number? }? }? } | { type: "patch", data: { base: { hp: number?, maxHp: number? }? }? } = ReadEVENT_SyncBase()
+			local Value: { type: "init", data: { base: { Hp: number?, MaxHp: number? }? }? } | { type: "patch", data: { base: { Hp: number?, MaxHp: number? }? }? } = ReadEVENT_SyncBase()
 			if Events.Reliable[0] ~= nil then
 				task.spawn(Events.Reliable[0], Value)
 			else
@@ -307,7 +307,7 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	SyncBase = {
-		On = function(Listener: (Value: { type: "init", data: { base: { hp: number?, maxHp: number? }? }? } | { type: "patch", data: { base: { hp: number?, maxHp: number? }? }? }) -> ()): () -> ()
+		On = function(Listener: (Value: { type: "init", data: { base: { Hp: number?, MaxHp: number? }? }? } | { type: "patch", data: { base: { Hp: number?, MaxHp: number? }? }? }) -> ()): () -> ()
 			Events.Reliable[0] = Listener
 			for Index, Arguments in Queue.Reliable[0] do
 				task.spawn(Listener, table.unpack(Arguments))

@@ -12,8 +12,8 @@ local TankBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.TankB
 local StructureBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.StructureBehavior)
 
 local EnemyBehaviorDefinitions = table.freeze({
-	swarm = SwarmBehavior,
-	tank = TankBehavior,
+	Swarm = SwarmBehavior,
+	Tank = TankBehavior,
 })
 
 --[=[
@@ -50,12 +50,11 @@ end
 function CombatBehaviorRuntimeService:Init(_registry: any, _name: string) end
 
 local function _resolveEnemyRole(roleName: string): string
-	local normalizedRole = string.lower(roleName)
-	if EnemyBehaviorDefinitions[normalizedRole] ~= nil then
-		return normalizedRole
+	if EnemyBehaviorDefinitions[roleName] ~= nil then
+		return roleName
 	end
 
-	return "swarm"
+	return "Swarm"
 end
 
 --[=[

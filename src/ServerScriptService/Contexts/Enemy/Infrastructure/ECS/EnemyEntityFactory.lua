@@ -37,36 +37,36 @@ end
 function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFrame: CFrame, waveNumber: number): number
 	self:RequireReady()
 
-	local roleConfig = EnemyConfig.ROLES[role]
+	local roleConfig = EnemyConfig.Roles[role]
 	assert(roleConfig ~= nil, "Unknown enemy role: " .. tostring(role))
 	local components = self:GetComponentsOrThrow()
 	local entity = self:_CreateEntity()
 
 	self:_Set(entity, components.HealthComponent, {
-		current = roleConfig.maxHp,
-		max = roleConfig.maxHp,
+		Current = roleConfig.MaxHp,
+		Max = roleConfig.MaxHp,
 	})
 	self:SetTransformCFrame(entity, spawnCFrame)
 	self:_Set(entity, components.RoleComponent, {
-		role = role,
-		moveSpeed = roleConfig.moveSpeed,
-		damage = roleConfig.damage,
-		attackRange = roleConfig.attackRange,
-		attackCooldown = roleConfig.attackCooldown,
-		targetPreference = roleConfig.targetPreference,
+		Role = role,
+		MoveSpeed = roleConfig.MoveSpeed,
+		Damage = roleConfig.Damage,
+		AttackRange = roleConfig.AttackRange,
+		AttackCooldown = roleConfig.AttackCooldown,
+		TargetPreference = roleConfig.TargetPreference,
 	})
 	self:_Set(entity, components.PathStateComponent, {
-		goalPosition = nil,
-		isMoving = false,
+		GoalPosition = nil,
+		IsMoving = false,
 	})
 	self:_Set(entity, components.IdentityComponent, {
-		enemyId = enemyId,
-		role = role,
-		waveNumber = waveNumber,
+		EnemyId = enemyId,
+		Role = role,
+		WaveNumber = waveNumber,
 	})
 	self:_Set(entity, components.CombatActionComponent, self:BuildDefaultCombatAction())
 	self:_Set(entity, components.AttackCooldownComponent, {
-		Cooldown = roleConfig.attackCooldown,
+		Cooldown = roleConfig.AttackCooldown,
 		LastAttackTime = 0,
 	})
 	self:_Set(entity, components.BehaviorConfigComponent, {
@@ -99,8 +99,8 @@ function EnemyEntityFactory:SetGoalPosition(entity: number, goalPosition: Vector
 	end
 
 	self:_Set(entity, self._components.PathStateComponent, {
-		goalPosition = goalPosition,
-		isMoving = false,
+		GoalPosition = goalPosition,
+		IsMoving = false,
 	})
 end
 
@@ -112,8 +112,8 @@ function EnemyEntityFactory:ClearGoalPosition(entity: number)
 	end
 
 	self:_Set(entity, self._components.PathStateComponent, {
-		goalPosition = nil,
-		isMoving = false,
+		GoalPosition = nil,
+		IsMoving = false,
 	})
 	self:_Add(entity, self._components.DirtyTag)
 end
@@ -124,13 +124,13 @@ function EnemyEntityFactory:SetPathMoving(entity: number, isMoving: boolean)
 	if state == nil then
 		return
 	end
-	if state.isMoving == isMoving then
+	if state.IsMoving == isMoving then
 		return
 	end
 
 	self:_Set(entity, self._components.PathStateComponent, {
-		goalPosition = state.goalPosition,
-		isMoving = isMoving,
+		GoalPosition = state.GoalPosition,
+		IsMoving = isMoving,
 	})
 	self:_Add(entity, self._components.DirtyTag)
 end
@@ -173,10 +173,10 @@ function EnemyEntityFactory:ApplyDamage(entity: number, amount: number): boolean
 		return false
 	end
 
-	local nextHp = math.max(0, health.current - amount)
+	local nextHp = math.max(0, health.Current - amount)
 	self:_Set(entity, self._components.HealthComponent, {
-		current = nextHp,
-		max = health.max,
+		Current = nextHp,
+		Max = health.Max,
 	})
 	self:_Add(entity, self._components.DirtyTag)
 
@@ -215,7 +215,7 @@ function EnemyEntityFactory:GetEntityByEnemyId(enemyId: string): number?
 	self:RequireReady()
 	for _, entity in ipairs(self:QueryAliveEntities()) do
 		local identity = self:GetIdentity(entity)
-		if identity ~= nil and identity.enemyId == enemyId then
+		if identity ~= nil and identity.EnemyId == enemyId then
 			return entity
 		end
 	end
@@ -283,7 +283,7 @@ function EnemyEntityFactory:GetPosition(entity: number)
 	return self:GetTransform(entity)
 end
 
-function EnemyEntityFactory:GetNearestAliveEnemy(position: Vector3, maxRange: number): { entity: number, CFrame: CFrame }?
+function EnemyEntityFactory:GetNearestAliveEnemy(position: Vector3, maxRange: number): { Entity: number, CFrame: CFrame }?
 	self:RequireReady()
 
 	local nearestEntity = SpatialQuery.FindBestCandidate(
@@ -313,7 +313,7 @@ function EnemyEntityFactory:GetNearestAliveEnemy(position: Vector3, maxRange: nu
 	end
 
 	return {
-		entity = nearestEntity,
+		Entity = nearestEntity,
 		CFrame = nearestCFrame,
 	}
 end

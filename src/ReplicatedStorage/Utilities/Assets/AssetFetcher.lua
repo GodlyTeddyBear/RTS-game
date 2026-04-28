@@ -61,7 +61,7 @@ end
 
 	Example:
 		local enemyRegistry = AssetFetcher.CreateEnemyRegistry(Assets.Enemies)
-		local swarmModel = enemyRegistry:GetEnemyModel("swarm")
+		local swarmModel = enemyRegistry:GetEnemyModel("Swarm")
 ]=]
 function AssetFetcher.CreateEnemyRegistry(folder: Folder)
 	local EnemyRegistry = require(script.Parent.EnemyRegistry)

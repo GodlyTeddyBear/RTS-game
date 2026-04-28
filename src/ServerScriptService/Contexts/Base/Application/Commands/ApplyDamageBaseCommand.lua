@@ -58,7 +58,7 @@ function ApplyDamageBaseCommand:Execute(amount: number): Result.Result<boolean>
 		local didDie = self._entityFactory:ApplyDamage(amount)
 		self._syncService:SyncBaseState()
 
-		if previousHealth.hp > 0 and didDie and not self._hasEmittedDeath then
+		if previousHealth.Hp > 0 and didDie and not self._hasEmittedDeath then
 			self._hasEmittedDeath = true
 			GameEvents.Bus:Emit(GameEvents.Events.Base.BaseDestroyed)
 		end

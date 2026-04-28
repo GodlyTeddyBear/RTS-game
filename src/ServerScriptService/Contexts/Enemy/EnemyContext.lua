@@ -264,9 +264,9 @@ end
 	Returns the nearest alive enemy to a world position within a search radius.
 	@param position Vector3 -- Search origin.
 	@param maxRange number -- Maximum search distance in studs.
-	@return Result.Result<{ entity: number, cframe: CFrame }?> -- Closest enemy payload or `nil`.
+	@return Result.Result<{ Entity: number, CFrame: CFrame }?> -- Closest enemy payload or `nil`.
 ]=]
-function EnemyContext:GetNearestAliveEnemy(position: Vector3, maxRange: number): Result.Result<{ entity: number, cframe: CFrame }?>
+function EnemyContext:GetNearestAliveEnemy(position: Vector3, maxRange: number): Result.Result<{ Entity: number, CFrame: CFrame }?>
 	return Catch(function()
 		return Ok(self._getNearestAliveEnemyQuery:Execute(position, maxRange))
 	end, "Enemy:GetNearestAliveEnemy")

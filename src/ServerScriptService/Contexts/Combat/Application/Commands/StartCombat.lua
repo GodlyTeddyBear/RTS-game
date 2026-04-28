@@ -53,7 +53,7 @@ end
 function StartCombat:_AssignBehaviorTree(entity: number)
 	-- Resolve the enemy's role so the runtime can pick the correct behavior tree.
 	local role = self._enemyEntityFactory:GetRole(entity)
-	local roleName = if role and role.role then role.role else "swarm"
+	local roleName = if role and role.Role then role.Role else "Swarm"
 	local tree, tickInterval = self._behaviorRuntimeService:BuildEnemyBehaviorTree(roleName)
 
 	-- Replace any stale combat state before the entity re-enters the tick loop.

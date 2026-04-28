@@ -63,7 +63,7 @@ local function _isTargetInRange(entity: number, services: any): boolean
 		return false
 	end
 
-	local attackRange = role.attackRange
+	local attackRange = role.AttackRange
 	if type(attackRange) ~= "number" then
 		return false
 	end
@@ -213,7 +213,7 @@ function AttackBaseExecutor:OnTick(entity: number, _dt: number, services: any): 
 		return self:Fail(entity, "MissingAttackState")
 	end
 
-	local damage = role.damage
+	local damage = role.Damage
 	if type(damage) ~= "number" or damage <= 0 then
 		return self:Fail(entity, "InvalidAttackDamage")
 	end

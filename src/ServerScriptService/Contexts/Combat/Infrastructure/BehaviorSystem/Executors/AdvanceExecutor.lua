@@ -2,10 +2,8 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Promise = require(ReplicatedStorage.Packages.Promise)
-local PathfindingHelper = require(ReplicatedStorage.Utilities.PathfindingHelper)
 local BaseExecutor = require(ReplicatedStorage.Utilities.BaseExecutor)
-local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
+local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 
 --[=[
 	@class AdvanceExecutor
@@ -25,55 +23,23 @@ function AdvanceExecutor.new()
 	return setmetatable(self, AdvanceExecutor)
 end
 
-function AdvanceExecutor:_GetAgentParams(entity: number, services: any): { [string]: any }
-	local role = services.EnemyEntityFactory:GetRole(entity)
-	if role then
-		local config = CombatMovementConfig.AGENT_PARAMS_BY_ROLE[role.role]
-		if config then
-			return config
-		end
-	end
-	return CombatMovementConfig.DEFAULT_AGENT_PARAMS
-end
-
-function AdvanceExecutor:_StartPath(entity: number, services: any): boolean
-	local pathState = services.EnemyEntityFactory:GetPathState(entity)
-	if pathState == nil or pathState.goalPosition == nil then
-		return false
-	end
-
-	local path = PathfindingHelper.CreatePath(entity, {
-		EnemyEntityFactory = services.EnemyEntityFactory,
-	}, self:_GetAgentParams(entity, services), CombatMovementConfig.PATHFINDING)
-	if path == nil then
-		return false
-	end
-
-	services.EnemyEntityFactory:SetPathMoving(entity, true)
-	self:TrackAsyncResource(
-		entity,
-		"PathPromise",
-		PathfindingHelper.RunPath(path, pathState.goalPosition, entity, CombatMovementConfig.PATHFINDING),
-		"cancel"
-	)
-	return true
-end
-
 function AdvanceExecutor:CanStart(entity: number, _data: any?, services: any): (boolean, string?)
-	if self:GetAsyncResource(entity, "PathPromise") ~= nil then
-		self:Cancel(entity, services)
-	end
-
 	local pathState = services.EnemyEntityFactory:GetPathState(entity)
-	if pathState == nil or pathState.goalPosition == nil then
+	if pathState == nil or pathState.GoalPosition == nil then
 		return false, "MissingGoalPosition"
 	end
 
-	if not self:_StartPath(entity, services) then
-		return false, "PathStartFailed"
+	local role = services.EnemyEntityFactory:GetRole(entity)
+	if role == nil then
+		return false, "MissingRole"
 	end
 
-	return true, nil
+	local roleConfig = EnemyConfig.Roles[role.Role]
+	if roleConfig == nil or roleConfig.MovementMode == nil then
+		return false, "InvalidMovementMode"
+	end
+
+	return services.MovementService:StartAdvance(entity, roleConfig.MovementMode)
 end
 
 function AdvanceExecutor:CanContinue(entity: number, services: any): (boolean, string?)
@@ -82,7 +48,7 @@ function AdvanceExecutor:CanContinue(entity: number, services: any): (boolean, s
 		return false, "MissingPathState"
 	end
 
-	if pathState.goalPosition == nil then
+	if pathState.GoalPosition == nil then
 		return false, "MissingGoalPosition"
 	end
 
@@ -90,35 +56,24 @@ function AdvanceExecutor:CanContinue(entity: number, services: any): (boolean, s
 end
 
 function AdvanceExecutor:OnTick(entity: number, _dt: number, services: any): string
-	local promise = self:GetAsyncResource(entity, "PathPromise")
-	if promise == nil then
-		if self:_StartPath(entity, services) then
-			return self:Running()
-		end
-		return self:Fail(entity, "PathStartFailed")
-	end
-
-	local status = promise:getStatus()
-	if status == Promise.Status.Started then
+	local status, reason = services.MovementService:TickAdvance(entity)
+	if status == "Running" then
 		return self:Running()
 	end
 
-	self:ReleaseAsyncResource(entity, "PathPromise", false)
-	services.EnemyEntityFactory:SetPathMoving(entity, false)
-
-	if status == Promise.Status.Resolved then
+	if status == "Success" then
 		return self:Success()
 	end
 
-	return self:Fail(entity, "PathPromiseRejected")
+	return self:Fail(entity, reason)
 end
 
 function AdvanceExecutor:OnCancel(entity: number, services: any)
-	services.EnemyEntityFactory:SetPathMoving(entity, false)
+	services.MovementService:StopMovement(entity)
 end
 
 function AdvanceExecutor:OnComplete(entity: number, services: any)
-	services.EnemyEntityFactory:SetPathMoving(entity, false)
+	services.MovementService:StopMovement(entity)
 end
 
 return AdvanceExecutor

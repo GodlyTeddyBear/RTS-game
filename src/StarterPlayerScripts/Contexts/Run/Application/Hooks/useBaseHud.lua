@@ -35,8 +35,8 @@ local function _ToHudData(state: BaseState?): TBaseHudData
 	end
 
 	return {
-		hp = state.hp,
-		maxHp = state.maxHp,
+		hp = state.Hp,
+		maxHp = state.MaxHp,
 	}
 end
 

@@ -76,6 +76,8 @@ This file is the repo-level policy entry point for Codex.
 | [.codex/documents/coding-style/CODING_STYLE_GUIDE.md](.codex/documents/coding-style/CODING_STYLE_GUIDE.md) | Core coding-style rules for naming, types, tables, structure, and React API style. |
 | [.codex/documents/methods/PLAN_DEVELOPMENT.md](.codex/documents/methods/PLAN_DEVELOPMENT.md) | Standard output contract and rubric gates for GDD and implementation planning. |
 | [.codex/documents/methods/backend/CONTEXT_BOUNDARIES.md](.codex/documents/methods/backend/CONTEXT_BOUNDARIES.md) | Context boundary categories, Catch ownership, and bridge-only rules. |
+| [.codex/documents/methods/backend/BASE_APPLICATION_CONTRACTS.md](.codex/documents/methods/backend/BASE_APPLICATION_CONTRACTS.md) | BaseApplication/BaseCommand/BaseQuery contracts for constructor identity, dependency resolution, and event-name resolution boundaries. |
+| [.codex/documents/methods/backend/BASE_PERSISTENCE_CONTRACTS.md](.codex/documents/methods/backend/BASE_PERSISTENCE_CONTRACTS.md) | BasePersistenceService contracts for profile access, path traversal/write semantics, and Result boundary behavior. |
 | [.codex/documents/methods/backend/APPLICATION_CONTRACTS.md](.codex/documents/methods/backend/APPLICATION_CONTRACTS.md) | Application command and query method contracts and prohibitions. |
 | [.codex/documents/methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md](.codex/documents/methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md) | Domain policy and spec contracts and restore requirements. |
 | [.codex/documents/methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md](.codex/documents/methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md) | Infrastructure runtime and persistence boundaries, lifecycle ownership, and sync placement. |

@@ -35,22 +35,22 @@ function HandleGoalReached:Execute(entity: any, primaryPlayer: Player?, commande
 		local identity = self._entityFactory:GetIdentity(entity)
 		Ensure(identity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
 
-		local roleConfig = EnemyConfig.ROLES[identity.role]
+		local roleConfig = EnemyConfig.Roles[identity.Role]
 		Ensure(roleConfig ~= nil, "InvalidRole", Errors.INVALID_ROLE)
 
 		self._entityFactory:MarkGoalReached(entity)
 		local deathCFrame = self._entityFactory:GetDeathCFrame(entity) or CFrame.new()
-		GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.role, identity.waveNumber, deathCFrame)
+		GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.Role, identity.WaveNumber, deathCFrame)
 
 		Try(self._despawnEnemyCommand:Execute(entity))
 
 		if primaryPlayer and commanderContext then
-			local damageResult = commanderContext:ApplyDamage(primaryPlayer, roleConfig.damage)
+			local damageResult = commanderContext:ApplyDamage(primaryPlayer, roleConfig.Damage)
 			if not damageResult.success then
 				Result.MentionError("Enemy:HandleGoalReached", "Failed to apply commander damage", {
-					EnemyId = identity.enemyId,
-					Role = identity.role,
-					WaveNumber = identity.waveNumber,
+					EnemyId = identity.EnemyId,
+					Role = identity.Role,
+					WaveNumber = identity.WaveNumber,
 					PlayerUserId = primaryPlayer.UserId,
 				}, damageResult.type)
 			end

@@ -14,12 +14,12 @@ local CombatMovementConfig = {}
 	Role-specific SimplePath agent settings used by goal movement.
 ]=]
 CombatMovementConfig.AGENT_PARAMS_BY_ROLE = table.freeze({
-	swarm = table.freeze({
+	Swarm = table.freeze({
 		AgentRadius = 1.5,
 		AgentHeight = 5,
 		AgentCanJump = true,
 	}),
-	tank = table.freeze({
+	Tank = table.freeze({
 		AgentRadius = 2.5,
 		AgentHeight = 6,
 		AgentCanJump = true,

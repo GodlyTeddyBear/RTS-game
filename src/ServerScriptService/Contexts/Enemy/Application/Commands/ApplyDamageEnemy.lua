@@ -44,7 +44,7 @@ function ApplyDamageEnemy:Execute(entity: any, amount: number): Result.Result<bo
 		local didDie = self._entityFactory:ApplyDamage(entity, amount)
 		if didDie then
 			local deathCFrame = self._entityFactory:GetDeathCFrame(entity) or CFrame.new()
-			GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.role, identity.waveNumber, deathCFrame)
+			GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.Role, identity.WaveNumber, deathCFrame)
 			Try(self._despawnEnemyCommand:Execute(entity))
 			return Ok(true)
 		end

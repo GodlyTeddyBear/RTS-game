@@ -14,10 +14,10 @@ local BehaviorConfig = {}
 	Role-specific behavior tree tick intervals used by combat AI.
 ]=]
 BehaviorConfig.DEFAULTS_BY_ROLE = table.freeze({
-	swarm = table.freeze({
+	Swarm = table.freeze({
 		TickInterval = 0.1,
 	}),
-	tank = table.freeze({
+	Tank = table.freeze({
 		TickInterval = 0.2,
 	}),
 })

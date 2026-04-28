@@ -9,6 +9,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
 local BaseTypes = require(ReplicatedStorage.Contexts.Base.Types.BaseTypes)
 
 local Ok = Result.Ok
@@ -17,6 +18,7 @@ type BaseState = BaseTypes.BaseState
 
 local GetBaseStateQuery = {}
 GetBaseStateQuery.__index = GetBaseStateQuery
+setmetatable(GetBaseStateQuery, BaseQuery)
 
 --[=[
     Create a new base-state query.
@@ -24,7 +26,8 @@ GetBaseStateQuery.__index = GetBaseStateQuery
     @return GetBaseStateQuery -- Query instance.
 ]=]
 function GetBaseStateQuery.new()
-	return setmetatable({}, GetBaseStateQuery)
+	local self = BaseQuery.new("Base", "GetBaseStateQuery")
+	return setmetatable(self, GetBaseStateQuery)
 end
 
 --[=[
@@ -34,7 +37,7 @@ end
     @param _name string -- Module name supplied by the BaseContext framework.
 ]=]
 function GetBaseStateQuery:Init(registry: any, _name: string)
-	self._syncService = registry:Get("BaseSyncService")
+	self:_RequireDependency(registry, "_syncService", "BaseSyncService")
 end
 
 --[=[

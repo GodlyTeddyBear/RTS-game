@@ -57,17 +57,20 @@ Read in this order:
 3. [architecture/backend/ERROR_HANDLING.md](architecture/backend/ERROR_HANDLING.md)
 4. [methods/backend/CONTEXT_BOUNDARIES.md](methods/backend/CONTEXT_BOUNDARIES.md)
 5. [methods/backend/BASE_CONTEXT_CONTRACTS.md](methods/backend/BASE_CONTEXT_CONTRACTS.md)
-6. [methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md](methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md)
-7. [coding-style/CODING_STYLE.md](coding-style/CODING_STYLE.md)
-8. [coding-style/READABILITY.md](coding-style/READABILITY.md)
+6. [methods/backend/BASE_APPLICATION_CONTRACTS.md](methods/backend/BASE_APPLICATION_CONTRACTS.md)
+7. [methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md](methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md)
+8. [coding-style/CODING_STYLE.md](coding-style/CODING_STYLE.md)
+9. [coding-style/READABILITY.md](coding-style/READABILITY.md)
 
 Read these when relevant:
 
 - [architecture/backend/CQRS.md](architecture/backend/CQRS.md) for commands, queries, or restore flow
 - [architecture/backend/STATE_SYNC.md](architecture/backend/STATE_SYNC.md) for sync behavior
 - [methods/backend/APPLICATION_CONTRACTS.md](methods/backend/APPLICATION_CONTRACTS.md) for command/query method boundaries
+- [methods/backend/BASE_APPLICATION_CONTRACTS.md](methods/backend/BASE_APPLICATION_CONTRACTS.md) for shared BaseApplication/BaseCommand/BaseQuery helper contracts
 - [methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md](methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md) for policies, specs, and restore-path rules
 - [methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md](methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md) for runtime and persistence boundaries
+- [methods/backend/BASE_PERSISTENCE_CONTRACTS.md](methods/backend/BASE_PERSISTENCE_CONTRACTS.md) for shared BasePersistenceService method boundaries
 - [patterns/NEGATIVE_SPACE.md](patterns/NEGATIVE_SPACE.md) when the task includes failure handling, validation, or restore sequencing
 
 ### If you are working on backend infrastructure outside a context
@@ -82,6 +85,8 @@ Read in this order:
 Then add the specific backend contract that matches the change:
 
 - [methods/backend/ASSET_ACCESS_CONTRACTS.md](methods/backend/ASSET_ACCESS_CONTRACTS.md)
+- [methods/backend/BASE_APPLICATION_CONTRACTS.md](methods/backend/BASE_APPLICATION_CONTRACTS.md)
+- [methods/backend/BASE_PERSISTENCE_CONTRACTS.md](methods/backend/BASE_PERSISTENCE_CONTRACTS.md)
 - [methods/backend/EVENTS_CONTRACTS.md](methods/backend/EVENTS_CONTRACTS.md)
 - [methods/backend/DOMAIN_VALIDATOR_CONTRACTS.md](methods/backend/DOMAIN_VALIDATOR_CONTRACTS.md)
 - [methods/backend/ERRORS_CONTRACTS.md](methods/backend/ERRORS_CONTRACTS.md)

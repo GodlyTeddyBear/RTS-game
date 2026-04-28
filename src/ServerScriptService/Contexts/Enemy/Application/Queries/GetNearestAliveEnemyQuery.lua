@@ -11,7 +11,7 @@ function GetNearestAliveEnemyQuery:Init(registry: any, _name: string)
 	self._entityFactory = registry:Get("EnemyEntityFactory")
 end
 
-function GetNearestAliveEnemyQuery:Execute(position: Vector3, maxRange: number): { entity: number, cframe: CFrame }?
+function GetNearestAliveEnemyQuery:Execute(position: Vector3, maxRange: number): { Entity: number, CFrame: CFrame }?
 	return self._entityFactory:GetNearestAliveEnemy(position, maxRange)
 end
 

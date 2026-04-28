@@ -86,6 +86,7 @@ export type TBehaviorConfigComponent = {
 	.CurrentTime number -- Timestamp shared across executor calls for one tick.
 	.HandleGoalReached any -- Command used to resolve goal-reaching enemies.
 	.HitboxService any -- Combat hitbox service for contact-confirmed attacks.
+	.MovementService any -- Combat movement service for pathfinding and boids movement.
 	.CombatHitResolutionService any -- Shared melee hit resolution service.
 	.ProjectileService any -- Combat projectile service for server-authoritative ranged attacks.
 ]=]
@@ -100,6 +101,7 @@ export type TExecutorServices = {
 	CurrentTime: number,
 	HandleGoalReached: any,
 	HitboxService: any,
+	MovementService: any,
 	CombatHitResolutionService: any,
 	ProjectileService: any,
 }

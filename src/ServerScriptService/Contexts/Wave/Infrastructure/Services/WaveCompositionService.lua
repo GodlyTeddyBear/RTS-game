@@ -42,7 +42,7 @@ local function validateAllowedRoles(
 	isEndless: boolean
 ): Result.Result<WaveComposition>
 	for groupIndex, group in composition do
-		if EnemyConfig.PHASE2_ALLOWED_ROLES[group.role] ~= true then
+		if EnemyConfig.Phase2AllowedRoles[group.role] ~= true then
 			return Err("DisallowedEnemyRole", Errors.DISALLOWED_ENEMY_ROLE, {
 				WaveNumber = waveNumber,
 				IsEndless = isEndless,

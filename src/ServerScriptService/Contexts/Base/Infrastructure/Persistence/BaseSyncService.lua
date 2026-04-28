@@ -97,8 +97,8 @@ function BaseSyncService:GetStateReadOnly(): BaseState?
 	end
 
 	return {
-		hp = state.hp,
-		maxHp = state.maxHp,
+		Hp = state.Hp,
+		MaxHp = state.MaxHp,
 	}
 end
 

@@ -55,31 +55,31 @@ local WaveConfig = {
 		Scripted wave definitions used before endless scaling begins.
 	]=]
 	-- Scripted wave definitions used before the endless loop starts.
-	-- Phase 2 one-family lock: prior tank groups are converted to swarm at a 1:4 count ratio.
+	-- Phase 2 one-family lock: prior Tank groups are converted to Swarm at a 1:4 count ratio.
 	WAVE_TABLE = {
 		[1] = {
-			{ role = "swarm", count = 5, groupDelay = 0 },
-			{ role = "swarm", count = 3, groupDelay = 8 },
+			{ role = "Swarm", count = 5, groupDelay = 0 },
+			{ role = "Swarm", count = 3, groupDelay = 8 },
 		},
 		[2] = {
-			{ role = "swarm", count = 6, groupDelay = 0 },
-			{ role = "swarm", count = 4, groupDelay = 12 },
+			{ role = "Swarm", count = 6, groupDelay = 0 },
+			{ role = "Swarm", count = 4, groupDelay = 12 },
 		},
 		[3] = {
-			{ role = "swarm", count = 8, groupDelay = 0 },
-			{ role = "swarm", count = 4, groupDelay = 10 },
+			{ role = "Swarm", count = 8, groupDelay = 0 },
+			{ role = "Swarm", count = 4, groupDelay = 10 },
 		},
 		[4] = {
-			{ role = "swarm", count = 10, groupDelay = 0 },
-			{ role = "swarm", count = 8, groupDelay = 12 },
+			{ role = "Swarm", count = 10, groupDelay = 0 },
+			{ role = "Swarm", count = 8, groupDelay = 12 },
 		},
 		[5] = {
-			{ role = "swarm", count = 12, groupDelay = 0 },
-			{ role = "swarm", count = 8, groupDelay = 9 },
+			{ role = "Swarm", count = 12, groupDelay = 0 },
+			{ role = "Swarm", count = 8, groupDelay = 9 },
 		},
 		[6] = {
-			{ role = "swarm", count = 14, groupDelay = 0 },
-			{ role = "swarm", count = 12, groupDelay = 10 },
+			{ role = "Swarm", count = 14, groupDelay = 0 },
+			{ role = "Swarm", count = 12, groupDelay = 10 },
 		},
 	},
 

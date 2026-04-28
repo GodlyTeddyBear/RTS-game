@@ -4,8 +4,8 @@ option ClientOutput = "Generated/BaseSyncClient.luau"
 option RemoteScope = "BASE_SYNC"
 
 struct BaseStatePayload {
-	hp: f64?,
-	maxHp: f64?,
+	Hp: f64?,
+	MaxHp: f64?,
 }
 
 struct InitPayload {

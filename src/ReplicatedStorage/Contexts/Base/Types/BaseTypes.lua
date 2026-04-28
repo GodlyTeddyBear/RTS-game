@@ -9,15 +9,15 @@
 local BaseTypes = {}
 
 export type BaseState = {
-	hp: number,
-	maxHp: number,
+	Hp: number,
+	MaxHp: number,
 }
 
 export type BaseAtomState = BaseState?
 
 export type HealthComponent = {
-	hp: number,
-	maxHp: number,
+	Hp: number,
+	MaxHp: number,
 }
 
 export type InstanceRefComponent = {

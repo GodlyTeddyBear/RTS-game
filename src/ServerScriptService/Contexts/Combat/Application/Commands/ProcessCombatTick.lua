@@ -69,6 +69,7 @@ function ProcessCombatTick:Init(registry: any, _name: string)
 	self._perceptionService = registry:Get("CombatPerceptionService")
 	self._handleGoalReachedCommand = registry:Get("HandleGoalReached")
 	self._hitboxService = registry:Get("HitboxService")
+	self._movementService = registry:Get("MovementService")
 	self._projectileService = registry:Get("ProjectileService")
 end
 
@@ -293,6 +294,7 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 			CurrentTime = currentTime,
 			HandleGoalReached = self._handleGoalReachedCommand,
 			HitboxService = self._hitboxService,
+			MovementService = self._movementService,
 			CombatHitResolutionService = self._combatHitResolutionService,
 			ProjectileService = self._projectileService,
 		}

@@ -11,7 +11,7 @@ local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local EnemySpecs = {}
 
 function EnemySpecs.IsValidRole(role: string): boolean
-	return EnemyConfig.ROLES[role] ~= nil
+	return EnemyConfig.Roles[role] ~= nil
 end
 
 function EnemySpecs.HasValidSpawnCFrame(spawnCFrame: CFrame): boolean

@@ -12,6 +12,7 @@ local CombatBehaviorRuntimeService = require(script.Parent.Infrastructure.Servic
 local CombatHitResolutionService = require(script.Parent.Infrastructure.Services.CombatHitResolutionService)
 local HitboxService = require(script.Parent.Infrastructure.Services.HitboxService)
 local LockOnService = require(script.Parent.Infrastructure.Services.LockOnService)
+local MovementService = require(script.Parent.Infrastructure.Services.MovementService)
 local ProjectileService = require(script.Parent.Infrastructure.Services.ProjectileService)
 local CombatPerceptionService = require(script.Parent.CombatDomain.Services.CombatPerceptionService)
 
@@ -45,6 +46,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "LockOnService",
 		Module = LockOnService,
 		CacheAs = "_lockOnService",
+	},
+	{
+		Name = "MovementService",
+		Module = MovementService,
+		CacheAs = "_movementService",
 	},
 	{
 		Name = "ProjectileService",
@@ -196,6 +202,7 @@ function CombatContext:KnitInit()
 	self._hitboxService = nil
 	self._combatHitResolutionService = nil
 	self._lockOnService = nil
+	self._movementService = nil
 	self._projectileService = nil
 	self._goalPosition = nil :: Vector3?
 

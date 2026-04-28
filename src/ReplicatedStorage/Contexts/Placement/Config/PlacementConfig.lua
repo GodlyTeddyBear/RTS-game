@@ -21,7 +21,6 @@ PlacementConfig.STRUCTURE_PLACEMENT_COSTS = table.freeze({
 
 -- Base disallowed zones are global: placement is allowed by default outside these zones.
 PlacementConfig.BASE_DISALLOWED_ZONE_TYPES = table.freeze({
-	lane = true,
 	blocked = true,
 })
 

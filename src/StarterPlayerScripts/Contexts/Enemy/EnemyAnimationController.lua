@@ -51,9 +51,9 @@ end
 local function _ResolveDisplayName(model: Model): string
 	local enemyRole = model:GetAttribute("EnemyRole")
 	if type(enemyRole) == "string" then
-		local roleConfig = EnemyConfig.ROLES[enemyRole]
-		if roleConfig and type(roleConfig.displayName) == "string" then
-			return roleConfig.displayName
+		local roleConfig = EnemyConfig.Roles[enemyRole]
+		if roleConfig and type(roleConfig.DisplayName) == "string" then
+			return roleConfig.DisplayName
 		end
 		return enemyRole
 	end

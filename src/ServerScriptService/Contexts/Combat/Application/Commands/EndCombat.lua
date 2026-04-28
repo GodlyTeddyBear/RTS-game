@@ -75,6 +75,7 @@ function EndCombat:Init(registry: any, _name: string)
 	self._combatHitResolutionService = registry:Get("CombatHitResolutionService")
 	self._hitboxService = registry:Get("HitboxService")
 	self._lockOnService = registry:Get("LockOnService")
+	self._movementService = registry:Get("MovementService")
 end
 
 --[=[
@@ -115,6 +116,7 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 			StructureContext = self._structureContext,
 			CurrentTime = os.clock(),
 			HitboxService = self._hitboxService,
+			MovementService = self._movementService,
 			CombatHitResolutionService = self._combatHitResolutionService,
 		}
 
@@ -152,6 +154,7 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 
 		self._hitboxService:CleanupAll()
 		self._combatHitResolutionService:CleanupAll()
+		self._movementService:CleanupAll()
 
 		if targetUserId then
 			self._loopService:StopCombat(targetUserId)
