@@ -1,9 +1,14 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local BaseGameObjectSyncService = require(ReplicatedStorage.Utilities.BaseGameObjectSyncService)
+
 local RUN_SPEED_THRESHOLD = 17
 
 local EnemyGameObjectSyncService = {}
 EnemyGameObjectSyncService.__index = EnemyGameObjectSyncService
+setmetatable(EnemyGameObjectSyncService, { __index = BaseGameObjectSyncService })
 
 local function _SetAttributeIfChanged(model: Model, attributeName: string, value: any)
 	if model:GetAttribute(attributeName) == value then
@@ -34,96 +39,64 @@ local function _ComputeAnimationState(pathState: any, role: any, combatAction: a
 end
 
 function EnemyGameObjectSyncService.new()
-	return setmetatable({}, EnemyGameObjectSyncService)
+	return setmetatable(BaseGameObjectSyncService.new("Enemy"), EnemyGameObjectSyncService)
 end
 
-function EnemyGameObjectSyncService:Init(registry: any, _name: string)
-	self.World = registry:Get("World")
-	self.Components = registry:Get("EnemyComponentRegistry"):GetComponents()
-	self.EnemyEntityFactory = registry:Get("EnemyEntityFactory")
-	self.EnemyInstanceFactory = registry:Get("EnemyInstanceFactory")
+function EnemyGameObjectSyncService:_GetComponentRegistryName(): string
+	return "EnemyComponentRegistry"
 end
 
-function EnemyGameObjectSyncService:PollPositions()
-	for _, entity in self.EnemyEntityFactory:QueryAliveEntities() do
-		local model = self.EnemyInstanceFactory:GetInstance(entity)
-		if model and model.Parent ~= nil then
-			local success, err = pcall(function()
-				self.EnemyEntityFactory:UpdatePosition(entity, model:GetPivot())
-			end)
-			if not success then
-				warn("[EnemyGameObjectSync] Failed to poll position:", entity, "-", err)
-			end
-		end
-	end
+function EnemyGameObjectSyncService:_GetEntityFactoryName(): string
+	return "EnemyEntityFactory"
 end
 
-function EnemyGameObjectSyncService:SyncDirtyEntities()
-	for entity in self.World:query(self.Components.DirtyTag) do
-		local success, err = pcall(function()
-			self:_SyncEntity(entity)
-		end)
-
-		if not success then
-			warn("[EnemyGameObjectSync] Failed to sync entity:", entity, "-", err)
-		end
-
-		self.World:remove(entity, self.Components.DirtyTag)
-	end
+function EnemyGameObjectSyncService:_GetInstanceFactoryName(): string?
+	return "EnemyInstanceFactory"
 end
 
-function EnemyGameObjectSyncService:RegisterEntity(entity: any, model: Model?)
-	local resolvedModel = model
-	if resolvedModel == nil then
-		local modelRef = self.World:get(entity, self.Components.ModelRefComponent)
-		if modelRef and modelRef.Model then
-			resolvedModel = modelRef.Model
-		end
-	end
-
-	if resolvedModel == nil then
-		return
-	end
-
-	self:_SyncEntity(entity, resolvedModel)
+function EnemyGameObjectSyncService:_QueryPollEntities(): { number }
+	return self:GetEntityFactoryOrThrow():QueryAliveEntities()
 end
 
-function EnemyGameObjectSyncService:_SyncEntity(entity: any, explicitModel: Model?)
-	local model = explicitModel or self.EnemyInstanceFactory:GetInstance(entity)
-	if not model then
-		return
-	end
+function EnemyGameObjectSyncService:_GetDirtyTag(): any?
+	return self:GetComponentsOrThrow().DirtyTag
+end
 
-	local health = self.EnemyEntityFactory:GetHealth(entity)
-	local role = self.EnemyEntityFactory:GetRole(entity)
-	local pathState = self.EnemyEntityFactory:GetPathState(entity)
-	local combatAction = self.EnemyEntityFactory:GetCombatAction(entity)
+function EnemyGameObjectSyncService:_ClearDirty(entity: number)
+	self:GetWorldOrThrow():remove(entity, self:GetComponentsOrThrow().DirtyTag)
+end
+
+function EnemyGameObjectSyncService:_PollEntity(entity: number, model: Model)
+	self:GetEntityFactoryOrThrow():UpdatePosition(entity, model:GetPivot())
+end
+
+function EnemyGameObjectSyncService:_SyncEntity(entity: number, model: Model)
+	local entityFactory = self:GetEntityFactoryOrThrow()
+	local components = self:GetComponentsOrThrow()
+	local world = self:GetWorldOrThrow()
+
+	local health = entityFactory:GetHealth(entity)
+	local role = entityFactory:GetRole(entity)
+	local pathState = entityFactory:GetPathState(entity)
+	local combatAction = entityFactory:GetCombatAction(entity)
 
 	if health then
-		model:SetAttribute("Health", health.current)
-		model:SetAttribute("MaxHealth", health.max)
+		self:SetAttributeIfChanged(model, "Health", health.current)
+		self:SetAttributeIfChanged(model, "MaxHealth", health.max)
 	end
 
 	if role then
-		model:SetAttribute("MoveSpeed", role.moveSpeed)
-		model:SetAttribute("Damage", role.damage)
-		model:SetAttribute("TargetPreference", role.targetPreference)
+		self:SetAttributeIfChanged(model, "MoveSpeed", role.moveSpeed)
+		self:SetAttributeIfChanged(model, "Damage", role.damage)
+		self:SetAttributeIfChanged(model, "TargetPreference", role.targetPreference)
 	end
 
 	local nextAnimationState = _ComputeAnimationState(pathState, role, combatAction)
 	_SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
 	_SetAttributeIfChanged(model, "AnimationLooping", nextAnimationState ~= "AttackStructure" and nextAnimationState ~= "AttackBase")
 
-	model:SetAttribute("Alive", self.World:has(entity, self.Components.AliveTag))
-	model:SetAttribute("GoalReached", self.World:has(entity, self.Components.GoalReachedTag))
-end
-
-function EnemyGameObjectSyncService:GetInstanceForEntity(entity: any): Model?
-	return self.EnemyInstanceFactory:GetInstance(entity) :: Model?
-end
-
-function EnemyGameObjectSyncService:CleanupAll()
-	return
+	self:SetAttributeIfChanged(model, "Alive", world:has(entity, components.AliveTag))
+	self:SetAttributeIfChanged(model, "GoalReached", world:has(entity, components.GoalReachedTag))
 end
 
 return EnemyGameObjectSyncService

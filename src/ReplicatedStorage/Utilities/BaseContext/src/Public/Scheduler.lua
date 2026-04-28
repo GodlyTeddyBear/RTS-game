@@ -51,6 +51,9 @@ end
 	@param phaseName string -- Server scheduler phase name.
 	@param targetField string -- Service field containing the target object.
 	@param methodName string? -- Optional poll method name override.
+	Poll systems are for services that must sample live runtime state and write it
+	back into ECS or another authoritative store. They are not interchangeable
+	with sync systems, which only project authoritative state onto instances.
 ]=]
 function SchedulerMethods:RegisterPollSystem(targetField: string, methodName: string?, phaseName: string)
 	self:RegisterMethodSystem(phaseName, targetField, MethodResolver.ResolveMethodName(methodName, Config.DefaultPollMethod, "BaseContext scheduler methodName"))
@@ -91,6 +94,8 @@ end
 	@param phaseName string -- Server scheduler phase name.
 	@param targetField string -- Service field containing the target object.
 	@param methodName string? -- Optional sync method name override.
+	Sync systems are for projection-only services that push authoritative ECS state
+	out onto their bound instance. They do not sample runtime state back into ECS.
 ]=]
 function SchedulerMethods:RegisterSyncSystem(targetField: string, methodName: string?, phaseName: string)
 	self:RegisterMethodSystem(phaseName, targetField, MethodResolver.ResolveMethodName(methodName, Config.DefaultSyncMethod, "BaseContext scheduler methodName"))

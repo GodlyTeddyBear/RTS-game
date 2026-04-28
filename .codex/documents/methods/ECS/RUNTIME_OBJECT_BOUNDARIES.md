@@ -37,6 +37,13 @@ Canonical architecture references:
 - Reads authoritative ECS state and pushes runtime attributes, animation flags, transforms, or other mutable projection onto the resolved instance.
 - Does not create instances, destroy instances, own reveal bindings, or mutate JECS state as part of projection.
 
+### Scheduler Usage
+
+- Use `RegisterSyncSystem(...)` when the service only projects ECS state onto the bound instance.
+- Use `RegisterPollSystem(...)` when the same service must sample live instance state and write that data back into ECS.
+- A context may register both hooks for the same game-object sync service when projection and polling are both required.
+- Poll registration is an execution concern, not a separate ownership layer.
+
 ---
 
 ## Dependency Contract

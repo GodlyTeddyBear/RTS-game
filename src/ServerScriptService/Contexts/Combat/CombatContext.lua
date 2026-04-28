@@ -214,7 +214,7 @@ function CombatContext:KnitStart()
 	CombatBaseContext:KnitStart()
 
 	-- Lane movement sync still runs independently from combat AI ticks.
-	CombatBaseContext:RegisterPollSystem("_enemyGameObjectSyncService", "PollPositions", "EnemyPositionPoll")
+	CombatBaseContext:RegisterPollSystem("_enemyGameObjectSyncService", nil, "EnemyPositionPoll")
 
 	-- Drive BT evaluation and executor updates for every active combat session.
 	CombatBaseContext:RegisterSchedulerSystem("CombatTick", function()

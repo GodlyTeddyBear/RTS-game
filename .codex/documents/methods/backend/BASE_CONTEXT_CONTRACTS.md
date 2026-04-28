@@ -34,6 +34,9 @@ Canonical architecture references:
 - `ExternalServices` resolves other Knit services during `KnitStart`.
 - `ExternalDependencies` resolves values from already registered services during `KnitStart`; the source method must return a `Result`.
 - `StartOrder` overrides registry start order and may contain only known layer names.
+- `RegisterSyncSystem(...)` is for projection-only runtime services that push authoritative ECS state onto instances.
+- `RegisterPollSystem(...)` is for runtime services that must read live instance state back into ECS or another authoritative store.
+- A single game-object sync service may participate in both registrations when it both projects and polls; the two scheduler hooks are not interchangeable.
 - `ProfileLifecycle` wires persistence loader, load, save, removing, and backfill behavior.
 - `Teardown` declares cleanup hooks and fields for `baseContext:Destroy()`.
 
