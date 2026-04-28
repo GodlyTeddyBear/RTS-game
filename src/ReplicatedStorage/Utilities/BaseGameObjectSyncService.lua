@@ -1,5 +1,11 @@
 --!strict
 
+--[=[
+	@type TRegistry
+	@within BaseGameObjectSyncService
+	@private
+	Minimal dependency-registry surface required by the sync base.
+]=]
 type TRegistry = {
 	Get: (self: any, name: string) -> any,
 }
@@ -13,6 +19,12 @@ type TRegistry = {
 	hooks they need. The base class handles readiness checks, model resolution,
 	fail-safe sync/poll execution, and dirty-tag collection without taking JECS
 	mutation ownership.
+
+	This layer sits between the entity factory and the instance factory. It may
+	resolve a model from an explicit argument, the optional instance factory, or
+	the entity factory's model ref, but it does not create models, mutate JECS
+	state, or own reveal bindings. Those responsibilities stay with the entity
+	and instance factory layers.
 	@server
 ]=]
 local BaseGameObjectSyncService = {}
@@ -252,27 +264,47 @@ end
 
 -- ── Private Overrides ─────────────────────────────────────────────────────────
 
--- Derived services must point the base helper at the context's component registry.
+--[=[
+	Derived services must point the base helper at the context's component registry.
+	@within BaseGameObjectSyncService
+	@private
+]=]
 function BaseGameObjectSyncService:_GetComponentRegistryName(): string
 	error(("%sGameObjectSyncService must implement _GetComponentRegistryName"):format(self._contextName))
 end
 
--- Derived services must point the base helper at the context's entity factory.
+--[=[
+	Derived services must point the base helper at the context's entity factory.
+	@within BaseGameObjectSyncService
+	@private
+]=]
 function BaseGameObjectSyncService:_GetEntityFactoryName(): string
 	error(("%sGameObjectSyncService must implement _GetEntityFactoryName"):format(self._contextName))
 end
 
--- Derived services may opt into a dedicated instance factory when they own one.
+--[=[
+	Derived services may opt into a dedicated instance factory when they own one.
+	@within BaseGameObjectSyncService
+	@private
+]=]
 function BaseGameObjectSyncService:_GetInstanceFactoryName(): string?
 	return nil
 end
 
--- Derived services can extend initialization after the base dependencies are ready.
+--[=[
+	Derived services can extend initialization after the base dependencies are ready.
+	@within BaseGameObjectSyncService
+	@private
+]=]
 function BaseGameObjectSyncService:_OnInit(_registry: TRegistry, _name: string)
 	return
 end
 
--- Resolves models in priority order so explicit overrides win over factory lookups.
+--[=[
+	Resolves models in priority order so explicit overrides win over factory lookups.
+	@within BaseGameObjectSyncService
+	@private
+]=]
 function BaseGameObjectSyncService:_ResolveModel(entity: number, explicitModel: Model?): Model?
 	if explicitModel ~= nil then
 		return explicitModel
@@ -298,16 +330,30 @@ function BaseGameObjectSyncService:_ResolveModel(entity: number, explicitModel: 
 	return nil
 end
 
+--[=[
+	Returns the entity list that should be synced during `SyncAll()`.
+	@within BaseGameObjectSyncService
+	@private
+]=]
 function BaseGameObjectSyncService:_QueryAllEntities(): { number }
 	return {}
 end
 
+--[=[
+	Returns the entity list that should be polled during `Poll()`.
+	@within BaseGameObjectSyncService
+	@private
+]=]
 function BaseGameObjectSyncService:_QueryPollEntities(): { number }
 	return {}
 end
 
--- Collects dirty entities through the context's dirty tag when the derived
--- service uses tag-driven sync invalidation.
+--[=[
+	Collects dirty entities through the context's dirty tag when the derived
+	service uses tag-driven sync invalidation.
+	@within BaseGameObjectSyncService
+	@private
+]=]
 function BaseGameObjectSyncService:_QueryDirtyEntities(): { number }
 	local dirtyTag = self:_GetDirtyTag()
 	if dirtyTag == nil then
@@ -322,26 +368,47 @@ function BaseGameObjectSyncService:_QueryDirtyEntities(): { number }
 	return entities
 end
 
+--[=[
+	Returns the dirty tag used by `SyncDirtyEntities()`, if the derived service has one.
+	@within BaseGameObjectSyncService
+	@private
+]=]
 function BaseGameObjectSyncService:_GetDirtyTag(): any?
 	return nil
 end
 
--- Derived services clear their own dirty markers after a successful sync pass.
+--[=[
+	Derived services clear their own dirty markers after a successful sync pass.
+	@within BaseGameObjectSyncService
+	@private
+]=]
 function BaseGameObjectSyncService:_ClearDirty(_entity: number)
 	return
 end
 
--- Derived services implement the actual model-to-ECS sync work here.
+--[=[
+	Derived services implement the actual model-to-ECS sync work here.
+	@within BaseGameObjectSyncService
+	@private
+]=]
 function BaseGameObjectSyncService:_SyncEntity(_entity: number, _model: Model)
 	error(("%sGameObjectSyncService must implement _SyncEntity"):format(self._contextName))
 end
 
--- Derived services can override this to copy runtime model state back into ECS.
+--[=[
+	Derived services can override this to copy runtime model state back into ECS.
+	@within BaseGameObjectSyncService
+	@private
+]=]
 function BaseGameObjectSyncService:_PollEntity(_entity: number, _model: Model)
 	return
 end
 
--- Centralizes failure logging so one bad entity does not abort the whole pass.
+--[=[
+	Centralizes failure logging so one bad entity does not abort the whole pass.
+	@within BaseGameObjectSyncService
+	@private
+]=]
 function BaseGameObjectSyncService:_OnSyncFailed(entity: number, err: any, operation: string)
 	warn(("[%sGameObjectSyncService] Failed during %s: %s - %s"):format(
 		self._contextName,
@@ -351,10 +418,20 @@ function BaseGameObjectSyncService:_OnSyncFailed(entity: number, err: any, opera
 	))
 end
 
+--[=[
+	Runs derived cleanup behavior when the service is torn down.
+	@within BaseGameObjectSyncService
+	@private
+]=]
 function BaseGameObjectSyncService:_OnCleanupAll()
 	return
 end
 
+--[=[
+	@within BaseGameObjectSyncService
+	@private
+	Resolves a model and safely runs the derived sync step for one entity.
+]=]
 function BaseGameObjectSyncService:_SafeSyncEntity(entity: number, explicitModel: Model?, operation: string, shouldClearDirty: boolean)
 	-- Resolve the target model and skip the pass when the entity no longer has a live model.
 	local model = self:_ResolveModel(entity, explicitModel)

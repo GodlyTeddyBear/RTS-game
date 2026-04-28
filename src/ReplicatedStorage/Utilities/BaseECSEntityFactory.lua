@@ -24,6 +24,13 @@ type ECSRevealBinding = {
 	@class BaseECSEntityFactory
 	Owns the JECS world/component access surface for one bounded ECS context and
 	manages deferred destruction plus reveal binding lifecycle.
+
+	This base creates and mutates ECS entities, exposes typed component accessors
+	and queries, and owns deferred destruction. It may store a model reference or
+	transform for an entity, but it does not create Workspace instances or apply
+	model reveal on its own. `BaseInstanceFactory` owns model creation and reveal
+	application, while `BaseGameObjectSyncService` bridges entity state onto the
+	resolved model.
 	@server
 ]=]
 local BaseECSEntityFactory = {}
@@ -89,11 +96,20 @@ function BaseECSEntityFactory:InitBase(registry: any, componentRegistryName: str
 	end
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Returns the component registry name owned by the derived factory.
+]=]
 function BaseECSEntityFactory:_GetComponentRegistryName(): string
 	error(("%sEntityFactory must implement _GetComponentRegistryName"):format(self._contextName))
 end
 
--- Runs the derived init hook after the base world and component lookup are ready.
+--[=[
+	Runs the derived init hook after the base world and component lookup are ready.
+	@within BaseECSEntityFactory
+	@private
+]=]
 function BaseECSEntityFactory:_OnInit(_registry: any, _name: string, _componentRegistry: any)
 	return
 end
@@ -107,7 +123,11 @@ function BaseECSEntityFactory:RequireReady()
 	assert(self._components ~= nil, ("%sEntityFactory: missing components"):format(self._contextName))
 end
 
--- Backward-compatible alias for pre-v2 call sites.
+--[=[
+	Backward-compatible alias for pre-v2 call sites.
+	@within BaseECSEntityFactory
+	@private
+]=]
 function BaseECSEntityFactory:_RequireReady()
 	self:RequireReady()
 end
@@ -122,7 +142,11 @@ function BaseECSEntityFactory:GetWorldOrThrow()
 	return self._world
 end
 
--- Internal helper for derived methods that need the world without repeating checks.
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Returns the world without repeating the public accessor name.
+]=]
 function BaseECSEntityFactory:_GetWorldUnsafe()
 	self:RequireReady()
 	return self._world
@@ -138,18 +162,32 @@ function BaseECSEntityFactory:GetComponentsOrThrow()
 	return self._components
 end
 
--- Centralized existence guard for all direct JECS mutations.
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Validates that the supplied entity exists before JECS mutation.
+]=]
 function BaseECSEntityFactory:_RequireEntityExists(entity: number, methodName: string?)
 	self:RequireReady()
 	assert(type(entity) == "number", ("%sEntityFactory:%s requires entity"):format(self._contextName, methodName or "Unknown"))
 	assert(self:_Exists(entity), ("%sEntityFactory:%s entity does not exist"):format(self._contextName, methodName or "Unknown"))
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Creates a new JECS entity in the context world.
+]=]
 function BaseECSEntityFactory:_CreateEntity(): number
 	local world = self:GetWorldOrThrow()
 	return world:entity()
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Creates a child entity and links it to the supplied parent entity.
+]=]
 function BaseECSEntityFactory:_CreateChildEntity(parentEntity: number): number
 	self:_RequireEntityExists(parentEntity, "_CreateChildEntity")
 	local childEntity = self:_CreateEntity()
@@ -157,59 +195,115 @@ function BaseECSEntityFactory:_CreateChildEntity(parentEntity: number): number
 	return childEntity
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Sets the JECS name component for an entity.
+]=]
 function BaseECSEntityFactory:_SetName(entity: number, name: string)
 	self:_RequireEntityExists(entity, "_SetName")
 	assert(type(name) == "string" and name ~= "", ("%sEntityFactory:_SetName requires name"):format(self._contextName))
 	self._world:set(entity, JECS.Name, name)
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Sets a component value on an entity.
+]=]
 function BaseECSEntityFactory:_Set(entity: number, component: any, value: any)
 	self:_RequireEntityExists(entity, "_Set")
 	self._world:set(entity, component, value)
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Adds a tag or component pair to an entity.
+]=]
 function BaseECSEntityFactory:_Add(entity: number, tag: any)
 	self:_RequireEntityExists(entity, "_Add")
 	self._world:add(entity, tag)
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Removes a tag or component from an entity.
+]=]
 function BaseECSEntityFactory:_Remove(entity: number, tag: any)
 	self:_RequireEntityExists(entity, "_Remove")
 	self._world:remove(entity, tag)
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Reads a component or tag from an entity.
+]=]
 function BaseECSEntityFactory:_Get(entity: number, component: any)
 	self:_RequireEntityExists(entity, "_Get")
 	return self._world:get(entity, component)
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Checks whether an entity has a component or tag.
+]=]
 function BaseECSEntityFactory:_Has(entity: number, componentOrTag: any): boolean
 	self:_RequireEntityExists(entity, "_Has")
 	return self._world:has(entity, componentOrTag)
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Checks whether the entity still exists in the world.
+]=]
 function BaseECSEntityFactory:_Exists(entity: number): boolean
 	self:RequireReady()
 	return self._world:exists(entity)
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Deletes an entity immediately after clearing reveal state.
+]=]
 function BaseECSEntityFactory:_DeleteNow(entity: number)
 	self:_RequireEntityExists(entity, "_DeleteNow")
 	self:_ClearRevealForEntity(entity)
 	self._world:delete(entity)
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Sets the `ChildOf` parent relationship for two entities.
+]=]
 function BaseECSEntityFactory:_SetParent(childEntity: number, parentEntity: number)
 	self:_RequireEntityExists(childEntity, "_SetParent")
 	self:_RequireEntityExists(parentEntity, "_SetParent")
 	self:_Add(childEntity, JECS.pair(self._childOfComponent, parentEntity))
 end
 
+--[=[
+	Returns the parent entity for a child-of relationship, if one exists.
+	@within BaseECSEntityFactory
+	@param entity number -- Entity id to inspect.
+	@return number? -- Parent entity id or nil.
+]=]
 function BaseECSEntityFactory:GetParentEntity(entity: number): number?
 	self:_RequireEntityExists(entity, "GetParentEntity")
 	return self._world:target(entity, self._childOfComponent)
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Configures the model-ref and transform components used by spatial accessors.
+]=]
 function BaseECSEntityFactory:_ConfigureSpatialComponents(modelRefComponentKey: string?, transformComponentKey: string?)
 	self:RequireReady()
 
@@ -226,45 +320,96 @@ function BaseECSEntityFactory:_ConfigureSpatialComponents(modelRefComponentKey: 
 	end
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Returns the configured model-ref component.
+]=]
 function BaseECSEntityFactory:_GetModelRefComponent()
 	assert(self._modelRefComponent ~= nil, ("%sEntityFactory: model ref component not configured"):format(self._contextName))
 	return self._modelRefComponent
 end
 
+--[=[
+	@within BaseECSEntityFactory
+	@private
+	Returns the configured transform component.
+]=]
 function BaseECSEntityFactory:_GetTransformComponent()
 	assert(self._transformComponent ~= nil, ("%sEntityFactory: transform component not configured"):format(self._contextName))
 	return self._transformComponent
 end
 
+--[=[
+	Sets the model reference component for an entity.
+	@within BaseECSEntityFactory
+	@param entity number -- Entity id to update.
+	@param model Model -- Live model to bind to the entity.
+]=]
 function BaseECSEntityFactory:SetModelRef(entity: number, model: Model)
 	self:_Set(entity, self:_GetModelRefComponent(), {
 		Model = model,
 	})
 end
 
+--[=[
+	Clears the model reference component for an entity.
+	@within BaseECSEntityFactory
+	@param entity number -- Entity id to update.
+]=]
 function BaseECSEntityFactory:ClearModelRef(entity: number)
 	self:_Remove(entity, self:_GetModelRefComponent())
 end
 
+--[=[
+	Returns the model reference component for an entity, if one exists.
+	@within BaseECSEntityFactory
+	@param entity number -- Entity id to inspect.
+	@return { Model: Model }? -- Stored model reference or nil.
+]=]
 function BaseECSEntityFactory:GetModelRef(entity: number): { Model: Model }?
 	return self:_Get(entity, self:_GetModelRefComponent())
 end
 
+--[=[
+	Returns the live model bound to an entity, if one exists.
+	@within BaseECSEntityFactory
+	@param entity number -- Entity id to inspect.
+	@return Model? -- Bound model or nil.
+]=]
 function BaseECSEntityFactory:GetEntityModel(entity: number): Model?
 	local modelRef = self:GetModelRef(entity)
 	return modelRef and modelRef.Model or nil
 end
 
+--[=[
+	Sets the transform component for an entity.
+	@within BaseECSEntityFactory
+	@param entity number -- Entity id to update.
+	@param cframe CFrame -- World-space transform to store.
+]=]
 function BaseECSEntityFactory:SetTransformCFrame(entity: number, cframe: CFrame)
 	self:_Set(entity, self:_GetTransformComponent(), {
 		CFrame = cframe,
 	})
 end
 
+--[=[
+	Returns the stored transform component for an entity, if one exists.
+	@within BaseECSEntityFactory
+	@param entity number -- Entity id to inspect.
+	@return { CFrame: CFrame }? -- Stored transform or nil.
+]=]
 function BaseECSEntityFactory:GetTransform(entity: number): { CFrame: CFrame }?
 	return self:_Get(entity, self:_GetTransformComponent())
 end
 
+--[=[
+	Returns the entity's world CFrame from either the bound model or stored transform.
+	@within BaseECSEntityFactory
+	@param entity number -- Entity id to inspect.
+	@return CFrame? -- Current world CFrame or nil.
+]=]
 function BaseECSEntityFactory:GetEntityCFrame(entity: number): CFrame?
 	local model = self:GetEntityModel(entity)
 	if model ~= nil then
@@ -275,6 +420,12 @@ function BaseECSEntityFactory:GetEntityCFrame(entity: number): CFrame?
 	return transform and transform.CFrame or nil
 end
 
+--[=[
+	Returns the entity's world position from either the bound model or stored transform.
+	@within BaseECSEntityFactory
+	@param entity number -- Entity id to inspect.
+	@return Vector3? -- Current world position or nil.
+]=]
 function BaseECSEntityFactory:GetEntityPosition(entity: number): Vector3?
 	local cframe = self:GetEntityCFrame(entity)
 	return cframe and cframe.Position or nil

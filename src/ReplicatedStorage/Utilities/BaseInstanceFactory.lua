@@ -6,12 +6,24 @@ local Workspace = game:GetService("Workspace")
 
 local ECS = require(ReplicatedStorage.Utilities.ECS)
 
+--[=[
+	@type ECSRevealState
+	@within BaseInstanceFactory
+	@private
+	Reveal payload currently applied to a bound instance.
+]=]
 type ECSRevealState = {
 	Attributes: { [string]: any }?,
 	ClearAttributes: { string }?,
 	Tags: { [string]: boolean }?,
 }
 
+--[=[
+	@type ECSRevealOptions
+	@within BaseInstanceFactory
+	@private
+	Identity fields used to build reveal metadata.
+]=]
 type ECSRevealOptions = {
 	EntityType: string,
 	SourceId: string,
@@ -20,6 +32,12 @@ type ECSRevealOptions = {
 	Namespace: string?,
 }
 
+--[=[
+	@type TInstanceBinding
+	@within BaseInstanceFactory
+	@private
+	Tracks the entity-instance binding and last applied reveal state.
+]=]
 type TInstanceBinding = {
 	EntityId: number,
 	Instance: Instance,
@@ -31,7 +49,14 @@ type TInstanceBinding = {
 --[=[
 	@class BaseInstanceFactory
 	Owns Workspace instance lifecycle and reveal state for ECS-backed runtime
-	objects, without taking JECS world ownership.
+	objects.
+
+	This base handles model creation or cloning, asset-template lookup, entity to
+	instance binding, reveal metadata, and instance cleanup. It does not own JECS
+	world mutation, component queries, or entity lifecycle; those belong to the
+	entity factory layer. `BaseGameObjectSyncService` may read from an instance
+	factory to resolve the live model, but it does not transfer ownership of the
+	model itself.
 	@server
 ]=]
 local BaseInstanceFactory = {}
@@ -89,6 +114,12 @@ end
 
 -- ── Public ────────────────────────────────────────────────────────────────────
 
+--[=[
+	Creates a new base instance factory helper.
+	@within BaseInstanceFactory
+	@param contextName string -- Owning context label used in assertions and diagnostics.
+	@return BaseInstanceFactory -- The base factory instance.
+]=]
 function BaseInstanceFactory.new(contextName: string)
 	local self = setmetatable({}, BaseInstanceFactory)
 	self._contextName = contextName
@@ -121,43 +152,92 @@ function BaseInstanceFactory:Init(registry: any, name: string)
 	self:_OnInit(registry, name)
 end
 
+--[=[
+	@within BaseInstanceFactory
+	@private
+	Returns the Workspace folder name that stores bound instances.
+]=]
 function BaseInstanceFactory:_GetWorkspaceFolderName(): string
 	error(("%sInstanceFactory must implement _GetWorkspaceFolderName"):format(self._contextName))
 end
 
+--[=[
+	@within BaseInstanceFactory
+	@private
+	Builds the optional asset registry from the context's `Assets` folder.
+]=]
 function BaseInstanceFactory:_CreateAssetRegistry(_assetsRoot: Folder): any
 	return nil
 end
 
+--[=[
+	@within BaseInstanceFactory
+	@private
+	Runs derived initialization after the base folder and asset registry are ready.
+]=]
 function BaseInstanceFactory:_OnInit(_registry: any, _name: string)
 	return
 end
 
+--[=[
+	@within BaseInstanceFactory
+	@private
+	Creates the live instance for a single entity.
+]=]
 function BaseInstanceFactory:_CreateInstanceForEntity(_entityId: number, _options: any): Instance
 	error(("%sInstanceFactory must implement _CreateInstanceForEntity"):format(self._contextName))
 end
 
+--[=[
+	@within BaseInstanceFactory
+	@private
+	Returns identity options for reveal metadata, if the instance should be revealed.
+]=]
 function BaseInstanceFactory:_BuildRevealIdentityOptions(_entityId: number, _instance: Instance, _options: any): ECSRevealOptions?
 	return nil
 end
 
+--[=[
+	@within BaseInstanceFactory
+	@private
+	Returns custom attributes to apply when the instance is revealed.
+]=]
 function BaseInstanceFactory:_BuildRevealAttributes(_entityId: number, _instance: Instance, _options: any): { [string]: any }?
 	return nil
 end
 
+--[=[
+	@within BaseInstanceFactory
+	@private
+	Returns custom tags to apply when the instance is revealed.
+]=]
 function BaseInstanceFactory:_BuildRevealTags(_entityId: number, _instance: Instance, _options: any): { [string]: boolean }?
 	return nil
 end
 
+--[=[
+	@within BaseInstanceFactory
+	@private
+	Returns attributes that should be cleared when the instance is destroyed.
+]=]
 function BaseInstanceFactory:_BuildRevealClearAttributes(_entityId: number, _instance: Instance, _options: any): { string }?
 	return nil
 end
 
+--[=[
+	@within BaseInstanceFactory
+	@private
+	Applies any instance-specific setup before the model is parented.
+]=]
 function BaseInstanceFactory:_PrepareInstance(_instance: Instance, _entityId: number, _options: any)
 	return
 end
 
--- Rebuilds the clear-state for a destroyed binding so stale identity data is removed.
+--[=[
+	Rebuilds the clear state for a destroyed binding so stale identity data is removed.
+	@within BaseInstanceFactory
+	@private
+]=]
 function BaseInstanceFactory:_BuildClearRevealState(_instance: Instance, entityId: number): ECSRevealState?
 	local binding = self._revealBindingsByEntity[entityId]
 	local clearState = _BuildClearRevealState(binding and binding.LastRevealState or nil)
@@ -176,10 +256,20 @@ function BaseInstanceFactory:_BuildClearRevealState(_instance: Instance, entityI
 	return clearState
 end
 
+--[=[
+	@within BaseInstanceFactory
+	@private
+	Returns the cached asset registry, if one was created during `Init`.
+]=]
 function BaseInstanceFactory:_GetAssetRegistry()
 	return self._assetRegistry
 end
 
+--[=[
+	@within BaseInstanceFactory
+	@private
+	Returns the root Workspace folder or throws when the factory has not been initialized.
+]=]
 function BaseInstanceFactory:_GetRootFolderOrThrow(): Folder
 	local rootFolder = self._rootFolder
 	assert(rootFolder ~= nil, ("%sInstanceFactory used before Init"):format(self._contextName))
@@ -338,7 +428,11 @@ function BaseInstanceFactory:RefreshReveal(entityId: number, optionsOverride: an
 	return revealState
 end
 
--- Creates, prepares, and registers the instance before reveal metadata is applied.
+--[=[
+	Creates, prepares, and registers the instance before reveal metadata is applied.
+	@within BaseInstanceFactory
+	@private
+]=]
 function BaseInstanceFactory:_CreateBoundInstance(entityId: number, options: any): Instance
 	assert(type(entityId) == "number", ("%sInstanceFactory:_CreateBoundInstance requires entity id"):format(self._contextName))
 
