@@ -1,5 +1,15 @@
 --!strict
 
+--[=[
+    @class PlacementGhostModel
+    Wraps the client-side placement ghost model and its presentation-only styling.
+
+    The placement cursor controller creates this wrapper while placement mode is active,
+    moves it to hovered coordinates, and tints it to reflect validity. It does not own
+    placement rules or server-authoritative state.
+    @client
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -12,6 +22,7 @@ PlacementGhostModel.__index = PlacementGhostModel
 local VALID_COLOR = Color3.fromRGB(0, 200, 100)
 local INVALID_COLOR = Color3.fromRGB(200, 50, 50)
 
+-- Computes a pivot that keeps the model bottom aligned to the hovered world position.
 local function _BuildBottomAlignedPivot(model: Model, targetWorldPos: Vector3): CFrame
 	local currentPivot = model:GetPivot()
 	local boundsCFrame, boundsSize = model:GetBoundingBox()
@@ -24,6 +35,7 @@ local function _BuildBottomAlignedPivot(model: Model, targetWorldPos: Vector3): 
 	return CFrame.new(targetPivotPosition) * pivotRotation
 end
 
+-- Applies the translucent, non-interactive ghost styling to every visible part.
 local function _ApplyGhostStyle(model: Model)
 	for _, descendant in ipairs(model:GetDescendants()) do
 		if descendant:IsA("BasePart") then
@@ -37,6 +49,7 @@ local function _ApplyGhostStyle(model: Model)
 	end
 end
 
+-- Resolves the structure registry from ReplicatedStorage and returns its source folder.
 local function _CreateStructureRegistry()
 	local assetsFolder = ReplicatedStorage:FindFirstChild("Assets")
 	if assetsFolder == nil then
@@ -53,6 +66,7 @@ end
 
 local structureRegistry, structuresFolder = _CreateStructureRegistry()
 
+-- Builds a fallback extractor model when the authored asset is missing in development.
 local function _CreateExtractorFallbackModel(): Model
 	local model = Instance.new("Model")
 	model.Name = MiningConfig.EXTRACTOR_STRUCTURE_TYPE
@@ -80,6 +94,7 @@ local function _CreateExtractorFallbackModel(): Model
 	return model
 end
 
+-- Resolves the template model for the requested structure type and preserves a fallback path for extractor previews.
 local function _FindTemplateModel(structureType: string): Model?
 	if structureType == MiningConfig.EXTRACTOR_STRUCTURE_TYPE then
 		local typeNode = structuresFolder and structuresFolder:FindFirstChild(structureType) or nil
@@ -102,21 +117,34 @@ local function _FindTemplateModel(structureType: string): Model?
 	return nil
 end
 
+-- [Public API]
+
+--[=[
+    Creates a new ghost model for the requested structure type.
+    @within PlacementGhostModel
+    @param structureType string -- The structure type to preview.
+    @return PlacementGhostModel -- The wrapper around the spawned ghost model.
+    @error string -- Thrown when no structure model exists for the requested type.
+]=]
 function PlacementGhostModel.new(structureType: string)
+	-- Resolve the template before any styling so we can fail fast on missing assets.
 	local model = _FindTemplateModel(structureType)
 	if model == nil then
 		error("PlacementGhostModel: missing structure model for type '" .. structureType .. "'")
 	end
 
+	-- Make the template non-interactive and translucent for placement preview.
 	_ApplyGhostStyle(model)
 
 	if model.PrimaryPart == nil then
+		-- Preserve movement support for models that do not declare a PrimaryPart.
 		local primaryPart = model:FindFirstChildWhichIsA("BasePart", true)
 		if primaryPart ~= nil then
 			model.PrimaryPart = primaryPart
 		end
 	end
 
+	-- Parent the preview into Workspace so the cursor controller can move it immediately.
 	model.Parent = Workspace
 
 	local self = setmetatable({}, PlacementGhostModel)
@@ -124,10 +152,12 @@ function PlacementGhostModel.new(structureType: string)
 	return self
 end
 
+-- Moves the ghost so its bottom face stays anchored to the hovered world position.
 function PlacementGhostModel:MoveTo(worldPos: Vector3)
 	self._model:PivotTo(_BuildBottomAlignedPivot(self._model, worldPos))
 end
 
+-- Tints the ghost to communicate whether the hovered tile is currently valid.
 function PlacementGhostModel:SetValid(isValid: boolean)
 	local tint = if isValid then VALID_COLOR else INVALID_COLOR
 	for _, descendant in ipairs(self._model:GetDescendants()) do
@@ -137,6 +167,7 @@ function PlacementGhostModel:SetValid(isValid: boolean)
 	end
 end
 
+-- Destroys the underlying model when the placement session ends.
 function PlacementGhostModel:Destroy()
 	if self._model ~= nil then
 		self._model:Destroy()

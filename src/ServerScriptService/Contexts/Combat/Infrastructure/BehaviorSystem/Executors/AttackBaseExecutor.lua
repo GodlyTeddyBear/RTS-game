@@ -15,7 +15,7 @@ type THitboxActivationResult = {
 
 local AttackBaseExecutor = {}
 AttackBaseExecutor.__index = AttackBaseExecutor
-setmetatable(AttackBaseExecutor, { __index = BaseExecutor })
+setmetatable(AttackBaseExecutor, BaseExecutor)
 
 function AttackBaseExecutor.new()
 	local self = BaseExecutor.new({
@@ -35,12 +35,12 @@ end
 
 local function _recordActivationSource(entity: number, services: any, source: string)
 	local modelRef = services.EnemyEntityFactory:GetModelRef(entity)
-	if modelRef == nil or modelRef.model == nil or modelRef.model.Parent == nil then
+	if modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
 		return
 	end
 
-	modelRef.model:SetAttribute("LastHitboxActivationSource", source)
-	modelRef.model:SetAttribute("LastHitboxActivatedAt", services.CurrentTime)
+	modelRef.Model:SetAttribute("LastHitboxActivationSource", source)
+	modelRef.Model:SetAttribute("LastHitboxActivatedAt", services.CurrentTime)
 end
 
 local function _isTargetInRange(entity: number, services: any): boolean
@@ -55,7 +55,7 @@ local function _isTargetInRange(entity: number, services: any): boolean
 		return false
 	end
 
-	return services.CombatPerceptionService:IsTargetInRange(enemyPosition.cframe.Position, attackRange, "Base", nil)
+	return services.CombatPerceptionService:IsTargetInRange(enemyPosition.CFrame.Position, attackRange, "Base", nil)
 end
 
 function AttackBaseExecutor:CanStart(entity: number, _data: any?, services: any): (boolean, string?)

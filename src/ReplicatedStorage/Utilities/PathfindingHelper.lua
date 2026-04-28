@@ -266,7 +266,7 @@ local function _validateEntityModel(entity: any, services: any): (any?, any?, st
 		return nil, nil, "MissingModelRef"
 	end
 
-	local model = modelRef.model
+	local model = modelRef.Model
 	if not model or not model.Parent then
 		return nil, nil, "MissingModel"
 	end

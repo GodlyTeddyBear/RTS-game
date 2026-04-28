@@ -10,7 +10,7 @@ local BaseECSComponentRegistry = require(ReplicatedStorage.Utilities.BaseECSComp
 ]=]
 local StructureComponentRegistry = {}
 StructureComponentRegistry.__index = StructureComponentRegistry
-setmetatable(StructureComponentRegistry, { __index = BaseECSComponentRegistry })
+setmetatable(StructureComponentRegistry, BaseECSComponentRegistry)
 
 --[=[
 	Creates a new component registry wrapper.
@@ -44,6 +44,8 @@ function StructureComponentRegistry:_RegisterComponents(_registry: any, _name: s
 	self:RegisterComponent("InstanceRefComponent", "Structure.InstanceRef", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] runtime model reference for collision and orientation services.
 	self:RegisterComponent("ModelRefComponent", "Structure.ModelRef", "AUTHORITATIVE")
+	-- [AUTHORITATIVE] runtime world transform for targeting and range checks.
+	self:RegisterComponent("TransformComponent", "Structure.Transform", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] stable identity metadata.
 	self:RegisterComponent("IdentityComponent", "Structure.Identity", "AUTHORITATIVE")
 	self:RegisterTag("ActiveTag", "Structure.ActiveTag")

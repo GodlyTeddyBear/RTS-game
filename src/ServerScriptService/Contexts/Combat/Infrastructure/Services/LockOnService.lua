@@ -34,11 +34,11 @@ function LockOnService:AttachConstraint(entity: number)
 	end
 
 	local modelRef = self._enemyEntityFactory:GetModelRef(entity)
-	if modelRef == nil or modelRef.model == nil then
+	if modelRef == nil or modelRef.Model == nil then
 		return
 	end
 
-	local primaryPart = modelRef.model.PrimaryPart
+	local primaryPart = modelRef.Model.PrimaryPart
 	if primaryPart == nil then
 		return
 	end
@@ -150,4 +150,3 @@ function LockOnService:UpdateAll(entities: { number })
 end
 
 return LockOnService
-

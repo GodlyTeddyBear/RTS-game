@@ -21,8 +21,8 @@ export type HealthComponent = {
 	max: number,
 }
 
-export type PositionComponent = {
-	cframe: CFrame,
+export type TransformComponent = {
+	CFrame: CFrame,
 }
 
 export type RoleComponent = {
@@ -40,8 +40,10 @@ export type PathStateComponent = {
 }
 
 export type ModelRefComponent = {
-	model: Model,
+	Model: Model,
 }
+
+export type PositionComponent = TransformComponent
 
 export type AliveTag = boolean
 

@@ -1,14 +1,13 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local JECS = require(ReplicatedStorage.Packages.JECS)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
 local Ok = Result.Ok
 
 local MapEntityFactory = {}
 MapEntityFactory.__index = MapEntityFactory
-setmetatable(MapEntityFactory, { __index = BaseECSEntityFactory })
+setmetatable(MapEntityFactory, BaseECSEntityFactory)
 
 export type ZoneMap = { [string]: Instance }
 
@@ -52,6 +51,19 @@ local function _ResolveAnchor(instance: Instance): BasePart?
 	return instance:FindFirstChildWhichIsA("BasePart", true)
 end
 
+local function _ResolveCFrame(instance: Instance): CFrame?
+	if instance:IsA("BasePart") then
+		return instance.CFrame
+	end
+
+	if instance:IsA("Model") then
+		return instance:GetPivot()
+	end
+
+	local anchor = _ResolveAnchor(instance)
+	return anchor and anchor.CFrame or nil
+end
+
 function MapEntityFactory.new()
 	local self = setmetatable(BaseECSEntityFactory.new("Map"), MapEntityFactory)
 	self._mapEntity = nil
@@ -65,6 +77,7 @@ end
 
 function MapEntityFactory:_OnInit(_registry: any, _name: string, _componentRegistry: any)
 	assert(self._components ~= nil and self._components.MapRootComponent ~= nil, "MapEntityFactory: missing MapComponentRegistry components")
+	self:_ConfigureSpatialComponents("MapInstanceComponent", "TransformComponent")
 end
 
 function MapEntityFactory:CreateMapRoot(mapId: string, templateName: string, mapModel: Model, zonesByName: ZoneMap): number
@@ -72,7 +85,6 @@ function MapEntityFactory:CreateMapRoot(mapId: string, templateName: string, map
 	self:RequireReady()
 
 	local components = self:GetComponentsOrThrow()
-	local world = self:_GetWorldUnsafe()
 	local mapEntity = self:_CreateEntity()
 
 	self:_Set(mapEntity, components.MapRootComponent, {
@@ -80,11 +92,10 @@ function MapEntityFactory:CreateMapRoot(mapId: string, templateName: string, map
 		Template = templateName,
 		CreatedAt = os.clock(),
 	})
-	self:_Set(mapEntity, components.MapInstanceComponent, {
-		Instance = mapModel,
-	})
+	self:SetModelRef(mapEntity, mapModel)
+	self:SetTransformCFrame(mapEntity, mapModel:GetPivot())
 
-	world:set(mapEntity, JECS.Name, ("RuntimeMap:%s"):format(mapId))
+	self:_SetName(mapEntity, ("RuntimeMap:%s"):format(mapId))
 	self._mapEntity = mapEntity
 	self._zoneEntityByName = {}
 
@@ -120,15 +131,17 @@ function MapEntityFactory:_CreateZoneEntity(mapEntity: number, zoneName: string,
 	self:RequireReady()
 
 	local components = self:GetComponentsOrThrow()
-	local world = self:_GetWorldUnsafe()
-	local zoneEntity = self:_CreateEntity()
+	local zoneEntity = self:_CreateChildEntity(mapEntity)
 
 	self:_Set(zoneEntity, components.ZoneComponent, {
 		ZoneName = zoneName,
 		Instance = zoneInstance,
 	})
-	self:_Add(zoneEntity, JECS.pair(components.ChildOf, mapEntity))
-	world:set(zoneEntity, JECS.Name, ("MapZone:%s"):format(zoneName))
+	local zoneCFrame = _ResolveCFrame(zoneInstance)
+	if zoneCFrame ~= nil then
+		self:SetTransformCFrame(zoneEntity, zoneCFrame)
+	end
+	self:_SetName(zoneEntity, ("MapZone:%s"):format(zoneName))
 
 	if zoneName == "Spawns" then
 		local spawnMarker = _FindFirstNamedBasePart(zoneInstance, "Spawn")
@@ -178,7 +191,7 @@ function MapEntityFactory:GetMapInstance(): Model?
 	end
 
 	local modelRef = self:_Get(mapEntity, self._components.MapInstanceComponent)
-	return modelRef and modelRef.Instance or nil
+	return modelRef and modelRef.Model or nil
 end
 
 function MapEntityFactory:GetZoneInstance(zoneName: string): Instance?
@@ -202,9 +215,8 @@ function MapEntityFactory:GetSpawnInstance(): BasePart?
 	end
 
 	local components = self:GetComponentsOrThrow()
-	local world = self:_GetWorldUnsafe()
 	for _, zoneEntity in ipairs(self:CollectQuery(components.SpawnZoneTag)) do
-		local parentEntity = world:target(zoneEntity, components.ChildOf)
+		local parentEntity = self:GetParentEntity(zoneEntity)
 		if parentEntity == mapEntity then
 			local spawnData = self:_Get(zoneEntity, components.SpawnComponent)
 			if spawnData and spawnData.Instance then
@@ -238,6 +250,35 @@ function MapEntityFactory:GetBaseAnchor(): BasePart?
 
 	local baseData = self:_Get(mapEntity, self._components.BaseComponent)
 	return baseData and baseData.Anchor or nil
+end
+
+function MapEntityFactory:GetMapCFrame(): CFrame?
+	local mapEntity = self._mapEntity
+	if mapEntity == nil then
+		return nil
+	end
+
+	return self:GetEntityCFrame(mapEntity)
+end
+
+function MapEntityFactory:GetMapPosition(): Vector3?
+	local cframe = self:GetMapCFrame()
+	return cframe and cframe.Position or nil
+end
+
+function MapEntityFactory:GetZoneCFrame(zoneName: string): CFrame?
+	local zoneEntity = self._zoneEntityByName[zoneName]
+	if zoneEntity == nil then
+		return nil
+	end
+
+	local transform = self:GetTransform(zoneEntity)
+	return transform and transform.CFrame or nil
+end
+
+function MapEntityFactory:GetZonePosition(zoneName: string): Vector3?
+	local cframe = self:GetZoneCFrame(zoneName)
+	return cframe and cframe.Position or nil
 end
 
 function MapEntityFactory:IsRuntimeMapReady(): Result.Result<boolean>

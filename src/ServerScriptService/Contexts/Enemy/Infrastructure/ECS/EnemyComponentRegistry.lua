@@ -10,7 +10,7 @@ local BaseECSComponentRegistry = require(ReplicatedStorage.Utilities.BaseECSComp
 ]=]
 local EnemyComponentRegistry = {}
 EnemyComponentRegistry.__index = EnemyComponentRegistry
-setmetatable(EnemyComponentRegistry, { __index = BaseECSComponentRegistry })
+setmetatable(EnemyComponentRegistry, BaseECSComponentRegistry)
 
 function EnemyComponentRegistry.new()
 	return setmetatable(BaseECSComponentRegistry.new("Enemy"), EnemyComponentRegistry)
@@ -18,7 +18,7 @@ end
 
 function EnemyComponentRegistry:_RegisterComponents(_registry: any, _name: string)
 	self:RegisterComponent("HealthComponent", "Enemy.Health", "AUTHORITATIVE")
-	self:RegisterComponent("PositionComponent", "Enemy.Position", "AUTHORITATIVE")
+	self:RegisterComponent("TransformComponent", "Enemy.Transform", "DERIVED")
 	self:RegisterComponent("RoleComponent", "Enemy.Role", "AUTHORITATIVE")
 	self:RegisterComponent("PathStateComponent", "Enemy.PathState", "AUTHORITATIVE")
 	self:RegisterComponent("ModelRefComponent", "Enemy.ModelRef", "AUTHORITATIVE")

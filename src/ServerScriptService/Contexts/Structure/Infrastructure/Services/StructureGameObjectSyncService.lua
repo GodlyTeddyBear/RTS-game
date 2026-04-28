@@ -35,8 +35,8 @@ function StructureGameObjectSyncService:RegisterEntity(entity: number, model: Mo
 	local resolvedModel = model
 	if resolvedModel == nil then
 		local modelRef = self._factory:GetModelRef(entity)
-		if modelRef and modelRef.model then
-			resolvedModel = modelRef.model
+		if modelRef and modelRef.Model then
+			resolvedModel = modelRef.Model
 		end
 	end
 
@@ -57,10 +57,10 @@ function StructureGameObjectSyncService:_SyncEntity(entity: number, explicitMode
 	local resolvedModel = explicitModel
 	if resolvedModel == nil then
 		local modelRef = self._factory:GetModelRef(entity)
-		if modelRef == nil or modelRef.model == nil or modelRef.model.Parent == nil then
+		if modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
 			return
 		end
-		resolvedModel = modelRef.model
+		resolvedModel = modelRef.Model
 	end
 
 	local model = resolvedModel

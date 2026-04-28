@@ -15,8 +15,8 @@ end
 function SummonComponentRegistry:_RegisterComponents(_registry: any, _name: string)
 	-- [AUTHORITATIVE] Stable summon identity for ownership and cleanup.
 	self:RegisterComponent("IdentityComponent", "Summon.Identity", "AUTHORITATIVE")
-	-- [AUTHORITATIVE] Current drone world transform.
-	self:RegisterComponent("PositionComponent", "Summon.Position", "AUTHORITATIVE")
+	-- [DERIVED] Current drone world transform.
+	self:RegisterComponent("PositionComponent", "Summon.Position", "DERIVED")
 	-- [AUTHORITATIVE] Combat tuning and last-attack timestamp.
 	self:RegisterComponent("CombatComponent", "Summon.Combat", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] Expiration windows for timed summon cleanup.

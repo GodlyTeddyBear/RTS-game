@@ -42,6 +42,9 @@ function BaseECSEntityFactory.new(contextName: string)
 	self._contextName = contextName
 	self._world = nil
 	self._components = nil
+	self._childOfComponent = JECS.ChildOf
+	self._modelRefComponent = nil
+	self._transformComponent = nil
 	self._destructionQueue = {} :: { number }
 	self._destructionQueueCounts = {} :: { [number]: number }
 	self._revealBindingsByEntity = {} :: { [number]: ECSRevealBinding }
@@ -81,6 +84,9 @@ function BaseECSEntityFactory:InitBase(registry: any, componentRegistryName: str
 
 	self._components = componentRegistry:GetComponents()
 	assert(self._components ~= nil, ("%sEntityFactory: %s returned nil components"):format(self._contextName, componentRegistryName))
+	if self._components.ChildOf ~= nil then
+		self._childOfComponent = self._components.ChildOf
+	end
 end
 
 function BaseECSEntityFactory:_GetComponentRegistryName(): string
@@ -144,6 +150,19 @@ function BaseECSEntityFactory:_CreateEntity(): number
 	return world:entity()
 end
 
+function BaseECSEntityFactory:_CreateChildEntity(parentEntity: number): number
+	self:_RequireEntityExists(parentEntity, "_CreateChildEntity")
+	local childEntity = self:_CreateEntity()
+	self:_SetParent(childEntity, parentEntity)
+	return childEntity
+end
+
+function BaseECSEntityFactory:_SetName(entity: number, name: string)
+	self:_RequireEntityExists(entity, "_SetName")
+	assert(type(name) == "string" and name ~= "", ("%sEntityFactory:_SetName requires name"):format(self._contextName))
+	self._world:set(entity, JECS.Name, name)
+end
+
 function BaseECSEntityFactory:_Set(entity: number, component: any, value: any)
 	self:_RequireEntityExists(entity, "_Set")
 	self._world:set(entity, component, value)
@@ -180,6 +199,87 @@ function BaseECSEntityFactory:_DeleteNow(entity: number)
 	self._world:delete(entity)
 end
 
+function BaseECSEntityFactory:_SetParent(childEntity: number, parentEntity: number)
+	self:_RequireEntityExists(childEntity, "_SetParent")
+	self:_RequireEntityExists(parentEntity, "_SetParent")
+	self:_Add(childEntity, JECS.pair(self._childOfComponent, parentEntity))
+end
+
+function BaseECSEntityFactory:GetParentEntity(entity: number): number?
+	self:_RequireEntityExists(entity, "GetParentEntity")
+	return self._world:target(entity, self._childOfComponent)
+end
+
+function BaseECSEntityFactory:_ConfigureSpatialComponents(modelRefComponentKey: string?, transformComponentKey: string?)
+	self:RequireReady()
+
+	if modelRefComponentKey ~= nil then
+		local modelRefComponent = self._components[modelRefComponentKey]
+		assert(modelRefComponent ~= nil, ("%sEntityFactory: missing spatial component '%s'"):format(self._contextName, modelRefComponentKey))
+		self._modelRefComponent = modelRefComponent
+	end
+
+	if transformComponentKey ~= nil then
+		local transformComponent = self._components[transformComponentKey]
+		assert(transformComponent ~= nil, ("%sEntityFactory: missing spatial component '%s'"):format(self._contextName, transformComponentKey))
+		self._transformComponent = transformComponent
+	end
+end
+
+function BaseECSEntityFactory:_GetModelRefComponent()
+	assert(self._modelRefComponent ~= nil, ("%sEntityFactory: model ref component not configured"):format(self._contextName))
+	return self._modelRefComponent
+end
+
+function BaseECSEntityFactory:_GetTransformComponent()
+	assert(self._transformComponent ~= nil, ("%sEntityFactory: transform component not configured"):format(self._contextName))
+	return self._transformComponent
+end
+
+function BaseECSEntityFactory:SetModelRef(entity: number, model: Model)
+	self:_Set(entity, self:_GetModelRefComponent(), {
+		Model = model,
+	})
+end
+
+function BaseECSEntityFactory:ClearModelRef(entity: number)
+	self:_Remove(entity, self:_GetModelRefComponent())
+end
+
+function BaseECSEntityFactory:GetModelRef(entity: number): { Model: Model }?
+	return self:_Get(entity, self:_GetModelRefComponent())
+end
+
+function BaseECSEntityFactory:GetEntityModel(entity: number): Model?
+	local modelRef = self:GetModelRef(entity)
+	return modelRef and modelRef.Model or nil
+end
+
+function BaseECSEntityFactory:SetTransformCFrame(entity: number, cframe: CFrame)
+	self:_Set(entity, self:_GetTransformComponent(), {
+		CFrame = cframe,
+	})
+end
+
+function BaseECSEntityFactory:GetTransform(entity: number): { CFrame: CFrame }?
+	return self:_Get(entity, self:_GetTransformComponent())
+end
+
+function BaseECSEntityFactory:GetEntityCFrame(entity: number): CFrame?
+	local model = self:GetEntityModel(entity)
+	if model ~= nil then
+		return model:GetPivot()
+	end
+
+	local transform = self:GetTransform(entity)
+	return transform and transform.CFrame or nil
+end
+
+function BaseECSEntityFactory:GetEntityPosition(entity: number): Vector3?
+	local cframe = self:GetEntityCFrame(entity)
+	return cframe and cframe.Position or nil
+end
+
 --[=[
 	Collects entities matching a component/tag query into an array.
 	@within BaseECSEntityFactory
@@ -205,12 +305,12 @@ end
 	@param childOfComponent any -- JECS `ChildOf` component or compatible pair id.
 	@return { number } -- Matching child entity ids.
 ]=]
-function BaseECSEntityFactory:CollectChildren(parentEntity: number, childOfComponent: any): { number }
+function BaseECSEntityFactory:CollectChildren(parentEntity: number, childOfComponent: any?): { number }
 	self:_RequireEntityExists(parentEntity, "CollectChildren")
 
 	local world = self:GetWorldOrThrow()
 	local entities = {}
-	for entity in world:query(JECS.pair(childOfComponent, parentEntity)) do
+	for entity in world:query(JECS.pair(childOfComponent or self._childOfComponent, parentEntity)) do
 		table.insert(entities, entity)
 	end
 	return entities
@@ -241,9 +341,7 @@ function BaseECSEntityFactory:MarkForDestruction(entity: number?)
 	end
 
 	self:RequireReady()
-	table.insert(self._destructionQueue, entity)
-	local currentCount = self._destructionQueueCounts[entity] or 0
-	self._destructionQueueCounts[entity] = currentCount + 1
+	self:_MarkForDestructionRecursive(entity, {})
 end
 
 --[=[
@@ -425,6 +523,29 @@ function BaseECSEntityFactory:_ClearRevealForEntity(entity: number)
 	local clearState = self:_BuildRevealClearState(binding)
 	self:ApplyReveal(binding.Instance, clearState)
 	self._revealBindingsByEntity[entity] = nil
+end
+
+function BaseECSEntityFactory:_MarkForDestructionRecursive(entity: number, visited: { [number]: boolean })
+	if visited[entity] == true then
+		return
+	end
+	visited[entity] = true
+
+	if not self:_Exists(entity) then
+		return
+	end
+
+	for _, childEntity in ipairs(self:CollectChildren(entity)) do
+		self:_MarkForDestructionRecursive(childEntity, visited)
+	end
+
+	if (self._destructionQueueCounts[entity] or 0) > 0 then
+		self._destructionQueueCounts[entity] += 1
+		return
+	end
+
+	table.insert(self._destructionQueue, entity)
+	self._destructionQueueCounts[entity] = 1
 end
 
 return BaseECSEntityFactory

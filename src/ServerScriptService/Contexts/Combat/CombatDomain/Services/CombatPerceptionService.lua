@@ -84,11 +84,11 @@ function CombatPerceptionService:_ResolveTargetRaycastData(targetKind: TTargetKi
 		end
 
 		local modelRef = self._structureEntityFactory:GetModelRef(targetEntity)
-		if modelRef == nil or modelRef.model == nil or modelRef.model.Parent == nil then
+		if modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
 			return nil, nil
 		end
 
-		return modelRef.model, _resolveModelReferencePoint(modelRef.model)
+		return modelRef.Model, _resolveModelReferencePoint(modelRef.Model)
 	end
 
 	if targetKind == "Enemy" then
@@ -100,11 +100,11 @@ function CombatPerceptionService:_ResolveTargetRaycastData(targetKind: TTargetKi
 		end
 
 		local modelRef = self._enemyEntityFactory:GetModelRef(targetEntity)
-		if modelRef == nil or modelRef.model == nil or modelRef.model.Parent == nil then
+		if modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
 			return nil, nil
 		end
 
-		return modelRef.model, _resolveModelReferencePoint(modelRef.model)
+		return modelRef.Model, _resolveModelReferencePoint(modelRef.Model)
 	end
 
 	return nil, nil
@@ -149,7 +149,7 @@ function CombatPerceptionService:_FindNearestEnemyInRange(structurePosition: Vec
 			continue
 		end
 
-		local offset = position.cframe.Position - structurePosition
+		local offset = position.CFrame.Position - structurePosition
 		local distanceSq = offset:Dot(offset)
 		if distanceSq <= maxDistanceSq and distanceSq < nearestDistanceSq then
 			if self:IsTargetInRange(structurePosition, attackRange, "Enemy", enemyEntity) then
@@ -247,13 +247,13 @@ function CombatPerceptionService:BuildSnapshot(entity: number, _currentTime: num
 	end
 
 	local targetStructureEntity = nil :: number?
-	if role and position and position.cframe and type(role.attackRange) == "number" then
-		targetStructureEntity = self:_FindNearestStructureInRange(position.cframe.Position, role.attackRange)
+	if role and position and position.CFrame and type(role.attackRange) == "number" then
+		targetStructureEntity = self:_FindNearestStructureInRange(position.CFrame.Position, role.attackRange)
 	end
 
 	local hasBaseTargetInRange = false
-	if targetStructureEntity == nil and role and position and position.cframe and type(role.attackRange) == "number" then
-		hasBaseTargetInRange = self:IsTargetInRange(position.cframe.Position, role.attackRange, "Base", nil)
+	if targetStructureEntity == nil and role and position and position.CFrame and type(role.attackRange) == "number" then
+		hasBaseTargetInRange = self:IsTargetInRange(position.CFrame.Position, role.attackRange, "Base", nil)
 	end
 
 	return {

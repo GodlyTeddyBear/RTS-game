@@ -66,14 +66,14 @@ function HitboxService:_ResolveAttackerModel(entity: number, kind: TEntityKind):
 	if kind == "Enemy" then
 		local modelRef = self._enemyEntityFactory:GetModelRef(entity)
 		if modelRef ~= nil then
-			return modelRef.model
+			return modelRef.Model
 		end
 		return nil
 	end
 
 	local modelRef = self._structureEntityFactory:GetModelRef(entity)
 	if modelRef ~= nil then
-		return modelRef.model
+		return modelRef.Model
 	end
 	return nil
 end

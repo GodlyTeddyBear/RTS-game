@@ -4,8 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.StructureConfig)
 local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.StructureTypes)
-local ExecutorTypes = require(ReplicatedStorage.Contexts.Combat.Types.ExecutorTypes)
-local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
+local CombatECSEntityFactory = require(ReplicatedStorage.Utilities.CombatECSEntityFactory)
 
 type StructureType = StructureTypes.StructureType
 type TAttackStatsComponent = StructureTypes.TAttackStatsComponent
@@ -14,7 +13,6 @@ type THealthComponent = StructureTypes.THealthComponent
 type TIdentityComponent = StructureTypes.TIdentityComponent
 type TInstanceRefComponent = StructureTypes.TInstanceRefComponent
 type ResolvedStructureRecord = StructureTypes.ResolvedStructureRecord
-type TCombatAction = ExecutorTypes.TCombatActionComponent
 
 --[=[
 	@class StructureEntityFactory
@@ -23,19 +21,7 @@ type TCombatAction = ExecutorTypes.TCombatActionComponent
 ]=]
 local StructureEntityFactory = {}
 StructureEntityFactory.__index = StructureEntityFactory
-setmetatable(StructureEntityFactory, { __index = BaseECSEntityFactory })
-
-local function _buildDefaultAction(): TCombatAction
-	return {
-		CurrentActionId = nil,
-		ActionState = "Idle",
-		ActionData = nil,
-		PendingActionId = nil,
-		PendingActionData = nil,
-		StartedAt = nil,
-		FinishedAt = nil,
-	}
-end
+setmetatable(StructureEntityFactory, CombatECSEntityFactory)
 
 --[=[
 	Creates a new entity factory wrapper.
@@ -43,7 +29,7 @@ end
 	@return StructureEntityFactory -- The new factory instance.
 ]=]
 function StructureEntityFactory.new()
-	return setmetatable(BaseECSEntityFactory.new("Structure"), StructureEntityFactory)
+	return setmetatable(CombatECSEntityFactory.new("Structure"), StructureEntityFactory)
 end
 
 --[=[
@@ -67,10 +53,12 @@ function StructureEntityFactory:_OnInit(_registry: any, _name: string, _componen
 			and self._components.CombatActionComponent ~= nil
 			and self._components.InstanceRefComponent ~= nil
 			and self._components.ModelRefComponent ~= nil
+			and self._components.TransformComponent ~= nil
 			and self._components.IdentityComponent ~= nil
 			and self._components.ActiveTag ~= nil,
 		"StructureEntityFactory: missing StructureComponentRegistry components"
 	)
+	self:_ConfigureSpatialComponents("ModelRefComponent", "TransformComponent")
 end
 
 --[=[
@@ -111,13 +99,14 @@ function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord)
 		Entity = nil,
 	})
 
-	self:_Set(entity, components.CombatActionComponent, _buildDefaultAction())
+	self:_Set(entity, components.CombatActionComponent, self:BuildDefaultCombatAction())
 
 	-- Persist the runtime instance id and world-space anchor for targeting queries.
 	self:_Set(entity, components.InstanceRefComponent, {
 		InstanceId = record.instanceId,
 		WorldPos = record.worldPos,
 	} :: TInstanceRefComponent)
+	self:SetTransformCFrame(entity, CFrame.new(record.worldPos))
 
 	-- Keep the canonical identity separate from the runtime instance ref.
 	self:_Set(entity, components.IdentityComponent, {
@@ -242,124 +231,6 @@ function StructureEntityFactory:SetCooldownElapsed(entity: number?, elapsed: num
 	} :: TAttackCooldownComponent)
 end
 
-function StructureEntityFactory:SetBehaviorTree(entity: number, treeInstance: any, tickInterval: number)
-	local components = self:GetComponentsOrThrow()
-
-	self:_Set(entity, components.BehaviorTreeComponent, {
-		TreeInstance = treeInstance,
-		TickInterval = tickInterval,
-		LastTickTime = 0,
-	})
-end
-
-function StructureEntityFactory:GetBehaviorTree(entity: number)
-	local components = self:GetComponentsOrThrow()
-
-	return self:_Get(entity, components.BehaviorTreeComponent)
-end
-
-function StructureEntityFactory:UpdateBTLastTickTime(entity: number, currentTime: number)
-	local behaviorTree = self:GetBehaviorTree(entity)
-	if behaviorTree == nil then
-		return
-	end
-
-	local components = self:GetComponentsOrThrow()
-
-	self:_Set(entity, components.BehaviorTreeComponent, {
-		TreeInstance = behaviorTree.TreeInstance,
-		TickInterval = behaviorTree.TickInterval,
-		LastTickTime = currentTime,
-	})
-end
-
-function StructureEntityFactory:GetCombatAction(entity: number)
-	local components = self:GetComponentsOrThrow()
-
-	return self:_Get(entity, components.CombatActionComponent)
-end
-
-function StructureEntityFactory:SetCombatAction(entity: number, action: TCombatAction)
-	local components = self:GetComponentsOrThrow()
-
-	self:_Set(entity, components.CombatActionComponent, {
-		CurrentActionId = action.CurrentActionId,
-		ActionState = action.ActionState,
-		ActionData = action.ActionData,
-		PendingActionId = action.PendingActionId,
-		PendingActionData = action.PendingActionData,
-		StartedAt = action.StartedAt,
-		FinishedAt = action.FinishedAt,
-	})
-end
-
-function StructureEntityFactory:PromoteToCommitted(entity: number)
-	local action = self:GetCombatAction(entity)
-	if action == nil or action.CurrentActionId == nil then
-		return
-	end
-
-	if action.ActionState == "Committed" then
-		return
-	end
-
-	self:SetCombatAction(entity, {
-		CurrentActionId = action.CurrentActionId,
-		ActionState = "Committed",
-		ActionData = action.ActionData,
-		PendingActionId = action.PendingActionId,
-		PendingActionData = action.PendingActionData,
-		StartedAt = action.StartedAt,
-		FinishedAt = action.FinishedAt,
-	})
-end
-
-function StructureEntityFactory:SetPendingAction(entity: number, actionId: string, actionData: any?)
-	local action = self:GetCombatAction(entity) or _buildDefaultAction()
-	self:SetCombatAction(entity, {
-		CurrentActionId = action.CurrentActionId,
-		ActionState = action.ActionState,
-		ActionData = action.ActionData,
-		PendingActionId = actionId,
-		PendingActionData = actionData,
-		StartedAt = action.StartedAt,
-		FinishedAt = action.FinishedAt,
-	})
-end
-
-function StructureEntityFactory:ClearPendingAction(entity: number)
-	local action = self:GetCombatAction(entity) or _buildDefaultAction()
-	self:SetCombatAction(entity, {
-		CurrentActionId = action.CurrentActionId,
-		ActionState = action.ActionState,
-		ActionData = action.ActionData,
-		PendingActionId = nil,
-		PendingActionData = nil,
-		StartedAt = action.StartedAt,
-		FinishedAt = action.FinishedAt,
-	})
-end
-
-function StructureEntityFactory:StartAction(entity: number, actionId: string, actionData: any?, currentTime: number)
-	self:SetCombatAction(entity, {
-		CurrentActionId = actionId,
-		ActionState = "Running",
-		ActionData = actionData,
-		PendingActionId = nil,
-		PendingActionData = nil,
-		StartedAt = currentTime,
-		FinishedAt = nil,
-	})
-end
-
-function StructureEntityFactory:ClearAction(entity: number)
-	self:SetCombatAction(entity, _buildDefaultAction())
-end
-
-function StructureEntityFactory:ResetActionState(entity: number)
-	self:SetCombatAction(entity, _buildDefaultAction())
-end
-
 function StructureEntityFactory:ApplyDamage(entity: number, amount: number): boolean
 	local health = self:GetHealth(entity)
 	if health == nil then
@@ -414,10 +285,8 @@ function StructureEntityFactory:SetModelRef(entity: number?, model: Model)
 		return
 	end
 
-	local components = self:GetComponentsOrThrow()
-	self:_Set(entity, components.ModelRefComponent, {
-		model = model,
-	})
+	CombatECSEntityFactory.SetModelRef(self, entity, model)
+	self:SetTransformCFrame(entity, model:GetPivot())
 end
 
 function StructureEntityFactory:ClearModelRef(entity: number?)
@@ -425,23 +294,21 @@ function StructureEntityFactory:ClearModelRef(entity: number?)
 		return
 	end
 
-	local components = self:GetComponentsOrThrow()
-	self:_Remove(entity, components.ModelRefComponent)
+	CombatECSEntityFactory.ClearModelRef(self, entity)
 end
 
-function StructureEntityFactory:GetModelRef(entity: number?): { model: Model }?
+function StructureEntityFactory:GetModelRef(entity: number?): { Model: Model }?
 	if entity == nil then
 		return nil
 	end
 
-	local components = self:GetComponentsOrThrow()
-	return self:_Get(entity, components.ModelRefComponent)
+	return CombatECSEntityFactory.GetModelRef(self, entity)
 end
 
 function StructureEntityFactory:GetEntityByModel(model: Model): number?
 	for _, entity in ipairs(self:QueryActiveEntities()) do
 		local modelRef = self:GetModelRef(entity)
-		if modelRef ~= nil and modelRef.model == model then
+		if modelRef ~= nil and modelRef.Model == model then
 			return entity
 		end
 	end
@@ -461,12 +328,17 @@ function StructureEntityFactory:GetEntityByStructureId(structureId: string): num
 end
 
 function StructureEntityFactory:GetPosition(entity: number?): Vector3?
-	local instanceRef = self:GetInstanceRef(entity)
-	if instanceRef == nil then
+	if entity == nil then
 		return nil
 	end
 
-	return instanceRef.WorldPos
+	local position = self:GetEntityPosition(entity)
+	if position ~= nil then
+		return position
+	end
+
+	local instanceRef = self:GetInstanceRef(entity)
+	return instanceRef and instanceRef.WorldPos or nil
 end
 
 function StructureEntityFactory:IsActive(entity: number?): boolean

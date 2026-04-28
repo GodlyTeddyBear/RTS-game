@@ -64,8 +64,8 @@ function StructureTargetingSystem:Tick()
 	local enemyPositionByEntity: { [number]: Vector3 } = {}
 	for _, enemyEntity in ipairs(aliveEnemiesResult.value) do
 		local position = self._enemyEntityFactory:GetPosition(enemyEntity)
-		if position and position.cframe then
-			enemyPositionByEntity[enemyEntity] = position.cframe.Position
+		if position and position.CFrame then
+			enemyPositionByEntity[enemyEntity] = position.CFrame.Position
 		end
 	end
 

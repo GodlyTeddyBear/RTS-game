@@ -2,19 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
-local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
-
-type TCombatActionState = "Idle" | "Running" | "Committed"
-
-type TCombatAction = {
-	CurrentActionId: string?,
-	ActionState: TCombatActionState,
-	ActionData: any?,
-	PendingActionId: string?,
-	PendingActionData: any?,
-	StartedAt: number?,
-	FinishedAt: number?,
-}
+local CombatECSEntityFactory = require(ReplicatedStorage.Utilities.CombatECSEntityFactory)
 
 --[=[
 	@class EnemyEntityFactory
@@ -23,22 +11,10 @@ type TCombatAction = {
 ]=]
 local EnemyEntityFactory = {}
 EnemyEntityFactory.__index = EnemyEntityFactory
-setmetatable(EnemyEntityFactory, { __index = BaseECSEntityFactory })
+setmetatable(EnemyEntityFactory, CombatECSEntityFactory)
 
 function EnemyEntityFactory.new()
-	return setmetatable(BaseECSEntityFactory.new("Enemy"), EnemyEntityFactory)
-end
-
-local function _buildDefaultAction(): TCombatAction
-	return {
-		CurrentActionId = nil,
-		ActionState = "Idle",
-		ActionData = nil,
-		PendingActionId = nil,
-		PendingActionData = nil,
-		StartedAt = nil,
-		FinishedAt = nil,
-	}
+	return setmetatable(CombatECSEntityFactory.new("Enemy"), EnemyEntityFactory)
 end
 
 function EnemyEntityFactory:_GetComponentRegistryName(): string
@@ -49,10 +25,12 @@ function EnemyEntityFactory:_OnInit(_registry: any, _name: string, _componentReg
 	assert(
 		self._components ~= nil
 			and self._components.AliveTag ~= nil
+			and self._components.TransformComponent ~= nil
 			and self._components.TargetComponent ~= nil
 			and self._components.LockOnComponent ~= nil,
 		"EnemyEntityFactory: missing EnemyComponentRegistry components"
 	)
+	self:_ConfigureSpatialComponents("ModelRefComponent", "TransformComponent")
 end
 
 function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFrame: CFrame, waveNumber: number): number
@@ -67,9 +45,7 @@ function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFra
 		current = roleConfig.maxHp,
 		max = roleConfig.maxHp,
 	})
-	self:_Set(entity, components.PositionComponent, {
-		cframe = spawnCFrame,
-	})
+	self:SetTransformCFrame(entity, spawnCFrame)
 	self:_Set(entity, components.RoleComponent, {
 		role = role,
 		moveSpeed = roleConfig.moveSpeed,
@@ -87,7 +63,7 @@ function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFra
 		role = role,
 		waveNumber = waveNumber,
 	})
-	self:_Set(entity, components.CombatActionComponent, _buildDefaultAction())
+	self:_Set(entity, components.CombatActionComponent, self:BuildDefaultCombatAction())
 	self:_Set(entity, components.AttackCooldownComponent, {
 		Cooldown = roleConfig.attackCooldown,
 		LastAttackTime = 0,
@@ -110,8 +86,7 @@ function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFra
 end
 
 function EnemyEntityFactory:SetModelRef(entity: number, model: Model)
-	self:RequireReady()
-	self:_Set(entity, self._components.ModelRefComponent, { model = model })
+	CombatECSEntityFactory.SetModelRef(self, entity, model)
 	self:_Add(entity, self._components.DirtyTag)
 end
 
@@ -159,131 +134,6 @@ function EnemyEntityFactory:SetPathMoving(entity: number, isMoving: boolean)
 	self:_Add(entity, self._components.DirtyTag)
 end
 
-function EnemyEntityFactory:SetBehaviorTree(entity: number, treeInstance: any, tickInterval: number)
-	self:RequireReady()
-	self:_Set(entity, self._components.BehaviorTreeComponent, {
-		TreeInstance = treeInstance,
-		TickInterval = tickInterval,
-		LastTickTime = 0,
-	})
-end
-
-function EnemyEntityFactory:GetBehaviorTree(entity: number)
-	self:RequireReady()
-	return self:_Get(entity, self._components.BehaviorTreeComponent)
-end
-
-function EnemyEntityFactory:UpdateBTLastTickTime(entity: number, currentTime: number)
-	self:RequireReady()
-	local behaviorTree = self:GetBehaviorTree(entity)
-	if behaviorTree == nil then
-		return
-	end
-
-	self:_Set(entity, self._components.BehaviorTreeComponent, {
-		TreeInstance = behaviorTree.TreeInstance,
-		TickInterval = behaviorTree.TickInterval,
-		LastTickTime = currentTime,
-	})
-end
-
-function EnemyEntityFactory:GetCombatAction(entity: number)
-	self:RequireReady()
-	return self:_Get(entity, self._components.CombatActionComponent)
-end
-
-function EnemyEntityFactory:SetCombatAction(entity: number, action: TCombatAction)
-	self:RequireReady()
-	self:_Set(entity, self._components.CombatActionComponent, {
-		CurrentActionId = action.CurrentActionId,
-		ActionState = action.ActionState,
-		ActionData = action.ActionData,
-		PendingActionId = action.PendingActionId,
-		PendingActionData = action.PendingActionData,
-		StartedAt = action.StartedAt,
-		FinishedAt = action.FinishedAt,
-	})
-	self:_Add(entity, self._components.DirtyTag)
-end
-
-function EnemyEntityFactory:PromoteToCommitted(entity: number)
-	self:RequireReady()
-	local action = self:GetCombatAction(entity)
-	if action == nil or action.CurrentActionId == nil then
-		return
-	end
-
-	if action.ActionState == "Committed" then
-		return
-	end
-
-	self:SetCombatAction(entity, {
-		CurrentActionId = action.CurrentActionId,
-		ActionState = "Committed",
-		ActionData = action.ActionData,
-		PendingActionId = action.PendingActionId,
-		PendingActionData = action.PendingActionData,
-		StartedAt = action.StartedAt,
-		FinishedAt = action.FinishedAt,
-	})
-end
-
-function EnemyEntityFactory:SetPendingAction(entity: number, actionId: string, actionData: any?)
-	self:RequireReady()
-	local action = self:GetCombatAction(entity) or _buildDefaultAction()
-	self:SetCombatAction(entity, {
-		CurrentActionId = action.CurrentActionId,
-		ActionState = action.ActionState,
-		ActionData = action.ActionData,
-		PendingActionId = actionId,
-		PendingActionData = actionData,
-		StartedAt = action.StartedAt,
-		FinishedAt = action.FinishedAt,
-	})
-end
-
-function EnemyEntityFactory:ClearPendingAction(entity: number)
-	self:RequireReady()
-	local action = self:GetCombatAction(entity) or _buildDefaultAction()
-	self:SetCombatAction(entity, {
-		CurrentActionId = action.CurrentActionId,
-		ActionState = action.ActionState,
-		ActionData = action.ActionData,
-		PendingActionId = nil,
-		PendingActionData = nil,
-		StartedAt = action.StartedAt,
-		FinishedAt = action.FinishedAt,
-	})
-end
-
-function EnemyEntityFactory:StartAction(entity: number, actionId: string, actionData: any?, currentTime: number)
-	self:RequireReady()
-	self:SetCombatAction(entity, {
-		CurrentActionId = actionId,
-		ActionState = "Running",
-		ActionData = actionData,
-		PendingActionId = nil,
-		PendingActionData = nil,
-		StartedAt = currentTime,
-		FinishedAt = nil,
-	})
-end
-
-function EnemyEntityFactory:ClearAction(entity: number)
-	self:RequireReady()
-	self:SetCombatAction(entity, _buildDefaultAction())
-end
-
-function EnemyEntityFactory:ResetActionState(entity: number)
-	self:RequireReady()
-	self:SetCombatAction(entity, _buildDefaultAction())
-end
-
-function EnemyEntityFactory:GetBehaviorConfig(entity: number)
-	self:RequireReady()
-	return self:_Get(entity, self._components.BehaviorConfigComponent)
-end
-
 function EnemyEntityFactory:GetAttackCooldown(entity: number)
 	self:RequireReady()
 	return self:_Get(entity, self._components.AttackCooldownComponent)
@@ -300,22 +150,6 @@ function EnemyEntityFactory:SetLastAttackTime(entity: number, lastAttackTime: nu
 		Cooldown = attackCooldown.Cooldown,
 		LastAttackTime = lastAttackTime,
 	})
-end
-
-function EnemyEntityFactory:SetBehaviorConfig(entity: number, config: { TickInterval: number })
-	self:RequireReady()
-	self:_Set(entity, self._components.BehaviorConfigComponent, {
-		TickInterval = config.TickInterval,
-	})
-
-	local behaviorTree = self:GetBehaviorTree(entity)
-	if behaviorTree ~= nil then
-		self:_Set(entity, self._components.BehaviorTreeComponent, {
-			TreeInstance = behaviorTree.TreeInstance,
-			TickInterval = config.TickInterval,
-			LastTickTime = behaviorTree.LastTickTime,
-		})
-	end
 end
 
 function EnemyEntityFactory:MarkGoalReached(entity: number)
@@ -349,23 +183,11 @@ function EnemyEntityFactory:ApplyDamage(entity: number, amount: number): boolean
 end
 
 function EnemyEntityFactory:UpdatePosition(entity: number, cframe: CFrame)
-	self:RequireReady()
-	self:_Set(entity, self._components.PositionComponent, { cframe = cframe })
+	self:SetTransformCFrame(entity, cframe)
 end
 
 function EnemyEntityFactory:GetDeathCFrame(entity: number): CFrame?
-	self:RequireReady()
-	local modelRef = self:GetModelRef(entity)
-	if modelRef ~= nil then
-		return modelRef.model:GetPivot()
-	end
-
-	local position = self:GetPosition(entity)
-	if position ~= nil then
-		return position.cframe
-	end
-
-	return nil
+	return self:GetEntityCFrame(entity)
 end
 
 function EnemyEntityFactory:IsAlive(entity: number): boolean
@@ -456,32 +278,11 @@ function EnemyEntityFactory:ClearLockOn(entity: number)
 	})
 end
 
-function EnemyEntityFactory:GetModelRef(entity: number)
-	self:RequireReady()
-	return self:_Get(entity, self._components.ModelRefComponent)
-end
-
 function EnemyEntityFactory:GetPosition(entity: number)
-	self:RequireReady()
-	return self:_Get(entity, self._components.PositionComponent)
+	return self:GetTransform(entity)
 end
 
-function EnemyEntityFactory:GetEntityCFrame(entity: number): CFrame?
-	self:RequireReady()
-	local modelRef = self:GetModelRef(entity)
-	if modelRef ~= nil and modelRef.model ~= nil then
-		return modelRef.model:GetPivot()
-	end
-
-	local position = self:GetPosition(entity)
-	if position == nil then
-		return nil
-	end
-
-	return position.cframe
-end
-
-function EnemyEntityFactory:GetNearestAliveEnemy(position: Vector3, maxRange: number): { entity: number, cframe: CFrame }?
+function EnemyEntityFactory:GetNearestAliveEnemy(position: Vector3, maxRange: number): { entity: number, CFrame: CFrame }?
 	self:RequireReady()
 
 	local nearestEntity = nil :: number?
@@ -510,7 +311,7 @@ function EnemyEntityFactory:GetNearestAliveEnemy(position: Vector3, maxRange: nu
 
 	return {
 		entity = nearestEntity,
-		cframe = nearestCFrame,
+		CFrame = nearestCFrame,
 	}
 end
 

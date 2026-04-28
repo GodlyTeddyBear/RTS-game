@@ -208,8 +208,8 @@ function ProjectileService:_BuildRaycastParams(structureEntity: number): Raycast
 
 	local excludedInstances = {}
 	local modelRef = self._structureEntityFactory:GetModelRef(structureEntity)
-	if modelRef ~= nil and modelRef.model ~= nil then
-		table.insert(excludedInstances, modelRef.model)
+	if modelRef ~= nil and modelRef.Model ~= nil then
+		table.insert(excludedInstances, modelRef.Model)
 	end
 	if self._projectileFolder ~= nil then
 		table.insert(excludedInstances, self._projectileFolder)
@@ -284,20 +284,20 @@ end
 
 function ProjectileService:_ResolveStructureMuzzleCFrame(structureEntity: number): CFrame?
 	local modelRef = self._structureEntityFactory:GetModelRef(structureEntity)
-	if modelRef == nil or modelRef.model == nil or modelRef.model.Parent == nil then
+	if modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
 		return nil
 	end
 
-	local muzzle = modelRef.model:FindFirstChild(MUZZLE_ATTACHMENT_NAME, true)
+	local muzzle = modelRef.Model:FindFirstChild(MUZZLE_ATTACHMENT_NAME, true)
 	if muzzle ~= nil and muzzle:IsA("Attachment") then
 		return muzzle.WorldCFrame
 	end
 
-	if modelRef.model.PrimaryPart ~= nil then
-		return modelRef.model.PrimaryPart.CFrame
+	if modelRef.Model.PrimaryPart ~= nil then
+		return modelRef.Model.PrimaryPart.CFrame
 	end
 
-	return modelRef.model:GetPivot()
+	return modelRef.Model:GetPivot()
 end
 
 function ProjectileService:_BuildBulletCache(config: TBulletConfig): any?

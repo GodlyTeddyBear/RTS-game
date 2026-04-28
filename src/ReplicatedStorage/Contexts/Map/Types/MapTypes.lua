@@ -9,7 +9,11 @@ export type MapRootComponent = {
 }
 
 export type MapInstanceComponent = {
-	Instance: Model,
+	Model: Model,
+}
+
+export type TransformComponent = {
+	CFrame: CFrame,
 }
 
 export type ZoneComponent = {

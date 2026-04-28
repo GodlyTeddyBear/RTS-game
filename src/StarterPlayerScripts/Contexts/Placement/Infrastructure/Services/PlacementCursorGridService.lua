@@ -1,11 +1,14 @@
 --!strict
 
---[[
-    Module: PlacementCursorGridService
-    Purpose: Provides client-side coordinate and tile filtering helpers for placement cursor logic.
-    Used In System: Called by placement commands and queries to convert cursor positions into valid grid tiles.
-    Boundaries: Owns presentation-facing coordinate filtering only; does not own authoritative world state or placement writes.
-]]
+--[=[
+    @class PlacementCursorGridService
+    Resolves client-side placement grid coordinates and valid tile filters for cursor logic.
+
+    Placement commands and queries call this service to convert between world positions,
+    grid coordinates, and placement eligibility. It owns client-side filtering only and
+    does not own authoritative placement state or writes.
+    @client
+]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -20,12 +23,16 @@ type TileDescriptor = WorldTypes.TileDescriptor
 
 type OccupiedSet = { [string]: boolean }
 
+-- [Private Helpers]
+
 local PlacementCursorGridService = {}
 
+-- Builds a stable key for a grid coordinate so occupied lookups can use string tables.
 local function _GetCoordKey(row: number, col: number): string
 	return ("%d_%d"):format(row, col)
 end
 
+-- Clones a grid coordinate so callers receive a frozen value object instead of runtime state.
 local function _CloneCoord(row: number, col: number): GridCoord
 	return table.freeze({
 		row = row,
@@ -33,6 +40,15 @@ local function _CloneCoord(row: number, col: number): GridCoord
 	})
 end
 
+-- [Public API]
+
+--[=[
+    Converts a grid coordinate to world space.
+    @within PlacementCursorGridService
+    @param row number -- Grid row index.
+    @param col number -- Grid column index.
+    @return Vector3 -- The world position for the grid coordinate.
+]=]
 function PlacementCursorGridService.CoordToWorld(row: number, col: number): Vector3
 	return PlacementGridRuntime.CoordToWorld({
 		row = row,
@@ -40,6 +56,12 @@ function PlacementCursorGridService.CoordToWorld(row: number, col: number): Vect
 	})
 end
 
+--[=[
+    Converts a world position to a frozen grid coordinate.
+    @within PlacementCursorGridService
+    @param worldPos Vector3 -- The world-space position to resolve.
+    @return GridCoord? -- The matching grid coordinate, or nil when outside the grid.
+]=]
 function PlacementCursorGridService.WorldToCoord(worldPos: Vector3): GridCoord?
 	local coord = PlacementGridRuntime.WorldToCoord(worldPos)
 	if coord == nil then
@@ -48,6 +70,13 @@ function PlacementCursorGridService.WorldToCoord(worldPos: Vector3): GridCoord?
 	return _CloneCoord(coord.row, coord.col)
 end
 
+--[=[
+    Returns the zone type for a grid tile.
+    @within PlacementCursorGridService
+    @param row number -- Grid row index.
+    @param col number -- Grid column index.
+    @return ZoneType? -- The zone type for the tile, or nil if the tile is unavailable.
+]=]
 function PlacementCursorGridService.GetZone(row: number, col: number): ZoneType?
 	local descriptor = PlacementGridRuntime.GetTileDescriptor(row, col)
 	if descriptor == nil then
@@ -56,14 +85,32 @@ function PlacementCursorGridService.GetZone(row: number, col: number): ZoneType?
 	return descriptor.zone
 end
 
+--[=[
+    Returns the full tile descriptor for a grid coordinate.
+    @within PlacementCursorGridService
+    @param row number -- Grid row index.
+    @param col number -- Grid column index.
+    @return TileDescriptor? -- The resolved tile descriptor, or nil if unavailable.
+]=]
 function PlacementCursorGridService.GetTileDescriptor(row: number, col: number): TileDescriptor?
 	return PlacementGridRuntime.GetTileDescriptor(row, col)
 end
 
+--[=[
+    Clears the runtime grid cache.
+    @within PlacementCursorGridService
+]=]
 function PlacementCursorGridService.ResetRuntimeCache()
 	PlacementGridRuntime.ResetCache()
 end
 
+--[=[
+    Returns all valid placement tiles for a structure type.
+    @within PlacementCursorGridService
+    @param structureType string -- The structure type being placed.
+    @param occupiedSet OccupiedSet -- Precomputed occupied tile lookup.
+    @return { GridCoord } -- Frozen list of valid placement coordinates.
+]=]
 function PlacementCursorGridService.GetValidTiles(structureType: string, occupiedSet: OccupiedSet): { GridCoord }
 	local placementCost = PlacementConfig.STRUCTURE_PLACEMENT_COSTS[structureType]
 	if placementCost == nil then
@@ -74,12 +121,15 @@ function PlacementCursorGridService.GetValidTiles(structureType: string, occupie
 	local validTiles = {}
 	for row = 1, spec.gridRows do
 		for col = 1, spec.gridCols do
+			-- Resolve the tile descriptor once so every filter checks the same tile state.
 			local descriptor = PlacementCursorGridService.GetTileDescriptor(row, col)
 			local coordKey = _GetCoordKey(row, col)
 			local zone = descriptor and descriptor.zone or nil
+			-- Base zone filters and per-structure placement prohibitions are enforced together here.
 			local isZoneDisallowed = zone ~= nil and PlacementConfig.BASE_DISALLOWED_ZONE_TYPES[zone] == true
 			local isPlacementProhibited = descriptor ~= nil and descriptor.isPlacementProhibited == true
 			local requiresResourceTile = PlacementConfig.REQUIRES_RESOURCE_TILE[structureType] == true
+			-- Resource-only structures are restricted to side-pocket tiles with a resolved resource type.
 			local hasRequiredResourceTile = not requiresResourceTile
 				or (descriptor ~= nil and descriptor.zone == "side_pocket" and descriptor.resourceType ~= nil)
 			if

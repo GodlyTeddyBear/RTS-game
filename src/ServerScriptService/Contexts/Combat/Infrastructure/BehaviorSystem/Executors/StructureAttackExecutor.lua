@@ -19,7 +19,7 @@ type TProjectileActivationResult = {
 ]=]
 local StructureAttackExecutor = {}
 StructureAttackExecutor.__index = StructureAttackExecutor
-setmetatable(StructureAttackExecutor, { __index = BaseExecutor })
+setmetatable(StructureAttackExecutor, BaseExecutor)
 
 function StructureAttackExecutor.new()
 	local self = BaseExecutor.new({
@@ -49,12 +49,12 @@ end
 
 local function _RecordActivationSource(entity: number, services: any, source: string)
 	local modelRef = services.StructureEntityFactory:GetModelRef(entity)
-	if modelRef == nil or modelRef.model == nil or modelRef.model.Parent == nil then
+	if modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
 		return
 	end
 
-	modelRef.model:SetAttribute("LastProjectileActivationSource", source)
-	modelRef.model:SetAttribute("LastProjectileActivatedAt", services.CurrentTime)
+	modelRef.Model:SetAttribute("LastProjectileActivationSource", source)
+	modelRef.Model:SetAttribute("LastProjectileActivatedAt", services.CurrentTime)
 end
 
 local function _isTargetInRange(entity: number, targetEnemy: number, services: any): boolean

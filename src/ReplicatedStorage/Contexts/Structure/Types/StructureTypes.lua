@@ -75,6 +75,14 @@ export type TInstanceRefComponent = {
 	WorldPos: Vector3,
 }
 
+export type TModelRefComponent = {
+	Model: Model,
+}
+
+export type TTransformComponent = {
+	CFrame: CFrame,
+}
+
 --[=[
 	@interface TIdentityComponent
 	@within StructureTypes

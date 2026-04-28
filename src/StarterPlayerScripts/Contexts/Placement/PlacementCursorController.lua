@@ -1,5 +1,15 @@
 --!strict
 
+--[=[
+    @class PlacementCursorController
+    Owns the client-side placement cursor session, render loop, and input wiring.
+
+    The controller coordinates application commands, infrastructure services, and input
+    bindings to preview placement, refresh valid tiles, and submit placement requests.
+    It does not own placement rules or authoritative world mutation.
+    @client
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -32,10 +42,16 @@ type GridCoord = PlacementTypes.GridCoord
 type PlacementAtom = PlacementTypes.PlacementAtom
 type RunState = RunTypes.RunState
 
+-- [Public API]
+
 local PlacementCursorController = Knit.CreateController({
 	Name = "PlacementCursorController",
 })
 
+--[=[
+    Initializes placement cursor state, queries, commands, and session infrastructure.
+    @within PlacementCursorController
+]=]
 function PlacementCursorController:KnitInit()
 	self._controllerJanitor = Janitor.new()
 	self._sessionJanitor = Janitor.new()
@@ -94,6 +110,10 @@ function PlacementCursorController:KnitInit()
 	self._confirmPlacementCommand = ConfirmPlacementCommand.new(self._exitPlacementModeCommand)
 end
 
+--[=[
+    Binds placement dependencies and the cancel input action.
+    @within PlacementCursorController
+]=]
 function PlacementCursorController:KnitStart()
 	self._playerInputController = Knit.GetController("PlayerInputController")
 	self._placementController = Knit.GetController("PlacementController")
@@ -140,18 +160,36 @@ function PlacementCursorController:KnitStart()
 	end)
 end
 
+--[=[
+    Toggles placement mode for a structure type.
+    @within PlacementCursorController
+    @param structureType string -- The structure type to toggle.
+]=]
 function PlacementCursorController:TogglePlacementMode(structureType: string)
 	self._togglePlacementModeCommand:Execute(self, self._commandDeps, structureType)
 end
 
+--[=[
+    Enters placement mode for a structure type.
+    @within PlacementCursorController
+    @param structureType string -- The structure type to preview and place.
+]=]
 function PlacementCursorController:EnterPlacementMode(structureType: string)
 	self._enterPlacementModeCommand:Execute(self, self._commandDeps, structureType)
 end
 
+--[=[
+    Exits the active placement session.
+    @within PlacementCursorController
+]=]
 function PlacementCursorController:ExitPlacementMode()
 	self._exitPlacementModeCommand:Execute(self, self._commandDeps)
 end
 
+--[=[
+    Disconnects placement session listeners and destroys placement visuals.
+    @within PlacementCursorController
+]=]
 function PlacementCursorController:Destroy()
 	self:ExitPlacementMode()
 	self._sessionJanitor:Destroy()
@@ -161,6 +199,7 @@ function PlacementCursorController:Destroy()
 	end
 end
 
+-- Keeps the active placement session in sync with render-time state and grid changes.
 function PlacementCursorController:_OnRenderStepped()
 	if self._state ~= "Active" then
 		return
@@ -184,10 +223,12 @@ function PlacementCursorController:_OnRenderStepped()
 	self:_UpdateHoverState()
 end
 
+-- Delegates hover syncing to the placement hover command so render logic stays thin.
 function PlacementCursorController:_UpdateHoverState()
 	self._updateHoverStateCommand:Execute(self, self._commandDeps)
 end
 
+-- Handles confirm-cancel input for the active placement session only.
 function PlacementCursorController:_OnInputBegan(input: InputObject, gameProcessed: boolean)
 	if gameProcessed or self._state ~= "Active" or self._confirming then
 		return
@@ -199,6 +240,7 @@ function PlacementCursorController:_OnInputBegan(input: InputObject, gameProcess
 	end
 end
 
+-- Delegates placement confirmation to the command that owns remote submission.
 function PlacementCursorController:_ConfirmPlacement()
 	self._confirmPlacementCommand:Execute(self, self._commandDeps)
 end

@@ -76,8 +76,8 @@ function EnemyGameObjectSyncService:RegisterEntity(entity: any, model: Model?)
 	local resolvedModel = model
 	if resolvedModel == nil then
 		local modelRef = self.World:get(entity, self.Components.ModelRefComponent)
-		if modelRef and modelRef.model then
-			resolvedModel = modelRef.model
+		if modelRef and modelRef.Model then
+			resolvedModel = modelRef.Model
 		end
 	end
 
