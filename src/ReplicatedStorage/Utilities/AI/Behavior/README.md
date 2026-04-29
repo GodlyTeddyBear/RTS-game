@@ -1,6 +1,6 @@
-# BehaviorSystem
+# AI.Behavior
 
-Shared utility for validating symbolic behavior definitions and compiling them into concrete `BehaviorTree` instances.
+Shared AI package module for validating symbolic behavior definitions and compiling them into concrete `BehaviorTree` instances.
 
 ## Purpose
 
@@ -10,7 +10,7 @@ Shared utility for validating symbolic behavior definitions and compiling them i
 
 ## Internal Architecture (DDD-Mimic)
 
-`BehaviorSystem` remains a utility library in `ReplicatedStorage`. It is **not** a server bounded context.
+`AI.Behavior` remains a utility library in `ReplicatedStorage`. It is **not** a server bounded context.
 
 Its internals now mimic multiple bounded-style internal contexts for organization only:
 
@@ -45,7 +45,7 @@ Builder methods:
 
 Runtime methods:
 
-- `BehaviorSystem.new(config)` creates a runtime facade with a configured builder.
+- `AI.Behavior.new(config)` creates a runtime facade with a configured builder.
 - `runtime:Validate(definition)` validates against the configured registries.
 - `runtime:BuildTree(definition)` builds a `BehaviorTree`.
 - `runtime:RegisterAction(definition)` registers one action definition and executor.
@@ -117,7 +117,7 @@ Types:
 ```lua
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local BehaviorSystem = require(ReplicatedStorage.Utilities.BehaviorSystem)
+local BehaviorSystem = require(ReplicatedStorage.Utilities.AI.Behavior)
 
 local conditions = {
 	HasWaypoints = function()
@@ -167,7 +167,7 @@ tree:run({
 ```lua
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local BehaviorSystem = require(ReplicatedStorage.Utilities.BehaviorSystem)
+local BehaviorSystem = require(ReplicatedStorage.Utilities.AI.Behavior)
 
 local conditions = {
 	HasTarget = function()

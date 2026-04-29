@@ -2,7 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local BehaviorSystem = require(ReplicatedStorage.Utilities.BehaviorSystem)
+local BehaviorSystem = require(ReplicatedStorage.Utilities.AI.Behavior)
 
 local HookRunner = require(script.Parent.HookRunner)
 local Types = require(script.Parent.Types)
@@ -16,6 +16,8 @@ type TFrameContext = Types.TFrameContext
 type TRunFrameEntityResult = Types.TRunFrameEntityResult
 type TRunFrameResult = Types.TRunFrameResult
 type TErrorSinkPayload = Types.TErrorSinkPayload
+type TCleanupKind = Types.TCleanupKind
+type TCleanupResult = Types.TCleanupResult
 
 type THookOutcome = HookRunner.THookOutcome
 
@@ -32,6 +34,7 @@ local _ResolveActorTypes
 local _BuildTreeContext
 local _CloneActionState
 local _GetActorLabel
+local _BuildCleanupResult
 
 local Runtime = {}
 Runtime.__index = Runtime
@@ -71,6 +74,14 @@ end
 
 function Runtime:GetExecutor(actionId: string)
 	return self._runtime:GetExecutor(actionId)
+end
+
+function Runtime:CancelActorAction(actorType: string, entity: number, frameContext: TFrameContext): TCleanupResult
+	return self:_CleanupActorAction("Cancel", actorType, entity, frameContext)
+end
+
+function Runtime:HandleActorDeath(actorType: string, entity: number, frameContext: TFrameContext): TCleanupResult
+	return self:_CleanupActorAction("Death", actorType, entity, frameContext)
 end
 
 function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
@@ -118,18 +129,7 @@ function Runtime:_BuildEntityStates(
 		}
 		table.insert(entityResults, result)
 
-		local actionState = _CloneActionState(adapter:GetActionState(entity))
-		local baseServices = if frameContext.Services ~= nil then frameContext.Services else {}
-		local hookContext = {
-			Entity = entity,
-			ActorType = actorType,
-			ActionState = actionState,
-			FrameContext = frameContext,
-			Services = baseServices,
-			Adapter = adapter,
-		}
-
-		local hookOutcome = self:_RunHooks(entity, actorType, adapter, hookContext, defects)
+		local hookOutcome = self:_BuildHookOutcome(actorType, entity, adapter, frameContext, defects)
 		local behaviorTree = adapter:GetBehaviorTree(entity)
 
 		table.insert(entityStates, {
@@ -143,6 +143,82 @@ function Runtime:_BuildEntityStates(
 	end
 
 	return entityStates
+end
+
+function Runtime:_CleanupActorAction(
+	cleanupKind: TCleanupKind,
+	actorType: string,
+	entity: number,
+	frameContext: TFrameContext
+): TCleanupResult
+	Validation.ValidateActorType(actorType)
+	Validation.ValidateFrameContext(frameContext)
+
+	local adapter = self:_RequireActorAdapter(actorType)
+	if adapter == nil then
+		return _BuildCleanupResult(actorType, entity, cleanupKind, "InvalidActorType", nil)
+	end
+
+	local defects = {}
+	local actionState = _CloneActionState(adapter:GetActionState(entity))
+	local hookOutcome = self:_BuildHookOutcome(actorType, entity, adapter, frameContext, defects)
+	local runtimeContext = {
+		DeltaTime = frameContext.DeltaTime,
+		Services = hookOutcome.Services,
+	}
+
+	local cleanupResult = if cleanupKind == "Cancel"
+		then self._runtime:CancelCurrentAction(entity, actionState, runtimeContext)
+		else self._runtime:HandleCurrentActionDeath(entity, actionState, runtimeContext)
+
+	if not cleanupResult.success then
+		local defect = {
+			Stage = if cleanupKind == "Cancel" then "CancelActorAction" else "HandleActorDeath",
+			ActorType = actorType,
+			Entity = entity,
+			ActorLabel = _GetActorLabel(adapter),
+			ErrorType = cleanupResult.type,
+			ErrorMessage = cleanupResult.message,
+			Details = nil,
+		}
+		self:_PushDefect(defects, defect)
+		adapter:ClearActionState(entity)
+
+		return _BuildCleanupResult(actorType, entity, cleanupKind, "ClearedAfterFailure", defect)
+	end
+
+	adapter:ClearActionState(entity)
+
+	if cleanupResult.value.Status == "NoCurrentAction" then
+		return _BuildCleanupResult(actorType, entity, cleanupKind, "NoCurrentAction", nil)
+	end
+
+	return _BuildCleanupResult(actorType, entity, cleanupKind, "Handled", nil)
+end
+
+function Runtime:_RequireActorAdapter(actorType: string): TActorAdapter?
+	return self._actorAdapters[actorType]
+end
+
+function Runtime:_BuildHookOutcome(
+	actorType: string,
+	entity: number,
+	adapter: TActorAdapter,
+	frameContext: TFrameContext,
+	defects: { TErrorSinkPayload }
+): THookOutcome
+	local actionState = _CloneActionState(adapter:GetActionState(entity))
+	local baseServices = if frameContext.Services ~= nil then frameContext.Services else {}
+	local hookContext = {
+		Entity = entity,
+		ActorType = actorType,
+		ActionState = actionState,
+		FrameContext = frameContext,
+		Services = baseServices,
+		Adapter = adapter,
+	}
+
+	return self:_RunHooks(entity, actorType, adapter, hookContext, defects)
 end
 
 function Runtime:_RunTreePhase(
@@ -436,6 +512,22 @@ function _GetActorLabel(adapter: TActorAdapter): string?
 	end
 
 	return adapter:GetActorLabel()
+end
+
+function _BuildCleanupResult(
+	actorType: string,
+	entity: number,
+	cleanupKind: TCleanupKind,
+	status: string,
+	defect: TErrorSinkPayload?
+): TCleanupResult
+	return {
+		ActorType = actorType,
+		Entity = entity,
+		CleanupKind = cleanupKind,
+		Status = status,
+		Defect = defect,
+	}
 end
 
 return table.freeze(Runtime)

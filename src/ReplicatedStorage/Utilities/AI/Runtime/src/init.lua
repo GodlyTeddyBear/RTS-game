@@ -24,6 +24,8 @@ export type TFrameContext = Types.TFrameContext
 export type TErrorSinkPayload = Types.TErrorSinkPayload
 export type TRunFrameEntityResult = Types.TRunFrameEntityResult
 export type TRunFrameResult = Types.TRunFrameResult
+export type TCleanupKind = Types.TCleanupKind
+export type TCleanupResult = Types.TCleanupResult
 
 --[=[
 	Creates a runtime facade for the supplied condition, command, and hook registries.

@@ -30,6 +30,8 @@ export type TActionDefinition = {
 	Executor: any?,
 }
 
+export type TCleanupKind = "Cancel" | "Death"
+
 --[=[
 	Ordered hook module used to contribute facts, behavior context, and runtime services.
 	@within AiRuntimeTypes
@@ -170,6 +172,24 @@ export type TRunFrameEntityResult = {
 export type TRunFrameResult = {
 	EntityResults: { TRunFrameEntityResult },
 	Defects: { TErrorSinkPayload },
+}
+
+--[=[
+	Result returned from the explicit actor-cleanup APIs.
+	@within AiRuntimeTypes
+	@interface TCleanupResult
+	.ActorType string -- Registered actor-type key used to resolve the adapter
+	.Entity number -- Runtime entity id being cleaned up
+	.CleanupKind TCleanupKind -- Cleanup path used for this request
+	.Status string -- `NoCurrentAction`, `Handled`, `ClearedAfterFailure`, or `InvalidActorType`
+	.Defect TErrorSinkPayload? -- Optional executor defect captured during cleanup
+]=]
+export type TCleanupResult = {
+	ActorType: string,
+	Entity: number,
+	CleanupKind: TCleanupKind,
+	Status: string,
+	Defect: TErrorSinkPayload?,
 }
 
 --[=[
