@@ -7,24 +7,23 @@ description: Read when you need this skill reference template and workflow rules
 
 <!-- This is a repo-local prompt template. Codex does not automatically expose this as a slash command. Prefer the matching skill when available. -->
 
-Create a new frontend feature slice named $ARGUMENTS.
-
+Create a new frontend feature slice named `$ARGUMENTS`.
 
 ---
 
 ## What to do
 
-1. Read `src/StarterPlayerScripts/Contexts/` to understand the existing feature structure before creating anything.
-2. Read the Counter feature at `src/StarterPlayerScripts/Contexts/Counter/` as the reference implementation — mirror its structure exactly.
-3. Scaffold the full folder structure and all boilerplate files listed below.
-4. After creating all files, report what was created.
-
+1. Read `.codex/Templates/README.md` and `.codex/Templates/frontend-feature.md` before creating anything.
+2. Read `src/StarterPlayerScripts/Contexts/` to understand the existing feature structure before creating anything.
+3. Read the Counter feature at `src/StarterPlayerScripts/Contexts/Counter/` as the reference implementation and mirror its structure exactly.
+4. Scaffold the full folder structure and all boilerplate files listed below.
+5. After creating all files, report what was created.
 
 ---
 
 ## Folder structure to create
 
-```
+```text
 src/StarterPlayerScripts/Contexts/$ARGUMENTS/
 ├── Infrastructure/
 │   └── $ARGUMENTS Atom.lua
@@ -42,12 +41,12 @@ src/StarterPlayerScripts/Contexts/$ARGUMENTS/
 └── Types/
 ```
 
-
 ---
 
 ## File contents
 
 ### `Infrastructure/$ARGUMENTS Atom.lua`
+
 ```lua
 --!strict
 
@@ -68,6 +67,7 @@ return create$ARGUMENTS Atom
 ```
 
 ### `Application/Hooks/use$ARGUMENTS.lua`
+
 ```lua
 --!strict
 
@@ -88,17 +88,14 @@ return use$ARGUMENTS
 ```
 
 ### `Application/Hooks/use$ARGUMENTS Actions.lua`
+
 ```lua
 --!strict
 
--- Write hook — does NOT subscribe to atom, no re-renders triggered
+-- Write hook - does NOT subscribe to atom, no re-renders triggered
 local function use$ARGUMENTS Actions()
     return {
         -- Add mutation functions here
-        -- Example:
-        -- doSomething = function()
-        --     atom({ ... })
-        -- end,
     }
 end
 
@@ -106,6 +103,7 @@ return use$ARGUMENTS Actions
 ```
 
 ### `Application/ViewModels/$ARGUMENTS ViewModel.lua`
+
 ```lua
 --!strict
 
@@ -126,6 +124,7 @@ return $ARGUMENTS ViewModel
 ```
 
 ### `Presentation/Templates/$ARGUMENTS Screen.lua`
+
 ```lua
 --!strict
 
@@ -154,6 +153,7 @@ return $ARGUMENTS Screen
 ```
 
 ### `Presentation/init.lua`
+
 ```lua
 --!strict
 
@@ -164,13 +164,12 @@ return {
 }
 ```
 
-
 ---
 
 ## Rules to follow
 
-- Read hook (`use$ARGUMENTS.lua`) uses `ReactCharm.useAtom()` — subscribes to state
-- Write hook (`use$ARGUMENTS Actions.lua`) does NOT call `ReactCharm.useAtom()` — no subscription
+- Read hook (`use$ARGUMENTS.lua`) uses `ReactCharm.useAtom()` - subscribes to state
+- Write hook (`use$ARGUMENTS Actions.lua`) does NOT call `ReactCharm.useAtom()` - no subscription
 - ViewModel returns a `table.freeze()`d table
 - Template is the only place hooks are called and ViewModels constructed
 - No business logic in Presentation components

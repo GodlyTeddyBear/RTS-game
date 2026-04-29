@@ -11,17 +11,17 @@ Create a new backend bounded context named `$ARGUMENTS`.
 
 `$ARGUMENTS` format: `<ContextName>` in PascalCase with no spaces (for example: `Fishing`, `PetTraining`).
 
-
 ---
 
 ## What to do
 
-1. Read `src/ServerScriptService/Contexts/` to verify naming and existing context patterns before creating files.
-2. Read `.codex/documents/methods/backend/BASE_CONTEXT_CONTRACTS.md` and `.codex/documents/architecture/backend/ERROR_HANDLING.md` to align with BaseContext and Result boundary rules.
-3. Read persistence event contracts:
+1. Read `.codex/Templates/README.md` and `.codex/Templates/backend-context.md` before creating anything.
+2. Read `src/ServerScriptService/Contexts/` to verify naming and existing context patterns before creating files.
+3. Read `.codex/documents/methods/backend/BASE_CONTEXT_CONTRACTS.md` and `.codex/documents/architecture/backend/ERROR_HANDLING.md` to align with BaseContext and Result boundary rules.
+4. Read persistence event contracts:
    - `src/ReplicatedStorage/Events/GameEvents/Misc/Persistence.lua`
    - `src/ServerScriptService/Persistence/PlayerLifecycleManager.lua`
-4. If the new context will own ECS infrastructure, also read:
+5. If the new context will own ECS infrastructure, also read:
    - `.codex/documents/methods/ECS/COMPONENT_RULES.md`
    - `.codex/documents/methods/ECS/ENTITY_FACTORY_RULES.md`
    - `.codex/documents/methods/ECS/WORLD_ISOLATION_RULES.md`
@@ -30,10 +30,9 @@ Create a new backend bounded context named `$ARGUMENTS`.
    - `.codex/documents/methods/ECS/TAG_RULES.md`
    - `.codex/documents/methods/ECS/INSTANCE_REVEAL_RULES.md`
    - `.codex/documents/methods/ECS/ECS_PERSISTENCE_RULES.md`
-5. Scaffold the folder structure below using the exact naming shown.
-6. Create only the boilerplate files listed below; do not create command/query/domain/infrastructure implementation files yet.
-7. After creation, report every file and folder created.
-
+6. Scaffold the folder structure below using the exact naming shown.
+7. Create only the boilerplate files listed below; do not create command/query/domain/infrastructure implementation files yet.
+8. After creation, report every file and folder created.
 
 ---
 
@@ -66,76 +65,6 @@ src/ReplicatedStorage/Contexts/<ContextName>/
 |- Types/
 `- Sync/
 ```
-
-
----
-
-## File contents
-
-### `<ContextName>Context.lua`
-
-```lua
---!strict
-
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Knit = require(ReplicatedStorage.Packages.Knit)
-local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
-
-local InfrastructureModules: { BaseContext.TModuleSpec } = {}
-local ApplicationModules: { BaseContext.TModuleSpec } = {}
-
-local <ContextName>Modules: BaseContext.TModuleLayers = {
-    Infrastructure = InfrastructureModules,
-    Application = ApplicationModules,
-}
-
-local <ContextName>Context = Knit.CreateService({
-    Name = "<ContextName>Context",
-    Client = {},
-    Modules = <ContextName>Modules,
-})
-
-local <ContextName>BaseContext = BaseContext.new(<ContextName>Context)
-
-function <ContextName>Context:KnitInit()
-    <ContextName>BaseContext:KnitInit()
-end
-
-function <ContextName>Context:KnitStart()
-    <ContextName>BaseContext:KnitStart()
-end
-
-return <ContextName>Context
-```
-
-### `Errors.lua`
-
-```lua
---!strict
-
-return table.freeze({
-    -- Add SCREAMING_SNAKE_CASE error constants as features are added
-    -- Example: INVALID_REQUEST = "Request is invalid",
-})
-```
-
-### `src/ReplicatedStorage/Contexts/<ContextName>/Types/<ContextName>Types.lua`
-
-```lua
---!strict
-
---[=[
-	@class <ContextName>Types
-	Defines shared types for the <ContextName> context.
-]=]
-local <ContextName>Types = {}
-
--- Add `export type ...` declarations here as the context grows.
--- Keep context-shared DTO/shape types centralized in this file.
-
-return table.freeze(<ContextName>Types)
-```
-
 
 ---
 

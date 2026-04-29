@@ -159,6 +159,23 @@ Use this path when you need an implementation-ready plan, not when you are alrea
 
 ---
 
+## Creation Templates
+
+### If you are creating backend or frontend scaffolding
+
+Read in this order:
+
+1. [.codex/Templates/README.md](../../Templates/README.md)
+2. The matching template:
+   - [backend-context.md](../../Templates/backend-context.md) for new backend contexts
+   - [backend-service.md](../../Templates/backend-service.md) for backend modules inside an existing context
+   - [backend-syncservice.md](../../Templates/backend-syncservice.md) for any `*SyncService`
+   - [frontend-feature.md](../../Templates/frontend-feature.md) for new frontend feature slices
+
+Use this path before creating anything so the template rules are the first read.
+
+---
+
 ## Documentation Work
 
 ### If you are creating or improving a `.codex/` markdown file

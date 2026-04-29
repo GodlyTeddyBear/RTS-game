@@ -11,13 +11,11 @@ Implement the feature request in `$ARGUMENTS` end-to-end.
 
 If `$ARGUMENTS` is empty, stop and ask the user to provide the feature request first.
 
-
 ---
 
 ## Goal
 
 Deliver working code, not just a plan. Ensure required architecture/context files are read before editing.
-
 
 ---
 
@@ -25,7 +23,8 @@ Deliver working code, not just a plan. Ensure required architecture/context file
 
 1. Read `.codex/MEMORIES.md`.
 2. Read `.codex/documents/ONBOARDING.md` to select the correct architecture docs.
-3. Determine scope from the request:
+3. Read `.codex/Templates/README.md` and the relevant template before creating anything.
+4. Determine scope from the request:
    - Backend scope: read `.codex/documents/architecture/backend/DDD.md`, `CQRS.md`, `ERROR_HANDLING.md`, and `STATE_SYNC.md`.
    - Frontend scope: read `.codex/documents/architecture/frontend/FRONTEND.md`, `LAYERS.md`, `HOOKS.md`, `COMPONENTS.md`, and `DEPENDENCY_RULES.md`.
    - Mixed scope: read both backend and frontend sets above.
@@ -34,6 +33,8 @@ Deliver working code, not just a plan. Ensure required architecture/context file
      - `src/ServerScriptService/Persistence/SessionManager.lua`
      - `src/ServerScriptService/Persistence/PlayerLifecycleManager.lua`
    - If backend involves context or application scaffolding, also read:
+     - `.codex/Templates/backend-context.md`
+     - `.codex/Templates/backend-service.md`
      - `.codex/documents/methods/backend/BASE_CONTEXT_CONTRACTS.md`
      - `.codex/documents/methods/backend/BASE_APPLICATION_CONTRACTS.md`
    - If backend involves ECS infrastructure, also read:
@@ -45,23 +46,22 @@ Deliver working code, not just a plan. Ensure required architecture/context file
      - `.codex/documents/methods/ECS/TAG_RULES.md`
      - `.codex/documents/methods/ECS/INSTANCE_REVEAL_RULES.md`
      - `.codex/documents/methods/ECS/ECS_PERSISTENCE_RULES.md`
-4. Read target code before changing it (no speculation):
+5. Read target code before changing it (no speculation):
    - Existing context entry: `src/ServerScriptService/Contexts/<ContextName>/<ContextName>Context.lua` when backend is involved.
    - Existing errors/types when backend is involved:
      - `src/ServerScriptService/Contexts/<ContextName>/Errors.lua`
      - `src/ReplicatedStorage/Contexts/<ContextName>/Types/<ContextName>Types.lua`
    - Existing feature entry: `src/StarterPlayerScripts/Contexts/<FeatureName>/Presentation/Templates/*` when frontend is involved.
 
-
 ---
 
 ## Scaffolding rules
 
-- New backend bounded context: use `/new-context <Name>` conventions.
-- New backend module inside an existing context: use `/new-service <Context> <Kind> <Name>` conventions.
-- New frontend feature slice: use `/new-feature <Name>` conventions.
+- New backend bounded context: read `.codex/Templates/backend-context.md` first, then use `/new-context <Name>` conventions.
+- New backend module inside an existing context: read `.codex/Templates/backend-service.md` first, then use `/new-service <Context> <Kind> <Name>` conventions.
+- Any backend `*SyncService`: read `.codex/Templates/backend-syncservice.md` first, then use the sync-service path under `Infrastructure/Persistence`.
+- New frontend feature slice: read `.codex/Templates/frontend-feature.md` first, then use `/new-feature <Name>` conventions.
 - Do not invent parallel folder conventions when a scaffold command exists.
-
 
 ---
 
@@ -85,7 +85,6 @@ Deliver working code, not just a plan. Ensure required architecture/context file
     - `PlacementPlus` for placement previews, snapping, footprint building, ground alignment, or placement validation
     - `ModelPlus` for pivot math, bounds/center reads, moving or aligning models, or reusable model traversal
 11. Update registration/wiring where needed (`Context.lua`, registries, presentation indices, etc.).
-
 
 ---
 
@@ -117,14 +116,12 @@ Use markdown checkboxes (`- [x]` / `- [ ]`) and include this section in the fina
 - [ ] Targeted lint/build checks were run, or explicitly marked as not run with reason.
 - [ ] Any incomplete items are listed with concrete blockers.
 
-
 ---
 
 ## Completion gate
 
 Do not claim the feature is complete if any required checklist item is unchecked.
 If an item is intentionally out of scope, mark it unchecked and provide a one-line reason.
-
 
 ---
 
@@ -134,7 +131,6 @@ If an item is intentionally out of scope, mark it unchecked and provide a one-li
    - Lint touched Luau files (prefer `selene` on touched paths when available).
    - Run any relevant build/sync command used in this repo when needed.
 2. If validation cannot be run, explicitly state what could not be run and why.
-
 
 ---
 
