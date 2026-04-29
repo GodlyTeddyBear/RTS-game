@@ -22,6 +22,21 @@ local Shared = {}
 ]=]
 Shared.EPSILON = 1e-5
 
+function Shared.CloneVisualizationOptions(visualizationOptions: Types.TVisualizationOptions?): Types.TVisualizationOptions?
+	if visualizationOptions == nil then
+		return nil
+	end
+
+	return table.freeze({
+		Enabled = visualizationOptions.Enabled,
+		Color = visualizationOptions.Color,
+		Width = visualizationOptions.Width,
+		Scale = visualizationOptions.Scale,
+		Duration = visualizationOptions.Duration,
+		Name = visualizationOptions.Name,
+	})
+end
+
 function Shared.CloneInstances(instances: { Instance }?): { Instance }?
 	if instances == nil then
 		return nil
@@ -44,6 +59,7 @@ function Shared.FreezeOptions(options: TQueryOptions?): TQueryOptions
 		frozenOptions.IgnoreWater = options.IgnoreWater
 		frozenOptions.RespectCanCollide = options.RespectCanCollide
 		frozenOptions.MaxParts = options.MaxParts
+		frozenOptions.Visualization = Shared.CloneVisualizationOptions(options.Visualization)
 	end
 
 	return table.freeze(frozenOptions)

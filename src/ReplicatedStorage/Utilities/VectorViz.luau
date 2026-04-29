@@ -212,13 +212,16 @@ end
 ]=]
 
 function VisualiserModule:DestroyVisualiser(ObjectName : string)
-    if VisualiserModule.VisualObjects[ObjectName] ~= nil then
-        VisualiserModule.VisualObjects[ObjectName].Visualisers.Beam:Destroy()
-        VisualiserModule.VisualObjects[ObjectName].Visualisers.Attachment0:Destroy()
-        VisualiserModule.VisualObjects[ObjectName].Visualisers.Attachment1:Destroy()
+    local visualObject = VisualiserModule.VisualObjects[ObjectName]
+    if visualObject == nil then
+        return
     end
 
-    table.clear(VisualiserModule.VisualObjects[ObjectName])
+    visualObject.Visualisers.Beam:Destroy()
+    visualObject.Visualisers.Attachment0:Destroy()
+    visualObject.Visualisers.Attachment1:Destroy()
+
+    table.clear(visualObject)
     VisualiserModule.VisualObjects[ObjectName] = nil
 end
 

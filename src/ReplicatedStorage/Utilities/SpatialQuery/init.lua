@@ -19,6 +19,13 @@ local SpatialQuery = require(script.src)
 export type TQueryOptions = SpatialQuery.TQueryOptions
 
 --[=[
+    @type TVisualizationOptions
+    @within SpatialQuery
+    Debug-only visualization configuration for ray-based helpers.
+]=]
+export type TVisualizationOptions = SpatialQuery.TVisualizationOptions
+
+--[=[
     @type TScoredCandidate<T>
     @within SpatialQuery
     Generic scored candidate payload used by best-candidate selection helpers.

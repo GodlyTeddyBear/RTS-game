@@ -42,6 +42,7 @@ function Options.Merge(baseOptions: TQueryOptions?, overrideOptions: TQueryOptio
 		mergedOptions.IgnoreWater = baseOptions.IgnoreWater
 		mergedOptions.RespectCanCollide = baseOptions.RespectCanCollide
 		mergedOptions.MaxParts = baseOptions.MaxParts
+		mergedOptions.Visualization = Shared.CloneVisualizationOptions(baseOptions.Visualization)
 	end
 
 	if overrideOptions ~= nil then
@@ -62,6 +63,9 @@ function Options.Merge(baseOptions: TQueryOptions?, overrideOptions: TQueryOptio
 		end
 		if overrideOptions.MaxParts ~= nil then
 			mergedOptions.MaxParts = overrideOptions.MaxParts
+		end
+		if overrideOptions.Visualization ~= nil then
+			mergedOptions.Visualization = Shared.CloneVisualizationOptions(overrideOptions.Visualization)
 		end
 	end
 

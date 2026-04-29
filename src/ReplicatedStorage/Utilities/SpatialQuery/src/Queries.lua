@@ -1,12 +1,22 @@
 --!strict
 
+local HttpService = game:GetService("HttpService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = require(script.Parent.Shared)
 local Options = require(script.Parent.Options)
 local Types = require(script.Parent.Types)
+local VectorViz = require(script.Parent.Parent.Parent.VectorViz)
 
 type TQueryOptions = Types.TQueryOptions
+type TVisualizationOptions = Types.TVisualizationOptions
+
+local DEFAULT_VISUALIZATION_COLOR = Color3.fromRGB(255, 0, 0)
+local DEFAULT_VISUALIZATION_WIDTH = 0.2
+local DEFAULT_VISUALIZATION_SCALE = 1
+local DEFAULT_VISUALIZATION_DURATION = 0.1
+local MIN_VISUALIZATION_DURATION = 0.01
+local ACTIVE_VISUALIZATION_TOKENS = {} :: { [string]: string }
 
 --[=[
     @class SpatialQueryQueries
@@ -19,12 +29,68 @@ type TQueryOptions = Types.TQueryOptions
 
 local Queries = {}
 
+local function _ResolvePositiveNumberOrDefault(value: number?, defaultValue: number): number
+	if value == nil or not Shared.IsPositiveNumber(value) then
+		return defaultValue
+	end
+
+	return value
+end
+
+local function _ResolveVisualizationOptions(options: TQueryOptions?): TVisualizationOptions?
+	if options == nil or options.Visualization == nil or options.Visualization.Enabled ~= true then
+		return nil
+	end
+
+	return {
+		Enabled = true,
+		Color = options.Visualization.Color or DEFAULT_VISUALIZATION_COLOR,
+		Width = _ResolvePositiveNumberOrDefault(options.Visualization.Width, DEFAULT_VISUALIZATION_WIDTH),
+		Scale = _ResolvePositiveNumberOrDefault(options.Visualization.Scale, DEFAULT_VISUALIZATION_SCALE),
+		Duration = math.max(
+			_ResolvePositiveNumberOrDefault(options.Visualization.Duration, DEFAULT_VISUALIZATION_DURATION),
+			MIN_VISUALIZATION_DURATION
+		),
+		Name = options.Visualization.Name,
+	}
+end
+
+local function _VisualizeRaycast(origin: Vector3, direction: Vector3, raycastResult: RaycastResult?, options: TQueryOptions?)
+	local visualizationOptions = _ResolveVisualizationOptions(options)
+	if visualizationOptions == nil then
+		return
+	end
+
+	local visualName = visualizationOptions.Name or ("SpatialQueryRay_%s"):format(HttpService:GenerateGUID(false))
+	local visualToken = HttpService:GenerateGUID(false)
+	local visualDirection = direction
+	if raycastResult ~= nil then
+		visualDirection = raycastResult.Position - origin
+	end
+
+	ACTIVE_VISUALIZATION_TOKENS[visualName] = visualToken
+	VectorViz:CreateVisualiser(visualName, origin, visualDirection, {
+		Colour = visualizationOptions.Color,
+		Width = visualizationOptions.Width,
+		Scale = visualizationOptions.Scale,
+	})
+
+	task.delay(visualizationOptions.Duration :: number, function()
+		if ACTIVE_VISUALIZATION_TOKENS[visualName] ~= visualToken then
+			return
+		end
+
+		ACTIVE_VISUALIZATION_TOKENS[visualName] = nil
+		VectorViz:DestroyVisualiser(visualName)
+	end)
+end
+
 --[=[
     Casts a ray using normalized query options.
     @within SpatialQueryQueries
     @param origin Vector3 -- Ray origin.
     @param direction Vector3 -- Ray direction and length.
-    @param options TQueryOptions? -- Query configuration to apply.
+    @param options TQueryOptions? -- Query configuration to apply. `Visualization` is debug-only and ray-only.
     @return RaycastResult? -- First hit, or `nil` when the ray hits nothing or the direction is degenerate.
 ]=]
 function Queries.Raycast(origin: Vector3, direction: Vector3, options: TQueryOptions?): RaycastResult?
@@ -32,7 +98,9 @@ function Queries.Raycast(origin: Vector3, direction: Vector3, options: TQueryOpt
 		return nil
 	end
 
-	return Workspace:Raycast(origin, direction, Options.BuildRaycastParams(options))
+	local raycastResult = Workspace:Raycast(origin, direction, Options.BuildRaycastParams(options))
+	_VisualizeRaycast(origin, direction, raycastResult, options)
+	return raycastResult
 end
 
 --[=[
@@ -40,7 +108,7 @@ end
     @within SpatialQueryQueries
     @param origin Vector3 -- Ray origin.
     @param target Vector3 -- Target position.
-    @param options TQueryOptions? -- Query configuration to apply.
+    @param options TQueryOptions? -- Query configuration to apply. `Visualization` is debug-only and ray-only.
     @return RaycastResult? -- First hit, or `nil` when the ray hits nothing or the points coincide.
 ]=]
 function Queries.RaycastTo(origin: Vector3, target: Vector3, options: TQueryOptions?): RaycastResult?

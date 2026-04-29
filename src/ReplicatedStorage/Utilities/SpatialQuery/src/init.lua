@@ -10,6 +10,7 @@ local Types = require(script.Types)
 
 export type TQueryOptions = Types.TQueryOptions
 export type TScoredCandidate<T> = Types.TScoredCandidate<T>
+export type TVisualizationOptions = Types.TVisualizationOptions
 
 --[=[
     @class SpatialQueryPackage
