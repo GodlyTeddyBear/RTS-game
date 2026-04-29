@@ -17,13 +17,22 @@ Create a new backend bounded context named `$ARGUMENTS`.
 ## What to do
 
 1. Read `src/ServerScriptService/Contexts/` to verify naming and existing context patterns before creating files.
-2. Read `.codex/documents/architecture/backend/ERROR_HANDLING.md` to align with Result + WrapContext context-boundary rules.
+2. Read `.codex/documents/methods/backend/BASE_CONTEXT_CONTRACTS.md` and `.codex/documents/architecture/backend/ERROR_HANDLING.md` to align with BaseContext and Result boundary rules.
 3. Read persistence event contracts:
    - `src/ReplicatedStorage/Events/GameEvents/Misc/Persistence.lua`
    - `src/ServerScriptService/Persistence/PlayerLifecycleManager.lua`
-4. Scaffold the folder structure below using the exact naming shown.
-5. Create only the boilerplate files listed below; do not create command/query/domain/infrastructure implementation files yet.
-6. After creation, report every file and folder created.
+4. If the new context will own ECS infrastructure, also read:
+   - `.codex/documents/methods/ECS/COMPONENT_RULES.md`
+   - `.codex/documents/methods/ECS/ENTITY_FACTORY_RULES.md`
+   - `.codex/documents/methods/ECS/WORLD_ISOLATION_RULES.md`
+   - `.codex/documents/methods/ECS/SYSTEM_RULES.md`
+   - `.codex/documents/methods/ECS/PHASE_AND_EXECUTION_RULES.md`
+   - `.codex/documents/methods/ECS/TAG_RULES.md`
+   - `.codex/documents/methods/ECS/INSTANCE_REVEAL_RULES.md`
+   - `.codex/documents/methods/ECS/ECS_PERSISTENCE_RULES.md`
+5. Scaffold the folder structure below using the exact naming shown.
+6. Create only the boilerplate files listed below; do not create command/query/domain/infrastructure implementation files yet.
+7. After creation, report every file and folder created.
 
 
 ---
@@ -70,16 +79,30 @@ src/ReplicatedStorage/Contexts/<ContextName>/
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Knit = require(ReplicatedStorage.Packages.Knit)
+local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
+
+local InfrastructureModules: { BaseContext.TModuleSpec } = {}
+local ApplicationModules: { BaseContext.TModuleSpec } = {}
+
+local <ContextName>Modules: BaseContext.TModuleLayers = {
+    Infrastructure = InfrastructureModules,
+    Application = ApplicationModules,
+}
 
 local <ContextName>Context = Knit.CreateService({
     Name = "<ContextName>Context",
     Client = {},
+    Modules = <ContextName>Modules,
 })
 
+local <ContextName>BaseContext = BaseContext.new(<ContextName>Context)
+
 function <ContextName>Context:KnitInit()
+    <ContextName>BaseContext:KnitInit()
 end
 
 function <ContextName>Context:KnitStart()
+    <ContextName>BaseContext:KnitStart()
 end
 
 return <ContextName>Context
@@ -122,6 +145,9 @@ return table.freeze(<ContextName>Types)
 - Do not create `Application/Services/` (deprecated). Use `Application/Commands/` and `Application/Queries/`.
 - Do not create `Config/DebugLogger.lua`.
 - Context file is a pass-through bridge only; no business logic.
+- Context files use `BaseContext.new(<ContextName>Context)` and delegate `KnitInit`/`KnitStart` to the wrapper.
+- Do not call `Registry.new(...)` or `WrapContext(...)` directly in a BaseContext-backed context file.
+- If the context owns ECS, also create the ECS folder and base-class modules under `Infrastructure/ECS/` and `Infrastructure/Persistence/` as needed.
 - Persistence lifecycle integration rule for future context behavior:
   - On context startup, register as a loader via `PlayerLifecycleManager:RegisterLoader("<ContextName>")`.
   - Hydrate context state on `GameEvents.Events.Persistence.ProfileLoaded`.
@@ -135,9 +161,14 @@ return table.freeze(<ContextName>Types)
   - Do not duplicate context-shared `export type` shapes across multiple modules.
 - Result boundary rule for future methods in `<ContextName>Context.lua`:
   - Require `ReplicatedStorage.Utilities.Result` and use `Catch` for context method boundaries (or `Ok(value)` for simple getters).
-  - Require `ReplicatedStorage.Utilities.WrapContext` and call `WrapContext(<ContextName>Context, "<ContextName>")` at the end of the file before returning.
+  - Require `ReplicatedStorage.Utilities.BaseContext` and use `BaseContext.new(<ContextName>Context)` to wrap the service table before lifecycle methods.
   - Public server-to-server context methods should return `Result.Result<T>` and preserve propagation by return value.
   - Use `result:unwrapOr(default)` only in terminal/private boundaries where default fallback is intentional.
   - `.Client` methods that call `Execute` directly should own a `Catch`; `.Client` methods that delegate to `self.Server:Method()` should not add another `Catch`.
+- ECS infrastructure should use the ECS base classes, not ad hoc world or registry setup:
+  - `BaseECSWorldService` for the world owner
+  - `BaseECSComponentRegistry` for component/tag registration
+  - `BaseECSEntityFactory` for entity creation and queries
+  - `BaseSyncService` for sync services that bridge atom state
 - `Errors.lua` uses `table.freeze()` and SCREAMING_SNAKE_CASE keys.
 - All created Luau files start with `--!strict`.

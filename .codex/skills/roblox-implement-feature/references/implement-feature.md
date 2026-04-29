@@ -33,6 +33,18 @@ Deliver working code, not just a plan. Ensure required architecture/context file
      - `src/ReplicatedStorage/Events/GameEvents/Misc/Persistence.lua`
      - `src/ServerScriptService/Persistence/SessionManager.lua`
      - `src/ServerScriptService/Persistence/PlayerLifecycleManager.lua`
+   - If backend involves context or application scaffolding, also read:
+     - `.codex/documents/methods/backend/BASE_CONTEXT_CONTRACTS.md`
+     - `.codex/documents/methods/backend/BASE_APPLICATION_CONTRACTS.md`
+   - If backend involves ECS infrastructure, also read:
+     - `.codex/documents/methods/ECS/COMPONENT_RULES.md`
+     - `.codex/documents/methods/ECS/ENTITY_FACTORY_RULES.md`
+     - `.codex/documents/methods/ECS/WORLD_ISOLATION_RULES.md`
+     - `.codex/documents/methods/ECS/SYSTEM_RULES.md`
+     - `.codex/documents/methods/ECS/PHASE_AND_EXECUTION_RULES.md`
+     - `.codex/documents/methods/ECS/TAG_RULES.md`
+     - `.codex/documents/methods/ECS/INSTANCE_REVEAL_RULES.md`
+     - `.codex/documents/methods/ECS/ECS_PERSISTENCE_RULES.md`
 4. Read target code before changing it (no speculation):
    - Existing context entry: `src/ServerScriptService/Contexts/<ContextName>/<ContextName>Context.lua` when backend is involved.
    - Existing errors/types when backend is involved:
@@ -62,7 +74,17 @@ Deliver working code, not just a plan. Ensure required architecture/context file
 5. Keep context-shared backend types centralized in `<ContextName>Types.lua`.
 6. Keep DDD/CQRS boundaries intact (queries read-only, commands mutate through infrastructure).
 7. For backend context persistence, wire hydration/save through `GameEvents.Events.Persistence` (`ProfileLoaded`, `ProfileSaving`) and readiness through `PlayerLifecycleManager` (`RegisterLoader`/`NotifyLoaded`).
-8. Update registration/wiring where needed (`Context.lua`, registries, presentation indices, etc.).
+8. Use `BaseContext` for backend context entry modules and `BaseCommand` / `BaseQuery` for backend application modules.
+9. Use ECS base classes for ECS infrastructure modules when relevant:
+   - `BaseECSWorldService` for the per-context world service
+   - `BaseECSComponentRegistry` for component/tag registration
+   - `BaseECSEntityFactory` for entity creation, queries, and deferred destruction
+   - `BaseSyncService` for persistence sync services that bridge atom state
+10. Prefer shared utilities for common technical work before writing one-off helpers:
+    - `SpatialQuery` for raycasts, overlap checks, visibility, range checks, target picking, or distance sorting
+    - `PlacementPlus` for placement previews, snapping, footprint building, ground alignment, or placement validation
+    - `ModelPlus` for pivot math, bounds/center reads, moving or aligning models, or reusable model traversal
+11. Update registration/wiring where needed (`Context.lua`, registries, presentation indices, etc.).
 
 
 ---

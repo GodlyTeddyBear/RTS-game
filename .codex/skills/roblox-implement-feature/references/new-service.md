@@ -26,7 +26,7 @@ Add a new backend module to an existing bounded context.
 4. Read persistence lifecycle contracts:
    - `src/ReplicatedStorage/Events/GameEvents/Misc/Persistence.lua`
    - `src/ServerScriptService/Persistence/PlayerLifecycleManager.lua`
-5. Read `.codex/documents/architecture/backend/ERROR_HANDLING.md` and follow its Result contract for the selected layer.
+5. Read `.codex/documents/methods/backend/BASE_APPLICATION_CONTRACTS.md` and `.codex/documents/architecture/backend/ERROR_HANDLING.md` and follow their BaseApplication/Result contracts for the selected layer.
 6. Create exactly one module at the target path for the selected `<Kind>`.
 7. If a new context-shared shape is needed, add it to `src/ReplicatedStorage/Contexts/<ContextName>/Types/<ContextName>Types.lua` instead of defining it locally across multiple files.
 8. Wire it in `'<ContextName>Context.lua'` when required (require + registry register + cached reference if used).
@@ -47,6 +47,15 @@ Add a new backend module to an existing bounded context.
 - `InfrastructurePersistence` -> `src/ServerScriptService/Contexts/<ContextName>/Infrastructure/Persistence/<Name>.lua`
 - `InfrastructureECS` -> `src/ServerScriptService/Contexts/<ContextName>/Infrastructure/ECS/<Name>.lua`
 - **Any `*SyncService` must use `InfrastructurePersistence` and live under `Infrastructure/Persistence/` (never `Infrastructure/Services/`).**
+- ECS infrastructure modules should prefer the ECS base classes:
+  - `BaseECSWorldService` for world ownership
+  - `BaseECSComponentRegistry` for component/tag registration
+  - `BaseECSEntityFactory` for entity mutation and queries
+  - `BaseSyncService` for atom-backed sync services that bridge ECS state
+- Shared utilities should still be preferred for reusable technical work inside ECS and non-ECS modules:
+  - `SpatialQuery` for raycasts, overlap checks, range checks, visibility, and target picking
+  - `PlacementPlus` for placement previews, snapping, footprints, ground alignment, and placement validation
+  - `ModelPlus` for model pivots, bounds, movement, alignment, and model traversal
 
 
 ---
@@ -81,11 +90,13 @@ Add a new backend module to an existing bounded context.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Ok, Try, Ensure = Result.Ok, Result.Try, Result.Ensure
 local <ContextName>Types = require(ReplicatedStorage.Contexts.<ContextName>.Types.<ContextName>Types)
 
 local <Name> = {}
 <Name>.__index = <Name>
+setmetatable(<Name>, BaseCommand)
 
 export type T<Name> = typeof(setmetatable(
     {} :: {
@@ -95,27 +106,30 @@ export type T<Name> = typeof(setmetatable(
 ))
 
 function <Name>.new(): T<Name>
-    local self = setmetatable({}, <Name>)
-    -- Initialize injected refs to nil :: any
-    return self
+    local self = BaseCommand.new("<ContextName>", "<Name>")
+    return setmetatable(self, <Name>)
 end
 
 function <Name>:Init(registry: any, _name: string)
-    -- self.SomeDependency = registry:Get("SomeDependency")
+    -- self:_RequireDependencies(registry, {
+    --     _someDependency = "SomeDependency",
+    -- })
 end
 
 function <Name>:Execute(...: any): Result.Result<any>
-    -- 1) Validate/guard inputs
-    Ensure(true, "NotImplemented", "Replace with real guard condition")
+    return Result.Catch(function()
+        -- 1) Validate/guard inputs
+        Ensure(true, "NotImplemented", "Replace with real guard condition")
 
-    -- 2) Domain policy/service checks
-    -- local policyData = Try(self.SomePolicy:Check(...))
-    -- local request: <ContextName>Types.SomeRequest = ...
+        -- 2) Domain policy/service checks
+        -- local policyData = Try(self.SomePolicy:Check(...))
+        -- local request: <ContextName>Types.SomeRequest = ...
 
-    -- 3) Infrastructure mutation/persist/sync
-    -- Try(self.SomePersistenceService:Save(...))
+        -- 3) Infrastructure mutation/persist/sync
+        -- Try(self.SomePersistenceService:Save(...))
 
-    return Ok(table.freeze({}))
+        return Ok(table.freeze({}))
+    end, self:_Label())
 end
 
 return <Name>
@@ -128,11 +142,13 @@ return <Name>
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
 local Ok, Try, Ensure = Result.Ok, Result.Try, Result.Ensure
 local <ContextName>Types = require(ReplicatedStorage.Contexts.<ContextName>.Types.<ContextName>Types)
 
 local <Name> = {}
 <Name>.__index = <Name>
+setmetatable(<Name>, BaseQuery)
 
 export type T<Name> = typeof(setmetatable(
     {} :: {
@@ -142,23 +158,23 @@ export type T<Name> = typeof(setmetatable(
 ))
 
 function <Name>.new(): T<Name>
-    local self = setmetatable({}, <Name>)
-    return self
+    local self = BaseQuery.new("<ContextName>", "<Name>")
+    return setmetatable(self, <Name>)
 end
 
 function <Name>:Init(registry: any, _name: string)
-    -- self.SyncService = registry:Get("SomeSyncService")
+    -- self:_RequireDependency(registry, "_syncService", "SomeSyncService")
 end
 
 function <Name>:Execute(...: any): Result.Result<any>
-    -- Inline structural guards (queries do not use Domain validators)
-    Ensure(true, "NotImplemented", "Replace with real guard condition")
+    return Ok(table.freeze({
+        -- Inline structural guards (queries do not use Domain validators)
+        -- Ensure(true, "NotImplemented", "Replace with real guard condition")
 
-    -- Read-only infrastructure calls
-    -- local data = Try(self.SomeReadService:Get(...)) -- if read can fail
-    -- local response: <ContextName>Types.SomeResponse = ...
-
-    return Ok(table.freeze({}))
+        -- Read-only infrastructure calls
+        -- local data = Try(self.SomeReadService:Get(...)) -- if read can fail
+        -- local response: <ContextName>Types.SomeResponse = ...
+    }))
 end
 
 return <Name>
@@ -338,6 +354,52 @@ end
 return <Name>
 ```
 
+### ECS Base Classes
+
+```lua
+--!strict
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local BaseECSWorldService = require(ReplicatedStorage.Utilities.BaseECSWorldService)
+local BaseECSComponentRegistry = require(ReplicatedStorage.Utilities.BaseECSComponentRegistry)
+local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
+local BaseSyncService = require(ReplicatedStorage.Utilities.BaseSyncService)
+
+local <ContextName>ECSWorldService = {}
+<ContextName>ECSWorldService.__index = <ContextName>ECSWorldService
+setmetatable(<ContextName>ECSWorldService, { __index = BaseECSWorldService })
+
+function <ContextName>ECSWorldService.new()
+    return setmetatable(BaseECSWorldService.new("<ContextName>"), <ContextName>ECSWorldService)
+end
+
+local <ContextName>ComponentRegistry = {}
+<ContextName>ComponentRegistry.__index = <ContextName>ComponentRegistry
+setmetatable(<ContextName>ComponentRegistry, { __index = BaseECSComponentRegistry })
+
+function <ContextName>ComponentRegistry.new()
+    return setmetatable(BaseECSComponentRegistry.new("<ContextName>"), <ContextName>ComponentRegistry)
+end
+
+local <ContextName>EntityFactory = {}
+<ContextName>EntityFactory.__index = <ContextName>EntityFactory
+setmetatable(<ContextName>EntityFactory, { __index = BaseECSEntityFactory })
+
+function <ContextName>EntityFactory.new()
+    return setmetatable(BaseECSEntityFactory.new("<ContextName>"), <ContextName>EntityFactory)
+end
+
+local <ContextName>SyncService = {}
+<ContextName>SyncService.__index = <ContextName>SyncService
+setmetatable(<ContextName>SyncService, { __index = BaseSyncService })
+
+function <ContextName>SyncService.new()
+    return setmetatable({}, <ContextName>SyncService)
+end
+
+return <ContextName>ECSWorldService
+```
+
 
 ---
 
@@ -347,6 +409,8 @@ return <Name>
   - `ApplicationCommand` / `ApplicationQuery` -> `"Application"`
   - `DomainPolicy` / `DomainService` / `DomainSpecs` / `DomainValueObject` -> `"Domain"` only if it is a runtime service that needs registry init; specs and value objects usually are not registry-registered
   - `InfrastructureService` / `InfrastructurePersistence` / `InfrastructureECS` -> `"Infrastructure"`
+  - `ApplicationCommand` and `ApplicationQuery` modules should inherit from `BaseCommand` and `BaseQuery` respectively.
+  - `InfrastructureECS` modules should use the ECS base classes when they own world, registry, entity, or sync behavior.
 - Queries must not depend on Domain modules.
 - Commands may depend on Domain + Infrastructure.
 - Domain services are pure and must not require Knit, JECS, ProfileStore, Charm, or Roblox instance APIs for side effects.
@@ -366,4 +430,3 @@ return <Name>
 - Keep context methods as pass-through bridges; no business logic in `'<ContextName>Context.lua'`.
 - Treat Result usage as mandatory by layer (see Result contract section above), not optional style.
 - Keep context-shared type definitions centralized in `<ContextName>Types.lua`; do not duplicate the same shape in multiple modules.
-
