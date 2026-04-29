@@ -2,7 +2,7 @@
 
 This document defines how shared utilities should be used in this codebase, when they belong in `ReplicatedStorage/Utilities/`, and how to decide whether a helper is a shared utility or a context-owned service.
 
-Use this as the default reference when introducing or reviewing a helper such as `ModelPlus`, `SpatialQuery`, `Specification`, `BaseContext`, `BaseApplication`, or `BasePersistenceService`.
+Use this as the default reference when introducing or reviewing a helper such as `ModelPlus`, `SpatialQuery`, `PlacementPlus`, `Specification`, `BaseContext`, `BaseApplication`, or `BasePersistenceService`.
 
 ---
 
@@ -22,6 +22,7 @@ Use this as the default reference when introducing or reviewing a helper such as
 - Utilities are not ECS ownership layers.
 - Utilities are not persistence or sync services.
 - If a module owns runtime state, world lifetime, entity lifecycle, persistence writes, or client-facing workflows, it is usually not a utility.
+- When a reusable helper already exists for the job, prefer it over direct Roblox API calls or one-off math/helpers in both backend and frontend code.
 
 ---
 
@@ -39,6 +40,7 @@ Examples of utility-style modules in this project:
 - `Specification`
 - `AssetFetcher`
 - `ModelPlus`
+- `PlacementPlus`
 - `SpatialQuery`
 
 ---
@@ -128,6 +130,35 @@ Do not use `BasePersistenceService` when:
 - `ModelPlus` can support ECS runtime object work, but it should not own the runtime object lifecycle.
 - `SpatialQuery` can support selection and lookup workflows, but it should not own ECS world access or become the business decision maker.
 
+
+## Preferred Utility Uses
+
+- Prefer `SpatialQuery` when you need one of these scenarios:
+  - raycasting from a position or cursor
+  - overlap or occupancy checks around a model footprint
+  - range checks for combat, targeting, or detection
+  - visibility or line-of-sight checks
+  - nearest-candidate selection from a filtered set
+  - sorting candidates by distance before picking one
+- Prefer `PlacementPlus` when you need one of these scenarios:
+  - building a placement preview from cursor or world input
+  - snapping a candidate to a grid or surface
+  - deriving a footprint from a model or bounds
+  - computing support points or clearance volumes
+  - validating whether a placement is legal before commit
+  - resolving ground alignment for a structure, ghost, or preview
+- Prefer `ModelPlus` when you need one of these scenarios:
+  - reading model pivot, bounds, center, top, or bottom values
+  - moving a model to a world position or CFrame
+  - aligning a model to the ground or another reference point
+  - rotating a model around its own pivot or another point
+  - finding children or descendants inside a model by selector or predicate
+  - reusing model search or traversal logic across more than one call site
+- Prefer these utilities before writing custom equivalents in backend or frontend context code when the behavior is generic enough to live in shared infrastructure.
+- Prefer these utilities before raw `workspace` queries, manual `CFrame` math, or repeated model traversal when a shared helper already covers the case.
+- Do not use them when the logic is unique to one feature and would become a thin wrapper around a shared helper with feature-specific branching.
+- Do not use them when the helper would need to own the lifecycle, state, or validation decision instead of returning data for the caller.
+
 ---
 
 ## Examples
@@ -145,6 +176,29 @@ Good ECS helper:
 - `ModelPlus` helps standardize model-related lookups or setup.
 - `InstanceFactory` still owns model lifecycle.
 - `SyncService` still owns projection.
+```
+
+```text
+Good placement flow:
+- `PlacementPlus` builds the candidate.
+- `SpatialQuery` handles the clearance and support checks.
+- `ModelPlus` handles the pivot and alignment math.
+- The context still owns orchestration and business rules.
+```
+
+```text
+Good client-side placement preview:
+- `PlacementPlus` builds the preview candidate from the cursor hit.
+- `SpatialQuery` checks local clearance or line of sight.
+- `ModelPlus` moves the ghost model to the aligned preview pivot.
+- The UI/controller still decides when to show or confirm the preview.
+```
+
+```text
+Good combat targeting:
+- `SpatialQuery` finds the nearest visible target in range.
+- `ModelPlus` reads model position or center when a target is represented by a model.
+- The combat service still decides whether the target is valid for the action.
 ```
 
 ```text

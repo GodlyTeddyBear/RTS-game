@@ -44,4 +44,11 @@ Context: Behavior trees and everything related was created using one file, which
 This isn't ideal because the file has multiple responsibilities.
 The solution was to separate into a new infrastructure folder that contains individual behaviors, and then the runtime service just requires and constructs them without knowing the individual specifics
 
+## [2026-04-29] Prefer Shared Spatial and Model Utilities
+
+Context: Shared helpers now cover common spatial lookup, placement candidate generation, and model pivot or bounds work.
+Rule: Prefer `SpatialQuery`, `PlacementPlus`, and `ModelPlus` before writing new ad hoc spatial math, placement validation, raycast helpers, or model traversal code.
+Why: These utilities keep placement, targeting, and model handling consistent and avoid duplicated technical logic across contexts.
+Applies To: Backend and frontend contexts, placement flows, combat and targeting flows, and any code that works with model transforms or spatial queries.
+
 <!-- Add new entries below this line using the Entry Format above. -->

@@ -43,6 +43,16 @@ Presentation/[Component]View.lua (pure view) -> Presentation-only dependencies
 [Feature] -> App (global) -> ReplicatedStorage
 ```
 
+### Shared Utility Scope
+
+```text
+Any frontend layer -> ReplicatedStorage.Utilities
+```
+
+- Prefer shared utilities such as `ModelPlus`, `PlacementPlus`, and `SpatialQuery` before writing custom model, placement, or spatial helpers in client code.
+- Prefer them for client-side preview ghosts, cursor raycasts, target highlighting, world-space model alignment, and any reusable distance or overlap check.
+- Keep the utility dependency technical only; do not use it to bypass presentation, hook, or feature-scope boundaries.
+
 ### Presentation Public API
 
 ```text

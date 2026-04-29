@@ -85,6 +85,8 @@ StarterPlayerScripts/
 - **Design concept before UI implementation** - define visual role, hierarchy, surfaces, and interaction model before building screens
 - **Screens stay composition-first** - use `use[Screen]Controller` hooks for orchestration
 - **Screens/templates do not orchestrate animation primitives directly** - use shared animation hooks and controller hooks
+- **Shared utilities are available to client code** - prefer `ModelPlus`, `PlacementPlus`, and `SpatialQuery` for reusable model, placement, and spatial work instead of custom one-off helpers
+- **Common client scenarios should use shared utilities** - use `PlacementPlus` for cursor-driven placement previews, `SpatialQuery` for local hit tests or target picking, and `ModelPlus` for moving or aligning world models in previews and VFX
 - **Templates are always feature-local** - never shared between features
 - **No cross-feature imports** - features cannot import from each other
 - **Use `Presentation/init.lua` as a feature public entrypoint** for App-level mounting/imports
