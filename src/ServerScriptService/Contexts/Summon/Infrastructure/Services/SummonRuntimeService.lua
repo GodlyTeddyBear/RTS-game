@@ -3,7 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
-local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
+local Orient = require(ReplicatedStorage.Utilities.Orient)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 local SummonConfig = require(ReplicatedStorage.Contexts.Summon.Config.SummonConfig)
@@ -15,18 +15,6 @@ local function _computeSpawnOffset(index: number): Vector3
 	local angle = (math.pi * 2) * (index / 5)
 	local radius = 3 + ((index % 2) * 1.5)
 	return Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
-end
-
-local function _moveTowards(current: Vector3, goal: Vector3, distance: number): Vector3
-	local delta = goal - current
-	local magnitude = delta.Magnitude
-	if magnitude <= 1e-5 or distance <= 0 then
-		return current
-	end
-	if magnitude <= distance then
-		return goal
-	end
-	return current + (delta.Unit * distance)
 end
 
 local function _makeDronePart(ownerUserId: number): BasePart
@@ -81,7 +69,7 @@ function SummonRuntimeService:SpawnSwarmDrones(player: Player, castOriginCFrame:
 		local offset = _computeSpawnOffset(index)
 		local spawnPosition = castOriginCFrame.Position + offset
 		local lookAt = castOriginCFrame.LookVector
-		local spawnCFrame = ModelPlus.BuildLookAtCFrame(spawnPosition, spawnPosition + lookAt) or castOriginCFrame
+		local spawnCFrame = Orient.BuildLookAt(spawnPosition, spawnPosition + lookAt) or castOriginCFrame
 		local now = os.clock()
 		local entity = self._entityFactory:CreateDrone(ownerUserId, spawnCFrame, now, {
 			summonCount = summonCount,
@@ -139,7 +127,7 @@ function SummonRuntimeService:Tick(dt: number, currentTime: number, enemyContext
 			local distanceToTarget = (targetPosition - nextPosition).Magnitude
 
 			if distanceToTarget > combat.AttackRange then
-				nextPosition = _moveTowards(nextPosition, targetPosition, combat.MoveSpeed * dt)
+				nextPosition = Orient.MoveTowards(nextPosition, targetPosition, combat.MoveSpeed * dt)
 				distanceToTarget = (targetPosition - nextPosition).Magnitude
 			end
 
@@ -154,8 +142,8 @@ function SummonRuntimeService:Tick(dt: number, currentTime: number, enemyContext
 			end
 		end
 
-		local nextCFrame = ModelPlus.BuildLookAtCFrame(nextPosition, nextPosition + positionCFrame.LookVector)
-			or ModelPlus.BuildCFrameAtPosition(positionCFrame, nextPosition)
+		local nextCFrame = Orient.BuildLookAt(nextPosition, nextPosition + positionCFrame.LookVector)
+			or Orient.BuildAtPosition(positionCFrame, nextPosition)
 		self._entityFactory:SetPosition(entity, nextCFrame)
 
 		local instanceRef = self._entityFactory:GetInstanceRef(entity)

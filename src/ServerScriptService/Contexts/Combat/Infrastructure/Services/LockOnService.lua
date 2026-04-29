@@ -3,7 +3,7 @@
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
+local Orient = require(ReplicatedStorage.Utilities.Orient)
 
 --[=[
 	@class LockOnService
@@ -213,7 +213,7 @@ function LockOnService:UpdateAll(entities: { number })
 			continue
 		end
 
-		local lookAt = ModelPlus.BuildFlatLookAtCFrame(selfCFrame.Position, targetPosition)
+		local lookAt = Orient.BuildFlatLookAt(selfCFrame.Position, targetPosition)
 		if lookAt == nil then
 			constraint.Enabled = false
 			_setHumanoidAutoRotate(humanoid, true)
