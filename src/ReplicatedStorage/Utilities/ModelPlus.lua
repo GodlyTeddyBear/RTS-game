@@ -10,6 +10,10 @@
 
 type TGridSize = number | Vector3
 
+local Find = require(script.Parent.Find)
+local Query = require(script.Parent.Query)
+local TableUtil = require(script.Parent.TableUtil)
+
 local _AssertModel: (model: Model) -> ()
 local _GetPivotRotation: (cframe: CFrame) -> CFrame
 local _BuildPivotWithPositionAndRotation: (position: Vector3, rotation: CFrame) -> CFrame
@@ -103,6 +107,197 @@ end
 function ModelPlus.GetTopY(model: Model): number
 	local boundsCFrame, boundsSize = ModelPlus.GetBounds(model)
 	return boundsCFrame.Position.Y + (boundsSize.Y * 0.5)
+end
+
+--[=[
+    Find a nested child under a model by path segments.
+    @within ModelPlus
+    @param model Model -- The model to inspect.
+    @param ... string -- Path segments to traverse.
+    @return Instance? -- The matched instance, or `nil` when any segment is missing.
+    @error string -- Thrown when `model` is nil or not a `Model`.
+]=]
+function ModelPlus.Find(model: Model, ...: string): Instance?
+	_AssertModel(model)
+	local path = table.pack(...)
+	local ok, instance = pcall(function()
+		return Find(model, table.unpack(path, 1, path.n))
+	end)
+	if not ok then
+		return nil
+	end
+
+	return instance
+end
+
+--[=[
+    Require a nested child under a model by path segments.
+    @within ModelPlus
+    @param model Model -- The model to inspect.
+    @param ... string -- Path segments to traverse.
+    @return Instance -- The matched instance.
+    @error string -- Thrown when `model` is nil, not a `Model`, or any segment is missing.
+]=]
+function ModelPlus.Require(model: Model, ...: string): Instance
+	_AssertModel(model)
+	return Find(model, ...)
+end
+
+--[=[
+    Query all descendant instances under a model using a selector.
+    @within ModelPlus
+    @param model Model -- The model to inspect.
+    @param selector string -- The descendant query selector.
+    @return { Instance } -- All matched descendants.
+    @error string -- Thrown when `model` is nil or not a `Model`.
+]=]
+function ModelPlus.QueryAll(model: Model, selector: string): { Instance }
+	_AssertModel(model)
+	return Query.all(model, selector)
+end
+
+--[=[
+    Query the first descendant instance under a model using a selector.
+    @within ModelPlus
+    @param model Model -- The model to inspect.
+    @param selector string -- The descendant query selector.
+    @return Instance? -- The first matched descendant, or `nil` when nothing matches.
+    @error string -- Thrown when `model` is nil or not a `Model`.
+]=]
+function ModelPlus.QueryFirst(model: Model, selector: string): Instance?
+	_AssertModel(model)
+	return Query.first(model, selector)
+end
+
+--[=[
+    Query exactly one descendant instance under a model using a selector.
+    @within ModelPlus
+    @param model Model -- The model to inspect.
+    @param selector string -- The descendant query selector.
+    @return Instance -- The matched descendant.
+    @error string -- Thrown when `model` is nil, not a `Model`, or the selector does not match exactly one instance.
+]=]
+function ModelPlus.QueryOne(model: Model, selector: string): Instance
+	_AssertModel(model)
+	return Query.one(model, selector)
+end
+
+--[=[
+    Return all direct children that match a predicate.
+    @within ModelPlus
+    @param model Model -- The model to inspect.
+    @param predicate (Instance) -> boolean -- Returns `true` for children that should be kept.
+    @return { Instance } -- All direct children that match the predicate.
+    @error string -- Thrown when `model` is nil or not a `Model`.
+]=]
+function ModelPlus.FilterChildren(model: Model, predicate: (Instance) -> boolean): { Instance }
+	_AssertModel(model)
+	return TableUtil.Filter(model:GetChildren(), function(instance: Instance)
+		return predicate(instance)
+	end)
+end
+
+--[=[
+    Return all descendants that match a predicate.
+    @within ModelPlus
+    @param model Model -- The model to inspect.
+    @param predicate (Instance) -> boolean -- Returns `true` for descendants that should be kept.
+    @return { Instance } -- All descendants that match the predicate.
+    @error string -- Thrown when `model` is nil or not a `Model`.
+]=]
+function ModelPlus.FilterDescendants(model: Model, predicate: (Instance) -> boolean): { Instance }
+	_AssertModel(model)
+	return TableUtil.Filter(model:GetDescendants(), function(instance: Instance)
+		return predicate(instance)
+	end)
+end
+
+--[=[
+    Find the first direct child that matches a predicate.
+    @within ModelPlus
+    @param model Model -- The model to inspect.
+    @param predicate (Instance) -> boolean -- Returns `true` for the child to return.
+    @return Instance? -- The first matching direct child, or `nil` when nothing matches.
+    @error string -- Thrown when `model` is nil or not a `Model`.
+]=]
+function ModelPlus.FindChild(model: Model, predicate: (Instance) -> boolean): Instance?
+	_AssertModel(model)
+	local instance = select(1, TableUtil.Find(model:GetChildren(), function(child: Instance)
+		return predicate(child)
+	end))
+	return instance
+end
+
+--[=[
+    Find the first descendant that matches a predicate.
+    @within ModelPlus
+    @param model Model -- The model to inspect.
+    @param predicate (Instance) -> boolean -- Returns `true` for the descendant to return.
+    @return Instance? -- The first matching descendant, or `nil` when nothing matches.
+    @error string -- Thrown when `model` is nil or not a `Model`.
+]=]
+function ModelPlus.FindDescendant(model: Model, predicate: (Instance) -> boolean): Instance?
+	_AssertModel(model)
+	local instance = select(1, TableUtil.Find(model:GetDescendants(), function(descendant: Instance)
+		return predicate(descendant)
+	end))
+	return instance
+end
+
+--[=[
+    Return all direct children whose exact `ClassName` matches the requested class.
+    @within ModelPlus
+    @param model Model -- The model to inspect.
+    @param className string -- The exact class name to match.
+    @return { Instance } -- All direct children with the exact class name.
+    @error string -- Thrown when `model` is nil or not a `Model`.
+]=]
+function ModelPlus.FindAllChildrenOfClass(model: Model, className: string): { Instance }
+	return ModelPlus.FilterChildren(model, function(instance: Instance)
+		return instance.ClassName == className
+	end)
+end
+
+--[=[
+    Return all descendants whose exact `ClassName` matches the requested class.
+    @within ModelPlus
+    @param model Model -- The model to inspect.
+    @param className string -- The exact class name to match.
+    @return { Instance } -- All descendants with the exact class name.
+    @error string -- Thrown when `model` is nil or not a `Model`.
+]=]
+function ModelPlus.FindAllDescendantsOfClass(model: Model, className: string): { Instance }
+	return ModelPlus.FilterDescendants(model, function(instance: Instance)
+		return instance.ClassName == className
+	end)
+end
+
+--[=[
+    Return all direct children that satisfy `IsA(className)`.
+    @within ModelPlus
+    @param model Model -- The model to inspect.
+    @param className string -- The class name to check with `IsA`.
+    @return { Instance } -- All direct children that satisfy `IsA(className)`.
+    @error string -- Thrown when `model` is nil or not a `Model`.
+]=]
+function ModelPlus.FindAllChildrenWhichIsA(model: Model, className: string): { Instance }
+	return ModelPlus.FilterChildren(model, function(instance: Instance)
+		return instance:IsA(className)
+	end)
+end
+
+--[=[
+    Return all descendants that satisfy `IsA(className)`.
+    @within ModelPlus
+    @param model Model -- The model to inspect.
+    @param className string -- The class name to check with `IsA`.
+    @return { Instance } -- All descendants that satisfy `IsA(className)`.
+    @error string -- Thrown when `model` is nil or not a `Model`.
+]=]
+function ModelPlus.FindAllDescendantsWhichIsA(model: Model, className: string): { Instance }
+	return ModelPlus.FilterDescendants(model, function(instance: Instance)
+		return instance:IsA(className)
+	end)
 end
 
 --[=[
@@ -430,9 +625,9 @@ end
 
 -- ── Private ───────────────────────────────────────────────────────────────
 
--- Fails fast when callers pass a nil model into the shared transform helpers.
+-- Fails fast when callers pass a nil or non-model instance into the shared helpers.
 _AssertModel = function(model: Model)
-	assert(model ~= nil, "ModelPlus requires a model instance")
+	assert(model ~= nil and model:IsA("Model"), "ModelPlus requires a Model instance")
 end
 
 -- Removes translation from a pivot or rotation CFrame so only orientation remains.
