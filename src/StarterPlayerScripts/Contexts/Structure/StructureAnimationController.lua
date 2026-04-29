@@ -10,6 +10,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local CollectionService = game:GetService("CollectionService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local ActionRegistry = require(ReplicatedStorage.Utilities.ActionSystem.ActionRegistry)
@@ -21,11 +22,16 @@ local StructureAttackAction = require(script.Parent.Actions.StructureAttackActio
 type TTrackedEntry = {
 	Cleanup: (() -> ())?,
 	AncestryConnection: RBXScriptConnection?,
+	TargetEnemyId: string?,
+	TargetModel: Model?,
 }
 
 local StructureAnimationController = Knit.CreateController({
 	Name = "StructureAnimationController",
 })
+
+local ENEMIES_FOLDER_NAME = "Enemies"
+local ANIMATED_ENEMY_TAG = "AnimatedEnemy"
 
 local function _IsStructureModel(instance: Instance): boolean
 	return instance:IsA("Model") and type(instance:GetAttribute("PlacementInstanceId")) == "number"
@@ -50,6 +56,8 @@ function StructureAnimationController:_TrackModel(model: Model)
 	local entry: TTrackedEntry = {
 		Cleanup = nil,
 		AncestryConnection = nil,
+		TargetEnemyId = nil,
+		TargetModel = nil,
 	}
 	self._tracked[model] = entry
 
@@ -65,6 +73,9 @@ function StructureAnimationController:_TrackModel(model: Model)
 			Model = model,
 			CombatService = combatService,
 			ActorKind = "Structure",
+			GetTargetWorldPosition = function(): Vector3?
+				return self:_GetTargetWorldPosition(model)
+			end,
 		}
 
 		return setmetatable(base, {
@@ -111,7 +122,54 @@ function StructureAnimationController:_UntrackModel(model: Model)
 		entry.Cleanup = nil
 	end
 
+	entry.TargetEnemyId = nil
+	entry.TargetModel = nil
+
 	self._tracked[model] = nil
+end
+
+function StructureAnimationController:_GetTargetWorldPosition(model: Model): Vector3?
+	local entry = self._tracked[model]
+	if entry == nil then
+		return nil
+	end
+
+	local targetEnemyId = model:GetAttribute("TargetEnemyId")
+	if type(targetEnemyId) ~= "string" or targetEnemyId == "" then
+		entry.TargetEnemyId = nil
+		entry.TargetModel = nil
+		return nil
+	end
+
+	if entry.TargetEnemyId ~= targetEnemyId or entry.TargetModel == nil or entry.TargetModel.Parent == nil then
+		entry.TargetEnemyId = targetEnemyId
+		entry.TargetModel = self:_ResolveEnemyModelById(targetEnemyId)
+	end
+
+	if entry.TargetModel == nil or entry.TargetModel.Parent == nil then
+		return nil
+	end
+
+	return entry.TargetModel:GetPivot().Position
+end
+
+function StructureAnimationController:_ResolveEnemyModelById(enemyId: string): Model?
+	local enemiesFolder = Workspace:FindFirstChild(ENEMIES_FOLDER_NAME)
+	if enemiesFolder ~= nil and enemiesFolder:IsA("Folder") then
+		for _, child in ipairs(enemiesFolder:GetChildren()) do
+			if child:IsA("Model") and child:GetAttribute("EnemyId") == enemyId then
+				return child
+			end
+		end
+	end
+
+	for _, instance in ipairs(CollectionService:GetTagged(ANIMATED_ENEMY_TAG)) do
+		if instance:IsA("Model") and instance:GetAttribute("EnemyId") == enemyId then
+			return instance
+		end
+	end
+
+	return nil
 end
 
 function StructureAnimationController:_ConnectPlacementsFolder(placementsFolder: Folder)

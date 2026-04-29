@@ -3,7 +3,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
-local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -41,7 +40,7 @@ function DespawnEnemy:Execute(entity: any): Result.Result<boolean>
 			return Ok(false)
 		end
 
-		GameEvents.Bus:Emit(GameEvents.Events.Combat.ActorRemoving, "Enemy", entity)
+		self:_EmitGameEvent("Combat", "ActorRemoving", "Enemy", entity)
 		self._instanceFactory:DestroyInstance(entity)
 		self._entityFactory:DeleteEntity(entity)
 		return Ok(true)

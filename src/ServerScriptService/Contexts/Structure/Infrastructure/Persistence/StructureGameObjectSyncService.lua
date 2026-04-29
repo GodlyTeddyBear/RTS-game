@@ -21,11 +21,31 @@ local function _ComputeAnimationState(combatAction: any): string
 end
 
 function StructureGameObjectSyncService.new()
-	return setmetatable(BaseGameObjectSyncService.new("Structure"), StructureGameObjectSyncService)
+	local self = setmetatable(BaseGameObjectSyncService.new("Structure"), StructureGameObjectSyncService)
+	self._registry = nil
+	self._enemyEntityFactory = nil
+	return self
 end
 
 function StructureGameObjectSyncService:_GetComponentRegistryName(): string
 	return "StructureComponentRegistry"
+end
+
+function StructureGameObjectSyncService:_OnInit(registry: any, _name: string)
+	self._registry = registry
+end
+
+function StructureGameObjectSyncService:Start()
+	local registry = self._registry
+	if registry == nil then
+		return
+	end
+
+	local enemyContext = registry:Get("EnemyContext")
+	local enemyEntityFactoryResult = enemyContext:GetEntityFactory()
+	if enemyEntityFactoryResult.success then
+		self._enemyEntityFactory = enemyEntityFactoryResult.value
+	end
 end
 
 function StructureGameObjectSyncService:_GetEntityFactoryName(): string
@@ -45,6 +65,7 @@ function StructureGameObjectSyncService:_SyncEntity(entity: number, model: Model
 	local identity = factory:GetIdentity(entity)
 	local health = factory:GetHealth(entity)
 	local combatAction = factory:GetCombatAction(entity)
+	local targetEnemyEntity = factory:GetTarget(entity)
 
 	if identity ~= nil then
 		self:SetAttributeIfChanged(model, "StructureId", identity.StructureId)
@@ -59,6 +80,20 @@ function StructureGameObjectSyncService:_SyncEntity(entity: number, model: Model
 	local nextAnimationState = _ComputeAnimationState(combatAction)
 	self:SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
 	self:SetAttributeIfChanged(model, "AnimationLooping", nextAnimationState ~= "StructureAttack")
+	self:SetAttributeIfChanged(model, "TargetEnemyId", self:_ResolveTargetEnemyId(targetEnemyEntity))
+end
+
+function StructureGameObjectSyncService:_ResolveTargetEnemyId(targetEnemyEntity: number?): string?
+	if type(targetEnemyEntity) ~= "number" or self._enemyEntityFactory == nil then
+		return nil
+	end
+
+	local identity = self._enemyEntityFactory:GetIdentity(targetEnemyEntity)
+	if identity == nil or type(identity.EnemyId) ~= "string" or identity.EnemyId == "" then
+		return nil
+	end
+
+	return identity.EnemyId
 end
 
 return StructureGameObjectSyncService

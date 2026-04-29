@@ -23,9 +23,27 @@ export type TLoadedClips = {
 
 export type TPoseFilterMode = "Whitelist" | "Blacklist"
 export type TPresetId = "Player" | "Worker" | "CombatNPC" | "EnemyLocomotion" | "Structure"
+export type TAimStrategy = "IKControl"
 
 export type TAnimationPresetOptions = {
 	AnimationsFolder: Folder?,
+}
+
+export type TIKAimRigConfig = {
+	ChainRootPath: string?,
+	EndEffectorPath: string?,
+	SmoothTime: number?,
+	Weight: number?,
+	Priority: number?,
+	ReturnToNeutralWhenNoTarget: boolean?,
+}
+
+export type TSetupAimRequest = {
+	Model: Model,
+	Strategy: TAimStrategy,
+	GetTargetWorldPosition: () -> Vector3?,
+	RigConfig: TIKAimRigConfig,
+	Context: any?,
 }
 
 export type TAnimationPreset = {

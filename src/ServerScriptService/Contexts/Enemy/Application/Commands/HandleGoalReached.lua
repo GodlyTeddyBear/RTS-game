@@ -1,7 +1,6 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
 local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -45,7 +44,7 @@ function HandleGoalReached:Execute(entity: any, primaryPlayer: Player?, commande
 
 		self._entityFactory:MarkGoalReached(entity)
 		local deathCFrame = self._entityFactory:GetDeathCFrame(entity) or CFrame.new()
-		GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.Role, identity.WaveNumber, deathCFrame)
+		self:_EmitGameEvent("Wave", "EnemyDied", identity.Role, identity.WaveNumber, deathCFrame)
 
 		Try(self._despawnEnemyCommand:Execute(entity))
 

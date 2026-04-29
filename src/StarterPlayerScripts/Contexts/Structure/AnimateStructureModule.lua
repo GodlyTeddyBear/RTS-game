@@ -10,6 +10,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
+local ResolveStructureAimRequest = require(script.Parent.Infrastructure.ResolveStructureAimRequest)
 
 local AnimateStructureModule = {}
 
@@ -24,7 +25,22 @@ local function _GetAnimationController()
 end
 
 function AnimateStructureModule.setup(model: Model, context: any)
-	return _GetAnimationController():Setup(model, "Structure", context)
+	return _GetAnimationController():Setup(model, "Structure", context):andThen(function(animationCleanup)
+		local aimCleanup = nil
+		local aimRequest = ResolveStructureAimRequest.Execute(model, context)
+		if aimRequest ~= nil then
+			aimCleanup = _GetAnimationController():SetupAim(aimRequest)
+		end
+
+		return function()
+			if aimCleanup ~= nil then
+				aimCleanup()
+			end
+			if animationCleanup ~= nil then
+				animationCleanup()
+			end
+		end
+	end)
 end
 
 return AnimateStructureModule

@@ -7,10 +7,12 @@ local Types = require(ReplicatedStorage.Contexts.Animation.Types.AnimationTypes)
 
 local GetAnimationPresetCommand = require(script.Parent.Application.Commands.GetAnimationPresetCommand)
 local SetupAnimationCommand = require(script.Parent.Application.Commands.SetupAnimationCommand)
+local SetupAimCommand = require(script.Parent.Application.Commands.SetupAimCommand)
 
 type TPresetId = Types.TPresetId
 type TAnimationPreset = Types.TAnimationPreset
 type TAnimationPresetOptions = Types.TAnimationPresetOptions
+type TSetupAimRequest = Types.TSetupAimRequest
 
 local AnimationController = Knit.CreateController({
 	Name = "AnimationController",
@@ -19,6 +21,7 @@ local AnimationController = Knit.CreateController({
 function AnimationController:KnitInit()
 	self._getAnimationPresetCommand = GetAnimationPresetCommand.new()
 	self._setupAnimationCommand = SetupAnimationCommand.new()
+	self._setupAimCommand = SetupAimCommand.new()
 end
 
 function AnimationController:GetPreset(presetId: TPresetId, options: TAnimationPresetOptions?): TAnimationPreset
@@ -51,6 +54,10 @@ function AnimationController:SetupWithFolder(
 	resolvedOptions.AnimationsFolder = animationsFolder
 
 	return self:Setup(model, presetId, context, resolvedOptions :: TAnimationPresetOptions)
+end
+
+function AnimationController:SetupAim(request: TSetupAimRequest): (() -> ())?
+	return self._setupAimCommand:Execute(request)
 end
 
 return AnimationController
