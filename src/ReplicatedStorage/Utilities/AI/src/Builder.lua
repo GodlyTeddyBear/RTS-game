@@ -12,12 +12,21 @@ local Validation = require(script.Parent.Validation)
 type TActionPack = Types.TActionPack
 type TActorRegistration = Types.TActorRegistration
 type TActorBundle = Types.TActorBundle
+type TActorPackage = Types.TActorPackage
 type TAssignmentDefaults = Types.TAssignmentDefaults
+type TSetupDefaults = Types.TSetupDefaults
 type TBehaviorCatalogResolved = Types.TBehaviorCatalogResolved
 type TSystemBuildResult = Types.TSystemBuildResult
 type TSystemBuilder = Types.TSystemBuilder
 type TSystemConfig = Types.TSystemConfig
 type TRegisterableRuntime = Types.TRegisterableRuntime
+
+--[=[
+	@class AISystemBuilder
+	Collects AI runtime registrations, behavior definitions, and builder-local defaults before producing one frozen build result.
+	@server
+	@client
+]=]
 
 local Builder = {}
 Builder.__index = Builder
@@ -33,6 +42,7 @@ local BUILDER_TRANSITIONS = table.freeze({
 	Disposed = {},
 })
 
+-- Small utility helpers keep the build phases easy to read without duplicating table-shape code.
 local function _GetSortedKeys(map: { [string]: any }): { string }
 	local keys = {}
 	for key in map do
@@ -140,6 +150,15 @@ local function _BuildAssignmentDefaults(
 	})
 end
 
+local function _BuildSetupDefaults(self: any): TSetupDefaults
+	return table.freeze({
+		DefaultTickInterval = self._defaultTickInterval,
+		TickIntervalByActorType = table.freeze(table.clone(self._tickIntervalByActorType)),
+		ClearActionStateOnWrite = self._clearActionStateOnSetup,
+		InitializeActionStateByActorType = table.freeze(table.clone(self._initializeActionStateByActorType)),
+	})
+end
+
 local function _ComposeHooks(self: any): { any }
 	local hooks = {}
 	_AppendHooks(hooks, self._hookLayers.GlobalHooks)
@@ -211,9 +230,17 @@ local function _BuildDiagnostics(self: any): Types.TBuildDiagnostics
 	})
 end
 
+--[=[
+	Creates a system builder for one AI runtime composition flow.
+	@within AISystemBuilder
+	@param aiModule any
+	@param config TSystemConfig
+	@return TSystemBuilder
+]=]
 function Builder.new(aiModule: any, config: TSystemConfig): TSystemBuilder
 	Validation.ValidateSystemConfig(config)
 
+	-- Global hooks are accumulated first so builder-added hooks can stay in one merged list.
 	local initialGlobalHooks = {}
 	if config.Hooks ~= nil then
 		_AppendHooks(initialGlobalHooks, config.Hooks)
@@ -242,6 +269,10 @@ function Builder.new(aiModule: any, config: TSystemConfig): TSystemBuilder
 	self._catalogActorDefaults = {}
 	self._catalogArchetypeDefaults = {}
 	self._fallbackBehaviorName = nil
+	self._tickIntervalByActorType = {}
+	self._defaultTickInterval = nil
+	self._clearActionStateOnSetup = nil
+	self._initializeActionStateByActorType = {}
 	self._buildStage = Types.Enums.BuildStage.Collect.Name
 	self._duplicateOverwrites = {}
 	self._lifecycle = StateMachine.new({
@@ -254,6 +285,12 @@ function Builder.new(aiModule: any, config: TSystemConfig): TSystemBuilder
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Adds hooks to the builder's global hook bucket.
+	@within AISystemBuilder
+	@param hooks { any }
+	@return TSystemBuilder
+]=]
 function Builder:AddHooks(hooks: { any }): TSystemBuilder
 	_AssertCollect(self, "AddHooks")
 	Validation.ValidateHooks(hooks)
@@ -261,6 +298,13 @@ function Builder:AddHooks(hooks: { any }): TSystemBuilder
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Loads hook modules from one folder into the builder's global hook bucket.
+	@within AISystemBuilder
+	@param folder Instance
+	@param predicate ((ModuleScript) -> boolean)?
+	@return TSystemBuilder
+]=]
 function Builder:LoadHooks(folder: Instance, predicate: ((ModuleScript) -> boolean)?): TSystemBuilder
 	_AssertCollect(self, "LoadHooks")
 	Validation.ValidateFolder(folder, Types.Enums.RegistrationKind.Hook.Name)
@@ -273,6 +317,12 @@ function Builder:LoadHooks(folder: Instance, predicate: ((ModuleScript) -> boole
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Adds many action definitions to the builder's action registry.
+	@within AISystemBuilder
+	@param actionDefinitions { [string]: any }
+	@return TSystemBuilder
+]=]
 function Builder:AddActions(actionDefinitions: { [string]: any }): TSystemBuilder
 	_AssertCollect(self, "AddActions")
 	Validation.ValidateActionDefinitions(actionDefinitions)
@@ -280,6 +330,12 @@ function Builder:AddActions(actionDefinitions: { [string]: any }): TSystemBuilde
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Adds one named action pack and merges its definitions into the builder's action registry.
+	@within AISystemBuilder
+	@param actionPack TActionPack
+	@return TSystemBuilder
+]=]
 function Builder:AddActionPack(actionPack: TActionPack): TSystemBuilder
 	_AssertCollect(self, "AddActionPack")
 	Validation.ValidateActionPack(actionPack)
@@ -294,6 +350,13 @@ function Builder:AddActionPack(actionPack: TActionPack): TSystemBuilder
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Loads action definition modules from one folder into the builder's action registry.
+	@within AISystemBuilder
+	@param folder Instance
+	@param predicate ((ModuleScript) -> boolean)?
+	@return TSystemBuilder
+]=]
 function Builder:LoadActions(folder: Instance, predicate: ((ModuleScript) -> boolean)?): TSystemBuilder
 	_AssertCollect(self, "LoadActions")
 	Validation.ValidateFolder(folder, Types.Enums.RegistrationKind.Action.Name)
@@ -308,6 +371,12 @@ function Builder:LoadActions(folder: Instance, predicate: ((ModuleScript) -> boo
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Adds one actor registration to the builder.
+	@within AISystemBuilder
+	@param registration TActorRegistration
+	@return TSystemBuilder
+]=]
 function Builder:AddActor(registration: TActorRegistration): TSystemBuilder
 	_AssertCollect(self, "AddActor")
 	Validation.ValidateRegistration(registration)
@@ -321,11 +390,18 @@ function Builder:AddActor(registration: TActorRegistration): TSystemBuilder
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Adds one actor bundle and merges its hook, action-pack, and default metadata.
+	@within AISystemBuilder
+	@param bundle TActorBundle
+	@return TSystemBuilder
+]=]
 function Builder:AddActorBundle(bundle: TActorBundle): TSystemBuilder
 	_AssertCollect(self, "AddActorBundle")
 	Validation.ValidateActorBundle(bundle)
 	table.insert(self._actorBundles, bundle)
 
+	-- Bundle-local hooks and action packs fold into the shared builder state before the actor registration is flattened.
 	if bundle.Hooks ~= nil then
 		_AppendHooks(self._hookLayers.ActorBundleHooks, bundle.Hooks)
 	end
@@ -350,9 +426,23 @@ function Builder:AddActorBundle(bundle: TActorBundle): TSystemBuilder
 		self._catalogActorDefaults[bundle.ActorType] = bundle.DefaultBehaviorName
 	end
 
+	if bundle.TickInterval ~= nil then
+		self._tickIntervalByActorType[bundle.ActorType] = bundle.TickInterval
+	end
+
+	if bundle.InitializeActionState ~= nil then
+		self._initializeActionStateByActorType[bundle.ActorType] = bundle.InitializeActionState
+	end
+
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Adds many actor bundles in order.
+	@within AISystemBuilder
+	@param bundles { TActorBundle }
+	@return TSystemBuilder
+]=]
 function Builder:AddActorBundles(bundles: { TActorBundle }): TSystemBuilder
 	_AssertCollect(self, "AddActorBundles")
 	Validation.ValidateActorBundles(bundles)
@@ -364,6 +454,82 @@ function Builder:AddActorBundles(bundles: { TActorBundle }): TSystemBuilder
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Adds one actor package and merges its package-level defaults into the builder.
+	@within AISystemBuilder
+	@param actorPackage TActorPackage
+	@return TSystemBuilder
+]=]
+function Builder:AddActorPackage(actorPackage: TActorPackage): TSystemBuilder
+	_AssertCollect(self, "AddActorPackage")
+	Validation.ValidateActorPackage(actorPackage)
+
+	local actorBundle = actorPackage.ActorBundle
+	-- Package-level defaults override the bundle only when the bundle leaves them unset.
+	if actorPackage.TickInterval ~= nil or actorPackage.InitializeActionState ~= nil then
+		actorBundle = {
+			ActorType = actorBundle.ActorType,
+			Adapter = actorBundle.Adapter,
+			Actions = actorBundle.Actions,
+			ActionPacks = actorBundle.ActionPacks,
+			DefaultBehaviorName = actorBundle.DefaultBehaviorName,
+			Hooks = actorBundle.Hooks,
+			TickInterval = if actorBundle.TickInterval ~= nil then actorBundle.TickInterval else actorPackage.TickInterval,
+			InitializeActionState = if actorBundle.InitializeActionState ~= nil
+				then actorBundle.InitializeActionState
+				else actorPackage.InitializeActionState,
+		}
+	end
+
+	self:AddActorBundle(actorBundle)
+
+	if actorPackage.Behaviors ~= nil then
+		self:AddBehaviors(actorPackage.Behaviors)
+	end
+
+	if actorPackage.Aliases ~= nil then
+		for _, aliasName in ipairs(_GetSortedKeys(actorPackage.Aliases)) do
+			self:SetBehaviorAlias(aliasName, actorPackage.Aliases[aliasName])
+		end
+	end
+
+	if actorPackage.ArchetypeDefaults ~= nil then
+		for _, archetypeName in ipairs(_GetSortedKeys(actorPackage.ArchetypeDefaults)) do
+			self:SetArchetypeDefault(archetypeName, actorPackage.ArchetypeDefaults[archetypeName])
+		end
+	end
+
+	if actorPackage.FallbackBehaviorName ~= nil then
+		self:SetFallbackBehavior(actorPackage.FallbackBehaviorName)
+	end
+
+	return (self :: any) :: TSystemBuilder
+end
+
+--[=[
+	Adds many actor packages in order.
+	@within AISystemBuilder
+	@param actorPackages { TActorPackage }
+	@return TSystemBuilder
+]=]
+function Builder:AddActorPackages(actorPackages: { TActorPackage }): TSystemBuilder
+	_AssertCollect(self, "AddActorPackages")
+	Validation.ValidateActorPackages(actorPackages)
+
+	for _, actorPackage in ipairs(actorPackages) do
+		self:AddActorPackage(actorPackage)
+	end
+
+	return (self :: any) :: TSystemBuilder
+end
+
+--[=[
+	Sets one behavior alias on the builder catalog.
+	@within AISystemBuilder
+	@param aliasName string
+	@param behaviorName string
+	@return TSystemBuilder
+]=]
 function Builder:SetBehaviorAlias(aliasName: string, behaviorName: string): TSystemBuilder
 	_AssertCollect(self, "SetBehaviorAlias")
 	Validation.ValidateBehaviorAlias(aliasName, behaviorName)
@@ -376,6 +542,13 @@ function Builder:SetBehaviorAlias(aliasName: string, behaviorName: string): TSys
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Sets one actor-type default behavior on the builder catalog.
+	@within AISystemBuilder
+	@param actorType string
+	@param behaviorName string
+	@return TSystemBuilder
+]=]
 function Builder:SetActorDefault(actorType: string, behaviorName: string): TSystemBuilder
 	_AssertCollect(self, "SetActorDefault")
 	Validation.ValidateActorType(actorType)
@@ -389,6 +562,13 @@ function Builder:SetActorDefault(actorType: string, behaviorName: string): TSyst
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Sets one archetype default behavior on the builder catalog.
+	@within AISystemBuilder
+	@param archetypeName string
+	@param behaviorName string
+	@return TSystemBuilder
+]=]
 function Builder:SetArchetypeDefault(archetypeName: string, behaviorName: string): TSystemBuilder
 	_AssertCollect(self, "SetArchetypeDefault")
 	Validation.ValidateArchetypeName(archetypeName)
@@ -402,6 +582,12 @@ function Builder:SetArchetypeDefault(archetypeName: string, behaviorName: string
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Sets the fallback behavior used when no other assignment source resolves.
+	@within AISystemBuilder
+	@param behaviorName string
+	@return TSystemBuilder
+]=]
 function Builder:SetFallbackBehavior(behaviorName: string): TSystemBuilder
 	_AssertCollect(self, "SetFallbackBehavior")
 	Validation.ValidateBehaviorRegistrationName(behaviorName)
@@ -414,6 +600,54 @@ function Builder:SetFallbackBehavior(behaviorName: string): TSystemBuilder
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Sets one actor-type tick interval used while writing actor setups.
+	@within AISystemBuilder
+	@param actorType string
+	@param tickInterval number
+	@return TSystemBuilder
+]=]
+function Builder:SetActorTickInterval(actorType: string, tickInterval: number): TSystemBuilder
+	_AssertCollect(self, "SetActorTickInterval")
+	Validation.ValidateActorType(actorType)
+	Validation.ValidateTickInterval(tickInterval)
+	self._tickIntervalByActorType[actorType] = tickInterval
+	return (self :: any) :: TSystemBuilder
+end
+
+--[=[
+	Sets the default tick interval used when an actor type does not override it.
+	@within AISystemBuilder
+	@param tickInterval number
+	@return TSystemBuilder
+]=]
+function Builder:SetDefaultTickInterval(tickInterval: number): TSystemBuilder
+	_AssertCollect(self, "SetDefaultTickInterval")
+	Validation.ValidateTickInterval(tickInterval)
+	self._defaultTickInterval = tickInterval
+	return (self :: any) :: TSystemBuilder
+end
+
+--[=[
+	Sets whether setup writing should clear action state by default.
+	@within AISystemBuilder
+	@param enabled boolean
+	@return TSystemBuilder
+]=]
+function Builder:SetClearActionStateOnSetup(enabled: boolean): TSystemBuilder
+	_AssertCollect(self, "SetClearActionStateOnSetup")
+	assert(type(enabled) == "boolean", "AI setup clear flag must be a boolean")
+	self._clearActionStateOnSetup = enabled
+	return (self :: any) :: TSystemBuilder
+end
+
+--[=[
+	Adds one named behavior definition to the builder catalog.
+	@within AISystemBuilder
+	@param name string
+	@param definition any
+	@return TSystemBuilder
+]=]
 function Builder:AddBehavior(name: string, definition: any): TSystemBuilder
 	_AssertCollect(self, "AddBehavior")
 	Validation.ValidateBehaviorRegistrationName(name)
@@ -423,6 +657,12 @@ function Builder:AddBehavior(name: string, definition: any): TSystemBuilder
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Adds many named behavior definitions to the builder catalog.
+	@within AISystemBuilder
+	@param behaviorDefinitions { [string]: any }
+	@return TSystemBuilder
+]=]
 function Builder:AddBehaviors(behaviorDefinitions: { [string]: any }): TSystemBuilder
 	_AssertCollect(self, "AddBehaviors")
 	Validation.ValidateBehaviorDefinitions(behaviorDefinitions)
@@ -430,6 +670,13 @@ function Builder:AddBehaviors(behaviorDefinitions: { [string]: any }): TSystemBu
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Loads behavior definition modules from one folder into the builder catalog.
+	@within AISystemBuilder
+	@param folder Instance
+	@param predicate ((ModuleScript) -> boolean)?
+	@return TSystemBuilder
+]=]
 function Builder:LoadBehaviors(folder: Instance, predicate: ((ModuleScript) -> boolean)?): TSystemBuilder
 	_AssertCollect(self, "LoadBehaviors")
 	Validation.ValidateFolder(folder, Types.Enums.RegistrationKind.Behavior.Name)
@@ -439,10 +686,19 @@ function Builder:LoadBehaviors(folder: Instance, predicate: ((ModuleScript) -> b
 	return (self :: any) :: TSystemBuilder
 end
 
+--[=[
+	Returns the builder lifecycle state.
+	@within AISystemBuilder
+	@return string
+]=]
 function Builder:GetState(): string
 	return self._lifecycle:GetState()
 end
 
+--[=[
+	Disposes the builder lifecycle and releases its state machine resources.
+	@within AISystemBuilder
+]=]
 function Builder:Dispose()
 	local currentState = self._lifecycle:GetState()
 	if currentState == Types.Enums.BuilderState.Disposed.Name then
@@ -454,10 +710,17 @@ function Builder:Dispose()
 	self._lifecycle:Destroy()
 end
 
+--[=[
+	Builds the frozen AI runtime bundle from the collected registrations.
+	@within AISystemBuilder
+	@return TSystemBuildResult
+]=]
 function Builder:Build(): TSystemBuildResult
 	_AssertCollect(self, "Build")
+	-- The builder moves through explicit stages so diagnostics can explain exactly where construction stopped.
 	self._buildStage = Types.Enums.BuildStage.RuntimeCreate.Name
 
+	-- Hooks are composed once, then reused for both hook registration aliases on the runtime.
 	local composedHooks = _ComposeHooks(self)
 	local runtime = self._ai.CreateRuntime({
 		Conditions = self._config.Conditions,
@@ -468,23 +731,28 @@ function Builder:Build(): TSystemBuildResult
 	})
 
 	if next(self._actions) ~= nil then
+		-- Actions register before actors so actors can rely on the executor set already being present.
 		self._buildStage = Types.Enums.BuildStage.RegisterActions.Name
 		self._ai.RegisterActions(runtime, self._actions)
 	end
 
+	-- Actor adapters register after actions because the runtime is now ready for tree execution.
 	self._buildStage = Types.Enums.BuildStage.RegisterActors.Name
 	for _, actorRegistration in ipairs(self._actors) do
 		self._ai.RegisterActor(runtime, actorRegistration.ActorType, actorRegistration.Adapter)
 	end
 
+	-- Behavior compilation is last because it depends on the runtime knowing the executors it can reference.
 	self._buildStage = Types.Enums.BuildStage.BuildBehaviors.Name
 	local resolvedCatalog = _BuildCatalog(self, runtime)
 	local actorDefaults = _BuildActorDefaults(self._actorBundles)
 	local assignmentDefaults = _BuildAssignmentDefaults(self._actorBundles, resolvedCatalog)
+	local setupDefaults = _BuildSetupDefaults(self)
 
 	_TransitionLifecycle(self, Types.Enums.BuilderState.Built.Name)
 	self._buildStage = Types.Enums.BuildStage.Complete.Name
 
+	-- Freeze the final product so downstream code cannot mutate the collected registration snapshot by accident.
 	local buildResult = table.freeze({
 		Runtime = runtime,
 		Behaviors = resolvedCatalog.Behaviors,
@@ -500,6 +768,7 @@ function Builder:Build(): TSystemBuildResult
 		ActorBundles = table.freeze(table.clone(self._actorBundles)),
 		ActorDefaults = actorDefaults,
 		AssignmentDefaults = assignmentDefaults,
+		SetupDefaults = setupDefaults,
 		Catalog = resolvedCatalog,
 		Manifest = _BuildManifest(self, resolvedCatalog, composedHooks),
 		Diagnostics = _BuildDiagnostics(self),

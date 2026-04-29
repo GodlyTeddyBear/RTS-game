@@ -5,6 +5,7 @@ local Types = require(script.Parent.Types)
 type TActorRegistration = Types.TActorRegistration
 type TActorBundle = Types.TActorBundle
 type TActionPack = Types.TActionPack
+type TActorPackage = Types.TActorPackage
 type TActorAdapter = Types.TActorAdapter
 type TRegisterableRuntime = Types.TRegisterableRuntime
 type TBehaviorRegistration = Types.TBehaviorRegistration
@@ -12,8 +13,16 @@ type TBehaviorCatalogConfig = Types.TBehaviorCatalogConfig
 type TAssignmentRequest = Types.TAssignmentRequest
 type TSystemConfig = Types.TSystemConfig
 
+--[=[
+	@class AIValidation
+	Centralizes input-shape checks for the shared AI facade builder and catalog helpers.
+	@server
+	@client
+]=]
+
 local Validation = {}
 
+-- Core identity checks
 function Validation.ValidateActorType(actorType: string)
 	assert(type(actorType) == "string" and #actorType > 0, "AI actorType must be a non-empty string")
 end
@@ -26,6 +35,7 @@ function Validation.ValidateAdapter(adapter: TActorAdapter)
 	assert(type(adapter) == "table", "AI adapter must be a table")
 end
 
+-- Bundle and package shapes
 function Validation.ValidateRegistration(registration: TActorRegistration)
 	assert(type(registration) == "table", "AI actor registration must be a table")
 	Validation.ValidateActorType(registration.ActorType)
@@ -55,6 +65,14 @@ function Validation.ValidateActorBundle(bundle: TActorBundle)
 	if bundle.Hooks ~= nil then
 		Validation.ValidateHooks(bundle.Hooks)
 	end
+
+	if bundle.TickInterval ~= nil then
+		Validation.ValidateTickInterval(bundle.TickInterval)
+	end
+
+	if bundle.InitializeActionState ~= nil then
+		assert(type(bundle.InitializeActionState) == "boolean", "AI actor bundle InitializeActionState must be a boolean")
+	end
 end
 
 function Validation.ValidateActorBundles(bundles: { TActorBundle })
@@ -64,6 +82,50 @@ function Validation.ValidateActorBundles(bundles: { TActorBundle })
 	end
 end
 
+function Validation.ValidateActorPackage(actorPackage: TActorPackage)
+	assert(type(actorPackage) == "table", "AI actor package must be a table")
+	Validation.ValidateActorBundle(actorPackage.ActorBundle)
+
+	if actorPackage.Behaviors ~= nil then
+		Validation.ValidateBehaviorDefinitions(actorPackage.Behaviors)
+	end
+
+	if actorPackage.Aliases ~= nil then
+		assert(type(actorPackage.Aliases) == "table", "AI actor package aliases must be a table")
+		for aliasName, behaviorName in actorPackage.Aliases do
+			Validation.ValidateBehaviorAlias(aliasName, behaviorName)
+		end
+	end
+
+	if actorPackage.ArchetypeDefaults ~= nil then
+		assert(type(actorPackage.ArchetypeDefaults) == "table", "AI actor package archetype defaults must be a table")
+		for archetypeName, behaviorName in actorPackage.ArchetypeDefaults do
+			Validation.ValidateArchetypeName(archetypeName)
+			Validation.ValidateBehaviorRegistrationName(behaviorName)
+		end
+	end
+
+	if actorPackage.FallbackBehaviorName ~= nil then
+		Validation.ValidateBehaviorRegistrationName(actorPackage.FallbackBehaviorName)
+	end
+
+	if actorPackage.TickInterval ~= nil then
+		Validation.ValidateTickInterval(actorPackage.TickInterval)
+	end
+
+	if actorPackage.InitializeActionState ~= nil then
+		assert(type(actorPackage.InitializeActionState) == "boolean", "AI actor package InitializeActionState must be a boolean")
+	end
+end
+
+function Validation.ValidateActorPackages(actorPackages: { TActorPackage })
+	assert(type(actorPackages) == "table", "AI actor packages must be an array")
+	for _, actorPackage in ipairs(actorPackages) do
+		Validation.ValidateActorPackage(actorPackage)
+	end
+end
+
+-- Shared registration payloads
 function Validation.ValidateHooks(hooks: { any })
 	assert(type(hooks) == "table", "AI hooks must be an array")
 end
@@ -80,6 +142,10 @@ end
 
 function Validation.ValidateBehaviorRegistrationName(name: string)
 	assert(type(name) == "string" and #name > 0, "AI behavior registration name must be a non-empty string")
+end
+
+function Validation.ValidateTickInterval(tickInterval: number)
+	assert(type(tickInterval) == "number" and tickInterval >= 0, "AI tick interval must be a non-negative number")
 end
 
 function Validation.ValidateBehaviorRegistration(registration: TBehaviorRegistration)
@@ -99,6 +165,7 @@ function Validation.ValidateBehaviorAlias(aliasName: string, behaviorName: strin
 	Validation.ValidateBehaviorRegistrationName(behaviorName)
 end
 
+-- Assignment and setup resolution
 function Validation.ValidateAssignmentRequest(request: TAssignmentRequest)
 	assert(type(request) == "table", "AI assignment request must be a table")
 	Validation.ValidateActorType(request.ActorType)
@@ -119,6 +186,88 @@ function Validation.ValidateAssignmentRequests(requests: { TAssignmentRequest })
 	end
 end
 
+function Validation.ValidateActorSetupRequest(request: Types.TActorSetupRequest)
+	assert(type(request) == "table", "AI actor setup request must be a table")
+	assert(type(request.Entity) == "number", "AI actor setup request.Entity must be a number")
+	Validation.ValidateAssignmentRequest({
+		ActorType = request.ActorType,
+		BehaviorName = request.BehaviorName,
+		ArchetypeName = request.ArchetypeName,
+	})
+end
+
+function Validation.ValidateActorSetupRequests(requests: { Types.TActorSetupRequest })
+	assert(type(requests) == "table", "AI actor setup requests must be an array")
+	for _, request in ipairs(requests) do
+		Validation.ValidateActorSetupRequest(request)
+	end
+end
+
+function Validation.ValidateActorSetupResult(setupResult: Types.TActorSetupResult)
+	assert(type(setupResult) == "table", "AI actor setup result must be a table")
+	assert(type(setupResult.Entity) == "number", "AI actor setup result.Entity must be a number")
+	Validation.ValidateActorType(setupResult.ActorType)
+	assert(type(setupResult.Found) == "boolean", "AI actor setup result.Found must be a boolean")
+
+	if setupResult.BehaviorName ~= nil then
+		Validation.ValidateBehaviorRegistrationName(setupResult.BehaviorName)
+	end
+
+	if setupResult.ResolvedBehaviorName ~= nil then
+		Validation.ValidateBehaviorRegistrationName(setupResult.ResolvedBehaviorName)
+	end
+end
+
+function Validation.ValidateActorSetupResults(setupResults: { Types.TActorSetupResult })
+	assert(type(setupResults) == "table", "AI actor setup results must be an array")
+	for _, setupResult in ipairs(setupResults) do
+		Validation.ValidateActorSetupResult(setupResult)
+	end
+end
+
+-- Setup write contracts
+function Validation.ValidateActorSetupWriteConfig(config: Types.TActorSetupWriteConfig)
+	assert(type(config) == "table", "AI actor setup write config must be a table")
+	assert(type(config.WriteSetup) == "function", "AI actor setup write config.WriteSetup must be a function")
+
+	if config.ClearActionState ~= nil then
+		assert(type(config.ClearActionState) == "function", "AI actor setup write config.ClearActionState must be a function")
+	end
+
+	if config.OnMissingBehavior ~= nil then
+		assert(type(config.OnMissingBehavior) == "function", "AI actor setup write config.OnMissingBehavior must be a function")
+	end
+end
+
+function Validation.ValidateFactorySetupWriteConfig(config: Types.TFactorySetupWriteConfig)
+	assert(type(config) == "table", "AI factory setup write config must be a table")
+	assert(config.Factory ~= nil, "AI factory setup write config.Factory is required")
+
+	-- Factory setup writers accept either method names or direct callbacks so callers can stay close to their own APIs.
+	local writeSetupType = type(config.WriteSetup)
+	assert(
+		writeSetupType == "string" or writeSetupType == "function",
+		"AI factory setup write config.WriteSetup must be a method-name string or function"
+	)
+
+	if config.ClearActionState ~= nil then
+		local clearType = type(config.ClearActionState)
+		assert(
+			clearType == "string" or clearType == "function",
+			"AI factory setup write config.ClearActionState must be a method-name string or function"
+		)
+	end
+
+	if config.OnMissingBehavior ~= nil then
+		local missingType = type(config.OnMissingBehavior)
+		assert(
+			missingType == "string" or missingType == "function",
+			"AI factory setup write config.OnMissingBehavior must be a method-name string or function"
+		)
+	end
+end
+
+-- Catalog and runtime surfaces
 function Validation.ValidateBehaviorCatalogConfig(config: TBehaviorCatalogConfig)
 	assert(type(config) == "table", "AI behavior catalog config must be a table")
 

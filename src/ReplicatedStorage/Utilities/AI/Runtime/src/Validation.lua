@@ -18,8 +18,16 @@ local REQUIRED_ADAPTER_METHODS = table.freeze({
 	"ShouldEvaluate",
 })
 
+--[=[
+	@class AiRuntimeValidation
+	Centralizes runtime configuration, adapter, and frame-input validation for `AiRuntime`.
+	@server
+	@client
+]=]
+
 local Validation = {}
 
+-- Runtime config validation
 function Validation.ValidateConfig(config: TConfig)
 	assert(type(config) == "table", "AiRuntime config must be a table")
 	assert(type(config.Conditions) == "table", "AiRuntime config.Conditions must be a table")
@@ -40,6 +48,7 @@ function Validation.ValidateActorType(actorType: string)
 	assert(type(actorType) == "string" and #actorType > 0, "AiRuntime actorType must be a non-empty string")
 end
 
+-- Adapter contract validation
 function Validation.ValidateActorAdapter(actorType: string, adapter: TActorAdapter)
 	assert(type(adapter) == "table", ("AiRuntime actor adapter '%s' must be a table"):format(actorType))
 
@@ -59,6 +68,7 @@ function Validation.ValidateActorAdapter(actorType: string, adapter: TActorAdapt
 	end
 end
 
+-- Frame input validation
 function Validation.ValidateFrameContext(frameContext: TFrameContext)
 	assert(type(frameContext) == "table", "AiRuntime RunFrame requires a frameContext table")
 	assert(type(frameContext.CurrentTime) == "number", "AiRuntime frameContext.CurrentTime must be a number")

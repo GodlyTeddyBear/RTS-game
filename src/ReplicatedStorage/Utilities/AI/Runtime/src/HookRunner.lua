@@ -17,6 +17,7 @@ local _MergeBucket
 local HookRunner = {}
 
 function HookRunner.Run(hooks: { THook }, entity: number, hookContext: THookContext): THookOutcome
+	-- Hooks contribute in order so later modules can intentionally override earlier buckets.
 	local facts = {}
 	local behaviorContext = {}
 	local mergedServices = table.clone(hookContext.Services)

@@ -18,6 +18,7 @@ local AiAdapterFactory = {
 export type TActionState = Types.TActionState
 export type TActorAdapter = Types.TActorAdapter
 export type TConfig = Types.TConfig
+export type TFactoryConfig = Types.TFactoryConfig
 
 --[=[
 	Builds a plain actor adapter that matches the `AiRuntime` adapter contract.
@@ -27,6 +28,10 @@ export type TConfig = Types.TConfig
 ]=]
 function AiAdapterFactory.Create(config: TConfig): TActorAdapter
 	return Factory.Create(config)
+end
+
+function AiAdapterFactory.CreateFactory(config: TFactoryConfig): TActorAdapter
+	return Factory.CreateFactory(config)
 end
 
 return table.freeze(AiAdapterFactory)

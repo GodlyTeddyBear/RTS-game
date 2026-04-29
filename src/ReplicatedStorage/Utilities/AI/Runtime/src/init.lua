@@ -26,6 +26,7 @@ export type TRunFrameEntityResult = Types.TRunFrameEntityResult
 export type TRunFrameResult = Types.TRunFrameResult
 export type TCleanupKind = Types.TCleanupKind
 export type TCleanupResult = Types.TCleanupResult
+export type TCleanupBatchResult = Types.TCleanupBatchResult
 
 --[=[
 	Creates a runtime facade for the supplied condition, command, and hook registries.

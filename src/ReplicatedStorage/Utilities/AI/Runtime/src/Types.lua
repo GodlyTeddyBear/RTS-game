@@ -192,6 +192,10 @@ export type TCleanupResult = {
 	Defect: TErrorSinkPayload?,
 }
 
+export type TCleanupBatchResult = {
+	TCleanupResult
+}
+
 --[=[
 	Runtime configuration bundle required to construct `AiRuntime`.
 	@within AiRuntimeTypes

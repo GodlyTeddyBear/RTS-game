@@ -13,6 +13,13 @@ type TBehaviorCatalogResolved = Types.TBehaviorCatalogResolved
 type TRegisterableRuntime = Types.TRegisterableRuntime
 type TResolveBehaviorOptions = Types.TResolveBehaviorOptions
 
+--[=[
+	@class AIBehaviorCatalog
+	Collects named behaviors, aliases, and default assignments before resolving them into a frozen catalog.
+	@server
+	@client
+]=]
+
 local BehaviorCatalog = {}
 BehaviorCatalog.__index = BehaviorCatalog
 
@@ -27,6 +34,7 @@ local CATALOG_TRANSITIONS = table.freeze({
 	Disposed = {},
 })
 
+-- Small helpers keep the catalog phases explicit and keep the collect/resolve flow easy to skim.
 local function _GetSortedKeys(map: { [string]: any }): { string }
 	local keys = {}
 	for key in map do
@@ -65,6 +73,12 @@ local function _BuildBehaviors(runtime: TRegisterableRuntime, behaviorDefinition
 	return table.freeze(builtBehaviors)
 end
 
+--[=[
+	Creates a behavior catalog from optional behavior, alias, and default assignments.
+	@within AIBehaviorCatalog
+	@param config TBehaviorCatalogConfig?
+	@return TBehaviorCatalog
+]=]
 function BehaviorCatalog.new(config: TBehaviorCatalogConfig?): TBehaviorCatalog
 	local self = setmetatable({}, BehaviorCatalog)
 	self._definitions = {}
@@ -113,6 +127,13 @@ function BehaviorCatalog.new(config: TBehaviorCatalogConfig?): TBehaviorCatalog
 	return (self :: any) :: TBehaviorCatalog
 end
 
+--[=[
+	Adds one behavior definition while the catalog is still collecting registrations.
+	@within AIBehaviorCatalog
+	@param name string
+	@param definition any
+	@return TBehaviorCatalog
+]=]
 function BehaviorCatalog:AddBehavior(name: string, definition: any): TBehaviorCatalog
 	_RequireState(self, "Collect", "AddBehavior")
 	Validation.ValidateBehaviorRegistrationName(name)
@@ -120,6 +141,12 @@ function BehaviorCatalog:AddBehavior(name: string, definition: any): TBehaviorCa
 	return (self :: any) :: TBehaviorCatalog
 end
 
+--[=[
+	Adds many behavior definitions while the catalog is still collecting registrations.
+	@within AIBehaviorCatalog
+	@param behaviorDefinitions { [string]: any }
+	@return TBehaviorCatalog
+]=]
 function BehaviorCatalog:AddBehaviors(behaviorDefinitions: { [string]: any }): TBehaviorCatalog
 	_RequireState(self, "Collect", "AddBehaviors")
 	Validation.ValidateBehaviorDefinitions(behaviorDefinitions)
@@ -131,6 +158,13 @@ function BehaviorCatalog:AddBehaviors(behaviorDefinitions: { [string]: any }): T
 	return (self :: any) :: TBehaviorCatalog
 end
 
+--[=[
+	Sets one alias that resolves to a named behavior during catalog build.
+	@within AIBehaviorCatalog
+	@param aliasName string
+	@param behaviorName string
+	@return TBehaviorCatalog
+]=]
 function BehaviorCatalog:SetAlias(aliasName: string, behaviorName: string): TBehaviorCatalog
 	_RequireState(self, "Collect", "SetAlias")
 	Validation.ValidateBehaviorRegistrationName(aliasName)
@@ -139,6 +173,13 @@ function BehaviorCatalog:SetAlias(aliasName: string, behaviorName: string): TBeh
 	return (self :: any) :: TBehaviorCatalog
 end
 
+--[=[
+	Sets the default behavior for one actor type.
+	@within AIBehaviorCatalog
+	@param actorType string
+	@param behaviorName string
+	@return TBehaviorCatalog
+]=]
 function BehaviorCatalog:SetActorDefault(actorType: string, behaviorName: string): TBehaviorCatalog
 	_RequireState(self, "Collect", "SetActorDefault")
 	Validation.ValidateActorType(actorType)
@@ -147,6 +188,13 @@ function BehaviorCatalog:SetActorDefault(actorType: string, behaviorName: string
 	return (self :: any) :: TBehaviorCatalog
 end
 
+--[=[
+	Sets the default behavior for one archetype.
+	@within AIBehaviorCatalog
+	@param archetypeName string
+	@param behaviorName string
+	@return TBehaviorCatalog
+]=]
 function BehaviorCatalog:SetArchetypeDefault(archetypeName: string, behaviorName: string): TBehaviorCatalog
 	_RequireState(self, "Collect", "SetArchetypeDefault")
 	Validation.ValidateArchetypeName(archetypeName)
@@ -155,6 +203,12 @@ function BehaviorCatalog:SetArchetypeDefault(archetypeName: string, behaviorName
 	return (self :: any) :: TBehaviorCatalog
 end
 
+--[=[
+	Sets the fallback behavior used when no explicit or default assignment resolves.
+	@within AIBehaviorCatalog
+	@param behaviorName string
+	@return TBehaviorCatalog
+]=]
 function BehaviorCatalog:SetFallbackBehavior(behaviorName: string): TBehaviorCatalog
 	_RequireState(self, "Collect", "SetFallbackBehavior")
 	Validation.ValidateBehaviorRegistrationName(behaviorName)
@@ -162,10 +216,17 @@ function BehaviorCatalog:SetFallbackBehavior(behaviorName: string): TBehaviorCat
 	return (self :: any) :: TBehaviorCatalog
 end
 
+--[=[
+	Builds and freezes the resolved catalog against the supplied runtime.
+	@within AIBehaviorCatalog
+	@param runtime TRegisterableRuntime
+	@return TBehaviorCatalogResolved
+]=]
 function BehaviorCatalog:Build(runtime: TRegisterableRuntime): TBehaviorCatalogResolved
 	_RequireState(self, "Collect", "Build")
 	Validation.ValidateRuntime(runtime)
 
+	-- Build freezes the resolved catalog so assignment lookups stay read-only after construction.
 	self._resolved = table.freeze({
 		Behaviors = _BuildBehaviors(runtime, self._definitions),
 		Aliases = table.freeze(table.clone(self._aliases)),
@@ -179,6 +240,12 @@ function BehaviorCatalog:Build(runtime: TRegisterableRuntime): TBehaviorCatalogR
 	return self._resolved
 end
 
+--[=[
+	Returns one resolved behavior by name or alias.
+	@within AIBehaviorCatalog
+	@param name string
+	@return any?
+]=]
 function BehaviorCatalog:GetBehavior(name: string): any?
 	_RequireState(self, "Resolved", "GetBehavior")
 	Validation.ValidateBehaviorRegistrationName(name)
@@ -193,11 +260,19 @@ function BehaviorCatalog:GetBehavior(name: string): any?
 	return resolved.Behaviors[resolvedName]
 end
 
+--[=[
+	Resolves one behavior tree for an actor type using the catalog's assignment order.
+	@within AIBehaviorCatalog
+	@param actorType string
+	@param options TResolveBehaviorOptions?
+	@return any?
+]=]
 function BehaviorCatalog:ResolveForActor(actorType: string, options: TResolveBehaviorOptions?): any?
 	_RequireState(self, "Resolved", "ResolveForActor")
 	Validation.ValidateActorType(actorType)
 
 	local resolved = (self :: any)._resolved :: TBehaviorCatalogResolved
+	-- The resolution order mirrors the builder defaults: explicit input, actor default, archetype default, fallback.
 	local behaviorName = if options ~= nil and options.BehaviorName ~= nil
 		then options.BehaviorName
 		else resolved.ActorDefaults[actorType]
@@ -219,10 +294,19 @@ function BehaviorCatalog:ResolveForActor(actorType: string, options: TResolveBeh
 	return resolved.Behaviors[resolvedName]
 end
 
+--[=[
+	Returns the catalog lifecycle state.
+	@within AIBehaviorCatalog
+	@return string
+]=]
 function BehaviorCatalog:GetState(): string
 	return self._lifecycle:GetState()
 end
 
+--[=[
+	Disposes the catalog lifecycle and releases state-machine resources.
+	@within AIBehaviorCatalog
+]=]
 function BehaviorCatalog:Dispose()
 	local currentState = self._lifecycle:GetState()
 	if currentState ~= "Disposed" then

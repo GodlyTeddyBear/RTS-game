@@ -19,9 +19,11 @@ local BehaviorSystem = require(ReplicatedStorage.Utilities.AI.Behavior)
 
 local BehaviorCatalog = require(script.BehaviorCatalog)
 local Builder = require(script.Builder)
+local SetupWriter = require(script.SetupWriter)
 local Types = require(script.Types)
 local Validation = require(script.Validation)
 
+-- Keep the facade shallow; the implementation lives in the sibling modules above.
 local AI = {
 	Types = Types,
 	Runtime = AiRuntime,
@@ -33,14 +35,21 @@ export type TRuntimeConfig = Types.TRuntimeConfig
 export type TFrameContext = Types.TFrameContext
 export type TActorAdapter = Types.TActorAdapter
 export type TAdapterConfig = Types.TAdapterConfig
+export type TFactoryAdapterConfig = Types.TFactoryAdapterConfig
 export type TActionPack = Types.TActionPack
 export type TActorRegistration = Types.TActorRegistration
 export type TActorBundle = Types.TActorBundle
+export type TActorPackage = Types.TActorPackage
 export type TBehaviorCatalog = Types.TBehaviorCatalog
 export type TBehaviorCatalogConfig = Types.TBehaviorCatalogConfig
 export type TResolveBehaviorOptions = Types.TResolveBehaviorOptions
 export type TAssignmentRequest = Types.TAssignmentRequest
 export type TAssignmentResult = Types.TAssignmentResult
+export type TActorSetupRequest = Types.TActorSetupRequest
+export type TActorSetupResult = Types.TActorSetupResult
+export type TActorSetupWriteConfig = Types.TActorSetupWriteConfig
+export type TFactorySetupWriteConfig = Types.TFactorySetupWriteConfig
+export type TActorSetupWriteResult = Types.TActorSetupWriteResult
 export type TBehaviorRegistration = Types.TBehaviorRegistration
 export type TRegisterableRuntime = Types.TRegisterableRuntime
 export type TRunFrameResult = Types.TRunFrameResult
@@ -49,6 +58,7 @@ export type TSystemConfig = Types.TSystemConfig
 export type TBuildManifest = Types.TBuildManifest
 export type TBuildDiagnostics = Types.TBuildDiagnostics
 export type TAssignmentDefaults = Types.TAssignmentDefaults
+export type TSetupDefaults = Types.TSetupDefaults
 export type TSystemBuildResult = Types.TSystemBuildResult
 export type TSystemBuilder = Types.TSystemBuilder
 
@@ -93,6 +103,16 @@ function AI.CreateAdapter(config: TAdapterConfig): TActorAdapter
 end
 
 --[=[
+	Creates an actor adapter from method-name strings or direct callbacks on a factory object.
+	@within AIEntry
+	@param config TFactoryAdapterConfig
+	@return TActorAdapter
+]=]
+function AI.CreateFactoryAdapter(config: TFactoryAdapterConfig): TActorAdapter
+	return AiAdapterFactory.CreateFactory(config)
+end
+
+--[=[
 	Creates a small registration bundle for one actor type.
 	@within AIEntry
 	@param registration TActorRegistration
@@ -124,6 +144,28 @@ function AI.CreateActorBundle(bundle: TActorBundle): TActorBundle
 		ActionPacks = bundle.ActionPacks,
 		DefaultBehaviorName = bundle.DefaultBehaviorName,
 		Hooks = bundle.Hooks,
+		TickInterval = bundle.TickInterval,
+		InitializeActionState = bundle.InitializeActionState,
+	})
+end
+
+--[=[
+	Creates an actor package that carries one bundle plus catalog defaults.
+	@within AIEntry
+	@param actorPackage TActorPackage
+	@return TActorPackage
+]=]
+function AI.CreateActorPackage(actorPackage: TActorPackage): TActorPackage
+	Validation.ValidateActorPackage(actorPackage)
+
+	return table.freeze({
+		ActorBundle = actorPackage.ActorBundle,
+		Behaviors = actorPackage.Behaviors,
+		Aliases = actorPackage.Aliases,
+		ArchetypeDefaults = actorPackage.ArchetypeDefaults,
+		FallbackBehaviorName = actorPackage.FallbackBehaviorName,
+		TickInterval = actorPackage.TickInterval,
+		InitializeActionState = actorPackage.InitializeActionState,
 	})
 end
 
@@ -192,6 +234,40 @@ function AI.RegisterActor(
 end
 
 --[=[
+	Registers many actor adapters and their action definitions on the runtime.
+	@within AIEntry
+	@param runtime TRegisterableRuntime
+	@param registrations { TActorRegistration }
+]=]
+function AI.RegisterActors(runtime: TRegisterableRuntime, registrations: { TActorRegistration })
+	Validation.ValidateRuntime(runtime)
+	assert(type(registrations) == "table", "AI registrations must be an array")
+
+	for _, registration in ipairs(registrations) do
+		Validation.ValidateRegistration(registration)
+		AI.RegisterActor(runtime, registration.ActorType, registration.Adapter, registration.Actions)
+	end
+end
+
+--[=[
+	Registers many actor bundles on the runtime.
+	@within AIEntry
+	@param runtime TRegisterableRuntime
+	@param bundles { TActorBundle }
+]=]
+function AI.RegisterActorBundles(runtime: TRegisterableRuntime, bundles: { TActorBundle })
+	Validation.ValidateRuntime(runtime)
+	Validation.ValidateActorBundles(bundles)
+
+	for _, bundle in ipairs(bundles) do
+		AI.RegisterActor(runtime, bundle.ActorType, bundle.Adapter, bundle.Actions)
+		if bundle.ActionPacks ~= nil then
+			AI.RegisterActionPacks(runtime, bundle.ActionPacks)
+		end
+	end
+end
+
+--[=[
 	Registers action definitions on the runtime.
 	@within AIEntry
 	@param runtime TRegisterableRuntime
@@ -201,6 +277,22 @@ function AI.RegisterActions(runtime: TRegisterableRuntime, definitions: any)
 	Validation.ValidateRuntime(runtime)
 	Validation.ValidateActionDefinitions(definitions)
 	runtime:RegisterActions(definitions)
+end
+
+--[=[
+	Registers many action packs on the runtime.
+	@within AIEntry
+	@param runtime TRegisterableRuntime
+	@param actionPacks { TActionPack }
+]=]
+function AI.RegisterActionPacks(runtime: TRegisterableRuntime, actionPacks: { TActionPack })
+	Validation.ValidateRuntime(runtime)
+	assert(type(actionPacks) == "table", "AI action packs must be an array")
+
+	for _, actionPack in ipairs(actionPacks) do
+		Validation.ValidateActionPack(actionPack)
+		AI.RegisterActions(runtime, actionPack.Definitions)
+	end
 end
 
 --[=[
@@ -220,6 +312,7 @@ local function _ResolveBehaviorName(
 	buildResult: TSystemBuildResult,
 	request: TAssignmentRequest
 ): (string?, string)
+	-- Resolve in descending priority so explicit input always wins over defaults.
 	local explicitBehaviorName = request.BehaviorName
 	if explicitBehaviorName ~= nil then
 		return explicitBehaviorName, Types.Enums.AssignmentSource.Explicit.Name
@@ -278,6 +371,7 @@ function AI.ResolveActorAssignment(
 	actorType: string,
 	options: TResolveBehaviorOptions?
 ): TAssignmentResult
+	-- Build a local request record first so the same validation path can serve all resolver entrypoints.
 	local request = {
 		ActorType = actorType,
 		BehaviorName = if options ~= nil then options.BehaviorName else nil,
@@ -304,6 +398,106 @@ function AI.ResolveActorAssignment(
 		ArchetypeName = request.ArchetypeName,
 		Found = found,
 	})
+end
+
+--[=[
+	Creates one resolved actor setup from a build result and setup request.
+	@within AIEntry
+	@param buildResult TSystemBuildResult
+	@param request TActorSetupRequest
+	@return TActorSetupResult
+]=]
+function AI.CreateActorSetup(
+	buildResult: TSystemBuildResult,
+	request: TActorSetupRequest,
+	_options: any?
+): TActorSetupResult
+	Validation.ValidateActorSetupRequest(request)
+	assert(type(buildResult) == "table", "AI buildResult must be a table")
+
+	local assignment = AI.ResolveActorAssignment(buildResult, request.ActorType, {
+		BehaviorName = request.BehaviorName,
+		ArchetypeName = request.ArchetypeName,
+	})
+	local initializeActionState = buildResult.SetupDefaults.InitializeActionStateByActorType[request.ActorType]
+	if initializeActionState == nil then
+		initializeActionState = buildResult.SetupDefaults.ClearActionStateOnWrite == true
+	end
+
+	return table.freeze({
+		Entity = request.Entity,
+		ActorType = request.ActorType,
+		Assignment = assignment,
+		Tree = assignment.Tree,
+		BehaviorName = assignment.BehaviorName,
+		ResolvedBehaviorName = assignment.ResolvedBehaviorName,
+		Found = assignment.Found,
+		TickInterval = buildResult.SetupDefaults.TickIntervalByActorType[request.ActorType]
+			or buildResult.SetupDefaults.DefaultTickInterval,
+		InitializeActionState = initializeActionState,
+		SetupDefaults = buildResult.SetupDefaults,
+	})
+end
+
+--[=[
+	Creates many resolved actor setups in request order.
+	@within AIEntry
+	@param buildResult TSystemBuildResult
+	@param requests { TActorSetupRequest }
+	@return { TActorSetupResult }
+]=]
+function AI.CreateActorSetups(
+	buildResult: TSystemBuildResult,
+	requests: { TActorSetupRequest },
+	_options: any?
+): { TActorSetupResult }
+	Validation.ValidateActorSetupRequests(requests)
+	assert(type(buildResult) == "table", "AI buildResult must be a table")
+
+	local setupResults = {}
+	for _, request in ipairs(requests) do
+		table.insert(setupResults, AI.CreateActorSetup(buildResult, request, nil))
+	end
+
+	return table.freeze(setupResults)
+end
+
+--[=[
+	Creates a setup-writer configuration from a factory object and its surfaces.
+	@within AIEntry
+	@param config TFactorySetupWriteConfig
+	@return TActorSetupWriteConfig
+]=]
+function AI.CreateFactorySetupWriter(config: TFactorySetupWriteConfig): TActorSetupWriteConfig
+	return SetupWriter.CreateFactory(config)
+end
+
+--[=[
+	Writes one resolved actor setup through the provided writer configuration.
+	@within AIEntry
+	@param setupResult TActorSetupResult
+	@param config TActorSetupWriteConfig
+	@return TActorSetupWriteResult
+]=]
+function AI.WriteActorSetup(
+	setupResult: TActorSetupResult,
+	config: TActorSetupWriteConfig
+): TActorSetupWriteResult
+	return SetupWriter.WriteOne(setupResult, config)
+end
+
+--[=[
+	Writes many resolved actor setups through the provided writer configuration.
+	@within AIEntry
+	@param setupResults { TActorSetupResult }
+	@param config TActorSetupWriteConfig
+	@return { TActorSetupWriteResult }
+]=]
+function AI.WriteActorSetups(
+	setupResults: { TActorSetupResult },
+	config: TActorSetupWriteConfig
+): { TActorSetupWriteResult }
+	return SetupWriter.WriteMany(setupResults, config)
 end
 
 --[=[
@@ -416,6 +610,7 @@ function AI.DescribeBuild(buildResult: TSystemBuildResult): { [string]: any }
 		Manifest = buildResult.Manifest,
 		Diagnostics = buildResult.Diagnostics,
 		AssignmentDefaults = buildResult.AssignmentDefaults,
+		SetupDefaults = buildResult.SetupDefaults,
 	})
 end
 

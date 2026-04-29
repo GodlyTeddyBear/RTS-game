@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local EnumList = require(ReplicatedStorage.Utilities.EnumList)
 
+-- Centralized enum registries keep diagnostics and lifecycle labels stable across the AI package.
 local Enums = {
 	RegistrationKind = EnumList.new("AIRegistrationKind", {
 		"Hook",

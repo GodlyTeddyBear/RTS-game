@@ -25,6 +25,7 @@ export type TActorAdapter = AiRuntime.TActorAdapter
 export type TRunFrameResult = AiRuntime.TRunFrameResult
 export type TCleanupResult = AiRuntime.TCleanupResult
 export type TAdapterConfig = AiAdapterFactory.TConfig
+export type TFactoryAdapterConfig = AiAdapterFactory.TFactoryConfig
 type TConditionRegistry = { [string]: (options: any?) -> any }
 type TCommandRegistry = { [string]: (options: any?) -> any }
 type THook = AiRuntime.THook
@@ -55,6 +56,18 @@ export type TActorBundle = {
 	ActionPacks: { TActionPack }?,
 	DefaultBehaviorName: string?,
 	Hooks: { any }?,
+	TickInterval: number?,
+	InitializeActionState: boolean?,
+}
+
+export type TActorPackage = {
+	ActorBundle: TActorBundle,
+	Behaviors: { [string]: any }?,
+	Aliases: { [string]: string }?,
+	ArchetypeDefaults: { [string]: string }?,
+	FallbackBehaviorName: string?,
+	TickInterval: number?,
+	InitializeActionState: boolean?,
 }
 
 export type TBehaviorRegistration = {
@@ -89,6 +102,50 @@ export type TAssignmentResult = {
 	Source: TAssignmentSource,
 	ArchetypeName: string?,
 	Found: boolean,
+}
+
+export type TActorSetupRequest = {
+	Entity: number,
+	ActorType: string,
+	BehaviorName: string?,
+	ArchetypeName: string?,
+}
+
+export type TActorSetupResult = {
+	Entity: number,
+	ActorType: string,
+	Assignment: TAssignmentResult,
+	Tree: any?,
+	BehaviorName: string?,
+	ResolvedBehaviorName: string?,
+	Found: boolean,
+	TickInterval: number?,
+	InitializeActionState: boolean,
+	SetupDefaults: TSetupDefaults,
+}
+
+export type TActorSetupWriteConfig = {
+	WriteSetup: (setupResult: TActorSetupResult) -> (),
+	ClearActionState: ((setupResult: TActorSetupResult) -> ())?,
+	OnMissingBehavior: ((setupResult: TActorSetupResult) -> ())?,
+}
+
+type TFactorySetupWriterSurface = string | ((factory: any, setupResult: TActorSetupResult) -> ())
+
+export type TFactorySetupWriteConfig = {
+	Factory: any,
+	WriteSetup: TFactorySetupWriterSurface,
+	ClearActionState: TFactorySetupWriterSurface?,
+	OnMissingBehavior: TFactorySetupWriterSurface?,
+}
+
+export type TActorSetupWriteResult = {
+	Entity: number,
+	ActorType: string,
+	Found: boolean,
+	WroteSetup: boolean,
+	BehaviorName: string?,
+	ResolvedBehaviorName: string?,
 }
 
 export type TRegisterableRuntime = {
@@ -155,6 +212,13 @@ export type TAssignmentDefaults = {
 	ResolutionOrder: { string },
 }
 
+export type TSetupDefaults = {
+	DefaultTickInterval: number?,
+	TickIntervalByActorType: { [string]: number },
+	ClearActionStateOnWrite: boolean?,
+	InitializeActionStateByActorType: { [string]: boolean },
+}
+
 export type TSystemBuildResult = {
 	Runtime: TRegisterableRuntime,
 	Behaviors: { [string]: any },
@@ -164,6 +228,7 @@ export type TSystemBuildResult = {
 	ActorBundles: { TActorBundle },
 	ActorDefaults: { [string]: { DefaultBehaviorName: string? } },
 	AssignmentDefaults: TAssignmentDefaults,
+	SetupDefaults: TSetupDefaults,
 	Catalog: TBehaviorCatalogResolved,
 	Manifest: TBuildManifest,
 	Diagnostics: TBuildDiagnostics,
@@ -178,10 +243,15 @@ export type TSystemBuilder = {
 	AddActor: (self: TSystemBuilder, registration: TActorRegistration) -> TSystemBuilder,
 	AddActorBundle: (self: TSystemBuilder, bundle: TActorBundle) -> TSystemBuilder,
 	AddActorBundles: (self: TSystemBuilder, bundles: { TActorBundle }) -> TSystemBuilder,
+	AddActorPackage: (self: TSystemBuilder, actorPackage: TActorPackage) -> TSystemBuilder,
+	AddActorPackages: (self: TSystemBuilder, actorPackages: { TActorPackage }) -> TSystemBuilder,
 	SetBehaviorAlias: (self: TSystemBuilder, aliasName: string, behaviorName: string) -> TSystemBuilder,
 	SetActorDefault: (self: TSystemBuilder, actorType: string, behaviorName: string) -> TSystemBuilder,
 	SetArchetypeDefault: (self: TSystemBuilder, archetypeName: string, behaviorName: string) -> TSystemBuilder,
 	SetFallbackBehavior: (self: TSystemBuilder, behaviorName: string) -> TSystemBuilder,
+	SetActorTickInterval: (self: TSystemBuilder, actorType: string, tickInterval: number) -> TSystemBuilder,
+	SetDefaultTickInterval: (self: TSystemBuilder, tickInterval: number) -> TSystemBuilder,
+	SetClearActionStateOnSetup: (self: TSystemBuilder, enabled: boolean) -> TSystemBuilder,
 	AddBehavior: (self: TSystemBuilder, name: string, definition: any) -> TSystemBuilder,
 	AddBehaviors: (self: TSystemBuilder, behaviorDefinitions: { [string]: any }) -> TSystemBuilder,
 	LoadBehaviors: (self: TSystemBuilder, folder: Instance, predicate: ((ModuleScript) -> boolean)?) -> TSystemBuilder,

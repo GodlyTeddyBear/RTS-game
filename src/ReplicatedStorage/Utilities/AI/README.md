@@ -2,6 +2,16 @@
 
 Shared package root for the project's AI utilities. `AI` exposes the package entrypoint, while `AI.Runtime`, `AI.AdapterFactory`, and `AI.Behavior` expose the underlying submodules directly. The package still does not own context lifecycle, ECS state, trees, hooks, executors, or teardown orchestration.
 
+## Package Layout
+
+- `src/init.lua` exposes the facade entrypoint and shared type exports.
+- `src/Builder.lua` collects registrations and produces the composed runtime bundle.
+- `src/SetupWriter.lua` writes resolved actor setups into caller-owned storage.
+- `src/BehaviorCatalog.lua` resolves named behaviors, aliases, and defaults.
+- `src/Validation.lua` centralizes input-shape checks for the facade surface.
+- `src/Types.lua` defines the shared facade types.
+- `src/Enums.lua` defines the shared enum registries used by the facade and diagnostics.
+
 ## Purpose
 
 - provide one package root for shared AI utilities
@@ -91,6 +101,17 @@ local assignmentDefaults = AI.ListAssignmentDefaults(builtAi)
 local assignmentDescription = AI.DescribeAssignment(builtAi, "Enemy", {
 	ArchetypeName = "GroundEnemy",
 })
+local setup = AI.CreateActorSetup(builtAi, {
+	Entity = enemyEntity,
+	ActorType = "Enemy",
+	ArchetypeName = "GroundEnemy",
+})
+
+AI.WriteActorSetup(setup, AI.CreateFactorySetupWriter({
+	Factory = enemyEntityFactory,
+	WriteSetup = "SetBehaviorTree",
+	ClearActionState = "ClearAction",
+}))
 ```
 
 Folder loading is optional and currently intended only for hooks, actions, and behaviors. Actor bundles stay explicit.
@@ -159,16 +180,26 @@ runtime:RunFrame({
 - `AI.CreateRuntime(config)`
 - `AI.CreateSystem(config)`
 - `AI.CreateAdapter(config)`
+- `AI.CreateFactoryAdapter(config)`
 - `AI.CreateBehaviorCatalog(config?)`
 - `AI.CreateActionPack(name, definitions)`
 - `AI.CreateActorRegistration(registration)`
 - `AI.CreateActorBundle(bundle)`
+- `AI.CreateActorPackage(package)`
 - `AI.CreateBehaviorRegistration(name, definition)`
 - `AI.RegisterActor(runtime, actorType, adapter, actionDefinitions?)`
+- `AI.RegisterActors(runtime, registrations)`
+- `AI.RegisterActorBundles(runtime, bundles)`
 - `AI.RegisterActions(runtime, definitions)`
+- `AI.RegisterActionPacks(runtime, actionPacks)`
 - `AI.BuildBehaviors(runtime, behaviorMap)`
 - `AI.ResolveActorAssignment(buildResult, actorType, options?)`
 - `AI.ResolveAssignments(buildResult, actorRequests)`
+- `AI.CreateActorSetup(buildResult, request, options?)`
+- `AI.CreateActorSetups(buildResult, requests, options?)`
+- `AI.CreateFactorySetupWriter(config)`
+- `AI.WriteActorSetup(setupResult, config)`
+- `AI.WriteActorSetups(setupResults, config)`
 - `AI.ResolveActorBehavior(buildResult, actorType, options?)`
 - `AI.ResolveActorDefaultBehavior(buildResult, actorType)`
 - `AI.ResolveBehaviorByArchetype(buildResult, archetypeName)`

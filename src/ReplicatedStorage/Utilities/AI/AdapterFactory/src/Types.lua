@@ -55,4 +55,19 @@ export type TConfig = {
 	ShouldEvaluate: (entity: number, currentTime: number) -> boolean,
 }
 
+type TFactoryCallback<TArgs..., TReturn...> = string | ((factory: any, TArgs...) -> TReturn...)
+
+export type TFactoryConfig = {
+	ActorLabel: string?,
+	Factory: any,
+	QueryActiveEntities: TFactoryCallback<any, { number }>,
+	GetBehaviorTree: TFactoryCallback<number, any?>,
+	GetActionState: TFactoryCallback<number, TActionState?>,
+	SetActionState: TFactoryCallback<number, TActionState, ()>,
+	ClearActionState: TFactoryCallback<number, ()>,
+	SetPendingAction: TFactoryCallback<number, string, any?, ()>,
+	UpdateLastTickTime: TFactoryCallback<number, number, ()>,
+	ShouldEvaluate: TFactoryCallback<number, number, boolean>,
+}
+
 return table.freeze(Types)
