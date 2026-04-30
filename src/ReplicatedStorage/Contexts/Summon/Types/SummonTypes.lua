@@ -9,14 +9,14 @@
 local SummonTypes = {}
 
 export type SwarmTuning = {
-	summonCount: number,
-	lifetime: number,
-	maxConcurrentDronesPerPlayer: number,
-	moveSpeed: number,
-	acquireRange: number,
-	attackRange: number,
-	attackInterval: number,
-	damagePerHit: number,
+	SummonCount: number,
+	Lifetime: number,
+	MaxConcurrentDronesPerPlayer: number,
+	MoveSpeed: number,
+	AcquireRange: number,
+	AttackRange: number,
+	AttackInterval: number,
+	DamagePerHit: number,
 }
 
 return table.freeze(SummonTypes)

@@ -15,14 +15,14 @@ type SwarmTuning = SummonTypes.SwarmTuning
 local SummonConfig = {}
 
 SummonConfig.SWARM_DRONES = table.freeze({
-	summonCount = 5,
-	lifetime = 20,
-	maxConcurrentDronesPerPlayer = 10,
-	moveSpeed = 26,
-	acquireRange = 40,
-	attackRange = 6,
-	attackInterval = 0.6,
-	damagePerHit = 6,
+	SummonCount = 5,
+	Lifetime = 20,
+	MaxConcurrentDronesPerPlayer = 10,
+	MoveSpeed = 26,
+	AcquireRange = 40,
+	AttackRange = 6,
+	AttackInterval = 0.6,
+	DamagePerHit = 6,
 } :: SwarmTuning)
 
 return table.freeze(SummonConfig)

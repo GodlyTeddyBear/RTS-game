@@ -11,8 +11,12 @@ local SummonComponentRegistry = require(script.Parent.Infrastructure.ECS.SummonC
 local SummonEntityFactory = require(script.Parent.Infrastructure.ECS.SummonEntityFactory)
 local SummonRuntimeService = require(script.Parent.Infrastructure.Services.SummonRuntimeService)
 local SpawnSwarmDronesCommand = require(script.Parent.Application.Commands.SpawnSwarmDronesCommand)
+local SpawnAllyCommand = require(script.Parent.Application.Commands.SpawnAllyCommand)
+local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 
 local Errors = require(script.Parent.Errors)
+
+type SpawnUnitResult = UnitTypes.SpawnUnitResult
 
 local Catch = Result.Catch
 local Ok = Result.Ok
@@ -41,6 +45,11 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		Module = SpawnSwarmDronesCommand,
 		CacheAs = "_spawnSwarmDronesCommand",
 	},
+	{
+		Name = "SpawnAllyCommand",
+		Module = SpawnAllyCommand,
+		CacheAs = "_spawnAllyCommand",
+	},
 }
 
 local SummonModules: BaseContext.TModuleLayers = {
@@ -59,6 +68,7 @@ local SummonContext = Knit.CreateService({
 	ExternalServices = {
 		{ Name = "EnemyContext", CacheAs = "_enemyContext" },
 		{ Name = "RunContext", CacheAs = "_runContext" },
+		{ Name = "UnitContext" },
 	},
 	Teardown = {
 		Before = "_BeforeDestroy",
@@ -119,13 +129,26 @@ function SummonContext:SpawnSwarmDrones(
 	player: Player,
 	slotMetadata: { [string]: any }?,
 	castOriginCFrame: CFrame
-): Result.Result<{ spawnedCount: number }>
+): Result.Result<{ SpawnedCount: number }>
 	return Catch(function()
 		Ensure(player, "InvalidPlayer", Errors.INVALID_PLAYER)
 		Ensure(castOriginCFrame, "InvalidCastOrigin", Errors.INVALID_CAST_ORIGIN)
 
 		return self._spawnSwarmDronesCommand:Execute(player, slotMetadata, castOriginCFrame)
 	end, "Summon:SpawnSwarmDrones")
+end
+
+function SummonContext:SpawnAlly(
+	player: Player,
+	slotMetadata: { [string]: any }?,
+	castOriginCFrame: CFrame
+): Result.Result<SpawnUnitResult>
+	return Catch(function()
+		Ensure(player, "InvalidPlayer", Errors.INVALID_PLAYER)
+		Ensure(castOriginCFrame, "InvalidCastOrigin", Errors.INVALID_CAST_ORIGIN)
+
+		return self._spawnAllyCommand:Execute(player, slotMetadata, castOriginCFrame)
+	end, "Summon:SpawnAlly")
 end
 
 function SummonContext:_BeforeDestroy()

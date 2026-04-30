@@ -43,8 +43,8 @@ CommanderConfig.SLOTS = {
 		energyCost = 5,
 		cooldownDuration = 18,
 		metadata = {
-			summonCount = 5,
-			lifetime = 20,
+			SummonCount = 5,
+			Lifetime = 20,
 			targetingRule = "NearestEnemy",
 		},
 	},
@@ -54,7 +54,7 @@ CommanderConfig.SLOTS = {
 		energyCost = 45,
 		cooldownDuration = 25,
 		metadata = {
-			lifetime = 30,
+			Lifetime = 30,
 			stationary = true,
 			pathingMode = "PassThrough",
 		},

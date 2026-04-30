@@ -11,12 +11,13 @@
     Phase execution order (per Heartbeat frame):
     1. `NPCPositionPoll`  — Model CFrame → PositionComponent
     2. `NPCSync`          — Animation state sync for dirty entities
-    3. `CombatTick`       — Per-user combat: BT + Actions + Completion
-    4. `WorkerSync`       — Worker dirty entity sync
-    5. `LotSync`          — Lot dirty entity sync
-    6. `BuildingSync`     — Building dirty entity sync
-    7. `MachineRuntime`  — Fuel burn + smelt progress for lot machines
-    8. `WorkerProduction` — Production + Mining (gated: runs once per second)
+    3. `UnitSync`         — Unit dirty entity sync
+    4. `CombatTick`       — Per-user combat: BT + Actions + Completion
+    5. `WorkerSync`       — Worker dirty entity sync
+    6. `LotSync`          — Lot dirty entity sync
+    7. `BuildingSync`     — Building dirty entity sync
+    8. `MachineRuntime`  — Fuel burn + smelt progress for lot machines
+    9. `WorkerProduction` — Production + Mining (gated: runs once per second)
     @server
 ]=]
 

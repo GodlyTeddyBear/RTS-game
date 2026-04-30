@@ -119,7 +119,7 @@ function UseAbilityCommand:Execute(player: Player, slotKey: SlotKey): Result.Res
 		local runState = Try(runStateResult)
 		Try(self._abilityUsePolicy:CheckCanUseInRunState(slot.Key, runState))
 
-		if slot.Key == "SummonA" then
+		if slot.Key == "SummonA" or slot.Key == "SummonB" then
 			local castOriginCFrame = Try(fromNilable(
 				_GetCommanderRootCFrame(player),
 				"CommanderRootMissing",
@@ -129,7 +129,9 @@ function UseAbilityCommand:Execute(player: Player, slotKey: SlotKey): Result.Res
 
 			Try(self._economyContext:SpendEnergy(player, slot.EnergyCost))
 
-			local spawnResult = self._summonContext:SpawnSwarmDrones(player, slot.Metadata, castOriginCFrame)
+			local spawnResult = if slot.Key == "SummonA"
+				then self._summonContext:SpawnSwarmDrones(player, slot.Metadata, castOriginCFrame)
+				else self._summonContext:SpawnAlly(player, slot.Metadata, castOriginCFrame)
 			if not spawnResult.success then
 				local refundResult = self._economyContext:AddResource(player, "Energy", slot.EnergyCost)
 				if not refundResult.success then

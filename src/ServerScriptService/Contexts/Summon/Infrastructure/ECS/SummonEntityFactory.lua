@@ -3,16 +3,9 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
-type SwarmTuning = {
-	summonCount: number,
-	lifetime: number,
-	maxConcurrentDronesPerPlayer: number,
-	moveSpeed: number,
-	acquireRange: number,
-	attackRange: number,
-	attackInterval: number,
-	damagePerHit: number,
-}
+local SummonTypes = require(ReplicatedStorage.Contexts.Summon.Types.SummonTypes)
+
+type SwarmTuning = SummonTypes.SwarmTuning
 
 type IdentityComponent = {
 	OwnerUserId: number,
@@ -115,17 +108,17 @@ function SummonEntityFactory:CreateDrone(ownerUserId: number, spawnCFrame: CFram
 	} :: PositionComponent)
 
 	self:_Set(entity, self._components.CombatComponent, {
-		MoveSpeed = tuning.moveSpeed,
-		AcquireRange = tuning.acquireRange,
-		AttackRange = tuning.attackRange,
-		AttackInterval = tuning.attackInterval,
-		DamagePerHit = tuning.damagePerHit,
+		MoveSpeed = tuning.MoveSpeed,
+		AcquireRange = tuning.AcquireRange,
+		AttackRange = tuning.AttackRange,
+		AttackInterval = tuning.AttackInterval,
+		DamagePerHit = tuning.DamagePerHit,
 		LastAttackAt = 0,
 	} :: CombatComponent)
 
 	self:_Set(entity, self._components.LifetimeComponent, {
 		SpawnedAt = now,
-		ExpiresAt = now + tuning.lifetime,
+		ExpiresAt = now + tuning.Lifetime,
 	} :: LifetimeComponent)
 
 	self:_Add(entity, self._components.ActiveTag)

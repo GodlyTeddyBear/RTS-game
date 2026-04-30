@@ -39,29 +39,29 @@ function SpawnSwarmDronesCommand:Execute(
 	player: Player,
 	slotMetadata: { [string]: any }?,
 	castOriginCFrame: CFrame
-): Result.Result<{ spawnedCount: number }>
+): Result.Result<{ SpawnedCount: number }>
 	return Result.Catch(function()
 		Ensure(player, "InvalidPlayer", Errors.INVALID_PLAYER)
 		Ensure(castOriginCFrame, "InvalidCastOrigin", Errors.INVALID_CAST_ORIGIN)
 		Ensure(slotMetadata == nil or type(slotMetadata) == "table", "InvalidMetadata", Errors.INVALID_METADATA)
 
 		local defaults = SummonConfig.SWARM_DRONES
-		local summonCount = _toPositiveInt(if slotMetadata then slotMetadata.summonCount else nil, defaults.summonCount)
+		local summonCount = _toPositiveInt(if slotMetadata then slotMetadata.SummonCount else nil, defaults.SummonCount)
 		local lifetime = if slotMetadata
-				and type(slotMetadata.lifetime) == "number"
-				and slotMetadata.lifetime > 0
-			then slotMetadata.lifetime
-			else defaults.lifetime
+				and type(slotMetadata.Lifetime) == "number"
+				and slotMetadata.Lifetime > 0
+			then slotMetadata.Lifetime
+			else defaults.Lifetime
 
 		Ensure(summonCount > 0, "InvalidSummonCount", Errors.INVALID_SUMMON_COUNT)
 		Ensure(lifetime > 0, "InvalidLifetime", Errors.INVALID_LIFETIME)
 
 		local spawnedCount = self._runtimeService:SpawnSwarmDrones(player, castOriginCFrame, summonCount, lifetime)
 		Ensure(spawnedCount > 0, "MaxConcurrentReached", Errors.MAX_CONCURRENT_REACHED, {
-			userId = player.UserId,
+			UserId = player.UserId,
 		})
 		return Ok({
-			spawnedCount = spawnedCount,
+			SpawnedCount = spawnedCount,
 		})
 	end, "Summon:SpawnSwarmDrones")
 end

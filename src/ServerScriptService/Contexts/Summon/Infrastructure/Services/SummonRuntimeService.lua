@@ -62,7 +62,7 @@ function SummonRuntimeService:SpawnSwarmDrones(player: Player, castOriginCFrame:
 	local currentCount = self._entityFactory:GetOwnerDroneCount(ownerUserId)
 
 	for index = 1, summonCount do
-		if currentCount >= tuning.maxConcurrentDronesPerPlayer then
+		if currentCount >= tuning.MaxConcurrentDronesPerPlayer then
 			break
 		end
 
@@ -72,14 +72,14 @@ function SummonRuntimeService:SpawnSwarmDrones(player: Player, castOriginCFrame:
 		local spawnCFrame = Orient.BuildLookAt(spawnPosition, spawnPosition + lookAt) or castOriginCFrame
 		local now = os.clock()
 		local entity = self._entityFactory:CreateDrone(ownerUserId, spawnCFrame, now, {
-			summonCount = summonCount,
-			lifetime = lifetime,
-			maxConcurrentDronesPerPlayer = tuning.maxConcurrentDronesPerPlayer,
-			moveSpeed = tuning.moveSpeed,
-			acquireRange = tuning.acquireRange,
-			attackRange = tuning.attackRange,
-			attackInterval = tuning.attackInterval,
-			damagePerHit = tuning.damagePerHit,
+			SummonCount = summonCount,
+			Lifetime = lifetime,
+			MaxConcurrentDronesPerPlayer = tuning.MaxConcurrentDronesPerPlayer,
+			MoveSpeed = tuning.MoveSpeed,
+			AcquireRange = tuning.AcquireRange,
+			AttackRange = tuning.AttackRange,
+			AttackInterval = tuning.AttackInterval,
+			DamagePerHit = tuning.DamagePerHit,
 		})
 
 		local dronePart = _makeDronePart(ownerUserId)

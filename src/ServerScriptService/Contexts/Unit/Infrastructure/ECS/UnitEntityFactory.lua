@@ -1,0 +1,242 @@
+--!strict
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
+local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
+
+type UnitDefinition = UnitTypes.UnitDefinition
+type SpawnUnitRequest = UnitTypes.SpawnUnitRequest
+type IdentityComponent = UnitTypes.IdentityComponent
+type OwnershipComponent = UnitTypes.OwnershipComponent
+type TransformComponent = UnitTypes.TransformComponent
+type HealthComponent = UnitTypes.HealthComponent
+type RoleComponent = UnitTypes.RoleComponent
+type LifetimeComponent = UnitTypes.LifetimeComponent
+
+local UnitEntityFactory = {}
+UnitEntityFactory.__index = UnitEntityFactory
+setmetatable(UnitEntityFactory, { __index = BaseECSEntityFactory })
+
+local function _ownerKey(ownerKind: string, ownerId: string): string
+	return ownerKind .. ":" .. ownerId
+end
+
+function UnitEntityFactory.new()
+	local self = setmetatable(BaseECSEntityFactory.new("Unit"), UnitEntityFactory)
+	self._ownerEntities = {} :: { [string]: { [number]: true } }
+	self._ownerKeyByEntity = {} :: { [number]: string }
+	return self
+end
+
+function UnitEntityFactory:_GetComponentRegistryName(): string
+	return "UnitComponentRegistry"
+end
+
+function UnitEntityFactory:_OnInit(_registry: any, _name: string, _componentRegistry: any)
+	assert(
+		self._components ~= nil
+			and self._components.IdentityComponent ~= nil
+			and self._components.OwnershipComponent ~= nil
+			and self._components.TransformComponent ~= nil
+			and self._components.HealthComponent ~= nil
+			and self._components.RoleComponent ~= nil
+			and self._components.LifetimeComponent ~= nil
+			and self._components.ModelRefComponent ~= nil
+			and self._components.ActiveTag ~= nil
+			and self._components.DirtyTag ~= nil,
+		"UnitEntityFactory: missing UnitComponentRegistry components"
+	)
+	self:_ConfigureSpatialComponents("ModelRefComponent", "TransformComponent")
+end
+
+function UnitEntityFactory:_TrackOwnerEntity(ownerKind: string, ownerId: string, entity: number)
+	local key = _ownerKey(ownerKind, ownerId)
+	local ownerSet = self._ownerEntities[key]
+	if ownerSet == nil then
+		ownerSet = {}
+		self._ownerEntities[key] = ownerSet
+	end
+	ownerSet[entity] = true
+	self._ownerKeyByEntity[entity] = key
+end
+
+function UnitEntityFactory:_UntrackOwnerEntity(entity: number)
+	local key = self._ownerKeyByEntity[entity]
+	if key == nil then
+		return
+	end
+
+	self._ownerKeyByEntity[entity] = nil
+	local ownerSet = self._ownerEntities[key]
+	if ownerSet == nil then
+		return
+	end
+
+	ownerSet[entity] = nil
+	if next(ownerSet) == nil then
+		self._ownerEntities[key] = nil
+	end
+end
+
+function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitRequest, definition: UnitDefinition, now: number): number
+	self:RequireReady()
+	local entity = self:_CreateEntity()
+
+	self:_Set(entity, self._components.IdentityComponent, {
+		UnitGuid = unitGuid,
+		UnitId = request.UnitId,
+	} :: IdentityComponent)
+
+	self:_Set(entity, self._components.OwnershipComponent, {
+		Faction = request.Faction,
+		OwnerKind = request.OwnerKind,
+		OwnerId = request.OwnerId,
+	} :: OwnershipComponent)
+
+	self:_Set(entity, self._components.TransformComponent, {
+		CFrame = request.SpawnCFrame,
+	} :: TransformComponent)
+
+	self:_Set(entity, self._components.HealthComponent, {
+		Hp = definition.MaxHp,
+		MaxHp = definition.MaxHp,
+	} :: HealthComponent)
+
+	self:_Set(entity, self._components.RoleComponent, {
+		DisplayName = definition.DisplayName,
+		MaxHp = definition.MaxHp,
+	} :: RoleComponent)
+
+	if request.Lifetime ~= nil then
+		self:_Set(entity, self._components.LifetimeComponent, {
+			SpawnedAt = now,
+			ExpiresAt = now + request.Lifetime,
+		} :: LifetimeComponent)
+	end
+
+	self:_Add(entity, self._components.ActiveTag)
+	self:_Add(entity, self._components.DirtyTag)
+	self:_TrackOwnerEntity(request.OwnerKind, request.OwnerId, entity)
+
+	return entity
+end
+
+function UnitEntityFactory:GetIdentity(entity: number): IdentityComponent?
+	self:RequireReady()
+	return self:_Get(entity, self._components.IdentityComponent)
+end
+
+function UnitEntityFactory:GetOwnership(entity: number): OwnershipComponent?
+	self:RequireReady()
+	return self:_Get(entity, self._components.OwnershipComponent)
+end
+
+function UnitEntityFactory:GetTransform(entity: number): TransformComponent?
+	self:RequireReady()
+	return self:_Get(entity, self._components.TransformComponent)
+end
+
+function UnitEntityFactory:SetTransform(entity: number, cframe: CFrame)
+	self:RequireReady()
+	self:_Set(entity, self._components.TransformComponent, {
+		CFrame = cframe,
+	} :: TransformComponent)
+	self:_Add(entity, self._components.DirtyTag)
+end
+
+function UnitEntityFactory:GetHealth(entity: number): HealthComponent?
+	self:RequireReady()
+	return self:_Get(entity, self._components.HealthComponent)
+end
+
+function UnitEntityFactory:GetRole(entity: number): RoleComponent?
+	self:RequireReady()
+	return self:_Get(entity, self._components.RoleComponent)
+end
+
+function UnitEntityFactory:GetLifetime(entity: number): LifetimeComponent?
+	self:RequireReady()
+	if not self:_Exists(entity) then
+		return nil
+	end
+	if not self:_Has(entity, self._components.LifetimeComponent) then
+		return nil
+	end
+	return self:_Get(entity, self._components.LifetimeComponent)
+end
+
+function UnitEntityFactory:IsActive(entity: number): boolean
+	self:RequireReady()
+	return self:_Exists(entity) and self:_Has(entity, self._components.ActiveTag)
+end
+
+function UnitEntityFactory:QueryActiveEntities(): { number }
+	self:RequireReady()
+	return self:CollectQuery(self._components.ActiveTag)
+end
+
+function UnitEntityFactory:QueryOwnerEntities(ownerKind: string, ownerId: string): { number }
+	self:RequireReady()
+	local ownerSet = self._ownerEntities[_ownerKey(ownerKind, ownerId)]
+	if ownerSet == nil then
+		return {}
+	end
+
+	local entities = {}
+	for entity in ownerSet do
+		if self:_Exists(entity) and self:IsActive(entity) then
+			table.insert(entities, entity)
+		end
+	end
+	return entities
+end
+
+function UnitEntityFactory:GetOwnerUnitCount(ownerKind: string, ownerId: string): number
+	return #self:QueryOwnerEntities(ownerKind, ownerId)
+end
+
+function UnitEntityFactory:DeleteEntity(entity: number?): boolean
+	self:RequireReady()
+	if entity == nil or not self:_Exists(entity) then
+		return false
+	end
+
+	if self:_Has(entity, self._components.ActiveTag) then
+		self:_Remove(entity, self._components.ActiveTag)
+	end
+	if self:_Has(entity, self._components.DirtyTag) then
+		self:_Remove(entity, self._components.DirtyTag)
+	end
+
+	self:_UntrackOwnerEntity(entity)
+	self:MarkForDestruction(entity)
+	return true
+end
+
+function UnitEntityFactory:DeleteOwnerUnits(ownerKind: string, ownerId: string): number
+	local deletedCount = 0
+	for _, entity in ipairs(self:QueryOwnerEntities(ownerKind, ownerId)) do
+		if self:DeleteEntity(entity) then
+			deletedCount += 1
+		end
+	end
+	return deletedCount
+end
+
+function UnitEntityFactory:DeleteAll(): number
+	local deletedCount = 0
+	for _, entity in ipairs(self:QueryActiveEntities()) do
+		if self:DeleteEntity(entity) then
+			deletedCount += 1
+		end
+	end
+	return deletedCount
+end
+
+function UnitEntityFactory:FlushPendingDeletes(): boolean
+	self:RequireReady()
+	return self:FlushDestructionQueue()
+end
+
+return UnitEntityFactory
