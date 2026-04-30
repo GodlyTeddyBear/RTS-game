@@ -1,0 +1,4 @@
+interface:
+  display_name: "Roblox Utility Migration"
+  short_description: "Migrate existing Luau code to shared utility modules."
+  default_prompt: "Migrate this file to use SpatialQuery, ModelPlus, PlacementPlus, and Orient where applicable while preserving behavior."
