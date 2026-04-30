@@ -32,6 +32,7 @@ function ProcessCombatTick:Init(registry: any, _name: string)
 		_loopService = "CombatLoopService",
 		_behaviorRuntimeService = "CombatBehaviorRuntimeService",
 		_combatHitResolutionService = "CombatHitResolutionService",
+		_actorRegistryService = "CombatActorRegistryService",
 		_perceptionService = "CombatPerceptionService",
 		_handleGoalReachedCommand = "HandleGoalReached",
 		_hitboxService = "HitboxService",
@@ -105,6 +106,7 @@ function ProcessCombatTick:_BuildRuntimeServices(currentTime: number): any
 		MovementService = self._movementService,
 		CombatHitResolutionService = self._combatHitResolutionService,
 		ProjectileService = self._projectileService,
+		CombatActorRegistryService = self._actorRegistryService,
 	}
 end
 

@@ -35,6 +35,7 @@ function HandleAnimationCallback:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_loopService = "CombatLoopService",
 		_runtimeService = "CombatBehaviorRuntimeService",
+		_actorRegistryService = "CombatActorRegistryService",
 		_hitboxService = "HitboxService",
 		_projectileService = "ProjectileService",
 		_handleGoalReached = "HandleGoalReached",
@@ -85,6 +86,60 @@ local function _resolveActiveCombatOwnerUserId(self: any): number?
 	return primaryPlayer.UserId
 end
 
+local function _activateRegisteredActor(self: any, actorId: string): Result.Result<boolean>?
+	local record = self._actorRegistryService:GetRecordByHandle(actorId)
+	if record == nil then
+		return nil
+	end
+
+	local action = self._actorRegistryService:GetActionState(record.RuntimeId)
+	if action == nil or type(action.CurrentActionId) ~= "string" then
+		return Err("MissingCurrentActionId", "Callback actor has no running action", {
+			ActorId = actorId,
+			ActorType = record.ActorType,
+		})
+	end
+
+	if action.ActionState == "Committed" then
+		return Ok(true)
+	end
+
+	if action.ActionState ~= "Running" then
+		return Err("ActionStateNotRunning", "Callback actor is not in callback-eligible action state", {
+			ActionState = action.ActionState,
+			ActionId = action.CurrentActionId,
+			ActorId = actorId,
+			ActorType = record.ActorType,
+		})
+	end
+
+	local executor = self._runtimeService:GetExecutor(action.CurrentActionId)
+	if executor == nil or type(executor.ActivateHitbox) ~= "function" then
+		return Err("ExecutorCannotActivateHitbox", "Current action executor does not expose ActivateHitbox", {
+			ActionId = action.CurrentActionId,
+			ActorId = actorId,
+			ActorType = record.ActorType,
+		})
+	end
+
+	local currentTime = os.clock()
+	local services = self._actorRegistryService:BuildServices(record.RuntimeId, currentTime)
+	services.CurrentTime = services.CurrentTime or currentTime
+
+	local activation = executor:ActivateHitbox(record.RuntimeId, services)
+	if type(activation) ~= "table" or activation.success ~= true then
+		local reason = if type(activation) == "table" then activation.reason else "ActivationFailed"
+		return Err(reason, "Executor rejected hitbox activation callback", {
+			ActionId = action.CurrentActionId,
+			ActorId = actorId,
+			ActorType = record.ActorType,
+			Source = if type(activation) == "table" then activation.source else nil,
+		})
+	end
+
+	return Ok(true)
+end
+
 function HandleAnimationCallback:Execute(
 	player: Player,
 	actorId: string,
@@ -119,6 +174,11 @@ function HandleAnimationCallback:Execute(
 				UserId = player.UserId,
 				ActiveOwnerUserId = activeOwnerUserId,
 			})
+		end
+
+		local registeredActorResult = _activateRegisteredActor(self, actorId)
+		if registeredActorResult ~= nil then
+			return registeredActorResult
 		end
 
 		-- Resolve the actor entity and confirm the current action can accept hitbox activation.

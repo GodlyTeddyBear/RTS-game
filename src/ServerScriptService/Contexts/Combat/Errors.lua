@@ -20,5 +20,14 @@ Errors.INVALID_STRUCTURE_ATTACK_DAMAGE = "CombatContext: invalid structure attac
 Errors.MISSING_PROJECTILE_ORIGIN = "CombatContext: projectile origin is missing"
 Errors.MISSING_PROJECTILE_TARGET = "CombatContext: projectile target is missing"
 Errors.PROJECTILE_FIRE_FAILED = "CombatContext: projectile fire failed"
+Errors.INVALID_ACTOR_TYPE_PAYLOAD = "CombatContext: invalid actor type registration payload"
+Errors.DUPLICATE_ACTOR_TYPE = "CombatContext: actor type is already registered"
+Errors.INVALID_ACTOR_PAYLOAD = "CombatContext: invalid combat actor registration payload"
+Errors.UNKNOWN_ACTOR_TYPE = "CombatContext: actor type is not registered"
+Errors.DUPLICATE_ACTOR_HANDLE = "CombatContext: combat actor handle is already registered"
+Errors.UNKNOWN_ACTOR_HANDLE = "CombatContext: combat actor handle is not registered"
+Errors.RUNTIME_ALREADY_STARTED = "CombatContext: generic combat runtime is already started"
+Errors.RUNTIME_NOT_STARTED = "CombatContext: generic combat runtime is not started"
+Errors.RUNTIME_START_FAILED = "CombatContext: generic combat runtime failed to start"
 
 return table.freeze(Errors)

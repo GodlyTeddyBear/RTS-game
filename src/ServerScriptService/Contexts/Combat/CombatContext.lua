@@ -6,7 +6,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local CombatTypes = require(ReplicatedStorage.Contexts.Combat.Types.CombatTypes)
 
+local CombatActorRegistryService = require(script.Parent.Infrastructure.Services.CombatActorRegistryService)
 local CombatLoopService = require(script.Parent.Infrastructure.Services.CombatLoopService)
 local CombatBehaviorRuntimeService = require(script.Parent.Infrastructure.Services.CombatBehaviorRuntimeService)
 local CombatHitResolutionService = require(script.Parent.Infrastructure.Services.CombatHitResolutionService)
@@ -21,8 +23,22 @@ local ProcessCombatTick = require(script.Parent.Application.Commands.ProcessComb
 local EndCombat = require(script.Parent.Application.Commands.EndCombat)
 local HandleGoalReached = require(script.Parent.Application.Commands.HandleGoalReached)
 local HandleAnimationCallback = require(script.Parent.Application.Commands.HandleAnimationCallback)
+local RegisterActorTypeCommand = require(script.Parent.Application.Commands.RegisterActorTypeCommand)
+local RegisterCombatActorCommand = require(script.Parent.Application.Commands.RegisterCombatActorCommand)
+local UnregisterCombatActorCommand = require(script.Parent.Application.Commands.UnregisterCombatActorCommand)
+local NotifyActorRemovedCommand = require(script.Parent.Application.Commands.NotifyActorRemovedCommand)
+local StartCombatRuntimeCommand = require(script.Parent.Application.Commands.StartCombatRuntimeCommand)
+local StopCombatRuntimeCommand = require(script.Parent.Application.Commands.StopCombatRuntimeCommand)
+
+type CombatActorTypePayload = CombatTypes.CombatActorTypePayload
+type CombatActorPayload = CombatTypes.CombatActorPayload
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "CombatActorRegistryService",
+		Module = CombatActorRegistryService,
+		CacheAs = "_combatActorRegistryService",
+	},
 	{
 		Name = "CombatLoopService",
 		Module = CombatLoopService,
@@ -93,6 +109,36 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		Name = "HandleAnimationCallback",
 		Module = HandleAnimationCallback,
 		CacheAs = "_handleAnimationCallbackCommand",
+	},
+	{
+		Name = "RegisterActorTypeCommand",
+		Module = RegisterActorTypeCommand,
+		CacheAs = "_registerActorTypeCommand",
+	},
+	{
+		Name = "RegisterCombatActorCommand",
+		Module = RegisterCombatActorCommand,
+		CacheAs = "_registerCombatActorCommand",
+	},
+	{
+		Name = "UnregisterCombatActorCommand",
+		Module = UnregisterCombatActorCommand,
+		CacheAs = "_unregisterCombatActorCommand",
+	},
+	{
+		Name = "NotifyActorRemovedCommand",
+		Module = NotifyActorRemovedCommand,
+		CacheAs = "_notifyActorRemovedCommand",
+	},
+	{
+		Name = "StartCombatRuntimeCommand",
+		Module = StartCombatRuntimeCommand,
+		CacheAs = "_startCombatRuntimeCommand",
+	},
+	{
+		Name = "StopCombatRuntimeCommand",
+		Module = StopCombatRuntimeCommand,
+		CacheAs = "_stopCombatRuntimeCommand",
 	},
 }
 
@@ -203,6 +249,7 @@ function CombatContext:KnitInit()
 	self._baseContext = nil
 	self._baseEntityFactory = nil
 	self._combatPerceptionService = nil
+	self._combatActorRegistryService = nil
 	self._goalPosition = nil :: Vector3?
 
 	self._runWaveStartedConnection = nil :: any
@@ -415,8 +462,47 @@ function CombatContext:GetCombatLoopService(): Result.Result<any>
 	return Ok(self._combatLoopService)
 end
 
+function CombatContext:RegisterActorType(payload: CombatActorTypePayload): Result.Result<boolean>
+	return Catch(function()
+		return self._registerActorTypeCommand:Execute(payload)
+	end, "Combat:RegisterActorType")
+end
+
+function CombatContext:RegisterCombatActor(payload: CombatActorPayload): Result.Result<string>
+	return Catch(function()
+		return self._registerCombatActorCommand:Execute(payload)
+	end, "Combat:RegisterCombatActor")
+end
+
+function CombatContext:UnregisterCombatActor(actorHandle: string): Result.Result<boolean>
+	return Catch(function()
+		return self._unregisterCombatActorCommand:Execute(actorHandle)
+	end, "Combat:UnregisterCombatActor")
+end
+
+function CombatContext:NotifyActorRemoved(actorHandle: string): Result.Result<boolean>
+	return Catch(function()
+		return self._notifyActorRemovedCommand:Execute(actorHandle)
+	end, "Combat:NotifyActorRemoved")
+end
+
+function CombatContext:StartCombatRuntime(sessionPayload: any?): Result.Result<boolean>
+	return Catch(function()
+		return self._startCombatRuntimeCommand:Execute(sessionPayload)
+	end, "Combat:StartCombatRuntime")
+end
+
+function CombatContext:StopCombatRuntime(): Result.Result<boolean>
+	return Catch(function()
+		return self._stopCombatRuntimeCommand:Execute()
+	end, "Combat:StopCombatRuntime")
+end
+
 function CombatContext:_BeforeDestroy()
 	Catch(function()
+		if self._stopCombatRuntimeCommand then
+			Try(self._stopCombatRuntimeCommand:Execute())
+		end
 		if self._endCombatCommand then
 			Try(self._endCombatCommand:Execute())
 		end
