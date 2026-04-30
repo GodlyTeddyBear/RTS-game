@@ -11,7 +11,7 @@ local BaseExecutor = require(ReplicatedStorage.Utilities.BaseExecutor)
 ]=]
 local IdleExecutor = {}
 IdleExecutor.__index = IdleExecutor
-setmetatable(IdleExecutor, { __index = BaseExecutor })
+setmetatable(IdleExecutor, BaseExecutor)
 
 --[=[
 	@within IdleExecutor

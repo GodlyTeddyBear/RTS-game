@@ -9,10 +9,12 @@ function ActorAdapterHook:Use(entity: number, hookContext: any): any?
 	end
 
 	local currentTime = hookContext.FrameContext.CurrentTime
+	local services = registryService:BuildServices(entity, currentTime)
+	services.ActionState = hookContext.ActionState
 
 	return {
 		Facts = registryService:BuildFacts(entity, currentTime),
-		Services = registryService:BuildServices(entity, currentTime),
+		Services = services,
 	}
 end
 

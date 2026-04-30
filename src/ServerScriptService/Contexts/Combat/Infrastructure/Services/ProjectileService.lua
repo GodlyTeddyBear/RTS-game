@@ -67,14 +67,14 @@ function ProjectileService:Init(registry: any, _name: string)
 end
 
 function ProjectileService:Start()
-	self._enemyContext = self._registry:Get("EnemyContext")
-	self._enemyEntityFactory = self._registry:Get("EnemyEntityFactory")
-	self._enemyInstanceFactory = self._registry:Get("EnemyInstanceFactory")
-	self._structureEntityFactory = self._registry:Get("StructureEntityFactory")
 	self._projectileFolder = self:_EnsureProjectileFolder()
 	self._bulletCache = self:_BuildBulletCache(ProjectileConfig.Bullet)
 	self:_ConfigureBehavior(ProjectileConfig.Bullet)
 	self:_ConnectCaster()
+end
+
+function ProjectileService:ConfigureStructureBulletResolver(resolver: any)
+	self._structureBulletResolver = resolver
 end
 
 function ProjectileService:FireStructureBullet(request: TStructureBulletRequest): TFireResult
@@ -87,7 +87,9 @@ function ProjectileService:FireStructureBullet(request: TStructureBulletRequest)
 		}
 	end
 
-	local targetCFrame = self._enemyEntityFactory:GetEntityCFrame(request.TargetEnemyEntity)
+	local targetCFrame = if self._structureBulletResolver ~= nil
+		then self._structureBulletResolver.ResolveEnemyCFrame(request.TargetEnemyEntity)
+		else nil
 	if targetCFrame == nil then
 		return {
 			success = false,
@@ -214,9 +216,11 @@ end
 
 function ProjectileService:_BuildRaycastParams(structureEntity: number): RaycastParams
 	local excludedInstances = {}
-	local modelRef = self._structureEntityFactory:GetModelRef(structureEntity)
-	if modelRef ~= nil and modelRef.Model ~= nil then
-		table.insert(excludedInstances, modelRef.Model)
+	if self._structureBulletResolver ~= nil then
+		local structureModel = self._structureBulletResolver.ResolveStructureModel(structureEntity)
+		if structureModel ~= nil then
+			table.insert(excludedInstances, structureModel)
+		end
 	end
 	if self._projectileFolder ~= nil then
 		table.insert(excludedInstances, self._projectileFolder)
@@ -238,7 +242,7 @@ function ProjectileService:_CanPierce(cast: any, raycastResult: RaycastResult): 
 		return false
 	end
 
-	if not self._enemyEntityFactory:IsAlive(enemyEntity) then
+	if self._structureBulletResolver == nil or not self._structureBulletResolver.IsEnemyAlive(enemyEntity) then
 		return true
 	end
 
@@ -256,7 +260,11 @@ end
 
 function ProjectileService:_HandleRayHit(cast: any, raycastResult: RaycastResult)
 	local enemyEntity = self:_ResolveEnemyEntity(raycastResult.Instance)
-	if enemyEntity == nil or not self._enemyEntityFactory:IsAlive(enemyEntity) then
+	if
+		enemyEntity == nil
+		or self._structureBulletResolver == nil
+		or not self._structureBulletResolver.IsEnemyAlive(enemyEntity)
+	then
 		return
 	end
 
@@ -283,34 +291,39 @@ function ProjectileService:_HandleCastTerminating(cast: any)
 end
 
 function ProjectileService:_ApplyDamage(enemyEntity: number, damage: number)
-	self._enemyContext:ApplyDamage(enemyEntity, damage)
+	if self._structureBulletResolver ~= nil then
+		self._structureBulletResolver.ApplyEnemyDamage(enemyEntity, damage)
+	end
 end
 
 function ProjectileService:_ResolveEnemyEntity(hitPart: Instance): number?
-	local model = hitPart:FindFirstAncestorOfClass("Model")
-	if model == nil then
+	if self._structureBulletResolver == nil then
 		return nil
 	end
 
-	return self._enemyInstanceFactory:GetEntity(model)
+	return self._structureBulletResolver.ResolveEnemyEntity(hitPart)
 end
 
 function ProjectileService:_ResolveStructureMuzzleCFrame(structureEntity: number): CFrame?
-	local modelRef = self._structureEntityFactory:GetModelRef(structureEntity)
-	if modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
+	if self._structureBulletResolver == nil then
 		return nil
 	end
 
-	local muzzle = modelRef.Model:FindFirstChild(MUZZLE_ATTACHMENT_NAME, true)
+	local model = self._structureBulletResolver.ResolveStructureModel(structureEntity)
+	if model == nil or model.Parent == nil then
+		return nil
+	end
+
+	local muzzle = model:FindFirstChild(MUZZLE_ATTACHMENT_NAME, true)
 	if muzzle ~= nil and muzzle:IsA("Attachment") then
 		return muzzle.WorldCFrame
 	end
 
-	if modelRef.Model.PrimaryPart ~= nil then
-		return modelRef.Model.PrimaryPart.CFrame
+	if model.PrimaryPart ~= nil then
+		return model.PrimaryPart.CFrame
 	end
 
-	return ModelPlus.GetPivot(modelRef.Model)
+	return ModelPlus.GetPivot(model)
 end
 
 function ProjectileService:_BuildBulletCache(config: TBulletConfig): any?

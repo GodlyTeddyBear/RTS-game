@@ -19,6 +19,7 @@ local EnemyECSWorldService = require(script.Parent.Infrastructure.ECS.EnemyECSWo
 local EnemyComponentRegistry = require(script.Parent.Infrastructure.ECS.EnemyComponentRegistry)
 local EnemyEntityFactory = require(script.Parent.Infrastructure.ECS.EnemyEntityFactory)
 local EnemyInstanceFactory = require(script.Parent.Infrastructure.Services.EnemyInstanceFactory)
+local EnemyCombatAdapterService = require(script.Parent.Infrastructure.Services.EnemyCombatAdapterService)
 local EnemyGameObjectSyncService = require(script.Parent.Infrastructure.Persistence.EnemyGameObjectSyncService)
 local EnemySpawnPolicy = require(script.Parent.EnemyDomain.Policies.EnemySpawnPolicy)
 
@@ -48,6 +49,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "EnemyInstanceFactory",
 		Module = EnemyInstanceFactory,
 		CacheAs = "_instanceFactory",
+	},
+	{
+		Name = "EnemyCombatAdapterService",
+		Module = EnemyCombatAdapterService,
+		CacheAs = "_combatAdapterService",
 	},
 	{
 		Name = "EnemyGameObjectSyncService",
@@ -120,6 +126,11 @@ local EnemyContext = Knit.CreateService({
 		Module = EnemyECSWorldService,
 	},
 	Modules = EnemyModules,
+	ExternalServices = {
+		{ Name = "CombatContext" },
+		{ Name = "StructureContext" },
+		{ Name = "BaseContext" },
+	},
 	Cache = {
 		World = "_world",
 		EnemyComponents = {
@@ -159,6 +170,7 @@ end
 function EnemyContext:KnitStart()
 	EnemyBaseContext:KnitStart()
 	EnemyBaseContext:RegisterSyncSystem("_syncService", nil, "EnemySync")
+	self._combatAdapterService:RegisterActorType()
 
 	-- Forward wave spawns into the spawn command so the context owns the creation path.
 	self._spawnConnection = GameEvents.Bus:On(
@@ -208,7 +220,17 @@ end
 ]=]
 function EnemyContext:SpawnEnemy(role: string, spawnCFrame: CFrame, waveNumber: number): Result.Result<number>
 	return Catch(function()
-		return self._spawnEnemyCommand:Execute(role, spawnCFrame, waveNumber)
+		local spawnResult = self._spawnEnemyCommand:Execute(role, spawnCFrame, waveNumber)
+		if not spawnResult.success then
+			return spawnResult
+		end
+
+		local registerResult = self._combatAdapterService:RegisterActor(spawnResult.value)
+		if not registerResult.success then
+			return registerResult
+		end
+
+		return spawnResult
 	end, "Enemy:SpawnEnemy")
 end
 

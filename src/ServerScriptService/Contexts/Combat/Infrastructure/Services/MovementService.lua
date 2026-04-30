@@ -47,7 +47,10 @@ function MovementService:Init(registry: any, _name: string)
 end
 
 function MovementService:Start()
-	self._enemyEntityFactory = self._registry:Get("EnemyEntityFactory")
+end
+
+function MovementService:ConfigureEnemyEntityFactory(enemyEntityFactory: any)
+	self._enemyEntityFactory = enemyEntityFactory
 end
 
 function MovementService:StartAdvance(entity: number, movementMode: EnemyMovementMode): (boolean, string?)

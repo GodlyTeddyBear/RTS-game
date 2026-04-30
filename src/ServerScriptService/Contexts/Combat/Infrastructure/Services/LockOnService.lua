@@ -37,9 +37,22 @@ end
 	Stores the combat factories needed to create and update facing constraints.
 ]=]
 function LockOnService:Start()
-	self._enemyEntityFactory = self._registry:Get("EnemyEntityFactory")
-	self._structureEntityFactory = self._registry:Get("StructureEntityFactory")
-	self._baseEntityFactory = self._registry:Get("BaseEntityFactory")
+end
+
+function LockOnService:ConfigureFactories(enemyEntityFactory: any, structureEntityFactory: any, baseEntityFactory: any)
+	self._enemyEntityFactory = enemyEntityFactory
+	self._structureEntityFactory = structureEntityFactory
+	self._baseEntityFactory = baseEntityFactory
+end
+
+function LockOnService:CleanupAll()
+	if self._enemyEntityFactory == nil then
+		return
+	end
+
+	for _, entity in ipairs(self._enemyEntityFactory:QueryAliveEntities()) do
+		self:DetachConstraint(entity)
+	end
 end
 
 local function _setHumanoidAutoRotate(humanoid: Humanoid?, enabled: boolean)

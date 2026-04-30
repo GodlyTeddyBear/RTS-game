@@ -55,6 +55,7 @@ function HitboxService.new()
 	self._hitEntities = {} :: { [THitboxHandle]: { THitEntity } }
 	self._hitEntityKeys = {} :: { [THitboxHandle]: { [string]: boolean } }
 	self._hitboxFolder = EnsureHitboxFolder()
+	self._targetResolvers = {} :: { (BasePart) -> THitEntity? }
 	return self
 end
 
@@ -73,10 +74,10 @@ end
 	Stores the context dependencies used while translating touches into combat targets.
 ]=]
 function HitboxService:Start()
-	self._enemyEntityFactory = self._registry:Get("EnemyEntityFactory")
-	self._structureEntityFactory = self._registry:Get("StructureEntityFactory")
-	self._baseEntityFactory = self._registry:Get("BaseEntityFactory")
-	self._enemyInstanceFactory = self._registry:Get("EnemyInstanceFactory")
+end
+
+function HitboxService:RegisterTargetResolver(resolver: (BasePart) -> THitEntity?)
+	table.insert(self._targetResolvers, resolver)
 end
 
 local function _buildHitKey(kind: TEntityKind, entity: number): string
@@ -84,50 +85,17 @@ local function _buildHitKey(kind: TEntityKind, entity: number): string
 end
 
 -- Resolves the model that should own the spawned hitbox.
-function HitboxService:_ResolveAttackerModel(entity: number, kind: TEntityKind): Model?
-	if kind == "Enemy" then
-		local modelRef = self._enemyEntityFactory:GetModelRef(entity)
-		if modelRef ~= nil then
-			return modelRef.Model
-		end
-		return nil
-	end
-
-	local modelRef = self._structureEntityFactory:GetModelRef(entity)
-	if modelRef ~= nil then
-		return modelRef.Model
-	end
+function HitboxService:_ResolveAttackerModel(_entity: number, _kind: TEntityKind): Model?
 	return nil
 end
 
 -- Maps a touched part back to a combat entity so hitbox callbacks stay domain-aware.
 function HitboxService:_ResolveTouchedEntity(hitPart: BasePart): THitEntity?
-	if self._baseEntityFactory ~= nil and self._baseEntityFactory:IsPartOfBase(hitPart) then
-		return {
-			Kind = "Base",
-			Entity = 0,
-		}
-	end
-
-	local model = hitPart:FindFirstAncestorOfClass("Model")
-	if model == nil then
-		return nil
-	end
-
-	local enemyEntity = self._enemyInstanceFactory:GetEntity(model)
-	if enemyEntity ~= nil then
-		return {
-			Kind = "Enemy",
-			Entity = enemyEntity,
-		}
-	end
-
-	local structureEntity = self._structureEntityFactory:GetEntityByModel(model)
-	if structureEntity ~= nil then
-		return {
-			Kind = "Structure",
-			Entity = structureEntity,
-		}
+	for _, resolver in ipairs(self._targetResolvers) do
+		local hitEntity = resolver(hitPart)
+		if hitEntity ~= nil then
+			return hitEntity
+		end
 	end
 
 	return nil
@@ -147,6 +115,15 @@ function HitboxService:CreateAttackHitbox(
 	config: THitboxConfig
 ): { success: boolean, handle: THitboxHandle?, reason: string? }
 	local model = self:_ResolveAttackerModel(attackerEntity, attackerKind)
+	return self:CreateAttackHitboxForModel(attackerEntity, attackerKind, model, config)
+end
+
+function HitboxService:CreateAttackHitboxForModel(
+	attackerEntity: number,
+	attackerKind: TEntityKind,
+	model: Model?,
+	config: THitboxConfig
+): { success: boolean, handle: THitboxHandle?, reason: string? }
 	if model == nil then
 		Result.MentionError("Combat:HitboxService", "Attack hitbox spawn skipped because attacker model was missing", {
 			AttackerEntity = attackerEntity,

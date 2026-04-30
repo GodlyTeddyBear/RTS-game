@@ -23,7 +23,7 @@ setmetatable(StructureAttackExecutor, BaseExecutor)
 
 function StructureAttackExecutor.new()
 	local self = BaseExecutor.new({
-		ActionId = "StructureAttack",
+		ActionId = "Structure.Attack",
 		IsCommitted = false,
 	})
 	return setmetatable(self, StructureAttackExecutor)
@@ -37,8 +37,8 @@ local function _activationResult(success: boolean, reason: string, source: strin
 	}
 end
 
-local function _getTargetEnemy(entity: number, services: any): number?
-	local action = services.StructureEntityFactory:GetCombatAction(entity)
+local function _getTargetEnemy(_entity: number, services: any): number?
+	local action = services.ActionState
 	local data = action and action.ActionData
 	if type(data) ~= "table" or type(data.TargetEnemyEntity) ~= "number" then
 		return nil

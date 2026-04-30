@@ -57,11 +57,11 @@ end
 	@param registry any -- Registry instance used to resolve dependencies.
 	@param _name string -- Registry key used to register the service.
 ]=]
-function CombatHitResolutionService:Start(registry: any, _name: string)
-	self._baseContext = registry:Get("BaseContext")
-	self._baseEntityFactory = registry:Get("BaseEntityFactory")
-	self._structureContext = registry:Get("StructureContext")
-	self._structureEntityFactory = registry:Get("StructureEntityFactory")
+function CombatHitResolutionService:Start(_registry: any, _name: string)
+end
+
+function CombatHitResolutionService:ConfigureEnemyMeleeResolver(resolver: any)
+	self._enemyMeleeResolver = resolver
 end
 
 -- Builds a stable deduplication key for one hit target inside a single hitbox handle.
@@ -72,11 +72,11 @@ end
 -- Filters out targets that should not receive melee damage from the attacker.
 function CombatHitResolutionService:_IsValidEnemyMeleeTarget(attackerEntity: number, hitEntity: THitEntity): boolean
 	if hitEntity.Kind == "Base" then
-		return self._baseEntityFactory:IsActive()
+		return self._enemyMeleeResolver ~= nil and self._enemyMeleeResolver.IsBaseActive()
 	end
 
 	if hitEntity.Kind == "Structure" then
-		return self._structureEntityFactory:IsActive(hitEntity.Entity)
+		return self._enemyMeleeResolver ~= nil and self._enemyMeleeResolver.IsStructureActive(hitEntity.Entity)
 	end
 
 	if hitEntity.Kind == "Enemy" then
@@ -136,11 +136,11 @@ function CombatHitResolutionService:ResolveEnemyMeleeHits(
 
 			if hitEntity.Kind == "Base" then
 				-- Route base hits through the base context so the shared damage pipeline stays authoritative.
-				Try(self._baseContext:ApplyDamage(damage))
+				Try(self._enemyMeleeResolver.ApplyBaseDamage(damage))
 				summary.HitBase = true
 			elseif hitEntity.Kind == "Structure" then
 				-- Route structure hits through the structure context so structure HP stays synchronized.
-				Try(self._structureContext:ApplyDamage(hitEntity.Entity, damage))
+				Try(self._enemyMeleeResolver.ApplyStructureDamage(hitEntity.Entity, damage))
 				table.insert(summary.HitStructures, hitEntity.Entity)
 			else
 				continue

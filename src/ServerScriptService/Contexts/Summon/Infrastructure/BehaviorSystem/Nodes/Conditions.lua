@@ -1,0 +1,3 @@
+--!strict
+
+return table.freeze({})

@@ -22,6 +22,7 @@ function CleanupUnitsCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_entityFactory = "UnitEntityFactory",
 		_instanceFactory = "UnitInstanceFactory",
+		_combatAdapterService = "UnitCombatAdapterService",
 	})
 end
 
@@ -37,6 +38,7 @@ function CleanupUnitsCommand:Execute(ownerKind: string?, ownerId: string?): Resu
 		end
 
 		for _, entity in ipairs(entities) do
+			self._combatAdapterService:UnregisterActor(entity)
 			self._instanceFactory:DestroyInstance(entity)
 			self._entityFactory:DeleteEntity(entity)
 		end

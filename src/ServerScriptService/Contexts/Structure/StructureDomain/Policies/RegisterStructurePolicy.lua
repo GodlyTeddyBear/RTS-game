@@ -40,7 +40,7 @@ end
 	@param registry any -- The dependency registry for this context.
 	@param _name string -- The registered module name.
 ]=]
-function RegisterStructurePolicy:Init(registry: any, _name: string)
+function RegisterStructurePolicy:Init(_registry: any, _name: string)
 end
 
 function RegisterStructurePolicy:Start(registry: any, _name: string)

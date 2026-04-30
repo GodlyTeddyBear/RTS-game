@@ -33,6 +33,10 @@ function RegisterCombatActorCommand:Execute(payload: CombatActorPayload): Result
 			return validationError
 		end
 
+		if not self._actorRegistryService:IsRuntimeStarted() then
+			return self._actorRegistryService:QueueCombatActor(payload)
+		end
+
 		local behaviorTree = Try(self._behaviorRuntimeService:BuildTree(payload.BehaviorDefinition))
 		return self._actorRegistryService:RegisterCombatActor(payload, behaviorTree)
 	end, self:_Label())

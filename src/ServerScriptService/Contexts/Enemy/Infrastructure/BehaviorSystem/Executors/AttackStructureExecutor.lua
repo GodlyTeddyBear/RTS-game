@@ -48,8 +48,8 @@ local function _recordActivationSource(entity: number, services: any, source: st
 	modelRef.Model:SetAttribute("LastHitboxActivatedAt", services.CurrentTime)
 end
 
-local function _getTargetStructure(entity: number, services: any): number?
-	local action = services.EnemyEntityFactory:GetCombatAction(entity)
+local function _getTargetStructure(_entity: number, services: any): number?
+	local action = services.ActionState
 	local data = action and action.ActionData
 	if type(data) ~= "table" or type(data.TargetStructureEntity) ~= "number" then
 		return nil

@@ -29,6 +29,7 @@ function SpawnUnitCommand:Init(registry: any, _name: string)
 		_entityFactory = "UnitEntityFactory",
 		_instanceFactory = "UnitInstanceFactory",
 		_syncService = "UnitGameObjectSyncService",
+		_combatAdapterService = "UnitCombatAdapterService",
 	})
 end
 
@@ -52,6 +53,7 @@ function SpawnUnitCommand:Execute(request: SpawnUnitRequest): Result.Result<Spaw
 		ModelPlus.MoveToCFrame(model, request.SpawnCFrame)
 		self._entityFactory:SetModelRef(entity, model)
 		self._syncService:RegisterEntity(entity, model)
+		Try(self._combatAdapterService:RegisterActor(entity))
 
 		return Ok({
 			Entity = entity,

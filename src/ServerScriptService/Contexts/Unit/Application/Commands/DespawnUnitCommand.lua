@@ -22,6 +22,7 @@ function DespawnUnitCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_entityFactory = "UnitEntityFactory",
 		_instanceFactory = "UnitInstanceFactory",
+		_combatAdapterService = "UnitCombatAdapterService",
 	})
 end
 
@@ -29,6 +30,7 @@ function DespawnUnitCommand:Execute(entity: number): Result.Result<boolean>
 	return Result.Catch(function()
 		Ensure(type(entity) == "number" and self._entityFactory:IsActive(entity), "InvalidEntity", Errors.INVALID_ENTITY)
 
+		self._combatAdapterService:UnregisterActor(entity)
 		self._instanceFactory:DestroyInstance(entity)
 		local deleted = self._entityFactory:DeleteEntity(entity)
 		self._entityFactory:FlushPendingDeletes()

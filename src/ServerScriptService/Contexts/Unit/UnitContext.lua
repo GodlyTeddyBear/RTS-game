@@ -11,6 +11,7 @@ local UnitECSWorldService = require(script.Parent.Infrastructure.ECS.UnitECSWorl
 local UnitComponentRegistry = require(script.Parent.Infrastructure.ECS.UnitComponentRegistry)
 local UnitEntityFactory = require(script.Parent.Infrastructure.ECS.UnitEntityFactory)
 local UnitInstanceFactory = require(script.Parent.Infrastructure.Services.UnitInstanceFactory)
+local UnitCombatAdapterService = require(script.Parent.Infrastructure.Services.UnitCombatAdapterService)
 local UnitGameObjectSyncService = require(script.Parent.Infrastructure.Persistence.UnitGameObjectSyncService)
 local UnitSpawnPolicy = require(script.Parent.UnitDomain.Policies.UnitSpawnPolicy)
 
@@ -40,6 +41,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "UnitInstanceFactory",
 		Module = UnitInstanceFactory,
 		CacheAs = "_instanceFactory",
+	},
+	{
+		Name = "UnitCombatAdapterService",
+		Module = UnitCombatAdapterService,
+		CacheAs = "_combatAdapterService",
 	},
 	{
 		Name = "UnitGameObjectSyncService",
@@ -97,6 +103,9 @@ local UnitContext = Knit.CreateService({
 		Module = UnitECSWorldService,
 	},
 	Modules = UnitModules,
+	ExternalServices = {
+		{ Name = "CombatContext" },
+	},
 	Teardown = {
 		Before = "_BeforeDestroy",
 		Fields = {
@@ -117,6 +126,7 @@ end
 function UnitContext:KnitStart()
 	UnitBaseContext:KnitStart()
 	UnitBaseContext:RegisterSyncSystem("_syncService", nil, "UnitSync")
+	self._combatAdapterService:RegisterActorType()
 
 	UnitBaseContext:OnContextEvent("Run", "RunEnded", function()
 		self:_OnRunEnded()

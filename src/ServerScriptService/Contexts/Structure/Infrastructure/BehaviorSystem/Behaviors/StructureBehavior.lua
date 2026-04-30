@@ -9,7 +9,7 @@ local StructureBehavior = table.freeze({
 	Priority = {
 		{
 			Sequence = {
-				"HasEnemyTargetInRange",
+				"StructureHasEnemyTargetInRange",
 				"StructureAttack",
 			},
 		},

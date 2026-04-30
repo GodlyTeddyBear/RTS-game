@@ -22,6 +22,7 @@ local StructureECSWorldService = require(script.Parent.Infrastructure.ECS.Struct
 local StructureComponentRegistry = require(script.Parent.Infrastructure.ECS.StructureComponentRegistry)
 local StructureEntityFactory = require(script.Parent.Infrastructure.ECS.StructureEntityFactory)
 local StructureInstanceFactory = require(script.Parent.Infrastructure.Services.StructureInstanceFactory)
+local StructureCombatAdapterService = require(script.Parent.Infrastructure.Services.StructureCombatAdapterService)
 local StructureGameObjectSyncService = require(script.Parent.Infrastructure.Persistence.StructureGameObjectSyncService)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
 local RegisterStructureCommand = require(script.Parent.Application.Commands.RegisterStructureCommand)
@@ -51,6 +52,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "StructureInstanceFactory",
 		Module = StructureInstanceFactory,
 		CacheAs = "_instanceFactory",
+	},
+	{
+		Name = "StructureCombatAdapterService",
+		Module = StructureCombatAdapterService,
+		CacheAs = "_combatAdapterService",
 	},
 	{
 		Name = "StructureGameObjectSyncService",
@@ -128,6 +134,7 @@ local StructureContext = Knit.CreateService({
 	ExternalServices = {
 		{ Name = "WorldContext" },
 		{ Name = "EnemyContext" },
+		{ Name = "CombatContext" },
 		{ Name = "RunContext", CacheAs = "_runContext" },
 		{ Name = "PlacementContext", CacheAs = "_placementContext" },
 	},
@@ -166,6 +173,7 @@ end
 ]=]
 function StructureContext:KnitStart()
 	StructureBaseContext:KnitStart()
+	self._combatAdapterService:RegisterActorType()
 
 	-- Register new placements as ECS entities as soon as PlacementContext announces them.
 	self._structurePlacedConnection = self._placementContext.StructurePlaced:Connect(function(record: StructureRecord)
@@ -206,7 +214,17 @@ end
 -- Registers a structure record with the ECS world through the application command stack.
 function StructureContext:_RegisterStructure(record: StructureRecord): Result.Result<number?>
 	return Catch(function()
-		return self._registerStructureCommand:Execute(record)
+		local registerResult = self._registerStructureCommand:Execute(record)
+		if not registerResult.success then
+			return registerResult
+		end
+		if registerResult.value ~= nil then
+			local combatResult = self._combatAdapterService:RegisterActor(registerResult.value)
+			if not combatResult.success then
+				return combatResult
+			end
+		end
+		return registerResult
 	end, "Structure:RegisterStructure")
 end
 

@@ -23,6 +23,7 @@ function CombatActorRegistryService.new()
 	self._recordsByRuntimeId = {} :: { [number]: CombatActorRecord }
 	self._runtimeIdsByHandle = {} :: { [string]: number }
 	self._runtimeIdsByActorType = {} :: { [string]: { number } }
+	self._pendingActorPayloadsByHandle = {} :: { [string]: CombatActorPayload }
 	self._nextRuntimeId = 0
 	self._runtimeStarted = false
 	return self
@@ -90,6 +91,35 @@ function CombatActorRegistryService:RegisterCombatActor(
 	return Ok(payload.ActorHandle)
 end
 
+function CombatActorRegistryService:QueueCombatActor(payload: CombatActorPayload): Result.Result<string>
+	local validationError = self:ValidateCombatActorPayload(payload)
+	if validationError ~= nil then
+		return validationError
+	end
+
+	if self._pendingActorPayloadsByHandle[payload.ActorHandle] ~= nil then
+		return Err("DuplicateActorHandle", Errors.DUPLICATE_ACTOR_HANDLE, {
+			ActorType = payload.ActorType,
+			ActorHandle = payload.ActorHandle,
+		})
+	end
+
+	self._pendingActorPayloadsByHandle[payload.ActorHandle] = payload
+	return Ok(payload.ActorHandle)
+end
+
+function CombatActorRegistryService:ConsumePendingActorPayloads(): { CombatActorPayload }
+	local payloads = {}
+	for _, payload in pairs(self._pendingActorPayloadsByHandle) do
+		table.insert(payloads, payload)
+	end
+	table.sort(payloads, function(left: CombatActorPayload, right: CombatActorPayload): boolean
+		return left.ActorHandle < right.ActorHandle
+	end)
+	table.clear(self._pendingActorPayloadsByHandle)
+	return payloads
+end
+
 function CombatActorRegistryService:ValidateCombatActorPayload(payload: CombatActorPayload): Result.Err?
 	local validationError = self:_ValidateActorPayload(payload)
 	if validationError ~= nil then
@@ -110,12 +140,24 @@ function CombatActorRegistryService:ValidateCombatActorPayload(payload: CombatAc
 		})
 	end
 
+	if self._pendingActorPayloadsByHandle[payload.ActorHandle] ~= nil then
+		return Err("DuplicateActorHandle", Errors.DUPLICATE_ACTOR_HANDLE, {
+			ActorType = payload.ActorType,
+			ActorHandle = payload.ActorHandle,
+		})
+	end
+
 	return nil
 end
 
 function CombatActorRegistryService:UnregisterCombatActor(actorHandle: string): Result.Result<boolean>
 	local runtimeId = self._runtimeIdsByHandle[actorHandle]
 	if runtimeId == nil then
+		if self._pendingActorPayloadsByHandle[actorHandle] ~= nil then
+			self._pendingActorPayloadsByHandle[actorHandle] = nil
+			return Ok(true)
+		end
+
 		return Err("UnknownActorHandle", Errors.UNKNOWN_ACTOR_HANDLE, {
 			ActorHandle = actorHandle,
 		})
@@ -330,11 +372,28 @@ function CombatActorRegistryService:CancelActor(runtimeId: number)
 	end
 end
 
+function CombatActorRegistryService:NotifyActionResult(runtimeId: number, actionResult: any)
+	local record = self._recordsByRuntimeId[runtimeId]
+	if record == nil or record.Adapter.OnActionResult == nil then
+		return
+	end
+
+	local didNotify = pcall(record.Adapter.OnActionResult, actionResult)
+	if not didNotify then
+		Result.MentionError("Combat:ActorRegistry", "Actor action-result callback failed", {
+			ActorType = record.ActorType,
+			ActorHandle = record.ActorHandle,
+			RuntimeId = runtimeId,
+		}, "ActorActionResultCallbackFailed")
+	end
+end
+
 function CombatActorRegistryService:ClearAll()
 	table.clear(self._actorTypes)
 	table.clear(self._recordsByRuntimeId)
 	table.clear(self._runtimeIdsByHandle)
 	table.clear(self._runtimeIdsByActorType)
+	table.clear(self._pendingActorPayloadsByHandle)
 	self._nextRuntimeId = 0
 	self._runtimeStarted = false
 end
@@ -428,6 +487,7 @@ function CombatActorRegistryService:_RemoveRuntimeId(runtimeId: number)
 
 	self._recordsByRuntimeId[runtimeId] = nil
 	self._runtimeIdsByHandle[record.ActorHandle] = nil
+	self._pendingActorPayloadsByHandle[record.ActorHandle] = nil
 
 	local runtimeIds = self._runtimeIdsByActorType[record.ActorType]
 	if runtimeIds == nil then

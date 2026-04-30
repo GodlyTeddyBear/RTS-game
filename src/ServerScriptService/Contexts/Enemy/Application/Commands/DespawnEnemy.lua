@@ -27,6 +27,7 @@ function DespawnEnemy:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_entityFactory = "EnemyEntityFactory",
 		_instanceFactory = "EnemyInstanceFactory",
+		_combatAdapterService = "EnemyCombatAdapterService",
 	})
 end
 
@@ -40,7 +41,7 @@ function DespawnEnemy:Execute(entity: any): Result.Result<boolean>
 			return Ok(false)
 		end
 
-		self:_EmitGameEvent("Combat", "ActorRemoving", "Enemy", entity)
+		self._combatAdapterService:UnregisterActor(entity)
 		self._instanceFactory:DestroyInstance(entity)
 		self._entityFactory:DeleteEntity(entity)
 		return Ok(true)

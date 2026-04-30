@@ -76,6 +76,7 @@ export type CombatActorAdapter = {
 	BuildServices: (currentTime: number) -> { [string]: any },
 	OnCancel: (() -> ())?,
 	OnRemoved: (() -> ())?,
+	OnActionResult: ((any) -> ())?,
 }
 
 --[=[

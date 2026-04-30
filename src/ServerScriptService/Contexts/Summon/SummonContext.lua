@@ -10,6 +10,7 @@ local SummonECSWorldService = require(script.Parent.Infrastructure.ECS.SummonECS
 local SummonComponentRegistry = require(script.Parent.Infrastructure.ECS.SummonComponentRegistry)
 local SummonEntityFactory = require(script.Parent.Infrastructure.ECS.SummonEntityFactory)
 local SummonRuntimeService = require(script.Parent.Infrastructure.Services.SummonRuntimeService)
+local SummonCombatAdapterService = require(script.Parent.Infrastructure.Services.SummonCombatAdapterService)
 local SpawnSwarmDronesCommand = require(script.Parent.Application.Commands.SpawnSwarmDronesCommand)
 local SpawnAllyCommand = require(script.Parent.Application.Commands.SpawnAllyCommand)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
@@ -36,6 +37,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "SummonRuntimeService",
 		Module = SummonRuntimeService,
 		CacheAs = "_runtimeService",
+	},
+	{
+		Name = "SummonCombatAdapterService",
+		Module = SummonCombatAdapterService,
+		CacheAs = "_combatAdapterService",
 	},
 }
 
@@ -69,6 +75,7 @@ local SummonContext = Knit.CreateService({
 		{ Name = "EnemyContext", CacheAs = "_enemyContext" },
 		{ Name = "RunContext", CacheAs = "_runContext" },
 		{ Name = "UnitContext" },
+		{ Name = "CombatContext" },
 	},
 	Teardown = {
 		Before = "_BeforeDestroy",
@@ -96,6 +103,7 @@ end
 
 function SummonContext:KnitStart()
 	SummonBaseContext:KnitStart()
+	self._combatAdapterService:RegisterActorType()
 
 	SummonBaseContext:RegisterSchedulerSystem("CombatTick", function()
 		if not self._combatEnabled then
