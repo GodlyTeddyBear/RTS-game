@@ -49,8 +49,9 @@ Presentation/[Component]View.lua (pure view) -> Presentation-only dependencies
 Any frontend layer -> ReplicatedStorage.Utilities
 ```
 
-- Prefer shared utilities such as `ModelPlus`, `PlacementPlus`, and `SpatialQuery` before writing custom model, placement, or spatial helpers in client code.
-- Prefer them for client-side preview ghosts, cursor raycasts, target highlighting, world-space model alignment, and any reusable distance or overlap check.
+- `Orient`, `ModelPlus`, `PlacementPlus`, and `SpatialQuery` are the required shared utility path when their use cases fit.
+- Use them for client-side preview ghosts, cursor raycasts, target highlighting, world-space model alignment, facing/rotation helpers, and reusable distance or overlap checks.
+- Do not create ad hoc or hacky custom equivalents for covered orientation, spatial query, model, or placement scenarios.
 - Keep the utility dependency technical only; do not use it to bypass presentation, hook, or feature-scope boundaries.
 
 ### Presentation Public API

@@ -1,16 +1,14 @@
-<!-- This is the canonical template hub for creation prompts. Read the relevant template before creating anything. -->
-
 # Templates
 
-Canonical creation prompts for Codex in this repo.
+Canonical scaffold references for new files in this repo.
 
 ---
 
 ## Purpose
 
-- Use these templates before creating backend, frontend, or doc scaffolds.
+- Use these templates as copy-paste references for the file shape and a simple working example.
+- Replace names and paths, then trim or expand only the feature-specific behavior.
 - Prefer the template that matches the exact creation target.
-- Keep the creation prompts short, specific, and aligned with repo rules.
 
 ---
 
@@ -18,21 +16,23 @@ Canonical creation prompts for Codex in this repo.
 
 ### Backend
 
-- [Backend Context](backend-context.md)
-- [Backend Service](backend-service.md)
-- [Backend SyncService](backend-syncservice.md)
+- [Backend Context](backend-context.md) - Bare scaffold for a new backend bounded context.
+- [Backend Service](backend-service.md) - Bare module skeleton for a module inside an existing backend context.
+- [Backend SyncService](backend-syncservice.md) - Bare sync-service skeleton for a backend context.
 
 ### Frontend
 
-- [Frontend Feature](frontend-feature.md)
+- [Frontend Feature](frontend-feature.md) - Bare scaffold for a new frontend feature slice.
+
+### Shared Utilities
+
+- [AI System](ai-system.md) - Scaffold for a context-owned AI system built on the shared AI utility package.
+- [Shared Utility](shared-utility.md) - Scaffold for reusable helpers such as `PlacementPlus`, `SpatialQuery`, `Orient`, `StateMachine`, and `ModelPlus`.
 
 ---
 
 ## Rules
 
-- Read the matching template before creating files.
-- Use the backend context template for new contexts only.
-- Use the backend service template for new modules inside an existing context.
-- Use the backend syncservice template for any `*SyncService`.
-- Use the frontend feature template for new feature slices.
-- Keep creation prompts additive and repo-specific.
+- Keep the scaffolds minimal.
+- Include only the files, folders, and module shapes that belong in the first commit.
+- Let the target doc show the structure, not a long workflow checklist.

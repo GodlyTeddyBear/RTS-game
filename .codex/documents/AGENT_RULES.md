@@ -47,6 +47,20 @@ Only make changes that are directly requested or clearly necessary.
 
 ---
 
+## Mandatory Shared Utility Use
+
+When a task matches an existing shared utility use case, use the shared utility instead of writing a custom replacement.
+
+- `Orient` owns reusable facing, look-at, interpolation, snapping, and transform helper scenarios
+- `SpatialQuery` owns reusable range, raycast, overlap, visibility, and candidate-selection scenarios
+- `ModelPlus` owns reusable model pivot, bounds, alignment, and traversal scenarios
+- `PlacementPlus` owns reusable placement candidate, snapping, footprint, and clearance scenarios
+- Do not write ad hoc or hacky equivalents for these covered scenarios in backend or frontend code
+
+If unsure whether a case is covered, check [UTILITY_USE.md](architecture/backend/UTILITY_USE.md) first and bias toward the shared utility.
+
+---
+
 ## Consider Future Scope Before Implementing
 
 Before writing an MVP, ask: **is this a one-off, or the first instance of a pattern?**

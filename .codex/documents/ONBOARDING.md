@@ -17,6 +17,8 @@ If the task touches code, also read the relevant canonical index before opening 
 - [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md) for architecture work
 - [methods/METHODS_INDEX.md](methods/METHODS_INDEX.md) for method-contract work
 - [coding-style/CODING_STYLE.md](coding-style/CODING_STYLE.md) for style-sensitive changes
+- [architecture/backend/UTILITY_USE.md](architecture/backend/UTILITY_USE.md) when the task may fit shared helpers such as `Orient`, `ModelPlus`, `SpatialQuery`, or `PlacementPlus` instead of ad hoc code
+- [.codex/Templates/README.md](../../Templates/README.md) when the task is creating or reshaping scaffolding
 
 ---
 
@@ -47,20 +49,22 @@ If the task touches any backend code, read these first:
 2. [architecture/backend/ERROR_HANDLING.md](architecture/backend/ERROR_HANDLING.md)
 3. [methods/backend/CONTEXT_BOUNDARIES.md](methods/backend/CONTEXT_BOUNDARIES.md) when the task is context-specific
 4. [methods/METHODS_INDEX.md](methods/METHODS_INDEX.md) when the task is method-contract specific
+5. [architecture/backend/UTILITY_USE.md](architecture/backend/UTILITY_USE.md) when the work could reuse an existing shared helper, `Orient`, `ModelPlus`, `SpatialQuery`, `PlacementPlus`, `BaseApplication`, or `BasePersistenceService`
 
 ### If you are creating or changing a backend context
 
 Read in this order:
 
 1. [architecture/backend/BACKEND.md](architecture/backend/BACKEND.md)
-2. [architecture/backend/DDD.md](architecture/backend/DDD.md)
-3. [architecture/backend/ERROR_HANDLING.md](architecture/backend/ERROR_HANDLING.md)
-4. [methods/backend/CONTEXT_BOUNDARIES.md](methods/backend/CONTEXT_BOUNDARIES.md)
-5. [methods/backend/BASE_CONTEXT_CONTRACTS.md](methods/backend/BASE_CONTEXT_CONTRACTS.md)
-6. [methods/backend/BASE_APPLICATION_CONTRACTS.md](methods/backend/BASE_APPLICATION_CONTRACTS.md)
-7. [methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md](methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md)
-8. [coding-style/CODING_STYLE.md](coding-style/CODING_STYLE.md)
-9. [coding-style/READABILITY.md](coding-style/READABILITY.md)
+2. [architecture/backend/UTILITY_USE.md](architecture/backend/UTILITY_USE.md) when the context will share technical helpers with other code
+3. [architecture/backend/DDD.md](architecture/backend/DDD.md)
+4. [architecture/backend/ERROR_HANDLING.md](architecture/backend/ERROR_HANDLING.md)
+5. [methods/backend/CONTEXT_BOUNDARIES.md](methods/backend/CONTEXT_BOUNDARIES.md)
+6. [methods/backend/BASE_CONTEXT_CONTRACTS.md](methods/backend/BASE_CONTEXT_CONTRACTS.md)
+7. [methods/backend/BASE_APPLICATION_CONTRACTS.md](methods/backend/BASE_APPLICATION_CONTRACTS.md)
+8. [methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md](methods/backend/DEPENDENCY_REGISTRATION_CONTRACTS.md)
+9. [coding-style/CODING_STYLE.md](coding-style/CODING_STYLE.md)
+10. [coding-style/READABILITY.md](coding-style/READABILITY.md)
 
 Read these when relevant:
 
@@ -78,8 +82,8 @@ Read these when relevant:
 Read in this order:
 
 1. [architecture/backend/BACKEND.md](architecture/backend/BACKEND.md)
-2. [architecture/backend/SYSTEMS.md](architecture/backend/SYSTEMS.md)
-3. [architecture/backend/UTILITY_USE.md](architecture/backend/UTILITY_USE.md)
+2. [architecture/backend/UTILITY_USE.md](architecture/backend/UTILITY_USE.md)
+3. [architecture/backend/SYSTEMS.md](architecture/backend/SYSTEMS.md)
 4. [methods/METHODS_INDEX.md](methods/METHODS_INDEX.md)
 
 Then add the specific backend contract that matches the change:
@@ -131,6 +135,7 @@ Read in this order:
 8. [architecture/frontend/DEPENDENCY_RULES.md](architecture/frontend/DEPENDENCY_RULES.md)
 9. [coding-style/CODING_STYLE.md](coding-style/CODING_STYLE.md)
 10. [coding-style/READABILITY.md](coding-style/READABILITY.md)
+11. [architecture/backend/UTILITY_USE.md](architecture/backend/UTILITY_USE.md) when frontend code may fit `Orient`, `SpatialQuery`, `ModelPlus`, or `PlacementPlus` instead of custom equivalents
 
 Read these when relevant:
 
@@ -171,6 +176,8 @@ Read in this order:
    - [backend-service.md](../../Templates/backend-service.md) for backend modules inside an existing context
    - [backend-syncservice.md](../../Templates/backend-syncservice.md) for any `*SyncService`
    - [frontend-feature.md](../../Templates/frontend-feature.md) for new frontend feature slices
+   - [ai-system.md](../../Templates/ai-system.md) for context-owned AI systems
+   - [shared-utility.md](../../Templates/shared-utility.md) for reusable helper modules
 
 Use this path before creating anything so the template rules are the first read.
 

@@ -24,6 +24,7 @@ Use this as the default reference when introducing or reviewing a helper such as
 - If a module owns runtime state, world lifetime, entity lifecycle, persistence writes, or client-facing workflows, it is usually not a utility.
 - When a reusable helper already exists for the job, prefer it over direct Roblox API calls or one-off math/helpers in both backend and frontend code.
 - When the work is in the same family as an existing utility, treat that utility as the default starting point before writing new helper logic.
+- `Orient`, `SpatialQuery`, `ModelPlus`, and `PlacementPlus` own their respective shared technical use cases and must be used when a call site fits those cases.
 
 ---
 
@@ -40,6 +41,7 @@ Examples of utility-style modules in this project:
 - `Result`
 - `Specification`
 - `AssetFetcher`
+- `Orient`
 - `ModelPlus`
 - `PlacementPlus`
 - `SpatialQuery`
@@ -137,30 +139,32 @@ Do not use `BasePersistenceService` when:
 
 ## Preferred Utility Uses
 
-- Prefer these utilities whenever the task is related to the matching scenario.
-- Prefer `SpatialQuery` when you need one of these scenarios:
+- `Orient`, `SpatialQuery`, `PlacementPlus`, and `ModelPlus` are the required path for their matching shared scenarios.
+- Use `Orient` when you need one of these scenarios:
+  - facing, look-at, yaw adjustment, interpolation, translation, snapping, or projection helpers
+  - reusable movement or transform helpers that would otherwise duplicate `CFrame` math
+- Use `SpatialQuery` when you need one of these scenarios:
   - raycasting from a position or cursor
   - overlap or occupancy checks around a model footprint
   - range checks for combat, targeting, or detection
   - visibility or line-of-sight checks
   - nearest-candidate selection from a filtered set
   - sorting candidates by distance before picking one
-- Prefer `PlacementPlus` when you need one of these scenarios:
+- Use `PlacementPlus` when you need one of these scenarios:
   - building a placement preview from cursor or world input
   - snapping a candidate to a grid or surface
   - deriving a footprint from a model or bounds
   - computing support points or clearance volumes
   - validating whether a placement is legal before commit
   - resolving ground alignment for a structure, ghost, or preview
-- Prefer `ModelPlus` when you need one of these scenarios:
+- Use `ModelPlus` when you need one of these scenarios:
   - reading model pivot, bounds, center, top, or bottom values
   - moving a model to a world position or CFrame
   - aligning a model to the ground or another reference point
   - rotating a model around its own pivot or another point
   - finding children or descendants inside a model by selector or predicate
   - reusing model search or traversal logic across more than one call site
-- Prefer these utilities before writing custom equivalents in backend or frontend context code when the behavior is generic enough to live in shared infrastructure.
-- Prefer these utilities before raw `workspace` queries, manual `CFrame` math, or repeated model traversal when a shared helper already covers the case.
+- Use these utilities before raw `workspace` queries, manual `CFrame` math, or repeated model traversal when a shared helper already covers the case.
 - If a call site is only "close enough" to one of these scenarios, bias toward the utility and keep any feature-specific differences at the caller.
 - Do not use them when the logic is unique to one feature and would become a thin wrapper around a shared helper with feature-specific branching.
 - Do not use them when the helper would need to own the lifecycle, state, or validation decision instead of returning data for the caller.
@@ -222,6 +226,7 @@ Not a utility:
 - Do not let `BasePersistenceService` own profile lifecycle event wiring.
 - Do not add domain policy/spec logic to `BaseApplication` or `BasePersistenceService`.
 - Do not treat a shared helper as an excuse to mix responsibilities.
+- Do not write custom or hacky replacements for `Orient`, `SpatialQuery`, `PlacementPlus`, or `ModelPlus` when their owned use cases fit.
 
 ---
 
