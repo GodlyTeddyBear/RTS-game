@@ -8,45 +8,6 @@ local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseComm
 
 local Ok = Result.Ok
 
-local function _cloneActionState(actionState: any): any
-	if actionState == nil then
-		return {
-			CurrentActionId = nil,
-			ActionState = "Idle",
-			ActionData = nil,
-			PendingActionId = nil,
-			PendingActionData = nil,
-			StartedAt = nil,
-			FinishedAt = nil,
-		}
-	end
-
-	return {
-		CurrentActionId = actionState.CurrentActionId,
-		ActionState = actionState.ActionState or "Idle",
-		ActionData = actionState.ActionData,
-		PendingActionId = actionState.PendingActionId,
-		PendingActionData = actionState.PendingActionData,
-		StartedAt = actionState.StartedAt or actionState.ActionStartedAt,
-		FinishedAt = actionState.FinishedAt,
-	}
-end
-
-local function _cancelRuntimeAction(scope: string, behaviorRuntimeService: any, entity: number, actionState: any, services: any)
-	local cancelResult = behaviorRuntimeService:CancelCurrentAction(entity, actionState, {
-		Services = services,
-	})
-	if cancelResult.success then
-		return
-	end
-
-	Result.MentionError(scope, "Behavior runtime failed while cancelling an active action during cleanup", {
-		Entity = entity,
-		CauseType = cancelResult.type,
-		CauseMessage = cancelResult.message,
-	}, cancelResult.type)
-end
-
 --[=[
 	@class EndCombat
 	Cancels active executors and clears active combat sessions.
@@ -129,13 +90,10 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 
 		-- Cancel each active runtime action before clearing its stored combat state.
 		for _, entity in ipairs(self._enemyEntityFactory:QueryAliveEntities()) do
-			_cancelRuntimeAction(
-				"Combat:EndCombat",
-				self._behaviorRuntimeService,
-				entity,
-				_cloneActionState(self._enemyEntityFactory:GetCombatAction(entity)),
-				services
-			)
+			self._behaviorRuntimeService:CancelActorAction("Enemy", entity, {
+				CurrentTime = services.CurrentTime,
+				Services = services,
+			})
 			self._lockOnService:DetachConstraint(entity)
 			self._enemyEntityFactory:ClearTarget(entity)
 			self._enemyEntityFactory:ClearAction(entity)
@@ -143,13 +101,10 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 
 		-- Clear structure actions separately because they use the same runtime but a different factory.
 		for _, entity in ipairs(self._structureEntityFactory:QueryActiveEntities()) do
-			_cancelRuntimeAction(
-				"Combat:EndCombat",
-				self._behaviorRuntimeService,
-				entity,
-				_cloneActionState(self._structureEntityFactory:GetCombatAction(entity)),
-				services
-			)
+			self._behaviorRuntimeService:CancelActorAction("Structure", entity, {
+				CurrentTime = services.CurrentTime,
+				Services = services,
+			})
 			self._structureEntityFactory:ClearAction(entity)
 		end
 

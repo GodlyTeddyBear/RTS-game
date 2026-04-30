@@ -15,6 +15,7 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
+local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 
 local Errors = require(script.Parent.Errors)
 local WaveECSWorldService = require(script.Parent.Infrastructure.ECS.WaveECSWorldService)
@@ -139,6 +140,7 @@ local Catch = Result.Catch
 local Ok = Result.Ok
 local Try = Result.Try
 local Ensure = Result.Ensure
+type SpawnArea = WorldTypes.SpawnArea
 
 -- [Initialization]
 
@@ -150,7 +152,7 @@ function WaveContext:KnitInit()
 	WaveBaseContext:KnitInit()
 
 	-- Prepare the runtime caches and listener slots before subscriptions begin.
-	self._spawnCFrames = {}
+	self._spawnAreas = {} :: { SpawnArea }
 	self._runContext = nil :: any
 	self._worldContext = nil :: any
 
@@ -190,24 +192,24 @@ function WaveContext:KnitStart()
 	)
 end
 
-function WaveContext:_RefreshSpawnCFrames(): boolean
+function WaveContext:_RefreshSpawnAreas(): boolean
 	if not self._worldContext then
-		self._spawnCFrames = {}
+		self._spawnAreas = {}
 		return false
 	end
 
-	local spawnPointsResult = self._worldContext:GetSpawnPoints()
-	if not spawnPointsResult.success then
-		Result.MentionError("Wave:RefreshSpawnCFrames", Errors.NO_SPAWN_POINTS, {
-			CauseType = spawnPointsResult.type,
-			CauseMessage = spawnPointsResult.message,
-		}, "NoSpawnPoints")
-		self._spawnCFrames = {}
+	local spawnAreasResult = self._worldContext:GetSpawnAreas()
+	if not spawnAreasResult.success then
+		Result.MentionError("Wave:RefreshSpawnAreas", Errors.NO_SPAWN_AREAS, {
+			CauseType = spawnAreasResult.type,
+			CauseMessage = spawnAreasResult.message,
+		}, "NoSpawnAreas")
+		self._spawnAreas = {}
 		return false
 	end
 
-	self._spawnCFrames = spawnPointsResult.value
-	return #self._spawnCFrames > 0
+	self._spawnAreas = spawnAreasResult.value
+	return #self._spawnAreas > 0
 end
 
 -- [Private Handlers]
@@ -221,8 +223,8 @@ end
 function WaveContext:_OnRunWaveStarted(waveNumber: number, isEndless: boolean)
 	Catch(function()
 		Ensure(self._runContext, "MissingDependency", Errors.MISSING_RUN_CONTEXT)
-		Ensure(self:_RefreshSpawnCFrames(), "NoSpawnPoints", Errors.NO_SPAWN_POINTS)
-		Try(self._handleWaveStartedCommand:Execute(waveNumber, isEndless, self._spawnCFrames, self._runContext))
+		Ensure(self:_RefreshSpawnAreas(), "NoSpawnAreas", Errors.NO_SPAWN_AREAS)
+		Try(self._handleWaveStartedCommand:Execute(waveNumber, isEndless, self._spawnAreas, self._runContext))
 		return Ok(nil)
 	end, "Wave:OnRunWaveStarted")
 end

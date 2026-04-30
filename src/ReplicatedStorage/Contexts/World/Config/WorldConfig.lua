@@ -41,7 +41,7 @@ WorldConfig.SIDE_POCKET_COLUMN_INTERVAL = 4
 --[=[
 	@prop SPAWN_PART_NAME string
 	@within WorldConfig
-	Marker part name used inside the runtime map `Spawns` zone.
+	Marker part name used inside the runtime map `Spawns` zone for spawn-area parts.
 ]=]
 WorldConfig.SPAWN_PART_NAME = "Spawn"
 

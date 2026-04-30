@@ -11,7 +11,10 @@ WorldLayoutService.__index = WorldLayoutService
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local WorldConfig = require(ReplicatedStorage.Contexts.World.Config.WorldConfig)
+local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 local Errors = require(script.Parent.Parent.Parent.Errors)
+
+type SpawnArea = WorldTypes.SpawnArea
 
 local function _CollectNamedBaseParts(container: Instance, markerName: string): { BasePart }
 	local parts = {}
@@ -63,23 +66,37 @@ local function _GetZoneContainer(self: any, zoneName: string, missingError: stri
 	return zoneResult.value
 end
 
---[=[
-	Returns all configured enemy spawn points.
-	@within WorldLayoutService
-	@return { CFrame } -- The configured spawn points.
-]=]
-function WorldLayoutService:GetSpawnPoints(): { CFrame }
-	local spawnsContainer = _GetZoneContainer(self, "Spawns", Errors.MISSING_SPAWN_PART)
-
-	local spawnMarkers = _CollectNamedBaseParts(spawnsContainer, WorldConfig.SPAWN_PART_NAME)
-	assert(#spawnMarkers > 0, Errors.INVALID_SPAWN_PART)
-
-	local randomIndex = Random.new():NextInteger(1, #spawnMarkers)
-	local spawnInstance = spawnMarkers[randomIndex]
+local function _BuildSpawnArea(spawnPart: BasePart): SpawnArea?
+	if spawnPart.Size.X <= 0 or spawnPart.Size.Z <= 0 then
+		return nil
+	end
 
 	return table.freeze({
-		spawnInstance.CFrame,
+		CFrame = spawnPart.CFrame,
+		Size = spawnPart.Size,
 	})
+end
+
+--[=[
+	Returns all configured enemy spawn areas.
+	@within WorldLayoutService
+	@return { SpawnArea } -- The configured spawn areas.
+]=]
+function WorldLayoutService:GetSpawnAreas(): { SpawnArea }
+	local spawnsContainer = _GetZoneContainer(self, "Spawns", Errors.MISSING_SPAWN_PART)
+	local spawnMarkers = _CollectNamedBaseParts(spawnsContainer, WorldConfig.SPAWN_PART_NAME)
+	local spawnAreas = {}
+
+	for _, spawnMarker in ipairs(spawnMarkers) do
+		local spawnArea = _BuildSpawnArea(spawnMarker)
+		if spawnArea ~= nil then
+			table.insert(spawnAreas, spawnArea)
+		end
+	end
+
+	assert(#spawnAreas > 0, Errors.INVALID_SPAWN_PART)
+
+	return table.freeze(spawnAreas)
 end
 
 return WorldLayoutService

@@ -64,6 +64,7 @@ local DomainModules: { BaseContext.TModuleSpec } = {
 	{
 		Name = "CombatPerceptionService",
 		Module = CombatPerceptionService,
+		CacheAs = "_combatPerceptionService",
 	},
 }
 
@@ -184,30 +185,6 @@ local Catch = Result.Catch
 local Ok = Result.Ok
 local Try = Result.Try
 
-local function _cloneActionState(actionState: any): any
-	if actionState == nil then
-		return {
-			CurrentActionId = nil,
-			ActionState = "Idle",
-			ActionData = nil,
-			PendingActionId = nil,
-			PendingActionData = nil,
-			StartedAt = nil,
-			FinishedAt = nil,
-		}
-	end
-
-	return {
-		CurrentActionId = actionState.CurrentActionId,
-		ActionState = actionState.ActionState or "Idle",
-		ActionData = actionState.ActionData,
-		PendingActionId = actionState.PendingActionId,
-		PendingActionData = actionState.PendingActionData,
-		StartedAt = actionState.StartedAt or actionState.ActionStartedAt,
-		FinishedAt = actionState.FinishedAt,
-	}
-end
-
 --[=[
 	@within CombatContext
 	Registers combat infrastructure, policies, and commands before the rest of the server starts ticking.
@@ -225,6 +202,7 @@ function CombatContext:KnitInit()
 	self._structureEntityFactory = nil
 	self._baseContext = nil
 	self._baseEntityFactory = nil
+	self._combatPerceptionService = nil
 	self._goalPosition = nil :: Vector3?
 
 	self._runWaveStartedConnection = nil :: any
@@ -401,21 +379,17 @@ end
 
 function CombatContext:_OnCombatActorRemoving(actorKind: string, entity: number)
 	Catch(function()
-		local factory = nil
-		if actorKind == "Enemy" then
-			factory = self._enemyEntityFactory
-		elseif actorKind == "Structure" then
-			factory = self._structureEntityFactory
-		else
+		if actorKind ~= "Enemy" and actorKind ~= "Structure" then
 			return Ok(nil)
 		end
 
-		local actionState = _cloneActionState(factory:GetCombatAction(entity))
-		local deathResult = self._combatBehaviorRuntimeService:HandleCurrentActionDeath(entity, actionState, {
+		self._combatBehaviorRuntimeService:HandleActorDeath(actorKind, entity, {
+			CurrentTime = os.clock(),
 			Services = {
 				EnemyEntityFactory = self._enemyEntityFactory,
 				StructureEntityFactory = self._structureEntityFactory,
 				BaseEntityFactory = self._baseEntityFactory,
+				CombatPerceptionService = self._combatPerceptionService,
 				EnemyContext = self._enemyContext,
 				StructureContext = self._structureContext,
 				BaseContext = self._baseContext,
@@ -428,17 +402,6 @@ function CombatContext:_OnCombatActorRemoving(actorKind: string, entity: number)
 			},
 		})
 
-		if not deathResult.success then
-			Result.MentionError("Combat:OnActorRemoving", "Behavior runtime failed while handling actor removal", {
-				ActorKind = actorKind,
-				Entity = entity,
-				CauseType = deathResult.type,
-				CauseMessage = deathResult.message,
-			}, deathResult.type)
-			return Ok(nil)
-		end
-
-		factory:ClearAction(entity)
 		return Ok(nil)
 	end, "Combat:OnActorRemoving")
 end

@@ -23,6 +23,7 @@ Use this as the default reference when introducing or reviewing a helper such as
 - Utilities are not persistence or sync services.
 - If a module owns runtime state, world lifetime, entity lifecycle, persistence writes, or client-facing workflows, it is usually not a utility.
 - When a reusable helper already exists for the job, prefer it over direct Roblox API calls or one-off math/helpers in both backend and frontend code.
+- When the work is in the same family as an existing utility, treat that utility as the default starting point before writing new helper logic.
 
 ---
 
@@ -80,10 +81,13 @@ Examples of utility-style modules in this project:
 - Utilities may provide persistence helper methods, but context infrastructure still owns lifecycle wiring.
 - Utilities should not replace a context service when the behavior belongs to a specific bounded context.
 - If a helper starts owning orchestration, move it into the appropriate context layer or service folder.
+- If a related utility already covers the technical behavior, use it rather than duplicating the logic in a feature-specific helper.
 
 ---
 
 ## How To Decide
+
+Start by checking whether the task matches an existing utility category or preferred use below. If it does, use the utility unless it would force the utility to own lifecycle, orchestration, or domain decisions.
 
 Use a utility when the module:
 
@@ -133,6 +137,7 @@ Do not use `BasePersistenceService` when:
 
 ## Preferred Utility Uses
 
+- Prefer these utilities whenever the task is related to the matching scenario.
 - Prefer `SpatialQuery` when you need one of these scenarios:
   - raycasting from a position or cursor
   - overlap or occupancy checks around a model footprint
@@ -156,6 +161,7 @@ Do not use `BasePersistenceService` when:
   - reusing model search or traversal logic across more than one call site
 - Prefer these utilities before writing custom equivalents in backend or frontend context code when the behavior is generic enough to live in shared infrastructure.
 - Prefer these utilities before raw `workspace` queries, manual `CFrame` math, or repeated model traversal when a shared helper already covers the case.
+- If a call site is only "close enough" to one of these scenarios, bias toward the utility and keep any feature-specific differences at the caller.
 - Do not use them when the logic is unique to one feature and would become a thin wrapper around a shared helper with feature-specific branching.
 - Do not use them when the helper would need to own the lifecycle, state, or validation decision instead of returning data for the caller.
 

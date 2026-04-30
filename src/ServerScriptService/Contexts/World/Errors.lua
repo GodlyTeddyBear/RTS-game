@@ -11,6 +11,6 @@ return table.freeze({
 	TILE_NOT_FOUND = "Tile not found",
 	MISSING_PLACEMENT_GRID_PART = "WorldContext: missing PlacementGrid part in runtime map PlacementGrids zone",
 	INVALID_PLACEMENT_GRID_DIMENSIONS = "WorldContext: invalid PlacementGrid dimensions",
-	MISSING_SPAWN_PART = "WorldContext: missing Spawns runtime zone or Spawn marker",
-	INVALID_SPAWN_PART = "WorldContext: Spawns runtime zone must contain a BasePart named Spawn",
+	MISSING_SPAWN_PART = "WorldContext: missing Spawns runtime zone or Spawn area marker",
+	INVALID_SPAWN_PART = "WorldContext: Spawns runtime zone must contain a valid BasePart named Spawn",
 })

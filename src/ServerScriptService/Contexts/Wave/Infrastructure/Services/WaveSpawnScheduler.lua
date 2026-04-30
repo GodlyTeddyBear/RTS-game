@@ -2,14 +2,18 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local WaveConfig = require(ReplicatedStorage.Contexts.Wave.Config.WaveConfig)
 local WaveTypes = require(ReplicatedStorage.Contexts.Wave.Types.WaveTypes)
+local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 type WaveComposition = WaveTypes.WaveComposition
+type SpawnArea = WorldTypes.SpawnArea
 
 --[=[
 	@class WaveSpawnScheduler
@@ -28,6 +32,7 @@ function WaveSpawnScheduler.new()
 	local self = setmetatable({}, WaveSpawnScheduler)
 	self._activeThreads = {} :: { thread }
 	self._generation = 0
+	self._random = Random.new()
 	return self
 end
 
@@ -51,21 +56,21 @@ end
 	Schedules delayed spawn callbacks for each group and enemy in a composition.
 	@within WaveSpawnScheduler
 	@param composition WaveComposition -- The ordered wave composition.
-	@param spawnCFrames { CFrame } -- Available spawn points for round-robin placement.
+	@param spawnAreas { SpawnArea } -- Available spawn areas for random placement.
 	@param waveNumber number -- The current wave number.
 	@param onSpawned function -- Callback invoked when a spawn becomes active.
 ]=]
 function WaveSpawnScheduler:Schedule(
 	composition: WaveComposition,
-	spawnCFrames: { CFrame },
+	spawnAreas: { SpawnArea },
 	waveNumber: number,
 	onSpawned: () -> ()
 )
 	-- Replace any previous schedule so stale callbacks cannot leak into the new wave.
 	self:CancelAll()
 
-	if #spawnCFrames == 0 then
-		Result.MentionError("Wave:WaveSpawnScheduler", Errors.NO_SPAWN_POINTS, { WaveNumber = waveNumber }, "NoSpawnPoints")
+	if #spawnAreas == 0 then
+		Result.MentionError("Wave:WaveSpawnScheduler", Errors.NO_SPAWN_AREAS, { WaveNumber = waveNumber }, "NoSpawnAreas")
 		return
 	end
 
@@ -86,8 +91,7 @@ function WaveSpawnScheduler:Schedule(
 						return
 					end
 
-					local spawnIndex = ((unitIndex - 1) % #spawnCFrames) + 1
-					local spawnCFrame = spawnCFrames[spawnIndex]
+					local spawnCFrame = self:_BuildRandomSpawnCFrame(spawnAreas)
 
 					-- Mark the spawn active before listeners react, so death callbacks cannot race the counter.
 					onSpawned()
@@ -114,6 +118,34 @@ function WaveSpawnScheduler:CancelAll()
 	end
 
 	table.clear(self._activeThreads)
+end
+
+function WaveSpawnScheduler:_BuildRandomSpawnCFrame(spawnAreas: { SpawnArea }): CFrame
+	local spawnArea = self:_PickRandomSpawnArea(spawnAreas)
+	local sampledPosition = self:_SampleRandomSpawnPosition(spawnArea)
+
+	assert(
+		SpatialQuery.ContainsPointInBox(sampledPosition, spawnArea.CFrame, spawnArea.Size),
+		Errors.NO_SPAWN_AREAS
+	)
+
+	return ModelPlus.BuildCFrameAtPosition(spawnArea.CFrame, sampledPosition)
+end
+
+function WaveSpawnScheduler:_PickRandomSpawnArea(spawnAreas: { SpawnArea }): SpawnArea
+	local spawnIndex = self._random:NextInteger(1, #spawnAreas)
+	return spawnAreas[spawnIndex]
+end
+
+function WaveSpawnScheduler:_SampleRandomSpawnPosition(spawnArea: SpawnArea): Vector3
+	local halfSize = spawnArea.Size * 0.5
+	local localOffset = Vector3.new(
+		self._random:NextNumber(-halfSize.X, halfSize.X),
+		0,
+		self._random:NextNumber(-halfSize.Z, halfSize.Z)
+	)
+
+	return spawnArea.CFrame:PointToWorldSpace(localOffset)
 end
 
 return WaveSpawnScheduler

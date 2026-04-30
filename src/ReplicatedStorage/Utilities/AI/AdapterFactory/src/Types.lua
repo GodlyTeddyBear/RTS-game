@@ -55,19 +55,26 @@ export type TConfig = {
 	ShouldEvaluate: (entity: number, currentTime: number) -> boolean,
 }
 
-type TFactoryCallback<TArgs..., TReturn...> = string | ((factory: any, TArgs...) -> TReturn...)
+type TFactoryQueryActiveEntities = string | ((factory: any, frameContext: any) -> { number })
+type TFactoryGetBehaviorTree = string | ((factory: any, entity: number) -> any?)
+type TFactoryGetActionState = string | ((factory: any, entity: number) -> TActionState?)
+type TFactorySetActionState = string | ((factory: any, entity: number, actionState: TActionState) -> ())
+type TFactoryClearActionState = string | ((factory: any, entity: number) -> ())
+type TFactorySetPendingAction = string | ((factory: any, entity: number, actionId: string, actionData: any?) -> ())
+type TFactoryUpdateLastTickTime = string | ((factory: any, entity: number, currentTime: number) -> ())
+type TFactoryShouldEvaluate = string | ((factory: any, entity: number, currentTime: number) -> boolean)
 
 export type TFactoryConfig = {
 	ActorLabel: string?,
 	Factory: any,
-	QueryActiveEntities: TFactoryCallback<any, { number }>,
-	GetBehaviorTree: TFactoryCallback<number, any?>,
-	GetActionState: TFactoryCallback<number, TActionState?>,
-	SetActionState: TFactoryCallback<number, TActionState, ()>,
-	ClearActionState: TFactoryCallback<number, ()>,
-	SetPendingAction: TFactoryCallback<number, string, any?, ()>,
-	UpdateLastTickTime: TFactoryCallback<number, number, ()>,
-	ShouldEvaluate: TFactoryCallback<number, number, boolean>,
+	QueryActiveEntities: TFactoryQueryActiveEntities,
+	GetBehaviorTree: TFactoryGetBehaviorTree,
+	GetActionState: TFactoryGetActionState,
+	SetActionState: TFactorySetActionState,
+	ClearActionState: TFactoryClearActionState,
+	SetPendingAction: TFactorySetPendingAction,
+	UpdateLastTickTime: TFactoryUpdateLastTickTime,
+	ShouldEvaluate: TFactoryShouldEvaluate,
 }
 
 return table.freeze(Types)

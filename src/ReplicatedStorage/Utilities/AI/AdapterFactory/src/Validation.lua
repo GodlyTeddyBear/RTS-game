@@ -16,7 +16,7 @@ local REQUIRED_CALLBACKS = table.freeze({
 	"ShouldEvaluate",
 })
 
-local REQUIRED_FACTORY_SURFACES = table.freeze(REQUIRED_CALLBACKS)
+local REQUIRED_FACTORY_SURFACES = REQUIRED_CALLBACKS
 
 --[=[
 	@class AiAdapterFactoryValidation

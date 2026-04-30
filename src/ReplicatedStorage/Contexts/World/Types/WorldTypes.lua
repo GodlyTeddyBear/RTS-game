@@ -75,6 +75,17 @@ export type GridSpec = {
 }
 
 --[=[
+	@interface SpawnArea
+	@within WorldTypes
+	.CFrame CFrame -- Authored spawn-area transform.
+	.Size Vector3 -- Authored spawn-area bounds size.
+]=]
+export type SpawnArea = {
+	CFrame: CFrame,
+	Size: Vector3,
+}
+
+--[=[
 	@interface Tile
 	@within WorldTypes
 	.coord GridCoord -- Grid coordinate for the tile.

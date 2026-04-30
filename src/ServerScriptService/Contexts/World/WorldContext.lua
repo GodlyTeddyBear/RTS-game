@@ -21,7 +21,7 @@ local WorldLayoutService = require(script.Parent.Infrastructure.Services.WorldLa
 local Errors = require(script.Parent.Errors)
 
 local GetTileQuery = require(script.Parent.Application.Queries.GetTileQuery)
-local GetSpawnPointsQuery = require(script.Parent.Application.Queries.GetSpawnPointsQuery)
+local GetSpawnAreasQuery = require(script.Parent.Application.Queries.GetSpawnAreasQuery)
 local GetBuildableTilesQuery = require(script.Parent.Application.Queries.GetBuildableTilesQuery)
 local GetExtractionTilesQuery = require(script.Parent.Application.Queries.GetExtractionTilesQuery)
 local GetLaneTilesQuery = require(script.Parent.Application.Queries.GetLaneTilesQuery)
@@ -54,11 +54,11 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		CacheAs = "_getTileQuery",
 	},
 	{
-		Name = "GetSpawnPointsQuery",
+		Name = "GetSpawnAreasQuery",
 		Factory = function(_service: any, baseContext: any)
-			return GetSpawnPointsQuery.new(baseContext:GetRegistry():Get("WorldLayoutService"))
+			return GetSpawnAreasQuery.new(baseContext:GetRegistry():Get("WorldLayoutService"))
 		end,
-		CacheAs = "_getSpawnPointsQuery",
+		CacheAs = "_getSpawnAreasQuery",
 	},
 	{
 		Name = "GetBuildableTilesQuery",
@@ -107,10 +107,11 @@ local Catch = Result.Catch
 local Ok = Result.Ok
 local Ensure = Result.Ensure
 type GridCoord = WorldTypes.GridCoord
+type SpawnArea = WorldTypes.SpawnArea
 type Tile = WorldTypes.Tile
 type WorldContextService = typeof(WorldContext) & {
 	_getTileQuery: any,
-	_getSpawnPointsQuery: any,
+	_getSpawnAreasQuery: any,
 	_getBuildableTilesQuery: any,
 	_getExtractionTilesQuery: any,
 	_getLaneTilesQuery: any,
@@ -154,14 +155,14 @@ function WorldContext.GetTile(self: WorldContextService, coord: GridCoord): Resu
 end
 
 --[=[
-	Returns all configured spawn points for enemy wave entry.
+	Returns all configured spawn areas for enemy wave entry.
 	@within WorldContext
-	@return Result.Result<{ CFrame }> -- Spawn points wrapped in `Result`.
+	@return Result.Result<{ SpawnArea }> -- Spawn areas wrapped in `Result`.
 ]=]
-function WorldContext.GetSpawnPoints(self: WorldContextService): Result.Result<{ CFrame }>
+function WorldContext.GetSpawnAreas(self: WorldContextService): Result.Result<{ SpawnArea }>
 	return Catch(function()
-		return Ok(self._getSpawnPointsQuery:Execute())
-	end, "World:GetSpawnPoints")
+		return Ok(self._getSpawnAreasQuery:Execute())
+	end, "World:GetSpawnAreas")
 end
 
 --[=[

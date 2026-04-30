@@ -149,6 +149,7 @@ export type TFrameContext = {
 	.TreeStatus string -- `SkippedNoTree`, `SkippedNotReady`, `Ran`, or `TreeDefect`
 	.StartStatus string? -- Start transition status returned from `StartPendingAction`
 	.CommitStatus string? -- Commit transition status returned from `CommitStartedAction`
+	.TickActionId string? -- Action id returned by `TickCurrentAction`
 	.TickStatus string? -- Tick status returned from `TickCurrentAction`
 	.ResolveStatus string? -- Resolve status returned from `ResolveFinishedAction`
 ]=]
@@ -158,6 +159,7 @@ export type TRunFrameEntityResult = {
 	TreeStatus: string,
 	StartStatus: string?,
 	CommitStatus: string?,
+	TickActionId: string?,
 	TickStatus: string?,
 	ResolveStatus: string?,
 }

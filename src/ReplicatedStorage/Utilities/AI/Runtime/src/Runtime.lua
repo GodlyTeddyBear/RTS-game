@@ -244,6 +244,7 @@ function Runtime:_BuildEntityStates(
 			TreeStatus = "SkippedNoTree",
 			StartStatus = nil,
 			CommitStatus = nil,
+			TickActionId = nil,
 			TickStatus = nil,
 			ResolveStatus = nil,
 		}
@@ -546,6 +547,7 @@ function Runtime:_RunActionPhase(
 		end
 
 		local tickStatus = tickResult.value.Status
+		entityState.Result.TickActionId = tickResult.value.ActionId
 		entityState.Result.TickStatus = tickStatus
 
 		local resolveResult = self._runtime:ResolveFinishedAction(actionState, tickResult.value, frameContext.CurrentTime)

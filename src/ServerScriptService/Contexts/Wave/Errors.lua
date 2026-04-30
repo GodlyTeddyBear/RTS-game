@@ -25,11 +25,11 @@ local Errors = {
 	]=]
 	INVALID_ENEMY_DIED = "WaveContext: EnemyDied received but no wave is active",
 	--[=[
-		@prop NO_SPAWN_POINTS string
+		@prop NO_SPAWN_AREAS string
 		@within Errors
-		Returned when the world exposes no spawn CFrames for the scheduler.
+		Returned when the world exposes no spawn areas for the scheduler.
 	]=]
-	NO_SPAWN_POINTS = "WaveContext: no spawn CFrames available - WorldContext returned empty",
+	NO_SPAWN_AREAS = "WaveContext: no spawn areas available - WorldContext returned empty",
 	--[=[
 		@prop INVALID_WAVE_NUMBER string
 		@within Errors

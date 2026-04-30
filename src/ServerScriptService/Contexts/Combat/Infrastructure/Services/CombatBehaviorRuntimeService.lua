@@ -3,9 +3,11 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BehaviorConfig = require(ReplicatedStorage.Contexts.Combat.Config.BehaviorConfig)
-local BehaviorSystem = require(ReplicatedStorage.Utilities.BehaviorSystem)
+local AI = require(ReplicatedStorage.Utilities.AI)
+local Result = require(ReplicatedStorage.Utilities.Result)
 local Nodes = require(script.Parent.Parent.BehaviorSystem.Nodes)
 local ExecutorDefinitions = require(script.Parent.Parent.BehaviorSystem.Executors)
+local PerceptionHook = require(script.Parent.Parent.BehaviorSystem.Hooks.PerceptionHook)
 
 local SwarmBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.SwarmBehavior)
 local TankBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.TankBehavior)
@@ -18,7 +20,7 @@ local EnemyBehaviorDefinitions = table.freeze({
 
 --[=[
 	@class CombatBehaviorRuntimeService
-	Owns Combat's shared BehaviorSystem runtime, behavior definitions, and executor registration.
+	Owns Combat's shared AI runtime, behavior definitions, actor adapters, and executor registration.
 	@server
 ]=]
 local CombatBehaviorRuntimeService = {}
@@ -31,9 +33,23 @@ CombatBehaviorRuntimeService.__index = CombatBehaviorRuntimeService
 ]=]
 function CombatBehaviorRuntimeService.new()
 	local self = setmetatable({}, CombatBehaviorRuntimeService)
-	self._runtime = BehaviorSystem.new({
+	self._runtime = AI.CreateRuntime({
 		Conditions = Nodes.Conditions,
 		Commands = Nodes.Commands,
+		Hooks = {
+			PerceptionHook,
+		},
+		ErrorSink = function(payload: any)
+			Result.MentionError("Combat:BehaviorRuntime", "AI runtime defect", {
+				Stage = payload.Stage,
+				ActorType = payload.ActorType,
+				ActorLabel = payload.ActorLabel,
+				Entity = payload.Entity,
+				CauseType = payload.ErrorType,
+				CauseMessage = payload.ErrorMessage,
+				Details = payload.Details,
+			}, payload.ErrorType)
+		end,
 	})
 
 	self._runtime:RegisterActions(ExecutorDefinitions)
@@ -48,6 +64,13 @@ end
 	@param _name string -- Registry key used to register the service.
 ]=]
 function CombatBehaviorRuntimeService:Init(_registry: any, _name: string) end
+
+function CombatBehaviorRuntimeService:Start(registry: any, _name: string)
+	self._enemyEntityFactory = registry:Get("EnemyEntityFactory")
+	self._structureEntityFactory = registry:Get("StructureEntityFactory")
+
+	self:_RegisterActorAdapters()
+end
 
 local function _resolveEnemyRole(roleName: string): string
 	if EnemyBehaviorDefinitions[roleName] ~= nil then
@@ -82,58 +105,67 @@ function CombatBehaviorRuntimeService:BuildStructureBehaviorTree(): (any, number
 	return self._runtime:BuildTree(StructureBehavior), BehaviorConfig.DEFAULT.TickInterval
 end
 
---[=[
-	@within CombatBehaviorRuntimeService
-	Returns the stored behavior tree when the entity is allowed to evaluate this frame.
-	@param factory any -- Entity factory that owns the behavior and action components.
-	@param entity number -- Entity id being evaluated.
-	@param currentTime number -- Shared timestamp for the current combat tick.
-	@return any? -- Behavior tree component payload or `nil` when the entity should skip evaluation.
-]=]
-function CombatBehaviorRuntimeService:GetReadyBehaviorTree(factory: any, entity: number, currentTime: number): any?
-	local actionState = factory:GetCombatAction(entity)
-	if actionState and actionState.ActionState == "Committed" then
-		return nil
-	end
-
-	local behaviorTree = factory:GetBehaviorTree(entity)
-	if behaviorTree == nil then
-		return nil
-	end
-
-	if currentTime - behaviorTree.LastTickTime < behaviorTree.TickInterval then
-		return nil
-	end
-
-	return behaviorTree
+function CombatBehaviorRuntimeService:RunFrame(frameContext: any): any
+	return self._runtime:RunFrame(frameContext)
 end
 
-function CombatBehaviorRuntimeService:StartPendingAction(entity: number, actionState: any, runtimeContext: any)
-	return self._runtime:StartPendingAction(entity, actionState, runtimeContext)
+function CombatBehaviorRuntimeService:CancelActorAction(actorType: string, entity: number, frameContext: any): any
+	return self._runtime:CancelActorAction(actorType, entity, frameContext)
 end
 
-function CombatBehaviorRuntimeService:CommitStartedAction(actionState: any, startResult: any, startedAt: number)
-	return self._runtime:CommitStartedAction(actionState, startResult, startedAt)
+function CombatBehaviorRuntimeService:CancelActorActions(actorType: string, entities: { number }, frameContext: any): any
+	return self._runtime:CancelActorActions(actorType, entities, frameContext)
 end
 
-function CombatBehaviorRuntimeService:TickCurrentAction(entity: number, actionState: any, runtimeContext: any)
-	return self._runtime:TickCurrentAction(entity, actionState, runtimeContext)
+function CombatBehaviorRuntimeService:HandleActorDeath(actorType: string, entity: number, frameContext: any): any
+	return self._runtime:HandleActorDeath(actorType, entity, frameContext)
 end
 
-function CombatBehaviorRuntimeService:ResolveFinishedAction(actionState: any, tickResult: any, finishedAt: number)
-	return self._runtime:ResolveFinishedAction(actionState, tickResult, finishedAt)
-end
-
-function CombatBehaviorRuntimeService:CancelCurrentAction(entity: number, actionState: any, runtimeContext: any)
-	return self._runtime:CancelCurrentAction(entity, actionState, runtimeContext)
-end
-
-function CombatBehaviorRuntimeService:HandleCurrentActionDeath(entity: number, actionState: any, runtimeContext: any)
-	return self._runtime:HandleCurrentActionDeath(entity, actionState, runtimeContext)
+function CombatBehaviorRuntimeService:HandleActorDeaths(actorType: string, entities: { number }, frameContext: any): any
+	return self._runtime:HandleActorDeaths(actorType, entities, frameContext)
 end
 
 function CombatBehaviorRuntimeService:GetExecutor(actionId: string)
 	return self._runtime:GetExecutor(actionId)
+end
+
+function CombatBehaviorRuntimeService:_RegisterActorAdapters()
+	self._runtime:RegisterActorType("Enemy", self:_CreateFactoryAdapter("Enemy", self._enemyEntityFactory, "QueryAliveEntities"))
+	self._runtime:RegisterActorType(
+		"Structure",
+		self:_CreateFactoryAdapter("Structure", self._structureEntityFactory, "QueryActiveEntities")
+	)
+end
+
+function CombatBehaviorRuntimeService:_CreateFactoryAdapter(
+	actorLabel: string,
+	factory: any,
+	queryActiveEntitiesMethod: string
+): any
+	return AI.CreateFactoryAdapter({
+		ActorLabel = actorLabel,
+		Factory = factory,
+		QueryActiveEntities = queryActiveEntitiesMethod,
+		GetBehaviorTree = "GetBehaviorTree",
+		GetActionState = "GetCombatAction",
+		SetActionState = "SetCombatAction",
+		ClearActionState = "ClearAction",
+		SetPendingAction = "SetPendingAction",
+		UpdateLastTickTime = "UpdateBTLastTickTime",
+		ShouldEvaluate = function(factoryObject: any, entity: number, currentTime: number): boolean
+			local actionState = factoryObject:GetCombatAction(entity)
+			if actionState and actionState.ActionState == "Committed" then
+				return false
+			end
+
+			local behaviorTree = factoryObject:GetBehaviorTree(entity)
+			if behaviorTree == nil then
+				return false
+			end
+
+			return currentTime - behaviorTree.LastTickTime >= behaviorTree.TickInterval
+		end,
+	})
 end
 
 return CombatBehaviorRuntimeService

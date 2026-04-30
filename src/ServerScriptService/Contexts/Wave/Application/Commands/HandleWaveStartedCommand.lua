@@ -5,12 +5,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
 local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 local RunConfig = require(ReplicatedStorage.Contexts.Run.Config.RunConfig)
+local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
 local Try = Result.Try
 local Ensure = Result.Ensure
+type SpawnArea = WorldTypes.SpawnArea
 
 --[=[
 	@class HandleWaveStartedCommand
@@ -68,7 +70,7 @@ end
 	@within HandleWaveStartedCommand
 	@param waveNumber number -- The current wave number.
 	@param isEndless boolean -- Whether the wave is part of endless mode.
-	@param spawnCFrames { CFrame } -- Cached spawn points from `WorldContext`.
+	@param spawnAreas { SpawnArea } -- Cached spawn areas from `WorldContext`.
 	@param runContext any -- The `RunContext` service used to notify early completion.
 	@return Result.Result<nil> -- `Ok(nil)` when the wave start is accepted.
 	@error string -- Throws when inputs are invalid or `NotifyWaveCleared` is rejected.
@@ -76,12 +78,12 @@ end
 function HandleWaveStartedCommand:Execute(
 	waveNumber: number,
 	isEndless: boolean,
-	spawnCFrames: { CFrame },
+	spawnAreas: { SpawnArea },
 	runContext: any
 ): Result.Result<nil>
 	-- Validate the wave request before touching state so bad inputs fail fast.
 	Ensure(waveNumber > 0, "InvalidWaveNumber", Errors.INVALID_WAVE_NUMBER)
-	Ensure(#spawnCFrames > 0, "NoSpawnPoints", Errors.NO_SPAWN_POINTS)
+	Ensure(#spawnAreas > 0, "NoSpawnAreas", Errors.NO_SPAWN_AREAS)
 
 	-- Reset any stale session if a previous wave was still marked active.
 	local currentState = self._state:GetStateReadOnly()
@@ -105,7 +107,7 @@ function HandleWaveStartedCommand:Execute(
 	self._state:SetState(self._lifecycle:StartWaveSession(waveNumber, plannedSpawns))
 
 	-- Schedule all enemy spawns and advance the runtime counters as each spawn activates.
-	self._scheduler:Schedule(composition, spawnCFrames, waveNumber, function()
+	self._scheduler:Schedule(composition, spawnAreas, waveNumber, function()
 		local latestState = self._state:GetStateReadOnly()
 		if not self._lifecycle:IsCurrentWave(latestState, waveNumber) then
 			return

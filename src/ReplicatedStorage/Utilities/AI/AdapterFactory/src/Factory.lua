@@ -17,19 +17,19 @@ type TFactoryConfig = Types.TFactoryConfig
 
 local Factory = {}
 
-local function _BuildFactoryInvoker(factoryObject: any, surface: any): (...any) -> ...any
+local function _BuildFactoryInvoker<T>(factoryObject: any, surface: string | T): T
 	-- Method-name strings let callers wire existing factory APIs without wrapping every call site.
 	if type(surface) == "string" then
-		return function(...: any): ...any
+		return (function(...: any): ...any
 			local method = factoryObject[surface]
 			assert(type(method) == "function", ("AiAdapterFactory factory is missing method '%s'"):format(surface))
 			return method(factoryObject, ...)
-		end
+		end) :: any
 	end
 
-	return function(...: any): ...any
-		return surface(factoryObject, ...)
-	end
+	return (function(...: any): ...any
+		return (surface :: any)(factoryObject, ...)
+	end) :: any
 end
 
 --[=[

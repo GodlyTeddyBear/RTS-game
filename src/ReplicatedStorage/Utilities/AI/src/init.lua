@@ -6,7 +6,6 @@
 	@prop Types AITypes -- Grouped type exports for the facade helpers
 	@prop Runtime AiRuntimeEntry -- Re-export of the shared AI runtime utility
 	@prop AdapterFactory AiAdapterFactoryEntry -- Re-export of the shared adapter factory utility
-	@prop Behavior BehaviorSystem -- Re-export of the shared behavior-system utility
 	@server
 	@client
 ]=]
@@ -28,8 +27,9 @@ local AI = {
 	Types = Types,
 	Runtime = AiRuntime,
 	AdapterFactory = AiAdapterFactory,
-	Behavior = BehaviorSystem,
 }
+
+export type TBehaviorSystem = typeof(BehaviorSystem)
 
 export type TRuntimeConfig = Types.TRuntimeConfig
 export type TFrameContext = Types.TFrameContext
@@ -110,6 +110,15 @@ end
 ]=]
 function AI.CreateFactoryAdapter(config: TFactoryAdapterConfig): TActorAdapter
 	return AiAdapterFactory.CreateFactory(config)
+end
+
+--[=[
+	Returns the shared behavior-system utility through the AI facade.
+	@within AIEntry
+	@return TBehaviorSystem
+]=]
+function AI.GetBehaviorSystem(): TBehaviorSystem
+	return BehaviorSystem
 end
 
 --[=[
@@ -308,10 +317,7 @@ function AI.BuildBehaviors(runtime: TRegisterableRuntime, behaviorDefinitions: {
 	return Builder.BuildBehaviors(runtime, behaviorDefinitions)
 end
 
-local function _ResolveBehaviorName(
-	buildResult: TSystemBuildResult,
-	request: TAssignmentRequest
-): (string?, string)
+local function _ResolveBehaviorName(buildResult: TSystemBuildResult, request: TAssignmentRequest): (string?, string)
 	-- Resolve in descending priority so explicit input always wins over defaults.
 	local explicitBehaviorName = request.BehaviorName
 	if explicitBehaviorName ~= nil then
@@ -381,7 +387,9 @@ function AI.ResolveActorAssignment(
 	assert(type(buildResult) == "table", "AI buildResult must be a table")
 
 	local behaviorName, source = _ResolveBehaviorName(buildResult, request)
-	local resolvedBehaviorName = if behaviorName ~= nil then (buildResult.Catalog.Aliases[behaviorName] or behaviorName) else nil
+	local resolvedBehaviorName = if behaviorName ~= nil
+		then (buildResult.Catalog.Aliases[behaviorName] or behaviorName)
+		else nil
 	local tree = if resolvedBehaviorName ~= nil then buildResult.Behaviors[resolvedBehaviorName] else nil
 	local found = tree ~= nil
 
@@ -479,10 +487,7 @@ end
 	@param config TActorSetupWriteConfig
 	@return TActorSetupWriteResult
 ]=]
-function AI.WriteActorSetup(
-	setupResult: TActorSetupResult,
-	config: TActorSetupWriteConfig
-): TActorSetupWriteResult
+function AI.WriteActorSetup(setupResult: TActorSetupResult, config: TActorSetupWriteConfig): TActorSetupWriteResult
 	return SetupWriter.WriteOne(setupResult, config)
 end
 
@@ -507,19 +512,19 @@ end
 	@param requests { TAssignmentRequest }
 	@return { TAssignmentResult }
 ]=]
-function AI.ResolveAssignments(
-	buildResult: TSystemBuildResult,
-	requests: { TAssignmentRequest }
-): { TAssignmentResult }
+function AI.ResolveAssignments(buildResult: TSystemBuildResult, requests: { TAssignmentRequest }): { TAssignmentResult }
 	Validation.ValidateAssignmentRequests(requests)
 	assert(type(buildResult) == "table", "AI buildResult must be a table")
 
 	local assignmentResults = {}
 	for _, request in ipairs(requests) do
-		table.insert(assignmentResults, AI.ResolveActorAssignment(buildResult, request.ActorType, {
-			BehaviorName = request.BehaviorName,
-			ArchetypeName = request.ArchetypeName,
-		}))
+		table.insert(
+			assignmentResults,
+			AI.ResolveActorAssignment(buildResult, request.ActorType, {
+				BehaviorName = request.BehaviorName,
+				ArchetypeName = request.ArchetypeName,
+			})
+		)
 	end
 
 	return table.freeze(assignmentResults)
@@ -544,7 +549,11 @@ end
 	@param options TResolveBehaviorOptions?
 	@return any?
 ]=]
-function AI.ResolveActorBehavior(buildResult: TSystemBuildResult, actorType: string, options: TResolveBehaviorOptions?): any?
+function AI.ResolveActorBehavior(
+	buildResult: TSystemBuildResult,
+	actorType: string,
+	options: TResolveBehaviorOptions?
+): any?
 	return AI.ResolveActorAssignment(buildResult, actorType, options).Tree
 end
 

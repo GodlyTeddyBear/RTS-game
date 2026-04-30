@@ -26,6 +26,10 @@ local BehaviorSystem = {
 	Helpers = Helpers,
 }
 
+export type TBehaviorSystem = typeof(BehaviorSystem) & {
+	new: (config: Types.TBuilderConfig) -> any,
+}
+
 --[=[
 	Creates a runtime facade for the supplied condition and command registries.
 	@within BehaviorSystemEntry

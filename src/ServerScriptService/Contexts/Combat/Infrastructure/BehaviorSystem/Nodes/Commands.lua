@@ -2,7 +2,8 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local BehaviorSystem = require(ReplicatedStorage.Utilities.BehaviorSystem)
+local AI = require(ReplicatedStorage.Utilities.AI)
+local BehaviorSystem = AI.GetBehaviorSystem()
 
 local function _requireActionFactory(context: any): any
 	local actionFactory = context.ActionFactory
