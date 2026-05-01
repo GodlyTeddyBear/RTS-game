@@ -1,7 +1,5 @@
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
 --[=[
 	@class CombatTypes
 	Defines shared combat runtime shapes used by the combat context.
@@ -9,7 +7,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 	@client
 ]=]
 local CombatTypes = {}
-local AI = require(ReplicatedStorage.Utilities.AI)
 
 --[=[
 	@interface CombatSession
@@ -59,9 +56,6 @@ export type CombatActorTypePayload = {
 	Commands: { [string]: (any?) -> any },
 	Executors: { [string]: any },
 	Hooks: { any }?,
-	SemanticRequirements: AI.TSemanticRequirements?,
-	RuntimeBinding: AI.TRuntimeBinding?,
-	RuntimeOwner: any?,
 }
 
 --[=[

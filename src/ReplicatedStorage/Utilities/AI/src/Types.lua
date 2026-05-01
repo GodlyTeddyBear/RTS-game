@@ -30,18 +30,42 @@ type TConditionRegistry = { [string]: (options: any?) -> any }
 type TCommandRegistry = { [string]: (options: any?) -> any }
 type THook = AiRuntime.THook
 type TErrorSinkPayload = AiRuntime.TErrorSinkPayload
+export type TRuntimeBindingMethodStatus = {
+	MethodName: string,
+	HasMethod: boolean,
+	RegisteredPhases: { string },
+}
+
+export type TRuntimeBindingStatus = {
+	TargetField: string,
+	TargetExists: boolean,
+	Poll: TRuntimeBindingMethodStatus,
+	Sync: TRuntimeBindingMethodStatus,
+}
+
+export type TRuntimeBindingOwner = {
+	GetSchedulerBindingStatus: (self: TRuntimeBindingOwner, serviceField: string) -> any,
+}
+
+export type TRegistrationValidationOptions = {
+	RuntimeOwner: TRuntimeBindingOwner?,
+}
+
 export type TSystemConfig = {
 	Conditions: TConditionRegistry,
 	Commands: TCommandRegistry,
 	Hooks: { THook }?,
 	GlobalHooks: { THook }?,
 	ErrorSink: ((payload: TErrorSinkPayload) -> ())?,
+	RuntimeOwner: TRuntimeBindingOwner?,
 }
 
 export type TActorRegistration = {
 	ActorType: string,
 	Adapter: TActorAdapter,
 	Actions: any?,
+	SemanticRequirements: TSemanticRequirements?,
+	RuntimeBinding: TRuntimeBinding?,
 }
 
 export type TActionPack = {

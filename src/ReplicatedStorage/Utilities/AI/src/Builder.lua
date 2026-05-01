@@ -255,6 +255,7 @@ function Builder.new(aiModule: any, config: TSystemConfig): TSystemBuilder
 		Conditions = config.Conditions,
 		Commands = config.Commands,
 		ErrorSink = config.ErrorSink,
+		RuntimeOwner = config.RuntimeOwner,
 	}
 	self._hookLayers = {
 		GlobalHooks = initialGlobalHooks,
@@ -379,7 +380,9 @@ end
 ]=]
 function Builder:AddActor(registration: TActorRegistration): TSystemBuilder
 	_AssertCollect(self, "AddActor")
-	Validation.ValidateRegistration(registration)
+	Validation.ValidateRegistrationForUse(registration, {
+		RuntimeOwner = self._config.RuntimeOwner,
+	})
 	table.insert(self._actors, registration)
 
 	if registration.Actions ~= nil then
@@ -398,7 +401,9 @@ end
 ]=]
 function Builder:AddActorBundle(bundle: TActorBundle): TSystemBuilder
 	_AssertCollect(self, "AddActorBundle")
-	Validation.ValidateActorBundle(bundle)
+	Validation.ValidateActorBundleForUse(bundle, {
+		RuntimeOwner = self._config.RuntimeOwner,
+	})
 	table.insert(self._actorBundles, bundle)
 
 	-- Bundle-local hooks and action packs fold into the shared builder state before the actor registration is flattened.
@@ -416,6 +421,8 @@ function Builder:AddActorBundle(bundle: TActorBundle): TSystemBuilder
 		ActorType = bundle.ActorType,
 		Adapter = bundle.Adapter,
 		Actions = bundle.Actions,
+		SemanticRequirements = bundle.SemanticRequirements,
+		RuntimeBinding = bundle.RuntimeBinding,
 	})
 
 	if bundle.DefaultBehaviorName ~= nil then
@@ -462,7 +469,9 @@ end
 ]=]
 function Builder:AddActorPackage(actorPackage: TActorPackage): TSystemBuilder
 	_AssertCollect(self, "AddActorPackage")
-	Validation.ValidateActorPackage(actorPackage)
+	Validation.ValidateActorPackageForUse(actorPackage, {
+		RuntimeOwner = self._config.RuntimeOwner,
+	})
 
 	local actorBundle = actorPackage.ActorBundle
 	-- Package-level defaults override the bundle only when the bundle leaves them unset.
@@ -719,6 +728,18 @@ end
 ]=]
 function Builder:Build(): TSystemBuildResult
 	_AssertCollect(self, "Build")
+	for _, actorRegistration in ipairs(self._actors) do
+		Validation.ValidateRegistrationForUse(actorRegistration, {
+			RuntimeOwner = self._config.RuntimeOwner,
+		})
+	end
+
+	for _, actorBundle in ipairs(self._actorBundles) do
+		Validation.ValidateActorBundleForUse(actorBundle, {
+			RuntimeOwner = self._config.RuntimeOwner,
+		})
+	end
+
 	-- The builder moves through explicit stages so diagnostics can explain exactly where construction stopped.
 	self._buildStage = Types.Enums.BuildStage.RuntimeCreate.Name
 
@@ -741,7 +762,9 @@ function Builder:Build(): TSystemBuildResult
 	-- Actor adapters register after actions because the runtime is now ready for tree execution.
 	self._buildStage = Types.Enums.BuildStage.RegisterActors.Name
 	for _, actorRegistration in ipairs(self._actors) do
-		self._ai.RegisterActor(runtime, actorRegistration.ActorType, actorRegistration.Adapter)
+		self._ai.RegisterActor(runtime, actorRegistration, {
+			RuntimeOwner = self._config.RuntimeOwner,
+		})
 	end
 
 	-- Behavior compilation is last because it depends on the runtime knowing the executors it can reference.

@@ -12,6 +12,7 @@ type TBehaviorRegistration = Types.TBehaviorRegistration
 type TBehaviorCatalogConfig = Types.TBehaviorCatalogConfig
 type TAssignmentRequest = Types.TAssignmentRequest
 type TSystemConfig = Types.TSystemConfig
+type TRegistrationValidationOptions = Types.TRegistrationValidationOptions
 
 --[=[
 	@class AIValidation
@@ -21,6 +22,7 @@ type TSystemConfig = Types.TSystemConfig
 ]=]
 
 local Validation = {}
+local _RequiresRuntimeBinding
 
 -- Core identity checks
 function Validation.ValidateActorType(actorType: string)
@@ -40,6 +42,27 @@ function Validation.ValidateRegistration(registration: TActorRegistration)
 	assert(type(registration) == "table", "AI actor registration must be a table")
 	Validation.ValidateActorType(registration.ActorType)
 	Validation.ValidateAdapter(registration.Adapter)
+
+	if (registration :: any).Actions ~= nil then
+		Validation.ValidateActionDefinitions((registration :: any).Actions)
+	end
+
+	if (registration :: any).SemanticRequirements ~= nil then
+		Validation.ValidateSemanticRequirements((registration :: any).SemanticRequirements)
+	end
+
+	if (registration :: any).RuntimeBinding ~= nil then
+		Validation.ValidateRuntimeBinding((registration :: any).RuntimeBinding)
+	end
+
+	if _RequiresRuntimeBinding((registration :: any).SemanticRequirements) then
+		assert(
+			(registration :: any).RuntimeBinding ~= nil,
+			("AI actor registration '%s' requires RuntimeBinding when semantic requirements declare polling or projection dependence"):format(
+				registration.ActorType
+			)
+		)
+	end
 end
 
 function Validation.ValidateSemanticRequirements(requirements: Types.TSemanticRequirements)
@@ -76,12 +99,150 @@ function Validation.ValidateRuntimeBinding(runtimeBinding: Types.TRuntimeBinding
 	end
 end
 
-local function _RequiresRuntimeBinding(requirements: Types.TSemanticRequirements?): boolean
+_RequiresRuntimeBinding = function(requirements: Types.TSemanticRequirements?): boolean
 	if requirements == nil then
 		return false
 	end
 
 	return requirements.FactsDependOnPolling == true or requirements.AttributesDependOnProjection == true
+end
+
+function Validation.ValidateRegistrationOptions(options: TRegistrationValidationOptions?)
+	if options == nil then
+		return
+	end
+
+	assert(type(options) == "table", "AI registration validation options must be a table")
+
+	if options.RuntimeOwner ~= nil then
+		assert(type(options.RuntimeOwner) == "table", "AI registration validation RuntimeOwner must be a table")
+		assert(
+			type((options.RuntimeOwner :: any).GetSchedulerBindingStatus) == "function",
+			"AI registration validation RuntimeOwner must expose GetSchedulerBindingStatus"
+		)
+	end
+end
+
+local function _ContainsPhase(registeredPhases: { string }, expectedPhase: string?): boolean
+	if expectedPhase == nil then
+		return #registeredPhases > 0
+	end
+
+	for _, registeredPhase in ipairs(registeredPhases) do
+		if registeredPhase == expectedPhase then
+			return true
+		end
+	end
+
+	return false
+end
+
+function Validation.ValidateSemanticContract(
+	actorType: string,
+	requirements: Types.TSemanticRequirements?,
+	runtimeBinding: Types.TRuntimeBinding?,
+	options: TRegistrationValidationOptions?
+)
+	Validation.ValidateActorType(actorType)
+	Validation.ValidateRegistrationOptions(options)
+
+	if requirements ~= nil then
+		Validation.ValidateSemanticRequirements(requirements)
+	end
+
+	if runtimeBinding ~= nil then
+		Validation.ValidateRuntimeBinding(runtimeBinding)
+	end
+
+	if not _RequiresRuntimeBinding(requirements) then
+		return
+	end
+
+	assert(
+		runtimeBinding ~= nil,
+		("AI actor '%s' requires RuntimeBinding when semantic requirements declare polling or projection dependence"):format(
+			actorType
+		)
+	)
+
+	assert(
+		options ~= nil and options.RuntimeOwner ~= nil,
+		("AI actor '%s' requires a RuntimeOwner when semantic requirements are declared"):format(actorType)
+	)
+
+	local bindingResult = options.RuntimeOwner:GetSchedulerBindingStatus(runtimeBinding.ServiceField)
+	assert(type(bindingResult) == "table", ("AI actor '%s' runtime owner must return a Result-like table"):format(actorType))
+	assert(
+		bindingResult.success == true,
+		("AI actor '%s' runtime owner failed to resolve binding for '%s': [%s] %s"):format(
+			actorType,
+			runtimeBinding.ServiceField,
+			tostring(bindingResult.type),
+			tostring(bindingResult.message)
+		)
+	)
+
+	local bindingStatus = bindingResult.value
+	assert(type(bindingStatus) == "table", ("AI actor '%s' binding status must be a table"):format(actorType))
+	assert(
+		bindingStatus.TargetExists == true,
+		("AI actor '%s' bound service field '%s' does not exist"):format(actorType, runtimeBinding.ServiceField)
+	)
+
+	if requirements ~= nil and requirements.FactsDependOnPolling == true then
+		local pollStatus = bindingStatus.Poll
+		assert(
+			type(pollStatus) == "table" and pollStatus.HasMethod == true,
+			("AI actor '%s' requires FactsDependOnPolling but '%s.Poll' is missing"):format(
+				actorType,
+				runtimeBinding.ServiceField
+			)
+		)
+		assert(
+			type(pollStatus.RegisteredPhases) == "table"
+				and _ContainsPhase(pollStatus.RegisteredPhases, runtimeBinding.PollPhase),
+			("AI actor '%s' requires FactsDependOnPolling but '%s.Poll' is not registered on phase '%s'"):format(
+				actorType,
+				runtimeBinding.ServiceField,
+				tostring(runtimeBinding.PollPhase)
+			)
+		)
+	end
+
+	if requirements ~= nil and requirements.AttributesDependOnProjection == true then
+		local syncStatus = bindingStatus.Sync
+		assert(
+			type(syncStatus) == "table" and syncStatus.HasMethod == true,
+			("AI actor '%s' requires AttributesDependOnProjection but '%s.SyncDirtyEntities' is missing"):format(
+				actorType,
+				runtimeBinding.ServiceField
+			)
+		)
+		assert(
+			type(syncStatus.RegisteredPhases) == "table"
+				and _ContainsPhase(syncStatus.RegisteredPhases, runtimeBinding.SyncPhase),
+			("AI actor '%s' requires AttributesDependOnProjection but '%s.SyncDirtyEntities' is not registered on phase '%s'"):format(
+				actorType,
+				runtimeBinding.ServiceField,
+				tostring(runtimeBinding.SyncPhase)
+			)
+		)
+	end
+end
+
+function Validation.ValidateRegistrationForUse(registration: TActorRegistration, options: TRegistrationValidationOptions?)
+	Validation.ValidateRegistration(registration)
+	Validation.ValidateSemanticContract(
+		registration.ActorType,
+		(registration :: any).SemanticRequirements,
+		(registration :: any).RuntimeBinding,
+		options
+	)
+end
+
+function Validation.ValidateActorBundleForUse(bundle: TActorBundle, options: TRegistrationValidationOptions?)
+	Validation.ValidateActorBundle(bundle)
+	Validation.ValidateSemanticContract(bundle.ActorType, bundle.SemanticRequirements, bundle.RuntimeBinding, options)
 end
 
 function Validation.ValidateActorBundle(bundle: TActorBundle)
@@ -175,6 +336,11 @@ function Validation.ValidateActorPackage(actorPackage: TActorPackage)
 	if actorPackage.InitializeActionState ~= nil then
 		assert(type(actorPackage.InitializeActionState) == "boolean", "AI actor package InitializeActionState must be a boolean")
 	end
+end
+
+function Validation.ValidateActorPackageForUse(actorPackage: TActorPackage, options: TRegistrationValidationOptions?)
+	Validation.ValidateActorPackage(actorPackage)
+	Validation.ValidateActorBundleForUse(actorPackage.ActorBundle, options)
 end
 
 function Validation.ValidateActorPackages(actorPackages: { TActorPackage })
@@ -382,6 +548,10 @@ function Validation.ValidateSystemConfig(config: TSystemConfig)
 	if config.ErrorSink ~= nil then
 		assert(type(config.ErrorSink) == "function", "AI system config.ErrorSink must be a function")
 	end
+
+	Validation.ValidateRegistrationOptions({
+		RuntimeOwner = config.RuntimeOwner,
+	})
 end
 
 function Validation.ValidateRuntime(runtime: TRegisterableRuntime)

@@ -30,6 +30,7 @@ local AI = require(ReplicatedStorage.Utilities.AI)
 local builtAi = AI.CreateSystem({
 	Conditions = Conditions,
 	Commands = Commands,
+	RuntimeOwner = enemyContext,
 	GlobalHooks = {
 		BaseFactsHook,
 	},
@@ -83,6 +84,15 @@ local builtAi = AI.CreateSystem({
 		DefaultBehaviorName = "EnemyDefault",
 		Hooks = {
 			EnemyPerceptionHook,
+		},
+		SemanticRequirements = {
+			FactsDependOnPolling = true,
+			AttributesDependOnProjection = true,
+		},
+		RuntimeBinding = {
+			ServiceField = "_syncService",
+			PollPhase = "EnemySync",
+			SyncPhase = "EnemySync",
 		},
 	}))
 	:SetBehaviorAlias("DefaultEnemy", "EnemyDefault")
@@ -174,7 +184,33 @@ local enemyAdapter = AI.CreateAdapter({
 	end,
 })
 
-AI.RegisterActor(runtime, "Enemy", enemyAdapter, Executors)
+AI.ValidateSemanticContract("Enemy", {
+	FactsDependOnPolling = true,
+	AttributesDependOnProjection = true,
+}, {
+	ServiceField = "_syncService",
+	PollPhase = "EnemySync",
+	SyncPhase = "EnemySync",
+}, {
+	RuntimeOwner = enemyContext,
+})
+
+AI.RegisterActor(runtime, {
+	ActorType = "Enemy",
+	Adapter = enemyAdapter,
+	Actions = Executors,
+	SemanticRequirements = {
+		FactsDependOnPolling = true,
+		AttributesDependOnProjection = true,
+	},
+	RuntimeBinding = {
+		ServiceField = "_syncService",
+		PollPhase = "EnemySync",
+		SyncPhase = "EnemySync",
+	},
+}, {
+	RuntimeOwner = enemyContext,
+})
 
 local tree = runtime:BuildTree(BehaviorDefinition)
 
@@ -197,9 +233,11 @@ runtime:RunFrame({
 - `AI.CreateActorBundle(bundle)`
 - `AI.CreateActorPackage(package)`
 - `AI.CreateBehaviorRegistration(name, definition)`
-- `AI.RegisterActor(runtime, actorType, adapter, actionDefinitions?)`
-- `AI.RegisterActors(runtime, registrations)`
-- `AI.RegisterActorBundles(runtime, bundles)`
+- `AI.ValidateSemanticContract(actorType, semanticRequirements, runtimeBinding, options?)`
+- `AI.RegisterActor(runtime, actorType, adapter, actionDefinitions?, options?)`
+- `AI.RegisterActor(runtime, registration, options?)`
+- `AI.RegisterActors(runtime, registrations, options?)`
+- `AI.RegisterActorBundles(runtime, bundles, options?)`
 - `AI.RegisterActions(runtime, definitions)`
 - `AI.RegisterActionPacks(runtime, actionPacks)`
 - `AI.BuildBehaviors(runtime, behaviorMap)`

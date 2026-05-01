@@ -40,6 +40,8 @@ export type TActionPack = Types.TActionPack
 export type TActorRegistration = Types.TActorRegistration
 export type TSemanticRequirements = Types.TSemanticRequirements
 export type TRuntimeBinding = Types.TRuntimeBinding
+export type TRuntimeBindingOwner = Types.TRuntimeBindingOwner
+export type TRegistrationValidationOptions = Types.TRegistrationValidationOptions
 export type TActorBundle = Types.TActorBundle
 export type TActorPackage = Types.TActorPackage
 export type TBehaviorCatalog = Types.TBehaviorCatalog
@@ -82,6 +84,15 @@ end
 ]=]
 function AI.CreateSystem(config: TSystemConfig): TSystemBuilder
 	return Builder.new(AI, config)
+end
+
+function AI.ValidateSemanticContract(
+	actorType: string,
+	requirements: TSemanticRequirements?,
+	runtimeBinding: TRuntimeBinding?,
+	options: TRegistrationValidationOptions?
+)
+	Validation.ValidateSemanticContract(actorType, requirements, runtimeBinding, options)
 end
 
 --[=[
@@ -136,6 +147,8 @@ function AI.CreateActorRegistration(registration: TActorRegistration): TActorReg
 		ActorType = registration.ActorType,
 		Adapter = registration.Adapter,
 		Actions = registration.Actions,
+		SemanticRequirements = registration.SemanticRequirements,
+		RuntimeBinding = registration.RuntimeBinding,
 	})
 end
 
@@ -231,18 +244,33 @@ end
 ]=]
 function AI.RegisterActor(
 	runtime: TRegisterableRuntime,
-	actorType: string,
-	adapter: TActorAdapter,
-	actionDefinitions: any?
+	actorTypeOrRegistration: string | TActorRegistration,
+	adapterOrOptions: TActorAdapter | TRegistrationValidationOptions?,
+	actionDefinitions: any?,
+	options: TRegistrationValidationOptions?
 )
 	Validation.ValidateRuntime(runtime)
-	Validation.ValidateActorType(actorType)
-	Validation.ValidateAdapter(adapter)
 
-	runtime:RegisterActorType(actorType, adapter)
+	local registration: TActorRegistration
+	local registrationOptions = options
 
-	if actionDefinitions ~= nil then
-		runtime:RegisterActions(actionDefinitions)
+	if type(actorTypeOrRegistration) == "table" then
+		registration = actorTypeOrRegistration
+		registrationOptions = (adapterOrOptions :: any) :: TRegistrationValidationOptions?
+	else
+		registration = {
+			ActorType = actorTypeOrRegistration,
+			Adapter = (adapterOrOptions :: any) :: TActorAdapter,
+			Actions = actionDefinitions,
+		}
+	end
+
+	Validation.ValidateRegistrationForUse(registration, registrationOptions)
+
+	runtime:RegisterActorType(registration.ActorType, registration.Adapter)
+
+	if registration.Actions ~= nil then
+		runtime:RegisterActions(registration.Actions)
 	end
 end
 
@@ -252,13 +280,17 @@ end
 	@param runtime TRegisterableRuntime
 	@param registrations { TActorRegistration }
 ]=]
-function AI.RegisterActors(runtime: TRegisterableRuntime, registrations: { TActorRegistration })
+function AI.RegisterActors(
+	runtime: TRegisterableRuntime,
+	registrations: { TActorRegistration },
+	options: TRegistrationValidationOptions?
+)
 	Validation.ValidateRuntime(runtime)
 	assert(type(registrations) == "table", "AI registrations must be an array")
 
 	for _, registration in ipairs(registrations) do
-		Validation.ValidateRegistration(registration)
-		AI.RegisterActor(runtime, registration.ActorType, registration.Adapter, registration.Actions)
+		Validation.ValidateRegistrationForUse(registration, options)
+		AI.RegisterActor(runtime, registration, options)
 	end
 end
 
@@ -268,12 +300,23 @@ end
 	@param runtime TRegisterableRuntime
 	@param bundles { TActorBundle }
 ]=]
-function AI.RegisterActorBundles(runtime: TRegisterableRuntime, bundles: { TActorBundle })
+function AI.RegisterActorBundles(
+	runtime: TRegisterableRuntime,
+	bundles: { TActorBundle },
+	options: TRegistrationValidationOptions?
+)
 	Validation.ValidateRuntime(runtime)
 	Validation.ValidateActorBundles(bundles)
 
 	for _, bundle in ipairs(bundles) do
-		AI.RegisterActor(runtime, bundle.ActorType, bundle.Adapter, bundle.Actions)
+		Validation.ValidateActorBundleForUse(bundle, options)
+		AI.RegisterActor(runtime, {
+			ActorType = bundle.ActorType,
+			Adapter = bundle.Adapter,
+			Actions = bundle.Actions,
+			SemanticRequirements = bundle.SemanticRequirements,
+			RuntimeBinding = bundle.RuntimeBinding,
+		}, options)
 		if bundle.ActionPacks ~= nil then
 			AI.RegisterActionPacks(runtime, bundle.ActionPacks)
 		end

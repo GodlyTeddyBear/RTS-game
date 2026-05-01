@@ -56,9 +56,6 @@ function CombatActorRegistryService:RegisterActorType(payload: CombatActorTypePa
 		Commands = payload.Commands,
 		Executors = payload.Executors,
 		Hooks = payload.Hooks,
-		SemanticRequirements = payload.SemanticRequirements,
-		RuntimeBinding = payload.RuntimeBinding,
-		RuntimeOwner = payload.RuntimeOwner,
 	})
 	self._runtimeIdsByActorType[actorType] = {}
 
@@ -422,118 +419,6 @@ function CombatActorRegistryService:ClearAll()
 	self._runtimeStarted = false
 end
 
-local function _HasDeclaredSemanticRequirement(requirements: any): boolean
-	if type(requirements) ~= "table" then
-		return false
-	end
-
-	return requirements.FactsDependOnPolling == true or requirements.AttributesDependOnProjection == true
-end
-
-local function _ContainsPhase(registeredPhases: { string }, expectedPhase: string?): boolean
-	if expectedPhase == nil then
-		return #registeredPhases > 0
-	end
-
-	for _, registeredPhase in ipairs(registeredPhases) do
-		if registeredPhase == expectedPhase then
-			return true
-		end
-	end
-
-	return false
-end
-
-function CombatActorRegistryService:_ValidateRuntimeBinding(payload: CombatActorTypePayload): Result.Err?
-	local requirements = payload.SemanticRequirements
-	if not _HasDeclaredSemanticRequirement(requirements) then
-		return nil
-	end
-
-	local runtimeBinding = payload.RuntimeBinding
-	if runtimeBinding == nil then
-		return Err("MissingActorRuntimeBinding", Errors.MISSING_ACTOR_RUNTIME_BINDING, {
-			ActorType = payload.ActorType,
-		})
-	end
-
-	local runtimeOwner = payload.RuntimeOwner
-	local getStatus = if type(runtimeOwner) == "table" then runtimeOwner.GetSchedulerBindingStatus else nil
-	if type(getStatus) ~= "function" then
-		return Err("InvalidActorRuntimeBindingOwner", Errors.INVALID_ACTOR_RUNTIME_BINDING_OWNER, {
-			ActorType = payload.ActorType,
-			ServiceField = runtimeBinding.ServiceField,
-		})
-	end
-
-	local statusResult = getStatus(runtimeOwner, runtimeBinding.ServiceField)
-	if type(statusResult) ~= "table" or statusResult.success ~= true then
-		return Err("InvalidActorRuntimeBindingOwner", Errors.INVALID_ACTOR_RUNTIME_BINDING_OWNER, {
-			ActorType = payload.ActorType,
-			ServiceField = runtimeBinding.ServiceField,
-			CauseType = if type(statusResult) == "table" then statusResult.type else "MissingResult",
-			CauseMessage = if type(statusResult) == "table"
-				then statusResult.message
-				else "Runtime owner did not return a successful scheduler binding Result",
-		})
-	end
-
-	local bindingStatus = statusResult.value
-	if type(bindingStatus) ~= "table" or bindingStatus.TargetExists ~= true then
-		return Err("InvalidActorRuntimeBindingOwner", Errors.INVALID_ACTOR_RUNTIME_BINDING_OWNER, {
-			ActorType = payload.ActorType,
-			ServiceField = runtimeBinding.ServiceField,
-			CauseMessage = "Runtime owner did not expose the bound service field",
-		})
-	end
-
-	if requirements.FactsDependOnPolling == true then
-		local pollStatus = bindingStatus.Poll
-		if type(pollStatus) ~= "table" or pollStatus.HasMethod ~= true then
-			return Err("ActorPollingRequirementUnsatisfied", Errors.ACTOR_POLL_REQUIREMENT_UNSATISFIED, {
-				ActorType = payload.ActorType,
-				ServiceField = runtimeBinding.ServiceField,
-				ExpectedMethod = "Poll",
-				MissingRequirement = "FactsDependOnPolling",
-			})
-		end
-
-		if type(pollStatus.RegisteredPhases) ~= "table" or not _ContainsPhase(pollStatus.RegisteredPhases, runtimeBinding.PollPhase) then
-			return Err("ActorPollingRequirementUnsatisfied", Errors.ACTOR_POLL_REQUIREMENT_UNSATISFIED, {
-				ActorType = payload.ActorType,
-				ServiceField = runtimeBinding.ServiceField,
-				ExpectedMethod = "Poll",
-				ExpectedPhase = runtimeBinding.PollPhase,
-				MissingRequirement = "FactsDependOnPolling",
-			})
-		end
-	end
-
-	if requirements.AttributesDependOnProjection == true then
-		local syncStatus = bindingStatus.Sync
-		if type(syncStatus) ~= "table" or syncStatus.HasMethod ~= true then
-			return Err("ActorProjectionRequirementUnsatisfied", Errors.ACTOR_PROJECTION_REQUIREMENT_UNSATISFIED, {
-				ActorType = payload.ActorType,
-				ServiceField = runtimeBinding.ServiceField,
-				ExpectedMethod = "SyncDirtyEntities",
-				MissingRequirement = "AttributesDependOnProjection",
-			})
-		end
-
-		if type(syncStatus.RegisteredPhases) ~= "table" or not _ContainsPhase(syncStatus.RegisteredPhases, runtimeBinding.SyncPhase) then
-			return Err("ActorProjectionRequirementUnsatisfied", Errors.ACTOR_PROJECTION_REQUIREMENT_UNSATISFIED, {
-				ActorType = payload.ActorType,
-				ServiceField = runtimeBinding.ServiceField,
-				ExpectedMethod = "SyncDirtyEntities",
-				ExpectedPhase = runtimeBinding.SyncPhase,
-				MissingRequirement = "AttributesDependOnProjection",
-			})
-		end
-	end
-
-	return nil
-end
-
 function CombatActorRegistryService:_ValidateActorTypePayload(payload: CombatActorTypePayload): Result.Err?
 	if type(payload) ~= "table" then
 		return Err("InvalidActorTypePayload", Errors.INVALID_ACTOR_TYPE_PAYLOAD)
@@ -547,59 +432,6 @@ function CombatActorRegistryService:_ValidateActorTypePayload(payload: CombatAct
 		return Err("InvalidActorTypePayload", Errors.INVALID_ACTOR_TYPE_PAYLOAD, {
 			ActorType = payload.ActorType,
 		})
-	end
-
-	local requirements = payload.SemanticRequirements
-	if requirements ~= nil then
-		if type(requirements) ~= "table" then
-			return Err("InvalidActorTypePayload", Errors.INVALID_ACTOR_TYPE_PAYLOAD, {
-				ActorType = payload.ActorType,
-			})
-		end
-
-		if requirements.FactsDependOnPolling ~= nil and type(requirements.FactsDependOnPolling) ~= "boolean" then
-			return Err("InvalidActorTypePayload", Errors.INVALID_ACTOR_TYPE_PAYLOAD, {
-				ActorType = payload.ActorType,
-			})
-		end
-
-		if requirements.AttributesDependOnProjection ~= nil and type(requirements.AttributesDependOnProjection) ~= "boolean" then
-			return Err("InvalidActorTypePayload", Errors.INVALID_ACTOR_TYPE_PAYLOAD, {
-				ActorType = payload.ActorType,
-			})
-		end
-	end
-
-	local runtimeBinding = payload.RuntimeBinding
-	if runtimeBinding ~= nil then
-		if type(runtimeBinding) ~= "table" then
-			return Err("InvalidActorTypePayload", Errors.INVALID_ACTOR_TYPE_PAYLOAD, {
-				ActorType = payload.ActorType,
-			})
-		end
-
-		if type(runtimeBinding.ServiceField) ~= "string" or runtimeBinding.ServiceField == "" then
-			return Err("InvalidActorTypePayload", Errors.INVALID_ACTOR_TYPE_PAYLOAD, {
-				ActorType = payload.ActorType,
-			})
-		end
-
-		if runtimeBinding.PollPhase ~= nil and (type(runtimeBinding.PollPhase) ~= "string" or runtimeBinding.PollPhase == "") then
-			return Err("InvalidActorTypePayload", Errors.INVALID_ACTOR_TYPE_PAYLOAD, {
-				ActorType = payload.ActorType,
-			})
-		end
-
-		if runtimeBinding.SyncPhase ~= nil and (type(runtimeBinding.SyncPhase) ~= "string" or runtimeBinding.SyncPhase == "") then
-			return Err("InvalidActorTypePayload", Errors.INVALID_ACTOR_TYPE_PAYLOAD, {
-				ActorType = payload.ActorType,
-			})
-		end
-	end
-
-	local runtimeBindingError = self:_ValidateRuntimeBinding(payload)
-	if runtimeBindingError ~= nil then
-		return runtimeBindingError
 	end
 
 	return nil

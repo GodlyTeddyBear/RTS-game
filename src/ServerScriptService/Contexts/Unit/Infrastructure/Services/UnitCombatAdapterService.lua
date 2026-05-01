@@ -12,9 +12,7 @@ local UnitCombatAdapterService = {}
 UnitCombatAdapterService.__index = UnitCombatAdapterService
 
 function UnitCombatAdapterService.new()
-	local self = setmetatable({}, UnitCombatAdapterService)
-	self._runtimeOwner = nil
-	return self
+	return setmetatable({}, UnitCombatAdapterService)
 end
 
 function UnitCombatAdapterService:Init(registry: any, _name: string)
@@ -31,11 +29,6 @@ function UnitCombatAdapterService:RegisterActorType(): Result.Result<boolean>
 		Conditions = Nodes.Conditions,
 		Commands = Nodes.Commands,
 		Executors = Executors,
-		SemanticRequirements = {
-			FactsDependOnPolling = false,
-			AttributesDependOnProjection = false,
-		},
-		RuntimeOwner = self._runtimeOwner,
 	})
 end
 
@@ -67,10 +60,6 @@ end
 
 function UnitCombatAdapterService:UnregisterActor(entity: number): Result.Result<boolean>
 	return self._combatContext:UnregisterCombatActor(self:_BuildActorHandle(entity))
-end
-
-function UnitCombatAdapterService:ConfigureRuntimeOwner(runtimeOwner: any)
-	self._runtimeOwner = runtimeOwner
 end
 
 function UnitCombatAdapterService:_BuildActorHandle(entity: number): string

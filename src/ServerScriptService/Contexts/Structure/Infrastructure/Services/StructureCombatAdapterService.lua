@@ -16,7 +16,6 @@ StructureCombatAdapterService.__index = StructureCombatAdapterService
 function StructureCombatAdapterService.new()
 	local self = setmetatable({}, StructureCombatAdapterService)
 	self._configuredCombatServices = false
-	self._runtimeOwner = nil
 	return self
 end
 
@@ -44,11 +43,6 @@ function StructureCombatAdapterService:RegisterActorType(): Result.Result<boolea
 				CreateExecutor = StructureAttackExecutor.new,
 			}),
 		},
-		SemanticRequirements = {
-			FactsDependOnPolling = false,
-			AttributesDependOnProjection = false,
-		},
-		RuntimeOwner = self._runtimeOwner,
 	})
 end
 
@@ -77,10 +71,6 @@ end
 
 function StructureCombatAdapterService:UnregisterActor(entity: number): Result.Result<boolean>
 	return self._combatContext:UnregisterCombatActor(self:_BuildActorHandle(entity))
-end
-
-function StructureCombatAdapterService:ConfigureRuntimeOwner(runtimeOwner: any)
-	self._runtimeOwner = runtimeOwner
 end
 
 function StructureCombatAdapterService:_ConfigureCombatServices()

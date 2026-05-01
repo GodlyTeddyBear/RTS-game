@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local AI = require(ReplicatedStorage.Utilities.AI)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
@@ -17,6 +18,17 @@ local FLEE_THRESHOLD = 0.2
 local EnemyBehaviorDefinitions = table.freeze({
 	Swarm = SwarmBehavior,
 	Tank = TankBehavior,
+})
+
+local EnemySemanticRequirements = table.freeze({
+	FactsDependOnPolling = true,
+	AttributesDependOnProjection = true,
+})
+
+local EnemyRuntimeBinding = table.freeze({
+	ServiceField = "_syncService",
+	PollPhase = "EnemySync",
+	SyncPhase = "EnemySync",
 })
 
 local EnemyCombatAdapterService = {}
@@ -45,22 +57,18 @@ function EnemyCombatAdapterService:Start(registry: any, _name: string)
 end
 
 function EnemyCombatAdapterService:RegisterActorType(): Result.Result<boolean>
-	return self._combatContext:RegisterActorType({
-		ActorType = "Enemy",
-		Conditions = Nodes.Conditions,
-		Commands = Nodes.Commands,
-		Executors = Executors,
-		SemanticRequirements = {
-			FactsDependOnPolling = true,
-			AttributesDependOnProjection = true,
-		},
-		RuntimeBinding = {
-			ServiceField = "_syncService",
-			PollPhase = "EnemySync",
-			SyncPhase = "EnemySync",
-		},
-		RuntimeOwner = self._runtimeOwner,
-	})
+	return Result.Catch(function()
+		AI.ValidateSemanticContract("Enemy", EnemySemanticRequirements, EnemyRuntimeBinding, {
+			RuntimeOwner = self._runtimeOwner,
+		})
+
+		return self._combatContext:RegisterActorType({
+			ActorType = "Enemy",
+			Conditions = Nodes.Conditions,
+			Commands = Nodes.Commands,
+			Executors = Executors,
+		})
+	end, "Enemy:RegisterActorType")
 end
 
 function EnemyCombatAdapterService:RegisterActor(entity: number): Result.Result<string>
