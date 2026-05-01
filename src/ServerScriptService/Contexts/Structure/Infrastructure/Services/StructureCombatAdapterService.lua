@@ -1,5 +1,11 @@
 --!strict
 
+--[=[
+    @class StructureCombatAdapterService
+    Bridges structure entities into the combat runtime and wires structure attacks to enemy targeting and damage.
+    @server
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
@@ -13,6 +19,14 @@ local StructureBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.
 local StructureCombatAdapterService = {}
 StructureCombatAdapterService.__index = StructureCombatAdapterService
 
+-- ── Public ────────────────────────────────────────────────────────────────────
+
+-- Creates a new structure combat adapter service with deferred combat-service wiring.
+--[=[
+    @within StructureCombatAdapterService
+    Creates a new structure combat adapter service.
+    @return StructureCombatAdapterService -- Service instance used to register structure combat actors.
+]=]
 function StructureCombatAdapterService.new()
 	local self = setmetatable({}, StructureCombatAdapterService)
 	self._configuredCombatServices = false
@@ -20,10 +34,24 @@ function StructureCombatAdapterService.new()
 	return self
 end
 
+-- Resolves the structure entity factory used to build actor adapters.
+--[=[
+    @within StructureCombatAdapterService
+    Resolves the structure context dependencies used by the adapter service.
+    @param registry any -- Registry instance supplied by the context bootstrap.
+    @param _name string -- Registry key used to register the service.
+]=]
 function StructureCombatAdapterService:Init(registry: any, _name: string)
 	self._entityFactory = registry:Get("StructureEntityFactory")
 end
 
+-- Caches combat and enemy dependencies before the first structure actor is registered.
+--[=[
+    @within StructureCombatAdapterService
+    Resolves the combat and enemy dependencies used by the adapter service.
+    @param registry any -- Registry instance supplied by the context bootstrap.
+    @param _name string -- Registry key used to register the service.
+]=]
 function StructureCombatAdapterService:Start(registry: any, _name: string)
 	self._combatContext = registry:Get("CombatContext")
 	self._enemyContext = registry:Get("EnemyContext")
@@ -33,6 +61,12 @@ function StructureCombatAdapterService:Start(registry: any, _name: string)
 	self:_ConfigureCombatServices()
 end
 
+-- Registers the structure actor type so the combat runtime can instantiate structure behavior trees.
+--[=[
+    @within StructureCombatAdapterService
+    Registers the structure actor type with the combat runtime.
+    @return Result.Result<boolean> -- Whether the actor type registration succeeded.
+]=]
 function StructureCombatAdapterService:RegisterActorType(): Result.Result<boolean>
 	return self._combatContext:RegisterActorType({
 		ActorType = "Structure",
@@ -52,6 +86,13 @@ function StructureCombatAdapterService:RegisterActorType(): Result.Result<boolea
 	})
 end
 
+-- Registers one structure entity as a runtime actor and builds its per-tick adapter hooks.
+--[=[
+    @within StructureCombatAdapterService
+    Registers one structure entity with the combat runtime.
+    @param entity number -- Structure entity id to register.
+    @return Result.Result<string> -- Actor handle for the registered structure.
+]=]
 function StructureCombatAdapterService:RegisterActor(entity: number): Result.Result<string>
 	return self._combatContext:RegisterCombatActor({
 		ActorType = "Structure",
@@ -75,22 +116,41 @@ function StructureCombatAdapterService:RegisterActor(entity: number): Result.Res
 	})
 end
 
+-- Unregisters one structure actor when its entity leaves the runtime.
+--[=[
+    @within StructureCombatAdapterService
+    Unregisters one structure actor from the combat runtime.
+    @param entity number -- Structure entity id to unregister.
+    @return Result.Result<boolean> -- Whether the actor was removed successfully.
+]=]
 function StructureCombatAdapterService:UnregisterActor(entity: number): Result.Result<boolean>
 	return self._combatContext:UnregisterCombatActor(self:_BuildActorHandle(entity))
 end
 
+-- Stores the context that owns this adapter so callbacks can resolve back into it.
+--[=[
+    @within StructureCombatAdapterService
+    Stores the runtime owner that owns this adapter service.
+    @param runtimeOwner any -- Owning context or runtime object.
+]=]
 function StructureCombatAdapterService:ConfigureRuntimeOwner(runtimeOwner: any)
 	self._runtimeOwner = runtimeOwner
 end
 
+-- ── Private ───────────────────────────────────────────────────────────────────
+
+-- Configures shared combat services once so all structure actors reuse the same adapters.
 function StructureCombatAdapterService:_ConfigureCombatServices()
 	if self._configuredCombatServices then
 		return
 	end
 
+	-- Install shared hit validation before any structure actor asks for melee or projectile checks.
 	self._combatServices.HitboxService:RegisterTargetResolver(function(hitPart: BasePart): any?
 		return self:_ResolveHitEntity(hitPart)
 	end)
+
+	-- Wire the projectile resolver to enemy and structure contexts so attacks can resolve live targets.
 	self._combatServices.ProjectileService:ConfigureStructureBulletResolver({
 		ResolveStructureModel = function(structureEntity: number): Model?
 			local modelRef = self._entityFactory:GetModelRef(structureEntity)
@@ -117,6 +177,7 @@ function StructureCombatAdapterService:_ConfigureCombatServices()
 	self._configuredCombatServices = true
 end
 
+-- Builds the stable combat handle, preferring the structure's configured id when present.
 function StructureCombatAdapterService:_BuildActorHandle(entity: number): string
 	local identity = self._entityFactory:GetIdentity(entity)
 	if identity ~= nil and type(identity.StructureId) == "string" then
@@ -125,7 +186,9 @@ function StructureCombatAdapterService:_BuildActorHandle(entity: number): string
 	return "Structure:" .. tostring(entity)
 end
 
+-- Builds the fact snapshot consumed by structure behavior nodes on each combat tick.
 function StructureCombatAdapterService:_BuildFacts(entity: number): { [string]: any }
+	-- Read attack state once so target selection is based on a single entity snapshot.
 	local attackStats = self._entityFactory:GetAttackStats(entity)
 	local position = self._entityFactory:GetPosition(entity)
 	local targetEnemyEntity = nil :: number?
@@ -138,6 +201,7 @@ function StructureCombatAdapterService:_BuildFacts(entity: number): { [string]: 
 	}
 end
 
+-- Builds the service map exposed to structure behavior executors for the current tick.
 function StructureCombatAdapterService:_BuildServices(entity: number, currentTime: number): { [string]: any }
 	return {
 		StructureEntityFactory = self:_BuildStructureFactoryProxy(entity),
@@ -148,6 +212,7 @@ function StructureCombatAdapterService:_BuildServices(entity: number, currentTim
 	}
 end
 
+-- Adapts projectile firing so the runtime always emits structure-owned bullets.
 function StructureCombatAdapterService:_BuildProjectileProxy(entity: number): any
 	local projectileService = self._combatServices.ProjectileService
 	return {
@@ -162,6 +227,7 @@ function StructureCombatAdapterService:_BuildProjectileProxy(entity: number): an
 	}
 end
 
+-- Adapts the structure entity factory to the behavior runtime without exposing the raw entity id.
 function StructureCombatAdapterService:_BuildStructureFactoryProxy(entity: number): any
 	local factory = self._entityFactory
 	return {
@@ -192,6 +258,7 @@ function StructureCombatAdapterService:_BuildStructureFactoryProxy(entity: numbe
 	}
 end
 
+-- Exposes range checks to behavior nodes through the shared combat perception interface.
 function StructureCombatAdapterService:_BuildPerceptionProxy(): any
 	return {
 		IsTargetInRange = function(_proxy: any, position: Vector3, attackRange: number, targetKind: any, targetEntity: number?)
@@ -203,6 +270,7 @@ function StructureCombatAdapterService:_BuildPerceptionProxy(): any
 	}
 end
 
+-- Finds the nearest enemy candidate that is still valid for the structure's attack range.
 function StructureCombatAdapterService:_FindNearestEnemyInRange(position: Vector3, attackRange: number): number?
 	return SpatialQuery.FindBestCandidate(
 		position,
@@ -221,6 +289,7 @@ function StructureCombatAdapterService:_FindNearestEnemyInRange(position: Vector
 	)
 end
 
+-- Resolves the enemy target model and performs the range test for structure attacks.
 function StructureCombatAdapterService:_IsEnemyTargetInRange(
 	position: Vector3,
 	attackRange: number,
@@ -244,6 +313,7 @@ function StructureCombatAdapterService:_IsEnemyTargetInRange(
 	)
 end
 
+-- Maps hit parts back to enemy entities for structure attack resolution.
 function StructureCombatAdapterService:_ResolveHitEntity(hitPart: BasePart): any?
 	local model = hitPart:FindFirstAncestorOfClass("Model")
 	if model == nil then

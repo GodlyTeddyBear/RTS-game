@@ -1,5 +1,11 @@
 --!strict
 
+--[=[
+    @class EnemyCombatAdapterService
+    Bridges enemy entities into the combat runtime and wires enemy-specific targeting, movement, and damage adapters.
+    @server
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local AI = require(ReplicatedStorage.Utilities.AI)
@@ -13,6 +19,7 @@ local Executors = require(script.Parent.Parent.BehaviorSystem.Executors)
 local SwarmBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.SwarmBehavior)
 local TankBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.TankBehavior)
 
+-- Health at or below 20% is treated as a flee condition.
 local FLEE_THRESHOLD = 0.2
 
 local EnemyBehaviorDefinitions = table.freeze({
@@ -34,6 +41,14 @@ local EnemyRuntimeBinding = table.freeze({
 local EnemyCombatAdapterService = {}
 EnemyCombatAdapterService.__index = EnemyCombatAdapterService
 
+-- ── Public ────────────────────────────────────────────────────────────────────
+
+-- Creates a new enemy combat adapter service with deferred combat-service wiring.
+--[=[
+    @within EnemyCombatAdapterService
+    Creates a new enemy combat adapter service.
+    @return EnemyCombatAdapterService -- Service instance used to register enemy combat actors.
+]=]
 function EnemyCombatAdapterService.new()
 	local self = setmetatable({}, EnemyCombatAdapterService)
 	self._configuredCombatServices = false
@@ -41,11 +56,25 @@ function EnemyCombatAdapterService.new()
 	return self
 end
 
+-- Resolves the entity factories needed to build enemy actor adapters.
+--[=[
+    @within EnemyCombatAdapterService
+    Resolves the enemy context dependencies used by the adapter service.
+    @param registry any -- Registry instance supplied by the context bootstrap.
+    @param _name string -- Registry key used to register the service.
+]=]
 function EnemyCombatAdapterService:Init(registry: any, _name: string)
 	self._entityFactory = registry:Get("EnemyEntityFactory")
 	self._instanceFactory = registry:Get("EnemyInstanceFactory")
 end
 
+-- Caches cross-context references and wires combat services once.
+--[=[
+    @within EnemyCombatAdapterService
+    Resolves the combat, structure, and base dependencies used by the adapter service.
+    @param registry any -- Registry instance supplied by the context bootstrap.
+    @param _name string -- Registry key used to register the service.
+]=]
 function EnemyCombatAdapterService:Start(registry: any, _name: string)
 	self._combatContext = registry:Get("CombatContext")
 	self._structureContext = registry:Get("StructureContext")
@@ -56,6 +85,12 @@ function EnemyCombatAdapterService:Start(registry: any, _name: string)
 	self:_ConfigureCombatServices()
 end
 
+-- Registers the enemy actor type so the combat runtime can instantiate enemy behavior trees.
+--[=[
+    @within EnemyCombatAdapterService
+    Registers the enemy actor type with the combat runtime.
+    @return Result.Result<boolean> -- Whether the actor type registration succeeded.
+]=]
 function EnemyCombatAdapterService:RegisterActorType(): Result.Result<boolean>
 	return Result.Catch(function()
 		AI.ValidateSemanticContract("Enemy", EnemySemanticRequirements, EnemyRuntimeBinding, {
@@ -74,16 +109,27 @@ function EnemyCombatAdapterService:RegisterActorType(): Result.Result<boolean>
 	end, "Enemy:RegisterActorType")
 end
 
+-- Registers one enemy entity as a runtime actor and builds its per-tick adapter hooks.
+--[=[
+    @within EnemyCombatAdapterService
+    Registers one enemy entity with the combat runtime.
+    @param entity number -- Enemy entity id to register.
+    @return Result.Result<string> -- Actor handle for the registered enemy.
+]=]
 function EnemyCombatAdapterService:RegisterActor(entity: number): Result.Result<string>
+	-- Resolve the enemy identity and behavior profile before the runtime sees the actor.
 	local identity = self._entityFactory:GetIdentity(entity)
 	local role = self._entityFactory:GetRole(entity)
 	local roleName = if role ~= nil and role.Role ~= nil then role.Role else "Swarm"
 	local behaviorDefinition = EnemyBehaviorDefinitions[roleName] or SwarmBehavior
 	local defaults = BehaviorConfig.DEFAULTS_BY_ROLE[roleName] or BehaviorConfig.DEFAULT
 	local actorHandle = self:_BuildActorHandle(entity)
+
+	-- Seed the goal position and lock-on state before the actor begins ticking.
 	self:_AssignGoalPosition(entity, actorHandle, roleName)
 	self._combatServices.LockOnService:AttachConstraint(entity)
 
+	-- Hand the combat runtime a thin adapter that delegates back into the enemy context.
 	return self._combatContext:RegisterCombatActor({
 		ActorType = "Enemy",
 		ActorHandle = actorHandle,
@@ -119,23 +165,47 @@ function EnemyCombatAdapterService:RegisterActor(entity: number): Result.Result<
 	})
 end
 
+-- Unregisters one enemy actor handle when its entity leaves the runtime.
+--[=[
+    @within EnemyCombatAdapterService
+    Unregisters one enemy actor from the combat runtime.
+    @param entity number -- Enemy entity id to unregister.
+    @return Result.Result<boolean> -- Whether the actor was removed successfully.
+]=]
 function EnemyCombatAdapterService:UnregisterActor(entity: number): Result.Result<boolean>
 	return self._combatContext:UnregisterCombatActor(self:_BuildActorHandle(entity))
 end
 
+-- Returns the stable combat actor handle for one enemy entity.
+--[=[
+    @within EnemyCombatAdapterService
+    Returns the combat actor handle for one enemy entity.
+    @param entity number -- Enemy entity id to resolve.
+    @return string -- Stable actor handle used by the combat runtime.
+]=]
 function EnemyCombatAdapterService:GetActorHandle(entity: number): string
 	return self:_BuildActorHandle(entity)
 end
 
+-- Stores the context that owns this adapter so callbacks can resolve back into it.
+--[=[
+    @within EnemyCombatAdapterService
+    Stores the runtime owner that owns this adapter service.
+    @param runtimeOwner any -- Owning context or runtime object.
+]=]
 function EnemyCombatAdapterService:ConfigureRuntimeOwner(runtimeOwner: any)
 	self._runtimeOwner = runtimeOwner
 end
 
+-- ── Private ───────────────────────────────────────────────────────────────────
+
+-- Configures shared combat services once so all enemy actors reuse the same adapters.
 function EnemyCombatAdapterService:_ConfigureCombatServices()
 	if self._configuredCombatServices then
 		return
 	end
 
+	-- Install shared enemy target resolution before any combat tick asks for hit validation.
 	self._combatServices.HitboxService:RegisterTargetResolver(function(hitPart: BasePart): any?
 		return self:_ResolveHitEntity(hitPart)
 	end)
@@ -163,6 +233,7 @@ function EnemyCombatAdapterService:_ConfigureCombatServices()
 	self._configuredCombatServices = true
 end
 
+-- Builds the stable combat handle, preferring the enemy's configured id when present.
 function EnemyCombatAdapterService:_BuildActorHandle(entity: number): string
 	local identity = self._entityFactory:GetIdentity(entity)
 	if identity ~= nil and type(identity.EnemyId) == "string" then
@@ -171,6 +242,7 @@ function EnemyCombatAdapterService:_BuildActorHandle(entity: number): string
 	return "Enemy:" .. tostring(entity)
 end
 
+-- Assigns the enemy's goal position from the base target or logs why the assignment failed.
 function EnemyCombatAdapterService:_AssignGoalPosition(entity: number, actorHandle: string, roleName: string)
 	local baseTargetResult = self._baseContext:GetBaseTargetCFrame()
 	if not baseTargetResult.success or baseTargetResult.value == nil then
@@ -189,7 +261,9 @@ function EnemyCombatAdapterService:_AssignGoalPosition(entity: number, actorHand
 	self._entityFactory:SetGoalPosition(entity, baseTargetResult.value.Position)
 end
 
+-- Builds the fact snapshot consumed by enemy behavior nodes on each combat tick.
 function EnemyCombatAdapterService:_BuildFacts(entity: number, _currentTime: number): { [string]: any }
+	-- Read enemy state once so the fact set is built from a consistent snapshot.
 	local pathState = self._entityFactory:GetPathState(entity)
 	local health = self._entityFactory:GetHealth(entity)
 	local role = self._entityFactory:GetRole(entity)
@@ -200,11 +274,13 @@ function EnemyCombatAdapterService:_BuildFacts(entity: number, _currentTime: num
 		healthPct = math.clamp(health.Current / health.Max, 0, 1)
 	end
 
+	-- Prefer structure targets; fall back to the base target when no structure is in range.
 	local targetStructureEntity = nil :: number?
 	if role ~= nil and position ~= nil and type(role.AttackRange) == "number" then
 		targetStructureEntity = self:_FindNearestStructureInRange(position.CFrame.Position, role.AttackRange)
 	end
 
+	-- Only probe the base when no structure target is available for the same range check.
 	local hasBaseTargetInRange = false
 	if targetStructureEntity == nil and role ~= nil and position ~= nil and type(role.AttackRange) == "number" then
 		hasBaseTargetInRange = self:_IsTargetInRange(position.CFrame.Position, role.AttackRange, "Base", nil)
@@ -219,6 +295,7 @@ function EnemyCombatAdapterService:_BuildFacts(entity: number, _currentTime: num
 	}
 end
 
+-- Builds the service map exposed to enemy behavior executors for the current tick.
 function EnemyCombatAdapterService:_BuildServices(entity: number, currentTime: number): { [string]: any }
 	local enemyFactoryProxy = self:_BuildEnemyFactoryProxy(entity)
 	return {
@@ -236,6 +313,7 @@ function EnemyCombatAdapterService:_BuildServices(entity: number, currentTime: n
 	}
 end
 
+-- Adapts the movement service to the current enemy entity.
 function EnemyCombatAdapterService:_BuildMovementProxy(entity: number): any
 	local movementService = self._combatServices.MovementService
 	return {
@@ -251,6 +329,7 @@ function EnemyCombatAdapterService:_BuildMovementProxy(entity: number): any
 	}
 end
 
+-- Adapts the enemy entity factory to the behavior runtime without exposing the raw entity id.
 function EnemyCombatAdapterService:_BuildEnemyFactoryProxy(entity: number): any
 	local factory = self._entityFactory
 	return {
@@ -292,6 +371,7 @@ function EnemyCombatAdapterService:_BuildEnemyFactoryProxy(entity: number): any
 	}
 end
 
+-- Adapts hitbox creation so enemy attacks use the entity's current model.
 function EnemyCombatAdapterService:_BuildHitboxProxy(entity: number): any
 	local hitboxService = self._combatServices.HitboxService
 	return {
@@ -314,6 +394,7 @@ function EnemyCombatAdapterService:_BuildHitboxProxy(entity: number): any
 	}
 end
 
+-- Exposes range checks to behavior nodes through the shared combat perception interface.
 function EnemyCombatAdapterService:_BuildPerceptionProxy(): any
 	return {
 		IsTargetInRange = function(
@@ -328,6 +409,7 @@ function EnemyCombatAdapterService:_BuildPerceptionProxy(): any
 	}
 end
 
+-- Finds the nearest structure candidate that is still valid for the enemy's attack range.
 function EnemyCombatAdapterService:_FindNearestStructureInRange(position: Vector3, attackRange: number): number?
 	return SpatialQuery.FindBestCandidate(
 		position,
@@ -345,6 +427,7 @@ function EnemyCombatAdapterService:_FindNearestStructureInRange(position: Vector
 	)
 end
 
+-- Resolves the active target instance and performs the range test for the requested target kind.
 function EnemyCombatAdapterService:_IsTargetInRange(
 	position: Vector3,
 	attackRange: number,
@@ -379,6 +462,7 @@ function EnemyCombatAdapterService:_IsTargetInRange(
 	)
 end
 
+-- Resolves raycast data for the enemy's current target kind.
 function EnemyCombatAdapterService:_ResolveTargetRaycastData(
 	targetKind: "Base" | "Structure" | "Enemy",
 	targetEntity: number?
@@ -423,6 +507,7 @@ function EnemyCombatAdapterService:_ResolveTargetRaycastData(
 	return nil, nil
 end
 
+-- Maps hit parts back to base or structure entities for enemy attack resolution.
 function EnemyCombatAdapterService:_ResolveHitEntity(hitPart: BasePart): any?
 	if self._baseEntityFactory:IsPartOfBase(hitPart) then
 		return {
@@ -447,6 +532,7 @@ function EnemyCombatAdapterService:_ResolveHitEntity(hitPart: BasePart): any?
 	return nil
 end
 
+-- Refreshes lock-on state after the combat runtime reports an action result.
 function EnemyCombatAdapterService:_HandleActionResult(entity: number, _actionResult: any)
 	self._combatServices.LockOnService:UpdateAll({ entity })
 end
