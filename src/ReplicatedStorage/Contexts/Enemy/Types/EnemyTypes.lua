@@ -47,6 +47,7 @@ export type ModelRefComponent = {
 
 export type EnemyRoleConfig = {
 	DisplayName: string,
+	RuntimeProfileId: string,
 	MaxHp: number,
 	Damage: number,
 	AttackRange: number,

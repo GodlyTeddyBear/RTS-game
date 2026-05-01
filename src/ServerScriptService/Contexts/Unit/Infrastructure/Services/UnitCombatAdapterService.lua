@@ -9,10 +9,14 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
-local BehaviorConfig = require(ReplicatedStorage.Contexts.Combat.Config.BehaviorConfig)
+local UnitConfig = require(ReplicatedStorage.Contexts.Unit.Config.UnitConfig)
 local Nodes = require(script.Parent.Parent.BehaviorSystem.Nodes)
 local Executors = require(script.Parent.Parent.BehaviorSystem.Executors)
-local UnitIdleBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.UnitIdleBehavior)
+local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
+local UnitRuntimeProfiles = require(script.Parent.Parent.Runtime.Profiles.UnitRuntimeProfiles)
+local UnitServiceProxyResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.UnitServiceProxyResolverFactory)
+
+type UnitDefinition = UnitTypes.UnitDefinition
 
 local UnitCombatAdapterService = {}
 UnitCombatAdapterService.__index = UnitCombatAdapterService
@@ -51,6 +55,9 @@ end
 ]=]
 function UnitCombatAdapterService:Start(registry: any, _name: string)
 	self._combatContext = registry:Get("CombatContext")
+	self._serviceProxyResolver = UnitServiceProxyResolverFactory.Create({
+		UnitEntityFactory = self._entityFactory,
+	})
 end
 
 -- Registers the unit actor type so the combat runtime can instantiate the passive unit behavior tree.
@@ -82,12 +89,20 @@ end
     @return Result.Result<string> -- Actor handle for the registered unit.
 ]=]
 function UnitCombatAdapterService:RegisterActor(entity: number): Result.Result<string>
+	local identity = self._entityFactory:GetIdentity(entity)
+	assert(identity ~= nil, "UnitCombatAdapterService: missing identity for unit actor")
+
+	local definition = UnitConfig.Definitions[identity.UnitId] :: UnitDefinition?
+	assert(definition ~= nil, ("UnitCombatAdapterService: missing config for unit id '%s'"):format(tostring(identity.UnitId)))
+
+	local runtimeProfile = UnitRuntimeProfiles.GetByVariant(definition.RuntimeProfileId)
+
 	-- Build the adapter directly from the entity snapshot so the runtime can tick it without extra lookups.
 	return self._combatContext:RegisterCombatActor({
 		ActorType = "Unit",
 		ActorHandle = self:_BuildActorHandle(entity),
-		BehaviorDefinition = UnitIdleBehavior,
-		TickInterval = BehaviorConfig.DEFAULT.TickInterval,
+		BehaviorDefinition = runtimeProfile.BehaviorDefinition,
+		TickInterval = runtimeProfile.TickInterval,
 		Adapter = {
 			-- Keep the actor alive only while the backing entity still exists in the unit factory.
 			IsActive = function(): boolean
@@ -99,14 +114,11 @@ function UnitCombatAdapterService:RegisterActor(entity: number): Result.Result<s
 			end,
 			-- Units do not contribute combat facts, so the behavior tree receives an empty snapshot.
 			BuildFacts = function(_currentTime: number): { [string]: any }
-				return {}
+				return self._serviceProxyResolver.BuildFacts(entity)
 			end,
 			-- Expose the current time and factory so the idle behavior can read unit state on demand.
 			BuildServices = function(currentTime: number): { [string]: any }
-				return {
-					CurrentTime = currentTime,
-					UnitEntityFactory = self._entityFactory,
-				}
+				return self._serviceProxyResolver.BuildServices(entity, currentTime)
 			end,
 		},
 	})

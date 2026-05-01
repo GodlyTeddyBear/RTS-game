@@ -16,6 +16,7 @@ type TPhase2AllowedRoles = { [TEnemyRole]: boolean }
 local Roles: { [TEnemyRole]: TEnemyRoleConfig } = table.freeze({
 	Swarm = table.freeze({
 		DisplayName = "Swarm",
+		RuntimeProfileId = "Swarm",
 		MaxHp = 30,
 		Damage = 5,
 		AttackRange = 6,
@@ -28,6 +29,7 @@ local Roles: { [TEnemyRole]: TEnemyRoleConfig } = table.freeze({
 	}),
 	Tank = table.freeze({
 		DisplayName = "Tank",
+		RuntimeProfileId = "Tank",
 		MaxHp = 120,
 		Damage = 15,
 		AttackRange = 6,

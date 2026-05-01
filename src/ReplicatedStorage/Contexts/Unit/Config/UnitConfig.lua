@@ -13,6 +13,7 @@ UnitConfig.DEFAULT_UNIT_ID = "AllyGrunt"
 UnitConfig.Definitions = {
 	AllyGrunt = table.freeze({
 		UnitId = "AllyGrunt",
+		RuntimeProfileId = "Idle",
 		DisplayName = "Ally Grunt",
 		MaxHp = 100,
 		ModelScale = Vector3.new(2.5, 5, 1.5),

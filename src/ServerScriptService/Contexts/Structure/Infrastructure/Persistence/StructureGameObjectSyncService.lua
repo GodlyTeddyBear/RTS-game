@@ -3,7 +3,11 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BaseGameObjectSyncService = require(ReplicatedStorage.Utilities.BaseGameObjectSyncService)
-local StructureAnimationStateResolver = require(script.Parent.Parent.RuntimeProfiles.StructureAnimationStateResolver)
+local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.StructureConfig)
+local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.StructureTypes)
+local StructureRuntimeProfiles = require(script.Parent.Parent.Runtime.Profiles.StructureRuntimeProfiles)
+
+type TStructureConfig = StructureTypes.TStructureConfig
 
 local StructureGameObjectSyncService = {}
 StructureGameObjectSyncService.__index = StructureGameObjectSyncService
@@ -101,7 +105,19 @@ function StructureGameObjectSyncService:_SyncEntity(entity: number, model: Model
 	end
 
 	local structureType = if identity ~= nil then identity.StructureType else nil
-	local nextAnimationState, isAnimationLooping = StructureAnimationStateResolver.Resolve(structureType, combatAction)
+	local runtimeProfileId = nil :: string?
+	if structureType ~= nil then
+		local structureConfig = StructureConfig.STRUCTURES[structureType] :: TStructureConfig?
+		if structureConfig ~= nil then
+			runtimeProfileId = structureConfig.RuntimeProfileId
+		end
+	end
+
+	local nextAnimationState, isAnimationLooping = StructureRuntimeProfiles.ResolveAnimationState({
+		VariantId = runtimeProfileId,
+		StructureType = structureType,
+		CombatAction = combatAction,
+	})
 	self:SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
 	self:SetAttributeIfChanged(model, "AnimationLooping", isAnimationLooping)
 	self:SetAttributeIfChanged(model, "TargetEnemyId", self:_ResolveTargetEnemyId(targetEnemyEntity))

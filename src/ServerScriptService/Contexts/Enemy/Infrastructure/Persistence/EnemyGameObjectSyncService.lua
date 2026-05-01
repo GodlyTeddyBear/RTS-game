@@ -3,11 +3,14 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BaseGameObjectSyncService = require(ReplicatedStorage.Utilities.BaseGameObjectSyncService)
+local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local CombatTypes = require(ReplicatedStorage.Contexts.Combat.Types.CombatTypes)
-local EnemyAnimationStateResolver = require(script.Parent.Parent.RuntimeProfiles.EnemyAnimationStateResolver)
+local EnemyTypes = require(ReplicatedStorage.Contexts.Enemy.Types.EnemyTypes)
+local EnemyRuntimeProfiles = require(script.Parent.Parent.Runtime.Profiles.EnemyRuntimeProfiles)
 
 type CombatActionState = CombatTypes.CombatActionState
+type EnemyRoleConfig = EnemyTypes.EnemyRoleConfig
 
 local EnemyGameObjectSyncService = {}
 EnemyGameObjectSyncService.__index = EnemyGameObjectSyncService
@@ -84,12 +87,21 @@ function EnemyGameObjectSyncService:_SyncEntity(entity: number, model: Model)
 	local roleName = if role ~= nil then role.Role else nil
 	local moveSpeed = if role ~= nil then role.MoveSpeed else nil
 	local isMoving = pathState ~= nil and pathState.IsMoving == true
-	local nextAnimationState, isAnimationLooping = EnemyAnimationStateResolver.Resolve(
-		roleName,
-		moveSpeed,
-		isMoving,
-		combatAction
-	)
+	local runtimeProfileId = nil :: string?
+	if roleName ~= nil then
+		local roleConfig = EnemyConfig.Roles[roleName] :: EnemyRoleConfig?
+		if roleConfig ~= nil then
+			runtimeProfileId = roleConfig.RuntimeProfileId
+		end
+	end
+
+	local nextAnimationState, isAnimationLooping = EnemyRuntimeProfiles.ResolveAnimationState({
+		VariantId = runtimeProfileId,
+		RoleName = roleName,
+		MoveSpeed = moveSpeed,
+		IsMoving = isMoving,
+		CombatAction = combatAction,
+	})
 	self:SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
 	self:SetAttributeIfChanged(model, "AnimationLooping", isAnimationLooping)
 

@@ -14,6 +14,7 @@ export type UnitOwnerKind = "Player" | "PlayerBase" | "EnemyBase"
 
 export type UnitDefinition = {
 	UnitId: UnitDefinitionId,
+	RuntimeProfileId: string,
 	DisplayName: string,
 	MaxHp: number,
 	ModelScale: Vector3,

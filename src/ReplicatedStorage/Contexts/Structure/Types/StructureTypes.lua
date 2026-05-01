@@ -97,7 +97,7 @@ export type TIdentityComponent = {
 export type TStructureConfig = {
 	DisplayName: string,
 	MaxHealth: number,
-	BehaviorId: "Attack" | "Extract",
+	RuntimeProfileId: "Attack" | "Extract",
 	AttackRange: number?,
 	AttackDamage: number?,
 	AttackCooldown: number?,

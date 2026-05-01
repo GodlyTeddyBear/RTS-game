@@ -9,16 +9,23 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local AI = require(ReplicatedStorage.Utilities.AI)
-local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
-local BehaviorConfig = require(ReplicatedStorage.Contexts.Combat.Config.BehaviorConfig)
+local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.StructureConfig)
+local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.StructureTypes)
 local Nodes = require(script.Parent.Parent.BehaviorSystem.Nodes)
 local StructureAttackExecutor = require(script.Parent.Parent.BehaviorSystem.Executors.StructureAttackExecutor)
 local StructureExtractExecutor = require(script.Parent.Parent.BehaviorSystem.Executors.StructureExtractExecutor)
-local StructureRuntimeProfileRegistry = require(script.Parent.Parent.RuntimeProfiles.StructureRuntimeProfileRegistry)
-local StructureHitTargetResolver = require(script.Parent.Resolvers.StructureHitTargetResolver)
-local StructureProjectileResolverFactory = require(script.Parent.Resolvers.StructureProjectileResolverFactory)
+local StructureRuntimeProfiles = require(script.Parent.Parent.Runtime.Profiles.StructureRuntimeProfiles)
+local StructureFactsResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.StructureFactsResolverFactory)
+local StructureFactoryProxyResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.StructureFactoryProxyResolverFactory)
+local StructureHitTargetResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.StructureHitTargetResolverFactory)
+local StructurePerceptionResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.StructurePerceptionResolverFactory)
+local StructureProjectileResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.StructureProjectileResolverFactory)
+local StructureProjectileProxyResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.StructureProjectileProxyResolverFactory)
+local StructureTargetingResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.StructureTargetingResolverFactory)
+
+type StructureType = StructureTypes.StructureType
+type TStructureConfig = StructureTypes.TStructureConfig
 
 local StructureCombatAdapterService = {}
 StructureCombatAdapterService.__index = StructureCombatAdapterService
@@ -96,6 +103,22 @@ function StructureCombatAdapterService:Start(registry: any, _name: string)
 	self._enemyEntityFactory = self._enemyContext:GetEntityFactory().value
 	self._enemyInstanceFactory = self._enemyContext:GetInstanceFactory().value
 	self._combatServices = self._combatContext:GetCombatRuntimeServices().value
+	self._targetingResolver = StructureTargetingResolverFactory.Create({
+		EnemyEntityFactory = self._enemyEntityFactory,
+	})
+	self._factsResolver = StructureFactsResolverFactory.Create({
+		StructureEntityFactory = self._entityFactory,
+		TargetingResolver = self._targetingResolver,
+	})
+	self._perceptionResolver = StructurePerceptionResolverFactory.Create({
+		TargetingResolver = self._targetingResolver,
+	})
+	self._structureFactoryProxyResolver = StructureFactoryProxyResolverFactory.Create({
+		StructureEntityFactory = self._entityFactory,
+	})
+	self._projectileProxyResolver = StructureProjectileProxyResolverFactory.Create({
+		ProjectileService = self._combatServices.ProjectileService,
+	})
 	self:_ConfigureCombatServices()
 end
 
@@ -140,12 +163,26 @@ end
     @return Result.Result<string> -- Actor handle for the registered structure.
 ]=]
 function StructureCombatAdapterService:RegisterActor(entity: number): Result.Result<string>
-	local behaviorDefinition = self:_ResolveBehaviorDefinition(entity)
+	local identity = self._entityFactory:GetIdentity(entity)
+	assert(identity ~= nil, "StructureCombatAdapterService: missing identity for structure actor")
+
+	local structureConfig = StructureConfig.STRUCTURES[identity.StructureType] :: TStructureConfig?
+	assert(
+		structureConfig ~= nil,
+		("StructureCombatAdapterService: missing config for structure type '%s'"):format(tostring(identity.StructureType))
+	)
+
+	local runtimeProfile = StructureRuntimeProfiles.GetByVariant(structureConfig.RuntimeProfileId)
+	local actorHandle = self:_BuildActorHandle(entity)
+	self._entityFactory:SetBehaviorConfig(entity, {
+		TickInterval = runtimeProfile.TickInterval,
+	})
+
 	return self._combatContext:RegisterCombatActor({
 		ActorType = "Structure",
-		ActorHandle = self:_BuildActorHandle(entity),
-		BehaviorDefinition = behaviorDefinition,
-		TickInterval = BehaviorConfig.DEFAULT.TickInterval,
+		ActorHandle = actorHandle,
+		BehaviorDefinition = runtimeProfile.BehaviorDefinition,
+		TickInterval = runtimeProfile.TickInterval,
 		Adapter = {
 			IsActive = function(): boolean
 				return self._entityFactory:IsActive(entity)
@@ -207,8 +244,12 @@ function StructureCombatAdapterService:_ConfigureCombatServices()
 	end
 
 	-- Install shared hit validation before any structure actor asks for melee or projectile checks.
+	local hitTargetResolver = StructureHitTargetResolverFactory.Create({
+		EnemyInstanceFactory = self._enemyInstanceFactory,
+	})
+
 	self._combatServices.HitboxService:RegisterTargetResolver(function(hitPart: BasePart): any?
-		return StructureHitTargetResolver.Resolve(self._enemyInstanceFactory, hitPart)
+		return hitTargetResolver.ResolveHitTarget(hitPart)
 	end)
 
 	-- Wire the projectile resolver to enemy and structure contexts so attacks can resolve live targets.
@@ -233,149 +274,20 @@ function StructureCombatAdapterService:_BuildActorHandle(entity: number): string
 	return "Structure:" .. tostring(entity)
 end
 
-function StructureCombatAdapterService:_ResolveBehaviorDefinition(entity: number): any
-	local identity = self._entityFactory:GetIdentity(entity)
-	assert(identity ~= nil, "StructureCombatAdapterService: missing identity for structure actor")
-	return StructureRuntimeProfileRegistry.GetByStructureType(identity.StructureType).BehaviorDefinition
-end
-
 -- Builds the fact snapshot consumed by structure behavior nodes on each combat tick.
 function StructureCombatAdapterService:_BuildFacts(entity: number): { [string]: any }
-	-- Read attack state once so target selection is based on a single entity snapshot.
-	local attackStats = self._entityFactory:GetAttackStats(entity)
-	local position = self._entityFactory:GetPosition(entity)
-	local targetEnemyEntity = nil :: number?
-	if attackStats ~= nil and position ~= nil then
-		targetEnemyEntity = self:_FindNearestEnemyInRange(position, attackStats.AttackRange)
-	end
-
-	return {
-		TargetEnemyEntity = targetEnemyEntity,
-	}
+	return self._factsResolver.BuildFacts(entity)
 end
 
 -- Builds the service map exposed to structure behavior executors for the current tick.
 function StructureCombatAdapterService:_BuildServices(entity: number, currentTime: number): { [string]: any }
 	return {
-		StructureEntityFactory = self:_BuildStructureFactoryProxy(entity),
+		StructureEntityFactory = self._structureFactoryProxyResolver.CreateProxy(entity),
 		EnemyEntityFactory = self._enemyEntityFactory,
-		CombatPerceptionService = self:_BuildPerceptionProxy(),
+		CombatPerceptionService = self._perceptionResolver.CreateProxy(),
 		CurrentTime = currentTime,
-		ProjectileService = self:_BuildProjectileProxy(entity),
+		ProjectileService = self._projectileProxyResolver.CreateProxy(entity),
 	}
-end
-
--- Adapts projectile firing so the runtime always emits structure-owned bullets.
-function StructureCombatAdapterService:_BuildProjectileProxy(entity: number): any
-	local projectileService = self._combatServices.ProjectileService
-	return {
-		FireStructureBullet = function(_proxy: any, request: any)
-			return projectileService:FireStructureBullet({
-				StructureEntity = entity,
-				TargetEnemyEntity = request.TargetEnemyEntity,
-				Damage = request.Damage,
-				MaxDistance = request.MaxDistance,
-			})
-		end,
-	}
-end
-
--- Adapts the structure entity factory to the behavior runtime without exposing the raw entity id.
-function StructureCombatAdapterService:_BuildStructureFactoryProxy(entity: number): any
-	local factory = self._entityFactory
-	return {
-		IsActive = function(_proxy: any, _runtimeId: number): boolean
-			return factory:IsActive(entity)
-		end,
-		GetPosition = function(_proxy: any, _runtimeId: number): Vector3?
-			return factory:GetPosition(entity)
-		end,
-		GetAttackStats = function(_proxy: any, _runtimeId: number)
-			return factory:GetAttackStats(entity)
-		end,
-		GetCooldown = function(_proxy: any, _runtimeId: number)
-			return factory:GetCooldown(entity)
-		end,
-		SetCooldownElapsed = function(_proxy: any, _runtimeId: number, elapsed: number)
-			factory:SetCooldownElapsed(entity, elapsed)
-		end,
-		SetTarget = function(_proxy: any, _runtimeId: number, targetEnemy: number?)
-			factory:SetTarget(entity, targetEnemy)
-		end,
-		GetModelRef = function(_proxy: any, _runtimeId: number)
-			return factory:GetModelRef(entity)
-		end,
-		PromoteToCommitted = function(_proxy: any, _runtimeId: number)
-			factory:PromoteToCommitted(entity)
-		end,
-	}
-end
-
--- Exposes range checks to behavior nodes through the shared combat perception interface.
-function StructureCombatAdapterService:_BuildPerceptionProxy(): any
-	return {
-		IsTargetInRange = function(
-			_proxy: any,
-			position: Vector3,
-			attackRange: number,
-			targetKind: any,
-			targetEntity: number?
-		)
-			if targetKind ~= "Enemy" or targetEntity == nil then
-				return false
-			end
-			return self:_IsEnemyTargetInRange(position, attackRange, targetEntity)
-		end,
-	}
-end
-
--- Finds the nearest enemy candidate that is still valid for the structure's attack range.
-function StructureCombatAdapterService:_FindNearestEnemyInRange(
-	position: Vector3,
-	attackRange: number
-): number?
-	return SpatialQuery.FindBestCandidate(
-		position,
-		self._enemyEntityFactory:QueryAliveEntities(),
-		function(enemyEntity: number): Vector3?
-			local enemyCFrame = self._enemyEntityFactory:GetEntityCFrame(enemyEntity)
-			return if enemyCFrame ~= nil then enemyCFrame.Position else nil
-		end,
-		function(enemyEntity: number, distance: number): number?
-			if not self:_IsEnemyTargetInRange(position, attackRange, enemyEntity) then
-				return nil
-			end
-			return -distance
-		end,
-		attackRange
-	)
-end
-
--- Resolves the enemy target model and performs the range test for structure attacks.
-function StructureCombatAdapterService:_IsEnemyTargetInRange(
-	position: Vector3,
-	attackRange: number,
-	enemyEntity: number
-): boolean
-	if not self._enemyEntityFactory:IsAlive(enemyEntity) then
-		return false
-	end
-
-	local modelRef = self._enemyEntityFactory:GetModelRef(enemyEntity)
-	if modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
-		return false
-	end
-
-	return SpatialQuery.IsWithinRaycastRange(
-		position,
-		ModelPlus.GetCenterPosition(modelRef.Model),
-		attackRange,
-		SpatialQuery.MergeOptions(
-			SpatialQuery.Presets.CharactersOnly,
-			SpatialQuery.Presets.IncludeInstances({ modelRef.Model })
-		),
-		0.05
-	)
 end
 
 return StructureCombatAdapterService

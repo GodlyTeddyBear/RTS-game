@@ -23,8 +23,8 @@ Split responsibilities into four context-owned layers:
 
 Then put all variant-specific behavior in:
 
-- `RuntimeProfiles/`
-- `Services/Resolvers/`
+- `Runtime/Profiles/`
+- `Runtime/Resolvers/`
 
 This keeps the sync service projection-only and keeps the adapter focused on runtime wiring instead of becoming a variant switchboard.
 
@@ -62,21 +62,21 @@ Contexts/
         PlayerECSWorldService.lua
       Persistence/
         PlayerGameObjectSyncService.lua
-      RuntimeProfiles/
-        PlayerRuntimeProfileRegistry.lua
-        PlayerAnimationStateResolver.lua
+      Runtime/
+        Profiles/
+          PlayerRuntimeProfiles.lua
+        Resolvers/
+          PlayerHitTargetResolverFactory.lua
+          PlayerProjectileResolverFactory.lua
       Services/
         PlayerInstanceFactory.lua
         PlayerCombatAdapterService.lua
-        Resolvers/
-          PlayerHitTargetResolver.lua
-          PlayerProjectileResolverFactory.lua
 ```
 
 `Persistence/` owns projection and polling.
 `Services/` owns runtime helpers and adapter wiring.
-`RuntimeProfiles/` owns per-variant runtime selection.
-`Resolvers/` owns combat callback tables and hit resolution helpers.
+`Runtime/Profiles/` owns per-variant runtime selection and animation-state resolution.
+`Runtime/Resolvers/` owns combat callback tables and hit resolution helpers.
 
 ## 1. Define Shared Config And Types
 
@@ -154,11 +154,11 @@ For `Players`, that usually means:
 - `DestroyInstance(entity)`
 - `DestroyAll()`
 
-## 4. Build The Runtime Profile Registry
+## 4. Build The Runtime Profile Module
 
 This is the key abstraction.
 
-A runtime profile registry converts the config-selected variant into a frozen runtime profile table.
+A runtime profile module converts the config-selected variant into a frozen runtime profile table and resolves animation state for sync projection.
 
 A profile should hold:
 
@@ -166,7 +166,7 @@ A profile should hold:
 - `DefaultAnimationState`
 - `AnimationByActionIdAndState`
 - `LoopingByAnimationState`
-- `TickInterval` when runtime timing varies by variant
+- `TickInterval`
 
 Example:
 
@@ -196,36 +196,17 @@ Rules:
 - Keep the strings that clients already consume stable.
 - Add new variants by adding new profiles, not by editing sync conditionals.
 
-## 5. Build The Animation State Resolver
-
 The sync service should not know special cases like:
 
 - `if Class == "Ranger" then ...`
 - `if ActionId == "Player.Shoot" then ...`
 
-Move that into a resolver module that accepts:
+Move that into the runtime profile module by exposing:
 
-- variant key
-- movement state
-- combat action
+- `GetByVariant(variantId)`
+- `ResolveAnimationState(input)`
 
-and returns:
-
-- `animationState`
-- `isLooping`
-
-Example:
-
-```lua
-local animationState, isLooping = PlayerAnimationStateResolver.Resolve(
-    className,
-    moveSpeed,
-    isMoving,
-    combatAction
-)
-```
-
-Locomotion fallback also belongs here if your context has it.
+Locomotion fallback also belongs there if your context has it.
 
 ## 6. Build The GameObjectSyncService
 
@@ -245,10 +226,10 @@ It should not:
 For `Players`, the sync method should read like:
 
 1. read health, identity, combat action, movement state
-2. resolve animation state through `PlayerAnimationStateResolver`
+2. resolve animation state through `PlayerRuntimeProfiles.ResolveAnimationState(...)`
 3. set model attributes
 
-If you find `PlayerGameObjectSyncService` growing `if className == ...` logic, move that logic back into `RuntimeProfiles/`.
+If you find `PlayerGameObjectSyncService` growing `if className == ...` logic, move that logic back into `Runtime/Profiles/`.
 
 ## 7. Build The Combat Adapter
 
@@ -269,7 +250,7 @@ It should not:
 For `Players`, this is the right pattern:
 
 ```lua
-local runtimeProfile = PlayerRuntimeProfileRegistry.GetByClass(className)
+local runtimeProfile = PlayerRuntimeProfiles.GetByVariant(runtimeProfileId)
 
 return combatContext:RegisterCombatActor({
     ActorType = "Player",
@@ -282,11 +263,11 @@ return combatContext:RegisterCombatActor({
 
 ## 8. Extract Combat Resolvers
 
-Any combat callback that is likely to grow should live in `Services/Resolvers/`.
+Any combat callback that is likely to grow should live in `Runtime/Resolvers/`.
 
 Typical extracted modules:
 
-- `PlayerHitTargetResolver.lua`
+- `PlayerHitTargetResolverFactory.lua`
 - `PlayerProjectileResolverFactory.lua`
 - `PlayerMeleeResolverFactory.lua`
 - `PlayerHealResolverFactory.lua`
@@ -294,6 +275,13 @@ Typical extracted modules:
 Use a simple rule:
 
 - If the adapter method only exists to build a callback table or map a touched part back to an entity, move it into `Resolvers/`.
+
+Standard helper contract:
+
+- helper modules should be `*Factory` modules
+- they should expose `Create(dependencies)`
+- `Create(...)` should return a frozen callback table
+- even single-purpose target mapping resolvers should return a callback table, not a bare function
 
 This keeps the adapter readable and makes future combat additions isolated.
 
@@ -346,11 +334,10 @@ The same principle applies on both server and client:
 - [ ] Create `PlayerComponentRegistry`.
 - [ ] Create `PlayerEntityFactory`.
 - [ ] Create `PlayerInstanceFactory`.
-- [ ] Create `PlayerRuntimeProfileRegistry`.
-- [ ] Create `PlayerAnimationStateResolver`.
+- [ ] Create `PlayerRuntimeProfiles`.
 - [ ] Create `PlayerGameObjectSyncService`.
 - [ ] Create `PlayerCombatAdapterService`.
-- [ ] Extract any hit, melee, projectile, or damage resolvers into `Services/Resolvers/`.
+- [ ] Extract any hit, melee, projectile, or damage resolvers into `Runtime/Resolvers/`.
 - [ ] Register the modules in `PlayersContext.lua`.
 - [ ] Register sync and poll systems in `KnitStart()`.
 - [ ] Keep preset action fallback mapping table-driven on the client side.
@@ -367,16 +354,14 @@ The same principle applies on both server and client:
 ## Current Reference Files
 
 - `Structure`
-  - `Infrastructure/RuntimeProfiles/StructureRuntimeProfileRegistry.lua`
-  - `Infrastructure/RuntimeProfiles/StructureAnimationStateResolver.lua`
-  - `Infrastructure/Services/Resolvers/StructureHitTargetResolver.lua`
-  - `Infrastructure/Services/Resolvers/StructureProjectileResolverFactory.lua`
+  - `Infrastructure/Runtime/Profiles/StructureRuntimeProfiles.lua`
+  - `Infrastructure/Runtime/Resolvers/StructureHitTargetResolverFactory.lua`
+  - `Infrastructure/Runtime/Resolvers/StructureProjectileResolverFactory.lua`
   - `Infrastructure/Persistence/StructureGameObjectSyncService.lua`
   - `Infrastructure/Services/StructureCombatAdapterService.lua`
 - `Enemy`
-  - `Infrastructure/RuntimeProfiles/EnemyRuntimeProfileRegistry.lua`
-  - `Infrastructure/RuntimeProfiles/EnemyAnimationStateResolver.lua`
-  - `Infrastructure/Services/Resolvers/EnemyHitTargetResolver.lua`
-  - `Infrastructure/Services/Resolvers/EnemyMeleeResolverFactory.lua`
+  - `Infrastructure/Runtime/Profiles/EnemyRuntimeProfiles.lua`
+  - `Infrastructure/Runtime/Resolvers/EnemyHitTargetResolverFactory.lua`
+  - `Infrastructure/Runtime/Resolvers/EnemyMeleeResolverFactory.lua`
   - `Infrastructure/Persistence/EnemyGameObjectSyncService.lua`
   - `Infrastructure/Services/EnemyCombatAdapterService.lua`

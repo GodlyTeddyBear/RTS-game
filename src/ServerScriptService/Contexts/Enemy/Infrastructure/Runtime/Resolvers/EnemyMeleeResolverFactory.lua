@@ -1,6 +1,8 @@
 --!strict
 
-local Result = require(game:GetService("ReplicatedStorage").Utilities.Result)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Result = require(ReplicatedStorage.Utilities.Result)
 
 local EnemyMeleeResolverFactory = {}
 
