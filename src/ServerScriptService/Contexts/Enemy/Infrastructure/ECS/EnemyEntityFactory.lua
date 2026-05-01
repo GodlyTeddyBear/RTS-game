@@ -183,6 +183,11 @@ function EnemyEntityFactory:ApplyDamage(entity: number, amount: number): boolean
 	return nextHp <= 0
 end
 
+function EnemyEntityFactory:MarkDirty(entity: number)
+	self:RequireReady()
+	self:_Add(entity, self._components.DirtyTag)
+end
+
 function EnemyEntityFactory:UpdatePosition(entity: number, cframe: CFrame)
 	self:SetTransformCFrame(entity, cframe)
 end

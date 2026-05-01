@@ -126,7 +126,22 @@ end
 function UnitContext:KnitStart()
 	UnitBaseContext:KnitStart()
 	UnitBaseContext:RegisterSyncSystem("_syncService", nil, "UnitSync")
-	self._combatAdapterService:RegisterActorType()
+	self._combatAdapterService:ConfigureRuntimeOwner(self)
+	local registerActorTypeResult = self._combatAdapterService:RegisterActorType()
+	if not registerActorTypeResult.success then
+		Result.MentionError("Unit:KnitStart", "Failed to register unit combat actor type", {
+			CauseType = registerActorTypeResult.type,
+			CauseMessage = registerActorTypeResult.message,
+			Details = registerActorTypeResult.data,
+		}, registerActorTypeResult.type)
+		error(
+			string.format(
+				"UnitContext failed to register combat actor type on April 30, 2026 startup path: [%s] %s",
+				tostring(registerActorTypeResult.type),
+				tostring(registerActorTypeResult.message)
+			)
+		)
+	end
 
 	UnitBaseContext:OnContextEvent("Run", "RunEnded", function()
 		self:_OnRunEnded()
@@ -183,6 +198,10 @@ end
 
 function UnitContext:GetGameObjectSyncService(): Result.Result<any>
 	return Ok(self._syncService)
+end
+
+function UnitContext:GetSchedulerBindingStatus(targetField: string): Result.Result<any>
+	return Ok(UnitBaseContext:GetSchedulerBindingStatus(targetField))
 end
 
 function UnitContext:_OnRunEnded()

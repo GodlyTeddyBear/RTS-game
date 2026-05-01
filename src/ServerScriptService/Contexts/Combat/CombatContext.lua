@@ -30,6 +30,7 @@ local StopCombatRuntimeCommand = require(script.Parent.Application.Commands.Stop
 
 type CombatActorTypePayload = CombatTypes.CombatActorTypePayload
 type CombatActorPayload = CombatTypes.CombatActorPayload
+type CombatActionState = CombatTypes.CombatActionState
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
@@ -211,6 +212,12 @@ end
 
 function CombatContext:_OnRunWaveStarted(waveNumber: number, isEndless: boolean)
 	Catch(function()
+		Result.MentionEvent("Combat:OnRunWaveStarted", "Received run wave start", {
+			WaveNumber = waveNumber,
+			IsEndless = isEndless,
+			RuntimeStarted = self._combatActorRegistryService:IsRuntimeStarted(),
+			ActorTypeCount = #self._combatActorRegistryService:GetActorTypePayloads(),
+		})
 		Try(self._startCombatCommand:Execute(waveNumber, isEndless))
 		return Ok(nil)
 	end, "Combat:OnRunWaveStarted")
@@ -250,6 +257,10 @@ function CombatContext:GetCombatRuntimeServices(): Result.Result<any>
 		CombatHitResolutionService = self._combatHitResolutionService,
 		ProjectileService = self._projectileService,
 	})
+end
+
+function CombatContext:GetCombatActorActionState(actorHandle: string): Result.Result<CombatActionState?>
+	return Ok(self._combatActorRegistryService:GetActionStateByHandle(actorHandle))
 end
 
 function CombatContext:RegisterActorType(payload: CombatActorTypePayload): Result.Result<boolean>

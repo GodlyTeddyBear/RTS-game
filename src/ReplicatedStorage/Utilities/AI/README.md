@@ -44,7 +44,7 @@ local builtAi = AI.CreateSystem({
 			QueryActiveEntities = function(_frameContext)
 				return enemyEntityFactory:QueryAliveEntities()
 			end,
-			GetBehaviorTree = function(entity)
+			GetCompiledBehaviorTree = function(entity)
 				return enemyEntityFactory:GetBehaviorTree(entity)
 			end,
 			GetActionState = function(entity)
@@ -63,12 +63,17 @@ local builtAi = AI.CreateSystem({
 				enemyEntityFactory:UpdateBTLastTickTime(entity, currentTime)
 			end,
 			ShouldEvaluate = function(entity, currentTime)
-				local tree = enemyEntityFactory:GetBehaviorTree(entity)
-				if tree == nil then
+				local compiledTree = enemyEntityFactory:GetBehaviorTree(entity)
+				if compiledTree == nil then
 					return false
 				end
 
-				return currentTime - tree.LastTickTime >= tree.TickInterval
+				local tickState = enemyTickStateByEntity[entity]
+				if tickState == nil then
+					return false
+				end
+
+				return currentTime - tickState.LastTickTime >= tickState.TickInterval
 			end,
 		}),
 		Actions = Executors,
@@ -136,7 +141,7 @@ local enemyAdapter = AI.CreateAdapter({
 	QueryActiveEntities = function(_frameContext)
 		return enemyEntityFactory:QueryAliveEntities()
 	end,
-	GetBehaviorTree = function(entity)
+	GetCompiledBehaviorTree = function(entity)
 		return enemyEntityFactory:GetBehaviorTree(entity)
 	end,
 	GetActionState = function(entity)
@@ -155,12 +160,17 @@ local enemyAdapter = AI.CreateAdapter({
 		enemyEntityFactory:UpdateBTLastTickTime(entity, currentTime)
 	end,
 	ShouldEvaluate = function(entity, currentTime)
-		local tree = enemyEntityFactory:GetBehaviorTree(entity)
-		if tree == nil then
+		local compiledTree = enemyEntityFactory:GetBehaviorTree(entity)
+		if compiledTree == nil then
 			return false
 		end
 
-		return currentTime - tree.LastTickTime >= tree.TickInterval
+		local tickState = enemyTickStateByEntity[entity]
+		if tickState == nil then
+			return false
+		end
+
+		return currentTime - tickState.LastTickTime >= tickState.TickInterval
 	end,
 })
 

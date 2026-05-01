@@ -37,7 +37,7 @@ local enemyAdapter = AiAdapterFactory.Create({
 	QueryActiveEntities = function(frameContext)
 		return enemyEntityFactory:QueryAliveEntities()
 	end,
-	GetBehaviorTree = function(entity)
+	GetCompiledBehaviorTree = function(entity)
 		return enemyEntityFactory:GetBehaviorTree(entity)
 	end,
 	GetActionState = function(entity)
@@ -56,12 +56,17 @@ local enemyAdapter = AiAdapterFactory.Create({
 		enemyEntityFactory:UpdateBTLastTickTime(entity, currentTime)
 	end,
 	ShouldEvaluate = function(entity, currentTime)
-		local tree = enemyEntityFactory:GetBehaviorTree(entity)
-		if tree == nil then
+		local compiledTree = enemyEntityFactory:GetBehaviorTree(entity)
+		if compiledTree == nil then
 			return false
 		end
 
-		return currentTime - tree.LastTickTime >= tree.TickInterval
+		local tickState = enemyTickStateByEntity[entity]
+		if tickState == nil then
+			return false
+		end
+
+		return currentTime - tickState.LastTickTime >= tickState.TickInterval
 	end,
 })
 ```
@@ -82,7 +87,7 @@ local enemyAdapter = AiAdapterFactory.Create({
 	QueryActiveEntities = function(_frameContext)
 		return enemyEntityFactory:QueryAliveEntities()
 	end,
-	GetBehaviorTree = function(entity)
+	GetCompiledBehaviorTree = function(entity)
 		return enemyEntityFactory:GetBehaviorTree(entity)
 	end,
 	GetActionState = function(entity)
@@ -101,12 +106,17 @@ local enemyAdapter = AiAdapterFactory.Create({
 		enemyEntityFactory:UpdateBTLastTickTime(entity, currentTime)
 	end,
 	ShouldEvaluate = function(entity, currentTime)
-		local tree = enemyEntityFactory:GetBehaviorTree(entity)
-		if tree == nil then
+		local compiledTree = enemyEntityFactory:GetBehaviorTree(entity)
+		if compiledTree == nil then
 			return false
 		end
 
-		return currentTime - tree.LastTickTime >= tree.TickInterval
+		local tickState = enemyTickStateByEntity[entity]
+		if tickState == nil then
+			return false
+		end
+
+		return currentTime - tickState.LastTickTime >= tickState.TickInterval
 	end,
 })
 ```
@@ -119,7 +129,7 @@ local structureAdapter = AiAdapterFactory.Create({
 	QueryActiveEntities = function(_frameContext)
 		return structureEntityFactory:QueryActiveEntities()
 	end,
-	GetBehaviorTree = function(entity)
+	GetCompiledBehaviorTree = function(entity)
 		return structureEntityFactory:GetBehaviorTree(entity)
 	end,
 	GetActionState = function(entity)
@@ -138,12 +148,17 @@ local structureAdapter = AiAdapterFactory.Create({
 		structureEntityFactory:UpdateBTLastTickTime(entity, currentTime)
 	end,
 	ShouldEvaluate = function(entity, currentTime)
-		local tree = structureEntityFactory:GetBehaviorTree(entity)
-		if tree == nil then
+		local compiledTree = structureEntityFactory:GetBehaviorTree(entity)
+		if compiledTree == nil then
 			return false
 		end
 
-		return currentTime - tree.LastTickTime >= tree.TickInterval
+		local tickState = structureTickStateByEntity[entity]
+		if tickState == nil then
+			return false
+		end
+
+		return currentTime - tickState.LastTickTime >= tickState.TickInterval
 	end,
 })
 ```
@@ -152,5 +167,5 @@ local structureAdapter = AiAdapterFactory.Create({
 
 - The utility does not inspect JECS or behavior-tree payloads itself.
 - The utility does not assume method names on entity factories.
-- `ShouldEvaluate` stays fully caller-owned in v1.
+- `ShouldEvaluate` and `UpdateLastTickTime` stay fully caller-owned in v1, including tick interval and last-tick persistence.
 - This is a bridge-builder, not a base class and not a lifecycle owner.

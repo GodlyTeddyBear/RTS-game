@@ -169,8 +169,24 @@ end
 ]=]
 function EnemyContext:KnitStart()
 	EnemyBaseContext:KnitStart()
+	EnemyBaseContext:RegisterPollSystem("_syncService", nil, "EnemySync")
 	EnemyBaseContext:RegisterSyncSystem("_syncService", nil, "EnemySync")
-	self._combatAdapterService:RegisterActorType()
+	self._combatAdapterService:ConfigureRuntimeOwner(self)
+	local registerActorTypeResult = self._combatAdapterService:RegisterActorType()
+	if not registerActorTypeResult.success then
+		Result.MentionError("Enemy:KnitStart", "Failed to register enemy combat actor type", {
+			CauseType = registerActorTypeResult.type,
+			CauseMessage = registerActorTypeResult.message,
+			Details = registerActorTypeResult.data,
+		}, registerActorTypeResult.type)
+		error(
+			string.format(
+				"EnemyContext failed to register combat actor type on April 30, 2026 startup path: [%s] %s",
+				tostring(registerActorTypeResult.type),
+				tostring(registerActorTypeResult.message)
+			)
+		)
+	end
 
 	-- Forward wave spawns into the spawn command so the context owns the creation path.
 	self._spawnConnection = GameEvents.Bus:On(
@@ -341,6 +357,10 @@ end
 ]=]
 function EnemyContext:GetGameObjectSyncService(): Result.Result<any>
 	return Ok(self._syncService)
+end
+
+function EnemyContext:GetSchedulerBindingStatus(targetField: string): Result.Result<any>
+	return Ok(EnemyBaseContext:GetSchedulerBindingStatus(targetField))
 end
 
 --[=[

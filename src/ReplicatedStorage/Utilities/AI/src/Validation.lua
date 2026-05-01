@@ -42,6 +42,48 @@ function Validation.ValidateRegistration(registration: TActorRegistration)
 	Validation.ValidateAdapter(registration.Adapter)
 end
 
+function Validation.ValidateSemanticRequirements(requirements: Types.TSemanticRequirements)
+	assert(type(requirements) == "table", "AI semantic requirements must be a table")
+
+	if requirements.FactsDependOnPolling ~= nil then
+		assert(
+			type(requirements.FactsDependOnPolling) == "boolean",
+			"AI semantic requirements FactsDependOnPolling must be a boolean"
+		)
+	end
+
+	if requirements.AttributesDependOnProjection ~= nil then
+		assert(
+			type(requirements.AttributesDependOnProjection) == "boolean",
+			"AI semantic requirements AttributesDependOnProjection must be a boolean"
+		)
+	end
+end
+
+function Validation.ValidateRuntimeBinding(runtimeBinding: Types.TRuntimeBinding)
+	assert(type(runtimeBinding) == "table", "AI runtime binding must be a table")
+	assert(
+		type(runtimeBinding.ServiceField) == "string" and #runtimeBinding.ServiceField > 0,
+		"AI runtime binding ServiceField must be a non-empty string"
+	)
+
+	if runtimeBinding.PollPhase ~= nil then
+		assert(type(runtimeBinding.PollPhase) == "string" and #runtimeBinding.PollPhase > 0, "AI runtime binding PollPhase must be a non-empty string")
+	end
+
+	if runtimeBinding.SyncPhase ~= nil then
+		assert(type(runtimeBinding.SyncPhase) == "string" and #runtimeBinding.SyncPhase > 0, "AI runtime binding SyncPhase must be a non-empty string")
+	end
+end
+
+local function _RequiresRuntimeBinding(requirements: Types.TSemanticRequirements?): boolean
+	if requirements == nil then
+		return false
+	end
+
+	return requirements.FactsDependOnPolling == true or requirements.AttributesDependOnProjection == true
+end
+
 function Validation.ValidateActorBundle(bundle: TActorBundle)
 	assert(type(bundle) == "table", "AI actor bundle must be a table")
 	Validation.ValidateActorType(bundle.ActorType)
@@ -72,6 +114,23 @@ function Validation.ValidateActorBundle(bundle: TActorBundle)
 
 	if bundle.InitializeActionState ~= nil then
 		assert(type(bundle.InitializeActionState) == "boolean", "AI actor bundle InitializeActionState must be a boolean")
+	end
+
+	if bundle.SemanticRequirements ~= nil then
+		Validation.ValidateSemanticRequirements(bundle.SemanticRequirements)
+	end
+
+	if bundle.RuntimeBinding ~= nil then
+		Validation.ValidateRuntimeBinding(bundle.RuntimeBinding)
+	end
+
+	if _RequiresRuntimeBinding(bundle.SemanticRequirements) then
+		assert(
+			bundle.RuntimeBinding ~= nil,
+			("AI actor bundle '%s' requires RuntimeBinding when semantic requirements declare polling or projection dependence"):format(
+				bundle.ActorType
+			)
+		)
 	end
 end
 

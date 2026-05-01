@@ -173,7 +173,22 @@ end
 ]=]
 function StructureContext:KnitStart()
 	StructureBaseContext:KnitStart()
-	self._combatAdapterService:RegisterActorType()
+	self._combatAdapterService:ConfigureRuntimeOwner(self)
+	local registerActorTypeResult = self._combatAdapterService:RegisterActorType()
+	if not registerActorTypeResult.success then
+		Result.MentionError("Structure:KnitStart", "Failed to register structure combat actor type", {
+			CauseType = registerActorTypeResult.type,
+			CauseMessage = registerActorTypeResult.message,
+			Details = registerActorTypeResult.data,
+		}, registerActorTypeResult.type)
+		error(
+			string.format(
+				"StructureContext failed to register combat actor type on April 30, 2026 startup path: [%s] %s",
+				tostring(registerActorTypeResult.type),
+				tostring(registerActorTypeResult.message)
+			)
+		)
+	end
 
 	-- Register new placements as ECS entities as soon as PlacementContext announces them.
 	self._structurePlacedConnection = self._placementContext.StructurePlaced:Connect(function(record: StructureRecord)
@@ -292,6 +307,10 @@ end
 ]=]
 function StructureContext:GetGameObjectSyncService(): Result.Result<any>
 	return Ok(self._gameObjectSyncService)
+end
+
+function StructureContext:GetSchedulerBindingStatus(targetField: string): Result.Result<any>
+	return Ok(StructureBaseContext:GetSchedulerBindingStatus(targetField))
 end
 
 function StructureContext:_BeforeDestroy()

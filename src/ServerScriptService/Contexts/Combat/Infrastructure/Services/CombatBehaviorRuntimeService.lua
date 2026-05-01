@@ -36,33 +36,70 @@ function CombatBehaviorRuntimeService:StartRuntime(): Result.Result<boolean>
 		return Err("RuntimeAlreadyStarted", Errors.RUNTIME_ALREADY_STARTED)
 	end
 
-	if not self._actorRegistryService:HasActorTypes() then
+	local actorTypePayloads = self._actorRegistryService:GetActorTypePayloads()
+	if #actorTypePayloads == 0 then
 		return Err("RuntimeStartFailed", Errors.RUNTIME_START_FAILED, {
 			Reason = "NoActorTypesRegistered",
 		})
 	end
 
+	local actorTypeNames = {}
+	for _, actorTypePayload in ipairs(actorTypePayloads) do
+		table.insert(actorTypeNames, actorTypePayload.ActorType)
+	end
+
+	Result.MentionEvent("Combat:BehaviorRuntime", "Starting combat runtime", {
+		ActorTypeCount = #actorTypePayloads,
+		ActorTypes = actorTypeNames,
+	})
+
+	local buildStage = "BuildRuntimeInputs"
 	local didBuild, buildResult = pcall(function()
+		buildStage = "BuildRuntimeInputs"
 		local mergedInputs = self:_BuildRuntimeInputs()
+		buildStage = "CreateRuntime"
 		local runtime = AI.CreateRuntime({
 			Conditions = mergedInputs.Conditions,
 			Commands = mergedInputs.Commands,
 			Hooks = mergedInputs.Hooks,
 			ErrorSink = function(payload: any)
-				Result.MentionError("Combat:BehaviorRuntime", "AI runtime defect", {
-					Stage = payload.Stage,
-					ActorType = payload.ActorType,
-					ActorLabel = payload.ActorLabel,
-					Entity = payload.Entity,
-					CauseType = payload.ErrorType,
-					CauseMessage = payload.ErrorMessage,
-					Details = payload.Details,
-				}, payload.ErrorType)
+				local actorType = tostring(payload.ActorType or "UnknownActorType")
+				local stage = tostring(payload.Stage or "UnknownStage")
+				local errorType = tostring(payload.ErrorType or "UnknownError")
+				local causeMessage = tostring(payload.ErrorMessage or "No cause message")
+				local actorDescriptor = if payload.ActorLabel ~= nil
+					then string.format("%s (%s)", actorType, tostring(payload.ActorLabel))
+					else actorType
+				local defectMessage = string.format(
+					"AI defect [%s] %s [%s]: %s",
+					stage,
+					actorDescriptor,
+					errorType,
+					causeMessage
+				)
+				Result.MentionError(
+					"Combat:BehaviorRuntime",
+					defectMessage,
+					{
+						Summary = defectMessage,
+						RuntimeStage = stage,
+						Actor = actorDescriptor,
+						ActorType = actorType,
+						ActorLabel = payload.ActorLabel,
+						Entity = payload.Entity,
+						ErrorType = errorType,
+						CauseMessage = causeMessage,
+						DefectDetails = payload.Details,
+					},
+					payload.ErrorType
+				)
 			end,
 		})
 
+		buildStage = "RegisterExecutors"
 		runtime:RegisterActions(mergedInputs.Executors)
-		for _, actorTypePayload in ipairs(self._actorRegistryService:GetActorTypePayloads()) do
+		for _, actorTypePayload in ipairs(actorTypePayloads) do
+			buildStage = "RegisterActorType:" .. actorTypePayload.ActorType
 			runtime:RegisterActorType(actorTypePayload.ActorType, self:_CreateRegistryAdapter(actorTypePayload.ActorType))
 		end
 
@@ -70,13 +107,25 @@ function CombatBehaviorRuntimeService:StartRuntime(): Result.Result<boolean>
 	end)
 
 	if not didBuild then
+		Result.MentionError("Combat:BehaviorRuntime", "Combat runtime build failed", {
+			Stage = buildStage,
+			ActorTypeCount = #actorTypePayloads,
+			ActorTypes = actorTypeNames,
+			CauseMessage = buildResult,
+		}, "RuntimeStartFailed")
 		return Err("RuntimeStartFailed", Errors.RUNTIME_START_FAILED, {
+			Stage = buildStage,
 			CauseMessage = buildResult,
 		})
 	end
 
 	self._runtime = buildResult
 	self._actorRegistryService:SetRuntimeStarted(true)
+
+	Result.MentionSuccess("Combat:BehaviorRuntime", "Combat runtime started", {
+		ActorTypeCount = #actorTypePayloads,
+		ActorTypes = actorTypeNames,
+	})
 
 	return self:_RegisterQueuedActors()
 end
@@ -150,11 +199,27 @@ function CombatBehaviorRuntimeService:_RegisterQueuedActors(): Result.Result<boo
 	for _, payload in ipairs(self._actorRegistryService:ConsumePendingActorPayloads()) do
 		local behaviorTreeResult = self:BuildTree(payload.BehaviorDefinition)
 		if not behaviorTreeResult.success then
+			Result.MentionError("Combat:BehaviorRuntime", "Queued actor behavior tree build failed", {
+				Stage = "BuildTree",
+				ActorType = payload.ActorType,
+				ActorHandle = payload.ActorHandle,
+				CauseType = behaviorTreeResult.type,
+				CauseMessage = behaviorTreeResult.message,
+				Details = behaviorTreeResult.data,
+			}, behaviorTreeResult.type)
 			return behaviorTreeResult
 		end
 
 		local registerResult = self._actorRegistryService:RegisterCombatActor(payload, behaviorTreeResult.value)
 		if not registerResult.success then
+			Result.MentionError("Combat:BehaviorRuntime", "Queued actor registration failed", {
+				Stage = "RegisterQueuedActor",
+				ActorType = payload.ActorType,
+				ActorHandle = payload.ActorHandle,
+				CauseType = registerResult.type,
+				CauseMessage = registerResult.message,
+				Details = registerResult.data,
+			}, registerResult.type)
 			return registerResult
 		end
 	end
@@ -185,13 +250,18 @@ end
 function CombatBehaviorRuntimeService:_MergeNamedRegistry(
 	target: { [string]: any },
 	source: { [string]: any },
-	_actorType: string,
+	actorType: string,
 	registryLabel: string
 )
 	for key, value in pairs(source) do
 		assert(
 			target[key] == nil,
-			string.format("Combat %s '%s' is registered more than once; namespace actor actions by context", registryLabel, key)
+			string.format(
+				"Combat %s '%s' from actor type '%s' is registered more than once; namespace actor actions by context",
+				registryLabel,
+				key,
+				actorType
+			)
 		)
 		target[key] = value
 	end
@@ -213,8 +283,8 @@ function CombatBehaviorRuntimeService:_CreateRegistryAdapter(actorType: string):
 		QueryActiveEntities = function(_frameContext: any): { number }
 			return self._actorRegistryService:QueryActiveRuntimeIds(actorType)
 		end,
-		GetBehaviorTree = function(runtimeId: number): any?
-			return self._actorRegistryService:GetBehaviorTree(runtimeId)
+		GetCompiledBehaviorTree = function(runtimeId: number): any?
+			return self._actorRegistryService:GetCompiledBehaviorTree(runtimeId)
 		end,
 		GetActionState = function(runtimeId: number): any?
 			return self._actorRegistryService:GetActionState(runtimeId)

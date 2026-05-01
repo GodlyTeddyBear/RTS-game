@@ -478,6 +478,8 @@ function Builder:AddActorPackage(actorPackage: TActorPackage): TSystemBuilder
 			InitializeActionState = if actorBundle.InitializeActionState ~= nil
 				then actorBundle.InitializeActionState
 				else actorPackage.InitializeActionState,
+			SemanticRequirements = actorBundle.SemanticRequirements,
+			RuntimeBinding = actorBundle.RuntimeBinding,
 		}
 	end
 

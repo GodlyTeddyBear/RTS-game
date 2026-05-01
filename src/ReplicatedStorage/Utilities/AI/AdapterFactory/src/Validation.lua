@@ -7,7 +7,7 @@ type TFactoryConfig = Types.TFactoryConfig
 
 local REQUIRED_CALLBACKS = table.freeze({
 	"QueryActiveEntities",
-	"GetBehaviorTree",
+	"GetCompiledBehaviorTree",
 	"GetActionState",
 	"SetActionState",
 	"ClearActionState",

@@ -50,15 +50,6 @@ local Commands = {
 			task:success()
 		end)
 	end,
-	StructureAttack = function()
-		return BehaviorSystem.Helpers.CreateCommandTask(function(task, context)
-			local actionFactory = _requireActionFactory(context)
-			actionFactory:SetPendingAction(context.Entity, "StructureAttack", {
-				TargetEnemyEntity = context.Facts.TargetEnemyEntity,
-			})
-			task:success()
-		end)
-	end,
 }
 
 return table.freeze(Commands)

@@ -19,7 +19,7 @@ export type TActionState = {
 
 export type TActorAdapter = {
 	QueryActiveEntities: (self: TActorAdapter, frameContext: any) -> { number },
-	GetBehaviorTree: (self: TActorAdapter, entity: number) -> any?,
+	GetCompiledBehaviorTree: (self: TActorAdapter, entity: number) -> any?,
 	GetActionState: (self: TActorAdapter, entity: number) -> TActionState?,
 	SetActionState: (self: TActorAdapter, entity: number, actionState: TActionState) -> (),
 	ClearActionState: (self: TActorAdapter, entity: number) -> (),
@@ -35,18 +35,18 @@ export type TActorAdapter = {
 	@interface TConfig
 	.ActorLabel string? -- Optional label returned through `GetActorLabel()`
 	.QueryActiveEntities (frameContext: any) -> { number } -- Returns the active entities for the current frame
-	.GetBehaviorTree (entity: number) -> any? -- Returns the stored behavior-tree payload
+	.GetCompiledBehaviorTree (entity: number) -> any? -- Returns the compiled behavior tree for the entity
 	.GetActionState (entity: number) -> TActionState? -- Returns the authoritative action state
 	.SetActionState (entity: number, actionState: TActionState) -> () -- Persists the resolved action state
 	.ClearActionState (entity: number) -> () -- Clears invalid or failed action state
 	.SetPendingAction (entity: number, actionId: string, actionData: any?) -> () -- Writes pending action requests during tree evaluation
-	.UpdateLastTickTime (entity: number, currentTime: number) -> () -- Stores the last successful tree-evaluation timestamp
-	.ShouldEvaluate (entity: number, currentTime: number) -> boolean -- Returns whether the entity should evaluate this frame
+	.UpdateLastTickTime (entity: number, currentTime: number) -> () -- Stores the last successful tree-evaluation timestamp owned by the adapter
+	.ShouldEvaluate (entity: number, currentTime: number) -> boolean -- Returns whether the entity should evaluate this frame based on adapter-owned scheduling state
 ]=]
 export type TConfig = {
 	ActorLabel: string?,
 	QueryActiveEntities: (frameContext: any) -> { number },
-	GetBehaviorTree: (entity: number) -> any?,
+	GetCompiledBehaviorTree: (entity: number) -> any?,
 	GetActionState: (entity: number) -> TActionState?,
 	SetActionState: (entity: number, actionState: TActionState) -> (),
 	ClearActionState: (entity: number) -> (),
@@ -56,7 +56,7 @@ export type TConfig = {
 }
 
 type TFactoryQueryActiveEntities = string | ((factory: any, frameContext: any) -> { number })
-type TFactoryGetBehaviorTree = string | ((factory: any, entity: number) -> any?)
+type TFactoryGetCompiledBehaviorTree = string | ((factory: any, entity: number) -> any?)
 type TFactoryGetActionState = string | ((factory: any, entity: number) -> TActionState?)
 type TFactorySetActionState = string | ((factory: any, entity: number, actionState: TActionState) -> ())
 type TFactoryClearActionState = string | ((factory: any, entity: number) -> ())
@@ -68,7 +68,7 @@ export type TFactoryConfig = {
 	ActorLabel: string?,
 	Factory: any,
 	QueryActiveEntities: TFactoryQueryActiveEntities,
-	GetBehaviorTree: TFactoryGetBehaviorTree,
+	GetCompiledBehaviorTree: TFactoryGetCompiledBehaviorTree,
 	GetActionState: TFactoryGetActionState,
 	SetActionState: TFactorySetActionState,
 	ClearActionState: TFactoryClearActionState,

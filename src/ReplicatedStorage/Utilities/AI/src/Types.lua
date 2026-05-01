@@ -49,6 +49,17 @@ export type TActionPack = {
 	Definitions: { [string]: any },
 }
 
+export type TSemanticRequirements = {
+	FactsDependOnPolling: boolean?,
+	AttributesDependOnProjection: boolean?,
+}
+
+export type TRuntimeBinding = {
+	ServiceField: string,
+	PollPhase: string?,
+	SyncPhase: string?,
+}
+
 export type TActorBundle = {
 	ActorType: string,
 	Adapter: TActorAdapter,
@@ -58,6 +69,8 @@ export type TActorBundle = {
 	Hooks: { any }?,
 	TickInterval: number?,
 	InitializeActionState: boolean?,
+	SemanticRequirements: TSemanticRequirements?,
+	RuntimeBinding: TRuntimeBinding?,
 }
 
 export type TActorPackage = {

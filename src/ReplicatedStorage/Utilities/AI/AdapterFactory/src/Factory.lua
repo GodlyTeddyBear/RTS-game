@@ -46,8 +46,8 @@ function Factory.Create(config: TConfig): TActorAdapter
 		QueryActiveEntities = function(_self: TActorAdapter, frameContext: any): { number }
 			return config.QueryActiveEntities(frameContext)
 		end,
-		GetBehaviorTree = function(_self: TActorAdapter, entity: number): any?
-			return config.GetBehaviorTree(entity)
+		GetCompiledBehaviorTree = function(_self: TActorAdapter, entity: number): any?
+			return config.GetCompiledBehaviorTree(entity)
 		end,
 		GetActionState = function(_self: TActorAdapter, entity: number): TActionState?
 			return config.GetActionState(entity)
@@ -93,7 +93,7 @@ function Factory.CreateFactory(config: TFactoryConfig): TActorAdapter
 	return Factory.Create({
 		ActorLabel = config.ActorLabel,
 		QueryActiveEntities = _BuildFactoryInvoker(factoryObject, config.QueryActiveEntities),
-		GetBehaviorTree = _BuildFactoryInvoker(factoryObject, config.GetBehaviorTree),
+		GetCompiledBehaviorTree = _BuildFactoryInvoker(factoryObject, config.GetCompiledBehaviorTree),
 		GetActionState = _BuildFactoryInvoker(factoryObject, config.GetActionState),
 		SetActionState = _BuildFactoryInvoker(factoryObject, config.SetActionState),
 		ClearActionState = _BuildFactoryInvoker(factoryObject, config.ClearActionState),

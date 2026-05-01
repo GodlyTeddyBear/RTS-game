@@ -101,13 +101,15 @@ Hooks should be read-only composition points. They should not mutate authoritati
 Required methods:
 
 - `QueryActiveEntities(frameContext) -> {number}`
-- `GetBehaviorTree(entity) -> any?`
+- `GetCompiledBehaviorTree(entity) -> any?`
 - `GetActionState(entity) -> any?`
 - `SetActionState(entity, actionState) -> ()`
 - `ClearActionState(entity) -> ()`
 - `SetPendingAction(entity, actionId, actionData) -> ()`
 - `UpdateLastTickTime(entity, currentTime) -> ()`
 - `ShouldEvaluate(entity, currentTime) -> boolean`
+
+`GetCompiledBehaviorTree` returns only the compiled tree. Tick interval, last-tick time, and gating decisions stay adapter-owned through `ShouldEvaluate` and `UpdateLastTickTime`.
 
 Optional methods:
 

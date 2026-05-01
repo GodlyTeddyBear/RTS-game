@@ -252,7 +252,7 @@ function Runtime:_BuildEntityStates(
 
 		-- Pull hook output before tree execution so facts and services are ready for the behavior tree.
 		local hookOutcome = self:_BuildHookOutcome(actorType, entity, adapter, frameContext, defects)
-		local behaviorTree = adapter:GetBehaviorTree(entity)
+		local behaviorTree = adapter:GetCompiledBehaviorTree(entity)
 
 		table.insert(entityStates, {
 			Entity = entity,
@@ -404,7 +404,7 @@ function Runtime:_RunTreePhase(
 
 		local treeContext = _BuildTreeContext(entityState.Entity, entityState.ActorType, entityState.Adapter, entityState.HookOutcome)
 		local didRun, runError = pcall(function()
-			entityState.BehaviorTree.TreeInstance:run(treeContext)
+			entityState.BehaviorTree:run(treeContext)
 		end)
 
 		if not didRun then

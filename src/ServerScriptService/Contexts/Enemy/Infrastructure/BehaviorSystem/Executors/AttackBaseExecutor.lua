@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BaseExecutor = require(ReplicatedStorage.Utilities.BaseExecutor)
 local HitboxConfig = require(ReplicatedStorage.Contexts.Combat.Config.HitboxConfig)
+local Result = require(ReplicatedStorage.Utilities.Result)
 
 local ACTIVATION_TIMEOUT_SECONDS = 0.35
 
@@ -42,6 +43,43 @@ local function _activationResult(success: boolean, reason: string, source: strin
 		reason = reason,
 		source = source,
 	}
+end
+
+local function _mentionExecutorMilestone(label: string, message: string, entity: number, services: any, extra: { [string]: any }?)
+	local payload = {
+		Entity = entity,
+		CurrentTime = services.CurrentTime,
+	}
+
+	local modelRef = services.EnemyEntityFactory:GetModelRef(entity)
+	if modelRef ~= nil and modelRef.Model ~= nil then
+		payload.Model = modelRef.Model:GetFullName()
+	end
+
+	if extra ~= nil then
+		for key, value in pairs(extra) do
+			payload[key] = value
+		end
+	end
+
+	Result.MentionEvent(label, message, payload)
+end
+
+local function _mentionExecutorStateChange(
+	self: any,
+	entity: number,
+	services: any,
+	key: string,
+	value: string,
+	message: string,
+	extra: { [string]: any }?
+)
+	if self:GetEntityValue(entity, key) == value then
+		return
+	end
+
+	self:SetEntityValue(entity, key, value)
+	_mentionExecutorMilestone("Enemy:AttackBaseExecutor", message, entity, services, extra)
 end
 
 -- Records where the activation came from so debugging and fallback timing stay visible in Studio.
@@ -86,6 +124,7 @@ local function _cleanupAttackBaseState(self: any, entity: number, services: any)
 	self:ClearEntityValue(entity, "AttackStartedAt")
 	self:ClearEntityValue(entity, "HitLanded")
 	self:ClearEntityValue(entity, "PendingHitboxActivation")
+	self:ClearEntityValue(entity, "DebugCanStartReason")
 	services.EnemyEntityFactory:ClearTarget(entity)
 end
 
@@ -100,13 +139,21 @@ end
 ]=]
 function AttackBaseExecutor:CanStart(entity: number, _data: any?, services: any): (boolean, string?)
 	if not services.BaseEntityFactory:IsActive() then
+		_mentionExecutorStateChange(self, entity, services, "DebugCanStartReason", "InactiveBase", "Base attack start blocked", {
+			Reason = "InactiveBase",
+		})
 		return false, "InactiveBase"
 	end
 
 	if not _isTargetInRange(entity, services) then
+		_mentionExecutorStateChange(self, entity, services, "DebugCanStartReason", "BaseOutOfRange", "Base attack start blocked", {
+			Reason = "BaseOutOfRange",
+		})
 		return false, "BaseOutOfRange"
 	end
 
+	self:ClearEntityValue(entity, "DebugCanStartReason")
+	_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack executor can start", entity, services, nil)
 	return true, nil
 end
 
@@ -127,6 +174,8 @@ function AttackBaseExecutor:OnStart(entity: number, _data: any?, services: any)
 	self:SetEntityValue(entity, "ActiveHitboxHandle", nil)
 	self:SetEntityValue(entity, "HitboxStartedAt", nil)
 	self:SetEntityValue(entity, "PendingHitboxActivation", false)
+	self:ClearEntityValue(entity, "DebugCanStartReason")
+	_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack executor started", entity, services, nil)
 end
 
 --[=[
@@ -190,6 +239,10 @@ local function _activateHitboxInternal(
 	services.EnemyEntityFactory:SetLastAttackTime(entity, services.CurrentTime)
 	services.EnemyEntityFactory:PromoteToCommitted(entity)
 	_recordActivationSource(entity, services, source)
+	_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack hitbox activated", entity, services, {
+		Source = source,
+		HitboxHandle = activatedHitbox.handle,
+	})
 
 	return _activationResult(true, "Activated", source)
 end
@@ -281,10 +334,17 @@ function AttackBaseExecutor:OnTick(entity: number, _dt: number, services: any): 
 
 	local resolutionResult = services.CombatHitResolutionService:ResolveEnemyMeleeHits(activeHitboxHandle, entity, damage)
 	if not resolutionResult.success then
+		_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack damage resolution failed", entity, services, {
+			Reason = "ApplyDamageFailed",
+		})
 		return self:Fail(entity, "ApplyDamageFailed")
 	end
 	if resolutionResult.value.AppliedHits > 0 then
 		self:SetEntityValue(entity, "HitLanded", true)
+		_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack applied hit", entity, services, {
+			AppliedHits = resolutionResult.value.AppliedHits,
+			HitboxHandle = activeHitboxHandle,
+		})
 	end
 
 	local startedAt = self:GetEntityValue(entity, "HitboxStartedAt")
@@ -298,8 +358,14 @@ function AttackBaseExecutor:OnTick(entity: number, _dt: number, services: any): 
 		self:ClearEntityValue(entity, "ActiveHitboxHandle")
 		self:ClearEntityValue(entity, "HitboxStartedAt")
 		if self:GetEntityValue(entity, "HitLanded") == true then
+			_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack executor completed successfully", entity, services, {
+				HitboxHandle = activeHitboxHandle,
+			})
 			return self:Success()
 		end
+		_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack executor expired without a hit", entity, services, {
+			HitboxHandle = activeHitboxHandle,
+		})
 		return self:Fail(entity, "HitboxExpired")
 	end
 

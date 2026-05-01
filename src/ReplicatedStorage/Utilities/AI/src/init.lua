@@ -38,6 +38,8 @@ export type TAdapterConfig = Types.TAdapterConfig
 export type TFactoryAdapterConfig = Types.TFactoryAdapterConfig
 export type TActionPack = Types.TActionPack
 export type TActorRegistration = Types.TActorRegistration
+export type TSemanticRequirements = Types.TSemanticRequirements
+export type TRuntimeBinding = Types.TRuntimeBinding
 export type TActorBundle = Types.TActorBundle
 export type TActorPackage = Types.TActorPackage
 export type TBehaviorCatalog = Types.TBehaviorCatalog
@@ -155,6 +157,8 @@ function AI.CreateActorBundle(bundle: TActorBundle): TActorBundle
 		Hooks = bundle.Hooks,
 		TickInterval = bundle.TickInterval,
 		InitializeActionState = bundle.InitializeActionState,
+		SemanticRequirements = bundle.SemanticRequirements,
+		RuntimeBinding = bundle.RuntimeBinding,
 	})
 end
 

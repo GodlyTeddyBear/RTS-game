@@ -9,7 +9,7 @@ type TFrameContext = Types.TFrameContext
 
 local REQUIRED_ADAPTER_METHODS = table.freeze({
 	"QueryActiveEntities",
-	"GetBehaviorTree",
+	"GetCompiledBehaviorTree",
 	"GetActionState",
 	"SetActionState",
 	"ClearActionState",

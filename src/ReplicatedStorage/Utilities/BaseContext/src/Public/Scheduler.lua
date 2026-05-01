@@ -16,6 +16,44 @@ local MethodResolver = require(script.Parent.Parent.Internal.MethodResolver)
 
 local SchedulerMethods = {}
 
+local function _EnsureRegistrationBucket(self: any, targetField: string): any
+	local registrations = self._schedulerRegistrations
+	local bucket = registrations[targetField]
+	if bucket ~= nil then
+		return bucket
+	end
+
+	bucket = {
+		Poll = {},
+		Sync = {},
+	}
+	registrations[targetField] = bucket
+	return bucket
+end
+
+local function _RecordRegistration(self: any, targetField: string, registrationKind: "Poll" | "Sync", phaseName: string)
+	local bucket = _EnsureRegistrationBucket(self, targetField)
+	bucket[registrationKind][phaseName] = true
+end
+
+local function _GetSortedPhaseNames(phasesByName: { [string]: boolean }): { string }
+	local phaseNames = {}
+	for phaseName in phasesByName do
+		table.insert(phaseNames, phaseName)
+	end
+	table.sort(phaseNames)
+	return phaseNames
+end
+
+local function _BuildMethodStatus(target: any, methodName: string, registeredPhases: { [string]: boolean }): any
+	local method = if target ~= nil then target[methodName] else nil
+	return table.freeze({
+		MethodName = methodName,
+		HasMethod = type(method) == "function",
+		RegisteredPhases = table.freeze(_GetSortedPhaseNames(registeredPhases)),
+	})
+end
+
 --[=[
 	Registers a custom server scheduler callback.
 	@within Scheduler
@@ -57,6 +95,7 @@ end
 ]=]
 function SchedulerMethods:RegisterPollSystem(targetField: string, methodName: string?, phaseName: string)
 	self:RegisterMethodSystem(phaseName, targetField, MethodResolver.ResolveMethodName(methodName, Config.DefaultPollMethod, "BaseContext scheduler methodName"))
+	_RecordRegistration(self, targetField, "Poll", phaseName)
 end
 
 --[=[
@@ -99,6 +138,29 @@ end
 ]=]
 function SchedulerMethods:RegisterSyncSystem(targetField: string, methodName: string?, phaseName: string)
 	self:RegisterMethodSystem(phaseName, targetField, MethodResolver.ResolveMethodName(methodName, Config.DefaultSyncMethod, "BaseContext scheduler methodName"))
+	_RecordRegistration(self, targetField, "Sync", phaseName)
+end
+
+--[=[
+	Returns scheduler binding status for one cached service field.
+	@within Scheduler
+	@param targetField string -- Service field containing the target object.
+	@return any -- Read-only status describing method surfaces and registered phases.
+]=]
+function SchedulerMethods:GetSchedulerBindingStatus(targetField: string): any
+	Assertions.AssertNonEmptyString(targetField, "BaseContext scheduler targetField")
+
+	local target = self._service[targetField]
+	local bucket = self._schedulerRegistrations[targetField]
+	local pollPhases = if bucket ~= nil then bucket.Poll else {}
+	local syncPhases = if bucket ~= nil then bucket.Sync else {}
+
+	return table.freeze({
+		TargetField = targetField,
+		TargetExists = target ~= nil,
+		Poll = _BuildMethodStatus(target, Config.DefaultPollMethod, pollPhases),
+		Sync = _BuildMethodStatus(target, Config.DefaultSyncMethod, syncPhases),
+	})
 end
 
 --[=[

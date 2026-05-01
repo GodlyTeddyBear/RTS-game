@@ -2,13 +2,11 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 local BehaviorConfig = require(ReplicatedStorage.Contexts.Combat.Config.BehaviorConfig)
 local HitboxConfig = require(ReplicatedStorage.Contexts.Combat.Config.HitboxConfig)
-local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local Nodes = require(script.Parent.Parent.BehaviorSystem.Nodes)
 local Executors = require(script.Parent.Parent.BehaviorSystem.Executors)
 local SwarmBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.SwarmBehavior)
@@ -27,6 +25,7 @@ EnemyCombatAdapterService.__index = EnemyCombatAdapterService
 function EnemyCombatAdapterService.new()
 	local self = setmetatable({}, EnemyCombatAdapterService)
 	self._configuredCombatServices = false
+	self._runtimeOwner = nil
 	return self
 end
 
@@ -51,19 +50,28 @@ function EnemyCombatAdapterService:RegisterActorType(): Result.Result<boolean>
 		Conditions = Nodes.Conditions,
 		Commands = Nodes.Commands,
 		Executors = Executors,
+		SemanticRequirements = {
+			FactsDependOnPolling = true,
+			AttributesDependOnProjection = true,
+		},
+		RuntimeBinding = {
+			ServiceField = "_syncService",
+			PollPhase = "EnemySync",
+			SyncPhase = "EnemySync",
+		},
+		RuntimeOwner = self._runtimeOwner,
 	})
 end
 
 function EnemyCombatAdapterService:RegisterActor(entity: number): Result.Result<string>
-	self:_AssignGoalPosition(entity)
-	self._combatServices.LockOnService:AttachConstraint(entity)
-
 	local identity = self._entityFactory:GetIdentity(entity)
 	local role = self._entityFactory:GetRole(entity)
 	local roleName = if role ~= nil and role.Role ~= nil then role.Role else "Swarm"
 	local behaviorDefinition = EnemyBehaviorDefinitions[roleName] or SwarmBehavior
 	local defaults = BehaviorConfig.DEFAULTS_BY_ROLE[roleName] or BehaviorConfig.DEFAULT
 	local actorHandle = self:_BuildActorHandle(entity)
+	self:_AssignGoalPosition(entity, actorHandle, roleName)
+	self._combatServices.LockOnService:AttachConstraint(entity)
 
 	return self._combatContext:RegisterCombatActor({
 		ActorType = "Enemy",
@@ -90,6 +98,9 @@ function EnemyCombatAdapterService:RegisterActor(entity: number): Result.Result<
 				self._combatServices.MovementService:StopMovement(entity)
 				self._combatServices.LockOnService:DetachConstraint(entity)
 			end,
+			OnActionStateChanged = function(_actionState: any)
+				self._entityFactory:MarkDirty(entity)
+			end,
 			OnActionResult = function(actionResult: any)
 				self:_HandleActionResult(entity, actionResult)
 			end,
@@ -101,6 +112,14 @@ function EnemyCombatAdapterService:UnregisterActor(entity: number): Result.Resul
 	return self._combatContext:UnregisterCombatActor(self:_BuildActorHandle(entity))
 end
 
+function EnemyCombatAdapterService:GetActorHandle(entity: number): string
+	return self:_BuildActorHandle(entity)
+end
+
+function EnemyCombatAdapterService:ConfigureRuntimeOwner(runtimeOwner: any)
+	self._runtimeOwner = runtimeOwner
+end
+
 function EnemyCombatAdapterService:_ConfigureCombatServices()
 	if self._configuredCombatServices then
 		return
@@ -110,7 +129,11 @@ function EnemyCombatAdapterService:_ConfigureCombatServices()
 		return self:_ResolveHitEntity(hitPart)
 	end)
 	self._combatServices.MovementService:ConfigureEnemyEntityFactory(self._entityFactory)
-	self._combatServices.LockOnService:ConfigureFactories(self._entityFactory, self._structureEntityFactory, self._baseEntityFactory)
+	self._combatServices.LockOnService:ConfigureFactories(
+		self._entityFactory,
+		self._structureEntityFactory,
+		self._baseEntityFactory
+	)
 	self._combatServices.CombatHitResolutionService:ConfigureEnemyMeleeResolver({
 		IsBaseActive = function(): boolean
 			return self._baseEntityFactory:IsActive()
@@ -137,9 +160,18 @@ function EnemyCombatAdapterService:_BuildActorHandle(entity: number): string
 	return "Enemy:" .. tostring(entity)
 end
 
-function EnemyCombatAdapterService:_AssignGoalPosition(entity: number)
+function EnemyCombatAdapterService:_AssignGoalPosition(entity: number, actorHandle: string, roleName: string)
 	local baseTargetResult = self._baseContext:GetBaseTargetCFrame()
 	if not baseTargetResult.success or baseTargetResult.value == nil then
+		Result.MentionError("Enemy:RegisterActor", "Enemy goal position could not be assigned", {
+			ActorHandle = actorHandle,
+			Role = roleName,
+			GoalPositionAssigned = false,
+			CauseType = if not baseTargetResult.success then baseTargetResult.type else "MissingBaseTargetCFrame",
+			CauseMessage = if not baseTargetResult.success
+				then baseTargetResult.message
+				else "Base target CFrame was nil during enemy registration",
+		}, if not baseTargetResult.success then baseTargetResult.type else "MissingBaseTargetCFrame")
 		return
 	end
 
@@ -229,7 +261,12 @@ function EnemyCombatAdapterService:_BuildEnemyFactoryProxy(entity: number): any
 		GetAttackCooldown = function(_proxy: any, _runtimeId: number)
 			return factory:GetAttackCooldown(entity)
 		end,
-		SetTarget = function(_proxy: any, _runtimeId: number, targetEntity: number?, targetKind: "Structure" | "Enemy" | "Base")
+		SetTarget = function(
+			_proxy: any,
+			_runtimeId: number,
+			targetEntity: number?,
+			targetKind: "Structure" | "Enemy" | "Base"
+		)
 			factory:SetTarget(entity, targetEntity, targetKind)
 		end,
 		ClearTarget = function(_proxy: any, _runtimeId: number)
@@ -247,10 +284,15 @@ end
 function EnemyCombatAdapterService:_BuildHitboxProxy(entity: number): any
 	local hitboxService = self._combatServices.HitboxService
 	return {
-		CreateAttackHitbox = function(_proxy: any, runtimeId: number, attackerKind: any, config: any)
+		CreateAttackHitbox = function(_proxy: any, _runtimeId: number, attackerKind: any, config: any)
 			local modelRef = self._entityFactory:GetModelRef(entity)
 			local model = if modelRef ~= nil then modelRef.Model else nil
-			return hitboxService:CreateAttackHitboxForModel(runtimeId, attackerKind, model, config or HitboxConfig.AttackStructure)
+			return hitboxService:CreateAttackHitboxForModel(
+				entity,
+				attackerKind,
+				model,
+				config or HitboxConfig.AttackStructure
+			)
 		end,
 		DestroyHitbox = function(_proxy: any, handle: string)
 			hitboxService:DestroyHitbox(handle)
@@ -263,7 +305,13 @@ end
 
 function EnemyCombatAdapterService:_BuildPerceptionProxy(): any
 	return {
-		IsTargetInRange = function(_proxy: any, position: Vector3, attackRange: number, targetKind: any, targetEntity: number?)
+		IsTargetInRange = function(
+			_proxy: any,
+			position: Vector3,
+			attackRange: number,
+			targetKind: any,
+			targetEntity: number?
+		)
 			return self:_IsTargetInRange(position, attackRange, targetKind, targetEntity)
 		end,
 	}
@@ -297,11 +345,25 @@ function EnemyCombatAdapterService:_IsTargetInRange(
 		return false
 	end
 
+	if targetKind == "Base" then
+		local overlappingParts = SpatialQuery.OverlapRadius(
+			position,
+			attackRange,
+			SpatialQuery.Presets.IncludeInstances({ targetInstance })
+		)
+		if #overlappingParts > 0 then
+			return true
+		end
+	end
+
 	return SpatialQuery.IsWithinRaycastRange(
 		position,
 		targetPosition,
 		attackRange,
-		SpatialQuery.MergeOptions(SpatialQuery.Presets.CharactersOnly, SpatialQuery.Presets.IncludeInstances({ targetInstance })),
+		SpatialQuery.MergeOptions(
+			SpatialQuery.Presets.CharactersOnly,
+			SpatialQuery.Presets.IncludeInstances({ targetInstance })
+		),
 		0.05
 	)
 end
@@ -316,17 +378,23 @@ function EnemyCombatAdapterService:_ResolveTargetRaycastData(
 		end
 
 		local baseRef = self._baseEntityFactory:GetInstanceRef()
-		if baseRef == nil then
+		if baseRef == nil or baseRef.Instance == nil then
 			return nil, nil
 		end
 
 		if baseRef.Instance:IsA("Model") then
 			return baseRef.Instance, ModelPlus.GetCenterPosition(baseRef.Instance)
 		end
+
 		if baseRef.Instance:IsA("BasePart") then
 			return baseRef.Instance, baseRef.Instance.Position
 		end
-		return baseRef.Instance, baseRef.Anchor.Position
+
+		if baseRef.Anchor ~= nil then
+			return baseRef.Instance, baseRef.Anchor.Position
+		end
+
+		return nil, nil
 	end
 
 	if targetKind == "Structure" then
@@ -368,34 +436,8 @@ function EnemyCombatAdapterService:_ResolveHitEntity(hitPart: BasePart): any?
 	return nil
 end
 
-function EnemyCombatAdapterService:_HandleActionResult(entity: number, actionResult: any)
+function EnemyCombatAdapterService:_HandleActionResult(entity: number, _actionResult: any)
 	self._combatServices.LockOnService:UpdateAll({ entity })
-
-	if actionResult.TickActionId ~= "Advance" or actionResult.TickStatus ~= "Success" then
-		return
-	end
-
-	local identity = self._entityFactory:GetIdentity(entity)
-	if identity == nil then
-		return
-	end
-
-	local roleConfig = EnemyConfig.Roles[identity.Role]
-	local deathCFrame = self._entityFactory:GetDeathCFrame(entity)
-	if roleConfig == nil or deathCFrame == nil or not self._baseEntityFactory:IsActive() then
-		return
-	end
-
-	if not self:_IsTargetInRange(deathCFrame.Position, roleConfig.AttackRange, "Base", nil) then
-		return
-	end
-
-	self._entityFactory:MarkGoalReached(entity)
-	GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.Role, identity.WaveNumber, deathCFrame)
-	self._baseContext:ApplyDamage(roleConfig.Damage)
-	self:UnregisterActor(entity)
-	self._instanceFactory:DestroyInstance(entity)
-	self._entityFactory:DeleteEntity(entity)
 end
 
 return EnemyCombatAdapterService

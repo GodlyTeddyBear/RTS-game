@@ -81,18 +81,18 @@ export type THookContext = {
 	@within AiRuntimeTypes
 	@interface TActorAdapter
 	.QueryActiveEntities (self: TActorAdapter, frameContext: TFrameContext) -> { number } -- Returns active runtime entities for the frame
-	.GetBehaviorTree (self: TActorAdapter, entity: number) -> any? -- Returns the stored behavior-tree payload
+	.GetCompiledBehaviorTree (self: TActorAdapter, entity: number) -> any? -- Returns the compiled behavior tree for the entity
 	.GetActionState (self: TActorAdapter, entity: number) -> TActionState? -- Returns the authoritative action state
 	.SetActionState (self: TActorAdapter, entity: number, actionState: TActionState) -> () -- Persists the resolved action state
 	.ClearActionState (self: TActorAdapter, entity: number) -> () -- Clears invalid or failed action state
 	.SetPendingAction (self: TActorAdapter, entity: number, actionId: string, actionData: any?) -> () -- Pending-action write surface used by command nodes
-	.UpdateLastTickTime (self: TActorAdapter, entity: number, currentTime: number) -> () -- Stores the last successful tree-evaluation timestamp
-	.ShouldEvaluate (self: TActorAdapter, entity: number, currentTime: number) -> boolean -- Returns whether the entity should evaluate its tree this frame
+	.UpdateLastTickTime (self: TActorAdapter, entity: number, currentTime: number) -> () -- Stores the last successful tree-evaluation timestamp owned by the adapter
+	.ShouldEvaluate (self: TActorAdapter, entity: number, currentTime: number) -> boolean -- Returns whether the entity should evaluate its tree this frame based on adapter-owned scheduling state
 	.GetActorLabel (self: TActorAdapter) -> string? -- Optional diagnostic label used by defects
 ]=]
 export type TActorAdapter = {
 	QueryActiveEntities: (self: TActorAdapter, frameContext: TFrameContext) -> { number },
-	GetBehaviorTree: (self: TActorAdapter, entity: number) -> any?,
+	GetCompiledBehaviorTree: (self: TActorAdapter, entity: number) -> any?,
 	GetActionState: (self: TActorAdapter, entity: number) -> TActionState?,
 	SetActionState: (self: TActorAdapter, entity: number, actionState: TActionState) -> (),
 	ClearActionState: (self: TActorAdapter, entity: number) -> (),

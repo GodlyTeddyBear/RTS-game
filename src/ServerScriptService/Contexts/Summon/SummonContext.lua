@@ -103,7 +103,13 @@ end
 
 function SummonContext:KnitStart()
 	SummonBaseContext:KnitStart()
-	self._combatAdapterService:RegisterActorType()
+	local registerActorTypeResult = self._combatAdapterService:RegisterActorType()
+	if not registerActorTypeResult.success then
+		Result.MentionError("Summon:KnitStart", "Failed to register summon combat actor type", {
+			CauseType = registerActorTypeResult.type,
+			CauseMessage = registerActorTypeResult.message,
+		}, registerActorTypeResult.type)
+	end
 
 	SummonBaseContext:RegisterSchedulerSystem("CombatTick", function()
 		if not self._combatEnabled then

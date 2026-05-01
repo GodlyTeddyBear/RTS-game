@@ -34,9 +34,28 @@ function StartCombat:Execute(waveNumber: number, isEndless: boolean): Result.Res
 		local primaryPlayer = Players:GetPlayers()[1]
 		Ensure(primaryPlayer ~= nil, "MissingPrimaryPlayer", Errors.MISSING_PRIMARY_PLAYER)
 
-		if not self._actorRegistryService:IsRuntimeStarted() then
+		local runtimeStarted = self._actorRegistryService:IsRuntimeStarted()
+		local actorTypePayloads = self._actorRegistryService:GetActorTypePayloads()
+		Result.MentionEvent("Combat:StartCombat", "Processing combat start request", {
+			WaveNumber = waveNumber,
+			IsEndless = isEndless,
+			PrimaryPlayerUserId = primaryPlayer.UserId,
+			RuntimeStarted = runtimeStarted,
+			ActorTypeCount = #actorTypePayloads,
+		})
+
+		if not runtimeStarted then
 			local startResult = self._behaviorRuntimeService:StartRuntime()
 			if not startResult.success then
+				Result.MentionError("Combat:StartCombat", "Combat runtime failed to start", {
+					WaveNumber = waveNumber,
+					IsEndless = isEndless,
+					PrimaryPlayerUserId = primaryPlayer.UserId,
+					ActorTypeCount = #actorTypePayloads,
+					CauseType = startResult.type,
+					CauseMessage = startResult.message,
+					Details = startResult.data,
+				}, startResult.type)
 				return startResult
 			end
 		end

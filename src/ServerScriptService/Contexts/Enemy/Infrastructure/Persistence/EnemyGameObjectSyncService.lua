@@ -4,8 +4,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BaseGameObjectSyncService = require(ReplicatedStorage.Utilities.BaseGameObjectSyncService)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
+local CombatTypes = require(ReplicatedStorage.Contexts.Combat.Types.CombatTypes)
 
 local RUN_SPEED_THRESHOLD = 17
+
+type CombatActionState = CombatTypes.CombatActionState
 
 local EnemyGameObjectSyncService = {}
 EnemyGameObjectSyncService.__index = EnemyGameObjectSyncService
@@ -39,6 +42,16 @@ local function _ComputeAnimationState(pathState: any, role: any, combatAction: a
 	return "Walk"
 end
 
+local function _ResolveCombatRuntimeAction(self: any, entity: number): CombatActionState?
+	local actorHandle = self._combatAdapterService:GetActorHandle(entity)
+	local actionStateResult = self._combatContext:GetCombatActorActionState(actorHandle)
+	if not actionStateResult.success then
+		return nil
+	end
+
+	return actionStateResult.value
+end
+
 function EnemyGameObjectSyncService.new()
 	return setmetatable(BaseGameObjectSyncService.new("Enemy"), EnemyGameObjectSyncService)
 end
@@ -53,6 +66,11 @@ end
 
 function EnemyGameObjectSyncService:_GetInstanceFactoryName(): string?
 	return "EnemyInstanceFactory"
+end
+
+function EnemyGameObjectSyncService:Start(registry: any, _name: string)
+	self._combatContext = registry:Get("CombatContext")
+	self._combatAdapterService = registry:Get("EnemyCombatAdapterService")
 end
 
 function EnemyGameObjectSyncService:_QueryPollEntities(): { number }
@@ -79,7 +97,7 @@ function EnemyGameObjectSyncService:_SyncEntity(entity: number, model: Model)
 	local health = entityFactory:GetHealth(entity)
 	local role = entityFactory:GetRole(entity)
 	local pathState = entityFactory:GetPathState(entity)
-	local combatAction = entityFactory:GetCombatAction(entity)
+	local combatAction = _ResolveCombatRuntimeAction(self, entity)
 
 	if health then
 		self:SetAttributeIfChanged(model, "Health", health.Current)

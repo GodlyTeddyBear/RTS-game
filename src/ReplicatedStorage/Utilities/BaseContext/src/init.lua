@@ -56,6 +56,7 @@ export type TBaseContext = {
 	RegisterTickSystem: (self: TBaseContext, targetField: string, methodName: string?, phaseName: string) -> (),
 	RegisterDeltaTickSystem: (self: TBaseContext, targetField: string, methodName: string?, phaseName: string) -> (),
 	RegisterSyncSystem: (self: TBaseContext, targetField: string, methodName: string?, phaseName: string) -> (),
+	GetSchedulerBindingStatus: (self: TBaseContext, targetField: string) -> any,
 	GetSchedulerDeltaTime: (self: TBaseContext) -> number,
 	OnGameEvent: (self: TBaseContext, eventName: string, callback: (...any) -> (), cacheAs: string?) -> any,
 	GetContextEvent: (self: TBaseContext, contextName: string, eventName: string) -> string,
@@ -110,6 +111,7 @@ function BaseContext.new(service: TContextService, registryContext: RegistryCont
 	self._initializedModules = {}
 	self._janitor = Janitor.new()
 	self._cleanupResults = nil
+	self._schedulerRegistrations = {}
 	self._destroyed = false
 	return self :: any
 end
