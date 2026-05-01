@@ -16,11 +16,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local MiningTypes = require(ReplicatedStorage.Contexts.Mining.Types.MiningTypes)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 
 local MiningECSWorldService = require(script.Parent.Infrastructure.ECS.MiningECSWorldService)
 local MiningComponentRegistry = require(script.Parent.Infrastructure.ECS.MiningComponentRegistry)
 local MiningEntityFactory = require(script.Parent.Infrastructure.ECS.MiningEntityFactory)
+local MiningActorRegistryService = require(script.Parent.Infrastructure.Services.MiningActorRegistryService)
+local MiningBehaviorRuntimeService = require(script.Parent.Infrastructure.Services.MiningBehaviorRuntimeService)
 local ExtractorMiningSystem = require(script.Parent.Infrastructure.Services.ExtractorMiningSystem)
 local ResourceNodeRegistryService = require(script.Parent.Infrastructure.Services.ResourceNodeRegistryService)
 local ResourceGatherInteractionService = require(script.Parent.Infrastructure.Services.ResourceGatherInteractionService)
@@ -32,6 +35,9 @@ local Catch = Result.Catch
 
 type StructureRecord = PlacementTypes.StructureRecord
 type RunState = "Idle" | "Prep" | "Wave" | "Resolution" | "Climax" | "Endless" | "RunEnd"
+type TMiningActorTypePayload = MiningTypes.TMiningActorTypePayload
+type TMiningActorPayload = MiningTypes.TMiningActorPayload
+type TMiningActionState = MiningTypes.TMiningActionState
 
 -- â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -44,6 +50,16 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "MiningEntityFactory",
 		Module = MiningEntityFactory,
 		CacheAs = "_entityFactory",
+	},
+	{
+		Name = "MiningActorRegistryService",
+		Module = MiningActorRegistryService,
+		CacheAs = "_actorRegistryService",
+	},
+	{
+		Name = "MiningBehaviorRuntimeService",
+		Module = MiningBehaviorRuntimeService,
+		CacheAs = "_behaviorRuntimeService",
 	},
 	{
 		Name = "ExtractorMiningSystem",
@@ -100,6 +116,7 @@ local MiningContext = Knit.CreateService({
 		{ Name = "PlacementContext", CacheAs = "_placementContext" },
 		{ Name = "RunContext", CacheAs = "_runContext" },
 		{ Name = "EconomyContext", CacheAs = "_economyContext" },
+		{ Name = "StructureContext", CacheAs = "_structureContext" },
 	},
 	Teardown = {
 		Before = "_BeforeDestroy",
@@ -211,9 +228,9 @@ function MiningContext:KnitStart()
 		end
 	)
 
-	-- Advance extractor production on the combat tick and flush deferred entity deletes afterward.
+	-- Advance extractor AI and flush deferred entity deletes afterward.
 	MiningBaseContext:RegisterSchedulerSystem("CombatTick", function()
-		self._extractorMiningSystem:Tick(MiningBaseContext:GetSchedulerDeltaTime())
+		self:_RunBehaviorFrame(MiningBaseContext:GetSchedulerDeltaTime())
 		self._entityFactory:FlushPendingDeletes()
 	end)
 end
@@ -240,7 +257,17 @@ end
 
 function MiningContext:_RegisterExtractor(record: StructureRecord): Result.Result<number?>
 	return Catch(function()
-		return self._registerExtractorCommand:Execute(record)
+		local registerResult = self._registerExtractorCommand:Execute(record)
+		if not registerResult.success or registerResult.value == nil then
+			return registerResult
+		end
+
+		local resolveResult = self._structureContext:ResolveMiningExtractorActor(record.instanceId)
+		if not resolveResult.success then
+			return resolveResult
+		end
+
+		return registerResult
 	end, "Mining:RegisterExtractor")
 end
 
@@ -250,19 +277,39 @@ function MiningContext:_CleanupAll(): Result.Result<boolean>
 	end, "Mining:CleanupAll")
 end
 
+function MiningContext:_RunBehaviorFrame(dt: number)
+	local frameResult = self._behaviorRuntimeService:RunFrame({
+		CurrentTime = os.clock(),
+		DeltaTime = dt,
+		Services = {
+			MiningActorRegistryService = self._actorRegistryService,
+		},
+	})
+
+	for _, entityResult in ipairs(frameResult.EntityResults) do
+		self._actorRegistryService:NotifyActionResult(entityResult.Entity, entityResult)
+	end
+end
+
 -- Cleans up gather wiring before the wrapped BaseContext tears down shared services.
 function MiningContext:_BeforeDestroy()
 	self._resourceGatherInteractionService:Cleanup()
 
 	local cleanupResult = self:_CleanupAll()
-	if cleanupResult.success then
-		return
+	if not cleanupResult.success then
+		Result.MentionError("Mining:Destroy", "Cleanup failed during destroy", {
+			CauseType = cleanupResult.type,
+			CauseMessage = cleanupResult.message,
+		}, cleanupResult.type)
 	end
 
-	Result.MentionError("Mining:Destroy", "Cleanup failed during destroy", {
-		CauseType = cleanupResult.type,
-		CauseMessage = cleanupResult.message,
-	}, cleanupResult.type)
+	local stopRuntimeResult = self._behaviorRuntimeService:StopRuntime()
+	if not stopRuntimeResult.success then
+		Result.MentionError("Mining:Destroy", "Failed to stop mining runtime", {
+			CauseType = stopRuntimeResult.type,
+			CauseMessage = stopRuntimeResult.message,
+		}, stopRuntimeResult.type)
+	end
 end
 
 -- â”€â”€ Public â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -281,6 +328,69 @@ function MiningContext:Destroy()
 		CauseType = destroyResult.type,
 		CauseMessage = destroyResult.message,
 	}, destroyResult.type)
+end
+
+function MiningContext:GetEntityFactory(): Result.Result<any>
+	return Result.Ok(self._entityFactory)
+end
+
+function MiningContext:GetExtractorMiningSystem(): Result.Result<any>
+	return Result.Ok(self._extractorMiningSystem)
+end
+
+function MiningContext:GetMiningActorActionState(actorHandle: string): Result.Result<TMiningActionState?>
+	return Result.Ok(self._actorRegistryService:GetActionStateByHandle(actorHandle))
+end
+
+function MiningContext:RegisterActorType(payload: TMiningActorTypePayload): Result.Result<boolean>
+	return Catch(function()
+		return self._actorRegistryService:RegisterActorType(payload)
+	end, "Mining:RegisterActorType")
+end
+
+function MiningContext:RegisterMiningActor(payload: TMiningActorPayload): Result.Result<string>
+	return Catch(function()
+		if not self._actorRegistryService:IsRuntimeStarted() then
+			local queueResult = self._actorRegistryService:QueueActor(payload)
+			if not queueResult.success then
+				return queueResult
+			end
+
+			local startRuntimeResult = self._behaviorRuntimeService:StartRuntime()
+			if not startRuntimeResult.success then
+				return startRuntimeResult
+			end
+
+			return queueResult
+		end
+
+		local behaviorTreeResult = self._behaviorRuntimeService:BuildTree(payload.BehaviorDefinition)
+		if not behaviorTreeResult.success then
+			return behaviorTreeResult
+		end
+
+		return self._actorRegistryService:RegisterActor(payload, behaviorTreeResult.value)
+	end, "Mining:RegisterMiningActor")
+end
+
+function MiningContext:UnregisterMiningActor(actorHandle: string): Result.Result<boolean>
+	return Catch(function()
+		local record = self._actorRegistryService:GetRecordByHandle(actorHandle)
+		if record ~= nil then
+			self._behaviorRuntimeService:CancelActorAction(record.ActorType, record.RuntimeId, {
+				CurrentTime = os.clock(),
+				DeltaTime = 0,
+				Services = {
+					MiningActorRegistryService = self._actorRegistryService,
+				},
+				ActorTypes = {
+					record.ActorType,
+				},
+			})
+		end
+
+		return self._actorRegistryService:UnregisterActor(actorHandle)
+	end, "Mining:UnregisterMiningActor")
 end
 
 return MiningContext

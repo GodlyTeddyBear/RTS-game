@@ -15,5 +15,10 @@ Errors.UNKNOWN_RESOURCE_NODE_TYPE = "MiningContext: resource node part name must
 Errors.INVALID_PLAYER = "MiningContext: player is invalid"
 Errors.UNREGISTERED_RESOURCE_NODE = "MiningContext: resource node is not registered"
 Errors.RESOURCE_GATHER_COOLDOWN = "MiningContext: resource node was gathered too recently"
+Errors.INVALID_ACTOR_TYPE_PAYLOAD = "MiningContext: mining actor-type payload is invalid"
+Errors.INVALID_ACTOR_PAYLOAD = "MiningContext: mining actor payload is invalid"
+Errors.RUNTIME_ALREADY_STARTED = "MiningContext: mining runtime already started"
+Errors.RUNTIME_START_FAILED = "MiningContext: mining runtime failed to start"
+Errors.RUNTIME_NOT_STARTED = "MiningContext: mining runtime is not started"
 
 return table.freeze(Errors)

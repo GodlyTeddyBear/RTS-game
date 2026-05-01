@@ -1,6 +1,6 @@
 # Runtime Profile Context Setup
 
-This document explains the current ECS runtime pattern used by `Structure` and `Enemy`, and how to set up a new context that follows the same shape.
+This document explains the current ECS runtime pattern used by `Structure`, `Enemy`, and `Unit`, and how to set up a new context that follows the same shape.
 
 Use this when you want a new bounded context that owns:
 
@@ -21,12 +21,43 @@ Split responsibilities into four context-owned layers:
 3. `GameObjectSyncService`
 4. `CombatAdapterService`
 
-Then put all variant-specific behavior in:
+Then put all variant-specific runtime policy in:
 
 - `Runtime/Profiles/`
 - `Runtime/Resolvers/`
 
+The owning context owns these modules. The shared runtime does not.
+
 This keeps the sync service projection-only and keeps the adapter focused on runtime wiring instead of becoming a variant switchboard.
+
+## Ownership Contract
+
+The owning context owns:
+
+- ECS entity creation and mutation
+- instance lifecycle
+- adapter registration and unregister flows
+- behavior definitions and executor packages
+- runtime profiles
+- resolver factories
+- sync projection policy
+
+The shared runtime owns:
+
+- generic runtime startup and shutdown
+- generic actor registration bookkeeping
+- behavior-tree compilation
+- per-frame evaluation
+- generic action-state storage and callback dispatch
+
+The shared runtime must not own:
+
+- context-specific adapters
+- context-specific profiles
+- context-specific behaviors
+- context-specific resolver factories
+
+Treat the shared runtime as a system that contexts hook onto, not as the owner of those contexts' actor logic.
 
 ## Runtime Flow
 
@@ -34,15 +65,40 @@ The runtime path should look like this:
 
 1. `Context` boots the world service and infrastructure modules.
 2. An application command creates the ECS entity in `EntityFactory`.
-3. `InstanceFactory` creates and binds the live model.
+3. `InstanceFactory` creates and binds the live model when this context owns one.
 4. `GameObjectSyncService:RegisterEntity(...)` pushes the first attribute projection.
-5. `CombatAdapterService:RegisterActor(...)` registers the entity with the combat runtime.
+5. `CombatAdapterService:RegisterActor(...)` or another context-owned adapter registers the entity with the shared runtime.
 6. Runtime profiles decide:
    - which behavior tree definition is used
    - which animation state should be projected for each action/state pair
    - whether that animation state loops
-   - any role/type-specific tick settings
-7. Resolver modules provide context-specific callbacks for hitbox, projectile, or damage systems.
+   - any role or type-specific tick settings
+7. Resolver modules provide context-specific callbacks for hitbox, projectile, movement, or damage systems.
+8. The shared runtime evaluates the actor each frame and writes action state back through callbacks.
+9. The sync service projects the resulting state back to the live model.
+
+## Registration And Removal Flows
+
+### Register flow
+
+```text
+Owning context creates entity
+  -> owning instance factory binds live model if needed
+  -> owning adapter resolves RuntimeProfileId from config
+  -> owning adapter gets BehaviorDefinition + TickInterval from Runtime/Profiles
+  -> owning adapter gets proxy and callback builders from Runtime/Resolvers
+  -> shared runtime registers or queues the actor
+```
+
+### Remove flow
+
+```text
+Owning context decides the entity is no longer active
+  -> owning adapter unregisters the actor handle
+  -> shared runtime removes the live actor record
+  -> adapter cleanup callbacks run when present
+  -> owning context cleans up its entity and instance state
+```
 
 ## Folder Layout
 
@@ -76,7 +132,7 @@ Contexts/
 `Persistence/` owns projection and polling.
 `Services/` owns runtime helpers and adapter wiring.
 `Runtime/Profiles/` owns per-variant runtime selection and animation-state resolution.
-`Runtime/Resolvers/` owns combat callback tables and hit resolution helpers.
+`Runtime/Resolvers/` owns callback tables and hit-resolution helpers.
 
 ## 1. Define Shared Config And Types
 
@@ -100,7 +156,7 @@ PlayerConfig.Classes = table.freeze({
 Rules:
 
 - The config key should be stable and data-owned.
-- The runtime profile key should be the only thing the adapter or sync resolver needs to branch on.
+- The runtime profile key should be the only thing the adapter or sync service needs to branch on.
 - Do not put behavior tree selection logic directly in the adapter once the config already knows the variant.
 
 ## 2. Build The Entity Factory
@@ -117,7 +173,7 @@ It should not own:
 
 - model creation
 - workspace parenting
-- animation state projection
+- animation-state projection
 - hitbox or projectile callback wiring
 
 For `Players`, create methods such as:
@@ -195,6 +251,7 @@ Rules:
 - Freeze the registry and nested profile tables.
 - Keep the strings that clients already consume stable.
 - Add new variants by adding new profiles, not by editing sync conditionals.
+- Do not place these profiles under the shared runtime context.
 
 The sync service should not know special cases like:
 
@@ -208,13 +265,30 @@ Move that into the runtime profile module by exposing:
 
 Locomotion fallback also belongs there if your context has it.
 
+## 5. Build Resolver Modules
+
+Resolver modules extract technical callback-building logic out of adapters.
+
+Resolver modules should own:
+
+- `Create(dependencies)`
+- proxy builders
+- target mapping helpers
+- combat callback tables that do not belong inline in the adapter
+
+Resolver modules should not own:
+
+- entity lifecycle
+- context orchestration
+- variant policy already owned by `Runtime/Profiles/`
+
 ## 6. Build The GameObjectSyncService
 
 The sync service should only:
 
 - read ECS state from `EntityFactory`
 - read live runtime action state from the owning runtime source
-- resolve the animation state through the resolver
+- resolve the animation state through the runtime profile module
 - project attributes to the bound model
 
 It should not:
@@ -222,10 +296,11 @@ It should not:
 - create or destroy instances
 - mutate ECS
 - contain per-class or per-role feature logic
+- choose behavior definitions
 
 For `Players`, the sync method should read like:
 
-1. read health, identity, combat action, movement state
+1. read health, identity, combat action, and movement state
 2. resolve animation state through `PlayerRuntimeProfiles.ResolveAnimationState(...)`
 3. set model attributes
 
@@ -246,6 +321,7 @@ It should not:
 - own all resolver logic inline
 - hardcode variant selection rules
 - turn into a catch-all file for future special cases
+- move context-specific behavior ownership into the shared runtime
 
 For `Players`, this is the right pattern:
 
@@ -280,14 +356,14 @@ Standard helper contract:
 
 - helper modules should be `*Factory` modules
 - they should expose `Create(dependencies)`
-- `Create(...)` should return a frozen callback table
+- `Create(...)` should return a callback table
 - even single-purpose target mapping resolvers should return a callback table, not a bare function
 
 This keeps the adapter readable and makes future combat additions isolated.
 
 ## 9. Connect The Context
 
-In `PlayersContext.lua`, register the modules the same way Structure and Enemy do:
+In `PlayersContext.lua`, register the modules the same way `Structure` and `Enemy` do:
 
 - component registry
 - entity factory
@@ -299,7 +375,7 @@ Then in `KnitStart()`:
 
 1. register sync and poll systems
 2. set the runtime owner on the adapter
-3. register the combat actor type
+3. register the actor type
 4. connect any placement, spawn, or lifecycle events
 
 ## 10. Client Animation Presets
@@ -350,6 +426,7 @@ The same principle applies on both server and client:
 - Letting the instance factory mutate ECS.
 - Letting the sync service create or destroy models.
 - Duplicating animation mapping logic in both adapter and sync.
+- Moving context-specific profiles, behaviors, or resolvers into the shared runtime context.
 
 ## Current Reference Files
 
@@ -365,3 +442,8 @@ The same principle applies on both server and client:
   - `Infrastructure/Runtime/Resolvers/EnemyMeleeResolverFactory.lua`
   - `Infrastructure/Persistence/EnemyGameObjectSyncService.lua`
   - `Infrastructure/Services/EnemyCombatAdapterService.lua`
+- `Unit`
+  - `Infrastructure/Runtime/Profiles/UnitRuntimeProfiles.lua`
+  - `Infrastructure/Runtime/Resolvers/UnitServiceProxyResolverFactory.lua`
+  - `Infrastructure/Persistence/UnitGameObjectSyncService.lua`
+  - `Infrastructure/Services/UnitCombatAdapterService.lua`

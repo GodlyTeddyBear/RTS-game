@@ -126,9 +126,9 @@ function ResourceNodeRegistryService:_RegisterResourceNode(resourcePart: BasePar
 	end
 
 	local nodeRecord: TResourceNodeRecord = {
-		nodeId = _BuildNodeId(resourcePart.Name, resourcePart),
-		instance = resourcePart,
-		resourceType = resourcePart.Name,
+		NodeId = _BuildNodeId(resourcePart.Name, resourcePart),
+		Instance = resourcePart,
+		ResourceType = resourcePart.Name,
 	}
 
 	local entity = self._factory:CreateResourceNode(nodeRecord)

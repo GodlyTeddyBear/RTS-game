@@ -26,6 +26,20 @@ local function _ResolveCombatRuntimeAction(self: any, entity: number): any?
 	return actionStateResult.value
 end
 
+local function _ResolveMiningRuntimeAction(self: any, entity: number): any?
+	if self._miningContext == nil or self._miningAdapterService == nil then
+		return nil
+	end
+
+	local actorHandle = self._miningAdapterService:GetActorHandle(entity)
+	local actionStateResult = self._miningContext:GetMiningActorActionState(actorHandle)
+	if not actionStateResult.success then
+		return nil
+	end
+
+	return actionStateResult.value
+end
+
 local function _ResolveRuntimeTargetEnemyEntity(combatAction: any): number?
 	if type(combatAction) ~= "table" then
 		return nil
@@ -44,6 +58,8 @@ function StructureGameObjectSyncService.new()
 	self._registry = nil
 	self._combatContext = nil
 	self._combatAdapterService = nil
+	self._miningContext = nil
+	self._miningAdapterService = nil
 	self._enemyEntityFactory = nil
 	return self
 end
@@ -64,6 +80,8 @@ function StructureGameObjectSyncService:Start()
 
 	self._combatContext = registry:Get("CombatContext")
 	self._combatAdapterService = registry:Get("StructureCombatAdapterService")
+	self._miningContext = registry:Get("MiningContext")
+	self._miningAdapterService = registry:Get("StructureMiningAdapterService")
 
 	local enemyContext = registry:Get("EnemyContext")
 	local enemyEntityFactoryResult = enemyContext:GetEntityFactory()
@@ -91,8 +109,6 @@ function StructureGameObjectSyncService:_SyncEntity(entity: number, model: Model
 	local factory = self:GetEntityFactoryOrThrow()
 	local identity = factory:GetIdentity(entity)
 	local health = factory:GetHealth(entity)
-	local combatAction = _ResolveCombatRuntimeAction(self, entity) or factory:GetCombatAction(entity)
-	local targetEnemyEntity = _ResolveRuntimeTargetEnemyEntity(combatAction) or factory:GetTarget(entity)
 
 	if identity ~= nil then
 		self:SetAttributeIfChanged(model, "StructureId", identity.StructureId)
@@ -112,6 +128,15 @@ function StructureGameObjectSyncService:_SyncEntity(entity: number, model: Model
 			runtimeProfileId = structureConfig.RuntimeProfileId
 		end
 	end
+
+	local combatAction = nil
+	if runtimeProfileId == "Extract" then
+		combatAction = _ResolveMiningRuntimeAction(self, entity) or factory:GetCombatAction(entity)
+	else
+		combatAction = _ResolveCombatRuntimeAction(self, entity) or factory:GetCombatAction(entity)
+	end
+
+	local targetEnemyEntity = _ResolveRuntimeTargetEnemyEntity(combatAction) or factory:GetTarget(entity)
 
 	local nextAnimationState, isAnimationLooping = StructureRuntimeProfiles.ResolveAnimationState({
 		VariantId = runtimeProfileId,

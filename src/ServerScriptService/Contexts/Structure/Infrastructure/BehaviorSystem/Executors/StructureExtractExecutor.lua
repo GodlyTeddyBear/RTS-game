@@ -26,6 +26,10 @@ function StructureExtractExecutor:CanStart(entity: number, _data: any?, services
 		return false, "InactiveStructure"
 	end
 
+	if not services.MiningExtractorProxy:IsActive() then
+		return false, "InactiveExtractor"
+	end
+
 	return true, nil
 end
 
@@ -34,10 +38,18 @@ function StructureExtractExecutor:CanContinue(entity: number, services: any): (b
 		return false, "InactiveStructure"
 	end
 
+	if not services.MiningExtractorProxy:IsActive() then
+		return false, "InactiveExtractor"
+	end
+
 	return true, nil
 end
 
-function StructureExtractExecutor:OnTick(_entity: number, _dt: number, _services: any): string
+function StructureExtractExecutor:OnTick(entity: number, dt: number, services: any): string
+	if not services.MiningExtractorProxy:Advance(dt) then
+		return self:Fail(entity, "InactiveExtractor")
+	end
+
 	return self:Running()
 end
 

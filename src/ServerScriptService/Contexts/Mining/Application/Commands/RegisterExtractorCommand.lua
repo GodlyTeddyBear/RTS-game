@@ -78,11 +78,11 @@ function RegisterExtractorCommand:Execute(record: StructureRecord): Result.Resul
 
 	-- Build the immutable extractor payload that the factory expects.
 	local extractorRecord: TExtractorRecord = {
-		instanceId = record.instanceId,
-		ownerUserId = record.ownerUserId,
-		resourceType = record.resourceType :: string,
-		intervalSeconds = MiningConfig.BASE_RATE_SECONDS,
-		amountPerCycle = MiningConfig.BASE_AMOUNT_PER_CYCLE,
+		InstanceId = record.instanceId,
+		OwnerUserId = record.ownerUserId,
+		ResourceType = record.resourceType :: string,
+		IntervalSeconds = MiningConfig.BASE_RATE_SECONDS,
+		AmountPerCycle = MiningConfig.BASE_AMOUNT_PER_CYCLE,
 	}
 
 	-- Register the entity and emit a success mention for observability.

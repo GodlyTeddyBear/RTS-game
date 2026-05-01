@@ -35,7 +35,9 @@ end
     @param _name string -- The registered module name.
 ]=]
 function CleanupAllExtractorsCommand:Init(registry: any, _name: string)
-	self:_RequireDependency(registry, "_factory", "MiningEntityFactory")
+	self:_RequireDependencies(registry, {
+		_factory = "MiningEntityFactory",
+	})
 end
 
 -- Deletes all mining entities and flushes deferred removals.

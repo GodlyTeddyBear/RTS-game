@@ -14,7 +14,6 @@ local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.Stru
 local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.StructureTypes)
 local Nodes = require(script.Parent.Parent.BehaviorSystem.Nodes)
 local StructureAttackExecutor = require(script.Parent.Parent.BehaviorSystem.Executors.StructureAttackExecutor)
-local StructureExtractExecutor = require(script.Parent.Parent.BehaviorSystem.Executors.StructureExtractExecutor)
 local StructureRuntimeProfiles = require(script.Parent.Parent.Runtime.Profiles.StructureRuntimeProfiles)
 local StructureFactsResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.StructureFactsResolverFactory)
 local StructureFactoryProxyResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.StructureFactoryProxyResolverFactory)
@@ -143,10 +142,6 @@ function StructureCombatAdapterService:RegisterActorType(): Result.Result<boolea
 					ActionId = "Structure.Attack",
 					CreateExecutor = StructureAttackExecutor.new,
 				}),
-				["Structure.Extract"] = table.freeze({
-					ActionId = "Structure.Extract",
-					CreateExecutor = StructureExtractExecutor.new,
-				}),
 			},
 			SemanticRequirements = StructureSemanticRequirements,
 			RuntimeBinding = StructureRuntimeBinding,
@@ -171,6 +166,10 @@ function StructureCombatAdapterService:RegisterActor(entity: number): Result.Res
 		structureConfig ~= nil,
 		("StructureCombatAdapterService: missing config for structure type '%s'"):format(tostring(identity.StructureType))
 	)
+
+	if structureConfig.RuntimeProfileId ~= "Attack" then
+		return Result.Ok(self:_BuildActorHandle(entity))
+	end
 
 	local runtimeProfile = StructureRuntimeProfiles.GetByVariant(structureConfig.RuntimeProfileId)
 	local actorHandle = self:_BuildActorHandle(entity)
@@ -211,6 +210,10 @@ end
     @return Result.Result<boolean> -- Whether the actor was removed successfully.
 ]=]
 function StructureCombatAdapterService:UnregisterActor(entity: number): Result.Result<boolean>
+	if not self:ShouldRegisterActor(entity) then
+		return Result.Ok(false)
+	end
+
 	return self._combatContext:UnregisterCombatActor(self:_BuildActorHandle(entity))
 end
 
@@ -233,6 +236,20 @@ end
 ]=]
 function StructureCombatAdapterService:ConfigureRuntimeOwner(runtimeOwner: any)
 	self._runtimeOwner = runtimeOwner
+end
+
+function StructureCombatAdapterService:ShouldRegisterActor(entity: number): boolean
+	local identity = self._entityFactory:GetIdentity(entity)
+	if identity == nil then
+		return false
+	end
+
+	local structureConfig = StructureConfig.STRUCTURES[identity.StructureType] :: TStructureConfig?
+	if structureConfig == nil then
+		return false
+	end
+
+	return structureConfig.RuntimeProfileId == "Attack"
 end
 
 -- ── Private ───────────────────────────────────────────────────────────────────

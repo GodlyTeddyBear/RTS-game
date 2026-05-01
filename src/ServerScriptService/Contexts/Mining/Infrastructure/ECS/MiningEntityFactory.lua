@@ -2,8 +2,8 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
 local MiningTypes = require(ReplicatedStorage.Contexts.Mining.Types.MiningTypes)
+local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
 
 type TExtractorRecord = MiningTypes.TExtractorRecord
 type TResourceNodeRecord = MiningTypes.TResourceNodeRecord
@@ -21,7 +21,7 @@ type TNodeInstanceComponent = MiningTypes.TNodeInstanceComponent
 ]=]
 local MiningEntityFactory = {}
 MiningEntityFactory.__index = MiningEntityFactory
-setmetatable(MiningEntityFactory, { __index = BaseECSEntityFactory })
+setmetatable(MiningEntityFactory, BaseECSEntityFactory)
 
 -- Creates the Mining entity factory wrapper around the shared ECS base factory.
 --[=[
@@ -66,21 +66,21 @@ function MiningEntityFactory:CreateExtractor(record: TExtractorRecord): number
 	local entity = self:_CreateEntity()
 
 	self:_Set(entity, components.OwnerComponent, {
-		UserId = record.ownerUserId,
+		UserId = record.OwnerUserId,
 	} :: TOwnerComponent)
 
 	self:_Set(entity, components.ResourceComponent, {
-		ResourceType = record.resourceType,
-		AmountPerCycle = record.amountPerCycle,
+		ResourceType = record.ResourceType,
+		AmountPerCycle = record.AmountPerCycle,
 	} :: TResourceComponent)
 
 	self:_Set(entity, components.TimingComponent, {
-		IntervalSeconds = record.intervalSeconds,
+		IntervalSeconds = record.IntervalSeconds,
 		ElapsedSeconds = 0,
 	} :: TTimingComponent)
 
 	self:_Set(entity, components.InstanceRefComponent, {
-		InstanceId = record.instanceId,
+		InstanceId = record.InstanceId,
 	} :: TInstanceRefComponent)
 
 	self:_Add(entity, components.ExtractorActiveTag)
@@ -99,12 +99,12 @@ function MiningEntityFactory:CreateResourceNode(record: TResourceNodeRecord): nu
 	local entity = self:_CreateEntity()
 
 	self:_Set(entity, components.ResourceNodeComponent, {
-		NodeId = record.nodeId,
-		ResourceType = record.resourceType,
+		NodeId = record.NodeId,
+		ResourceType = record.ResourceType,
 	} :: TResourceNodeComponent)
 
 	self:_Set(entity, components.NodeInstanceComponent, {
-		Instance = record.instance,
+		Instance = record.Instance,
 	} :: TNodeInstanceComponent)
 
 	self:_Add(entity, components.ResourceNodeTag)
@@ -176,6 +176,31 @@ end
 function MiningEntityFactory:QueryActiveEntities(): { number }
 	local components = self:GetComponentsOrThrow()
 	return self:CollectQuery(components.ExtractorActiveTag)
+end
+
+function MiningEntityFactory:GetInstanceRef(entity: number): TInstanceRefComponent?
+	local components = self:GetComponentsOrThrow()
+	return self:_Get(entity, components.InstanceRefComponent)
+end
+
+function MiningEntityFactory:FindExtractorByInstanceId(instanceId: number): number?
+	for _, entity in ipairs(self:QueryActiveEntities()) do
+		local instanceRef = self:GetInstanceRef(entity)
+		if instanceRef ~= nil and instanceRef.InstanceId == instanceId then
+			return entity
+		end
+	end
+
+	return nil
+end
+
+function MiningEntityFactory:IsActive(entity: number?): boolean
+	if entity == nil then
+		return false
+	end
+
+	local components = self:GetComponentsOrThrow()
+	return self:_Has(entity, components.ExtractorActiveTag)
 end
 
 -- Returns the resource-node component for a node entity, if present.

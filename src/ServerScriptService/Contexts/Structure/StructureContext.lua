@@ -23,6 +23,7 @@ local StructureComponentRegistry = require(script.Parent.Infrastructure.ECS.Stru
 local StructureEntityFactory = require(script.Parent.Infrastructure.ECS.StructureEntityFactory)
 local StructureInstanceFactory = require(script.Parent.Infrastructure.Services.StructureInstanceFactory)
 local StructureCombatAdapterService = require(script.Parent.Infrastructure.Services.StructureCombatAdapterService)
+local StructureMiningAdapterService = require(script.Parent.Infrastructure.Services.StructureMiningAdapterService)
 local StructureGameObjectSyncService = require(script.Parent.Infrastructure.Persistence.StructureGameObjectSyncService)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
 local RegisterStructureCommand = require(script.Parent.Application.Commands.RegisterStructureCommand)
@@ -57,6 +58,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "StructureCombatAdapterService",
 		Module = StructureCombatAdapterService,
 		CacheAs = "_combatAdapterService",
+	},
+	{
+		Name = "StructureMiningAdapterService",
+		Module = StructureMiningAdapterService,
+		CacheAs = "_miningAdapterService",
 	},
 	{
 		Name = "StructureGameObjectSyncService",
@@ -135,6 +141,7 @@ local StructureContext = Knit.CreateService({
 		{ Name = "WorldContext" },
 		{ Name = "EnemyContext" },
 		{ Name = "CombatContext" },
+		{ Name = "MiningContext" },
 		{ Name = "RunContext", CacheAs = "_runContext" },
 		{ Name = "PlacementContext", CacheAs = "_placementContext" },
 	},
@@ -192,6 +199,23 @@ function StructureContext:KnitStart()
 		)
 	end
 
+	self._miningAdapterService:ConfigureRuntimeOwner(self)
+	local registerMiningActorTypeResult = self._miningAdapterService:RegisterActorType()
+	if not registerMiningActorTypeResult.success then
+		Result.MentionError("Structure:KnitStart", "Failed to register structure mining actor type", {
+			CauseType = registerMiningActorTypeResult.type,
+			CauseMessage = registerMiningActorTypeResult.message,
+			Details = registerMiningActorTypeResult.data,
+		}, registerMiningActorTypeResult.type)
+		error(
+			string.format(
+				"StructureContext failed to register mining actor type on May 1, 2026 startup path: [%s] %s",
+				tostring(registerMiningActorTypeResult.type),
+				tostring(registerMiningActorTypeResult.message)
+			)
+		)
+	end
+
 	-- Register new placements as ECS entities as soon as PlacementContext announces them.
 	self._structurePlacedConnection = self._placementContext.StructurePlaced:Connect(function(record: StructureRecord)
 		local result = self:_RegisterStructure(record)
@@ -233,9 +257,18 @@ function StructureContext:_RegisterStructure(record: StructureRecord): Result.Re
 			return registerResult
 		end
 		if registerResult.value ~= nil then
-			local combatResult = self._combatAdapterService:RegisterActor(registerResult.value)
-			if not combatResult.success then
-				return combatResult
+			if self._combatAdapterService:ShouldRegisterActor(registerResult.value) then
+				local combatResult = self._combatAdapterService:RegisterActor(registerResult.value)
+				if not combatResult.success then
+					return combatResult
+				end
+			end
+
+			if self._miningAdapterService:ShouldRegisterActor(registerResult.value) then
+				local miningResult = self._miningAdapterService:RegisterActor(registerResult.value)
+				if not miningResult.success then
+					return miningResult
+				end
 			end
 		end
 		return registerResult
@@ -293,6 +326,12 @@ end
 ]=]
 function StructureContext:GetEntityFactory(): Result.Result<any>
 	return Ok(self._entityFactory)
+end
+
+function StructureContext:ResolveMiningExtractorActor(instanceId: number): Result.Result<boolean>
+	return Catch(function()
+		return self._miningAdapterService:ResolvePendingActor(instanceId)
+	end, "Structure:ResolveMiningExtractorActor")
 end
 
 function StructureContext:GetInstanceFactory(): Result.Result<any>

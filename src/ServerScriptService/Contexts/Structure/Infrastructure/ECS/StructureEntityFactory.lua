@@ -334,6 +334,17 @@ function StructureEntityFactory:GetEntityByStructureId(structureId: string): num
 	return nil
 end
 
+function StructureEntityFactory:GetEntityByInstanceId(instanceId: number): number?
+	for _, entity in ipairs(self:QueryActiveEntities()) do
+		local instanceRef = self:GetInstanceRef(entity)
+		if instanceRef ~= nil and instanceRef.InstanceId == instanceId then
+			return entity
+		end
+	end
+
+	return nil
+end
+
 function StructureEntityFactory:GetPosition(entity: number?): Vector3?
 	if entity == nil then
 		return nil

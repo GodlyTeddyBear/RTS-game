@@ -37,6 +37,7 @@ function CleanupAllCommand:Init(registry: any, _name: string)
 		_factory = "StructureEntityFactory",
 		_instanceFactory = "StructureInstanceFactory",
 		_combatAdapterService = "StructureCombatAdapterService",
+		_miningAdapterService = "StructureMiningAdapterService",
 	})
 end
 
@@ -49,6 +50,7 @@ function CleanupAllCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
 		for _, entity in ipairs(self._factory:QueryActiveEntities()) do
 			self._combatAdapterService:UnregisterActor(entity)
+			self._miningAdapterService:UnregisterActor(entity)
 		end
 
 		-- Bulk cleanup stays centralized in the entity factory so teardown remains atomic.

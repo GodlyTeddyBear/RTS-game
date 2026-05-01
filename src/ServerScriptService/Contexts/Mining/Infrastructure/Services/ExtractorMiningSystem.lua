@@ -54,7 +54,7 @@ end
 function ExtractorMiningSystem:Tick(dt: number)
 	-- Reads the active extractor set and forwards each entity to the per-extractor updater.
 	for _, entity in ipairs(self._factory:QueryActiveEntities()) do
-		self:_TickExtractor(entity, dt)
+		self:AdvanceExtractor(entity, dt)
 	end
 end
 
@@ -65,7 +65,7 @@ end
     @param entity number -- The entity id to advance.
     @param dt number -- The scheduler delta time.
 ]=]
-function ExtractorMiningSystem:_TickExtractor(entity: number, dt: number)
+function ExtractorMiningSystem:AdvanceExtractor(entity: number, dt: number)
 	local owner = self._factory:GetOwner(entity)
 	local resource = self._factory:GetResource(entity)
 	local timing = self._factory:GetTiming(entity)
