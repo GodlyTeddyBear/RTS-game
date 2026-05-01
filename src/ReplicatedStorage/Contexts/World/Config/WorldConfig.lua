@@ -32,11 +32,11 @@ WorldConfig.TILE_SIZE = TILE_SIZE
 WorldConfig.GRID_PART_NAME = "PlacementGrid"
 
 --[=[
-	@prop SIDE_POCKET_COLUMN_INTERVAL number
+	@prop RESOURCE_ZONE_NAME string
 	@within WorldConfig
-	Fallback interval used for side-pocket resource alternation when no part attribute is set.
+	Zone name used for authored resource parts that mark extractor-valid tiles.
 ]=]
-WorldConfig.SIDE_POCKET_COLUMN_INTERVAL = 4
+WorldConfig.RESOURCE_ZONE_NAME = "Resources"
 
 --[=[
 	@prop SPAWN_PART_NAME string

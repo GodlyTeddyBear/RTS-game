@@ -25,9 +25,9 @@ WorldGridRuntimeService.__index = WorldGridRuntimeService
 function WorldGridRuntimeService.new()
 	local self = setmetatable({}, WorldGridRuntimeService)
 	self._cachedGridSpec = nil :: GridSpec?
-	self._sidePocketParts = nil :: { BasePart }?
-	self._sidePocketCoordKeySet = nil :: { [string]: boolean }?
-	self._sidePocketResourceByKey = nil :: { [string]: string }?
+	self._resourceParts = nil :: { BasePart }?
+	self._resourceCoordKeySet = nil :: { [string]: boolean }?
+	self._resourceTypeByKey = nil :: { [string]: string }?
 	self._placementProhibitedParts = nil :: { BasePart }?
 	self._placementProhibitedCoordKeySet = nil :: { [string]: boolean }?
 	self._mapContext = nil :: any
@@ -69,14 +69,14 @@ function WorldGridRuntimeService:_GetGridPart(): BasePart?
 	return nil
 end
 
-function WorldGridRuntimeService:_GetSidePocketParts(): { BasePart }
+function WorldGridRuntimeService:_GetResourceParts(): { BasePart }
 	local parts = {}
-	local sidePocketsContainer = self:_GetZoneContainer("SidePockets")
-	if sidePocketsContainer ~= nil then
-		if sidePocketsContainer:IsA("BasePart") then
-			table.insert(parts, sidePocketsContainer)
+	local resourcesContainer = self:_GetZoneContainer(WorldConfig.RESOURCE_ZONE_NAME)
+	if resourcesContainer ~= nil then
+		if resourcesContainer:IsA("BasePart") then
+			table.insert(parts, resourcesContainer)
 		else
-			for _, instance in ipairs(sidePocketsContainer:GetDescendants()) do
+			for _, instance in ipairs(resourcesContainer:GetDescendants()) do
 				if instance:IsA("BasePart") then
 					table.insert(parts, instance)
 				end
@@ -147,9 +147,9 @@ end
 
 function WorldGridRuntimeService:ResetCache()
 	self._cachedGridSpec = nil
-	self._sidePocketParts = nil
-	self._sidePocketCoordKeySet = nil
-	self._sidePocketResourceByKey = nil
+	self._resourceParts = nil
+	self._resourceCoordKeySet = nil
+	self._resourceTypeByKey = nil
 	self._placementProhibitedParts = nil
 	self._placementProhibitedCoordKeySet = nil
 end
@@ -193,18 +193,13 @@ function WorldGridRuntimeService:WorldToCoord(worldPos: Vector3): GridCoord?
 	})
 end
 
-local function _BuildResourceType(col: number): string
-	return if (col / WorldConfig.SIDE_POCKET_COLUMN_INTERVAL) % 2 == 0 then "Crystal" else "Metal"
-end
-
 local function _GetCoordKey(row: number, col: number): string
 	return (`{row}_{col}`)
 end
 
 local function _GetPartResourceType(part: BasePart): string?
-	local attributeValue = part:GetAttribute("ResourceType")
-	if type(attributeValue) == "string" and #attributeValue > 0 then
-		return attributeValue
+	if #part.Name > 0 then
+		return part.Name
 	end
 	return nil
 end
@@ -237,13 +232,13 @@ local function _TileOverlapsPartXZ(part: BasePart, worldCenter: Vector3, spec: G
 	return false
 end
 
-function WorldGridRuntimeService:_GetSidePocketPartsCached(): { BasePart }
-	if self._sidePocketParts ~= nil then
-		return self._sidePocketParts
+function WorldGridRuntimeService:_GetResourcePartsCached(): { BasePart }
+	if self._resourceParts ~= nil then
+		return self._resourceParts
 	end
 
-	local parts = self:_GetSidePocketParts()
-	self._sidePocketParts = parts
+	local parts = self:_GetResourceParts()
+	self._resourceParts = parts
 	return parts
 end
 
@@ -255,16 +250,6 @@ function WorldGridRuntimeService:_GetPlacementProhibitedPartsCached(): { BasePar
 	local parts = self:_GetPlacementProhibitedParts()
 	self._placementProhibitedParts = parts
 	return parts
-end
-
-function WorldGridRuntimeService:_ResolveSidePocketPart(worldPos: Vector3, spec: GridSpec): BasePart?
-	local sidePocketParts = self:_GetSidePocketPartsCached()
-	for _, part in ipairs(sidePocketParts) do
-		if _TileOverlapsPartXZ(part, worldPos, spec) then
-			return part
-		end
-	end
-	return nil
 end
 
 function WorldGridRuntimeService:_ResolveNearestEligibleCoord(worldPos: Vector3, spec: GridSpec): GridCoord?
@@ -294,18 +279,21 @@ function WorldGridRuntimeService:_ResolveNearestEligibleCoord(worldPos: Vector3,
 	return bestCoord
 end
 
-function WorldGridRuntimeService:_GetResolvedSidePocketTiles(spec: GridSpec): ({ [string]: boolean }, { [string]: string })
-	if self._sidePocketCoordKeySet ~= nil and self._sidePocketResourceByKey ~= nil then
-		return self._sidePocketCoordKeySet, self._sidePocketResourceByKey
+function WorldGridRuntimeService:_GetResolvedResourceTiles(spec: GridSpec): ({ [string]: boolean }, { [string]: string })
+	if self._resourceCoordKeySet ~= nil and self._resourceTypeByKey ~= nil then
+		return self._resourceCoordKeySet, self._resourceTypeByKey
 	end
 
 	local coordKeySet = {} :: { [string]: boolean }
-	local resourceByKey = {} :: { [string]: string }
-	local sidePocketParts = self:_GetSidePocketPartsCached()
+	local resourceTypeByKey = {} :: { [string]: string }
+	local resourceParts = self:_GetResourcePartsCached()
 
-	for _, part in ipairs(sidePocketParts) do
+	for _, part in ipairs(resourceParts) do
 		local matchedAnyTile = false
 		local partResourceType = _GetPartResourceType(part)
+		if partResourceType == nil then
+			continue
+		end
 
 		for row = 1, spec.gridRows do
 			if row ~= spec.laneRow then
@@ -317,9 +305,9 @@ function WorldGridRuntimeService:_GetResolvedSidePocketTiles(spec: GridSpec): ({
 
 					if _TileOverlapsPartXZ(part, tileCenter, spec) then
 						local coordKey = _GetCoordKey(row, col)
-						coordKeySet[coordKey] = true
-						if partResourceType ~= nil then
-							resourceByKey[coordKey] = partResourceType
+						if coordKeySet[coordKey] ~= true then
+							coordKeySet[coordKey] = true
+							resourceTypeByKey[coordKey] = partResourceType
 						end
 						matchedAnyTile = true
 					end
@@ -332,17 +320,17 @@ function WorldGridRuntimeService:_GetResolvedSidePocketTiles(spec: GridSpec): ({
 			local nearestCoord = self:_ResolveNearestEligibleCoord(part.Position, spec)
 			if nearestCoord ~= nil then
 				local coordKey = _GetCoordKey(nearestCoord.row, nearestCoord.col)
-				coordKeySet[coordKey] = true
-				if partResourceType ~= nil then
-					resourceByKey[coordKey] = partResourceType
+				if coordKeySet[coordKey] ~= true then
+					coordKeySet[coordKey] = true
+					resourceTypeByKey[coordKey] = partResourceType
 				end
 			end
 		end
 	end
 
-	self._sidePocketCoordKeySet = coordKeySet
-	self._sidePocketResourceByKey = resourceByKey
-	return coordKeySet, resourceByKey
+	self._resourceCoordKeySet = coordKeySet
+	self._resourceTypeByKey = resourceTypeByKey
+	return coordKeySet, resourceTypeByKey
 end
 
 function WorldGridRuntimeService:_GetResolvedPlacementProhibitedTiles(spec: GridSpec): { [string]: boolean }
@@ -397,10 +385,10 @@ function WorldGridRuntimeService:GetTileDescriptor(row: number, col: number): Ti
 		zone = "lane"
 	else
 		local coordKey = _GetCoordKey(row, col)
-		local sidePocketCoordKeySet, sidePocketResourceByKey = self:_GetResolvedSidePocketTiles(spec)
-		if sidePocketCoordKeySet[coordKey] == true then
+		local resourceCoordKeySet, resourceTypeByKey = self:_GetResolvedResourceTiles(spec)
+		if resourceCoordKeySet[coordKey] == true then
 			zone = "side_pocket"
-			resourceType = sidePocketResourceByKey[coordKey] or _BuildResourceType(col)
+			resourceType = resourceTypeByKey[coordKey]
 		end
 	end
 

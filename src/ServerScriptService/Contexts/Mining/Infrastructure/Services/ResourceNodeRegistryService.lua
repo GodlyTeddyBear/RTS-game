@@ -2,8 +2,8 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local MiningConfig = require(ReplicatedStorage.Contexts.Mining.Config.MiningConfig)
 local MiningTypes = require(ReplicatedStorage.Contexts.Mining.Types.MiningTypes)
+local WorldConfig = require(ReplicatedStorage.Contexts.World.Config.WorldConfig)
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local MiningSpecs = require(script.Parent.Parent.Parent.MiningDomain.Specs.MiningSpecs)
@@ -84,7 +84,7 @@ end
 ]=]
 function ResourceNodeRegistryService:RegisterNodesFromMapZone(): Result.Result<number>
 	-- Resolve the active resource zone from the map context before inspecting instances.
-	local zoneResult = self._mapContext:GetZoneInstance(MiningConfig.RESOURCE_ZONE_NAME)
+	local zoneResult = self._mapContext:GetZoneInstance(WorldConfig.RESOURCE_ZONE_NAME)
 	if not zoneResult.success then
 		return zoneResult
 	end

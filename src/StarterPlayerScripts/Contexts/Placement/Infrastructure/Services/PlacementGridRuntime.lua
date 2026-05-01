@@ -26,24 +26,24 @@ type GridSpec = WorldTypes.GridSpec
 local PlacementGridRuntime = {}
 
 local cachedGridSpec: GridSpec? = nil
-local cachedSidePocketParts: { BasePart }? = nil
-local cachedSidePocketCoordKeySet: { [string]: boolean }? = nil
-local cachedSidePocketResourceByKey: { [string]: string }? = nil
+local cachedResourceParts: { BasePart }? = nil
+local cachedResourceCoordKeySet: { [string]: boolean }? = nil
+local cachedResourceTypeByKey: { [string]: string }? = nil
 local cachedPlacementProhibitedParts: { BasePart }? = nil
 local cachedPlacementProhibitedCoordKeySet: { [string]: boolean }? = nil
 local GRID_PART_WAIT_TIMEOUT_SECONDS = 30
 local GRID_PART_POLL_INTERVAL_SECONDS = 0.25
 local PLACEMENT_GRIDS_PATH = "Workspace.Map.Game.Environment.Zones.PlacementGrids"
-local SIDE_POCKETS_PATH = "Workspace.Map.Game.Environment.Zones.SidePockets"
+local RESOURCE_ZONE_PATH = "Workspace.Map.Game.Environment.Zones." .. WorldConfig.RESOURCE_ZONE_NAME
 local PLACEMENT_PROHIBITED_PATH = "Workspace.Map.Game.Environment.Zones.PlacementProhibited"
 
 -- [Private Helpers]
 
 local function _ResetCache()
 	cachedGridSpec = nil
-	cachedSidePocketParts = nil
-	cachedSidePocketCoordKeySet = nil
-	cachedSidePocketResourceByKey = nil
+	cachedResourceParts = nil
+	cachedResourceCoordKeySet = nil
+	cachedResourceTypeByKey = nil
 	cachedPlacementProhibitedParts = nil
 	cachedPlacementProhibitedCoordKeySet = nil
 end
@@ -133,10 +133,10 @@ local function _GetGridPart(): BasePart
 	))
 end
 
--- Collects authored side-pocket parts so tile zoning can be derived from map markers instead of hardcoded coordinates.
-local function _GetSidePocketParts(): { BasePart }
+-- Collects authored resource parts so extractor-valid tiles derive from the same nodes mining uses.
+local function _GetResourceParts(): { BasePart }
 	local parts = {}
-	local container = _ResolvePath(SIDE_POCKETS_PATH)
+	local container = _ResolvePath(RESOURCE_ZONE_PATH)
 	if container ~= nil then
 		if container:IsA("BasePart") then
 			table.insert(parts, container)
@@ -150,7 +150,7 @@ local function _GetSidePocketParts(): { BasePart }
 	end
 
 	if #parts == 0 then
-		local fallback = Workspace:FindFirstChild("SidePockets", true)
+		local fallback = Workspace:FindFirstChild(WorldConfig.RESOURCE_ZONE_NAME, true)
 		if fallback ~= nil then
 			if fallback:IsA("BasePart") then
 				table.insert(parts, fallback)
@@ -260,14 +260,14 @@ function PlacementGridRuntime.ResetCache()
 	_ResetCache()
 end
 
--- Returns the cached side-pocket part list because authored map markers do not change during play.
-local function _GetSidePocketPartsCached(): { BasePart }
-	if cachedSidePocketParts ~= nil then
-		return cachedSidePocketParts
+-- Returns the cached resource-part list because authored map markers do not change during play.
+local function _GetResourcePartsCached(): { BasePart }
+	if cachedResourceParts ~= nil then
+		return cachedResourceParts
 	end
 
-	local parts = _GetSidePocketParts()
-	cachedSidePocketParts = parts
+	local parts = _GetResourceParts()
+	cachedResourceParts = parts
 	return parts
 end
 
@@ -320,21 +320,14 @@ function PlacementGridRuntime.WorldToCoord(worldPos: Vector3): GridCoord?
 	})
 end
 
--- Builds the fallback resource label for side-pocket tiles when the authored part does not specify one.
-local function _BuildResourceType(col: number): string
-	return if (col / WorldConfig.SIDE_POCKET_COLUMN_INTERVAL) % 2 == 0 then "Crystal" else "Metal"
-end
-
 -- Builds a stable lookup key for a grid coordinate so cached tile membership can stay table-driven.
 local function _GetCoordKey(row: number, col: number): string
 	return (`{row}_{col}`)
 end
 
--- Reads the authored resource type from a side-pocket marker part when the map explicitly defines one.
 local function _GetPartResourceType(part: BasePart): string?
-	local attributeValue = part:GetAttribute("ResourceType")
-	if type(attributeValue) == "string" and #attributeValue > 0 then
-		return attributeValue
+	if #part.Name > 0 then
+		return part.Name
 	end
 	return nil
 end
@@ -397,18 +390,21 @@ local function _ResolveNearestEligibleCoord(worldPos: Vector3, spec: GridSpec): 
 	return bestCoord
 end
 
--- Resolves side-pocket membership and optional resource overrides from authored marker parts.
-local function _GetResolvedSidePocketTiles(spec: GridSpec): ({ [string]: boolean }, { [string]: string })
-	if cachedSidePocketCoordKeySet ~= nil and cachedSidePocketResourceByKey ~= nil then
-		return cachedSidePocketCoordKeySet, cachedSidePocketResourceByKey
+-- Resolves resource-tile membership and resource types from authored resource parts.
+local function _GetResolvedResourceTiles(spec: GridSpec): ({ [string]: boolean }, { [string]: string })
+	if cachedResourceCoordKeySet ~= nil and cachedResourceTypeByKey ~= nil then
+		return cachedResourceCoordKeySet, cachedResourceTypeByKey
 	end
 
 	local coordKeySet = {} :: { [string]: boolean }
-	local resourceByKey = {} :: { [string]: string }
+	local resourceTypeByKey = {} :: { [string]: string }
 
-	for _, part in ipairs(_GetSidePocketPartsCached()) do
+	for _, part in ipairs(_GetResourcePartsCached()) do
 		local matchedAnyTile = false
 		local partResourceType = _GetPartResourceType(part)
+		if partResourceType == nil then
+			continue
+		end
 
 		for row = 1, spec.gridRows do
 			if row ~= spec.laneRow then
@@ -420,9 +416,9 @@ local function _GetResolvedSidePocketTiles(spec: GridSpec): ({ [string]: boolean
 
 					if _TileOverlapsPartXZ(part, tileCenter, spec) then
 						local coordKey = _GetCoordKey(row, col)
-						coordKeySet[coordKey] = true
-						if partResourceType ~= nil then
-							resourceByKey[coordKey] = partResourceType
+						if coordKeySet[coordKey] ~= true then
+							coordKeySet[coordKey] = true
+							resourceTypeByKey[coordKey] = partResourceType
 						end
 						matchedAnyTile = true
 					end
@@ -435,17 +431,17 @@ local function _GetResolvedSidePocketTiles(spec: GridSpec): ({ [string]: boolean
 			local nearestCoord = _ResolveNearestEligibleCoord(part.Position, spec)
 			if nearestCoord ~= nil then
 				local coordKey = _GetCoordKey(nearestCoord.row, nearestCoord.col)
-				coordKeySet[coordKey] = true
-				if partResourceType ~= nil then
-					resourceByKey[coordKey] = partResourceType
+				if coordKeySet[coordKey] ~= true then
+					coordKeySet[coordKey] = true
+					resourceTypeByKey[coordKey] = partResourceType
 				end
 			end
 		end
 	end
 
-	cachedSidePocketCoordKeySet = coordKeySet
-	cachedSidePocketResourceByKey = resourceByKey
-	return coordKeySet, resourceByKey
+	cachedResourceCoordKeySet = coordKeySet
+	cachedResourceTypeByKey = resourceTypeByKey
+	return coordKeySet, resourceTypeByKey
 end
 
 -- Resolves placement-prohibited tile membership from authored marker parts.
@@ -507,10 +503,10 @@ function PlacementGridRuntime.GetTileDescriptor(row: number, col: number): TileD
 		zone = "lane"
 	else
 		local coordKey = _GetCoordKey(row, col)
-		local sidePocketCoordKeySet, sidePocketResourceByKey = _GetResolvedSidePocketTiles(spec)
-		if sidePocketCoordKeySet[coordKey] == true then
+		local resourceCoordKeySet, resourceTypeByKey = _GetResolvedResourceTiles(spec)
+		if resourceCoordKeySet[coordKey] == true then
 			zone = "side_pocket"
-			resourceType = sidePocketResourceByKey[coordKey] or _BuildResourceType(col)
+			resourceType = resourceTypeByKey[coordKey]
 		end
 	end
 
