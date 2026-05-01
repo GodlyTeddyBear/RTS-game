@@ -30,6 +30,7 @@ end
 
 function StartCombat:Execute(waveNumber: number, isEndless: boolean): Result.Result<boolean>
 	return Result.Catch(function()
+		-- Validate the start request and resolve the combat owner first.
 		Ensure(waveNumber > 0, "InvalidWaveNumber", Errors.INVALID_WAVE_NUMBER)
 
 		local primaryPlayer = Players:GetPlayers()[1]
@@ -49,12 +50,15 @@ function StartCombat:Execute(waveNumber: number, isEndless: boolean): Result.Res
 			return Ok(false)
 		end
 
+		-- Reserve the session before touching the shared runtime.
 		Try(self._loopService:BeginSession(primaryPlayer.UserId, waveNumber, isEndless))
 
+		-- Start the runtime only when this session needs to own it.
 		if not runtimeStarted then
 			local startResult = self._behaviorRuntimeService:StartRuntime()
 			if not startResult.success then
-				Try(self._loopService:AbortSession(primaryPlayer.UserId))
+				Try(self._loopService:MarkSessionFailed(primaryPlayer.UserId, startResult.message))
+				Try(self._loopService:ClearSession(primaryPlayer.UserId))
 				Result.MentionError("Combat:StartCombat", "Combat runtime failed to start", {
 					WaveNumber = waveNumber,
 					IsEndless = isEndless,
@@ -68,7 +72,23 @@ function StartCombat:Execute(waveNumber: number, isEndless: boolean): Result.Res
 			end
 		end
 
-		Try(self._loopService:ActivateSession(primaryPlayer.UserId))
+		-- Promote the reserved session through readiness before enabling combat work.
+		local runtimeReadyResult = self._loopService:MarkRuntimeReady(primaryPlayer.UserId)
+		if not runtimeReadyResult.success then
+			Try(self._loopService:MarkSessionFailed(primaryPlayer.UserId, runtimeReadyResult.message))
+			Try(self._behaviorRuntimeService:StopRuntime())
+			Try(self._loopService:ClearSession(primaryPlayer.UserId))
+			return runtimeReadyResult
+		end
+
+		local activateResult = self._loopService:ActivateSession(primaryPlayer.UserId)
+		if not activateResult.success then
+			Try(self._loopService:MarkSessionFailed(primaryPlayer.UserId, activateResult.message))
+			Try(self._behaviorRuntimeService:StopRuntime())
+			Try(self._loopService:ClearSession(primaryPlayer.UserId))
+			return activateResult
+		end
+
 		return Ok(true)
 	end, self:_Label())
 end

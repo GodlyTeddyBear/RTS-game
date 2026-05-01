@@ -210,6 +210,10 @@ function BaseAIRuntimeService:GetExecutor(actionId: string)
 	return self._runtime:GetExecutor(actionId)
 end
 
+function BaseAIRuntimeService:HasRuntimeObject(): boolean
+	return self._runtime ~= nil
+end
+
 function BaseAIRuntimeService:_BuildErrorSink(): (payload: any) -> ()
 	return function(payload: any)
 		local actorType = tostring(payload.ActorType or "UnknownActorType")

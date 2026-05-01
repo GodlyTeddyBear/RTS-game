@@ -32,6 +32,7 @@ end
 
 function EndCombat:Execute(userId: number?): Result.Result<boolean>
 	return Result.Catch(function()
+		-- Resolve the combat owner when the caller does not pass one explicitly.
 		local targetUserId = userId
 		if targetUserId == nil then
 			local primaryPlayer = Players:GetPlayers()[1]
@@ -44,6 +45,7 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 			return Ok(false)
 		end
 
+		-- Enter shutdown before tearing down runtime-owned services.
 		Try(self._loopService:BeginEndingSession(targetUserId))
 
 		self._hitboxService:CleanupAll()
@@ -52,6 +54,7 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 		self._movementService:CleanupAll()
 		self._projectileService:CleanupAll()
 
+		-- Stop the runtime before clearing the final session record.
 		Try(self._behaviorRuntimeService:StopRuntime())
 		Try(self._loopService:ClearSession(targetUserId))
 

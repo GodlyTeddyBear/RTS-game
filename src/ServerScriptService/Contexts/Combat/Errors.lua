@@ -26,6 +26,7 @@ Errors.RUNTIME_ALREADY_STARTED = "CombatContext: generic combat runtime is alrea
 Errors.RUNTIME_NOT_STARTED = "CombatContext: generic combat runtime is not started"
 Errors.RUNTIME_START_FAILED = "CombatContext: generic combat runtime failed to start"
 Errors.ILLEGAL_SESSION_TRANSITION = "CombatContext: combat session state transition is not allowed"
+Errors.COMBAT_SESSION_INVARIANT_FAILED = "CombatContext: combat session lifecycle invariants are not satisfied"
 Errors.COMBAT_SESSION_MISSING = "CombatContext: combat session does not exist"
 
 return table.freeze(Errors)

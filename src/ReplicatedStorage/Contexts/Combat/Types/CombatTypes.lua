@@ -12,7 +12,18 @@ local AIContractTypes = require(ReplicatedStorage.Utilities.AI.ContractTypes)
 ]=]
 local CombatTypes = {}
 
-export type CombatSessionState = "Starting" | "Active" | "Ending"
+export type CombatSessionState = "Starting" | "RuntimeReady" | "Active" | "Ending" | "Failed"
+
+export type CombatSessionLifecycleSnapshot = {
+	HasSessionRecord: boolean,
+	HasRegisteredActorTypes: boolean,
+	RuntimeStarted: boolean,
+	RuntimeObjectPresent: boolean,
+	QueuedActorRegistrationHealthy: boolean,
+	IsShutdownLocked: boolean,
+	HasLifecycleFailure: boolean,
+	FailureReason: string?,
+}
 
 --[=[
 	@interface CombatSession

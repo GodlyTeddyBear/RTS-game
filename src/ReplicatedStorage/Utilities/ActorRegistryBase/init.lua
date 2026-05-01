@@ -148,6 +148,20 @@ function ActorRegistryBase:GetPendingActorPayloads(): { any }
 end
 
 --[=[
+    Returns how many actor payloads are waiting for runtime registration.
+    @within ActorRegistryBase
+    @return number -- Pending actor payload count
+]=]
+function ActorRegistryBase:GetPendingActorPayloadCount(): number
+	local count = 0
+	for _ in pairs(self._pendingActorPayloadsByHandle) do
+		count += 1
+	end
+
+	return count
+end
+
+--[=[
     Returns queued actor payloads and clears the pending queue.
     @within ActorRegistryBase
     @return { any } -- Pending payloads in handle order

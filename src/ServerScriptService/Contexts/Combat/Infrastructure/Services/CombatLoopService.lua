@@ -9,6 +9,7 @@ local CombatSessionStateMachine = require(script.Parent.CombatSessionStateMachin
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 type CombatSession = CombatTypes.CombatSession
+type CombatSessionLifecycleSnapshot = CombatTypes.CombatSessionLifecycleSnapshot
 type CombatSessionState = CombatTypes.CombatSessionState
 type InternalCombatSessionState = CombatSessionState | "Inactive"
 
@@ -17,6 +18,9 @@ type CombatSessionRecord = {
 	WaveNumber: number,
 	IsEndless: boolean,
 	IsPaused: boolean,
+	IsShutdownLocked: boolean,
+	HasLifecycleFailure: boolean,
+	FailureReason: string?,
 }
 
 local Ok = Result.Ok
@@ -44,6 +48,8 @@ CombatLoopService.__index = CombatLoopService
 function CombatLoopService.new()
 	local self = setmetatable({}, CombatLoopService)
 	self.ActiveCombats = {} :: { [number]: CombatSessionRecord }
+	self._actorRegistryService = nil
+	self._behaviorRuntimeService = nil
 	return self
 end
 
@@ -54,6 +60,8 @@ end
 	@param _name string -- Registry key used to register the service.
 ]=]
 function CombatLoopService:Init(_registry: any, _name: string)
+	self._actorRegistryService = _registry:Get("CombatActorRegistryService")
+	self._behaviorRuntimeService = _registry:Get("CombatBehaviorRuntimeService")
 end
 
 --[=[
@@ -69,17 +77,24 @@ function CombatLoopService:BeginSession(
 	isEndless: boolean
 ): Result.Result<CombatSessionState>
 	return Result.Catch(function()
-		-- Create the session machine first so the stored record always has a valid lifecycle owner.
 		local machine = CombatSessionStateMachine.new()
-		Try(machine:Transition("Starting"))
-
-		-- Capture the session metadata alongside the machine so the loop can rebuild snapshots later.
-		self.ActiveCombats[userId] = {
+		local record: CombatSessionRecord = {
 			Machine = machine,
 			WaveNumber = waveNumber,
 			IsEndless = isEndless,
 			IsPaused = false,
+			IsShutdownLocked = false,
+			HasLifecycleFailure = false,
+			FailureReason = nil,
 		}
+		self.ActiveCombats[userId] = record
+
+		local beginResult = machine:BeginStart(self:_BuildLifecycleSnapshot(record))
+		if not beginResult.success then
+			record.Machine:Destroy()
+			self.ActiveCombats[userId] = nil
+			return beginResult
+		end
 
 		return Ok("Starting")
 	end, "CombatLoopService:BeginSession")
@@ -87,64 +102,92 @@ end
 
 --[=[
 	@within CombatLoopService
-	Transitions one active combat session from `Starting` to `Active`.
+	Transitions one reserved combat session from `RuntimeReady` to `Active`.
 	@param userId number -- User id that owns the combat session.
 	@return Result.Result<CombatSessionState> -- New session state or a typed combat error.
 ]=]
 function CombatLoopService:ActivateSession(userId: number): Result.Result<CombatSessionState>
 	return Result.Catch(function()
-		local record = self.ActiveCombats[userId]
-		-- Missing sessions should surface as a typed combat error instead of a silent no-op.
-		if record == nil then
-			return Err("CombatSessionMissing", Errors.COMBAT_SESSION_MISSING, {
-				UserId = userId,
-			})
-		end
-
-		return record.Machine:Transition("Active")
+		local record = Try(self:_GetRecord(userId))
+		return record.Machine:Activate(self:_BuildLifecycleSnapshot(record))
 	end, "CombatLoopService:ActivateSession")
 end
 
 --[=[
 	@within CombatLoopService
-	Transitions one combat session back to `Inactive` and removes it from the registry.
+	Fails one combat session and clears it back to `Inactive`.
 	@param userId number -- User id that owns the combat session.
 	@return Result.Result<boolean> -- Whether a session was removed.
 ]=]
 function CombatLoopService:AbortSession(userId: number): Result.Result<boolean>
 	return Result.Catch(function()
 		local record = self.ActiveCombats[userId]
-		-- Nothing to abort if the user never entered combat.
 		if record == nil then
 			return Ok(false)
 		end
 
-		-- Transition out of combat before destroying the machine so cleanup sees a final state.
-		Try(record.Machine:Transition("Inactive"))
-		record.Machine:Destroy()
-		self.ActiveCombats[userId] = nil
+		local currentState = record.Machine:GetState()
+		if currentState ~= "Failed" and currentState ~= "Ending" then
+			Try(self:MarkSessionFailed(userId, "SessionAborted"))
+		end
 
+		Try(self:ClearSession(userId))
 		return Ok(true)
 	end, "CombatLoopService:AbortSession")
 end
 
+function CombatLoopService:MarkRuntimeReady(userId: number): Result.Result<CombatSessionState>
+	return Result.Catch(function()
+		local record = Try(self:_GetRecord(userId))
+		return record.Machine:MarkRuntimeReady(self:_BuildLifecycleSnapshot(record))
+	end, "CombatLoopService:MarkRuntimeReady")
+end
+
+function CombatLoopService:MarkSessionFailed(
+	userId: number,
+	failureReason: string
+): Result.Result<CombatSessionState>
+	return Result.Catch(function()
+		local record = Try(self:_GetRecord(userId))
+		local previousShutdownLock = record.IsShutdownLocked
+		local previousHasFailure = record.HasLifecycleFailure
+		local previousFailureReason = record.FailureReason
+
+		record.IsShutdownLocked = true
+		record.HasLifecycleFailure = true
+		record.FailureReason = failureReason
+
+		local failResult = record.Machine:Fail(self:_BuildLifecycleSnapshot(record))
+		if failResult.success then
+			return failResult
+		end
+
+		record.IsShutdownLocked = previousShutdownLock
+		record.HasLifecycleFailure = previousHasFailure
+		record.FailureReason = previousFailureReason
+		return failResult
+	end, "CombatLoopService:MarkSessionFailed")
+end
+
 --[=[
 	@within CombatLoopService
-	Transitions one active combat session from `Active` to `Ending`.
+	Transitions one active combat session from `Active` to `Ending` and locks shutdown.
 	@param userId number -- User id that owns the combat session.
 	@return Result.Result<CombatSessionState> -- New session state or a typed combat error.
 ]=]
 function CombatLoopService:BeginEndingSession(userId: number): Result.Result<CombatSessionState>
 	return Result.Catch(function()
-		local record = self.ActiveCombats[userId]
-		-- Ending only makes sense for an existing session.
-		if record == nil then
-			return Err("CombatSessionMissing", Errors.COMBAT_SESSION_MISSING, {
-				UserId = userId,
-			})
+		local record = Try(self:_GetRecord(userId))
+		local previousShutdownLock = record.IsShutdownLocked
+
+		record.IsShutdownLocked = true
+		local endingResult = record.Machine:BeginEnding(self:_BuildLifecycleSnapshot(record))
+		if endingResult.success then
+			return endingResult
 		end
 
-		return record.Machine:Transition("Ending")
+		record.IsShutdownLocked = previousShutdownLock
+		return endingResult
 	end, "CombatLoopService:BeginEndingSession")
 end
 
@@ -157,13 +200,11 @@ end
 function CombatLoopService:ClearSession(userId: number): Result.Result<boolean>
 	return Result.Catch(function()
 		local record = self.ActiveCombats[userId]
-		-- Clearing is idempotent so callers can clean up without guarding twice.
 		if record == nil then
 			return Ok(false)
 		end
 
-		-- Mirror abort cleanup so the state machine exits cleanly before removal.
-		Try(record.Machine:Transition("Inactive"))
+		Try(record.Machine:Clear(self:_BuildLifecycleSnapshot(record)))
 		record.Machine:Destroy()
 		self.ActiveCombats[userId] = nil
 
@@ -316,11 +357,34 @@ end
 	Destroys all tracked sessions and clears the active combat registry.
 ]=]
 function CombatLoopService:Destroy()
-	-- Tear down every live machine before clearing the registry so shutdown stays deterministic.
 	for userId, record in pairs(self.ActiveCombats) do
 		record.Machine:Destroy()
 		self.ActiveCombats[userId] = nil
 	end
+end
+
+function CombatLoopService:_BuildLifecycleSnapshot(record: CombatSessionRecord): CombatSessionLifecycleSnapshot
+	return {
+		HasSessionRecord = true,
+		HasRegisteredActorTypes = self._actorRegistryService:HasActorTypes(),
+		RuntimeStarted = self._actorRegistryService:IsRuntimeStarted(),
+		RuntimeObjectPresent = self._behaviorRuntimeService:HasRuntimeObject(),
+		QueuedActorRegistrationHealthy = self._actorRegistryService:GetPendingActorPayloadCount() == 0,
+		IsShutdownLocked = record.IsShutdownLocked,
+		HasLifecycleFailure = record.HasLifecycleFailure,
+		FailureReason = record.FailureReason,
+	}
+end
+
+function CombatLoopService:_GetRecord(userId: number): Result.Result<CombatSessionRecord>
+	local record = self.ActiveCombats[userId]
+	if record ~= nil then
+		return Ok(record)
+	end
+
+	return Err("CombatSessionMissing", Errors.COMBAT_SESSION_MISSING, {
+		UserId = userId,
+	})
 end
 
 return CombatLoopService
