@@ -61,6 +61,15 @@ local function _ResolveDisplayName(model: Model): string
 	return model.Name
 end
 
+local function _BuildEnemyActorHandle(model: Model): string?
+	local enemyId = model:GetAttribute("EnemyId")
+	if type(enemyId) == "string" and enemyId ~= "" then
+		return "Enemy:" .. enemyId
+	end
+
+	return nil
+end
+
 -- [Public API]
 
 --[=[
@@ -128,8 +137,7 @@ function EnemyAnimationController:_TrackModel(model: Model)
 		return setmetatable(base, {
 			__index = function(_, key)
 				if key == "ActorId" or key == "NPCId" then
-					local resolvedEnemyId = model:GetAttribute("EnemyId")
-					return if type(resolvedEnemyId) == "string" then resolvedEnemyId else nil
+					return _BuildEnemyActorHandle(model)
 				end
 				return nil
 			end,
