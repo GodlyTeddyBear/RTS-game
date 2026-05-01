@@ -17,21 +17,6 @@ type TFactoryConfig = Types.TFactoryConfig
 
 local Factory = {}
 
-local function _BuildFactoryInvoker<T>(factoryObject: any, surface: string | T): T
-	-- Method-name strings let callers wire existing factory APIs without wrapping every call site.
-	if type(surface) == "string" then
-		return (function(...: any): ...any
-			local method = factoryObject[surface]
-			assert(type(method) == "function", ("AiAdapterFactory factory is missing method '%s'"):format(surface))
-			return method(factoryObject, ...)
-		end) :: any
-	end
-
-	return (function(...: any): ...any
-		return (surface :: any)(factoryObject, ...)
-	end) :: any
-end
-
 --[=[
 	Creates one direct callback adapter for `AiRuntime`.
 	@within AiAdapterFactoryImpl
@@ -44,15 +29,20 @@ function Factory.Create(config: TConfig): TActorAdapter
 	-- The returned adapter is a plain table so the runtime can call it without owning any state.
 	local adapter = {
 		QueryActiveEntities = function(_self: TActorAdapter, frameContext: any): { number }
-			return config.QueryActiveEntities(frameContext)
+			local entities = config.QueryActiveEntities(frameContext)
+			Validation.ValidateQueryActiveEntitiesResult(entities)
+			return entities
 		end,
 		GetCompiledBehaviorTree = function(_self: TActorAdapter, entity: number): any?
 			return config.GetCompiledBehaviorTree(entity)
 		end,
 		GetActionState = function(_self: TActorAdapter, entity: number): TActionState?
-			return config.GetActionState(entity)
+			local actionState = config.GetActionState(entity)
+			Validation.ValidateActionState(actionState, "AiAdapterFactory GetActionState")
+			return actionState
 		end,
 		SetActionState = function(_self: TActorAdapter, entity: number, actionState: TActionState)
+			Validation.ValidateActionState(actionState, "AiAdapterFactory SetActionState")
 			config.SetActionState(entity, actionState)
 		end,
 		ClearActionState = function(_self: TActorAdapter, entity: number)
@@ -65,7 +55,9 @@ function Factory.Create(config: TConfig): TActorAdapter
 			config.UpdateLastTickTime(entity, currentTime)
 		end,
 		ShouldEvaluate = function(_self: TActorAdapter, entity: number, currentTime: number): boolean
-			return config.ShouldEvaluate(entity, currentTime)
+			local shouldEvaluate = config.ShouldEvaluate(entity, currentTime)
+			Validation.ValidateShouldEvaluateResult(shouldEvaluate)
+			return shouldEvaluate
 		end,
 	} :: TActorAdapter
 
@@ -74,6 +66,8 @@ function Factory.Create(config: TConfig): TActorAdapter
 			return config.ActorLabel
 		end
 	end
+
+	Validation.ValidateAdapter(adapter)
 
 	return adapter
 end
@@ -85,22 +79,7 @@ end
 	@return TActorAdapter
 ]=]
 function Factory.CreateFactory(config: TFactoryConfig): TActorAdapter
-	Validation.ValidateFactoryConfig(config)
-
-	local factoryObject = config.Factory
-
-	-- Factory-backed adapters forward through the same explicit callback contract as direct adapters.
-	return Factory.Create({
-		ActorLabel = config.ActorLabel,
-		QueryActiveEntities = _BuildFactoryInvoker(factoryObject, config.QueryActiveEntities),
-		GetCompiledBehaviorTree = _BuildFactoryInvoker(factoryObject, config.GetCompiledBehaviorTree),
-		GetActionState = _BuildFactoryInvoker(factoryObject, config.GetActionState),
-		SetActionState = _BuildFactoryInvoker(factoryObject, config.SetActionState),
-		ClearActionState = _BuildFactoryInvoker(factoryObject, config.ClearActionState),
-		SetPendingAction = _BuildFactoryInvoker(factoryObject, config.SetPendingAction),
-		UpdateLastTickTime = _BuildFactoryInvoker(factoryObject, config.UpdateLastTickTime),
-		ShouldEvaluate = _BuildFactoryInvoker(factoryObject, config.ShouldEvaluate),
-	})
+	return Factory.Create(Validation.ResolveFactoryConfig(config))
 end
 
 return table.freeze(Factory)

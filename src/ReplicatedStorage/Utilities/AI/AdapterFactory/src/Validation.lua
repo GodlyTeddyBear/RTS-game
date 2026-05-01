@@ -1,22 +1,11 @@
 --!strict
 
 local Types = require(script.Parent.Types)
+local ConfigPolicy = require(script.Parent.ConfigPolicy)
+local HasValidActionStateShapeSpec = require(script.Parent.Specs.HasValidActionStateShapeSpec)
 
 type TConfig = Types.TConfig
 type TFactoryConfig = Types.TFactoryConfig
-
-local REQUIRED_CALLBACKS = table.freeze({
-	"QueryActiveEntities",
-	"GetCompiledBehaviorTree",
-	"GetActionState",
-	"SetActionState",
-	"ClearActionState",
-	"SetPendingAction",
-	"UpdateLastTickTime",
-	"ShouldEvaluate",
-})
-
-local REQUIRED_FACTORY_SURFACES = REQUIRED_CALLBACKS
 
 --[=[
 	@class AiAdapterFactoryValidation
@@ -29,37 +18,42 @@ local Validation = {}
 
 -- Direct callback adapters
 function Validation.ValidateConfig(config: TConfig)
-	assert(type(config) == "table", "AiAdapterFactory config must be a table")
-
-	if config.ActorLabel ~= nil then
-		assert(type(config.ActorLabel) == "string" and #config.ActorLabel > 0, "AiAdapterFactory ActorLabel must be a non-empty string")
-	end
-
-	for _, callbackName in ipairs(REQUIRED_CALLBACKS) do
-		assert(
-			type((config :: any)[callbackName]) == "function",
-			("AiAdapterFactory config.%s must be a function"):format(callbackName)
-		)
-	end
+	ConfigPolicy.ValidateDirectConfig(config)
 end
 
 -- Factory-backed adapters
-function Validation.ValidateFactoryConfig(config: TFactoryConfig)
-	assert(type(config) == "table", "AiAdapterFactory factory config must be a table")
-	assert(config.Factory ~= nil, "AiAdapterFactory factory config.Factory is required")
+function Validation.ResolveFactoryConfig(config: TFactoryConfig): TConfig
+	return ConfigPolicy.ResolveFactoryConfig(config)
+end
 
-	if config.ActorLabel ~= nil then
-		assert(type(config.ActorLabel) == "string" and #config.ActorLabel > 0, "AiAdapterFactory ActorLabel must be a non-empty string")
-	end
+function Validation.ValidateAdapter(adapter: Types.TActorAdapter)
+	assert(type(adapter) == "table", "AiAdapterFactory built adapter must be a table")
 
-	for _, surfaceName in ipairs(REQUIRED_FACTORY_SURFACES) do
-		local surface = (config :: any)[surfaceName]
-		local surfaceType = type(surface)
+	for _, callbackName in ipairs(ConfigPolicy.GetRequiredCallbacks()) do
 		assert(
-			surfaceType == "string" or surfaceType == "function",
-			("AiAdapterFactory factory config.%s must be a method-name string or function"):format(surfaceName)
+			type((adapter :: any)[callbackName]) == "function",
+			("AiAdapterFactory built adapter.%s must be a function"):format(callbackName)
 		)
 	end
+
+	if (adapter :: any).GetActorLabel ~= nil then
+		assert(type((adapter :: any).GetActorLabel) == "function", "AiAdapterFactory built adapter.GetActorLabel must be a function")
+	end
+end
+
+function Validation.ValidateQueryActiveEntitiesResult(entities: any)
+	assert(type(entities) == "table", "AiAdapterFactory QueryActiveEntities must return an array")
+end
+
+function Validation.ValidateActionState(actionState: any, sourceLabel: string)
+	local result = HasValidActionStateShapeSpec.HasValidActionStateShape:IsSatisfiedBy({
+		ActionState = actionState,
+	})
+	assert(result.success, ("%s received an invalid action-state payload"):format(sourceLabel))
+end
+
+function Validation.ValidateShouldEvaluateResult(result: any)
+	assert(type(result) == "boolean", "AiAdapterFactory ShouldEvaluate must return a boolean")
 end
 
 return table.freeze(Validation)

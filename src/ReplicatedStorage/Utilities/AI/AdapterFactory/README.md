@@ -13,8 +13,10 @@ Shared AI package module for building `AI.Runtime` actor adapters from explicit 
 `AI.AdapterFactory` owns:
 
 - validating adapter-builder config
+- eagerly resolving factory-backed method-name surfaces during construction
 - producing a plain adapter table that matches the `AiRuntime` adapter contract
 - forwarding adapter calls into caller-provided callbacks
+- asserting shared action-state shape at the adapter boundary
 
 The owning context still owns:
 
