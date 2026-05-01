@@ -37,6 +37,20 @@ local function _IsStructureModel(instance: Instance): boolean
 	return instance:IsA("Model") and type(instance:GetAttribute("PlacementInstanceId")) == "number"
 end
 
+local function _BuildStructureActorHandleFromModel(model: Model): string?
+	local structureId = model:GetAttribute("StructureId")
+	if type(structureId) == "string" and structureId ~= "" then
+		return "Structure:" .. structureId
+	end
+
+	local placementInstanceId = model:GetAttribute("PlacementInstanceId")
+	if type(placementInstanceId) == "number" then
+		return "Structure:" .. tostring(placementInstanceId)
+	end
+
+	return nil
+end
+
 function StructureAnimationController:KnitInit()
 	local structureAttackAction = StructureAttackAction.new()
 	ActionRegistry.Register("StructureAttack", structureAttackAction)
@@ -46,6 +60,10 @@ function StructureAnimationController:KnitInit()
 	self._placementsFolderConnectionRemoved = nil :: RBXScriptConnection?
 	self._workspaceChildAddedConnection = nil :: RBXScriptConnection?
 	self._combatService = nil
+end
+
+function StructureAnimationController:_BuildStructureActorHandle(model: Model): string?
+	return _BuildStructureActorHandleFromModel(model)
 end
 
 function StructureAnimationController:_TrackModel(model: Model)
@@ -81,8 +99,7 @@ function StructureAnimationController:_TrackModel(model: Model)
 		return setmetatable(base, {
 			__index = function(_, key)
 				if key == "ActorId" then
-					local placementInstanceId = model:GetAttribute("PlacementInstanceId")
-					return if type(placementInstanceId) == "number" then tostring(placementInstanceId) else nil
+					return self:_BuildStructureActorHandle(model)
 				end
 				return nil
 			end,

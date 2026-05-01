@@ -8,21 +8,52 @@ local StructureGameObjectSyncService = {}
 StructureGameObjectSyncService.__index = StructureGameObjectSyncService
 setmetatable(StructureGameObjectSyncService, { __index = BaseGameObjectSyncService })
 
+local ACTIVE_STRUCTURE_ATTACK_ACTION_ID = "Structure.Attack"
+local STRUCTURE_ATTACK_ANIMATION_STATE = "StructureAttack"
+
 local function _ComputeAnimationState(combatAction: any): string
 	if
 		combatAction ~= nil
-		and combatAction.CurrentActionId == "StructureAttack"
+		and combatAction.CurrentActionId == ACTIVE_STRUCTURE_ATTACK_ACTION_ID
 		and (combatAction.ActionState == "Running" or combatAction.ActionState == "Committed")
 	then
-		return "StructureAttack"
+		return STRUCTURE_ATTACK_ANIMATION_STATE
 	end
 
 	return "Idle"
 end
 
+-- Sync reads live action state from CombatContext because combat runtime ownership
+-- lives there, while StructureContext still owns structure ECS state like health,
+-- identity, and structure-side target data.
+local function _ResolveCombatRuntimeAction(self: any, entity: number): any?
+	local actorHandle = self._combatAdapterService:GetActorHandle(entity)
+	local actionStateResult = self._combatContext:GetCombatActorActionState(actorHandle)
+	if not actionStateResult.success then
+		return nil
+	end
+
+	return actionStateResult.value
+end
+
+local function _ResolveRuntimeTargetEnemyEntity(combatAction: any): number?
+	if type(combatAction) ~= "table" then
+		return nil
+	end
+
+	local actionData = combatAction.ActionData
+	if type(actionData) ~= "table" or type(actionData.TargetEnemyEntity) ~= "number" then
+		return nil
+	end
+
+	return actionData.TargetEnemyEntity
+end
+
 function StructureGameObjectSyncService.new()
 	local self = setmetatable(BaseGameObjectSyncService.new("Structure"), StructureGameObjectSyncService)
 	self._registry = nil
+	self._combatContext = nil
+	self._combatAdapterService = nil
 	self._enemyEntityFactory = nil
 	return self
 end
@@ -41,6 +72,9 @@ function StructureGameObjectSyncService:Start()
 		return
 	end
 
+	self._combatContext = registry:Get("CombatContext")
+	self._combatAdapterService = registry:Get("StructureCombatAdapterService")
+
 	local enemyContext = registry:Get("EnemyContext")
 	local enemyEntityFactoryResult = enemyContext:GetEntityFactory()
 	if enemyEntityFactoryResult.success then
@@ -52,6 +86,10 @@ function StructureGameObjectSyncService:_GetEntityFactoryName(): string
 	return "StructureEntityFactory"
 end
 
+function StructureGameObjectSyncService:_ComputeAnimationState(combatAction: any): string
+	return _ComputeAnimationState(combatAction)
+end
+
 function StructureGameObjectSyncService:_GetInstanceFactoryName(): string?
 	return "StructureInstanceFactory"
 end
@@ -60,12 +98,15 @@ function StructureGameObjectSyncService:_QueryAllEntities(): { number }
 	return self:GetEntityFactoryOrThrow():QueryActiveEntities()
 end
 
+-- Sync should read each field from its true owner: structure identity and health come
+-- from StructureEntityFactory, while live running combat action comes from CombatContext.
+-- This mixed read is intentional and not a layering mistake.
 function StructureGameObjectSyncService:_SyncEntity(entity: number, model: Model)
 	local factory = self:GetEntityFactoryOrThrow()
 	local identity = factory:GetIdentity(entity)
 	local health = factory:GetHealth(entity)
-	local combatAction = factory:GetCombatAction(entity)
-	local targetEnemyEntity = factory:GetTarget(entity)
+	local combatAction = _ResolveCombatRuntimeAction(self, entity) or factory:GetCombatAction(entity)
+	local targetEnemyEntity = _ResolveRuntimeTargetEnemyEntity(combatAction) or factory:GetTarget(entity)
 
 	if identity ~= nil then
 		self:SetAttributeIfChanged(model, "StructureId", identity.StructureId)
@@ -77,9 +118,9 @@ function StructureGameObjectSyncService:_SyncEntity(entity: number, model: Model
 		self:SetAttributeIfChanged(model, "MaxHealth", health.Max)
 	end
 
-	local nextAnimationState = _ComputeAnimationState(combatAction)
+	local nextAnimationState = self:_ComputeAnimationState(combatAction)
 	self:SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
-	self:SetAttributeIfChanged(model, "AnimationLooping", nextAnimationState ~= "StructureAttack")
+	self:SetAttributeIfChanged(model, "AnimationLooping", nextAnimationState ~= STRUCTURE_ATTACK_ANIMATION_STATE)
 	self:SetAttributeIfChanged(model, "TargetEnemyId", self:_ResolveTargetEnemyId(targetEnemyEntity))
 end
 

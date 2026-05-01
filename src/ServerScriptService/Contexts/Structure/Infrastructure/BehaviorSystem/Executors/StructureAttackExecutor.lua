@@ -111,7 +111,7 @@ function StructureAttackExecutor:OnStart(entity: number, data: any?, services: a
 	if type(targetEnemy) ~= "number" then
 		return
 	end
-
+	--print("started")
 	services.StructureEntityFactory:SetTarget(entity, targetEnemy)
 	self:SetEntityValue(entity, "AwaitingHitboxActivation", false)
 	self:SetEntityValue(entity, "ProjectileActivated", false)
@@ -123,6 +123,7 @@ end
 
 function StructureAttackExecutor:CanContinue(entity: number, services: any): (boolean, string?)
 	local targetEnemy = _getTargetEnemy(entity, services)
+	--print("can continue?", targetEnemy)
 	if targetEnemy == nil then
 		return false, "MissingTargetEnemy"
 	end
@@ -198,7 +199,10 @@ function StructureAttackExecutor:ActivateHitbox(entity: number, services: any): 
 	return _activateHitboxInternal(self, entity, services, "AnimationCallback")
 end
 
-function StructureAttackExecutor:TryActivateHitboxFromTimeout(entity: number, services: any): TProjectileActivationResult
+function StructureAttackExecutor:TryActivateHitboxFromTimeout(
+	entity: number,
+	services: any
+): TProjectileActivationResult
 	return _activateHitboxInternal(self, entity, services, "ServerTimeoutFallback")
 end
 
@@ -252,10 +256,12 @@ end
 
 function StructureAttackExecutor:OnCancel(entity: number, services: any)
 	_cleanupStructureAttackState(self, entity, services)
+	--print("cancel")
 end
 
 function StructureAttackExecutor:OnComplete(entity: number, services: any)
 	_cleanupStructureAttackState(self, entity, services)
+	--print("complete")
 end
 
 function StructureAttackExecutor:OnDeath(entity: number, services: any)

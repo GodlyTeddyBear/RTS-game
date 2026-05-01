@@ -8,6 +8,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local AI = require(ReplicatedStorage.Utilities.AI)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
@@ -18,6 +19,40 @@ local StructureBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.
 
 local StructureCombatAdapterService = {}
 StructureCombatAdapterService.__index = StructureCombatAdapterService
+
+local StructureSemanticRequirements = table.freeze({
+	FactsDependOnPolling = false,
+	AttributesDependOnProjection = true,
+})
+
+local StructureRuntimeBinding = table.freeze({
+	ServiceField = "_gameObjectSyncService",
+	SyncPhase = "StructureSync",
+})
+
+local function _CloneActionState(actionState: any): any
+	if type(actionState) ~= "table" then
+		return {
+			CurrentActionId = nil,
+			ActionState = "Idle",
+			ActionData = nil,
+			PendingActionId = nil,
+			PendingActionData = nil,
+			StartedAt = nil,
+			FinishedAt = nil,
+		}
+	end
+
+	return {
+		CurrentActionId = actionState.CurrentActionId,
+		ActionState = actionState.ActionState or "Idle",
+		ActionData = actionState.ActionData,
+		PendingActionId = actionState.PendingActionId,
+		PendingActionData = actionState.PendingActionData,
+		StartedAt = actionState.StartedAt,
+		FinishedAt = actionState.FinishedAt,
+	}
+end
 
 -- ── Public ────────────────────────────────────────────────────────────────────
 
@@ -68,22 +103,26 @@ end
     @return Result.Result<boolean> -- Whether the actor type registration succeeded.
 ]=]
 function StructureCombatAdapterService:RegisterActorType(): Result.Result<boolean>
-	return self._combatContext:RegisterActorType({
-		ActorType = "Structure",
-		Conditions = Nodes.Conditions,
-		Commands = Nodes.Commands,
-		Executors = {
-			["Structure.Attack"] = table.freeze({
-				ActionId = "Structure.Attack",
-				CreateExecutor = StructureAttackExecutor.new,
-			}),
-		},
-		SemanticRequirements = {
-			FactsDependOnPolling = false,
-			AttributesDependOnProjection = false,
-		},
-		RuntimeOwner = self._runtimeOwner,
-	})
+	return Result.Catch(function()
+		AI.ValidateSemanticContract("Structure", StructureSemanticRequirements, StructureRuntimeBinding, {
+			RuntimeOwner = self._runtimeOwner,
+		})
+
+		return self._combatContext:RegisterActorType({
+			ActorType = "Structure",
+			Conditions = Nodes.Conditions,
+			Commands = Nodes.Commands,
+			Executors = {
+				["Structure.Attack"] = table.freeze({
+					ActionId = "Structure.Attack",
+					CreateExecutor = StructureAttackExecutor.new,
+				}),
+			},
+			SemanticRequirements = StructureSemanticRequirements,
+			RuntimeBinding = StructureRuntimeBinding,
+			RuntimeOwner = self._runtimeOwner,
+		})
+	end, "Structure:RegisterActorType")
 end
 
 -- Registers one structure entity as a runtime actor and builds its per-tick adapter hooks.
@@ -112,6 +151,9 @@ function StructureCombatAdapterService:RegisterActor(entity: number): Result.Res
 			BuildServices = function(currentTime: number): { [string]: any }
 				return self:_BuildServices(entity, currentTime)
 			end,
+			OnActionStateChanged = function(actionState: any)
+				self._entityFactory:SetCombatAction(entity, _CloneActionState(actionState))
+			end,
 		},
 	})
 end
@@ -125,6 +167,17 @@ end
 ]=]
 function StructureCombatAdapterService:UnregisterActor(entity: number): Result.Result<boolean>
 	return self._combatContext:UnregisterCombatActor(self:_BuildActorHandle(entity))
+end
+
+-- Returns the stable combat actor handle for one structure entity.
+--[=[
+    @within StructureCombatAdapterService
+    Returns the combat actor handle for one structure entity.
+    @param entity number -- Structure entity id to resolve.
+    @return string -- Stable actor handle used by the combat runtime.
+]=]
+function StructureCombatAdapterService:GetActorHandle(entity: number): string
+	return self:_BuildActorHandle(entity)
 end
 
 -- Stores the context that owns this adapter so callbacks can resolve back into it.
@@ -261,7 +314,13 @@ end
 -- Exposes range checks to behavior nodes through the shared combat perception interface.
 function StructureCombatAdapterService:_BuildPerceptionProxy(): any
 	return {
-		IsTargetInRange = function(_proxy: any, position: Vector3, attackRange: number, targetKind: any, targetEntity: number?)
+		IsTargetInRange = function(
+			_proxy: any,
+			position: Vector3,
+			attackRange: number,
+			targetKind: any,
+			targetEntity: number?
+		)
 			if targetKind ~= "Enemy" or targetEntity == nil then
 				return false
 			end
@@ -271,7 +330,10 @@ function StructureCombatAdapterService:_BuildPerceptionProxy(): any
 end
 
 -- Finds the nearest enemy candidate that is still valid for the structure's attack range.
-function StructureCombatAdapterService:_FindNearestEnemyInRange(position: Vector3, attackRange: number): number?
+function StructureCombatAdapterService:_FindNearestEnemyInRange(
+	position: Vector3,
+	attackRange: number
+): number?
 	return SpatialQuery.FindBestCandidate(
 		position,
 		self._enemyEntityFactory:QueryAliveEntities(),
@@ -308,7 +370,10 @@ function StructureCombatAdapterService:_IsEnemyTargetInRange(
 		position,
 		ModelPlus.GetCenterPosition(modelRef.Model),
 		attackRange,
-		SpatialQuery.MergeOptions(SpatialQuery.Presets.CharactersOnly, SpatialQuery.Presets.IncludeInstances({ modelRef.Model })),
+		SpatialQuery.MergeOptions(
+			SpatialQuery.Presets.CharactersOnly,
+			SpatialQuery.Presets.IncludeInstances({ modelRef.Model })
+		),
 		0.05
 	)
 end

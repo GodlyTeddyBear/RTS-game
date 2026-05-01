@@ -173,6 +173,8 @@ end
 ]=]
 function StructureContext:KnitStart()
 	StructureBaseContext:KnitStart()
+	StructureBaseContext:RegisterMethodSystem("CombatTick", "_entityFactory", "FlushPendingDeletes")
+	StructureBaseContext:RegisterSyncSystem("_gameObjectSyncService", "SyncAll", "StructureSync")
 	self._combatAdapterService:ConfigureRuntimeOwner(self)
 	local registerActorTypeResult = self._combatAdapterService:RegisterActorType()
 	if not registerActorTypeResult.success then
@@ -219,9 +221,6 @@ function StructureContext:KnitStart()
 			}, result.type)
 		end
 	end)
-
-	StructureBaseContext:RegisterMethodSystem("CombatTick", "_entityFactory", "FlushPendingDeletes")
-	StructureBaseContext:RegisterMethodSystem("CombatTick", "_gameObjectSyncService", "SyncAll")
 end
 
 -- [Private Helpers]

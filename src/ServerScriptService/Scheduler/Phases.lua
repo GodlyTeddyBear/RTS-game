@@ -29,4 +29,5 @@ return table.freeze({
 	phase("EnemySync"),
 	phase("UnitSync"),
 	phase("CombatTick"),
+	phase("StructureSync"),
 }) :: { PhaseEntry }

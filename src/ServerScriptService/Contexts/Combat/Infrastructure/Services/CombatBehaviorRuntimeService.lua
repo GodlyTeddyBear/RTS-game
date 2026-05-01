@@ -289,9 +289,15 @@ function CombatBehaviorRuntimeService:_RegisterQueuedActors(): Result.Result<boo
 			return behaviorTreeResult
 		end
 
+		-- Remove the queued payload before live registration so the registry does not reject
+		-- the actor for colliding with its own pending handle.
+		self._actorRegistryService:RemovePendingActorPayload(payload.ActorHandle)
+
 		-- Register the actor after the tree exists so the runtime never sees a half-built actor.
 		local registerResult = self._actorRegistryService:RegisterActor(payload, behaviorTreeResult.value)
 		if not registerResult.success then
+			-- Restore the pending payload immediately so startup failure keeps the actor retryable.
+			self._actorRegistryService:QueueActor(payload)
 			Result.MentionError("Combat:BehaviorRuntime", "Queued actor registration failed", {
 				Stage = "RegisterQueuedActor",
 				ActorType = payload.ActorType,
@@ -306,7 +312,6 @@ function CombatBehaviorRuntimeService:_RegisterQueuedActors(): Result.Result<boo
 
 		-- Track successful registrations so a later failure can unwind only the new actors.
 		table.insert(registeredHandles, payload.ActorHandle)
-		self._actorRegistryService:RemovePendingActorPayload(payload.ActorHandle)
 	end
 
 	return Ok(true)

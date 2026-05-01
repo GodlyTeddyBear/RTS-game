@@ -526,6 +526,7 @@ function Runtime:_RunActionPhase(
 )
 	for _, entityState in ipairs(entityStates) do
 		local actionState = _CloneActionState(entityState.Adapter:GetActionState(entityState.Entity))
+		entityState.HookOutcome.Services.ActionState = actionState
 		local runtimeContext = {
 			DeltaTime = frameContext.DeltaTime,
 			Services = entityState.HookOutcome.Services,
