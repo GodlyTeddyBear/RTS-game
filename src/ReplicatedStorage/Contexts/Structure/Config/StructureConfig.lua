@@ -9,7 +9,7 @@
 local StructureConfig = {}
 
 --[=[
-	@prop STRUCTURES { [string]: { DisplayName: string, MaxHealth: number, AttackRange: number, AttackDamage: number, AttackCooldown: number, AimRig: any? } }
+	@prop STRUCTURES { [string]: { DisplayName: string, MaxHealth: number, BehaviorId: string, AttackRange: number?, AttackDamage: number?, AttackCooldown: number?, AimRig: any? } }
 	@within StructureConfig
 	Frozen structure definitions keyed by canonical structure type.
 ]=]
@@ -17,6 +17,7 @@ StructureConfig.STRUCTURES = table.freeze({
 	SentryTurret = table.freeze({
 		DisplayName = "Sentry Turret",
 		MaxHealth = 100,
+		BehaviorId = "Attack",
 		AttackRange = 30,
 		AttackDamage = 15,
 		AttackCooldown = 1.2,
@@ -30,6 +31,11 @@ StructureConfig.STRUCTURES = table.freeze({
 			ReturnToNeutralWhenNoTarget = true,
 		}),
 	}),
+	Extractor = table.freeze({
+		DisplayName = "Extractor",
+		MaxHealth = 140,
+		BehaviorId = "Extract",
+	}),
 })
 
 --[=[
@@ -39,6 +45,8 @@ StructureConfig.STRUCTURES = table.freeze({
 ]=]
 StructureConfig.TYPE_ALIASES = table.freeze({
 	SentryTurret = "SentryTurret",
+	turret = "SentryTurret",
+	Extractor = "Extractor",
 })
 
 return table.freeze(StructureConfig)

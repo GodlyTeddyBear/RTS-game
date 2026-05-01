@@ -5,42 +5,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local BaseGameObjectSyncService = require(ReplicatedStorage.Utilities.BaseGameObjectSyncService)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local CombatTypes = require(ReplicatedStorage.Contexts.Combat.Types.CombatTypes)
-
-local RUN_SPEED_THRESHOLD = 17
+local EnemyAnimationStateResolver = require(script.Parent.Parent.RuntimeProfiles.EnemyAnimationStateResolver)
 
 type CombatActionState = CombatTypes.CombatActionState
 
 local EnemyGameObjectSyncService = {}
 EnemyGameObjectSyncService.__index = EnemyGameObjectSyncService
 setmetatable(EnemyGameObjectSyncService, { __index = BaseGameObjectSyncService })
-
-local function _SetAttributeIfChanged(model: Model, attributeName: string, value: any)
-	if model:GetAttribute(attributeName) == value then
-		return
-	end
-
-	model:SetAttribute(attributeName, value)
-end
-
-local function _ComputeAnimationState(pathState: any, role: any, combatAction: any): string
-	if
-		combatAction ~= nil
-		and (combatAction.CurrentActionId == "AttackStructure" or combatAction.CurrentActionId == "AttackBase")
-		and (combatAction.ActionState == "Running" or combatAction.ActionState == "Committed")
-	then
-		return combatAction.CurrentActionId
-	end
-
-	if not pathState or pathState.IsMoving ~= true then
-		return "Idle"
-	end
-
-	if role and type(role.MoveSpeed) == "number" and role.MoveSpeed >= RUN_SPEED_THRESHOLD then
-		return "Run"
-	end
-
-	return "Walk"
-end
 
 local function _ResolveCombatRuntimeAction(self: any, entity: number): CombatActionState?
 	local actorHandle = self._combatAdapterService:GetActorHandle(entity)
@@ -110,9 +81,17 @@ function EnemyGameObjectSyncService:_SyncEntity(entity: number, model: Model)
 		self:SetAttributeIfChanged(model, "TargetPreference", role.TargetPreference)
 	end
 
-	local nextAnimationState = _ComputeAnimationState(pathState, role, combatAction)
-	_SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
-	_SetAttributeIfChanged(model, "AnimationLooping", nextAnimationState ~= "AttackStructure" and nextAnimationState ~= "AttackBase")
+	local roleName = if role ~= nil then role.Role else nil
+	local moveSpeed = if role ~= nil then role.MoveSpeed else nil
+	local isMoving = pathState ~= nil and pathState.IsMoving == true
+	local nextAnimationState, isAnimationLooping = EnemyAnimationStateResolver.Resolve(
+		roleName,
+		moveSpeed,
+		isMoving,
+		combatAction
+	)
+	self:SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
+	self:SetAttributeIfChanged(model, "AnimationLooping", isAnimationLooping)
 
 	self:SetAttributeIfChanged(model, "Alive", world:has(entity, components.AliveTag))
 	self:SetAttributeIfChanged(model, "GoalReached", world:has(entity, components.GoalReachedTag))

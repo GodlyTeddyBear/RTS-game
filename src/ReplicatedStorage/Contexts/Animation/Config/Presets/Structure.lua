@@ -3,6 +3,11 @@
 local Helpers = require(script.Parent.Parent.AnimationPresetHelpers)
 local Constants = require(script.Parent.Parent.AnimationPresetConstants)
 
+local ACTION_STATE_FALLBACKS = table.freeze({
+	StructureAttack = "Attack",
+	StructureExtract = "Extract",
+})
+
 return table.freeze({
 	Id = "Structure",
 	Tag = "[AnimateStructure]",
@@ -18,12 +23,7 @@ return table.freeze({
 	WarnOnMissingAnimation = true,
 	ActionNameTransform = Helpers.ToActionName,
 	ActionStateFallback = function(state: string, validActions: { [string]: boolean }): string?
-		if state ~= "StructureAttack" then
-			return nil
-		end
-		if validActions.Attack then
-			return "Attack"
-		end
-		return nil
+		local actionName = ACTION_STATE_FALLBACKS[state]
+		return if actionName ~= nil and validActions[actionName] then actionName else nil
 	end,
 })

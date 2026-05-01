@@ -56,7 +56,7 @@ local function PlacementPalette(props: TPlacementPaletteProps)
 
 	return e(Frame, {
 		ref = visibility.containerRef,
-		Size = UDim2.fromScale(0.22, 0.3),
+		Size = UDim2.fromScale(0.22, 0.44),
 		Position = UDim2.fromScale(0.01, 0.5),
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundColor3 = Colors.Surface.Primary,
@@ -75,28 +75,28 @@ local function PlacementPalette(props: TPlacementPaletteProps)
 			Justify = "Start",
 		}, {
 			Title = e(Text, {
-				Size = UDim2.fromScale(1, 0.14),
+				Size = UDim2.fromScale(1, 0.1),
 				Text = "BUILD",
 				Variant = "heading",
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextYAlignment = Enum.TextYAlignment.Center,
 			}),
 			Body = e(VStack, {
-				Size = UDim2.fromScale(1, 0.8),
+				Size = UDim2.fromScale(1, 0.84),
 				BackgroundTransparency = 1,
 				Gap = Spacing.SM,
 				Align = "Start",
 				Justify = "Start",
 			}, (function()
 				local children = {}
-				for index, cardData in paletteHud.structures do
+				for _, cardData in paletteHud.structures do
 					children[cardData.structureType] = e(StructureCard, {
 						cardData = cardData,
 						isSelected = selectedType == cardData.structureType,
 						onSelect = function(_structureType: string)
 							_HandleStructureSelected(cardData)
 						end,
-						LayoutOrder = index,
+						LayoutOrder = cardData.layoutOrder,
 					})
 				end
 				return children

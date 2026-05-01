@@ -9,11 +9,11 @@
 local StructureTypes = {}
 
 --[=[
-	@type StructureType "SentryTurret"
+	@type StructureType "SentryTurret" | "Extractor"
 	@within StructureTypes
 	Canonical structure type identifier.
 ]=]
-export type StructureType = "SentryTurret"
+export type StructureType = "SentryTurret" | "Extractor"
 
 --[=[
 	@type StructureId string
@@ -92,6 +92,16 @@ export type TTransformComponent = {
 export type TIdentityComponent = {
 	StructureId: StructureId,
 	StructureType: StructureType,
+}
+
+export type TStructureConfig = {
+	DisplayName: string,
+	MaxHealth: number,
+	BehaviorId: "Attack" | "Extract",
+	AttackRange: number?,
+	AttackDamage: number?,
+	AttackCooldown: number?,
+	AimRig: any?,
 }
 
 --[=[

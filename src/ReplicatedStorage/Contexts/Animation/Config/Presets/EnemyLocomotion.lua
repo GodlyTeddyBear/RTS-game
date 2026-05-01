@@ -3,6 +3,11 @@
 local Helpers = require(script.Parent.Parent.AnimationPresetHelpers)
 local Constants = require(script.Parent.Parent.AnimationPresetConstants)
 
+local ACTION_STATE_CANDIDATES = table.freeze({
+	AttackBase = table.freeze({ "AttackStructure", "attackstructure", "Attack", "attack" }),
+	AttackStructure = table.freeze({ "Attack", "attack" }),
+})
+
 return table.freeze({
 	Id = "EnemyLocomotion",
 	Tag = "[AnimateEnemy]",
@@ -21,18 +26,18 @@ return table.freeze({
 		if validActions[state] then
 			return nil
 		end
-		if state == "AttackBase" and validActions.AttackStructure then
-			return "AttackStructure"
+
+		local candidates = ACTION_STATE_CANDIDATES[state]
+		if candidates == nil then
+			return nil
 		end
-		if state == "AttackBase" and validActions.attackstructure then
-			return "attackstructure"
+
+		for _, candidate in ipairs(candidates) do
+			if validActions[candidate] then
+				return candidate
+			end
 		end
-		if (state == "AttackBase" or state == "AttackStructure") and validActions.Attack then
-			return "Attack"
-		end
-		if (state == "AttackBase" or state == "AttackStructure") and validActions.attack then
-			return "attack"
-		end
+
 		return nil
 	end,
 })

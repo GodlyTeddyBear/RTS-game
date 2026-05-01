@@ -7,6 +7,7 @@ local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.Struct
 local CombatECSEntityFactory = require(ReplicatedStorage.Utilities.CombatECSEntityFactory)
 
 type StructureType = StructureTypes.StructureType
+type TStructureConfig = StructureTypes.TStructureConfig
 type TAttackStatsComponent = StructureTypes.TAttackStatsComponent
 type TAttackCooldownComponent = StructureTypes.TAttackCooldownComponent
 type THealthComponent = StructureTypes.THealthComponent
@@ -70,7 +71,7 @@ end
 function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord): number
 	local components = self:GetComponentsOrThrow()
 
-	local structureConfig = StructureConfig.STRUCTURES[record.structureType]
+	local structureConfig = StructureConfig.STRUCTURES[record.structureType] :: TStructureConfig?
 	assert(structureConfig ~= nil, "Unknown structure type: " .. tostring(record.structureType))
 
 	-- Create the entity first so every component write targets the same ECS id.
@@ -78,16 +79,22 @@ function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord)
 	local structureId = tostring(record.instanceId)
 
 	-- Copy the combat stats from config so later balance changes stay data-driven.
-	self:_Set(entity, components.AttackStatsComponent, {
-		AttackRange = structureConfig.AttackRange,
-		AttackDamage = structureConfig.AttackDamage,
-		AttackCooldown = structureConfig.AttackCooldown,
-	} :: TAttackStatsComponent)
+	if
+		type(structureConfig.AttackRange) == "number"
+		and type(structureConfig.AttackDamage) == "number"
+		and type(structureConfig.AttackCooldown) == "number"
+	then
+		self:_Set(entity, components.AttackStatsComponent, {
+			AttackRange = structureConfig.AttackRange,
+			AttackDamage = structureConfig.AttackDamage,
+			AttackCooldown = structureConfig.AttackCooldown,
+		} :: TAttackStatsComponent)
 
-	-- Start ready so the first acquired target can be attacked immediately.
-	self:_Set(entity, components.AttackCooldownComponent, {
-		Elapsed = structureConfig.AttackCooldown,
-	} :: TAttackCooldownComponent)
+		-- Start ready so the first acquired target can be attacked immediately.
+		self:_Set(entity, components.AttackCooldownComponent, {
+			Elapsed = structureConfig.AttackCooldown,
+		} :: TAttackCooldownComponent)
+	end
 
 	self:_Set(entity, components.HealthComponent, {
 		Current = structureConfig.MaxHealth,

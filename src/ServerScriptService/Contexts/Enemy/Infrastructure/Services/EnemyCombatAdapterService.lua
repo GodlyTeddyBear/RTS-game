@@ -12,20 +12,15 @@ local AI = require(ReplicatedStorage.Utilities.AI)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
-local BehaviorConfig = require(ReplicatedStorage.Contexts.Combat.Config.BehaviorConfig)
 local HitboxConfig = require(ReplicatedStorage.Contexts.Combat.Config.HitboxConfig)
 local Nodes = require(script.Parent.Parent.BehaviorSystem.Nodes)
 local Executors = require(script.Parent.Parent.BehaviorSystem.Executors)
-local SwarmBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.SwarmBehavior)
-local TankBehavior = require(script.Parent.Parent.BehaviorSystem.Behaviors.TankBehavior)
+local EnemyRuntimeProfileRegistry = require(script.Parent.Parent.RuntimeProfiles.EnemyRuntimeProfileRegistry)
+local EnemyHitTargetResolver = require(script.Parent.Resolvers.EnemyHitTargetResolver)
+local EnemyMeleeResolverFactory = require(script.Parent.Resolvers.EnemyMeleeResolverFactory)
 
 -- Health at or below 20% is treated as a flee condition.
 local FLEE_THRESHOLD = 0.2
-
-local EnemyBehaviorDefinitions = table.freeze({
-	Swarm = SwarmBehavior,
-	Tank = TankBehavior,
-})
 
 local EnemySemanticRequirements = table.freeze({
 	FactsDependOnPolling = true,
@@ -121,8 +116,7 @@ function EnemyCombatAdapterService:RegisterActor(entity: number): Result.Result<
 	local identity = self._entityFactory:GetIdentity(entity)
 	local role = self._entityFactory:GetRole(entity)
 	local roleName = if role ~= nil and role.Role ~= nil then role.Role else "Swarm"
-	local behaviorDefinition = EnemyBehaviorDefinitions[roleName] or SwarmBehavior
-	local defaults = BehaviorConfig.DEFAULTS_BY_ROLE[roleName] or BehaviorConfig.DEFAULT
+	local runtimeProfile = EnemyRuntimeProfileRegistry.GetByRole(roleName)
 	local actorHandle = self:_BuildActorHandle(entity)
 
 	-- Seed the goal position and lock-on state before the actor begins ticking.
@@ -133,8 +127,8 @@ function EnemyCombatAdapterService:RegisterActor(entity: number): Result.Result<
 	return self._combatContext:RegisterCombatActor({
 		ActorType = "Enemy",
 		ActorHandle = actorHandle,
-		BehaviorDefinition = behaviorDefinition,
-		TickInterval = defaults.TickInterval,
+		BehaviorDefinition = runtimeProfile.BehaviorDefinition,
+		TickInterval = runtimeProfile.TickInterval,
 		Adapter = {
 			IsActive = function(): boolean
 				return self._entityFactory:IsAlive(entity)
@@ -207,7 +201,10 @@ function EnemyCombatAdapterService:_ConfigureCombatServices()
 
 	-- Install shared enemy target resolution before any combat tick asks for hit validation.
 	self._combatServices.HitboxService:RegisterTargetResolver(function(hitPart: BasePart): any?
-		return self:_ResolveHitEntity(hitPart)
+		return EnemyHitTargetResolver.Resolve({
+			BaseEntityFactory = self._baseEntityFactory,
+			StructureEntityFactory = self._structureEntityFactory,
+		}, hitPart)
 	end)
 	self._combatServices.MovementService:ConfigureEnemyEntityFactory(self._entityFactory)
 	self._combatServices.LockOnService:ConfigureFactories(
@@ -215,20 +212,14 @@ function EnemyCombatAdapterService:_ConfigureCombatServices()
 		self._structureEntityFactory,
 		self._baseEntityFactory
 	)
-	self._combatServices.CombatHitResolutionService:ConfigureEnemyMeleeResolver({
-		IsBaseActive = function(): boolean
-			return self._baseEntityFactory:IsActive()
-		end,
-		IsStructureActive = function(structureEntity: number): boolean
-			return self._structureEntityFactory:IsActive(structureEntity)
-		end,
-		ApplyBaseDamage = function(damage: number): Result.Result<boolean>
-			return self._baseContext:ApplyDamage(damage)
-		end,
-		ApplyStructureDamage = function(structureEntity: number, damage: number): Result.Result<boolean>
-			return self._structureContext:ApplyDamage(structureEntity, damage)
-		end,
-	})
+	self._combatServices.CombatHitResolutionService:ConfigureEnemyMeleeResolver(
+		EnemyMeleeResolverFactory.Create({
+			BaseContext = self._baseContext,
+			BaseEntityFactory = self._baseEntityFactory,
+			StructureContext = self._structureContext,
+			StructureEntityFactory = self._structureEntityFactory,
+		})
+	)
 
 	self._configuredCombatServices = true
 end
@@ -505,31 +496,6 @@ function EnemyCombatAdapterService:_ResolveTargetRaycastData(
 	end
 
 	return nil, nil
-end
-
--- Maps hit parts back to base or structure entities for enemy attack resolution.
-function EnemyCombatAdapterService:_ResolveHitEntity(hitPart: BasePart): any?
-	if self._baseEntityFactory:IsPartOfBase(hitPart) then
-		return {
-			Kind = "Base",
-			Entity = 0,
-		}
-	end
-
-	local model = hitPart:FindFirstAncestorOfClass("Model")
-	if model == nil then
-		return nil
-	end
-
-	local structureEntity = self._structureEntityFactory:GetEntityByModel(model)
-	if structureEntity ~= nil then
-		return {
-			Kind = "Structure",
-			Entity = structureEntity,
-		}
-	end
-
-	return nil
 end
 
 -- Refreshes lock-on state after the combat runtime reports an action result.

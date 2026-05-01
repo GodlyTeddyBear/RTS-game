@@ -56,7 +56,7 @@ local function StructureCard(props: TStructureCardProps)
 
 	return e(Button, {
 		Text = "",
-		Size = UDim2.fromScale(1, 1),
+		Size = UDim2.fromScale(1, 0.44),
 		LayoutOrder = props.LayoutOrder,
 		Variant = "secondary",
 		ClipsDescendants = true,

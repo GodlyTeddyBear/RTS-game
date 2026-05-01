@@ -46,6 +46,7 @@ export type TStructureCardData = {
 	costMap: ResourceCostMap,
 	costText: string,
 	canAfford: boolean,
+	layoutOrder: number,
 }
 
 local runAtom: (() -> RunAtomState)? = nil
@@ -56,6 +57,10 @@ local DEFAULT_RUN_STATE: RunAtomState = table.freeze({
 	phaseStartedAt = nil,
 	phaseEndsAt = nil,
 	phaseDuration = nil,
+})
+local STRUCTURE_DISPLAY_ORDER = table.freeze({
+	"turret",
+	"Extractor",
 })
 
 -- [Private Helpers]
@@ -144,6 +149,26 @@ local function _FormatCostText(costMap: ResourceCostMap): string
 	return table.concat(parts, " / ")
 end
 
+local function _BuildOrderedStructureTypes(): { string }
+	local orderedTypes = {}
+	local included = {}
+
+	for index, structureType in ipairs(STRUCTURE_DISPLAY_ORDER) do
+		if PlacementConfig.STRUCTURE_PLACEMENT_COSTS[structureType] ~= nil then
+			orderedTypes[index] = structureType
+			included[structureType] = true
+		end
+	end
+
+	for structureType in PlacementConfig.STRUCTURE_PLACEMENT_COSTS do
+		if included[structureType] ~= true then
+			orderedTypes[#orderedTypes + 1] = structureType
+		end
+	end
+
+	return orderedTypes
+end
+
 -- [Public API]
 
 --[=[
@@ -160,14 +185,17 @@ local function usePlacementPaletteHud(): { isVisible: boolean, structures: { TSt
 	local runState = ReactCharm.useAtom(_GetRunAtom()) or DEFAULT_RUN_STATE
 	local wallet = ReactCharm.useAtom(_GetResourceAtom()) :: ResourceClientState
 
-	local structures = table.create(1)
-	for structureType, costMap in PlacementConfig.STRUCTURE_PLACEMENT_COSTS do
+	local orderedStructureTypes = _BuildOrderedStructureTypes()
+	local structures = table.create(#orderedStructureTypes)
+	for index, structureType in ipairs(orderedStructureTypes) do
+		local costMap = PlacementConfig.STRUCTURE_PLACEMENT_COSTS[structureType]
 		structures[#structures + 1] = table.freeze({
 			structureType = structureType,
 			displayName = _FormatStructureName(structureType),
 			costMap = costMap,
 			costText = _FormatCostText(costMap),
 			canAfford = _CanAfford(wallet, costMap),
+			layoutOrder = index,
 		} :: TStructureCardData)
 	end
 

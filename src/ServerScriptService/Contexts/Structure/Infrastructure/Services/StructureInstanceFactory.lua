@@ -7,6 +7,7 @@ local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local BaseInstanceFactory = require(ReplicatedStorage.Utilities.BaseInstanceFactory)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
+local MiningConfig = require(ReplicatedStorage.Contexts.Mining.Config.MiningConfig)
 local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
 
 type TCreateStructureInstanceOptions = {
@@ -18,6 +19,33 @@ type TCreateStructureInstanceOptions = {
 local StructureInstanceFactory = {}
 StructureInstanceFactory.__index = StructureInstanceFactory
 setmetatable(StructureInstanceFactory, { __index = BaseInstanceFactory })
+
+local function _CreateExtractorFallbackModel(): Model
+	local model = Instance.new("Model")
+	model.Name = MiningConfig.EXTRACTOR_STRUCTURE_TYPE
+
+	local base = Instance.new("Part")
+	base.Name = "Base"
+	base.Anchored = true
+	base.CanCollide = true
+	base.Size = Vector3.new(5, 1, 5)
+	base.Color = Color3.fromRGB(78, 83, 92)
+	base.Material = Enum.Material.Metal
+	base.Parent = model
+
+	local drill = Instance.new("Part")
+	drill.Name = "ExtractorCore"
+	drill.Anchored = true
+	drill.CanCollide = true
+	drill.Size = Vector3.new(2, 4, 2)
+	drill.Position = Vector3.new(0, 2.5, 0)
+	drill.Color = Color3.fromRGB(202, 170, 76)
+	drill.Material = Enum.Material.DiamondPlate
+	drill.Parent = model
+
+	model.PrimaryPart = base
+	return model
+end
 
 local function _EnsureAnimationsFolderValue(model: Model, animationsFolder: Folder?)
 	local animationsFolderRef = model:FindFirstChild("AnimationsFolder")
@@ -94,10 +122,22 @@ end
 
 function StructureInstanceFactory:_CreateInstanceForEntity(_entityId: number, options: TCreateStructureInstanceOptions): Instance
 	local assetRegistry = self:_GetAssetRegistry()
-	assert(assetRegistry ~= nil, "StructureInstanceFactory: missing structure asset registry")
+	if assetRegistry == nil then
+		assert(
+			options.structureType == MiningConfig.EXTRACTOR_STRUCTURE_TYPE,
+			"StructureInstanceFactory: missing structure asset registry"
+		)
+		return _CreateExtractorFallbackModel()
+	end
 
 	local model = assetRegistry:GetStructureModel(options.structureType)
-	assert(model ~= nil, "StructureInstanceFactory: missing structure model for " .. tostring(options.structureType))
+	if model == nil then
+		assert(
+			options.structureType == MiningConfig.EXTRACTOR_STRUCTURE_TYPE,
+			"StructureInstanceFactory: missing structure model for " .. tostring(options.structureType)
+		)
+		return _CreateExtractorFallbackModel()
+	end
 	return model
 end
 

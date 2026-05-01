@@ -3,25 +3,11 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BaseGameObjectSyncService = require(ReplicatedStorage.Utilities.BaseGameObjectSyncService)
+local StructureAnimationStateResolver = require(script.Parent.Parent.RuntimeProfiles.StructureAnimationStateResolver)
 
 local StructureGameObjectSyncService = {}
 StructureGameObjectSyncService.__index = StructureGameObjectSyncService
 setmetatable(StructureGameObjectSyncService, { __index = BaseGameObjectSyncService })
-
-local ACTIVE_STRUCTURE_ATTACK_ACTION_ID = "Structure.Attack"
-local STRUCTURE_ATTACK_ANIMATION_STATE = "StructureAttack"
-
-local function _ComputeAnimationState(combatAction: any): string
-	if
-		combatAction ~= nil
-		and combatAction.CurrentActionId == ACTIVE_STRUCTURE_ATTACK_ACTION_ID
-		and (combatAction.ActionState == "Running" or combatAction.ActionState == "Committed")
-	then
-		return STRUCTURE_ATTACK_ANIMATION_STATE
-	end
-
-	return "Idle"
-end
 
 -- Sync reads live action state from CombatContext because combat runtime ownership
 -- lives there, while StructureContext still owns structure ECS state like health,
@@ -86,10 +72,6 @@ function StructureGameObjectSyncService:_GetEntityFactoryName(): string
 	return "StructureEntityFactory"
 end
 
-function StructureGameObjectSyncService:_ComputeAnimationState(combatAction: any): string
-	return _ComputeAnimationState(combatAction)
-end
-
 function StructureGameObjectSyncService:_GetInstanceFactoryName(): string?
 	return "StructureInstanceFactory"
 end
@@ -118,9 +100,10 @@ function StructureGameObjectSyncService:_SyncEntity(entity: number, model: Model
 		self:SetAttributeIfChanged(model, "MaxHealth", health.Max)
 	end
 
-	local nextAnimationState = self:_ComputeAnimationState(combatAction)
+	local structureType = if identity ~= nil then identity.StructureType else nil
+	local nextAnimationState, isAnimationLooping = StructureAnimationStateResolver.Resolve(structureType, combatAction)
 	self:SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
-	self:SetAttributeIfChanged(model, "AnimationLooping", nextAnimationState ~= STRUCTURE_ATTACK_ANIMATION_STATE)
+	self:SetAttributeIfChanged(model, "AnimationLooping", isAnimationLooping)
 	self:SetAttributeIfChanged(model, "TargetEnemyId", self:_ResolveTargetEnemyId(targetEnemyEntity))
 end
 
