@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local BehaviorSystem = require(ReplicatedStorage.Utilities.AI.Behavior)
 
 local HookRunner = require(script.Parent.HookRunner)
+local RuntimeEnums = require(script.Parent.RuntimeEnums)
 local Types = require(script.Parent.Types)
 local Validation = require(script.Parent.Validation)
 
@@ -125,7 +126,7 @@ end
 	@return TCleanupResult
 ]=]
 function Runtime:CancelActorAction(actorType: string, entity: number, frameContext: TFrameContext): TCleanupResult
-	return self:_CleanupActorAction("Cancel", actorType, entity, frameContext)
+	return self:_CleanupActorAction(RuntimeEnums.CleanupKind.Cancel.Name, actorType, entity, frameContext)
 end
 
 --[=[
@@ -137,7 +138,7 @@ end
 	@return TCleanupResult
 ]=]
 function Runtime:HandleActorDeath(actorType: string, entity: number, frameContext: TFrameContext): TCleanupResult
-	return self:_CleanupActorAction("Death", actorType, entity, frameContext)
+	return self:_CleanupActorAction(RuntimeEnums.CleanupKind.Death.Name, actorType, entity, frameContext)
 end
 
 --[=[
@@ -248,7 +249,7 @@ function Runtime:_BuildEntityStates(
 		local result = {
 			ActorType = actorType,
 			Entity = entity,
-			TreeStatus = "SkippedNoTree",
+			TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name,
 			StartStatus = nil,
 			CommitStatus = nil,
 			TickActionId = nil,
@@ -297,7 +298,7 @@ function Runtime:_CleanupActorAction(
 	local adapter = self:_RequireActorAdapter(actorType)
 	if adapter == nil then
 		-- Return a structured invalid-type result instead of throwing so cleanup can stay caller-safe.
-		return _BuildCleanupResult(actorType, entity, cleanupKind, "InvalidActorType", nil)
+		return _BuildCleanupResult(actorType, entity, cleanupKind, RuntimeEnums.CleanupStatus.InvalidActorType.Name, nil)
 	end
 
 	local defects = {}
@@ -312,14 +313,14 @@ function Runtime:_CleanupActorAction(
 	}
 
 	-- Cleanup uses the same runtime boundary as frame execution so cancellation and death stay behavior-system aware.
-	local cleanupResult = if cleanupKind == "Cancel"
+	local cleanupResult = if cleanupKind == RuntimeEnums.CleanupKind.Cancel.Name
 		then self._runtime:CancelCurrentAction(entity, actionState, runtimeContext)
 		else self._runtime:HandleCurrentActionDeath(entity, actionState, runtimeContext)
 
 	if not cleanupResult.success then
 		-- Cleanup failures still clear the adapter state so stale actions do not linger after the defect.
 		local defect = {
-			Stage = if cleanupKind == "Cancel" then "CancelActorAction" else "HandleActorDeath",
+			Stage = if cleanupKind == RuntimeEnums.CleanupKind.Cancel.Name then "CancelActorAction" else "HandleActorDeath",
 			ActorType = actorType,
 			Entity = entity,
 			ActorLabel = _GetActorLabel(adapter),
@@ -330,17 +331,25 @@ function Runtime:_CleanupActorAction(
 		self:_PushDefect(defects, defect)
 		adapter:ClearActionState(entity)
 
-		return _BuildCleanupResult(actorType, entity, cleanupKind, "ClearedAfterFailure", defect)
+		return _BuildCleanupResult(
+			actorType,
+			entity,
+			cleanupKind,
+			RuntimeEnums.CleanupStatus.ClearedAfterFailure.Name,
+			defect
+		)
 	end
 
 	adapter:ClearActionState(entity)
 
-	if cleanupResult.value.Status == "NoCurrentAction" then
+	if cleanupResult.value.Status == RuntimeEnums.CancelStatus.NoCurrentAction.Name
+		or cleanupResult.value.Status == RuntimeEnums.DeathStatus.NoCurrentAction.Name
+	then
 		-- A no-op cleanup still returns a distinct status for callers that care about the empty-path case.
-		return _BuildCleanupResult(actorType, entity, cleanupKind, "NoCurrentAction", nil)
+		return _BuildCleanupResult(actorType, entity, cleanupKind, RuntimeEnums.CleanupStatus.NoCurrentAction.Name, nil)
 	end
 
-	return _BuildCleanupResult(actorType, entity, cleanupKind, "Handled", nil)
+	return _BuildCleanupResult(actorType, entity, cleanupKind, RuntimeEnums.CleanupStatus.Handled.Name, nil)
 end
 
 --[=[
@@ -404,7 +413,7 @@ function Runtime:_RunTreePhase(
 	for _, entityState in ipairs(entityStates) do
 		if entityState.BehaviorTree == nil then
 			-- No tree means there is nothing to evaluate for this entity.
-			entityState.Result.TreeStatus = "SkippedNoTree"
+			entityState.Result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name
 			continue
 		end
 
@@ -412,7 +421,7 @@ function Runtime:_RunTreePhase(
 		Validation.ValidateShouldEvaluateResult(entityState.ActorType, entityState.Entity, shouldEvaluate)
 		if not shouldEvaluate then
 			-- The adapter owns the tick gate, so the runtime skips entities that are not ready yet.
-			entityState.Result.TreeStatus = "SkippedNotReady"
+			entityState.Result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNotReady.Name
 			continue
 		end
 
@@ -423,7 +432,7 @@ function Runtime:_RunTreePhase(
 
 		if not didRun then
 			-- Tree execution defects stay isolated to the tree phase and do not stop later entities.
-			entityState.Result.TreeStatus = "TreeDefect"
+			entityState.Result.TreeStatus = RuntimeEnums.TreeStatus.TreeDefect.Name
 			self:_PushDefect(defects, {
 				Stage = "TreeRun",
 				ActorType = entityState.ActorType,
@@ -436,7 +445,7 @@ function Runtime:_RunTreePhase(
 			continue
 		end
 
-		entityState.Result.TreeStatus = "Ran"
+		entityState.Result.TreeStatus = RuntimeEnums.TreeStatus.Ran.Name
 		-- The tree advanced successfully, so the adapter records the new tick time for the next frame.
 		entityState.Adapter:UpdateLastTickTime(entityState.Entity, frameContext.CurrentTime)
 	end
@@ -482,12 +491,14 @@ function Runtime:_RunTransitionPhase(
 		local startStatus = startResult.value.Status
 		entityState.Result.StartStatus = startStatus
 
-		if startStatus == "NoAction" or startStatus == "Blocked" then
+		if startStatus == RuntimeEnums.StartStatus.NoAction.Name
+			or startStatus == RuntimeEnums.StartStatus.Blocked.Name
+		then
 			-- These statuses intentionally leave the action state unchanged.
 			continue
 		end
 
-		if startStatus == "NoChange" then
+		if startStatus == RuntimeEnums.StartStatus.NoChange.Name then
 			-- No-change means the pending action should be dropped but the current action should stay intact.
 			actionState.PendingActionId = nil
 			actionState.PendingActionData = nil
@@ -495,7 +506,9 @@ function Runtime:_RunTransitionPhase(
 			continue
 		end
 
-		if startStatus == "MissingAction" or startStatus == "FailedToStart" then
+		if startStatus == RuntimeEnums.StartStatus.MissingAction.Name
+			or startStatus == RuntimeEnums.StartStatus.FailedToStart.Name
+		then
 			-- Missing or failed starts reset the adapter state so the entity does not retain a bad pending action.
 			entityState.Adapter:ClearActionState(entityState.Entity)
 			continue
@@ -504,7 +517,7 @@ function Runtime:_RunTransitionPhase(
 		local commitResult = self._runtime:CommitStartedAction(actionState, startResult.value, frameContext.CurrentTime)
 		entityState.Result.CommitStatus = commitResult.Status
 
-		if commitResult.Status == "Committed" then
+		if commitResult.Status == RuntimeEnums.CommitStatus.Committed.Name then
 			-- A successful commit writes the updated action state back to the adapter.
 			entityState.Adapter:SetActionState(entityState.Entity, actionState)
 			continue
@@ -572,13 +585,13 @@ function Runtime:_RunActionPhase(
 		local resolveResult = self._runtime:ResolveFinishedAction(actionState, tickResult.value, frameContext.CurrentTime)
 		entityState.Result.ResolveStatus = resolveResult.Status
 
-		if resolveResult.Status == "Resolved" then
+		if resolveResult.Status == RuntimeEnums.ResolveStatus.Resolved.Name then
 			-- Resolved actions keep the updated state because the action may have advanced into a new terminal status.
 			entityState.Adapter:SetActionState(entityState.Entity, actionState)
 			continue
 		end
 
-		if resolveResult.Status == "InvalidResult" then
+		if resolveResult.Status == RuntimeEnums.ResolveStatus.InvalidResult.Name then
 			-- Invalid resolve transitions are defects because the shared runtime rejected the terminal status.
 			self:_PushDefect(defects, {
 				Stage = "ResolveFinishedAction",

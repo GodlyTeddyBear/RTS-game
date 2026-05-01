@@ -9,6 +9,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local RuntimeEnums = require(ReplicatedStorage.Utilities.AI.Runtime.src.RuntimeEnums)
 local ExecutorBoundary = require(script.Parent.ExecutorBoundary)
 local RuntimeContextAdapter = require(script.Parent.RuntimeContextAdapter)
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -24,9 +25,9 @@ type TTryDeathActionResult = Types.TTryDeathActionResult
 
 local HandleCurrentActionDeath = {}
 
-local function _createResult(status: string, actionId: string?): TDeathActionResult
+local function _createResult(status: any, actionId: string?): TDeathActionResult
 	return {
-		Status = status,
+		Status = status.Name,
 		ActionId = actionId,
 	}
 end
@@ -39,12 +40,12 @@ function HandleCurrentActionDeath.TryExecute(
 ): TTryDeathActionResult
 	local currentActionId = actionState.CurrentActionId
 	if type(currentActionId) ~= "string" or currentActionId == "" then
-		return Ok(_createResult("NoCurrentAction", nil))
+		return Ok(_createResult(RuntimeEnums.DeathStatus.NoCurrentAction, nil))
 	end
 
 	local executor = executors[currentActionId]
 	if executor == nil then
-		return Ok(_createResult("MissingAction", currentActionId))
+		return Ok(_createResult(RuntimeEnums.DeathStatus.MissingAction, currentActionId))
 	end
 
 	local executorServices = RuntimeContextAdapter.GetExecutorServices(runtimeContext)
@@ -53,7 +54,7 @@ function HandleCurrentActionDeath.TryExecute(
 		return deathResult
 	end
 
-	return Ok(_createResult("Handled", currentActionId))
+	return Ok(_createResult(RuntimeEnums.DeathStatus.Handled, currentActionId))
 end
 
 return table.freeze(HandleCurrentActionDeath)

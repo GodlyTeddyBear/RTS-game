@@ -9,6 +9,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local RuntimeEnums = require(ReplicatedStorage.Utilities.AI.Runtime.src.RuntimeEnums)
 local ActionId = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.ActionId)
 local ActionStateTransitionSpec = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Specs.ActionStateTransitionSpec)
 local ExecutorBoundary = require(script.Parent.ExecutorBoundary)
@@ -28,13 +29,13 @@ local StartPendingAction = {}
 
 -- Package the pending-start outcome into the shared runtime result shape.
 local function _createResult(
-	status: string,
+	status: any,
 	actionId: string?,
 	replacedActionId: string?,
 	failureReason: string?
 ): TStartActionResult
 	return {
-		Status = status,
+		Status = status.Name,
 		ActionId = actionId,
 		ReplacedActionId = replacedActionId,
 		FailureReason = failureReason,
@@ -59,7 +60,7 @@ function StartPendingAction.TryExecute(
 	-- Read the pending action id and exit early when nothing is waiting to start
 	local pendingActionId = actionState.PendingActionId
 	if type(pendingActionId) ~= "string" then
-		return Ok(_createResult("NoAction", nil, nil, nil))
+		return Ok(_createResult(RuntimeEnums.StartStatus.NoAction, nil, nil, nil))
 	end
 	pendingActionId = ActionId.From(pendingActionId, "actionState.PendingActionId")
 
@@ -68,7 +69,7 @@ function StartPendingAction.TryExecute(
 		ActionState = actionState.ActionState,
 	})
 	if not transitionResult.success then
-		return Ok(_createResult("Blocked", pendingActionId, nil, tostring(actionState.ActionState)))
+		return Ok(_createResult(RuntimeEnums.StartStatus.Blocked, pendingActionId, nil, tostring(actionState.ActionState)))
 	end
 
 	-- Resolve runtime services and detect whether the pending action replaces an active one
@@ -79,7 +80,7 @@ function StartPendingAction.TryExecute(
 	if type(currentActionId) == "string" then
 		currentActionId = ActionId.From(currentActionId, "actionState.CurrentActionId")
 		if currentActionId == pendingActionId then
-			return Ok(_createResult("NoChange", pendingActionId, nil, nil))
+			return Ok(_createResult(RuntimeEnums.StartStatus.NoChange, pendingActionId, nil, nil))
 		end
 
 		local currentExecutor = executors[currentActionId]
@@ -95,7 +96,7 @@ function StartPendingAction.TryExecute(
 	-- Look up the pending executor before attempting the start transition
 	local nextExecutor = executors[pendingActionId]
 	if nextExecutor == nil then
-		return Ok(_createResult("MissingAction", pendingActionId, replacedActionId, nil))
+		return Ok(_createResult(RuntimeEnums.StartStatus.MissingAction, pendingActionId, replacedActionId, nil))
 	end
 
 	-- Start the executor defensively so executor errors become a failed result instead of a hard crash
@@ -106,10 +107,17 @@ function StartPendingAction.TryExecute(
 
 	local startInvocation = startResult.value
 	if not startInvocation.Success then
-		return Ok(_createResult("FailedToStart", pendingActionId, replacedActionId, startInvocation.FailureReason))
+		return Ok(
+			_createResult(
+				RuntimeEnums.StartStatus.FailedToStart,
+				pendingActionId,
+				replacedActionId,
+				startInvocation.FailureReason
+			)
+		)
 	end
 
-	local status = if replacedActionId ~= nil then "Replaced" else "Started"
+	local status = if replacedActionId ~= nil then RuntimeEnums.StartStatus.Replaced else RuntimeEnums.StartStatus.Started
 	return Ok(_createResult(status, pendingActionId, replacedActionId, nil))
 end
 

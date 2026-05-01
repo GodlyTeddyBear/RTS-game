@@ -7,6 +7,9 @@
 	@client
 ]=]
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local RuntimeEnums = require(ReplicatedStorage.Utilities.AI.Runtime.src.RuntimeEnums)
 local ActionStateTransitionSpec = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Specs.ActionStateTransitionSpec)
 local Types = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Types)
 
@@ -34,9 +37,9 @@ function ResolveFinishedAction.Execute(
 
 	-- Skip non-terminal or no-op results because they do not resolve the current action
 	local status = tickResult.Status
-	if status == "Running" or status == "NoCurrentAction" then
+	if status == RuntimeEnums.TickStatus.Running.Name or status == RuntimeEnums.TickStatus.NoCurrentAction.Name then
 		return {
-			Status = "Skipped",
+			Status = RuntimeEnums.ResolveStatus.Skipped.Name,
 			ActionId = tickResult.ActionId,
 		}
 	end
@@ -47,7 +50,7 @@ function ResolveFinishedAction.Execute(
 	})
 	if not terminalResult.success then
 		return {
-			Status = "InvalidResult",
+			Status = RuntimeEnums.ResolveStatus.InvalidResult.Name,
 			ActionId = tickResult.ActionId,
 		}
 	end
@@ -56,7 +59,7 @@ function ResolveFinishedAction.Execute(
 	local currentActionId = actionState.CurrentActionId
 	if tickResult.ActionId ~= currentActionId then
 		return {
-			Status = "InvalidResult",
+			Status = RuntimeEnums.ResolveStatus.InvalidResult.Name,
 			ActionId = tickResult.ActionId,
 		}
 	end
@@ -72,7 +75,7 @@ function ResolveFinishedAction.Execute(
 	end
 
 	return {
-		Status = "Resolved",
+		Status = RuntimeEnums.ResolveStatus.Resolved.Name,
 		ActionId = resolvedActionId,
 	}
 end

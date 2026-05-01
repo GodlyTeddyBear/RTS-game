@@ -9,6 +9,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local RuntimeEnums = require(ReplicatedStorage.Utilities.AI.Runtime.src.RuntimeEnums)
 local ExecutorBoundary = require(script.Parent.ExecutorBoundary)
 local RuntimeContextAdapter = require(script.Parent.RuntimeContextAdapter)
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -43,7 +44,7 @@ function CancelCurrentAction.TryExecute(
 	local currentActionId = actionState.CurrentActionId
 	if type(currentActionId) ~= "string" or #currentActionId == 0 then
 		return Ok({
-			Status = "NoCurrentAction",
+			Status = RuntimeEnums.CancelStatus.NoCurrentAction.Name,
 			ActionId = nil,
 		})
 	end
@@ -52,7 +53,7 @@ function CancelCurrentAction.TryExecute(
 	local executor = executors[currentActionId]
 	if executor == nil then
 		return Ok({
-			Status = "MissingAction",
+			Status = RuntimeEnums.CancelStatus.MissingAction.Name,
 			ActionId = currentActionId,
 		})
 	end
@@ -65,7 +66,7 @@ function CancelCurrentAction.TryExecute(
 	end
 
 	return Ok({
-		Status = "Cancelled",
+		Status = RuntimeEnums.CancelStatus.Cancelled.Name,
 		ActionId = currentActionId,
 	})
 end

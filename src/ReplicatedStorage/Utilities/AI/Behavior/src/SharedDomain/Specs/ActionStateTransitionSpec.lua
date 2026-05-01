@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Spec = require(ReplicatedStorage.Utilities.Specification)
+local RuntimeEnums = require(ReplicatedStorage.Utilities.AI.Runtime.src.RuntimeEnums)
 
 export type TStartTransitionCandidate = {
 	ActionState: any,
@@ -30,7 +31,10 @@ local HasCommittableStartResult = Spec.new(
 	function(candidate: TCommitStartCandidate): boolean
 		local startResult = candidate.StartResult
 		return type(startResult) == "table"
-			and (startResult.Status == "Started" or startResult.Status == "Replaced")
+			and (
+				startResult.Status == RuntimeEnums.StartStatus.Started.Name
+				or startResult.Status == RuntimeEnums.StartStatus.Replaced.Name
+			)
 	end
 )
 
@@ -40,7 +44,11 @@ local HasTerminalTickResult = Spec.new(
 	function(candidate: TResolveTickCandidate): boolean
 		local tickResult = candidate.TickResult
 		return type(tickResult) == "table"
-			and (tickResult.Status == "Success" or tickResult.Status == "Fail" or tickResult.Status == "MissingAction")
+			and (
+				tickResult.Status == RuntimeEnums.TickStatus.Success.Name
+				or tickResult.Status == RuntimeEnums.TickStatus.Fail.Name
+				or tickResult.Status == RuntimeEnums.TickStatus.MissingAction.Name
+			)
 	end
 )
 

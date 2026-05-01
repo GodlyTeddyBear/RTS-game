@@ -7,6 +7,9 @@
 	@client
 ]=]
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local RuntimeEnums = require(ReplicatedStorage.Utilities.AI.Runtime.src.RuntimeEnums)
 local ActionId = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.ActionId)
 local ActionStateTransitionSpec = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Specs.ActionStateTransitionSpec)
 local Types = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Types)
@@ -39,7 +42,7 @@ function CommitStartedAction.Execute(
 	})
 	if not committableResult.success then
 		return {
-			Status = "Skipped",
+			Status = RuntimeEnums.CommitStatus.Skipped.Name,
 			ActionId = startResult.ActionId,
 		}
 	end
@@ -48,7 +51,7 @@ function CommitStartedAction.Execute(
 	local pendingActionId = actionState.PendingActionId
 	if type(pendingActionId) ~= "string" then
 		return {
-			Status = "InvalidResult",
+			Status = RuntimeEnums.CommitStatus.InvalidResult.Name,
 			ActionId = nil,
 		}
 	end
@@ -57,7 +60,7 @@ function CommitStartedAction.Execute(
 	if startResult.ActionId ~= pendingActionId then
 		-- Mismatched ids mean the caller tried to commit a stale or unrelated result
 		return {
-			Status = "InvalidResult",
+			Status = RuntimeEnums.CommitStatus.InvalidResult.Name,
 			ActionId = startResult.ActionId,
 		}
 	end
@@ -74,7 +77,7 @@ function CommitStartedAction.Execute(
 	end
 
 	return {
-		Status = "Committed",
+		Status = RuntimeEnums.CommitStatus.Committed.Name,
 		ActionId = pendingActionId,
 	}
 end

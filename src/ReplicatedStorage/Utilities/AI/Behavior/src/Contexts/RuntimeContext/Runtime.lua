@@ -11,6 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ActionId = require(script.Parent.Parent.Parent.SharedDomain.ValueObjects.ActionId)
 local Builder = require(script.Parent.Parent.BuildContext.Builder)
+local RuntimeEnums = require(ReplicatedStorage.Utilities.AI.Runtime.src.RuntimeEnums)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local ActionValidationPolicy = require(script.Parent.Parent.Parent.SharedDomain.Policies.ActionValidationPolicy)
 local StartPendingAction = require(script.Parent.Application.UseCases.Runtime.StartPendingAction)
@@ -219,7 +220,7 @@ function Runtime:OnActionSucceeded(
 	assert(type(callback) == "function", "BehaviorSystem OnActionSucceeded requires a callback")
 
 	-- Only success results should reach the callback
-	if tickResult.Status ~= "Success" then
+	if tickResult.Status ~= RuntimeEnums.TickStatus.Success.Name then
 		return false
 	end
 

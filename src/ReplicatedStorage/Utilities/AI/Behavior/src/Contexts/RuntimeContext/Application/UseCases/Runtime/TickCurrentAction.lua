@@ -9,6 +9,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local RuntimeEnums = require(ReplicatedStorage.Utilities.AI.Runtime.src.RuntimeEnums)
 local ActionId = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.ActionId)
 local TickStatus = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.TickStatus)
 local ExecutorBoundary = require(script.Parent.ExecutorBoundary)
@@ -27,9 +28,9 @@ type TTryTickActionResult = Types.TTryTickActionResult
 local TickCurrentAction = {}
 
 -- Package the tick outcome into the shared runtime result shape.
-local function _createResult(status: string, actionId: string?): TTickActionResult
+local function _createResult(status: any, actionId: string?): TTickActionResult
 	return {
-		Status = status,
+		Status = status.Name,
 		ActionId = actionId,
 	}
 end
@@ -52,14 +53,14 @@ function TickCurrentAction.TryExecute(
 	-- Read the current action id and exit early when nothing is active
 	local currentActionId = actionState.CurrentActionId
 	if type(currentActionId) ~= "string" then
-		return Ok(_createResult("NoCurrentAction", nil))
+		return Ok(_createResult(RuntimeEnums.TickStatus.NoCurrentAction, nil))
 	end
 	currentActionId = ActionId.From(currentActionId, "actionState.CurrentActionId")
 
 	-- Look up the executor for the active action before ticking it
 	local executor = executors[currentActionId]
 	if executor == nil then
-		return Ok(_createResult("MissingAction", currentActionId))
+		return Ok(_createResult(RuntimeEnums.TickStatus.MissingAction, currentActionId))
 	end
 
 	-- Extract execution inputs from the runtime context bag
@@ -76,22 +77,22 @@ function TickCurrentAction.TryExecute(
 
 	-- Normalize invalid executor statuses to fail so the runtime stays in a known state
 	if not TickStatus.IsValid(status) then
-		status = "Fail"
+		status = RuntimeEnums.TickStatus.Fail.Name
 	end
 
-	if status == "Success" then
+	if status == RuntimeEnums.TickStatus.Success.Name then
 		-- Success requires executor completion before reporting the terminal result
 		local completeResult = ExecutorBoundary.TryComplete(executor, currentActionId, entity, executorServices)
 		if not completeResult.success then
 			return completeResult
 		end
 
-		return Ok(_createResult("Success", currentActionId))
+		return Ok(_createResult(RuntimeEnums.TickStatus.Success, currentActionId))
 	end
 
-	if status == "Running" then
+	if status == RuntimeEnums.TickStatus.Running.Name then
 		-- Running keeps the action active without cleanup
-		return Ok(_createResult("Running", currentActionId))
+		return Ok(_createResult(RuntimeEnums.TickStatus.Running, currentActionId))
 	end
 
 	-- Any other terminal path cancels the executor and reports failure
@@ -100,7 +101,7 @@ function TickCurrentAction.TryExecute(
 		return cancelResult
 	end
 
-	return Ok(_createResult("Fail", currentActionId))
+	return Ok(_createResult(RuntimeEnums.TickStatus.Fail, currentActionId))
 end
 
 return table.freeze(TickCurrentAction)
