@@ -56,3 +56,37 @@ While tracing the issue, we also removed an outdated enemy goal shortcut and tig
 - added temporary combat debug logs for facts, pending base attack selection, and base attack executor milestones
 
 Those changes helped narrow the failure, but the root cause was stale ECS position caused by missing poll scheduling.
+
+# Enemy Animation Callback Handle Debugged
+
+## Symptom
+
+Enemy attack animations were firing their server callback, but combat logs showed:
+
+- `Animation callback actor handle is not registered`
+- `Error type: UnknownActorHandle`
+
+The callback payload contained a raw enemy id such as `67cc2616-f219-4e08-93fa-eb9b43e214fa`.
+
+## Actual Cause
+
+The client animation context was sending the wrong identifier shape for combat callbacks.
+
+`BaseAction` forwards `context.ActorId` or `context.NPCId` directly to `CombatContext.AnimationCallback`, so the payload must already be the canonical combat actor handle. The enemy animation controller was returning the raw `EnemyId` attribute instead of the combat registry handle.
+
+On the server, `EnemyCombatAdapterService:_BuildActorHandle()` registers enemy actors as `Enemy:<EnemyId>`, so `HandleAnimationCallback` could not find a matching record when it received the unprefixed value.
+
+## Fix
+
+`EnemyAnimationController` now builds the canonical handle before returning callback context values:
+
+```lua
+Enemy:<EnemyId>
+```
+
+That makes the client payload match the server registry key exactly, so the callback lookup succeeds without any reconciliation logic.
+
+## Notes
+
+- `StructureAnimationController` was already using the canonical structure handle format, so it did not need a change.
+- The shared action layer stayed unchanged because it already forwards `ActorId` and `NPCId` without modification.

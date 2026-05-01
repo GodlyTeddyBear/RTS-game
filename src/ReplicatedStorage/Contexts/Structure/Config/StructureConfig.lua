@@ -39,7 +39,6 @@ StructureConfig.STRUCTURES = table.freeze({
 ]=]
 StructureConfig.TYPE_ALIASES = table.freeze({
 	SentryTurret = "SentryTurret",
-	turret = "SentryTurret",
 })
 
 return table.freeze(StructureConfig)
