@@ -1,5 +1,7 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 --[=[
 	@class Runtime
 	Facade that combines behavior-tree compilation with action registration and executor lifecycle dispatch.
@@ -7,9 +9,10 @@
 	@client
 ]=]
 
-local ActionAssertions = require(script.Parent.Parent.Parent.SharedDomain.Assertions.ActionAssertions)
 local ActionId = require(script.Parent.Parent.Parent.SharedDomain.ValueObjects.ActionId)
 local Builder = require(script.Parent.Parent.BuildContext.Builder)
+local Result = require(ReplicatedStorage.Utilities.Result)
+local ActionValidationPolicy = require(script.Parent.Parent.Parent.SharedDomain.Policies.ActionValidationPolicy)
 local StartPendingAction = require(script.Parent.Application.UseCases.Runtime.StartPendingAction)
 local CommitStartedAction = require(script.Parent.Application.UseCases.Runtime.CommitStartedAction)
 local TickCurrentAction = require(script.Parent.Application.UseCases.Runtime.TickCurrentAction)
@@ -36,10 +39,7 @@ type TTryDeathActionResult = Types.TTryDeathActionResult
 local Runtime = {}
 Runtime.__index = Runtime
 
-local assertActionDefinition = ActionAssertions.AssertActionDefinition
-local assertActionId = ActionAssertions.AssertActionId
-local assertActionState = ActionAssertions.AssertActionState
-local assertExecutor = ActionAssertions.AssertExecutor
+local Try = Result.Try
 
 --[=[
 	Creates a runtime facade with a configured behavior builder.
@@ -82,7 +82,7 @@ end
 ]=]
 function Runtime:RegisterAction(definition: TActionDefinition)
 	-- Validate the action definition before touching the runtime registries
-	assertActionDefinition(definition)
+	Try(ActionValidationPolicy.CheckActionDefinition(definition))
 
 	-- Normalize the action id and reject duplicate registrations
 	local actionId = ActionId.From(definition.ActionId, "action definition ActionId")
@@ -93,7 +93,7 @@ function Runtime:RegisterAction(definition: TActionDefinition)
 	if executor == nil then
 		executor = definition.CreateExecutor()
 	end
-	assertExecutor(executor, actionId)
+	Try(ActionValidationPolicy.CheckExecutor(executor, actionId))
 
 	self._actions[actionId] = definition
 	self._executors[actionId] = executor
@@ -122,7 +122,7 @@ end
 ]=]
 function Runtime:GetExecutor(actionId: string)
 	-- Normalize the lookup key so callers can pass any valid action-id string
-	assertActionId(actionId, "actionId")
+	Try(ActionValidationPolicy.CheckActionId(actionId, "actionId"))
 	return self._executors[ActionId.From(actionId, "actionId")]
 end
 
@@ -140,7 +140,7 @@ function Runtime:StartPendingAction(
 	actionState: TActionState,
 	runtimeContext: TActionRuntimeContext
 ): TTryStartActionResult
-	assertActionState(actionState)
+	Try(ActionValidationPolicy.CheckActionState(actionState))
 	return StartPendingAction.TryExecute(entity, actionState, runtimeContext, self._executors)
 end
 
@@ -159,7 +159,7 @@ function Runtime:CommitStartedAction(
 	startedAt: any?
 ): TCommitStartResult
 	-- Validate the action-state table before delegating to the shared commit use case
-	assertActionState(actionState)
+	Try(ActionValidationPolicy.CheckActionState(actionState))
 	return CommitStartedAction.Execute(actionState, startResult, startedAt)
 end
 
@@ -177,7 +177,7 @@ function Runtime:TickCurrentAction(
 	actionState: TActionState,
 	runtimeContext: TActionRuntimeContext
 ): TTryTickActionResult
-	assertActionState(actionState)
+	Try(ActionValidationPolicy.CheckActionState(actionState))
 	return TickCurrentAction.TryExecute(entity, actionState, runtimeContext, self._executors)
 end
 
@@ -196,7 +196,7 @@ function Runtime:ResolveFinishedAction(
 	finishedAt: any?
 ): TResolveFinishedActionResult
 	-- Validate the action-state table before delegating to the shared resolve use case
-	assertActionState(actionState)
+	Try(ActionValidationPolicy.CheckActionState(actionState))
 	return ResolveFinishedAction.Execute(actionState, tickResult, finishedAt)
 end
 
@@ -225,7 +225,7 @@ function Runtime:OnActionSucceeded(
 
 	-- Apply the optional action-id filter before invoking the callback
 	if actionId ~= nil then
-		assertActionId(actionId, "actionId")
+		Try(ActionValidationPolicy.CheckActionId(actionId, "actionId"))
 		if tickResult.ActionId ~= actionId then
 			return false
 		end
@@ -249,7 +249,7 @@ function Runtime:CancelCurrentAction(
 	actionState: TActionState,
 	runtimeContext: TActionRuntimeContext
 ): TTryCancelActionResult
-	assertActionState(actionState)
+	Try(ActionValidationPolicy.CheckActionState(actionState))
 	return CancelCurrentAction.TryExecute(entity, actionState, runtimeContext, self._executors)
 end
 
@@ -267,7 +267,7 @@ function Runtime:HandleCurrentActionDeath(
 	actionState: TActionState,
 	runtimeContext: TActionRuntimeContext
 ): TTryDeathActionResult
-	assertActionState(actionState)
+	Try(ActionValidationPolicy.CheckActionState(actionState))
 	return HandleCurrentActionDeath.TryExecute(entity, actionState, runtimeContext, self._executors)
 end
 

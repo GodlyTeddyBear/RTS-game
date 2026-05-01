@@ -64,9 +64,11 @@ function StartPendingAction.TryExecute(
 	pendingActionId = ActionId.From(pendingActionId, "actionState.PendingActionId")
 
 	-- Block transitions when the owning action-state is not allowed to start
-	local canStart, blockedReason = ActionStateTransitionSpec.CanStartFromActionState(actionState.ActionState)
-	if not canStart then
-		return Ok(_createResult("Blocked", pendingActionId, nil, blockedReason))
+	local transitionResult = ActionStateTransitionSpec.CanStartFromActionState:IsSatisfiedBy({
+		ActionState = actionState.ActionState,
+	})
+	if not transitionResult.success then
+		return Ok(_createResult("Blocked", pendingActionId, nil, tostring(actionState.ActionState)))
 	end
 
 	-- Resolve runtime services and detect whether the pending action replaces an active one

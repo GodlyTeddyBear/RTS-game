@@ -1,51 +1,51 @@
 --!strict
 
---[=[
-    @class ActionStateTransitionSpec
-    Shared specification that describes which BehaviorSystem action-state transitions are allowed.
-    @server
-    @client
-]=]
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local ActionStateTransitionSpec = {}
+local Spec = require(ReplicatedStorage.Utilities.Specification)
 
---[=[
-    Checks whether a pending action can start from the current action-state label.
-    @within ActionStateTransitionSpec
-    @param actionState any -- Current action-state label
-    @return boolean -- Whether the start transition is allowed
-    @return string? -- Blocking reason when the transition is disallowed
-]=]
-function ActionStateTransitionSpec.CanStartFromActionState(actionState: any): (boolean, string?)
-	if actionState == nil then
-		return true, nil
+export type TStartTransitionCandidate = {
+	ActionState: any,
+}
+
+export type TCommitStartCandidate = {
+	StartResult: any,
+}
+
+export type TResolveTickCandidate = {
+	TickResult: any,
+}
+
+local CanStartFromActionState = Spec.new(
+	"BlockedActionTransition",
+	"BehaviorSystem cannot start a pending action while current action state is Committed",
+	function(candidate: TStartTransitionCandidate): boolean
+		return candidate.ActionState == nil or candidate.ActionState ~= "Committed"
 	end
+)
 
-	if actionState == "Committed" then
-		return false, "Committed"
+local HasCommittableStartResult = Spec.new(
+	"UncommittableStartResult",
+	"BehaviorSystem startResult.Status must be Started or Replaced to commit",
+	function(candidate: TCommitStartCandidate): boolean
+		local startResult = candidate.StartResult
+		return type(startResult) == "table"
+			and (startResult.Status == "Started" or startResult.Status == "Replaced")
 	end
+)
 
-	return true, nil
-end
+local HasTerminalTickResult = Spec.new(
+	"NonTerminalTickResult",
+	"BehaviorSystem tickResult.Status must be Success, Fail, or MissingAction to resolve",
+	function(candidate: TResolveTickCandidate): boolean
+		local tickResult = candidate.TickResult
+		return type(tickResult) == "table"
+			and (tickResult.Status == "Success" or tickResult.Status == "Fail" or tickResult.Status == "MissingAction")
+	end
+)
 
---[=[
-    Checks whether a start result should be committed into the owning action-state table.
-    @within ActionStateTransitionSpec
-    @param status any -- Start result status
-    @return boolean -- Whether the result can be committed
-]=]
-function ActionStateTransitionSpec.IsStartResultCommittable(status: any): boolean
-	return status == "Started" or status == "Replaced"
-end
-
---[=[
-    Checks whether a tick result is terminal and can be resolved.
-    @within ActionStateTransitionSpec
-    @param status any -- Tick result status
-    @return boolean -- Whether the result is terminal
-]=]
-function ActionStateTransitionSpec.IsTickResultTerminal(status: any): boolean
-	return status == "Success" or status == "Fail" or status == "MissingAction"
-end
-
-return table.freeze(ActionStateTransitionSpec)
+return table.freeze({
+	CanStartFromActionState = CanStartFromActionState,
+	HasCommittableStartResult = HasCommittableStartResult,
+	HasTerminalTickResult = HasTerminalTickResult,
+})

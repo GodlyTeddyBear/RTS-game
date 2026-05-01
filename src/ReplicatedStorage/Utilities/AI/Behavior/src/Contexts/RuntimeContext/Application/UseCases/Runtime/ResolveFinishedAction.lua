@@ -42,7 +42,10 @@ function ResolveFinishedAction.Execute(
 	end
 
 	-- Only terminal statuses may clear the current action state
-	if not ActionStateTransitionSpec.IsTickResultTerminal(status) then
+	local terminalResult = ActionStateTransitionSpec.HasTerminalTickResult:IsSatisfiedBy({
+		TickResult = tickResult,
+	})
+	if not terminalResult.success then
 		return {
 			Status = "InvalidResult",
 			ActionId = tickResult.ActionId,

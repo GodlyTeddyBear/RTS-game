@@ -1,59 +1,99 @@
 --!strict
 
---[=[
-    @class DefinitionNodeSpec
-    Shared specification that validates symbolic definition node shapes before BehaviorSystem compilation.
-    @server
-    @client
-]=]
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local DefinitionNodeSpec = {}
+local Spec = require(ReplicatedStorage.Utilities.Specification)
 
---[=[
-    Validates the outer shape of a symbolic behavior node.
-    @within DefinitionNodeSpec
-    @param node any -- Candidate node
-    @return boolean -- Whether the node is a supported symbolic shape
-    @return string? -- Validation failure reason when invalid
-]=]
-function DefinitionNodeSpec.ValidateNodeShape(node: any): (boolean, string?)
-	local nodeType = type(node)
-	if nodeType ~= "string" and nodeType ~= "table" then
-		return false, "must be a string or table"
+export type TDefinitionNodeCandidate = {
+	Node: any,
+}
+
+local HasSupportedNodeType = Spec.new(
+	"InvalidDefinitionNode",
+	"must be a string or table",
+	function(candidate: TDefinitionNodeCandidate): boolean
+		local nodeType = type(candidate.Node)
+		return nodeType == "string" or nodeType == "table"
 	end
+)
 
-	return true, nil
-end
-
---[=[
-    Validates the shape of a composite symbolic node.
-    @within DefinitionNodeSpec
-    @param node any -- Candidate node
-    @return boolean -- Whether the node declares exactly one composite field
-    @return string? -- Validation failure reason when invalid
-]=]
-function DefinitionNodeSpec.ValidateCompositeShape(node: any): (boolean, string?)
-	if type(node) ~= "table" then
-		return false, "must be a table"
+local HasCompositeTable = Spec.new(
+	"InvalidCompositeNode",
+	"must be a table",
+	function(candidate: TDefinitionNodeCandidate): boolean
+		return type(candidate.Node) == "table"
 	end
+)
 
-	local hasSequence = node.Sequence ~= nil
-	local hasPriority = node.Priority ~= nil
-	if not hasSequence and not hasPriority then
-		return false, "must declare Sequence or Priority"
-	end
-
-	if hasSequence and hasPriority then
-		return false, "cannot declare both Sequence and Priority"
-	end
-
-	for key in pairs(node) do
-		if key ~= "Sequence" and key ~= "Priority" then
-			return false, ("contains unsupported key '%s'"):format(tostring(key))
+local HasCompositeKind = Spec.new(
+	"InvalidCompositeNode",
+	"must declare Sequence or Priority",
+	function(candidate: TDefinitionNodeCandidate): boolean
+		local node = candidate.Node
+		if type(node) ~= "table" then
+			return false
 		end
+
+		return node.Sequence ~= nil or node.Priority ~= nil
 	end
+)
 
-	return true, nil
-end
+local HasSingleCompositeKind = Spec.new(
+	"InvalidCompositeNode",
+	"cannot declare both Sequence and Priority",
+	function(candidate: TDefinitionNodeCandidate): boolean
+		local node = candidate.Node
+		if type(node) ~= "table" then
+			return true
+		end
 
-return table.freeze(DefinitionNodeSpec)
+		return not (node.Sequence ~= nil and node.Priority ~= nil)
+	end
+)
+
+local HasSupportedCompositeKeys = Spec.new(
+	"InvalidCompositeNode",
+	"contains unsupported keys",
+	function(candidate: TDefinitionNodeCandidate): boolean
+		local node = candidate.Node
+		if type(node) ~= "table" then
+			return false
+		end
+
+		for key in pairs(node) do
+			if key ~= "Sequence" and key ~= "Priority" then
+				return false
+			end
+		end
+
+		return true
+	end
+)
+
+local HasSequenceNode = Spec.new(
+	"InvalidSequenceNode",
+	"is not a valid Sequence node",
+	function(candidate: TDefinitionNodeCandidate): boolean
+		local node = candidate.Node
+		return type(node) == "table" and type(node.Sequence) == "table"
+	end
+)
+
+local HasPriorityNode = Spec.new(
+	"InvalidPriorityNode",
+	"is not a valid Priority node",
+	function(candidate: TDefinitionNodeCandidate): boolean
+		local node = candidate.Node
+		return type(node) == "table" and type(node.Priority) == "table"
+	end
+)
+
+return table.freeze({
+	HasValidNodeShape = HasSupportedNodeType,
+	HasValidCompositeShape = HasCompositeTable
+		:And(HasCompositeKind)
+		:And(HasSingleCompositeKind)
+		:And(HasSupportedCompositeKeys),
+	HasSequenceNode = HasSequenceNode,
+	HasPriorityNode = HasPriorityNode,
+})

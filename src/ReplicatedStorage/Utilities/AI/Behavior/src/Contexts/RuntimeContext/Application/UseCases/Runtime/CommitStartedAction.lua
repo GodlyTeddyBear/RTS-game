@@ -34,7 +34,10 @@ function CommitStartedAction.Execute(
 	assert(type(startResult) == "table", "BehaviorSystem CommitStartedAction requires a startResult table")
 
 	-- Skip results that do not represent a commit-worthy start transition
-	if not ActionStateTransitionSpec.IsStartResultCommittable(startResult.Status) then
+	local committableResult = ActionStateTransitionSpec.HasCommittableStartResult:IsSatisfiedBy({
+		StartResult = startResult,
+	})
+	if not committableResult.success then
 		return {
 			Status = "Skipped",
 			ActionId = startResult.ActionId,

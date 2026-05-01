@@ -3,11 +3,14 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BehaviorTree = require(ReplicatedStorage.Utilities.BehaviorTree)
-local DefinitionAssertions = require(script.Parent.Parent.Parent.Parent.SharedDomain.Assertions.DefinitionAssertions)
+local Result = require(ReplicatedStorage.Utilities.Result)
+local DefinitionValidationPolicy = require(script.Parent.Parent.Parent.Parent.SharedDomain.Policies.DefinitionValidationPolicy)
 local DefinitionPath = require(script.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.DefinitionPath)
 
 local NodeResolver = {}
 NodeResolver.__index = NodeResolver
+
+local Try = Result.Try
 
 local MAX_DEFINITION_DEPTH = 128
 
@@ -21,7 +24,7 @@ end
 function NodeResolver:ResolveLeaf(name: string, path: string)
 	-- Normalize the path and verify the symbol is registered before invoking a builder
 	local normalizedPath = DefinitionPath.From(path)
-	DefinitionAssertions.AssertKnownLeaf(self._conditions, self._commands, name, normalizedPath)
+	Try(DefinitionValidationPolicy.CheckKnownLeaf(self._conditions, self._commands, name, normalizedPath))
 
 	-- Prefer the condition registry when both tables are queried by name
 	local conditionBuilder = self._conditions[name]
@@ -37,7 +40,7 @@ end
 function NodeResolver:ResolveSequence(children: { any }, path: string, depth: number)
 	-- Validate the child array before recursing so sparse or empty arrays fail at the parent node
 	local normalizedPath = DefinitionPath.From(path)
-	DefinitionAssertions.AssertNonEmptyChildren(children, normalizedPath, "Sequence")
+	Try(DefinitionValidationPolicy.CheckNonEmptyChildren(children, normalizedPath, "Sequence"))
 	return BehaviorTree.Sequence:new({
 		nodes = self:_ResolveChildren(children, normalizedPath .. ".Sequence", depth + 1),
 	})
@@ -46,7 +49,7 @@ end
 function NodeResolver:ResolvePriority(children: { any }, path: string, depth: number)
 	-- Validate the child array before recursing so the priority node keeps a dense ordered list
 	local normalizedPath = DefinitionPath.From(path)
-	DefinitionAssertions.AssertNonEmptyChildren(children, normalizedPath, "Priority")
+	Try(DefinitionValidationPolicy.CheckNonEmptyChildren(children, normalizedPath, "Priority"))
 	return BehaviorTree.Priority:new({
 		nodes = self:_ResolveChildren(children, normalizedPath .. ".Priority", depth + 1),
 	})
@@ -67,11 +70,8 @@ function NodeResolver:ResolveNode(node: any, path: string, depth: number?)
 	-- Normalize the path and enforce the recursion cap before branching on node shape
 	local normalizedPath = DefinitionPath.From(path)
 	local currentDepth = if depth ~= nil then depth else 1
-	assert(
-		currentDepth <= MAX_DEFINITION_DEPTH,
-		("BehaviorSystem definition node at %s exceeds max depth (%d)"):format(normalizedPath, MAX_DEFINITION_DEPTH)
-	)
-	DefinitionAssertions.AssertNodeShape(node, normalizedPath)
+	Try(DefinitionValidationPolicy.CheckDefinitionDepth(currentDepth, MAX_DEFINITION_DEPTH, normalizedPath))
+	Try(DefinitionValidationPolicy.CheckNodeShape(node, normalizedPath))
 
 	if type(node) == "string" then
 		-- Leaf nodes resolve directly to a concrete task instance
@@ -79,16 +79,16 @@ function NodeResolver:ResolveNode(node: any, path: string, depth: number?)
 	end
 
 	-- Composite nodes must be validated before choosing the branch-specific resolver
-	DefinitionAssertions.AssertCompositeShape(node, normalizedPath)
+	Try(DefinitionValidationPolicy.CheckCompositeShape(node, normalizedPath))
 
 	if node.Sequence ~= nil then
 		-- Sequence nodes preserve left-to-right evaluation order
-		DefinitionAssertions.AssertSequenceNode(node, normalizedPath)
+		Try(DefinitionValidationPolicy.CheckSequenceNode(node, normalizedPath))
 		return self:ResolveSequence(node.Sequence, normalizedPath, currentDepth)
 	end
 
 	-- Priority nodes preserve first-success evaluation order
-	DefinitionAssertions.AssertPriorityNode(node, normalizedPath)
+	Try(DefinitionValidationPolicy.CheckPriorityNode(node, normalizedPath))
 	return self:ResolvePriority(node.Priority, normalizedPath, currentDepth)
 end
 

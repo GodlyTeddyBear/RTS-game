@@ -1,53 +1,69 @@
 --!strict
 
---[=[
-    @class ChildArraySpec
-    Shared specification that validates composite-node child arrays used by BehaviorSystem symbolic definitions.
-    @server
-    @client
-]=]
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local ChildArraySpec = {}
+local Spec = require(ReplicatedStorage.Utilities.Specification)
 
---[=[
-    Validates that a table is a dense 1-based child array with at least one entry.
-    @within ChildArraySpec
-    @param children any -- Candidate child collection
-    @return boolean -- Whether the child collection is valid
-    @return string? -- Validation failure reason when invalid
-]=]
-function ChildArraySpec.Validate(children: any): (boolean, string?)
-	if type(children) ~= "table" then
-		return false, "must contain a child array"
+export type TChildArrayCandidate = {
+	Children: any,
+}
+
+local HasChildArrayTable = Spec.new(
+	"InvalidChildArray",
+	"must contain a child array",
+	function(candidate: TChildArrayCandidate): boolean
+		return type(candidate.Children) == "table"
 	end
+)
 
-	if next(children) == nil then
-		return false, "must contain at least one child"
+local HasChildEntries = Spec.new(
+	"InvalidChildArray",
+	"must contain at least one child",
+	function(candidate: TChildArrayCandidate): boolean
+		local children = candidate.Children
+		return type(children) == "table" and next(children) ~= nil
 	end
+)
 
-	if children[1] == nil then
-		return false, "must start at index 1"
+local StartsAtIndexOne = Spec.new(
+	"InvalidChildArray",
+	"must start at index 1",
+	function(candidate: TChildArrayCandidate): boolean
+		local children = candidate.Children
+		return type(children) == "table" and children[1] ~= nil
 	end
+)
 
-	local childCount = 0
-	local maxIndex = 0
-	for key in pairs(children) do
-		if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then
-			return false, ("contains non-array key '%s'"):format(tostring(key))
+local HasDenseArrayKeys = Spec.new(
+	"InvalidChildArray",
+	"has a sparse child array",
+	function(candidate: TChildArrayCandidate): boolean
+		local children = candidate.Children
+		if type(children) ~= "table" then
+			return false
 		end
 
-		local numericKey = key :: number
-		childCount += 1
-		if numericKey > maxIndex then
-			maxIndex = numericKey
+		local childCount = 0
+		local maxIndex = 0
+		for key in pairs(children) do
+			if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then
+				return false
+			end
+
+			local numericKey = key :: number
+			childCount += 1
+			if numericKey > maxIndex then
+				maxIndex = numericKey
+			end
 		end
+
+		return maxIndex == childCount
 	end
+)
 
-	if maxIndex ~= childCount then
-		return false, "has a sparse child array"
-	end
-
-	return true, nil
-end
-
-return table.freeze(ChildArraySpec)
+return table.freeze({
+	HasDenseNonEmptyChildArray = HasChildArrayTable
+		:And(HasChildEntries)
+		:And(StartsAtIndexOne)
+		:And(HasDenseArrayKeys),
+})
