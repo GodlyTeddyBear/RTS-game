@@ -8,6 +8,29 @@ Shared AI package module for building `AI.Runtime` actor adapters from explicit 
 - Keep adapter construction explicit and context-owned.
 - Avoid pushing ECS, behavior-tree, or domain ownership into `AI.Runtime` itself.
 
+## Required Config
+
+`AI.AdapterFactory.Create(config)` requires a callback bundle with these fields:
+
+- `QueryActiveEntities(frameContext)`
+- `GetCompiledBehaviorTree(entity)`
+- `GetActionState(entity)`
+- `SetActionState(entity, actionState)`
+- `ClearActionState(entity)`
+- `SetPendingAction(entity, actionId, actionData)`
+- `UpdateLastTickTime(entity, currentTime)`
+- `ShouldEvaluate(entity, currentTime)`
+
+`ActorLabel` is optional. When present, it must be a non-empty string and is returned through `GetActorLabel()`.
+
+`GetActionState` must return either a table or `nil`, and the returned action-state table must only use the supported `TActionState` shape.
+
+## Factory Surface
+
+`AI.AdapterFactory.CreateFactory(config)` supports the same adapter contract, but resolves each callback from method-name strings or direct functions on a caller-owned factory object.
+
+Use it when the context wants to keep the adapter surface explicit while reducing repeated method wiring.
+
 ## Boundaries
 
 `AI.AdapterFactory` owns:
@@ -26,6 +49,8 @@ The owning context still owns:
 - pending-action mutation semantics
 - tick-evaluation rules
 - all domain-specific AI logic
+
+The factory does not invent defaults for missing required callbacks. If one of the required surfaces cannot be resolved, adapter creation fails.
 
 ## Public Surface
 
@@ -171,3 +196,4 @@ local structureAdapter = AiAdapterFactory.Create({
 - The utility does not assume method names on entity factories.
 - `ShouldEvaluate` and `UpdateLastTickTime` stay fully caller-owned in v1, including tick interval and last-tick persistence.
 - This is a bridge-builder, not a base class and not a lifecycle owner.
+- `CreateFactory` is for factory-backed method resolution only; it does not change the adapter contract.

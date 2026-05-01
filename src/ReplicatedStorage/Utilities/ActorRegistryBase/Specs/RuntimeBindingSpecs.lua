@@ -1,17 +1,36 @@
 --!strict
 
+--[=[
+    @class RuntimeBindingSpecs
+    Shared specifications that validate actor runtime binding status snapshots.
+    @server
+    @client
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local AI = require(ReplicatedStorage.Utilities.AI)
 local Spec = require(ReplicatedStorage.Utilities.Specification)
 local Errors = require(script.Parent.Parent.Errors)
 
+--[=[
+    @type TRuntimeBindingCandidate
+    @within RuntimeBindingSpecs
+]=]
 export type TRuntimeBindingCandidate = {
 	RuntimeBinding: any,
 	BindingStatus: any,
 }
 
-local HasRuntimeTarget = Spec.new(
+local RuntimeBindingSpecs = {}
+
+--[=[
+    @prop HasRuntimeTarget Specification
+    @within RuntimeBindingSpecs
+    @readonly
+    Checks that the runtime owner exposes the bound target service field.
+]=]
+RuntimeBindingSpecs.HasRuntimeTarget = Spec.new(
 	"InvalidActorRuntimeBindingOwner",
 	Errors.INVALID_ACTOR_RUNTIME_BINDING_OWNER,
 	function(candidate: TRuntimeBindingCandidate): boolean
@@ -20,7 +39,13 @@ local HasRuntimeTarget = Spec.new(
 	end
 )
 
-local HasPollMethod = Spec.new(
+--[=[
+    @prop HasPollMethod Specification
+    @within RuntimeBindingSpecs
+    @readonly
+    Checks that the runtime owner exposes the poll method required by the actor type.
+]=]
+RuntimeBindingSpecs.HasPollMethod = Spec.new(
 	"ActorPollingRequirementUnsatisfied",
 	Errors.ACTOR_POLL_REQUIREMENT_UNSATISFIED,
 	function(candidate: TRuntimeBindingCandidate): boolean
@@ -30,7 +55,13 @@ local HasPollMethod = Spec.new(
 	end
 )
 
-local HasPollPhase = Spec.new(
+--[=[
+    @prop HasPollPhase Specification
+    @within RuntimeBindingSpecs
+    @readonly
+    Checks that the runtime owner registered the poll phase required by the actor type.
+]=]
+RuntimeBindingSpecs.HasPollPhase = Spec.new(
 	"ActorPollingRequirementUnsatisfied",
 	Errors.ACTOR_POLL_REQUIREMENT_UNSATISFIED,
 	function(candidate: TRuntimeBindingCandidate): boolean
@@ -44,7 +75,13 @@ local HasPollPhase = Spec.new(
 	end
 )
 
-local HasSyncMethod = Spec.new(
+--[=[
+    @prop HasSyncMethod Specification
+    @within RuntimeBindingSpecs
+    @readonly
+    Checks that the runtime owner exposes the sync method required by the actor type.
+]=]
+RuntimeBindingSpecs.HasSyncMethod = Spec.new(
 	"ActorProjectionRequirementUnsatisfied",
 	Errors.ACTOR_PROJECTION_REQUIREMENT_UNSATISFIED,
 	function(candidate: TRuntimeBindingCandidate): boolean
@@ -54,7 +91,13 @@ local HasSyncMethod = Spec.new(
 	end
 )
 
-local HasSyncPhase = Spec.new(
+--[=[
+    @prop HasSyncPhase Specification
+    @within RuntimeBindingSpecs
+    @readonly
+    Checks that the runtime owner registered the sync phase required by the actor type.
+]=]
+RuntimeBindingSpecs.HasSyncPhase = Spec.new(
 	"ActorProjectionRequirementUnsatisfied",
 	Errors.ACTOR_PROJECTION_REQUIREMENT_UNSATISFIED,
 	function(candidate: TRuntimeBindingCandidate): boolean
@@ -68,10 +111,4 @@ local HasSyncPhase = Spec.new(
 	end
 )
 
-return table.freeze({
-	HasRuntimeTarget = HasRuntimeTarget,
-	HasPollMethod = HasPollMethod,
-	HasPollPhase = HasPollPhase,
-	HasSyncMethod = HasSyncMethod,
-	HasSyncPhase = HasSyncPhase,
-})
+return table.freeze(RuntimeBindingSpecs)

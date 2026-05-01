@@ -1,6 +1,6 @@
 # AI
 
-Shared package root for the project's AI utilities. `AI` exposes the package entrypoint, while `AI.Runtime`, `AI.AdapterFactory`, and `AI.Behavior` expose the underlying submodules directly. The package still does not own context lifecycle, ECS state, trees, hooks, executors, or teardown orchestration.
+Shared package root for the project's AI utilities. `AI` exposes the package entrypoint, while `AI.Runtime`, `AI.AdapterFactory`, and `AI.Behavior` expose the underlying submodules directly. `ActorRegistryBase` is a sibling utility in the same package family for contexts that need a reusable actor registry base. The package still does not own context lifecycle, ECS state, trees, hooks, executors, registry subclass behavior, or teardown orchestration.
 
 ## Package Layout
 
@@ -11,11 +11,13 @@ Shared package root for the project's AI utilities. `AI` exposes the package ent
 - `src/Validation.lua` centralizes input-shape checks for the facade surface.
 - `src/Types.lua` defines the shared facade types.
 - `src/Enums.lua` defines the shared enum registries used by the facade and diagnostics.
+- `src/ReplicatedStorage/Utilities/ActorRegistryBase/` provides the reusable actor registry base, errors, metadata policy, and runtime-binding specs for derived context registries.
 
 ## Purpose
 
 - provide one package root for shared AI utilities
 - expose `AI.Runtime`, `AI.AdapterFactory`, and `AI.Behavior` under one namespace
+- keep `ActorRegistryBase` available as the shared registry foundation for AI-related contexts
 - reduce repetitive setup with a composition builder and small registration helpers
 
 ## Preferred Usage
@@ -269,9 +271,10 @@ runtime:RunFrame({
 - hooks and fact composition
 - executor registrations
 - actor adapters and authoritative ECS state
+- actor registry subclass implementations and registry-specific record behavior
 - actor bundle consumption and tree assignment policy
 - behavior assignment into ECS or runtime storage
 - tree assignment into ECS or runtime storage
 - broader cleanup and shutdown orchestration around `AI.Runtime` cleanup APIs
 
-Actor bundles, behavior catalogs, and action packs are composition helpers only. They do not assign trees into ECS automatically, and they do not own actor lifecycle.
+Actor bundles, behavior catalogs, action packs, and the `ActorRegistryBase` utility are composition or infrastructure helpers only. They do not assign trees into ECS automatically, and they do not own actor lifecycle.
