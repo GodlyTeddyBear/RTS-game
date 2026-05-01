@@ -13,7 +13,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
 local EnemyECSWorldService = require(script.Parent.Infrastructure.ECS.EnemyECSWorldService)
 local EnemyComponentRegistry = require(script.Parent.Infrastructure.ECS.EnemyComponentRegistry)
@@ -144,6 +143,7 @@ local EnemyContext = Knit.CreateService({
 		Before = "_BeforeDestroy",
 		Fields = {
 			{ Field = "_spawnConnection", Method = "Disconnect" },
+			{ Field = "_waveEndedConnection", Method = "Disconnect" },
 			{ Field = "_runEndedConnection", Method = "Disconnect" },
 		},
 	},
@@ -160,6 +160,7 @@ local EnemyBaseContext = BaseContext.new(EnemyContext)
 function EnemyContext:KnitInit()
 	EnemyBaseContext:KnitInit()
 	self._spawnConnection = nil :: any
+	self._waveEndedConnection = nil :: any
 	self._runEndedConnection = nil :: any
 end
 
@@ -189,17 +190,24 @@ function EnemyContext:KnitStart()
 	end
 
 	-- Forward wave spawns into the spawn command so the context owns the creation path.
-	self._spawnConnection = GameEvents.Bus:On(
-		GameEvents.Events.Wave.SpawnEnemy,
+	EnemyBaseContext:OnContextEvent(
+		"Wave",
+		"SpawnEnemy",
 		function(role: string, spawnCFrame: CFrame, waveNumber: number)
 			self:_OnWaveSpawnEnemy(role, spawnCFrame, waveNumber)
-		end
+		end,
+		"_spawnConnection"
 	)
 
+	-- Clean up all enemies when a wave ends so phase skips do not leave stale enemy state behind.
+	EnemyBaseContext:OnContextEvent("Run", "WaveEnded", function(_waveNumber: number)
+		self:_OnWaveEnded()
+	end, "_waveEndedConnection")
+
 	-- Clean up all enemies when the run ends so no stale entities survive the lifecycle boundary.
-	self._runEndedConnection = GameEvents.Bus:On(GameEvents.Events.Run.RunEnded, function()
+	EnemyBaseContext:OnContextEvent("Run", "RunEnded", function()
 		self:_OnRunEnded()
-	end)
+	end, "_runEndedConnection")
 end
 
 -- Wraps the wave spawn event in the enemy spawn use-case and reports failures through Result logging.
@@ -220,6 +228,17 @@ function EnemyContext:_OnRunEnded()
 	local result = self:CleanupAll()
 	if not result.success then
 		Result.MentionError("Enemy:OnRunEnded", "Failed to cleanup enemies after run ended", {
+			CauseType = result.type,
+			CauseMessage = result.message,
+		}, result.type)
+	end
+end
+
+-- Wraps the wave-ended event in the enemy cleanup use-case and reports failures through Result logging.
+function EnemyContext:_OnWaveEnded()
+	local result = self:CleanupAll()
+	if not result.success then
+		Result.MentionError("Enemy:OnWaveEnded", "Failed to cleanup enemies after wave ended", {
 			CauseType = result.type,
 			CauseMessage = result.message,
 		}, result.type)

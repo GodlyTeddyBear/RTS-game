@@ -22,6 +22,12 @@ export type TActionState = {
 	CurrentActionId: string?,
 	ActionData: any?,
 	ActionState: string?,
+	StartedAt: number?,
+	FinishedAt: number?,
+}
+
+export type TCompiledBehaviorTree = {
+	run: (self: TCompiledBehaviorTree, context: { [string]: any }) -> (),
 }
 
 export type TActionDefinition = {
@@ -81,7 +87,7 @@ export type THookContext = {
 	@within AiRuntimeTypes
 	@interface TActorAdapter
 	.QueryActiveEntities (self: TActorAdapter, frameContext: TFrameContext) -> { number } -- Returns active runtime entities for the frame
-	.GetCompiledBehaviorTree (self: TActorAdapter, entity: number) -> any? -- Returns the compiled behavior tree for the entity
+	.GetCompiledBehaviorTree (self: TActorAdapter, entity: number) -> TCompiledBehaviorTree? -- Returns the compiled behavior tree for the entity
 	.GetActionState (self: TActorAdapter, entity: number) -> TActionState? -- Returns the authoritative action state
 	.SetActionState (self: TActorAdapter, entity: number, actionState: TActionState) -> () -- Persists the resolved action state
 	.ClearActionState (self: TActorAdapter, entity: number) -> () -- Clears invalid or failed action state
@@ -92,7 +98,7 @@ export type THookContext = {
 ]=]
 export type TActorAdapter = {
 	QueryActiveEntities: (self: TActorAdapter, frameContext: TFrameContext) -> { number },
-	GetCompiledBehaviorTree: (self: TActorAdapter, entity: number) -> any?,
+	GetCompiledBehaviorTree: (self: TActorAdapter, entity: number) -> TCompiledBehaviorTree?,
 	GetActionState: (self: TActorAdapter, entity: number) -> TActionState?,
 	SetActionState: (self: TActorAdapter, entity: number, actionState: TActionState) -> (),
 	ClearActionState: (self: TActorAdapter, entity: number) -> (),

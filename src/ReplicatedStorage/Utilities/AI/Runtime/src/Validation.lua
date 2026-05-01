@@ -1,22 +1,11 @@
 --!strict
 
 local Types = require(script.Parent.Types)
+local RuntimeValidationPolicy = require(script.Parent.Policies.RuntimeValidationPolicy)
 
 type TConfig = Types.TConfig
-type THook = Types.THook
 type TActorAdapter = Types.TActorAdapter
 type TFrameContext = Types.TFrameContext
-
-local REQUIRED_ADAPTER_METHODS = table.freeze({
-	"QueryActiveEntities",
-	"GetCompiledBehaviorTree",
-	"GetActionState",
-	"SetActionState",
-	"ClearActionState",
-	"SetPendingAction",
-	"UpdateLastTickTime",
-	"ShouldEvaluate",
-})
 
 --[=[
 	@class AiRuntimeValidation
@@ -27,69 +16,56 @@ local REQUIRED_ADAPTER_METHODS = table.freeze({
 
 local Validation = {}
 
--- Runtime config validation
 function Validation.ValidateConfig(config: TConfig)
-	assert(type(config) == "table", "AiRuntime config must be a table")
-	assert(type(config.Conditions) == "table", "AiRuntime config.Conditions must be a table")
-	assert(type(config.Commands) == "table", "AiRuntime config.Commands must be a table")
-	assert(type(config.Hooks) == "table", "AiRuntime config.Hooks must be a table")
-
-	for index, hook: THook in ipairs(config.Hooks) do
-		assert(type(hook) == "table", ("AiRuntime hook #%d must be a table"):format(index))
-		assert(type(hook.Use) == "function", ("AiRuntime hook #%d must expose Use"):format(index))
-	end
-
-	if config.ErrorSink ~= nil then
-		assert(type(config.ErrorSink) == "function", "AiRuntime config.ErrorSink must be a function")
-	end
+	RuntimeValidationPolicy.CheckConfig(config)
 end
 
 function Validation.ValidateActorType(actorType: string)
-	assert(type(actorType) == "string" and #actorType > 0, "AiRuntime actorType must be a non-empty string")
+	RuntimeValidationPolicy.CheckActorType(actorType)
 end
 
--- Adapter contract validation
 function Validation.ValidateActorAdapter(actorType: string, adapter: TActorAdapter)
-	assert(type(adapter) == "table", ("AiRuntime actor adapter '%s' must be a table"):format(actorType))
-
-	for _, methodName in ipairs(REQUIRED_ADAPTER_METHODS) do
-		assert(
-			type((adapter :: any)[methodName]) == "function",
-			("AiRuntime actor adapter '%s' must expose %s"):format(actorType, methodName)
-		)
-	end
-
-	local getActorLabel = (adapter :: any).GetActorLabel
-	if getActorLabel ~= nil then
-		assert(
-			type(getActorLabel) == "function",
-			("AiRuntime actor adapter '%s' GetActorLabel must be a function"):format(actorType)
-		)
-	end
+	RuntimeValidationPolicy.CheckActorAdapter(actorType, adapter)
 end
 
--- Frame input validation
 function Validation.ValidateFrameContext(frameContext: TFrameContext)
-	assert(type(frameContext) == "table", "AiRuntime RunFrame requires a frameContext table")
-	assert(type(frameContext.CurrentTime) == "number", "AiRuntime frameContext.CurrentTime must be a number")
+	RuntimeValidationPolicy.CheckFrameContext(frameContext)
+end
 
-	if frameContext.DeltaTime ~= nil then
-		assert(type(frameContext.DeltaTime) == "number", "AiRuntime frameContext.DeltaTime must be a number")
-	end
+function Validation.ValidateMonotonicFrameTime(currentTime: number, lastFrameTime: number?)
+	RuntimeValidationPolicy.CheckMonotonicFrameTime(currentTime, lastFrameTime)
+end
 
-	if frameContext.Services ~= nil then
-		assert(type(frameContext.Services) == "table", "AiRuntime frameContext.Services must be a table")
-	end
+function Validation.ValidateQueryActiveEntitiesResult(actorType: string, entities: any)
+	RuntimeValidationPolicy.CheckQueryActiveEntitiesResult(actorType, entities)
+end
 
-	if frameContext.ActorTypes ~= nil then
-		assert(type(frameContext.ActorTypes) == "table", "AiRuntime frameContext.ActorTypes must be a string array")
-		for index, actorType in ipairs(frameContext.ActorTypes) do
-			assert(
-				type(actorType) == "string" and #actorType > 0,
-				("AiRuntime frameContext.ActorTypes[%d] must be a non-empty string"):format(index)
-			)
-		end
-	end
+function Validation.ValidateEntityId(actorType: string, entity: any, sourceLabel: string)
+	RuntimeValidationPolicy.CheckEntityId(actorType, entity, sourceLabel)
+end
+
+function Validation.ValidateActionState(actionState: any, sourceLabel: string)
+	RuntimeValidationPolicy.CheckActionState(actionState, sourceLabel)
+end
+
+function Validation.ValidateBehaviorTree(actorType: string, entity: number, behaviorTree: any)
+	RuntimeValidationPolicy.CheckBehaviorTree(actorType, entity, behaviorTree)
+end
+
+function Validation.ValidateShouldEvaluateResult(actorType: string, entity: number, result: any)
+	RuntimeValidationPolicy.CheckShouldEvaluateResult(actorType, entity, result)
+end
+
+function Validation.ValidateHookContribution(index: number, contribution: any)
+	RuntimeValidationPolicy.CheckHookContribution(index, contribution)
+end
+
+function Validation.ValidateBehaviorContextReservedKeys(index: number, behaviorContext: any)
+	RuntimeValidationPolicy.CheckBehaviorContextReservedKeys(index, behaviorContext)
+end
+
+function Validation.ValidateActorLabel(actorType: string, actorLabel: any)
+	RuntimeValidationPolicy.CheckActorLabel(actorType, actorLabel)
 end
 
 return table.freeze(Validation)

@@ -19,6 +19,7 @@ export type TConfig = Types.TConfig
 export type THook = Types.THook
 export type THookContext = Types.THookContext
 export type THookContribution = Types.THookContribution
+export type TCompiledBehaviorTree = Types.TCompiledBehaviorTree
 export type TActorAdapter = Types.TActorAdapter
 export type TFrameContext = Types.TFrameContext
 export type TErrorSinkPayload = Types.TErrorSinkPayload

@@ -11,6 +11,7 @@ local Validation = require(script.Parent.Validation)
 type TConfig = Types.TConfig
 type TActionDefinition = Types.TActionDefinition
 type TActionState = Types.TActionState
+type TCompiledBehaviorTree = Types.TCompiledBehaviorTree
 type TActorAdapter = Types.TActorAdapter
 type TFrameContext = Types.TFrameContext
 type TRunFrameEntityResult = Types.TRunFrameEntityResult
@@ -28,7 +29,7 @@ type TEntityFrameState = {
 	Adapter: TActorAdapter,
 	Result: TRunFrameEntityResult,
 	HookOutcome: THookOutcome,
-	BehaviorTree: any?,
+	BehaviorTree: TCompiledBehaviorTree?,
 }
 
 local _ResolveActorTypes
@@ -66,6 +67,7 @@ function Runtime.new(config: TConfig)
 	self._errorSink = config.ErrorSink
 	self._actorAdapters = {}
 	self._actorOrder = {}
+	self._lastFrameTime = nil
 
 	return self
 end
@@ -188,6 +190,7 @@ end
 ]=]
 function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 	Validation.ValidateFrameContext(frameContext)
+	Validation.ValidateMonotonicFrameTime(frameContext.CurrentTime, self._lastFrameTime)
 
 	-- Frame execution is deliberately staged so defects can be attributed to the exact phase that failed.
 	local defects = {}
@@ -206,6 +209,8 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 		-- Tick handling advances the active action and resolves terminal results.
 		self:_RunActionPhase(entityStates, frameContext, defects)
 	end
+
+	self._lastFrameTime = frameContext.CurrentTime
 
 	return table.freeze({
 		EntityResults = entityResults,
@@ -234,9 +239,11 @@ function Runtime:_BuildEntityStates(
 	-- Entity state snapshots let the three runtime phases share the same per-entity inputs without repeated adapter calls.
 	local entityStates = {}
 	local entities = adapter:QueryActiveEntities(frameContext)
-	assert(type(entities) == "table", ("AiRuntime adapter '%s' QueryActiveEntities must return an array"):format(actorType))
+	Validation.ValidateQueryActiveEntitiesResult(actorType, entities)
 
 	for _, entity in ipairs(entities) do
+		Validation.ValidateEntityId(actorType, entity, "QueryActiveEntities")
+
 		-- Seed a result record before the per-phase work fills in status fields.
 		local result = {
 			ActorType = actorType,
@@ -253,6 +260,7 @@ function Runtime:_BuildEntityStates(
 		-- Pull hook output before tree execution so facts and services are ready for the behavior tree.
 		local hookOutcome = self:_BuildHookOutcome(actorType, entity, adapter, frameContext, defects)
 		local behaviorTree = adapter:GetCompiledBehaviorTree(entity)
+		Validation.ValidateBehaviorTree(actorType, entity, behaviorTree)
 
 		table.insert(entityStates, {
 			Entity = entity,
@@ -293,7 +301,9 @@ function Runtime:_CleanupActorAction(
 	end
 
 	local defects = {}
-	local actionState = _CloneActionState(adapter:GetActionState(entity))
+	local actionStateSnapshot = adapter:GetActionState(entity)
+	Validation.ValidateActionState(actionStateSnapshot, "AiRuntime Cleanup GetActionState")
+	local actionState = _CloneActionState(actionStateSnapshot)
 	-- Reuse the normal hook merge path so cleanup sees the same service bag as frame execution.
 	local hookOutcome = self:_BuildHookOutcome(actorType, entity, adapter, frameContext, defects)
 	local runtimeContext = {
@@ -362,7 +372,9 @@ function Runtime:_BuildHookOutcome(
 	frameContext: TFrameContext,
 	defects: { TErrorSinkPayload }
 ): THookOutcome
-	local actionState = _CloneActionState(adapter:GetActionState(entity))
+	local actionStateSnapshot = adapter:GetActionState(entity)
+	Validation.ValidateActionState(actionStateSnapshot, "AiRuntime HookContext GetActionState")
+	local actionState = _CloneActionState(actionStateSnapshot)
 	local baseServices = if frameContext.Services ~= nil then frameContext.Services else {}
 	local hookContext = {
 		Entity = entity,
@@ -396,7 +408,9 @@ function Runtime:_RunTreePhase(
 			continue
 		end
 
-		if not entityState.Adapter:ShouldEvaluate(entityState.Entity, frameContext.CurrentTime) then
+		local shouldEvaluate = entityState.Adapter:ShouldEvaluate(entityState.Entity, frameContext.CurrentTime)
+		Validation.ValidateShouldEvaluateResult(entityState.ActorType, entityState.Entity, shouldEvaluate)
+		if not shouldEvaluate then
 			-- The adapter owns the tick gate, so the runtime skips entities that are not ready yet.
 			entityState.Result.TreeStatus = "SkippedNotReady"
 			continue
@@ -442,7 +456,9 @@ function Runtime:_RunTransitionPhase(
 	defects: { TErrorSinkPayload }
 )
 	for _, entityState in ipairs(entityStates) do
-		local actionState = _CloneActionState(entityState.Adapter:GetActionState(entityState.Entity))
+		local actionStateSnapshot = entityState.Adapter:GetActionState(entityState.Entity)
+		Validation.ValidateActionState(actionStateSnapshot, "AiRuntime StartPendingAction GetActionState")
+		local actionState = _CloneActionState(actionStateSnapshot)
 		local runtimeContext = {
 			DeltaTime = frameContext.DeltaTime,
 			Services = entityState.HookOutcome.Services,
@@ -525,7 +541,9 @@ function Runtime:_RunActionPhase(
 	defects: { TErrorSinkPayload }
 )
 	for _, entityState in ipairs(entityStates) do
-		local actionState = _CloneActionState(entityState.Adapter:GetActionState(entityState.Entity))
+		local actionStateSnapshot = entityState.Adapter:GetActionState(entityState.Entity)
+		Validation.ValidateActionState(actionStateSnapshot, "AiRuntime TickCurrentAction GetActionState")
+		local actionState = _CloneActionState(actionStateSnapshot)
 		entityState.HookOutcome.Services.ActionState = actionState
 		local runtimeContext = {
 			DeltaTime = frameContext.DeltaTime,
@@ -581,7 +599,7 @@ end
 
 --[=[
 	@private
-	Runs the hook chain for one entity and converts failures into a neutral outcome.
+	Runs the hook chain for one entity through the shared hook boundary.
 	@within AiRuntimeService
 	@param entity number
 	@param actorType string
@@ -592,36 +610,12 @@ end
 ]=]
 function Runtime:_RunHooks(
 	entity: number,
-	actorType: string,
-	adapter: TActorAdapter,
+	_actorType: string,
+	_adapter: TActorAdapter,
 	hookContext: Types.THookContext,
-	defects: { TErrorSinkPayload }
+	_defects: { TErrorSinkPayload }
 ): THookOutcome
-	local didRun, hookOutcome = pcall(function()
-		return HookRunner.Run(self._hooks, entity, hookContext)
-	end)
-
-	if didRun then
-		return hookOutcome
-	end
-
-	-- Hook failures collapse to a neutral payload so frame execution can keep moving.
-	self:_PushDefect(defects, {
-		Stage = "HookRun",
-		ActorType = actorType,
-		Entity = entity,
-		ActorLabel = _GetActorLabel(adapter),
-		ErrorType = "HookRunFailed",
-		ErrorMessage = tostring(hookOutcome),
-		Details = nil,
-	})
-
-	return {
-		-- Fall back to empty facts and behavior context when hooks fail so tree execution can still continue.
-		Facts = {},
-		BehaviorContext = {},
-		Services = hookContext.Services,
-	}
+	return HookRunner.Run(self._hooks, entity, hookContext)
 end
 
 --[=[
@@ -774,7 +768,9 @@ function _GetActorLabel(adapter: TActorAdapter): string?
 		return nil
 	end
 
-	return adapter:GetActorLabel()
+	local actorLabel = adapter:GetActorLabel()
+	Validation.ValidateActorLabel("unknown", actorLabel)
+	return actorLabel
 end
 
 --[=[

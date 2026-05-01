@@ -1,6 +1,7 @@
 --!strict
 
 local Types = require(script.Parent.Types)
+local Validation = require(script.Parent.Validation)
 
 type THook = Types.THook
 type THookContext = Types.THookContext
@@ -11,7 +12,6 @@ export type THookOutcome = {
 	Services: { [string]: any },
 }
 
-local _AssertContributionBucket
 local _MergeBucket
 
 local HookRunner = {}
@@ -22,15 +22,14 @@ function HookRunner.Run(hooks: { THook }, entity: number, hookContext: THookCont
 	local behaviorContext = {}
 	local mergedServices = table.clone(hookContext.Services)
 
-	for _, hook in ipairs(hooks) do
+	for index, hook in ipairs(hooks) do
 		local contribution = hook:Use(entity, hookContext)
 		if contribution == nil then
 			continue
 		end
 
-		_AssertContributionBucket("Facts", contribution.Facts)
-		_AssertContributionBucket("BehaviorContext", contribution.BehaviorContext)
-		_AssertContributionBucket("Services", contribution.Services)
+		Validation.ValidateHookContribution(index, contribution)
+		Validation.ValidateBehaviorContextReservedKeys(index, contribution.BehaviorContext)
 
 		_MergeBucket(facts, contribution.Facts)
 		_MergeBucket(behaviorContext, contribution.BehaviorContext)
@@ -42,12 +41,6 @@ function HookRunner.Run(hooks: { THook }, entity: number, hookContext: THookCont
 		BehaviorContext = behaviorContext,
 		Services = mergedServices,
 	}
-end
-
-function _AssertContributionBucket(label: string, bucket: { [string]: any }?)
-	if bucket ~= nil then
-		assert(type(bucket) == "table", ("AiRuntime hook contribution '%s' must be a table"):format(label))
-	end
 end
 
 function _MergeBucket(target: { [string]: any }, source: { [string]: any }?)
