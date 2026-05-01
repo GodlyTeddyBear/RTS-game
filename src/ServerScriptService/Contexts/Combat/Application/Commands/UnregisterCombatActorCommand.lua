@@ -39,7 +39,7 @@ function UnregisterCombatActorCommand:Execute(actorHandle: string): Result.Resul
 			})
 		end
 
-		return Try(self._actorRegistryService:UnregisterCombatActor(actorHandle))
+		return Try(self._actorRegistryService:UnregisterActor(actorHandle))
 	end, self:_Label())
 end
 

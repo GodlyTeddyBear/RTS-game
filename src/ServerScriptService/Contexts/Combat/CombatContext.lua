@@ -25,8 +25,6 @@ local RegisterActorTypeCommand = require(script.Parent.Application.Commands.Regi
 local RegisterCombatActorCommand = require(script.Parent.Application.Commands.RegisterCombatActorCommand)
 local UnregisterCombatActorCommand = require(script.Parent.Application.Commands.UnregisterCombatActorCommand)
 local NotifyActorRemovedCommand = require(script.Parent.Application.Commands.NotifyActorRemovedCommand)
-local StartCombatRuntimeCommand = require(script.Parent.Application.Commands.StartCombatRuntimeCommand)
-local StopCombatRuntimeCommand = require(script.Parent.Application.Commands.StopCombatRuntimeCommand)
 
 type CombatActorTypePayload = CombatTypes.CombatActorTypePayload
 type CombatActorPayload = CombatTypes.CombatActorPayload
@@ -116,16 +114,6 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		Module = NotifyActorRemovedCommand,
 		CacheAs = "_notifyActorRemovedCommand",
 	},
-	{
-		Name = "StartCombatRuntimeCommand",
-		Module = StartCombatRuntimeCommand,
-		CacheAs = "_startCombatRuntimeCommand",
-	},
-	{
-		Name = "StopCombatRuntimeCommand",
-		Module = StopCombatRuntimeCommand,
-		CacheAs = "_stopCombatRuntimeCommand",
-	},
 }
 
 local CombatModules: BaseContext.TModuleLayers = {
@@ -174,11 +162,7 @@ function CombatContext:KnitStart()
 
 	CombatBaseContext:RegisterSchedulerSystem("CombatTick", function()
 		local dt = CombatBaseContext:GetSchedulerDeltaTime()
-		for userId, activeCombat in pairs(self._combatLoopService:GetActiveCombats()) do
-			if activeCombat.IsPaused then
-				continue
-			end
-
+		for userId in pairs(self._combatLoopService:GetSessions()) do
 			self._processCombatTickCommand:Execute(userId, dt)
 		end
 	end)
@@ -226,7 +210,6 @@ end
 function CombatContext:_OnRunEnded()
 	Catch(function()
 		Try(self._endCombatCommand:Execute())
-		Try(self._stopCombatRuntimeCommand:Execute())
 		return Ok(nil)
 	end, "Combat:OnRunEnded")
 end
@@ -234,7 +217,6 @@ end
 function CombatContext:_OnRunWaveEnded()
 	Catch(function()
 		Try(self._endCombatCommand:Execute())
-		Try(self._stopCombatRuntimeCommand:Execute())
 		return Ok(nil)
 	end, "Combat:OnRunWaveEnded")
 end
@@ -287,23 +269,8 @@ function CombatContext:NotifyActorRemoved(actorHandle: string): Result.Result<bo
 	end, "Combat:NotifyActorRemoved")
 end
 
-function CombatContext:StartCombatRuntime(sessionPayload: any?): Result.Result<boolean>
-	return Catch(function()
-		return self._startCombatRuntimeCommand:Execute(sessionPayload)
-	end, "Combat:StartCombatRuntime")
-end
-
-function CombatContext:StopCombatRuntime(): Result.Result<boolean>
-	return Catch(function()
-		return self._stopCombatRuntimeCommand:Execute()
-	end, "Combat:StopCombatRuntime")
-end
-
 function CombatContext:_BeforeDestroy()
 	Catch(function()
-		if self._stopCombatRuntimeCommand then
-			Try(self._stopCombatRuntimeCommand:Execute())
-		end
 		if self._endCombatCommand then
 			Try(self._endCombatCommand:Execute())
 		end

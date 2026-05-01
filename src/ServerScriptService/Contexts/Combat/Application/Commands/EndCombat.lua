@@ -7,6 +7,7 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
+local Try = Result.Try
 
 local EndCombat = {}
 EndCombat.__index = EndCombat
@@ -20,6 +21,7 @@ end
 function EndCombat:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_loopService = "CombatLoopService",
+		_behaviorRuntimeService = "CombatBehaviorRuntimeService",
 		_combatHitResolutionService = "CombatHitResolutionService",
 		_hitboxService = "HitboxService",
 		_lockOnService = "LockOnService",
@@ -38,15 +40,20 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 			end
 		end
 
+		if targetUserId == nil or not self._loopService:HasSession(targetUserId) then
+			return Ok(false)
+		end
+
+		Try(self._loopService:BeginEndingSession(targetUserId))
+
 		self._hitboxService:CleanupAll()
 		self._combatHitResolutionService:CleanupAll()
 		self._lockOnService:CleanupAll()
 		self._movementService:CleanupAll()
 		self._projectileService:CleanupAll()
 
-		if targetUserId ~= nil then
-			self._loopService:StopCombat(targetUserId)
-		end
+		Try(self._behaviorRuntimeService:StopRuntime())
+		Try(self._loopService:ClearSession(targetUserId))
 
 		return Ok(true)
 	end, self:_Label())

@@ -29,6 +29,20 @@ function Validation.ValidateActorType(actorType: string)
 	assert(type(actorType) == "string" and #actorType > 0, "AI actorType must be a non-empty string")
 end
 
+function Validation.ContainsPhase(registeredPhases: { string }, expectedPhase: string?): boolean
+	if expectedPhase == nil then
+		return #registeredPhases > 0
+	end
+
+	for _, registeredPhase in ipairs(registeredPhases) do
+		if registeredPhase == expectedPhase then
+			return true
+		end
+	end
+
+	return false
+end
+
 function Validation.ValidateArchetypeName(archetypeName: string)
 	assert(type(archetypeName) == "string" and #archetypeName > 0, "AI archetype name must be a non-empty string")
 end
@@ -123,20 +137,6 @@ function Validation.ValidateRegistrationOptions(options: TRegistrationValidation
 	end
 end
 
-local function _ContainsPhase(registeredPhases: { string }, expectedPhase: string?): boolean
-	if expectedPhase == nil then
-		return #registeredPhases > 0
-	end
-
-	for _, registeredPhase in ipairs(registeredPhases) do
-		if registeredPhase == expectedPhase then
-			return true
-		end
-	end
-
-	return false
-end
-
 function Validation.ValidateSemanticContract(
 	actorType: string,
 	requirements: Types.TSemanticRequirements?,
@@ -200,7 +200,7 @@ function Validation.ValidateSemanticContract(
 		)
 		assert(
 			type(pollStatus.RegisteredPhases) == "table"
-				and _ContainsPhase(pollStatus.RegisteredPhases, runtimeBinding.PollPhase),
+				and Validation.ContainsPhase(pollStatus.RegisteredPhases, runtimeBinding.PollPhase),
 			("AI actor '%s' requires FactsDependOnPolling but '%s.Poll' is not registered on phase '%s'"):format(
 				actorType,
 				runtimeBinding.ServiceField,
@@ -220,7 +220,7 @@ function Validation.ValidateSemanticContract(
 		)
 		assert(
 			type(syncStatus.RegisteredPhases) == "table"
-				and _ContainsPhase(syncStatus.RegisteredPhases, runtimeBinding.SyncPhase),
+				and Validation.ContainsPhase(syncStatus.RegisteredPhases, runtimeBinding.SyncPhase),
 			("AI actor '%s' requires AttributesDependOnProjection but '%s.SyncDirtyEntities' is not registered on phase '%s'"):format(
 				actorType,
 				runtimeBinding.ServiceField,

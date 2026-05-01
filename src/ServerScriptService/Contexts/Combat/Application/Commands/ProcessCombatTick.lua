@@ -26,12 +26,7 @@ end
 
 function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<boolean>
 	return Result.Catch(function()
-		if not self._loopService:IsActive(userId) then
-			return Ok(false)
-		end
-
-		local activeCombat = self._loopService:GetActiveCombat(userId)
-		if activeCombat == nil or activeCombat.IsPaused then
+		if not self._loopService:IsRunnable(userId) then
 			return Ok(false)
 		end
 

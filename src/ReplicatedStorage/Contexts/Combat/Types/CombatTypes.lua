@@ -1,5 +1,9 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local AIContractTypes = require(ReplicatedStorage.Utilities.AI.ContractTypes)
+
 --[=[
 	@class CombatTypes
 	Defines shared combat runtime shapes used by the combat context.
@@ -8,15 +12,19 @@
 ]=]
 local CombatTypes = {}
 
+export type CombatSessionState = "Starting" | "Active" | "Ending"
+
 --[=[
 	@interface CombatSession
 	@within CombatTypes
 	Active combat session metadata keyed by user id.
+	.State CombatSessionState -- Lifecycle state for the current combat session.
 	.WaveNumber number -- Current wave number for the active session.
 	.IsEndless boolean -- Whether the current run is endless.
 	.IsPaused boolean -- Whether combat updates are paused.
 ]=]
 export type CombatSession = {
+	State: CombatSessionState,
 	WaveNumber: number,
 	IsEndless: boolean,
 	IsPaused: boolean,
@@ -56,6 +64,9 @@ export type CombatActorTypePayload = {
 	Commands: { [string]: (any?) -> any },
 	Executors: { [string]: any },
 	Hooks: { any }?,
+	SemanticRequirements: AIContractTypes.TSemanticRequirements?,
+	RuntimeBinding: AIContractTypes.TRuntimeBinding?,
+	RuntimeOwner: any?,
 }
 
 --[=[

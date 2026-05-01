@@ -9,6 +9,7 @@ local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
 local Ensure = Result.Ensure
+local Try = Result.Try
 
 local StartCombat = {}
 StartCombat.__index = StartCombat
@@ -44,9 +45,16 @@ function StartCombat:Execute(waveNumber: number, isEndless: boolean): Result.Res
 			ActorTypeCount = #actorTypePayloads,
 		})
 
+		if self._loopService:HasSession(primaryPlayer.UserId) then
+			return Ok(false)
+		end
+
+		Try(self._loopService:BeginSession(primaryPlayer.UserId, waveNumber, isEndless))
+
 		if not runtimeStarted then
 			local startResult = self._behaviorRuntimeService:StartRuntime()
 			if not startResult.success then
+				Try(self._loopService:AbortSession(primaryPlayer.UserId))
 				Result.MentionError("Combat:StartCombat", "Combat runtime failed to start", {
 					WaveNumber = waveNumber,
 					IsEndless = isEndless,
@@ -60,7 +68,7 @@ function StartCombat:Execute(waveNumber: number, isEndless: boolean): Result.Res
 			end
 		end
 
-		self._loopService:StartCombat(primaryPlayer.UserId, waveNumber, isEndless)
+		Try(self._loopService:ActivateSession(primaryPlayer.UserId))
 		return Ok(true)
 	end, self:_Label())
 end

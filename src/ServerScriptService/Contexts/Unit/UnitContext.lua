@@ -126,6 +126,7 @@ end
 function UnitContext:KnitStart()
 	UnitBaseContext:KnitStart()
 	UnitBaseContext:RegisterSyncSystem("_syncService", nil, "UnitSync")
+	self._combatAdapterService:ConfigureRuntimeOwner(self)
 	local registerActorTypeResult = self._combatAdapterService:RegisterActorType()
 	if not registerActorTypeResult.success then
 		Result.MentionError("Unit:KnitStart", "Failed to register unit combat actor type", {

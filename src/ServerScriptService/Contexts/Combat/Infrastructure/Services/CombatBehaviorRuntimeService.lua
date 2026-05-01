@@ -127,7 +127,14 @@ function CombatBehaviorRuntimeService:StartRuntime(): Result.Result<boolean>
 		ActorTypes = actorTypeNames,
 	})
 
-	return self:_RegisterQueuedActors()
+	local queueResult = self:_RegisterQueuedActors()
+	if not queueResult.success then
+		self._runtime = nil
+		self._actorRegistryService:SetRuntimeStarted(false)
+		return queueResult
+	end
+
+	return Ok(true)
 end
 
 function CombatBehaviorRuntimeService:StopRuntime(): Result.Result<boolean>
@@ -196,7 +203,13 @@ function CombatBehaviorRuntimeService:GetExecutor(actionId: string)
 end
 
 function CombatBehaviorRuntimeService:_RegisterQueuedActors(): Result.Result<boolean>
-	for _, payload in ipairs(self._actorRegistryService:ConsumePendingActorPayloads()) do
+	local pendingPayloads = self._actorRegistryService:GetPendingActorPayloads()
+	local payloadsByHandle = {}
+	local registeredHandles = {}
+
+	for _, payload in ipairs(pendingPayloads) do
+		payloadsByHandle[payload.ActorHandle] = payload
+
 		local behaviorTreeResult = self:BuildTree(payload.BehaviorDefinition)
 		if not behaviorTreeResult.success then
 			Result.MentionError("Combat:BehaviorRuntime", "Queued actor behavior tree build failed", {
@@ -207,10 +220,11 @@ function CombatBehaviorRuntimeService:_RegisterQueuedActors(): Result.Result<boo
 				CauseMessage = behaviorTreeResult.message,
 				Details = behaviorTreeResult.data,
 			}, behaviorTreeResult.type)
+			self:_RollbackQueuedActorStartup(payloadsByHandle, registeredHandles)
 			return behaviorTreeResult
 		end
 
-		local registerResult = self._actorRegistryService:RegisterCombatActor(payload, behaviorTreeResult.value)
+		local registerResult = self._actorRegistryService:RegisterActor(payload, behaviorTreeResult.value)
 		if not registerResult.success then
 			Result.MentionError("Combat:BehaviorRuntime", "Queued actor registration failed", {
 				Stage = "RegisterQueuedActor",
@@ -220,11 +234,29 @@ function CombatBehaviorRuntimeService:_RegisterQueuedActors(): Result.Result<boo
 				CauseMessage = registerResult.message,
 				Details = registerResult.data,
 			}, registerResult.type)
+			self:_RollbackQueuedActorStartup(payloadsByHandle, registeredHandles)
 			return registerResult
 		end
+
+		table.insert(registeredHandles, payload.ActorHandle)
+		self._actorRegistryService:RemovePendingActorPayload(payload.ActorHandle)
 	end
 
 	return Ok(true)
+end
+
+function CombatBehaviorRuntimeService:_RollbackQueuedActorStartup(
+	payloadsByHandle: { [string]: any },
+	registeredHandles: { string }
+)
+	for _, actorHandle in ipairs(registeredHandles) do
+		self._actorRegistryService:DiscardActor(actorHandle)
+
+		local payload = payloadsByHandle[actorHandle]
+		if payload ~= nil then
+			self._actorRegistryService:QueueActor(payload)
+		end
+	end
 end
 
 function CombatBehaviorRuntimeService:_BuildRuntimeInputs(): TMergedRuntimeInputs

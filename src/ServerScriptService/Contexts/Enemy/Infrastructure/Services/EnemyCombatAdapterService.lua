@@ -67,6 +67,9 @@ function EnemyCombatAdapterService:RegisterActorType(): Result.Result<boolean>
 			Conditions = Nodes.Conditions,
 			Commands = Nodes.Commands,
 			Executors = Executors,
+			SemanticRequirements = EnemySemanticRequirements,
+			RuntimeBinding = EnemyRuntimeBinding,
+			RuntimeOwner = self._runtimeOwner,
 		})
 	end, "Enemy:RegisterActorType")
 end

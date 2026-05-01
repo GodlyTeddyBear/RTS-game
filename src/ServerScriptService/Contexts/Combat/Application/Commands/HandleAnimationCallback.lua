@@ -33,7 +33,7 @@ local function _ResolveActiveCombatOwnerUserId(self: any): number?
 	if primaryPlayer == nil then
 		return nil
 	end
-	if not self._loopService:IsActive(primaryPlayer.UserId) then
+	if not self._loopService:CanAcceptAnimationCallbacks(primaryPlayer.UserId) then
 		return nil
 	end
 	return primaryPlayer.UserId
@@ -111,7 +111,7 @@ function HandleAnimationCallback:Execute(
 				CallbackType = callbackType,
 			})
 		end
-		if not self._loopService:IsActive(player.UserId) then
+		if not self._loopService:CanAcceptAnimationCallbacks(player.UserId) then
 			return Err("CombatInactive", "Combat is not active for callback sender", {
 				UserId = player.UserId,
 			})

@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local AiAdapterFactory = require(ReplicatedStorage.Utilities.AI.AdapterFactory)
+local AIContractTypes = require(ReplicatedStorage.Utilities.AI.ContractTypes)
 local AiRuntime = require(ReplicatedStorage.Utilities.AI.Runtime)
 local Enums = require(script.Parent.Enums)
 
@@ -30,26 +31,10 @@ type TConditionRegistry = { [string]: (options: any?) -> any }
 type TCommandRegistry = { [string]: (options: any?) -> any }
 type THook = AiRuntime.THook
 type TErrorSinkPayload = AiRuntime.TErrorSinkPayload
-export type TRuntimeBindingMethodStatus = {
-	MethodName: string,
-	HasMethod: boolean,
-	RegisteredPhases: { string },
-}
-
-export type TRuntimeBindingStatus = {
-	TargetField: string,
-	TargetExists: boolean,
-	Poll: TRuntimeBindingMethodStatus,
-	Sync: TRuntimeBindingMethodStatus,
-}
-
-export type TRuntimeBindingOwner = {
-	GetSchedulerBindingStatus: (self: TRuntimeBindingOwner, serviceField: string) -> any,
-}
-
-export type TRegistrationValidationOptions = {
-	RuntimeOwner: TRuntimeBindingOwner?,
-}
+export type TRuntimeBindingMethodStatus = AIContractTypes.TRuntimeBindingMethodStatus
+export type TRuntimeBindingStatus = AIContractTypes.TRuntimeBindingStatus
+export type TRuntimeBindingOwner = AIContractTypes.TRuntimeBindingOwner
+export type TRegistrationValidationOptions = AIContractTypes.TRegistrationValidationOptions
 
 export type TSystemConfig = {
 	Conditions: TConditionRegistry,
@@ -73,16 +58,8 @@ export type TActionPack = {
 	Definitions: { [string]: any },
 }
 
-export type TSemanticRequirements = {
-	FactsDependOnPolling: boolean?,
-	AttributesDependOnProjection: boolean?,
-}
-
-export type TRuntimeBinding = {
-	ServiceField: string,
-	PollPhase: string?,
-	SyncPhase: string?,
-}
+export type TSemanticRequirements = AIContractTypes.TSemanticRequirements
+export type TRuntimeBinding = AIContractTypes.TRuntimeBinding
 
 export type TActorBundle = {
 	ActorType: string,

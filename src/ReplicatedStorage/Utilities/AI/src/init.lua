@@ -13,6 +13,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local AiAdapterFactory = require(ReplicatedStorage.Utilities.AI.AdapterFactory)
+local AIContractTypes = require(ReplicatedStorage.Utilities.AI.ContractTypes)
 local AiRuntime = require(ReplicatedStorage.Utilities.AI.Runtime)
 local BehaviorSystem = require(ReplicatedStorage.Utilities.AI.Behavior)
 
@@ -38,10 +39,10 @@ export type TAdapterConfig = Types.TAdapterConfig
 export type TFactoryAdapterConfig = Types.TFactoryAdapterConfig
 export type TActionPack = Types.TActionPack
 export type TActorRegistration = Types.TActorRegistration
-export type TSemanticRequirements = Types.TSemanticRequirements
-export type TRuntimeBinding = Types.TRuntimeBinding
-export type TRuntimeBindingOwner = Types.TRuntimeBindingOwner
-export type TRegistrationValidationOptions = Types.TRegistrationValidationOptions
+export type TSemanticRequirements = AIContractTypes.TSemanticRequirements
+export type TRuntimeBinding = AIContractTypes.TRuntimeBinding
+export type TRuntimeBindingOwner = AIContractTypes.TRuntimeBindingOwner
+export type TRegistrationValidationOptions = AIContractTypes.TRegistrationValidationOptions
 export type TActorBundle = Types.TActorBundle
 export type TActorPackage = Types.TActorPackage
 export type TBehaviorCatalog = Types.TBehaviorCatalog
@@ -93,6 +94,18 @@ function AI.ValidateSemanticContract(
 	options: TRegistrationValidationOptions?
 )
 	Validation.ValidateSemanticContract(actorType, requirements, runtimeBinding, options)
+end
+
+function AI.ValidateSemanticRequirements(requirements: TSemanticRequirements)
+	Validation.ValidateSemanticRequirements(requirements)
+end
+
+function AI.ValidateRuntimeBinding(runtimeBinding: TRuntimeBinding)
+	Validation.ValidateRuntimeBinding(runtimeBinding)
+end
+
+function AI.ContainsPhase(registeredPhases: { string }, expectedPhase: string?): boolean
+	return Validation.ContainsPhase(registeredPhases, expectedPhase)
 end
 
 --[=[

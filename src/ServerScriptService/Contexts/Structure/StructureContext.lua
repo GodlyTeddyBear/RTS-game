@@ -173,6 +173,7 @@ end
 ]=]
 function StructureContext:KnitStart()
 	StructureBaseContext:KnitStart()
+	self._combatAdapterService:ConfigureRuntimeOwner(self)
 	local registerActorTypeResult = self._combatAdapterService:RegisterActorType()
 	if not registerActorTypeResult.success then
 		Result.MentionError("Structure:KnitStart", "Failed to register structure combat actor type", {

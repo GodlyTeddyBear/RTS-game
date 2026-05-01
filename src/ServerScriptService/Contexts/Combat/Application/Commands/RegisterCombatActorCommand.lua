@@ -28,17 +28,12 @@ end
 
 function RegisterCombatActorCommand:Execute(payload: CombatActorPayload): Result.Result<string>
 	return Result.Catch(function()
-		local validationError = self._actorRegistryService:ValidateCombatActorPayload(payload)
-		if validationError ~= nil then
-			return validationError
-		end
-
 		if not self._actorRegistryService:IsRuntimeStarted() then
-			return self._actorRegistryService:QueueCombatActor(payload)
+			return self._actorRegistryService:QueueActor(payload)
 		end
 
 		local behaviorTree = Try(self._behaviorRuntimeService:BuildTree(payload.BehaviorDefinition))
-		return self._actorRegistryService:RegisterCombatActor(payload, behaviorTree)
+		return self._actorRegistryService:RegisterActor(payload, behaviorTree)
 	end, self:_Label())
 end
 
