@@ -25,6 +25,7 @@ local Types = require(script.Types)
 local muchacho_hitbox = {}
 muchacho_hitbox.__index = muchacho_hitbox
 
+local DEFAULT_UPDATE_INTERVAL = 12 / 60
 
 local get_CFrame = {
 	["Instance"] = function(point)
@@ -49,6 +50,7 @@ function muchacho_hitbox.CreateHitbox()
 	-- Detection and lifecycle configuration
 	self.DetectionMode = "Default"
 	self.AutoDestroy = true
+	self.UpdateInterval = DEFAULT_UPDATE_INTERVAL
 
 	-- Visualizer settings for debugging spatial queries
 	self.Visualizer = true
@@ -78,6 +80,9 @@ function muchacho_hitbox.CreateHitbox()
 	-- Collision event signals
 	self.Touched = GoodSignal.new()
 	self.TouchEnded = GoodSignal.new()
+
+	-- Frame throttling state
+	self._UpdateAccumulator = 0
 
 	return self
 end
@@ -113,7 +118,19 @@ function muchacho_hitbox.Start(self: Types.Hitbox)
 
 	-- Spawn heartbeat loop for continuous spatial queries
 	task.spawn(function()
-		self._Connection = rs.Heartbeat:Connect(function()
+		self._Connection = rs.Heartbeat:Connect(function(deltaTime: number)
+			local updateInterval = self.UpdateInterval
+			if type(updateInterval) == "number" and updateInterval > 0 then
+				local accumulator = self._UpdateAccumulator or 0
+				accumulator += deltaTime
+				self._UpdateAccumulator = accumulator
+				if accumulator < updateInterval then
+					return
+				end
+
+				self._UpdateAccumulator = 0
+			end
+
 			self:_visualize()
 			self:_cast()
 		end)
@@ -321,6 +338,7 @@ end
 function muchacho_hitbox:_clear()
 	-- Clear the accumulated hit list
 	self.HitList = {}
+	self._UpdateAccumulator = 0
 
 	-- Disconnect the heartbeat loop
 	if self._Connection then

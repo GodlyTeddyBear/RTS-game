@@ -8,6 +8,13 @@ local MuchachoHitbox = require(ReplicatedStorage.Utilities.MuchachoHitbox)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 
+local HITBOX_PROFILING_ENABLED = false
+local profileBegin = debug.profilebegin
+local profileEnd = debug.profileend
+local createProfileTag = "Combat:HitboxService:Create"
+local touchProfileTag = "Combat:HitboxService:Touch"
+local destroyProfileTag = "Combat:HitboxService:Destroy"
+
 type THitboxConfig = {
 	DetectionMode: "Default" | "ConstantDetection" | "HitOnce" | "HitParts",
 	Shape: Enum.PartType,
@@ -32,6 +39,22 @@ export type THitEntity = {
 ]=]
 local HitboxService = {}
 HitboxService.__index = HitboxService
+
+local function _runProfiled(tag: string, callback: () -> any?): any
+	if not HITBOX_PROFILING_ENABLED then
+		return callback()
+	end
+
+	profileBegin(tag)
+	local packed = table.pack(xpcall(callback, debug.traceback))
+	profileEnd()
+
+	if not packed[1] then
+		error(packed[2], 0)
+	end
+
+	return table.unpack(packed, 2, packed.n :: number)
+end
 
 local function EnsureHitboxFolder(): Folder
 	local existing = Workspace:FindFirstChild("Hitboxes")
@@ -73,8 +96,7 @@ end
 	@within HitboxService
 	Stores the context dependencies used while translating touches into combat targets.
 ]=]
-function HitboxService:Start()
-end
+function HitboxService:Start() end
 
 function HitboxService:RegisterTargetResolver(resolver: (BasePart) -> THitEntity?)
 	table.insert(self._targetResolvers, resolver)
@@ -124,87 +146,71 @@ function HitboxService:CreateAttackHitboxForModel(
 	model: Model?,
 	config: THitboxConfig
 ): { success: boolean, handle: THitboxHandle?, reason: string? }
-	if model == nil then
-		Result.MentionError("Combat:HitboxService", "Attack hitbox spawn skipped because attacker model was missing", {
-			AttackerEntity = attackerEntity,
-			AttackerKind = attackerKind,
-		}, "MissingModelRef")
+	return _runProfiled(createProfileTag, function()
+		if model == nil then
+			return {
+				success = false,
+				reason = "MissingModelRef",
+			}
+		end
+
+		local primaryPart = model.PrimaryPart
+		if primaryPart == nil then
+			return {
+				success = false,
+				reason = "MissingPrimaryPart",
+			}
+		end
+
+		local hitbox = MuchachoHitbox.CreateHitbox()
+		hitbox.DetectionMode = config.DetectionMode
+		hitbox.Shape = config.Shape
+		hitbox.Size = config.Size
+		hitbox.Offset = config.Offset
+		hitbox.CFrame = primaryPart
+		hitbox.Visualizer = config.Visualize
+		hitbox.AutoDestroy = false
+
+		hitbox.OverlapParams = SpatialQuery.BuildOverlapParams(SpatialQuery.Presets.ExcludeModel(model))
+
+		local handle: THitboxHandle = hitbox.Key
+		local janitor = Janitor.new()
+		self._janitors[handle] = janitor
+		self._hitEntities[handle] = {}
+		self._hitEntityKeys[handle] = {}
+
+		janitor:Add(hitbox, "Destroy")
+		janitor:Add(
+			hitbox.Touched:Connect(function(hitPart: BasePart, _humanoid: Humanoid?)
+				_runProfiled(touchProfileTag, function()
+					local hitEntity = self:_ResolveTouchedEntity(hitPart)
+					if hitEntity == nil then
+						return
+					end
+
+					local hitKey = _buildHitKey(hitEntity.Kind, hitEntity.Entity)
+					local hitKeyMap = self._hitEntityKeys[handle]
+					if hitKeyMap == nil or hitKeyMap[hitKey] then
+						return
+					end
+
+					hitKeyMap[hitKey] = true
+					local hitList = self._hitEntities[handle]
+					if hitList ~= nil then
+						table.insert(hitList, hitEntity)
+					end
+				end)
+			end),
+			"Disconnect"
+		)
+
+		hitbox:Start()
+
 		return {
-			success = false,
-			reason = "MissingModelRef",
+			success = true,
+			handle = handle,
 		}
-	end
-
-	local primaryPart = model.PrimaryPart
-	if primaryPart == nil then
-		Result.MentionError("Combat:HitboxService", "Attack hitbox spawn skipped because attacker primary part was missing", {
-			AttackerEntity = attackerEntity,
-			AttackerKind = attackerKind,
-			ModelName = model.Name,
-		}, "MissingPrimaryPart")
-		return {
-			success = false,
-			reason = "MissingPrimaryPart",
-		}
-	end
-
-	local hitbox = MuchachoHitbox.CreateHitbox()
-	hitbox.DetectionMode = config.DetectionMode
-	hitbox.Shape = config.Shape
-	hitbox.Size = config.Size
-	hitbox.Offset = config.Offset
-	hitbox.CFrame = primaryPart
-	hitbox.Visualizer = config.Visualize
-	hitbox.AutoDestroy = false
-
-	hitbox.OverlapParams = SpatialQuery.BuildOverlapParams(SpatialQuery.Presets.ExcludeModel(model))
-
-	local handle: THitboxHandle = hitbox.Key
-	local janitor = Janitor.new()
-	self._janitors[handle] = janitor
-	self._hitEntities[handle] = {}
-	self._hitEntityKeys[handle] = {}
-
-	janitor:Add(hitbox, "Destroy")
-	janitor:Add(hitbox.Touched:Connect(function(hitPart: BasePart, _humanoid: Humanoid?)
-		local hitEntity = self:_ResolveTouchedEntity(hitPart)
-		if hitEntity == nil then
-			return
-		end
-
-		local hitKey = _buildHitKey(hitEntity.Kind, hitEntity.Entity)
-		local hitKeyMap = self._hitEntityKeys[handle]
-		if hitKeyMap == nil or hitKeyMap[hitKey] then
-			return
-		end
-
-		hitKeyMap[hitKey] = true
-		local hitList = self._hitEntities[handle]
-		if hitList ~= nil then
-			table.insert(hitList, hitEntity)
-		end
-	end), "Disconnect")
-
-	hitbox:Start()
-	Result.MentionSuccess("Combat:HitboxService", "Spawned attack hitbox", {
-		AttackerEntity = attackerEntity,
-		AttackerKind = attackerKind,
-		Handle = handle,
-		ModelName = model.Name,
-		PrimaryPartName = primaryPart.Name,
-		Visualizer = config.Visualize,
-		FolderName = self._hitboxFolder.Name,
-		Shape = tostring(config.Shape),
-		SizeX = config.Size.X,
-		SizeY = config.Size.Y,
-		SizeZ = config.Size.Z,
-		OffsetPosition = tostring(config.Offset.Position),
-	})
-
-	return {
-		success = true,
-		handle = handle,
-	}
+	end)
 end
 
 --[=[
@@ -250,16 +256,18 @@ end
 	@param handle THitboxHandle -- Hitbox handle to destroy.
 ]=]
 function HitboxService:DestroyHitbox(handle: THitboxHandle)
-	local janitor = self._janitors[handle]
-	if janitor ~= nil then
-		pcall(function()
-			janitor:Cleanup()
-		end)
-	end
+	_runProfiled(destroyProfileTag, function()
+		local janitor = self._janitors[handle]
+		if janitor ~= nil then
+			pcall(function()
+				janitor:Cleanup()
+			end)
+		end
 
-	self._janitors[handle] = nil
-	self._hitEntities[handle] = nil
-	self._hitEntityKeys[handle] = nil
+		self._janitors[handle] = nil
+		self._hitEntities[handle] = nil
+		self._hitEntityKeys[handle] = nil
+	end)
 end
 
 --[=[

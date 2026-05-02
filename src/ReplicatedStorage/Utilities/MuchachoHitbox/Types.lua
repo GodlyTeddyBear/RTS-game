@@ -16,6 +16,7 @@ local types = {}
 	.Visualizer boolean -- Whether to render a debug visualization part
 	.DetectionMode "Default" | "ConstantDetection" | "HitOnce" | "HitParts" -- Event firing behavior
 	.AutoDestroy boolean -- Whether to automatically clean up signals on stop
+	.UpdateInterval number? -- Seconds between hitbox updates; zero or nil means every Heartbeat
 	.Key string -- Unique identifier for tracking active hitboxes
 	.OverlapParams OverlapParams -- Roblox query configuration (group filters, etc.)
 	.Size Vector3 -- Hitbox dimensions (extent for blocks, radius for balls)
@@ -62,6 +63,7 @@ export type Hitbox = {
 	-- Detection configuration
 	DetectionMode: ("Default" | "ConstantDetection" | "HitOnce" | "HitParts"),
 	AutoDestroy: boolean,
+	UpdateInterval: number?,
 	Key: string,
 
 	OverlapParams: OverlapParams,
@@ -79,6 +81,9 @@ export type Hitbox = {
 	-- Collision events
 	Touched: GoodSignal.Signal<BasePart, Humanoid?>,
 	TouchEnded: GoodSignal.Signal<BasePart, Humanoid?>,
+
+	-- Throttle state
+	_UpdateAccumulator: number?,
 
 	-- Lifecycle methods
 	Start: (self: Hitbox) -> (),

@@ -40,7 +40,7 @@ local WaveConfig = {
 		Seconds between enemy spawns within a group.
 	]=]
 	-- Seconds between individual enemy spawns inside a group.
-	SPAWN_DRIP_INTERVAL = 2,
+	SPAWN_DRIP_INTERVAL = 0.1,
 	--[=[
 		@prop ENDLESS_SCALE_FACTOR number
 		@within WaveConfig
@@ -58,7 +58,7 @@ local WaveConfig = {
 	-- Phase 2 one-family lock: prior Tank groups are converted to Swarm at a 1:4 count ratio.
 	WAVE_TABLE = {
 		[1] = {
-			{ role = "Swarm", count = 5, groupDelay = 0 },
+			{ role = "Swarm", count = 60, groupDelay = 0 },
 			{ role = "Swarm", count = 3, groupDelay = 8 },
 		},
 		[2] = {

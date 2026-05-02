@@ -6,9 +6,10 @@
 
     Contexts register their systems during `KnitStart()` via `RegisterSystem()`.
     `Runtime.server.lua` calls `Initialize()` after `Knit.Start()` resolves, which
-    builds the pipeline, flushes queued systems, and connects to `RunService.Heartbeat`.
+    builds the pipeline, flushes queued systems, and gates execution behind a fixed
+    `RunService.Heartbeat` accumulator.
 
-    Phase execution order (per Heartbeat frame):
+    Phase execution order (per scheduler tick):
     1. `EnemyPositionPoll`
     2. `EnemySync`
     3. `UnitSync`
@@ -21,6 +22,7 @@
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local Planck = require(ReplicatedStorage.Packages.Planck)
 local Jabby = require(ReplicatedStorage.Packages.Jabby)
 local Phases = require(script.Parent.Phases)
@@ -46,7 +48,11 @@ end
 local _queuedSystems: { TQueuedSystem } = {}
 local _scheduler: any = nil
 local _jabbyScheduler: any = nil
+local _heartbeatPipeline: any = nil
+local _schedulerSignal: BindableEvent? = nil
 local _initialized = false
+local _heartbeatAccumulator: number = 0
+local SCHEDULER_INTERVAL = DebugConfig.SCHEDULER_INTERVAL
 -- Delta time captured by the currently-running wrapper (for GetDeltaTime())
 local _currentDeltaTime: number = 0
 
@@ -80,6 +86,7 @@ end
 function ServerScheduler:Initialize()
 	assert(not _initialized, "[ServerScheduler] Already initialized")
 	self:_CreateJabbyScheduler()
+	self:_CreateSchedulerSignal()
 	self:_BuildHeartbeatPipeline()
 	self:_FlushQueuedSystems()
 	_initialized = true
@@ -104,7 +111,7 @@ end
     system function is not directly registered with Planck, so this captures delta time
     in the outer wrapper and exposes it here.
     @within ServerScheduler
-    @return number -- Seconds elapsed since the last Heartbeat frame
+    @return number -- Seconds elapsed since the last scheduler tick
 ]=]
 function ServerScheduler:GetDeltaTime(): number
 	return _currentDeltaTime
@@ -140,12 +147,30 @@ function ServerScheduler:_CreateJabbyScheduler()
 	_scheduler = Planck.Scheduler.new()
 end
 
+function ServerScheduler:_CreateSchedulerSignal()
+	local schedulerSignal = Instance.new("BindableEvent")
+	schedulerSignal.Name = "ServerSchedulerSignal"
+	_schedulerSignal = schedulerSignal
+end
+
 function ServerScheduler:_BuildHeartbeatPipeline()
-	local pipeline = Planck.Pipeline.new("ServerHeartbeat")
+	_heartbeatPipeline = Planck.Pipeline.new("ServerHeartbeat")
 	for _, entry in ipairs(Phases) do
-		pipeline:insert(entry.Phase)
+		_heartbeatPipeline:insert(entry.Phase)
 	end
-	_scheduler:insert(pipeline, RunService, "Heartbeat")
+
+	assert(_schedulerSignal ~= nil, "[ServerScheduler] Scheduler signal not initialized")
+	_scheduler:insert(_heartbeatPipeline, _schedulerSignal, "Event")
+
+	RunService.Heartbeat:Connect(function(deltaTime: number)
+		_heartbeatAccumulator += deltaTime
+		if _heartbeatAccumulator < SCHEDULER_INTERVAL then
+			return
+		end
+
+		_heartbeatAccumulator = 0
+		_schedulerSignal:Fire()
+	end)
 end
 
 function ServerScheduler:_FlushQueuedSystems()
@@ -170,4 +195,3 @@ function ServerScheduler:_WrapWithJabbyTiming(systemId: any, systemFn: (...any) 
 end
 
 return ServerScheduler
-

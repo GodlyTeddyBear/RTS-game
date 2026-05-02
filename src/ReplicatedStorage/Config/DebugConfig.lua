@@ -10,4 +10,5 @@
 return table.freeze({
 	ENABLED = true, -- Master switch for ALL debug logging
 	RESET_DATA_ON_JOIN = false, -- Wipe player data to template defaults on every join (testing only)
+	SCHEDULER_INTERVAL = 10 / 60, -- Seconds between server scheduler ticks (testing only)
 })
