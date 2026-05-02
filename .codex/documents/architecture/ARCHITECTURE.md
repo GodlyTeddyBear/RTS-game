@@ -15,6 +15,7 @@ Server-side architecture: DDD layers, Knit, JECS, ProfileStore, state sync, erro
 - [backend/CQRS.md](backend/CQRS.md) - Command/Query separation, asymmetric layers, dependency rules
 - [backend/STATE_SYNC.md](backend/STATE_SYNC.md) - Deep clone rules, nested table sync, centralized mutation
 - [backend/SYSTEMS.md](backend/SYSTEMS.md) - JECS, ProfileStore, debug logging, key libraries
+- [backend/ENTITY_IMPLEMENTATION_PIPELINE.md](backend/ENTITY_IMPLEMENTATION_PIPELINE.md) - End-to-end checklist for adding a new entity family or variant
 - [backend/POLICIES_AND_SPECS.md](backend/POLICIES_AND_SPECS.md) - Specifications, Policies, eligibility checking, candidate types
 
 ---

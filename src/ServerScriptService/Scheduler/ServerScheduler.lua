@@ -9,15 +9,12 @@
     builds the pipeline, flushes queued systems, and connects to `RunService.Heartbeat`.
 
     Phase execution order (per Heartbeat frame):
-    1. `NPCPositionPoll`  — Model CFrame → PositionComponent
-    2. `NPCSync`          — Animation state sync for dirty entities
-    3. `UnitSync`         — Unit dirty entity sync
-    4. `CombatTick`       — Per-user combat: BT + Actions + Completion
-    5. `WorkerSync`       — Worker dirty entity sync
-    6. `LotSync`          — Lot dirty entity sync
-    7. `BuildingSync`     — Building dirty entity sync
-    8. `MachineRuntime`  — Fuel burn + smelt progress for lot machines
-    9. `WorkerProduction` — Production + Mining (gated: runs once per second)
+    1. `EnemyPositionPoll`
+    2. `EnemySync`
+    3. `UnitSync`
+    4. `CombatTick`
+    5. `MiningTick`
+    6. `StructureSync`
     @server
 ]=]
 
@@ -173,3 +170,4 @@ function ServerScheduler:_WrapWithJabbyTiming(systemId: any, systemFn: (...any) 
 end
 
 return ServerScheduler
+

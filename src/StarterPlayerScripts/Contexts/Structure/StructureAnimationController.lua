@@ -18,6 +18,7 @@ local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.Plac
 
 local AnimateStructureModule = require(script.Parent.AnimateStructureModule)
 local StructureAttackAction = require(script.Parent.Actions.StructureAttackAction)
+local StructureExtractAction = require(script.Parent.Actions.StructureExtractAction)
 
 type TTrackedEntry = {
 	Cleanup: (() -> ())?,
@@ -53,7 +54,9 @@ end
 
 function StructureAnimationController:KnitInit()
 	local structureAttackAction = StructureAttackAction.new()
+	local structureExtractAction = StructureExtractAction.new()
 	ActionRegistry.Register("StructureAttack", structureAttackAction)
+	ActionRegistry.Register("StructureExtract", structureExtractAction)
 
 	self._tracked = {} :: { [Model]: TTrackedEntry }
 	self._placementsFolderConnectionAdded = nil :: RBXScriptConnection?

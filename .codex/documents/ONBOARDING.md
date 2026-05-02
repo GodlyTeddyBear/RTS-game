@@ -69,6 +69,7 @@ Read in this order:
 Read these when relevant:
 
 - [architecture/backend/CQRS.md](architecture/backend/CQRS.md) for commands, queries, or restore flow
+- [architecture/backend/ENTITY_IMPLEMENTATION_PIPELINE.md](architecture/backend/ENTITY_IMPLEMENTATION_PIPELINE.md) when adding a new entity family or a new entity variant with config, ECS, profiles, adapters, sync, and persistence work
 - [architecture/backend/STATE_SYNC.md](architecture/backend/STATE_SYNC.md) for sync behavior
 - [methods/backend/APPLICATION_CONTRACTS.md](methods/backend/APPLICATION_CONTRACTS.md) for command/query method boundaries
 - [methods/backend/BASE_APPLICATION_CONTRACTS.md](methods/backend/BASE_APPLICATION_CONTRACTS.md) for shared BaseApplication/BaseCommand/BaseQuery helper contracts
@@ -115,6 +116,7 @@ Read in this order:
 Read these when relevant:
 
 - [architecture/backend/ECS_OVERVIEW.md](architecture/backend/ECS_OVERVIEW.md) for the high-level ECS role map
+- [architecture/backend/ENTITY_IMPLEMENTATION_PIPELINE.md](architecture/backend/ENTITY_IMPLEMENTATION_PIPELINE.md) when the task is creating a new entity family or extending an existing one end to end
 - [methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md](methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md) for entity, instance, and sync ownership
 
 ---

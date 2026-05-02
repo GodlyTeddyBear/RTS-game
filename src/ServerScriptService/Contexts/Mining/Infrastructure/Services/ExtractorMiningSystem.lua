@@ -7,7 +7,7 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 
 --[=[
     @class ExtractorMiningSystem
-    Advances mining extractor timers and grants output to online owners on the combat tick.
+    Advances mining extractor timers and grants output to online owners on the mining tick.
     @server
 ]=]
 local ExtractorMiningSystem = {}

@@ -81,6 +81,7 @@ This file is the repo-level policy entry point for Codex.
 | [.codex/documents/methods/backend/APPLICATION_CONTRACTS.md](.codex/documents/methods/backend/APPLICATION_CONTRACTS.md) | Application command and query method contracts and prohibitions. |
 | [.codex/documents/methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md](.codex/documents/methods/backend/DOMAIN_POLICY_SPEC_CONTRACTS.md) | Domain policy and spec contracts and restore requirements. |
 | [.codex/documents/methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md](.codex/documents/methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md) | Infrastructure runtime and persistence boundaries, lifecycle ownership, and sync placement. |
+| [.codex/documents/architecture/backend/ENTITY_IMPLEMENTATION_PIPELINE.md](.codex/documents/architecture/backend/ENTITY_IMPLEMENTATION_PIPELINE.md) | End-to-end pipeline for adding a new entity family or variant across config, ECS, runtimes, sync, and persistence. |
 | [.codex/documents/methods/frontend/HOOK_VIEWMODEL_CONTRACTS.md](.codex/documents/methods/frontend/HOOK_VIEWMODEL_CONTRACTS.md) | Frontend hook and ViewModel method contracts. |
 | [.codex/documents/methods/frontend/TEMPLATE_ORGANISM_CONTRACTS.md](.codex/documents/methods/frontend/TEMPLATE_ORGANISM_CONTRACTS.md) | Frontend template and organism composition and animation boundary contracts. |
 | [.codex/documents/methods/frontend/CONTROLLER_INFRA_CONTRACTS.md](.codex/documents/methods/frontend/CONTROLLER_INFRA_CONTRACTS.md) | Frontend controller side-effect and infrastructure boundary contracts. |

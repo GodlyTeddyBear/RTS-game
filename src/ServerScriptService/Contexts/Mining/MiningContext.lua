@@ -6,7 +6,7 @@
 
     `PlacementContext` notifies this context when extractor structures are placed.
     `RunContext` drives cleanup and resource-node reattachment at run transitions.
-    `CombatTick` advances extractor production while gather interactions remain owned by the mining services.
+    `MiningTick` advances extractor production while gather interactions remain owned by the mining services.
     Owns mining orchestration only; Economy owns balances and Placement owns structure spawning.
     @server
 ]=]
@@ -233,7 +233,7 @@ function MiningContext:KnitStart()
 	)
 
 	-- Advance extractor AI and flush deferred entity deletes afterward.
-	MiningBaseContext:RegisterSchedulerSystem("CombatTick", function()
+	MiningBaseContext:RegisterSchedulerSystem("MiningTick", function()
 		self:_RunBehaviorFrame(MiningBaseContext:GetSchedulerDeltaTime())
 		self._entityFactory:FlushPendingDeletes()
 	end)

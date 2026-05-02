@@ -98,6 +98,7 @@ src/
 - [ERROR_HANDLING.md](ERROR_HANDLING.md) - Success/data pattern, assertions vs validation, logging format, error constants
 - [STATE_SYNC.md](STATE_SYNC.md) - Deep clone rules, nested table sync, centralized mutation pattern
 - [ECS_OVERVIEW.md](ECS_OVERVIEW.md) - ECS roles, boundaries, sync placement, and persistence linkage
+- [ENTITY_IMPLEMENTATION_PIPELINE.md](ENTITY_IMPLEMENTATION_PIPELINE.md) - Full pipeline for adding a new entity family or entity variant across config, ECS, runtimes, sync, and persistence
 - [UTILITY_USE.md](UTILITY_USE.md) - Shared utility usage, ECS helper boundaries, and placement guidance
 - [SYSTEMS.md](SYSTEMS.md) - JECS, ProfileStore, debug logging, key libraries
 
@@ -108,4 +109,5 @@ src/
 - [architecture/ARCHITECTURE.md](../ARCHITECTURE.md) - Root architecture index
 - [backend/DDD.md](DDD.md) - DDD layer rules and bounded-context structure
 - [backend/ECS_OVERVIEW.md](ECS_OVERVIEW.md) - ECS ownership and runtime boundaries
+- [backend/ENTITY_IMPLEMENTATION_PIPELINE.md](ENTITY_IMPLEMENTATION_PIPELINE.md) - End-to-end entity implementation flow
 - [backend/SYSTEMS.md](SYSTEMS.md) - Runtime systems, persistence flow, and library references
