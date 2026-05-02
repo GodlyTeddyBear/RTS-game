@@ -11,7 +11,6 @@ local EnemyTypes = require(script.Parent.Parent.Types.EnemyTypes)
 type TEnemyRole = EnemyTypes.EnemyRole
 type TEnemyRoleConfig = EnemyTypes.EnemyRoleConfig
 type TEnemyConfig = EnemyTypes.EnemyConfig
-type TPhase2AllowedRoles = { [TEnemyRole]: boolean }
 
 local Roles: { [TEnemyRole]: TEnemyRoleConfig } = table.freeze({
 	Swarm = table.freeze({
@@ -42,13 +41,8 @@ local Roles: { [TEnemyRole]: TEnemyRoleConfig } = table.freeze({
 	}),
 })
 
-local Phase2AllowedRoles: TPhase2AllowedRoles = table.freeze({
-	Swarm = true,
-})
-
 local EnemyConfig: TEnemyConfig = table.freeze({
 	Roles = Roles,
-	Phase2AllowedRoles = Phase2AllowedRoles,
 })
 
 return EnemyConfig

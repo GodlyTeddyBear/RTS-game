@@ -25,6 +25,7 @@ local EnemySpawnPolicy = require(script.Parent.EnemyDomain.Policies.EnemySpawnPo
 local SpawnEnemyCommand = require(script.Parent.Application.Commands.SpawnEnemy)
 local DespawnEnemyCommand = require(script.Parent.Application.Commands.DespawnEnemy)
 local ApplyDamageEnemyCommand = require(script.Parent.Application.Commands.ApplyDamageEnemy)
+local HandleGoalReachedCommand = require(script.Parent.Application.Commands.HandleGoalReached)
 local CleanupAllEnemiesCommand = require(script.Parent.Application.Commands.CleanupAllEnemies)
 local GetAliveEnemiesQuery = require(script.Parent.Application.Queries.GetAliveEnemiesQuery)
 local GetEnemyCountQuery = require(script.Parent.Application.Queries.GetEnemyCountQuery)
@@ -83,6 +84,11 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		Name = "ApplyDamageEnemyCommand",
 		Module = ApplyDamageEnemyCommand,
 		CacheAs = "_applyDamageEnemyCommand",
+	},
+	{
+		Name = "HandleGoalReachedCommand",
+		Module = HandleGoalReachedCommand,
+		CacheAs = "_handleGoalReachedCommand",
 	},
 	{
 		Name = "CleanupAllEnemiesCommand",
@@ -292,6 +298,18 @@ function EnemyContext:ApplyDamage(entity: any, amount: number): Result.Result<bo
 	return Catch(function()
 		return self._applyDamageEnemyCommand:Execute(entity, amount)
 	end, "Enemy:ApplyDamage")
+end
+
+--[=[
+	@within EnemyContext
+	Handles the enemy reaching its goal by applying base damage and despawning the entity.
+	@param entity any -- Enemy entity id that completed its advance path.
+	@return Result.Result<boolean> -- Whether the goal-reach flow completed successfully.
+]=]
+function EnemyContext:HandleGoalReached(entity: any): Result.Result<boolean>
+	return Catch(function()
+		return self._handleGoalReachedCommand:Execute(entity)
+	end, "Enemy:HandleGoalReached")
 end
 
 --[=[

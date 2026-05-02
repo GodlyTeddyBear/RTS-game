@@ -10,7 +10,6 @@ local BoidsConfig = require(ReplicatedStorage.Contexts.Combat.Config.BoidsConfig
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local EnemyTypes = require(ReplicatedStorage.Contexts.Enemy.Types.EnemyTypes)
 
-local ADVANCE_BOIDS_SESSION_ID = "CombatAdvanceBase"
 local GOAL_POSITION_EPSILON = 0.01
 
 type EnemyMovementMode = EnemyTypes.EnemyMovementMode
@@ -156,6 +155,24 @@ function MovementService:_GetBoidsOptions(): BoidsHelper.TBoidsOptions
 	}
 end
 
+function MovementService:_GetBoidsMinGroupSize(): number
+	local configuredMinGroupSize = BoidsConfig.MinGroupSize
+	if type(configuredMinGroupSize) ~= "number" then
+		return 2
+	end
+
+	return math.max(1, math.floor(configuredMinGroupSize))
+end
+
+function MovementService:_BuildBoidsSessionId(goalPosition: Vector3): string
+	return string.format(
+		"CombatAdvanceBase:%.2f:%.2f:%.2f",
+		goalPosition.X,
+		goalPosition.Y,
+		goalPosition.Z
+	)
+end
+
 function MovementService:_ResolveAdvanceMode(
 	movementMode: EnemyMovementMode,
 	goalPosition: Vector3
@@ -165,7 +182,7 @@ function MovementService:_ResolveAdvanceMode(
 	end
 
 	if movementMode == "Any" then
-		return if self:_CountBoidsCapableEntitiesAtGoal(goalPosition) > 1 then "Boids" else "Path"
+		return if self:_CountBoidsCapableEntitiesAtGoal(goalPosition) >= self:_GetBoidsMinGroupSize() then "Boids" else "Path"
 	end
 
 	return nil
@@ -203,13 +220,14 @@ end
 
 function MovementService:_StartBoids(entity: number, goalPosition: Vector3): boolean
 	local options = self:_GetBoidsOptions()
-	if not BoidsHelper.InitGroupMovement(entity, ADVANCE_BOIDS_SESSION_ID, goalPosition, options) then
+	local sessionId = self:_BuildBoidsSessionId(goalPosition)
+	if not BoidsHelper.InitGroupMovement(entity, sessionId, goalPosition, options) then
 		return false
 	end
 
 	self._movementByEntity[entity] = {
 		Mode = "Boids",
-		SessionId = ADVANCE_BOIDS_SESSION_ID,
+		SessionId = sessionId,
 		PreviousVelocity = Vector3.zero,
 	}
 	self._enemyEntityFactory:SetPathMoving(entity, true)

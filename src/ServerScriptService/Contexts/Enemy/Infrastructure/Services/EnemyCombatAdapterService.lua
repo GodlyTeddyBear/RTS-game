@@ -283,7 +283,7 @@ function EnemyCombatAdapterService:_BuildServices(entity: number, currentTime: n
 		StructureEntityFactory = self._structureEntityFactory,
 		BaseEntityFactory = self._baseEntityFactory,
 		CombatPerceptionService = self._perceptionResolver.CreateProxy(),
-		EnemyContext = nil,
+		EnemyContext = self._runtimeOwner,
 		StructureContext = self._structureContext,
 		BaseContext = self._baseContext,
 		CurrentTime = currentTime,

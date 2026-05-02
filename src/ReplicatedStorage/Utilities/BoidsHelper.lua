@@ -312,6 +312,7 @@ function BoidsHelper.InitGroupMovement(
 	if not session then
 		session = createSession(sessionId, targetPosition)
 	end
+	session.TargetPosition = targetPosition
 
 	registerEntity(session, entity, entityPosition)
 	return true

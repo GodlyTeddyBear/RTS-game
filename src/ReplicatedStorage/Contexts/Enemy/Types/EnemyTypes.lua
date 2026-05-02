@@ -61,7 +61,6 @@ export type EnemyRoleConfig = {
 
 export type EnemyConfig = {
 	Roles: { [EnemyRole]: EnemyRoleConfig },
-	Phase2AllowedRoles: { [EnemyRole]: boolean },
 }
 
 export type PositionComponent = TransformComponent

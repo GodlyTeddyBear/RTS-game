@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BaseExecutor = require(ReplicatedStorage.Utilities.BaseExecutor)
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
+local Result = require(ReplicatedStorage.Utilities.Result)
 
 --[=[
 	@class AdvanceExecutor
@@ -74,6 +75,20 @@ end
 
 function AdvanceExecutor:OnComplete(entity: number, services: any)
 	services.MovementService:StopMovement(entity)
+
+	local enemyContext = services.EnemyContext
+	if enemyContext == nil or type(enemyContext.HandleGoalReached) ~= "function" then
+		return
+	end
+
+	local goalReachedResult = enemyContext:HandleGoalReached(entity)
+	if not goalReachedResult.success then
+		Result.MentionError("Enemy:AdvanceExecutor", "Failed to handle enemy goal reach", {
+			Entity = entity,
+			CauseType = goalReachedResult.type,
+			CauseMessage = goalReachedResult.message,
+		}, goalReachedResult.type)
+	end
 end
 
 return AdvanceExecutor

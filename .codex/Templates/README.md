@@ -29,6 +29,7 @@ Canonical scaffold references for new files in this repo.
 - [AI System](ai-system.md) - Scaffold for a context-owned AI system built on the shared AI utility package.
 - [AI Runtime Creator](ai-runtime-creator.md) - Scaffold for a runtime creator module that owns `AI.CreateRuntime` configuration and frame APIs.
 - [AI Runtime Consumer Context](ai-runtime-context.md) - Scaffold for contexts that consume the runtime creator and own adapters, resolvers, actor registry, and profiles.
+- [Create Entity Variant](create-entity.md) - Checklist template for adding a new `Enemy` or `Structure` variant in existing contexts.
 - [Shared Utility](shared-utility.md) - Scaffold for reusable helpers such as `PlacementPlus`, `SpatialQuery`, `Orient`, `StateMachine`, and `ModelPlus`.
 
 ---

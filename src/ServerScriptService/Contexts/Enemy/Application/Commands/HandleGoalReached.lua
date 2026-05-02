@@ -13,7 +13,7 @@ local Try = Result.Try
 
 --[=[
 	@class HandleGoalReached
-	Handles enemy goal contact by notifying wave logic, damaging the commander, and despawning the enemy.
+	Handles enemy goal contact by notifying wave logic, damaging the base, and despawning the enemy.
 	@server
 ]=]
 local HandleGoalReached = {}
@@ -32,9 +32,14 @@ function HandleGoalReached:Init(registry: any, _name: string)
 	})
 end
 
-function HandleGoalReached:Execute(entity: any, primaryPlayer: Player?, commanderContext: any): Result.Result<boolean>
+function HandleGoalReached:Start(registry: any, _name: string)
+	self._baseContext = registry:Get("BaseContext")
+end
+
+function HandleGoalReached:Execute(entity: any): Result.Result<boolean>
 	return Result.Catch(function()
 		Ensure(entity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
+		Ensure(self._baseContext ~= nil, "DependencyUnavailable", "BaseContext dependency is unavailable")
 
 		local identity = self._entityFactory:GetIdentity(entity)
 		Ensure(identity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
@@ -48,16 +53,13 @@ function HandleGoalReached:Execute(entity: any, primaryPlayer: Player?, commande
 
 		Try(self._despawnEnemyCommand:Execute(entity))
 
-		if primaryPlayer and commanderContext then
-			local damageResult = commanderContext:ApplyDamage(primaryPlayer, roleConfig.Damage)
-			if not damageResult.success then
-				Result.MentionError("Enemy:HandleGoalReached", "Failed to apply commander damage", {
-					EnemyId = identity.EnemyId,
-					Role = identity.Role,
-					WaveNumber = identity.WaveNumber,
-					PlayerUserId = primaryPlayer.UserId,
-				}, damageResult.type)
-			end
+		local damageResult = self._baseContext:ApplyDamage(roleConfig.Damage)
+		if not damageResult.success then
+			Result.MentionError("Enemy:HandleGoalReached", "Failed to apply base damage", {
+				EnemyId = identity.EnemyId,
+				Role = identity.Role,
+				WaveNumber = identity.WaveNumber,
+			}, damageResult.type)
 		end
 
 		return Ok(true)

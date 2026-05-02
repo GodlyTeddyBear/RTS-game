@@ -33,6 +33,24 @@ setmetatable(EnemyInstanceFactory, { __index = BaseInstanceFactory })
 
 local ANIMATED_ENEMY_TAG = "AnimatedEnemy"
 
+local function _EnsureAnimationsFolderValue(model: Model, animationsFolder: Folder?)
+	local animationsFolderRef = model:FindFirstChild("AnimationsFolder")
+	if animationsFolderRef ~= nil and not animationsFolderRef:IsA("ObjectValue") then
+		animationsFolderRef:Destroy()
+		animationsFolderRef = nil
+	end
+
+	if animationsFolderRef == nil then
+		animationsFolderRef = Instance.new("ObjectValue")
+		animationsFolderRef.Name = "AnimationsFolder"
+		animationsFolderRef.Parent = model
+	end
+
+	if animationsFolder ~= nil then
+		(animationsFolderRef :: ObjectValue).Value = animationsFolder
+	end
+end
+
 function EnemyInstanceFactory.new()
 	local self = setmetatable(BaseInstanceFactory.new("Enemy"), EnemyInstanceFactory)
 	self._animationsFolder = nil :: Folder?
@@ -76,9 +94,8 @@ function EnemyInstanceFactory:_CreateFallbackModel(role: string, enemyId: string
 	rootPart.Size = roleConfig.ModelScale
 	rootPart.Color = roleConfig.ModelColor
 	rootPart.Material = Enum.Material.SmoothPlastic
-	rootPart.Anchored = false
+	rootPart.Anchored = true
 	rootPart.CanCollide = false
-	rootPart.Massless = false
 	rootPart.Parent = model
 
 	local humanoid = Instance.new("Humanoid")
@@ -94,19 +111,15 @@ end
 
 function EnemyInstanceFactory:_CreateInstanceForEntity(_entityId: number, options: TCreateEnemyInstanceOptions): Instance
 	local role = options.Role
-	local enemyId = options.EnemyId
 	local assetRegistry = self:_GetAssetRegistry()
-
-	if assetRegistry ~= nil and assetRegistry:EnemyModelExists(role) then
-		local success, loadedModel = pcall(function()
-			return assetRegistry:GetEnemyModel(role)
-		end)
-		if success and loadedModel ~= nil then
-			return loadedModel
+	if assetRegistry ~= nil then
+		local model = assetRegistry:GetEnemyModel(role)
+		if model ~= nil then
+			return model
 		end
 	end
 
-	return self:_CreateFallbackModel(role, enemyId)
+	return self:_CreateFallbackModel(role, options.EnemyId)
 end
 
 function EnemyInstanceFactory:_PrepareInstance(instance: Instance, _entityId: number, options: TCreateEnemyInstanceOptions)
@@ -118,21 +131,7 @@ function EnemyInstanceFactory:_PrepareInstance(instance: Instance, _entityId: nu
 	local model = instance :: Model
 	model.Name = "Enemy_" .. options.Role .. "_" .. options.EnemyId
 
-	local animationsFolderRef = model:FindFirstChild("AnimationsFolder")
-	if animationsFolderRef ~= nil and not animationsFolderRef:IsA("ObjectValue") then
-		animationsFolderRef:Destroy()
-		animationsFolderRef = nil
-	end
-
-	if animationsFolderRef == nil then
-		animationsFolderRef = Instance.new("ObjectValue")
-		animationsFolderRef.Name = "AnimationsFolder"
-		animationsFolderRef.Parent = model
-	end
-
-	if self._animationsFolder ~= nil then
-		(animationsFolderRef :: ObjectValue).Value = self._animationsFolder
-	end
+	_EnsureAnimationsFolderValue(model, self._animationsFolder)
 
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	if humanoid == nil then
@@ -154,6 +153,12 @@ function EnemyInstanceFactory:_PrepareInstance(instance: Instance, _entityId: nu
 
 	assert(model.PrimaryPart ~= nil, "Enemy model missing PrimaryPart: " .. model.Name)
 	model.PrimaryPart.Anchored = false
+	if model:GetAttribute("AnimationState") == nil then
+		model:SetAttribute("AnimationState", "Idle")
+	end
+	if model:GetAttribute("AnimationLooping") == nil then
+		model:SetAttribute("AnimationLooping", true)
+	end
 	EntityCollisionService:ApplyModel(model)
 end
 

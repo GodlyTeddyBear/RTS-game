@@ -55,10 +55,9 @@ local WaveConfig = {
 		Scripted wave definitions used before endless scaling begins.
 	]=]
 	-- Scripted wave definitions used before the endless loop starts.
-	-- Phase 2 one-family lock: prior Tank groups are converted to Swarm at a 1:4 count ratio.
 	WAVE_TABLE = {
 		[1] = {
-			{ role = "Swarm", count = 60, groupDelay = 0 },
+			{ role = "Tank", count = 3, groupDelay = 0 },
 			{ role = "Swarm", count = 3, groupDelay = 8 },
 		},
 		[2] = {

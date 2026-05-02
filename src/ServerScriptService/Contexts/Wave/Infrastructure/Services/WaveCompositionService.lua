@@ -5,7 +5,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
 local WaveConfig = require(ReplicatedStorage.Contexts.Wave.Config.WaveConfig)
 local WaveTypes = require(ReplicatedStorage.Contexts.Wave.Types.WaveTypes)
-local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -33,26 +32,6 @@ local function copyComposition(source: WaveComposition): WaveComposition
 		}
 	end
 	return copy
-end
-
--- Enforces Phase 2 one-family runtime by rejecting groups outside the allow-list.
-local function validateAllowedRoles(
-	composition: WaveComposition,
-	waveNumber: number,
-	isEndless: boolean
-): Result.Result<WaveComposition>
-	for groupIndex, group in composition do
-		if EnemyConfig.Phase2AllowedRoles[group.role] ~= true then
-			return Err("DisallowedEnemyRole", Errors.DISALLOWED_ENEMY_ROLE, {
-				WaveNumber = waveNumber,
-				IsEndless = isEndless,
-				GroupIndex = groupIndex,
-				Role = group.role,
-			})
-		end
-	end
-
-	return Ok(composition)
 end
 
 --[=[
@@ -96,7 +75,7 @@ function WaveCompositionService:BuildWave(
 		if not scriptedWave then
 			return Err("UnknownWave", Errors.UNKNOWN_WAVE, { WaveNumber = waveNumber })
 		end
-		return validateAllowedRoles(copyComposition(scriptedWave), waveNumber, false)
+		return Ok(copyComposition(scriptedWave))
 	end
 
 	local baseWave = WaveConfig.WAVE_TABLE[#WaveConfig.WAVE_TABLE]
@@ -117,7 +96,7 @@ function WaveCompositionService:BuildWave(
 	end
 
 	local endlessComposition = self._endlessScaling:ApplyRoleUpgrades(scaledComposition, resolvedIndex)
-	return validateAllowedRoles(endlessComposition, waveNumber, true)
+	return Ok(endlessComposition)
 end
 
 return WaveCompositionService
