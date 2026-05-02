@@ -12,6 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
 local ActorTypeMetadataPolicy = require(script.Policies.ActorTypeMetadataPolicy)
+local SetupValidationPolicy = require(script.Policies.SetupValidationPolicy)
 local Errors = require(script.Errors)
 
 local Err = Result.Err
@@ -242,6 +243,15 @@ end
 ]=]
 function ActorRegistryBase:IsRuntimeStarted(): boolean
 	return self._runtimeStarted
+end
+
+--[=[
+    Validates that the derived registry is fully configured for AI runtime ownership.
+    @within ActorRegistryBase
+    @return any -- Result object describing whether the registry setup is valid
+]=]
+function ActorRegistryBase:ValidateSetup(): any
+	return SetupValidationPolicy.Check(self, ActorRegistryBase)
 end
 
 --[=[

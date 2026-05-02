@@ -7,6 +7,7 @@
 ]=]
 
 local Assertions = require(script.Parent.Internal.Assertions)
+local AIRuntimeValidation = require(script.AIRuntimeValidation)
 local CacheValidation = require(script.CacheValidation)
 local LifecycleValidation = require(script.LifecycleValidation)
 local ModuleValidation = require(script.ModuleValidation)
@@ -27,6 +28,7 @@ function Validation.ValidateServiceConfig(context: any)
 
 	ModuleValidation.ValidateServiceModules(service)
 	CacheValidation.Validate(service, service.Cache)
+	AIRuntimeValidation.ValidateConfig(service, service.AIRuntimeContext)
 	LifecycleValidation.ValidateConfig(service, service.ProfileLifecycle)
 	TeardownValidation.ValidateConfig(service, service.Teardown)
 end
@@ -42,8 +44,18 @@ function Validation.ValidateStartConfig(context: any)
 	Assertions.AssertNonEmptyString(service.Name, "BaseContext service.Name")
 
 	StartValidation.Validate(service)
+	AIRuntimeValidation.ValidateConfig(service, service.AIRuntimeContext)
 	LifecycleValidation.ValidateConfig(service, service.ProfileLifecycle)
 	TeardownValidation.ValidateConfig(service, service.Teardown)
+end
+
+--[=[
+    Validates the optional AI runtime pair after BaseContext start registration completes.
+    @within Validation
+    @param context any -- BaseContext instance to validate.
+]=]
+function Validation.ValidateAIRuntimeRuntime(context: any)
+	AIRuntimeValidation.ValidateRuntime(context)
 end
 
 --[=[

@@ -90,4 +90,84 @@ Errors.ACTOR_PROJECTION_REQUIREMENT_UNSATISFIED = "ActorRegistryBase: actor type
 ]=]
 Errors.INVALID_ACTOR_TYPE_PAYLOAD = "ActorRegistryBase: invalid actor type registration payload"
 
+--[=[
+    @prop INVALID_SETUP_MISSING_ACTOR_TYPES string
+    @within Errors
+    @readonly
+    Returned when shared setup validation cannot find the actor-type storage table.
+]=]
+Errors.INVALID_SETUP_MISSING_ACTOR_TYPES = "ActorRegistryBase setup is missing _actorTypes"
+
+--[=[
+    @prop INVALID_SETUP_MISSING_RECORDS_BY_RUNTIME_ID string
+    @within Errors
+    @readonly
+    Returned when shared setup validation cannot find the runtime-record storage table.
+]=]
+Errors.INVALID_SETUP_MISSING_RECORDS_BY_RUNTIME_ID = "ActorRegistryBase setup is missing _recordsByRuntimeId"
+
+--[=[
+    @prop INVALID_SETUP_MISSING_RUNTIME_IDS_BY_HANDLE string
+    @within Errors
+    @readonly
+    Returned when shared setup validation cannot find the handle index table.
+]=]
+Errors.INVALID_SETUP_MISSING_RUNTIME_IDS_BY_HANDLE = "ActorRegistryBase setup is missing _runtimeIdsByHandle"
+
+--[=[
+    @prop INVALID_SETUP_MISSING_RUNTIME_IDS_BY_ACTOR_TYPE string
+    @within Errors
+    @readonly
+    Returned when shared setup validation cannot find the actor-type runtime-id index table.
+]=]
+Errors.INVALID_SETUP_MISSING_RUNTIME_IDS_BY_ACTOR_TYPE = "ActorRegistryBase setup is missing _runtimeIdsByActorType"
+
+--[=[
+    @prop INVALID_SETUP_MISSING_PENDING_ACTOR_PAYLOADS string
+    @within Errors
+    @readonly
+    Returned when shared setup validation cannot find the pending actor payload table.
+]=]
+Errors.INVALID_SETUP_MISSING_PENDING_ACTOR_PAYLOADS = "ActorRegistryBase setup is missing _pendingActorPayloadsByHandle"
+
+--[=[
+    @prop INVALID_SETUP_NON_NUMERIC_NEXT_RUNTIME_ID string
+    @within Errors
+    @readonly
+    Returned when the runtime id counter is not numeric during setup validation.
+]=]
+Errors.INVALID_SETUP_NON_NUMERIC_NEXT_RUNTIME_ID = "ActorRegistryBase setup has a non-numeric _nextRuntimeId"
+
+--[=[
+    @prop INVALID_SETUP_NON_BOOLEAN_RUNTIME_STARTED_FLAG string
+    @within Errors
+    @readonly
+    Returned when the runtime-started flag is not boolean during setup validation.
+]=]
+Errors.INVALID_SETUP_NON_BOOLEAN_RUNTIME_STARTED_FLAG = "ActorRegistryBase setup has a non-boolean _runtimeStarted flag"
+
+--[=[
+    @prop INVALID_SETUP_MISSING_OVERRIDE_HOOK string
+    @within Errors
+    @readonly
+    Returned when a required override hook is missing or not overridden.
+]=]
+Errors.INVALID_SETUP_MISSING_OVERRIDE_HOOK = "ActorRegistryBase setup must override hook"
+
+--[=[
+    @prop INVALID_SETUP_MISSING_HOOK string
+    @within Errors
+    @readonly
+    Returned when a required abstract hook is missing during setup validation.
+]=]
+Errors.INVALID_SETUP_MISSING_HOOK = "ActorRegistryBase setup is missing hook"
+
+--[=[
+    @prop INVALID_SETUP_MISSING_RUNTIME_METHOD string
+    @within Errors
+    @readonly
+    Returned when a required runtime method is missing during setup validation.
+]=]
+Errors.INVALID_SETUP_MISSING_RUNTIME_METHOD = "ActorRegistryBase setup is missing runtime method"
+
 return table.freeze(Errors)

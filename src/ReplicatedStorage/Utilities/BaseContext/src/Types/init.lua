@@ -99,6 +99,13 @@ export type TExternalServiceSpec = ServiceTypes.TExternalServiceSpec
 export type TExternalDependencySpec = ServiceTypes.TExternalDependencySpec
 
 --[=[
+    @type TAIRuntimeContextSpec
+    @within Types
+    Re-export of `ServiceTypes.TAIRuntimeContextSpec`.
+]=]
+export type TAIRuntimeContextSpec = ServiceTypes.TAIRuntimeContextSpec
+
+--[=[
     @type TStartOrder
     @within Types
     Re-export of `ServiceTypes.TStartOrder`.

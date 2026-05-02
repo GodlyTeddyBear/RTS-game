@@ -175,6 +175,8 @@ Read in this order:
    - [backend-context.md](../../Templates/backend-context.md) for new backend contexts
    - [backend-service.md](../../Templates/backend-service.md) for backend modules inside an existing context
    - [backend-syncservice.md](../../Templates/backend-syncservice.md) for any `*SyncService`
+   - [ai-runtime-creator.md](../../Templates/ai-runtime-creator.md) for modules that own `AI.CreateRuntime` configuration and frame APIs
+   - [ai-runtime-context.md](../../Templates/ai-runtime-context.md) for contexts that own adapters, resolvers, actor registry, and profiles while consuming the runtime creator
    - [frontend-feature.md](../../Templates/frontend-feature.md) for new frontend feature slices
    - [ai-system.md](../../Templates/ai-system.md) for context-owned AI systems
    - [shared-utility.md](../../Templates/shared-utility.md) for reusable helper modules

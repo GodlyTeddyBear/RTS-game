@@ -128,6 +128,10 @@ local CombatContext = Knit.CreateService({
 	},
 	Modules = CombatModules,
 	StartOrder = { "Infrastructure", "Application" },
+	AIRuntimeContext = {
+		RuntimeServiceField = "_combatBehaviorRuntimeService",
+		ActorRegistryServiceField = "_combatActorRegistryService",
+	},
 	Teardown = {
 		Before = "_BeforeDestroy",
 		Fields = {

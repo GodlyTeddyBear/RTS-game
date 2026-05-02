@@ -75,6 +75,17 @@ export type TExternalDependencySpec = {
 }
 
 --[=[
+    @interface TAIRuntimeContextSpec
+    @within ServiceTypes
+    .RuntimeServiceField string -- Cached service field that stores the context-owned AI runtime service.
+    .ActorRegistryServiceField string -- Cached service field that stores the paired actor registry service.
+]=]
+export type TAIRuntimeContextSpec = {
+	RuntimeServiceField: string,
+	ActorRegistryServiceField: string,
+}
+
+--[=[
     @type TStartOrder
     @within ServiceTypes
     Ordered layer names used when starting the registry.
@@ -92,6 +103,7 @@ export type TStartOrder = { string }
     .ExternalServices { TExternalServiceSpec }? -- External Knit services to register.
     .ExternalDependencies { TExternalDependencySpec }? -- External dependency values to register.
     .StartOrder TStartOrder? -- Registry start order override.
+    .AIRuntimeContext TAIRuntimeContextSpec? -- Optional AI runtime startup validation config.
     .ProfileLifecycle TProfileLifecycleSpec? -- Profile lifecycle configuration.
     .Teardown TTeardownSpec? -- Teardown configuration.
 ]=]
@@ -104,6 +116,7 @@ export type TContextService = {
 	ExternalServices: { TExternalServiceSpec }?,
 	ExternalDependencies: { TExternalDependencySpec }?,
 	StartOrder: TStartOrder?,
+	AIRuntimeContext: TAIRuntimeContextSpec?,
 	ProfileLifecycle: TProfileLifecycleSpec?,
 	Teardown: TTeardownSpec?,
 	_registry: any?,

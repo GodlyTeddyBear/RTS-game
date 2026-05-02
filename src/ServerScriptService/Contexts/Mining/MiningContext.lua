@@ -118,6 +118,10 @@ local MiningContext = Knit.CreateService({
 		{ Name = "EconomyContext", CacheAs = "_economyContext" },
 		{ Name = "StructureContext", CacheAs = "_structureContext" },
 	},
+	AIRuntimeContext = {
+		RuntimeServiceField = "_behaviorRuntimeService",
+		ActorRegistryServiceField = "_actorRegistryService",
+	},
 	Teardown = {
 		Before = "_BeforeDestroy",
 		Fields = {

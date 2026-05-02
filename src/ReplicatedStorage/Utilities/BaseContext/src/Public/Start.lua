@@ -32,6 +32,9 @@ function StartMethods:KnitStart()
 
 	-- Start modules after all registry entries are available.
 	self:StartRegisteredModules()
+
+	-- Validate optional AI runtime pairings before the wrapped context wires custom listeners.
+	Validation.ValidateAIRuntimeRuntime(self)
 end
 
 -- Registers all configured external Knit services.

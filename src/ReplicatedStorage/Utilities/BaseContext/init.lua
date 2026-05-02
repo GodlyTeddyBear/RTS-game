@@ -21,6 +21,7 @@ export type TTeardownFieldSpec = Types.TTeardownFieldSpec
 export type TTeardownSpec = Types.TTeardownSpec
 export type TExternalServiceSpec = Types.TExternalServiceSpec
 export type TExternalDependencySpec = Types.TExternalDependencySpec
+export type TAIRuntimeContextSpec = Types.TAIRuntimeContextSpec
 export type TStartOrder = Types.TStartOrder
 export type TContextService = Types.TContextService
 export type TBaseContext = BaseContext.TBaseContext

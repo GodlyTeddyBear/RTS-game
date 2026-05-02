@@ -4,11 +4,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local AI = require(ReplicatedStorage.Utilities.AI)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local SetupValidationPolicy = require(script.Policies.SetupValidationPolicy)
 
 local Ok = Result.Ok
 local Err = Result.Err
-
-type Result<T> = Result.Result<T>
 
 export type TBaseAIRuntimeErrors = {
 	RUNTIME_ALREADY_STARTED: string,
@@ -33,6 +32,8 @@ export type TBaseAIRuntimeService = typeof(setmetatable({} :: {
 	_baseHooks: { any },
 	_errors: TBaseAIRuntimeErrors,
 }, {} :: any))
+
+type Result<T> = Result.Result<T>
 
 type TMergedRuntimeInputs = {
 	Conditions: { [string]: (any?) -> any },
@@ -212,6 +213,10 @@ end
 
 function BaseAIRuntimeService:HasRuntimeObject(): boolean
 	return self._runtime ~= nil
+end
+
+function BaseAIRuntimeService:ValidateSetup(expectedActorRegistryService: any): Result<boolean>
+	return SetupValidationPolicy.Check(self, expectedActorRegistryService)
 end
 
 function BaseAIRuntimeService:_BuildErrorSink(): (payload: any) -> ()
