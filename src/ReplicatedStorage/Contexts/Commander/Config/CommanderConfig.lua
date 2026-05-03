@@ -28,68 +28,68 @@ CommanderConfig.MAX_HP = 100
 ]=]
 CommanderConfig.SLOTS = {
 	{
-		key = "Mobility",
-		displayName = "Blink Step",
-		energyCost = 15,
-		cooldownDuration = 10,
-		metadata = {
-			maxRange = 18,
-			lockedWhileOverchargeChanneling = true,
+		Key = "Mobility",
+		DisplayName = "Blink Step",
+		EnergyCost = 15,
+		CooldownDuration = 10,
+		Metadata = {
+			MaxRange = 18,
+			LockedWhileOverchargeChanneling = true,
 		},
 	},
 	{
-		key = "SummonA",
-		displayName = "Swarm Drones",
-		energyCost = 5,
-		cooldownDuration = 18,
-		metadata = {
+		Key = "SummonA",
+		DisplayName = "Swarm Drones",
+		EnergyCost = 5,
+		CooldownDuration = 18,
+		Metadata = {
 			SummonCount = 5,
 			Lifetime = 20,
-			targetingRule = "NearestEnemy",
+			TargetingRule = "NearestEnemy",
 		},
 	},
 	{
-		key = "SummonB",
-		displayName = "Elite Guardian",
-		energyCost = 45,
-		cooldownDuration = 25,
-		metadata = {
+		Key = "SummonB",
+		DisplayName = "Elite Guardian",
+		EnergyCost = 45,
+		CooldownDuration = 25,
+		Metadata = {
 			Lifetime = 30,
-			stationary = true,
-			pathingMode = "PassThrough",
+			Stationary = true,
+			PathingMode = "PassThrough",
 		},
 	},
 	{
-		key = "Control",
-		displayName = "Gravity Pulse",
-		energyCost = 25,
-		cooldownDuration = 14,
-		metadata = {
-			radius = 10,
-			knockbackStuds = 8,
-			slowDuration = 1.5,
+		Key = "Control",
+		DisplayName = "Gravity Pulse",
+		EnergyCost = 25,
+		CooldownDuration = 14,
+		Metadata = {
+			Radius = 10,
+			KnockbackStuds = 8,
+			SlowDuration = 1.5,
 		},
 	},
 	{
-		key = "Ultimate",
-		displayName = "Overcharge Field",
-		energyCost = 70,
-		cooldownDuration = 55,
-		metadata = {
-			channelTime = 1,
-			interruptibleByDamage = true,
-			movementLockedDuringChannel = true,
-			radius = 25,
-			stunDuration = 3,
-			structureAttackSpeedMultiplier = 1.5,
-			buffDuration = 8,
+		Key = "Ultimate",
+		DisplayName = "Overcharge Field",
+		EnergyCost = 70,
+		CooldownDuration = 55,
+		Metadata = {
+			ChannelTime = 1,
+			InterruptibleByDamage = true,
+			MovementLockedDuringChannel = true,
+			Radius = 25,
+			StunDuration = 3,
+			StructureAttackSpeedMultiplier = 1.5,
+			BuffDuration = 8,
 		},
 	},
 } :: { AbilitySlotDef }
 
 for _, slot in CommanderConfig.SLOTS do
-	if slot.metadata then
-		table.freeze(slot.metadata)
+	if slot.Metadata then
+		table.freeze(slot.Metadata)
 	end
 	table.freeze(slot)
 end

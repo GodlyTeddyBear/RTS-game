@@ -11,8 +11,8 @@ type CooldownState = CommanderTypes.CooldownState
 type CommanderState = CommanderTypes.CommanderState
 
 type HealthComponent = {
-	hp: number,
-	maxHp: number,
+	Hp: number,
+	MaxHp: number,
 }
 
 type IdentityComponent = {
@@ -32,8 +32,8 @@ local function _cloneCooldowns(source: CooldownState): CooldownState
 	for slotKey, entry in pairs(source) do
 		if entry ~= nil then
 			clone[slotKey] = {
-				startedAt = entry.startedAt,
-				duration = entry.duration,
+				StartedAt = entry.StartedAt,
+				Duration = entry.Duration,
 			}
 		end
 	end
@@ -76,8 +76,8 @@ function CommanderEntityFactory:CreateOrResetCommander(userId: number, maxHp: nu
 	end
 
 	self:_Set(entity, self._components.HealthComponent, {
-		hp = maxHp,
-		maxHp = maxHp,
+		Hp = maxHp,
+		MaxHp = maxHp,
 	} :: HealthComponent)
 	self:_Set(entity, self._components.CooldownsComponent, {
 		Cooldowns = {} :: CooldownState,
@@ -118,10 +118,10 @@ function CommanderEntityFactory:SetHP(userId: number, hp: number): number?
 		return nil
 	end
 
-	local clampedHp = math.max(0, math.min(health.maxHp, hp))
+	local clampedHp = math.max(0, math.min(health.MaxHp, hp))
 	self:_Set(entity, self._components.HealthComponent, {
-		hp = clampedHp,
-		maxHp = health.maxHp,
+		Hp = clampedHp,
+		MaxHp = health.MaxHp,
 	} :: HealthComponent)
 	return clampedHp
 end
@@ -139,10 +139,10 @@ function CommanderEntityFactory:ApplyDamage(userId: number, amount: number): num
 	end
 
 	local sanitizedAmount = math.max(0, amount)
-	local nextHp = math.max(0, health.hp - sanitizedAmount)
+	local nextHp = math.max(0, health.Hp - sanitizedAmount)
 	self:_Set(entity, self._components.HealthComponent, {
-		hp = nextHp,
-		maxHp = health.maxHp,
+		Hp = nextHp,
+		MaxHp = health.MaxHp,
 	} :: HealthComponent)
 	return nextHp
 end
@@ -172,8 +172,8 @@ function CommanderEntityFactory:SetCooldown(userId: number, slotKey: SlotKey, du
 	local current = self:_Get(entity, self._components.CooldownsComponent) :: CooldownsComponent?
 	local nextCooldowns = _cloneCooldowns(if current == nil then {} :: CooldownState else current.Cooldowns)
 	nextCooldowns[slotKey] = {
-		startedAt = os.clock(),
-		duration = duration,
+		StartedAt = os.clock(),
+		Duration = duration,
 	} :: CooldownEntry
 
 	self:_Set(entity, self._components.CooldownsComponent, {
@@ -210,9 +210,9 @@ function CommanderEntityFactory:GetCommanderState(userId: number): CommanderStat
 
 	local cooldowns = self:GetCooldowns(userId) or ({} :: CooldownState)
 	return {
-		hp = health.hp,
-		maxHp = health.maxHp,
-		cooldowns = cooldowns,
+		Hp = health.Hp,
+		MaxHp = health.MaxHp,
+		Cooldowns = cooldowns,
 	}
 end
 

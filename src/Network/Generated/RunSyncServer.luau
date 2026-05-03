@@ -158,11 +158,11 @@ local Queue: any = {
 
 local SerdesEvent = "?"
 local SerdesThread: thread?
-export type RunSnapshotPayload = { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }
-export type InitPayload = { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }
-export type PatchPayload = { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }
-export type SyncPayload = { type: "init", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? }
-local function WriteEVENT_SyncRunState(Value: { type: "init", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? }): ()
+export type RunSnapshotPayload = { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }
+export type InitPayload = { RunState: { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }? }
+export type PatchPayload = { RunState: { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }? }
+export type SyncPayload = { type: "init", data: { RunState: { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }? }? } | { type: "patch", data: { RunState: { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }? }? }
+local function WriteEVENT_SyncRunState(Value: { type: "init", data: { RunState: { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }? }? } | { type: "patch", data: { RunState: { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }? }? }): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
@@ -174,42 +174,42 @@ local function WriteEVENT_SyncRunState(Value: { type: "init", data: { runState: 
 		if Value.data ~= nil then
 			-- Allocate BLOCK: 1 bytes
 			local BLOCK_START = Allocate(1)
-			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.runState ~= nil and 1 or 0)
-			if Value.data.runState ~= nil then
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.RunState ~= nil and 1 or 0)
+			if Value.data.RunState ~= nil then
 				-- Allocate BLOCK: 5 bytes
 				local BLOCK_START = Allocate(5)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.runState.state ~= nil and 1 or 0)
-				if Value.data.runState.state ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.RunState.State ~= nil and 1 or 0)
+				if Value.data.RunState.State ~= nil then
 					-- Allocate BLOCK: 2 bytes
 					local BLOCK_START = Allocate(2)
-					local Length = #Value.data.runState.state
+					local Length = #Value.data.RunState.State
 					buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
 					Allocate(Length)
-					buffer.writestring(SendBuffer, SendOffset, Value.data.runState.state, Length)
+					buffer.writestring(SendBuffer, SendOffset, Value.data.RunState.State, Length)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.runState.waveNumber ~= nil and 1 or 0)
-				if Value.data.runState.waveNumber ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.RunState.WaveNumber ~= nil and 1 or 0)
+				if Value.data.RunState.WaveNumber ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.runState.waveNumber)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.RunState.WaveNumber)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.data.runState.phaseStartedAt ~= nil and 1 or 0)
-				if Value.data.runState.phaseStartedAt ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.data.RunState.PhaseStartedAt ~= nil and 1 or 0)
+				if Value.data.RunState.PhaseStartedAt ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.runState.phaseStartedAt)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.RunState.PhaseStartedAt)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.data.runState.phaseEndsAt ~= nil and 1 or 0)
-				if Value.data.runState.phaseEndsAt ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.data.RunState.PhaseEndsAt ~= nil and 1 or 0)
+				if Value.data.RunState.PhaseEndsAt ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.runState.phaseEndsAt)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.RunState.PhaseEndsAt)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 4, Value.data.runState.phaseDuration ~= nil and 1 or 0)
-				if Value.data.runState.phaseDuration ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 4, Value.data.RunState.PhaseDuration ~= nil and 1 or 0)
+				if Value.data.RunState.PhaseDuration ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.runState.phaseDuration)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.RunState.PhaseDuration)
 				end
 			end
 		end
@@ -221,42 +221,42 @@ local function WriteEVENT_SyncRunState(Value: { type: "init", data: { runState: 
 		if Value.data ~= nil then
 			-- Allocate BLOCK: 1 bytes
 			local BLOCK_START = Allocate(1)
-			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.runState ~= nil and 1 or 0)
-			if Value.data.runState ~= nil then
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.RunState ~= nil and 1 or 0)
+			if Value.data.RunState ~= nil then
 				-- Allocate BLOCK: 5 bytes
 				local BLOCK_START = Allocate(5)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.runState.state ~= nil and 1 or 0)
-				if Value.data.runState.state ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.RunState.State ~= nil and 1 or 0)
+				if Value.data.RunState.State ~= nil then
 					-- Allocate BLOCK: 2 bytes
 					local BLOCK_START = Allocate(2)
-					local Length = #Value.data.runState.state
+					local Length = #Value.data.RunState.State
 					buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
 					Allocate(Length)
-					buffer.writestring(SendBuffer, SendOffset, Value.data.runState.state, Length)
+					buffer.writestring(SendBuffer, SendOffset, Value.data.RunState.State, Length)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.runState.waveNumber ~= nil and 1 or 0)
-				if Value.data.runState.waveNumber ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.RunState.WaveNumber ~= nil and 1 or 0)
+				if Value.data.RunState.WaveNumber ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.runState.waveNumber)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.RunState.WaveNumber)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.data.runState.phaseStartedAt ~= nil and 1 or 0)
-				if Value.data.runState.phaseStartedAt ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.data.RunState.PhaseStartedAt ~= nil and 1 or 0)
+				if Value.data.RunState.PhaseStartedAt ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.runState.phaseStartedAt)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.RunState.PhaseStartedAt)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.data.runState.phaseEndsAt ~= nil and 1 or 0)
-				if Value.data.runState.phaseEndsAt ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.data.RunState.PhaseEndsAt ~= nil and 1 or 0)
+				if Value.data.RunState.PhaseEndsAt ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.runState.phaseEndsAt)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.RunState.PhaseEndsAt)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 4, Value.data.runState.phaseDuration ~= nil and 1 or 0)
-				if Value.data.runState.phaseDuration ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 4, Value.data.RunState.PhaseDuration ~= nil and 1 or 0)
+				if Value.data.RunState.PhaseDuration ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.runState.phaseDuration)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.RunState.PhaseDuration)
 				end
 			end
 		end
@@ -361,12 +361,12 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	SyncRunState = {
-		Fire = function(Player: Player, Value: { type: "init", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? }): ()
+		Fire = function(Player: Player, Value: { type: "init", data: { RunState: { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }? }? } | { type: "patch", data: { RunState: { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }? }? }): ()
 			Load(PlayersMap[Player])
 			WriteEVENT_SyncRunState(Value)
 			PlayersMap[Player] = Save()
 		end,
-		FireAll = function(Value: { type: "init", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? }): ()
+		FireAll = function(Value: { type: "init", data: { RunState: { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }? }? } | { type: "patch", data: { RunState: { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }? }? }): ()
 			Load()
 			WriteEVENT_SyncRunState(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -378,7 +378,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireList = function(List: {Player}, Value: { type: "init", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? }): ()
+		FireList = function(List: {Player}, Value: { type: "init", data: { RunState: { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }? }? } | { type: "patch", data: { RunState: { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }? }? }): ()
 			Load()
 			WriteEVENT_SyncRunState(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -390,7 +390,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireExcept = function(Except: Player, Value: { type: "init", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? } | { type: "patch", data: { runState: { state: string?, waveNumber: number?, phaseStartedAt: number?, phaseEndsAt: number?, phaseDuration: number? }? }? }): ()
+		FireExcept = function(Except: Player, Value: { type: "init", data: { RunState: { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }? }? } | { type: "patch", data: { RunState: { State: string?, WaveNumber: number?, PhaseStartedAt: number?, PhaseEndsAt: number?, PhaseDuration: number? }? }? }): ()
 			Load()
 			WriteEVENT_SyncRunState(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances

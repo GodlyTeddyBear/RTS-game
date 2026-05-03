@@ -66,9 +66,9 @@ function EndlessScalingService:ApplyRoleUpgrades(composition: WaveComposition, e
 		if thresholdIndex <= endlessWaveIndex then
 			local threshold: EndlessRoleThreshold = WaveConfig.ENDLESS_ROLE_THRESHOLDS[thresholdIndex]
 			table.insert(upgraded, {
-				role = threshold.role,
-				count = threshold.count,
-				groupDelay = 0,
+				Role = threshold.Role,
+				Count = threshold.Count,
+				GroupDelay = 0,
 			})
 		end
 	end

@@ -158,14 +158,14 @@ local Queue: any = {
 
 local SerdesEvent = "?"
 local SerdesThread: thread?
-export type GridCoordPayload = { row: number?, col: number? }
-export type StructureRecordPayload = { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }
-export type PlacementList = {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}
-export type PlacementStatePayload = { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }
-export type InitPayload = { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }
-export type PatchPayload = { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }
-export type SyncPayload = { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? }
-local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? }): ()
+export type GridCoordPayload = { GridId: string?, Row: number?, Col: number? }
+export type StructureRecordPayload = { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }
+export type PlacementList = {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}
+export type PlacementStatePayload = { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }
+export type InitPayload = { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }
+export type PatchPayload = { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }
+export type SyncPayload = { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? }
+local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? }): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
@@ -177,70 +177,86 @@ local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { placemen
 		if Value.data ~= nil then
 			-- Allocate BLOCK: 1 bytes
 			local BLOCK_START = Allocate(1)
-			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.placements ~= nil and 1 or 0)
-			if Value.data.placements ~= nil then
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Placements ~= nil and 1 or 0)
+			if Value.data.Placements ~= nil then
 				-- Allocate BLOCK: 1 bytes
 				local BLOCK_START = Allocate(1)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.placements.placements ~= nil and 1 or 0)
-				if Value.data.placements.placements ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Placements.Placements ~= nil and 1 or 0)
+				if Value.data.Placements.Placements ~= nil then
 					-- Allocate BLOCK: 2 bytes
 					local BLOCK_START = Allocate(2)
 					local Elements_5 = 0
-					for Key_5, Element_5 in Value.data.placements.placements do
+					for Key_5, Element_5 in Value.data.Placements.Placements do
 						Elements_5 += 1
 						local OFFSET_0 = Allocate(4)
 						buffer.writeu32(SendBuffer, OFFSET_0, Key_5)
 						local OFFSET_1 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_1, Element_5.coord ~= nil and 1 or 0)
-						if Element_5.coord ~= nil then
-							-- Allocate BLOCK: 2 bytes
-							local BLOCK_START = Allocate(2)
-							buffer.writeu8(SendBuffer, BLOCK_START + 0, Element_5.coord.row ~= nil and 1 or 0)
-							if Element_5.coord.row ~= nil then
-								-- Allocate BLOCK: 8 bytes
-								local BLOCK_START = Allocate(8)
-								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.coord.row)
+						buffer.writeu8(SendBuffer, OFFSET_1, Element_5.Coord ~= nil and 1 or 0)
+						if Element_5.Coord ~= nil then
+							-- Allocate BLOCK: 3 bytes
+							local BLOCK_START = Allocate(3)
+							buffer.writeu8(SendBuffer, BLOCK_START + 0, Element_5.Coord.GridId ~= nil and 1 or 0)
+							if Element_5.Coord.GridId ~= nil then
+								-- Allocate BLOCK: 2 bytes
+								local BLOCK_START = Allocate(2)
+								local Length = #Element_5.Coord.GridId
+								buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+								Allocate(Length)
+								buffer.writestring(SendBuffer, SendOffset, Element_5.Coord.GridId, Length)
 							end
-							buffer.writeu8(SendBuffer, BLOCK_START + 1, Element_5.coord.col ~= nil and 1 or 0)
-							if Element_5.coord.col ~= nil then
+							buffer.writeu8(SendBuffer, BLOCK_START + 1, Element_5.Coord.Row ~= nil and 1 or 0)
+							if Element_5.Coord.Row ~= nil then
 								-- Allocate BLOCK: 8 bytes
 								local BLOCK_START = Allocate(8)
-								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.coord.col)
+								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Coord.Row)
+							end
+							buffer.writeu8(SendBuffer, BLOCK_START + 2, Element_5.Coord.Col ~= nil and 1 or 0)
+							if Element_5.Coord.Col ~= nil then
+								-- Allocate BLOCK: 8 bytes
+								local BLOCK_START = Allocate(8)
+								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Coord.Col)
 							end
 						end
 						local OFFSET_2 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_2, Element_5.structureType ~= nil and 1 or 0)
-						if Element_5.structureType ~= nil then
+						buffer.writeu8(SendBuffer, OFFSET_2, Element_5.StructureType ~= nil and 1 or 0)
+						if Element_5.StructureType ~= nil then
 							-- Allocate BLOCK: 2 bytes
 							local BLOCK_START = Allocate(2)
-							local Length = #Element_5.structureType
+							local Length = #Element_5.StructureType
 							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
 							Allocate(Length)
-							buffer.writestring(SendBuffer, SendOffset, Element_5.structureType, Length)
+							buffer.writestring(SendBuffer, SendOffset, Element_5.StructureType, Length)
 						end
 						local OFFSET_3 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_3, Element_5.instanceId ~= nil and 1 or 0)
-						if Element_5.instanceId ~= nil then
+						buffer.writeu8(SendBuffer, OFFSET_3, Element_5.InstanceId ~= nil and 1 or 0)
+						if Element_5.InstanceId ~= nil then
 							-- Allocate BLOCK: 8 bytes
 							local BLOCK_START = Allocate(8)
-							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.instanceId)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.InstanceId)
 						end
 						local OFFSET_4 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_4, Element_5.tier ~= nil and 1 or 0)
-						if Element_5.tier ~= nil then
+						buffer.writeu8(SendBuffer, OFFSET_4, Element_5.OwnerUserId ~= nil and 1 or 0)
+						if Element_5.OwnerUserId ~= nil then
 							-- Allocate BLOCK: 8 bytes
 							local BLOCK_START = Allocate(8)
-							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.tier)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.OwnerUserId)
 						end
 						local OFFSET_5 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_5, Element_5.resourceType ~= nil and 1 or 0)
-						if Element_5.resourceType ~= nil then
+						buffer.writeu8(SendBuffer, OFFSET_5, Element_5.Tier ~= nil and 1 or 0)
+						if Element_5.Tier ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Tier)
+						end
+						local OFFSET_6 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_6, Element_5.ResourceType ~= nil and 1 or 0)
+						if Element_5.ResourceType ~= nil then
 							-- Allocate BLOCK: 2 bytes
 							local BLOCK_START = Allocate(2)
-							local Length = #Element_5.resourceType
+							local Length = #Element_5.ResourceType
 							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
 							Allocate(Length)
-							buffer.writestring(SendBuffer, SendOffset, Element_5.resourceType, Length)
+							buffer.writestring(SendBuffer, SendOffset, Element_5.ResourceType, Length)
 						end
 					end
 					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
@@ -255,70 +271,86 @@ local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { placemen
 		if Value.data ~= nil then
 			-- Allocate BLOCK: 1 bytes
 			local BLOCK_START = Allocate(1)
-			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.placements ~= nil and 1 or 0)
-			if Value.data.placements ~= nil then
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Placements ~= nil and 1 or 0)
+			if Value.data.Placements ~= nil then
 				-- Allocate BLOCK: 1 bytes
 				local BLOCK_START = Allocate(1)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.placements.placements ~= nil and 1 or 0)
-				if Value.data.placements.placements ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Placements.Placements ~= nil and 1 or 0)
+				if Value.data.Placements.Placements ~= nil then
 					-- Allocate BLOCK: 2 bytes
 					local BLOCK_START = Allocate(2)
 					local Elements_5 = 0
-					for Key_5, Element_5 in Value.data.placements.placements do
+					for Key_5, Element_5 in Value.data.Placements.Placements do
 						Elements_5 += 1
 						local OFFSET_0 = Allocate(4)
 						buffer.writeu32(SendBuffer, OFFSET_0, Key_5)
 						local OFFSET_1 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_1, Element_5.coord ~= nil and 1 or 0)
-						if Element_5.coord ~= nil then
-							-- Allocate BLOCK: 2 bytes
-							local BLOCK_START = Allocate(2)
-							buffer.writeu8(SendBuffer, BLOCK_START + 0, Element_5.coord.row ~= nil and 1 or 0)
-							if Element_5.coord.row ~= nil then
-								-- Allocate BLOCK: 8 bytes
-								local BLOCK_START = Allocate(8)
-								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.coord.row)
+						buffer.writeu8(SendBuffer, OFFSET_1, Element_5.Coord ~= nil and 1 or 0)
+						if Element_5.Coord ~= nil then
+							-- Allocate BLOCK: 3 bytes
+							local BLOCK_START = Allocate(3)
+							buffer.writeu8(SendBuffer, BLOCK_START + 0, Element_5.Coord.GridId ~= nil and 1 or 0)
+							if Element_5.Coord.GridId ~= nil then
+								-- Allocate BLOCK: 2 bytes
+								local BLOCK_START = Allocate(2)
+								local Length = #Element_5.Coord.GridId
+								buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+								Allocate(Length)
+								buffer.writestring(SendBuffer, SendOffset, Element_5.Coord.GridId, Length)
 							end
-							buffer.writeu8(SendBuffer, BLOCK_START + 1, Element_5.coord.col ~= nil and 1 or 0)
-							if Element_5.coord.col ~= nil then
+							buffer.writeu8(SendBuffer, BLOCK_START + 1, Element_5.Coord.Row ~= nil and 1 or 0)
+							if Element_5.Coord.Row ~= nil then
 								-- Allocate BLOCK: 8 bytes
 								local BLOCK_START = Allocate(8)
-								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.coord.col)
+								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Coord.Row)
+							end
+							buffer.writeu8(SendBuffer, BLOCK_START + 2, Element_5.Coord.Col ~= nil and 1 or 0)
+							if Element_5.Coord.Col ~= nil then
+								-- Allocate BLOCK: 8 bytes
+								local BLOCK_START = Allocate(8)
+								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Coord.Col)
 							end
 						end
 						local OFFSET_2 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_2, Element_5.structureType ~= nil and 1 or 0)
-						if Element_5.structureType ~= nil then
+						buffer.writeu8(SendBuffer, OFFSET_2, Element_5.StructureType ~= nil and 1 or 0)
+						if Element_5.StructureType ~= nil then
 							-- Allocate BLOCK: 2 bytes
 							local BLOCK_START = Allocate(2)
-							local Length = #Element_5.structureType
+							local Length = #Element_5.StructureType
 							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
 							Allocate(Length)
-							buffer.writestring(SendBuffer, SendOffset, Element_5.structureType, Length)
+							buffer.writestring(SendBuffer, SendOffset, Element_5.StructureType, Length)
 						end
 						local OFFSET_3 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_3, Element_5.instanceId ~= nil and 1 or 0)
-						if Element_5.instanceId ~= nil then
+						buffer.writeu8(SendBuffer, OFFSET_3, Element_5.InstanceId ~= nil and 1 or 0)
+						if Element_5.InstanceId ~= nil then
 							-- Allocate BLOCK: 8 bytes
 							local BLOCK_START = Allocate(8)
-							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.instanceId)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.InstanceId)
 						end
 						local OFFSET_4 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_4, Element_5.tier ~= nil and 1 or 0)
-						if Element_5.tier ~= nil then
+						buffer.writeu8(SendBuffer, OFFSET_4, Element_5.OwnerUserId ~= nil and 1 or 0)
+						if Element_5.OwnerUserId ~= nil then
 							-- Allocate BLOCK: 8 bytes
 							local BLOCK_START = Allocate(8)
-							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.tier)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.OwnerUserId)
 						end
 						local OFFSET_5 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_5, Element_5.resourceType ~= nil and 1 or 0)
-						if Element_5.resourceType ~= nil then
+						buffer.writeu8(SendBuffer, OFFSET_5, Element_5.Tier ~= nil and 1 or 0)
+						if Element_5.Tier ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Tier)
+						end
+						local OFFSET_6 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_6, Element_5.ResourceType ~= nil and 1 or 0)
+						if Element_5.ResourceType ~= nil then
 							-- Allocate BLOCK: 2 bytes
 							local BLOCK_START = Allocate(2)
-							local Length = #Element_5.resourceType
+							local Length = #Element_5.ResourceType
 							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
 							Allocate(Length)
-							buffer.writestring(SendBuffer, SendOffset, Element_5.resourceType, Length)
+							buffer.writestring(SendBuffer, SendOffset, Element_5.ResourceType, Length)
 						end
 					end
 					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
@@ -426,12 +458,12 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	SyncPlacements = {
-		Fire = function(Player: Player, Value: { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? }): ()
+		Fire = function(Player: Player, Value: { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? }): ()
 			Load(PlayersMap[Player])
 			WriteEVENT_SyncPlacements(Value)
 			PlayersMap[Player] = Save()
 		end,
-		FireAll = function(Value: { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? }): ()
+		FireAll = function(Value: { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncPlacements(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -443,7 +475,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireList = function(List: {Player}, Value: { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? }): ()
+		FireList = function(List: {Player}, Value: { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncPlacements(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -455,7 +487,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireExcept = function(Except: Player, Value: { type: "init", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? } | { type: "patch", data: { placements: { placements: {[number]: { coord: { row: number?, col: number? }?, structureType: string?, instanceId: number?, tier: number?, resourceType: string? }}? }? }? }): ()
+		FireExcept = function(Except: Player, Value: { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncPlacements(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances

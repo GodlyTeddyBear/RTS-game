@@ -12,8 +12,8 @@ local Ensure = Result.Ensure
 type GridCoord = PlacementTypes.GridCoord
 
 export type PlacementRequest = {
-	coord: GridCoord,
-	structureType: string,
+	Coord: GridCoord,
+	StructureType: string,
 }
 
 --[=[
@@ -43,7 +43,8 @@ end
 	@return Result.Result<PlacementRequest> -- The sanitized request payload.
 ]=]
 -- Validate the request shape before the policy touches any live game state.
-function PlacementValidator:ValidateRequest(coordRow: any, coordCol: any, structureType: any): Result.Result<PlacementRequest>
+function PlacementValidator:ValidateRequest(gridId: any, coordRow: any, coordCol: any, structureType: any): Result.Result<PlacementRequest>
+	Ensure(type(gridId) == "string" and #gridId > 0, "InvalidRequestCoord", Errors.INVALID_REQUEST_COORD)
 	Ensure(type(coordRow) == "number", "InvalidRequestCoord", Errors.INVALID_REQUEST_COORD)
 	Ensure(type(coordCol) == "number", "InvalidRequestCoord", Errors.INVALID_REQUEST_COORD)
 	Ensure(math.floor(coordRow) == coordRow, "InvalidRequestCoord", Errors.INVALID_REQUEST_COORD)
@@ -53,11 +54,12 @@ function PlacementValidator:ValidateRequest(coordRow: any, coordCol: any, struct
 	Ensure(#structureType > 0, "InvalidRequestStructureType", Errors.INVALID_REQUEST_STRUCTURE_TYPE)
 
 	return Ok({
-		coord = {
-			row = coordRow,
-			col = coordCol,
+		Coord = {
+			GridId = gridId,
+			Row = coordRow,
+			Col = coordCol,
 		},
-		structureType = structureType,
+		StructureType = structureType,
 	})
 end
 

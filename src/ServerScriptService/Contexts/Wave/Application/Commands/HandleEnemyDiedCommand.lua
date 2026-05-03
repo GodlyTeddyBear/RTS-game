@@ -98,8 +98,8 @@ function HandleEnemyDiedCommand:Execute(
 	Result.MentionEvent("Wave:HandleEnemyDiedCommand", "Enemy death registered", {
 		Role = role,
 		WaveNumber = waveNumber,
-		PendingSpawns = nextState.pendingSpawnCount,
-		ActiveEnemies = nextState.activeEnemyCount,
+		PendingSpawns = nextState.PendingSpawnCount,
+		ActiveEnemies = nextState.ActiveEnemyCount,
 	})
 
 	-- Resolve the wave if this was the last remaining enemy.

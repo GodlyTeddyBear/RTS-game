@@ -21,7 +21,7 @@ setmetatable(CommanderSyncClient, BaseSyncClient)
 	@return CommanderSyncClient -- The new sync client.
 ]=]
 function CommanderSyncClient.new()
-	local self = BaseSyncClient.new(BlinkClient, "SyncCommander", "commander", SharedAtoms.CreateClientAtom)
+	local self = BaseSyncClient.new(BlinkClient, "SyncCommander", "Commander", SharedAtoms.CreateClientAtom)
 	return setmetatable(self, CommanderSyncClient)
 end
 

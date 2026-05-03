@@ -61,17 +61,17 @@ local function _BuildResourceRows(wallet: ResourceWallet?): ({ TInventoryResourc
 	end
 
 	local rows = {
-		_CreateResourceRow("Energy", wallet.energy, false, 1),
+		_CreateResourceRow("Energy", wallet.Energy, false, 1),
 	}
 
 	local resourceNames = {}
-	for resourceName in wallet.resources do
+	for resourceName in wallet.Resources do
 		table.insert(resourceNames, resourceName)
 	end
 	table.sort(resourceNames)
 
 	for index, resourceName in resourceNames do
-		table.insert(rows, _CreateResourceRow(resourceName, wallet.resources[resourceName] or 0, false, index + 1))
+		table.insert(rows, _CreateResourceRow(resourceName, wallet.Resources[resourceName] or 0, false, index + 1))
 	end
 
 	return rows, false

@@ -158,13 +158,13 @@ local Queue: any = {
 local SerdesEvent = "?"
 local SerdesThread: thread?
 Queue.Reliable[0] = table.create(256)
-export type CooldownEntryPayload = { startedAt: number, duration: number }
-export type CooldownMap = {[string]: { startedAt: number, duration: number }}
-export type CommanderStatePayload = { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }
-export type InitPayload = { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }
-export type PatchPayload = { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }
-export type SyncPayload = { type: "init", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? } | { type: "patch", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? }
-local function ReadEVENT_SyncCommander(): ({ type: "init", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? } | { type: "patch", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? })
+export type CooldownEntryPayload = { StartedAt: number, Duration: number }
+export type CooldownMap = {[string]: { StartedAt: number, Duration: number }}
+export type CommanderStatePayload = { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }
+export type InitPayload = { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }
+export type PatchPayload = { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }
+export type SyncPayload = { type: "init", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? } | { type: "patch", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? }
+local function ReadEVENT_SyncCommander(): ({ type: "init", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? } | { type: "patch", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? })
 	-- Read BLOCK: 1 bytes
 	local BLOCK_START = Read(1)
 	local Tag = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
@@ -180,21 +180,21 @@ local function ReadEVENT_SyncCommander(): ({ type: "init", data: { commander: { 
 			if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 				-- Read BLOCK: 3 bytes
 				local BLOCK_START = Read(3)
-				Value.data.commander = {} :: any
+				Value.data.Commander = {} :: any
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 					-- Read BLOCK: 8 bytes
 					local BLOCK_START = Read(8)
-					Value.data.commander.hp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+					Value.data.Commander.Hp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 				end
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
 					-- Read BLOCK: 8 bytes
 					local BLOCK_START = Read(8)
-					Value.data.commander.maxHp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+					Value.data.Commander.MaxHp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 				end
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 2) == 1 then
 					-- Read BLOCK: 2 bytes
 					local BLOCK_START = Read(2)
-					Value.data.commander.cooldowns = {}
+					Value.data.Commander.Cooldowns = {}
 					local Elements_5 = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
 					for _ = 1, Elements_5 do
 						local OFFSET_0 = Read(2)
@@ -202,10 +202,10 @@ local function ReadEVENT_SyncCommander(): ({ type: "init", data: { commander: { 
 						local Key_5 = buffer.readstring(RecieveBuffer, Read(Length), Length)
 						local Element_5 = {} :: any
 						local OFFSET_1 = Read(8)
-						Element_5.startedAt = buffer.readf64(RecieveBuffer, OFFSET_1)
+						Element_5.StartedAt = buffer.readf64(RecieveBuffer, OFFSET_1)
 						local OFFSET_2 = Read(8)
-						Element_5.duration = buffer.readf64(RecieveBuffer, OFFSET_2)
-						Value.data.commander.cooldowns[Key_5] = Element_5
+						Element_5.Duration = buffer.readf64(RecieveBuffer, OFFSET_2)
+						Value.data.Commander.Cooldowns[Key_5] = Element_5
 					end
 				end
 			end
@@ -222,21 +222,21 @@ local function ReadEVENT_SyncCommander(): ({ type: "init", data: { commander: { 
 			if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 				-- Read BLOCK: 3 bytes
 				local BLOCK_START = Read(3)
-				Value.data.commander = {} :: any
+				Value.data.Commander = {} :: any
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 					-- Read BLOCK: 8 bytes
 					local BLOCK_START = Read(8)
-					Value.data.commander.hp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+					Value.data.Commander.Hp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 				end
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
 					-- Read BLOCK: 8 bytes
 					local BLOCK_START = Read(8)
-					Value.data.commander.maxHp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+					Value.data.Commander.MaxHp = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 				end
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 2) == 1 then
 					-- Read BLOCK: 2 bytes
 					local BLOCK_START = Read(2)
-					Value.data.commander.cooldowns = {}
+					Value.data.Commander.Cooldowns = {}
 					local Elements_5 = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
 					for _ = 1, Elements_5 do
 						local OFFSET_0 = Read(2)
@@ -244,10 +244,10 @@ local function ReadEVENT_SyncCommander(): ({ type: "init", data: { commander: { 
 						local Key_5 = buffer.readstring(RecieveBuffer, Read(Length), Length)
 						local Element_5 = {} :: any
 						local OFFSET_1 = Read(8)
-						Element_5.startedAt = buffer.readf64(RecieveBuffer, OFFSET_1)
+						Element_5.StartedAt = buffer.readf64(RecieveBuffer, OFFSET_1)
 						local OFFSET_2 = Read(8)
-						Element_5.duration = buffer.readf64(RecieveBuffer, OFFSET_2)
-						Value.data.commander.cooldowns[Key_5] = Element_5
+						Element_5.Duration = buffer.readf64(RecieveBuffer, OFFSET_2)
+						Value.data.Commander.Cooldowns[Key_5] = Element_5
 					end
 				end
 			end
@@ -308,7 +308,7 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
 		if Index == 0 then
-			local Value: { type: "init", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? } | { type: "patch", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? } = ReadEVENT_SyncCommander()
+			local Value: { type: "init", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? } | { type: "patch", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? } = ReadEVENT_SyncCommander()
 			if Events.Reliable[0] ~= nil then
 				task.spawn(Events.Reliable[0], Value)
 			else
@@ -343,7 +343,7 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	SyncCommander = {
-		On = function(Listener: (Value: { type: "init", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? } | { type: "patch", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? }) -> ()): () -> ()
+		On = function(Listener: (Value: { type: "init", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? } | { type: "patch", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? }) -> ()): () -> ()
 			Events.Reliable[0] = Listener
 			for Index, Arguments in Queue.Reliable[0] do
 				task.spawn(Listener, table.unpack(Arguments))

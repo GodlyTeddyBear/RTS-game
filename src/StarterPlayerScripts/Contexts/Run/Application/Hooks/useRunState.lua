@@ -9,19 +9,19 @@ local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 type RunState = RunTypes.RunState
 
 export type TRunState = {
-	state: RunState,
-	waveNumber: number,
-	phaseStartedAt: number?,
-	phaseEndsAt: number?,
-	phaseDuration: number?,
+	State: RunState,
+	WaveNumber: number,
+	PhaseStartedAt: number?,
+	PhaseEndsAt: number?,
+	PhaseDuration: number?,
 }
 
 local DEFAULT_RUN_STATE: TRunState = table.freeze({
-	state = "Idle",
-	waveNumber = 0,
-	phaseStartedAt = nil,
-	phaseEndsAt = nil,
-	phaseDuration = nil,
+	State = "Idle",
+	WaveNumber = 0,
+	PhaseStartedAt = nil,
+	PhaseEndsAt = nil,
+	PhaseDuration = nil,
 })
 
 local runAtom: (() -> TRunState)? = nil

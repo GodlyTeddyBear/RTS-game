@@ -21,8 +21,8 @@ local BuildOccupiedSetQuery = {}
 BuildOccupiedSetQuery.__index = BuildOccupiedSetQuery
 
 -- Builds a stable key for a coordinate so the occupied lookup can use string tables.
-local function _GetCoordKey(row: number, col: number): string
-	return ("%d_%d"):format(row, col)
+local function _GetCoordKey(gridId: string, row: number, col: number): string
+	return (`{gridId}:{row}:{col}`)
 end
 
 --[=[
@@ -60,12 +60,12 @@ function BuildOccupiedSetQuery:Execute(atom: PlacementAtom?): { [string]: boolea
 	end
 
 	-- Keep only records whose instance still exists in Workspace.
-	for _, record in ipairs(atom.placements) do
-		if liveInstanceIds[record.instanceId] ~= true then
+	for _, record in ipairs(atom.Placements) do
+		if liveInstanceIds[record.InstanceId] ~= true then
 			continue
 		end
 
-		occupiedSet[_GetCoordKey(record.coord.row, record.coord.col)] = true
+		occupiedSet[_GetCoordKey(record.Coord.GridId, record.Coord.Row, record.Coord.Col)] = true
 	end
 
 	return occupiedSet

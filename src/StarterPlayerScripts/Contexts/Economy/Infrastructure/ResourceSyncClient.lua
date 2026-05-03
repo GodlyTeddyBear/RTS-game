@@ -31,7 +31,7 @@ ResourceSyncClient.__index = ResourceSyncClient
 	@return ResourceSyncClient -- The new client sync wrapper.
 ]=]
 function ResourceSyncClient.new()
-	local self = BaseSyncClient.new(BlinkClient, "SyncResources", "resources", SharedAtoms.CreateClientAtom)
+	local self = BaseSyncClient.new(BlinkClient, "SyncResources", "Resources", SharedAtoms.CreateClientAtom)
 	return setmetatable(self, ResourceSyncClient)
 end
 

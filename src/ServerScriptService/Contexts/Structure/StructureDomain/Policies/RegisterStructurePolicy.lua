@@ -53,7 +53,7 @@ local function _isValidCoord(coord: GridCoord?): boolean
 		return false
 	end
 
-	return type(coord.row) == "number" and type(coord.col) == "number"
+	return type(coord.GridId) == "string" and type(coord.Row) == "number" and type(coord.Col) == "number"
 end
 
 --[=[
@@ -66,32 +66,33 @@ end
 function RegisterStructurePolicy:Check(record: StructureRecord): Result.Result<ResolvedStructureRecord>
 	-- Validate the record shape first so later field access is safe.
 	Ensure(type(record) == "table", "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
-	Ensure(StructureSpecs.IsValidStructureType(record.structureType), "UnknownStructureType", Errors.UNKNOWN_STRUCTURE_TYPE, {
-		structureType = record.structureType,
+	Ensure(StructureSpecs.IsValidStructureType(record.StructureType), "UnknownStructureType", Errors.UNKNOWN_STRUCTURE_TYPE, {
+		StructureType = record.StructureType,
 	})
-	Ensure(StructureSpecs.HasValidInstanceId(record.instanceId), "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD, {
-		instanceId = record.instanceId,
+	Ensure(StructureSpecs.HasValidInstanceId(record.InstanceId), "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD, {
+		InstanceId = record.InstanceId,
 	})
-	Ensure(_isValidCoord(record.coord), "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
+	Ensure(_isValidCoord(record.Coord), "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
 
 	-- Resolve the live tile before any combat component can be created from the record.
-	local tile = Try(self._worldContext:GetTile(record.coord))
+	local tile = Try(self._worldContext:GetTile(record.Coord))
 	Ensure(tile ~= nil, "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD, {
-		row = record.coord.row,
-		col = record.coord.col,
+		GridId = record.Coord.GridId,
+		Row = record.Coord.Row,
+		Col = record.Coord.Col,
 	})
-	Ensure(typeof(tile.worldPos) == "Vector3", "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
+	Ensure(typeof(tile.WorldPos) == "Vector3", "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
 
 	-- Normalize the structure key to the canonical combat type after all guards pass.
-	local resolvedType = StructureSpecs.ResolveStructureType(record.structureType)
+	local resolvedType = StructureSpecs.ResolveStructureType(record.StructureType)
 	Ensure(resolvedType ~= nil, "UnknownStructureType", Errors.UNKNOWN_STRUCTURE_TYPE, {
-		structureType = record.structureType,
+		StructureType = record.StructureType,
 	})
 
 	return Ok({
-		structureType = resolvedType :: StructureType,
-		instanceId = record.instanceId,
-		worldPos = tile.worldPos,
+		StructureType = resolvedType :: StructureType,
+		InstanceId = record.InstanceId,
+		WorldPos = tile.WorldPos,
 	})
 end
 

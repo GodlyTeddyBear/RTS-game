@@ -176,17 +176,18 @@ function PlacementContext:_ReleaseOccupiedTilesForCurrentPlacements()
 	local placements = self._syncService:GetPlacementsReadOnly()
 
 	for _, record in ipairs(placements) do
-		local occupancyResult = self._worldContext:SetTileOccupied(record.coord, false)
+		local occupancyResult = self._worldContext:SetTileOccupied(record.Coord, false)
 		if occupancyResult.success and occupancyResult.value == true then
 			continue
 		end
 
 		Result.MentionError("Placement:ReleaseTileOccupancy", "Failed to clear occupied tile at run end", {
-			row = record.coord.row,
-			col = record.coord.col,
-			errorType = occupancyResult.type,
-			errorMessage = occupancyResult.message,
-			occupancyUpdated = occupancyResult.value,
+			GridId = record.Coord.GridId,
+			Row = record.Coord.Row,
+			Col = record.Coord.Col,
+			ErrorType = occupancyResult.type,
+			ErrorMessage = occupancyResult.message,
+			OccupancyUpdated = occupancyResult.value,
 		}, occupancyResult.type)
 	end
 end
@@ -201,15 +202,16 @@ end
 -- Validate the raw remote payload before delegating to the placement command.
 function PlacementContext:_HandlePlaceStructureRequest(player: Player, request: any): PlaceResponse
 	-- Defensive shape checks keep malformed requests from reaching the command stack.
-	local coordRow = type(request) == "table" and request.coord_row or nil
-	local coordCol = type(request) == "table" and request.coord_col or nil
-	local structureType = type(request) == "table" and request.structureType or nil
-	local validatedResult = self._validator:ValidateRequest(coordRow, coordCol, structureType)
+	local gridId = type(request) == "table" and request.GridId or nil
+	local coordRow = type(request) == "table" and request.CoordRow or nil
+	local coordCol = type(request) == "table" and request.CoordCol or nil
+	local structureType = type(request) == "table" and request.StructureType or nil
+	local validatedResult = self._validator:ValidateRequest(gridId, coordRow, coordCol, structureType)
 	if not validatedResult.success then
 		return {
-			success = false,
-			errorMessage = validatedResult.message,
-			instanceId = nil,
+			Success = false,
+			ErrorMessage = validatedResult.message,
+			InstanceId = nil,
 		}
 	end
 
@@ -217,24 +219,24 @@ function PlacementContext:_HandlePlaceStructureRequest(player: Player, request: 
 	local placementResult = Catch(function()
 		return self._placeStructureCommand:Execute(
 			player,
-			validatedResult.value.coord,
-			validatedResult.value.structureType
+			validatedResult.value.Coord,
+			validatedResult.value.StructureType
 		)
 	end, "Placement:PlaceStructure")
 	if not placementResult.success then
 		return {
-			success = false,
-			errorMessage = placementResult.message,
-			instanceId = nil,
+			Success = false,
+			ErrorMessage = placementResult.message,
+			InstanceId = nil,
 		}
 	end
 
-	self._structurePlacedSignal:Fire(placementResult.value.record)
+	self._structurePlacedSignal:Fire(placementResult.value.Record)
 
 	return {
-		success = true,
-		errorMessage = nil,
-		instanceId = placementResult.value.instanceId,
+		Success = true,
+		ErrorMessage = nil,
+		InstanceId = placementResult.value.InstanceId,
 	}
 end
 

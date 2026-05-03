@@ -26,10 +26,10 @@ local function AbilityBar()
 	}, (function()
 		local children = {}
 		for index, slot in abilityHud.slots do
-			children[slot.key] = e(AbilitySlot, {
+			children[slot.Key] = e(AbilitySlot, {
 				slotData = slot,
 				onActivate = function()
-					commanderController:UseAbility(slot.key)
+					commanderController:UseAbility(slot.Key)
 				end,
 				LayoutOrder = index,
 			})

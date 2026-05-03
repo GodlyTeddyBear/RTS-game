@@ -54,14 +54,14 @@ function PlacementSyncService:Init(registry: any, _name: string)
 	self.BlinkServer = registry:Get("BlinkSyncServer")
 	self.Atom = SharedAtoms.CreateServerAtom()
 	self.Syncer = CharmSync.server({
-		atoms = { placements = self.Atom },
+		atoms = { Placements = self.Atom },
 		interval = 0.1,
 		preserveHistory = false,
 		autoSerialize = false,
 	})
 
-	-- Use the Blink event as the transport boundary; the atom stays server-authoritative.
-	self.Cleanup = self.Syncer:connect(function(player: Player, payload: buffer)
+	-- Build the Placement Blink payload explicitly so the enum discriminator stays Pascal-case.
+	self.Cleanup = self.Syncer:connect(function(player: Player, payload)
 		self.BlinkServer.SyncPlacements.Fire(player, payload)
 	end)
 end
@@ -84,7 +84,7 @@ end
 -- Placement count is read for cap checks before any write work begins.
 function PlacementSyncService:GetPlacementCount(): number
 	local state = self.Atom() :: PlacementAtom
-	return #state.placements
+	return #state.Placements
 end
 
 --[=[
@@ -95,7 +95,7 @@ end
 -- Return a deep clone so callers cannot mutate the atom snapshot in place.
 function PlacementSyncService:GetPlacementsReadOnly(): { StructureRecord }
 	local state = self.Atom() :: PlacementAtom
-	return deepClone(state.placements)
+	return deepClone(state.Placements)
 end
 
 --[=[
@@ -107,8 +107,8 @@ end
 function PlacementSyncService:AddPlacement(record: StructureRecord)
 	self.Atom(function(current: PlacementAtom)
 		local updated = table.clone(current)
-		updated.placements = table.clone(current.placements)
-		table.insert(updated.placements, deepClone(record))
+		updated.Placements = table.clone(current.Placements)
+		table.insert(updated.Placements, deepClone(record))
 		return updated
 	end)
 end
@@ -124,8 +124,8 @@ function PlacementSyncService:RemovePlacementByInstanceId(instanceId: number): S
 
 	self.Atom(function(current: PlacementAtom)
 		local removeIndex = nil :: number?
-		for index, record in ipairs(current.placements) do
-			if record.instanceId == instanceId then
+		for index, record in ipairs(current.Placements) do
+			if record.InstanceId == instanceId then
 				removeIndex = index
 				removedRecord = deepClone(record)
 				break
@@ -137,8 +137,8 @@ function PlacementSyncService:RemovePlacementByInstanceId(instanceId: number): S
 		end
 
 		local updated = table.clone(current)
-		updated.placements = table.clone(current.placements)
-		table.remove(updated.placements, removeIndex)
+		updated.Placements = table.clone(current.Placements)
+		table.remove(updated.Placements, removeIndex)
 		return updated
 	end)
 
@@ -153,7 +153,7 @@ end
 function PlacementSyncService:ClearAll()
 	self.Atom(function(_current: PlacementAtom)
 		return {
-			placements = {},
+			Placements = {},
 		}
 	end)
 end

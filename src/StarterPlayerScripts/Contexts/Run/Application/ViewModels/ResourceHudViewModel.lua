@@ -27,7 +27,7 @@ function ResourceHudViewModel.getEnergy(wallet: ResourceWallet?): number
 		return 0
 	end
 
-	return wallet.energy
+	return wallet.Energy
 end
 
 function ResourceHudViewModel.fromWallet(wallet: ResourceWallet?): TResourceHudData
@@ -35,9 +35,9 @@ function ResourceHudViewModel.fromWallet(wallet: ResourceWallet?): TResourceHudD
 		return DEFAULT_RESOURCE_HUD
 	end
 
-	local resources = wallet.resources
+	local resources = wallet.Resources
 	return table.freeze({
-		energy = wallet.energy,
+		energy = wallet.Energy,
 		metal = resources.Metal or 0,
 		crystal = resources.Crystal or 0,
 		isSyncing = false,

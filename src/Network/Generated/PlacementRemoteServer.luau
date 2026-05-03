@@ -159,40 +159,42 @@ local Queue: any = {
 local SerdesEvent = "?"
 local SerdesThread: thread?
 Queue.Reliable[0] = table.create(256)
-export type PlaceRequest = { ["coord_row"]: number, ["coord_col"]: number, structureType: string }
-export type PlaceResponse = { success: boolean, errorMessage: string?, instanceId: number? }
-local function ReadFUNCTION_DATA_PlaceStructure(): ({ ["coord_row"]: number, ["coord_col"]: number, structureType: string })
-	-- Read BLOCK: 4 bytes
-	local BLOCK_START = Read(4)
+export type PlaceRequest = { GridId: string, CoordRow: number, CoordCol: number, StructureType: string }
+export type PlaceResponse = { Success: boolean, ErrorMessage: string?, InstanceId: number? }
+local function ReadFUNCTION_DATA_PlaceStructure(): ({ GridId: string, CoordRow: number, CoordCol: number, StructureType: string })
+	-- Read BLOCK: 6 bytes
+	local BLOCK_START = Read(6)
 	local Value = {} :: any
-	Value["coord_row"] = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-	Value["coord_col"] = buffer.readu8(RecieveBuffer, BLOCK_START + 1)
-	local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 2)
-	Value.structureType = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+	Value.GridId = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	Value.CoordRow = buffer.readu8(RecieveBuffer, BLOCK_START + 2)
+	Value.CoordCol = buffer.readu8(RecieveBuffer, BLOCK_START + 3)
+	Length = buffer.readu16(RecieveBuffer, BLOCK_START + 4)
+	Value.StructureType = buffer.readstring(RecieveBuffer, Read(Length), Length)
 	return Value
 end
 
-local function WriteFUNCTION_RETURN_PlaceStructure(Value: { success: boolean, errorMessage: string?, instanceId: number? }, InvocationIdentifier: number): ()
+local function WriteFUNCTION_RETURN_PlaceStructure(Value: { Success: boolean, ErrorMessage: string?, InstanceId: number? }, InvocationIdentifier: number): ()
 	-- Allocate BLOCK: 6 bytes
 	local BLOCK_START = Allocate(6)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
 	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
-	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.success and 1 or 0)
-	buffer.writeu8(SendBuffer, BLOCK_START + 4, Value.errorMessage ~= nil and 1 or 0)
-	if Value.errorMessage ~= nil then
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.Success and 1 or 0)
+	buffer.writeu8(SendBuffer, BLOCK_START + 4, Value.ErrorMessage ~= nil and 1 or 0)
+	if Value.ErrorMessage ~= nil then
 		-- Allocate BLOCK: 2 bytes
 		local BLOCK_START = Allocate(2)
-		local Length = #Value.errorMessage
+		local Length = #Value.ErrorMessage
 		buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
 		Allocate(Length)
-		buffer.writestring(SendBuffer, SendOffset, Value.errorMessage, Length)
+		buffer.writestring(SendBuffer, SendOffset, Value.ErrorMessage, Length)
 	end
-	buffer.writeu8(SendBuffer, BLOCK_START + 5, Value.instanceId ~= nil and 1 or 0)
-	if Value.instanceId ~= nil then
+	buffer.writeu8(SendBuffer, BLOCK_START + 5, Value.InstanceId ~= nil and 1 or 0)
+	if Value.InstanceId ~= nil then
 		-- Allocate BLOCK: 4 bytes
 		local BLOCK_START = Allocate(4)
-		buffer.writeu32(SendBuffer, BLOCK_START + 0, Value.instanceId)
+		buffer.writeu32(SendBuffer, BLOCK_START + 0, Value.InstanceId)
 	end
 end
 
@@ -268,7 +270,7 @@ Reliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instance
 			-- Read BLOCK: 1 bytes
 			local BLOCK_START = Read(1)
 			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-			local Value: { ["coord_row"]: number, ["coord_col"]: number, structureType: string } = ReadFUNCTION_DATA_PlaceStructure()
+			local Value: { GridId: string, CoordRow: number, CoordCol: number, StructureType: string } = ReadFUNCTION_DATA_PlaceStructure()
 			if Events.Reliable[0] ~= nil then
 				task.spawn(Events.Reliable[0], Player, Value, InvocationIdentifier)
 			else
@@ -303,9 +305,9 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	PlaceStructure = {
-		On = function(Listener: (Player, { ["coord_row"]: number, ["coord_col"]: number, structureType: string }) -> ({ success: boolean, errorMessage: string?, instanceId: number? })): ()
-			Events.Reliable[0] = function(Player: Player, Value: { ["coord_row"]: number, ["coord_col"]: number, structureType: string }, InvocationIdentifier: number): ()
-				local ReturnValue: { success: boolean, errorMessage: string?, instanceId: number? };
+		On = function(Listener: (Player, { GridId: string, CoordRow: number, CoordCol: number, StructureType: string }) -> ({ Success: boolean, ErrorMessage: string?, InstanceId: number? })): ()
+			Events.Reliable[0] = function(Player: Player, Value: { GridId: string, CoordRow: number, CoordCol: number, StructureType: string }, InvocationIdentifier: number): ()
+				local ReturnValue: { Success: boolean, ErrorMessage: string?, InstanceId: number? };
 				local Success, Error = pcall(function ()
 					ReturnValue = Listener(Player, Value)
 				end)

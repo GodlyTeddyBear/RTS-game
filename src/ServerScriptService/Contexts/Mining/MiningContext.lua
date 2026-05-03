@@ -162,8 +162,8 @@ function MiningContext:KnitStart()
 			Result.MentionError("Mining:OnStructurePlaced", "Failed to register extractor", {
 				CauseType = result.type,
 				CauseMessage = result.message,
-				InstanceId = record.instanceId,
-				StructureType = record.structureType,
+				InstanceId = record.InstanceId,
+				StructureType = record.StructureType,
 			}, result.type)
 		end
 	end)
@@ -266,7 +266,7 @@ function MiningContext:_RegisterExtractor(record: StructureRecord): Result.Resul
 			return registerResult
 		end
 
-		local resolveResult = self._structureContext:ResolveMiningExtractorActor(record.instanceId)
+		local resolveResult = self._structureContext:ResolveMiningExtractorActor(record.InstanceId)
 		if not resolveResult.success then
 			return resolveResult
 		end

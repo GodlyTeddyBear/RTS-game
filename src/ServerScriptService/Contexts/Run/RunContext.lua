@@ -584,11 +584,11 @@ end
 function RunContext:_BuildRunSnapshot(): RunSnapshot
 	local phaseClock = self._timer:GetPhaseClock()
 	return {
-		state = self._machine:GetState(),
-		waveNumber = self._machine:GetWaveNumber(),
-		phaseStartedAt = phaseClock.phaseStartedAt,
-		phaseEndsAt = phaseClock.phaseEndsAt,
-		phaseDuration = phaseClock.phaseDuration,
+		State = self._machine:GetState(),
+		WaveNumber = self._machine:GetWaveNumber(),
+		PhaseStartedAt = phaseClock.phaseStartedAt,
+		PhaseEndsAt = phaseClock.phaseEndsAt,
+		PhaseDuration = phaseClock.phaseDuration,
 	}
 end
 

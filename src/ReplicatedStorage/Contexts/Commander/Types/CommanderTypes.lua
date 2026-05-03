@@ -18,36 +18,36 @@ export type SlotKey = "Mobility" | "SummonA" | "SummonB" | "Control" | "Ultimate
 --[=[
 	@interface AbilitySlotDef
 	@within CommanderTypes
-	.key SlotKey -- Stable slot identifier.
-	.displayName string -- Player-facing slot name.
-	.energyCost number -- Energy cost to activate the slot.
-	.cooldownDuration number -- Cooldown duration in seconds.
-	.metadata { [string]: any }? -- Slot-specific tuning values.
+	.Key SlotKey -- Stable slot identifier.
+	.DisplayName string -- Player-facing slot name.
+	.EnergyCost number -- Energy cost to activate the slot.
+	.CooldownDuration number -- Cooldown duration in seconds.
+	.Metadata { [string]: any }? -- Slot-specific tuning values.
 		Current v1 defaults encoded in CommanderConfig metadata:
-		- Mobility: `maxRange`, `lockedWhileOverchargeChanneling`
-		- SummonA: `summonCount`, `lifetime`, `targetingRule = "NearestEnemy"`
-		- SummonB: `lifetime`, `stationary`, `pathingMode = "PassThrough"`
-		- Control: `radius`, `knockbackStuds`, `slowDuration`
-		- Ultimate: `channelTime`, `interruptibleByDamage`, `movementLockedDuringChannel`,
-		  `radius`, `stunDuration`, `structureAttackSpeedMultiplier`, `buffDuration`
+		- Mobility: `MaxRange`, `LockedWhileOverchargeChanneling`
+		- SummonA: `SummonCount`, `Lifetime`, `TargetingRule = "NearestEnemy"`
+		- SummonB: `Lifetime`, `Stationary`, `PathingMode = "PassThrough"`
+		- Control: `Radius`, `KnockbackStuds`, `SlowDuration`
+		- Ultimate: `ChannelTime`, `InterruptibleByDamage`, `MovementLockedDuringChannel`,
+		  `Radius`, `StunDuration`, `StructureAttackSpeedMultiplier`, `BuffDuration`
 ]=]
 export type AbilitySlotDef = {
-	key: SlotKey,
-	displayName: string,
-	energyCost: number,
-	cooldownDuration: number,
-	metadata: { [string]: any }?,
+	Key: SlotKey,
+	DisplayName: string,
+	EnergyCost: number,
+	CooldownDuration: number,
+	Metadata: { [string]: any }?,
 }
 
 --[=[
 	@interface CooldownEntry
 	@within CommanderTypes
-	.startedAt number -- Clock time when the cooldown began.
-	.duration number -- Cooldown duration in seconds.
+	.StartedAt number -- Clock time when the cooldown began.
+	.Duration number -- Cooldown duration in seconds.
 ]=]
 export type CooldownEntry = {
-	startedAt: number,
-	duration: number,
+	StartedAt: number,
+	Duration: number,
 }
 
 --[=[
@@ -62,14 +62,14 @@ export type CooldownState = {
 --[=[
 	@interface CommanderState
 	@within CommanderTypes
-	.hp number -- Current commander HP.
-	.maxHp number -- Maximum commander HP.
-	.cooldowns CooldownState -- Per-slot cooldown entries.
+	.Hp number -- Current commander HP.
+	.MaxHp number -- Maximum commander HP.
+	.Cooldowns CooldownState -- Per-slot cooldown entries.
 ]=]
 export type CommanderState = {
-	hp: number,
-	maxHp: number,
-	cooldowns: CooldownState,
+	Hp: number,
+	MaxHp: number,
+	Cooldowns: CooldownState,
 }
 
 --[=[

@@ -4,15 +4,16 @@ option ClientOutput = "Generated/PlacementRemoteClient.luau"
 option RemoteScope = "PLACEMENT_REMOTE"
 
 struct PlaceRequest {
-	coord_row: u8,
-	coord_col: u8,
-	structureType: string,
+	GridId: string,
+	CoordRow: u8,
+	CoordCol: u8,
+	StructureType: string,
 }
 
 struct PlaceResponse {
-	success: boolean,
-	errorMessage: string?,
-	instanceId: u32?,
+	Success: boolean,
+	ErrorMessage: string?,
+	InstanceId: u32?,
 }
 
 function PlaceStructure {

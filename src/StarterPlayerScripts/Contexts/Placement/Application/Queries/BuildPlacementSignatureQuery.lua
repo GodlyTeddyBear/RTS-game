@@ -38,9 +38,15 @@ function BuildPlacementSignatureQuery:Execute(atom: PlacementAtom?): string
 		return ""
 	end
 
-	local parts = table.create(#atom.placements)
-	for index, record in ipairs(atom.placements) do
-		parts[index] = ("%d:%d:%s:%d"):format(record.coord.row, record.coord.col, record.structureType, record.instanceId)
+	local parts = table.create(#atom.Placements)
+	for index, record in ipairs(atom.Placements) do
+		parts[index] = ("%s:%d:%d:%s:%d"):format(
+			record.Coord.GridId,
+			record.Coord.Row,
+			record.Coord.Col,
+			record.StructureType,
+			record.InstanceId
+		)
 	end
 
 	return table.concat(parts, "|")

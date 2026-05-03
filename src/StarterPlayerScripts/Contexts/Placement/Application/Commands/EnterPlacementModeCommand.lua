@@ -20,7 +20,7 @@ local function _GetCoordKey(coord: GridCoord?): string?
 	if coord == nil then
 		return nil
 	end
-	return ("%d_%d"):format(coord.row, coord.col)
+	return (`{coord.GridId}:{coord.Row}:{coord.Col}`)
 end
 
 local EnterPlacementModeCommand = {}
@@ -69,7 +69,7 @@ function EnterPlacementModeCommand:Execute(state: any, deps: any, structureType:
 
 	-- Placement mode is only available during the prep phase.
 	local runState = deps.runAtom()
-	if runState.state ~= "Prep" then
+	if runState.State ~= "Prep" then
 		return
 	end
 
@@ -98,7 +98,7 @@ function EnterPlacementModeCommand:Execute(state: any, deps: any, structureType:
 	state._hoveredCoord = nil
 	state._hoveredKey = nil
 	state._isHoveredValid = false
-	state._runState = runState.state
+	state._runState = runState.State
 	state._placementSignature = self._buildPlacementSignatureQuery:Execute(deps.placementAtom())
 	state._validTileSet = {}
 	state._sessionId += 1

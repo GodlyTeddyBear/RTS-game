@@ -36,7 +36,7 @@ PlacementSyncClient.__index = PlacementSyncClient
 ]=]
 -- Mirror the server atom shape so client hydration can stay zero-conversion.
 function PlacementSyncClient.new()
-	local self = BaseSyncClient.new(BlinkClient, "SyncPlacements", "placements", SharedAtoms.CreateClientAtom)
+	local self = BaseSyncClient.new(BlinkClient, "SyncPlacements", "Placements", SharedAtoms.CreateClientAtom)
 	return setmetatable(self, PlacementSyncClient)
 end
 

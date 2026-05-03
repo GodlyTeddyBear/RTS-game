@@ -78,12 +78,12 @@ function WaveSpawnScheduler:Schedule(
 
 	for _, group in composition do
 		-- Delay the group so composition pacing survives the whole wave lifecycle.
-		local outerHandle = task.delay(group.groupDelay, function()
+		local outerHandle = task.delay(group.GroupDelay, function()
 			if self._generation ~= generation then
 				return
 			end
 
-			for unitIndex = 1, group.count do
+			for unitIndex = 1, group.Count do
 				-- Drip each unit within the group so the lane pressure ramps gradually.
 				local spawnDelay = (unitIndex - 1) * WaveConfig.SPAWN_DRIP_INTERVAL
 				local innerHandle = task.delay(spawnDelay, function()
@@ -95,7 +95,7 @@ function WaveSpawnScheduler:Schedule(
 
 					-- Mark the spawn active before listeners react, so death callbacks cannot race the counter.
 					onSpawned()
-					GameEvents.Bus:Emit(GameEvents.Events.Wave.SpawnEnemy, group.role, spawnCFrame, waveNumber)
+					GameEvents.Bus:Emit(GameEvents.Events.Wave.SpawnEnemy, group.Role, spawnCFrame, waveNumber)
 				end)
 
 				self:_Track(innerHandle)

@@ -22,7 +22,7 @@ local function _GetCoordKey(coord: GridCoord?): string?
 	if coord == nil then
 		return nil
 	end
-	return ("%d_%d"):format(coord.row, coord.col)
+	return (`{coord.GridId}:{coord.Row}:{coord.Col}`)
 end
 
 local RefreshValidTilesCommand = {}

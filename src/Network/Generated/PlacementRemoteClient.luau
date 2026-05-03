@@ -158,22 +158,26 @@ local Queue: any = {
 local SerdesEvent = "?"
 local SerdesThread: thread?
 Queue.Reliable[0] = table.create(256)
-export type PlaceRequest = { ["coord_row"]: number, ["coord_col"]: number, structureType: string }
-export type PlaceResponse = { success: boolean, errorMessage: string?, instanceId: number? }
-local function WriteFUNCTION_DATA_PlaceStructure(Value: { ["coord_row"]: number, ["coord_col"]: number, structureType: string }, InvocationIdentifier: number): ()
-	-- Allocate BLOCK: 6 bytes
-	local BLOCK_START = Allocate(6)
+export type PlaceRequest = { GridId: string, CoordRow: number, CoordCol: number, StructureType: string }
+export type PlaceResponse = { Success: boolean, ErrorMessage: string?, InstanceId: number? }
+local function WriteFUNCTION_DATA_PlaceStructure(Value: { GridId: string, CoordRow: number, CoordCol: number, StructureType: string }, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 8 bytes
+	local BLOCK_START = Allocate(8)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
-	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value["coord_row"])
-	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value["coord_col"])
-	local Length = #Value.structureType
-	buffer.writeu16(SendBuffer, BLOCK_START + 4, Length)
+	local Length = #Value.GridId
+	buffer.writeu16(SendBuffer, BLOCK_START + 2, Length)
 	Allocate(Length)
-	buffer.writestring(SendBuffer, SendOffset, Value.structureType, Length)
+	buffer.writestring(SendBuffer, SendOffset, Value.GridId, Length)
+	buffer.writeu8(SendBuffer, BLOCK_START + 4, Value.CoordRow)
+	buffer.writeu8(SendBuffer, BLOCK_START + 5, Value.CoordCol)
+	local Length = #Value.StructureType
+	buffer.writeu16(SendBuffer, BLOCK_START + 6, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value.StructureType, Length)
 end
 
-local function ReadFUNCTION_RETURN_PlaceStructure(): ({ success: boolean, errorMessage: string?, instanceId: number? })
+local function ReadFUNCTION_RETURN_PlaceStructure(): ({ Success: boolean, ErrorMessage: string?, InstanceId: number? })
 	-- Read BLOCK: 4 bytes
 	local BLOCK_START = Read(4)
 	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
@@ -181,17 +185,17 @@ local function ReadFUNCTION_RETURN_PlaceStructure(): ({ success: boolean, errorM
 		error("Server encountered an error.")
 	end
 	local Value = {} :: any
-	Value.success = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
+	Value.Success = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
 	if buffer.readu8(RecieveBuffer, BLOCK_START + 2) == 1 then
 		-- Read BLOCK: 2 bytes
 		local BLOCK_START = Read(2)
 		local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
-		Value.errorMessage = buffer.readstring(RecieveBuffer, Read(Length), Length)
+		Value.ErrorMessage = buffer.readstring(RecieveBuffer, Read(Length), Length)
 	end
 	if buffer.readu8(RecieveBuffer, BLOCK_START + 3) == 1 then
 		-- Read BLOCK: 4 bytes
 		local BLOCK_START = Read(4)
-		Value.instanceId = buffer.readu32(RecieveBuffer, BLOCK_START + 0)
+		Value.InstanceId = buffer.readu32(RecieveBuffer, BLOCK_START + 0)
 	end
 	return Value
 end
@@ -281,7 +285,7 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	PlaceStructure = {
-		Invoke = function(Value: { ["coord_row"]: number, ["coord_col"]: number, structureType: string }): ({ success: boolean, errorMessage: string?, instanceId: number? })
+		Invoke = function(Value: { GridId: string, CoordRow: number, CoordCol: number, StructureType: string }): ({ Success: boolean, ErrorMessage: string?, InstanceId: number? })
 			local InvocationIdentifier = Invoke()
 			if Calls[InvocationIdentifier] ~= nil then
 				Invocations -= 1
@@ -289,7 +293,7 @@ local Returns = table.freeze({
 			end
 			WriteFUNCTION_DATA_PlaceStructure(Value, InvocationIdentifier)
 			Calls[InvocationIdentifier] = coroutine.running()
-			local Success, ReturnValue: { success: boolean, errorMessage: string?, instanceId: number? } = coroutine.yield()
+			local Success, ReturnValue: { Success: boolean, ErrorMessage: string?, InstanceId: number? } = coroutine.yield()
 			if Success ~= true then
 				error("There was an exception while processing \"PlaceStructure\".")
 			end

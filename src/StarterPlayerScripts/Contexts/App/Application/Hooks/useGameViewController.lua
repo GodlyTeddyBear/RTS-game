@@ -242,7 +242,7 @@ local function useGameViewController(): TGameViewController
 	local actionsRef = useRef(actions)
 	local soundActionsRef = useRef(soundActions)
 	local pendingNavigationRef = useRef(nil :: thread?)
-	local previousRunStateRef = useRef(runState.state)
+	local previousRunStateRef = useRef(runState.State)
 
 	actionsRef.current = actions
 	soundActionsRef.current = soundActions
@@ -265,7 +265,7 @@ local function useGameViewController(): TGameViewController
 
 	useEffect(function()
 		local previousState = previousRunStateRef.current
-		local currentState = runState.state
+		local currentState = runState.State
 		previousRunStateRef.current = currentState
 
 		if previousState == currentState then
@@ -286,7 +286,7 @@ local function useGameViewController(): TGameViewController
 				actionsRef.current.reset(GAME_SCREEN)
 			end
 		end
-	end, { runState.state, navigation.CurrentScreen })
+	end, { runState.State, navigation.CurrentScreen })
 
 	local playerUsername, playerLevel = _GetPlayerInfo()
 	local onToggleMenu = useMemo(function()
@@ -330,7 +330,7 @@ local function useGameViewController(): TGameViewController
 		isInventoryOpen = isInventoryOpen,
 		onToggleInventory = onToggleInventory,
 		onCloseInventory = onCloseInventory,
-		isRunActive = _IsRunActive(runState.state),
+		isRunActive = _IsRunActive(runState.State),
 		playerUsername = playerUsername,
 		playerLevel = playerLevel,
 	}

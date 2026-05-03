@@ -90,3 +90,40 @@ That makes the client payload match the server registry key exactly, so the call
 
 - `StructureAnimationController` was already using the canonical structure handle format, so it did not need a change.
 - The shared action layer stayed unchanged because it already forwards `ActorId` and `NPCId` without modification.
+
+# Placement Sync Variant Casing Debugged
+
+## Symptom
+
+Server errored during placement sync replication with:
+
+- `Unexpected variant: nil`
+- `ReplicatedStorage.Network.Generated.PlacementSyncServer` in `WriteEVENT_SyncPlacements`
+
+## Actual Cause
+
+`PlacementSync.blink` enum discriminator and payload field names were changed to Pascal case, but Blink-generated sync variant decoding expected the canonical lowercase envelope keys.
+
+For `SyncPayload`, both of these must be lowercase:
+
+- enum discriminator key: `"type"`
+- payload field key: `data`
+
+Using Pascal case (`"Type"` / `Data`) caused the generated serializer to fail variant matching, which produced `Unexpected variant: nil`.
+
+## Fix
+
+Reverted `PlacementSync.blink` `SyncPayload` envelope keys to lowercase:
+
+```blink
+enum SyncPayload = "type" {
+	init {
+		data: InitPayload?,
+	},
+	patch {
+		data: PatchPayload?,
+	},
+}
+```
+
+After regeneration, server sync no longer throws the variant error.

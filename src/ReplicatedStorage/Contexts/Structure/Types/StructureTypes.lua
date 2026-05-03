@@ -112,9 +112,9 @@ export type TStructureConfig = {
 	.worldPos Vector3 -- Authoritative world position for the structure.
 ]=]
 export type ResolvedStructureRecord = {
-	structureType: StructureType,
-	instanceId: number,
-	worldPos: Vector3,
+	StructureType: StructureType,
+	InstanceId: number,
+	WorldPos: Vector3,
 }
 
 --[=[

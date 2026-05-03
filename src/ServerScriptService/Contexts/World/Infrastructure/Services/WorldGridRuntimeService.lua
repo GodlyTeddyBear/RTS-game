@@ -8,23 +8,21 @@ local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 type GridCoord = WorldTypes.GridCoord
 type TileDescriptor = WorldTypes.TileDescriptor
 type ZoneLayout = WorldTypes.ZoneLayout
-type ZoneType = WorldTypes.ZoneType
 type GridSpec = WorldTypes.GridSpec
 
 local MISSING_PART_CODE = "MissingPlacementGridPart"
 local INVALID_DIMENSIONS_CODE = "InvalidPlacementGridDimensions"
+local MISSING_GRID_ID_CODE = "MissingPlacementGridId"
+local DUPLICATE_GRID_ID_CODE = "DuplicatePlacementGridId"
+local OVERLAPPING_GRIDS_CODE = "OverlappingPlacementGrids"
 
---[=[
-	@class WorldGridRuntimeService
-	Computes and caches world-grid runtime geometry from the placement grid part.
-	@server
-]=]
 local WorldGridRuntimeService = {}
 WorldGridRuntimeService.__index = WorldGridRuntimeService
 
 function WorldGridRuntimeService.new()
 	local self = setmetatable({}, WorldGridRuntimeService)
-	self._cachedGridSpec = nil :: GridSpec?
+	self._cachedGridSpecsById = nil :: { [string]: GridSpec }?
+	self._cachedGridSpecList = nil :: { GridSpec }?
 	self._resourceParts = nil :: { BasePart }?
 	self._resourceCoordKeySet = nil :: { [string]: boolean }?
 	self._resourceTypeByKey = nil :: { [string]: string }?
@@ -50,23 +48,24 @@ function WorldGridRuntimeService:_GetZoneContainer(zoneName: string): Instance?
 	return zoneResult.value
 end
 
-function WorldGridRuntimeService:_GetGridPart(): BasePart?
+function WorldGridRuntimeService:_GetGridParts(): { BasePart }
 	local gridContainer = self:_GetZoneContainer("PlacementGrids")
 	if gridContainer == nil then
-		return nil
+		return {}
 	end
 
+	local gridParts = {}
 	if gridContainer:IsA("BasePart") and gridContainer.Name == WorldConfig.GRID_PART_NAME then
-		return gridContainer
+		table.insert(gridParts, gridContainer)
 	end
 
 	for _, descendant in ipairs(gridContainer:GetDescendants()) do
 		if descendant:IsA("BasePart") and descendant.Name == WorldConfig.GRID_PART_NAME then
-			return descendant
+			table.insert(gridParts, descendant)
 		end
 	end
 
-	return nil
+	return gridParts
 end
 
 function WorldGridRuntimeService:_GetResourceParts(): { BasePart }
@@ -105,6 +104,12 @@ function WorldGridRuntimeService:_GetPlacementProhibitedParts(): { BasePart }
 	return parts
 end
 
+local function _GetGridId(gridPart: BasePart): string
+	local gridId = gridPart:GetAttribute("GridId")
+	assert(type(gridId) == "string" and #gridId > 0, MISSING_GRID_ID_CODE)
+	return gridId
+end
+
 local function _BuildGridSpec(gridPart: BasePart): GridSpec
 	local tileSize = WorldConfig.TILE_SIZE
 	local gridSize = gridPart.Size
@@ -128,25 +133,47 @@ local function _BuildGridSpec(gridPart: BasePart): GridSpec
 	end
 
 	return table.freeze({
-		gridCFrame = gridPart.CFrame,
-		gridSize = gridSize,
-		tileSize = tileSize,
-		gridRows = gridRows,
-		gridCols = gridCols,
-		laneRow = laneRow,
-		sidePocketRows = table.freeze(sidePocketRows),
+		GridId = _GetGridId(gridPart),
+		GridCFrame = gridPart.CFrame,
+		GridSize = gridSize,
+		TileSize = tileSize,
+		GridRows = gridRows,
+		GridCols = gridCols,
+		LaneRow = laneRow,
+		SidePocketRows = table.freeze(sidePocketRows),
 	})
 end
 
-function WorldGridRuntimeService:GetValidationCodes(): { MissingPart: string, InvalidDimensions: string }
+local function _IsOverlappingXZ(firstPart: BasePart, secondPart: BasePart): boolean
+	local firstHalfSize = firstPart.Size * 0.5
+	local secondHalfSize = secondPart.Size * 0.5
+	local firstCenter = firstPart.Position
+	local secondCenter = secondPart.Position
+	local epsilon = 1e-4
+
+	return math.abs(firstCenter.X - secondCenter.X) < (firstHalfSize.X + secondHalfSize.X - epsilon)
+		and math.abs(firstCenter.Z - secondCenter.Z) < (firstHalfSize.Z + secondHalfSize.Z - epsilon)
+end
+
+function WorldGridRuntimeService:GetValidationCodes(): {
+	MissingPart: string,
+	InvalidDimensions: string,
+	MissingGridId: string,
+	DuplicateGridId: string,
+	OverlappingGrids: string
+}
 	return table.freeze({
 		MissingPart = MISSING_PART_CODE,
 		InvalidDimensions = INVALID_DIMENSIONS_CODE,
+		MissingGridId = MISSING_GRID_ID_CODE,
+		DuplicateGridId = DUPLICATE_GRID_ID_CODE,
+		OverlappingGrids = OVERLAPPING_GRIDS_CODE,
 	})
 end
 
 function WorldGridRuntimeService:ResetCache()
-	self._cachedGridSpec = nil
+	self._cachedGridSpecsById = nil
+	self._cachedGridSpecList = nil
 	self._resourceParts = nil
 	self._resourceCoordKeySet = nil
 	self._resourceTypeByKey = nil
@@ -154,47 +181,88 @@ function WorldGridRuntimeService:ResetCache()
 	self._placementProhibitedCoordKeySet = nil
 end
 
-function WorldGridRuntimeService:GetGridSpec(): GridSpec
-	if self._cachedGridSpec ~= nil then
-		return self._cachedGridSpec
+function WorldGridRuntimeService:GetGridSpecs(): { [string]: GridSpec }
+	if self._cachedGridSpecsById ~= nil then
+		return self._cachedGridSpecsById
 	end
 
-	local gridPart = self:_GetGridPart()
-	assert(gridPart ~= nil, MISSING_PART_CODE)
+	local gridParts = self:_GetGridParts()
+	assert(#gridParts > 0, MISSING_PART_CODE)
 
-	local spec = _BuildGridSpec(gridPart)
-	self._cachedGridSpec = spec
-	return spec
+	local specsById = {} :: { [string]: GridSpec }
+	local specList = {} :: { GridSpec }
+	local partById = {} :: { [string]: BasePart }
+
+	for _, gridPart in ipairs(gridParts) do
+		local spec = _BuildGridSpec(gridPart)
+		assert(specsById[spec.GridId] == nil, DUPLICATE_GRID_ID_CODE)
+		specsById[spec.GridId] = spec
+		partById[spec.GridId] = gridPart
+		table.insert(specList, spec)
+	end
+
+	table.sort(specList, function(left: GridSpec, right: GridSpec): boolean
+		return left.GridId < right.GridId
+	end)
+
+	for firstIndex = 1, #specList do
+		local firstSpec = specList[firstIndex]
+		local firstPart = partById[firstSpec.GridId]
+		for secondIndex = firstIndex + 1, #specList do
+			local secondSpec = specList[secondIndex]
+			local secondPart = partById[secondSpec.GridId]
+			if firstPart ~= nil and secondPart ~= nil then
+				assert(not _IsOverlappingXZ(firstPart, secondPart), OVERLAPPING_GRIDS_CODE)
+			end
+		end
+	end
+
+	self._cachedGridSpecsById = specsById
+	self._cachedGridSpecList = specList
+	return specsById
+end
+
+function WorldGridRuntimeService:GetGridSpecList(): { GridSpec }
+	if self._cachedGridSpecList ~= nil then
+		return self._cachedGridSpecList
+	end
+
+	self:GetGridSpecs()
+	return self._cachedGridSpecList or {}
+end
+
+function WorldGridRuntimeService:GetGridSpec(gridId: string): GridSpec?
+	return self:GetGridSpecs()[gridId]
 end
 
 function WorldGridRuntimeService:CoordToWorld(coord: GridCoord): Vector3
-	local spec = self:GetGridSpec()
-	local localX = -spec.gridSize.X * 0.5 + spec.tileSize * 0.5 + (coord.col - 1) * spec.tileSize
-	local localZ = -spec.gridSize.Z * 0.5 + spec.tileSize * 0.5 + (coord.row - 1) * spec.tileSize
-	return spec.gridCFrame:PointToWorldSpace(Vector3.new(localX, 0, localZ))
+	local spec = self:GetGridSpec(coord.GridId)
+	assert(spec ~= nil, "WorldGridRuntimeService: unknown GridId")
+	local localX = -spec.GridSize.X * 0.5 + spec.TileSize * 0.5 + (coord.Col - 1) * spec.TileSize
+	local localZ = -spec.GridSize.Z * 0.5 + spec.TileSize * 0.5 + (coord.Row - 1) * spec.TileSize
+	return spec.GridCFrame:PointToWorldSpace(Vector3.new(localX, 0, localZ))
 end
 
 function WorldGridRuntimeService:WorldToCoord(worldPos: Vector3): GridCoord?
-	local spec = self:GetGridSpec()
-	local localPos = spec.gridCFrame:PointToObjectSpace(worldPos)
-	local col = math.floor((localPos.X + spec.gridSize.X * 0.5) / spec.tileSize) + 1
-	local row = math.floor((localPos.Z + spec.gridSize.Z * 0.5) / spec.tileSize) + 1
+	for _, spec in ipairs(self:GetGridSpecList()) do
+		local localPos = spec.GridCFrame:PointToObjectSpace(worldPos)
+		local col = math.floor((localPos.X + spec.GridSize.X * 0.5) / spec.TileSize) + 1
+		local row = math.floor((localPos.Z + spec.GridSize.Z * 0.5) / spec.TileSize) + 1
 
-	if row < 1 or row > spec.gridRows then
-		return nil
-	end
-	if col < 1 or col > spec.gridCols then
-		return nil
+		if row >= 1 and row <= spec.GridRows and col >= 1 and col <= spec.GridCols then
+			return table.freeze({
+				GridId = spec.GridId,
+				Row = row,
+				Col = col,
+			})
+		end
 	end
 
-	return table.freeze({
-		row = row,
-		col = col,
-	})
+	return nil
 end
 
-local function _GetCoordKey(row: number, col: number): string
-	return (`{row}_{col}`)
+local function _GetCoordKey(coord: GridCoord): string
+	return (`{coord.GridId}:{coord.Row}:{coord.Col}`)
 end
 
 local function _GetPartResourceType(part: BasePart): string?
@@ -212,9 +280,9 @@ local function _IsInsidePartXZ(part: BasePart, worldPoint: Vector3): boolean
 end
 
 local function _TileOverlapsPartXZ(part: BasePart, worldCenter: Vector3, spec: GridSpec): boolean
-	local halfTile = spec.tileSize * 0.5
-	local right = spec.gridCFrame.RightVector
-	local look = spec.gridCFrame.LookVector
+	local halfTile = spec.TileSize * 0.5
+	local right = spec.GridCFrame.RightVector
+	local look = spec.GridCFrame.LookVector
 	local sampleOffsets = {
 		Vector3.zero,
 		right * halfTile + look * halfTile,
@@ -256,21 +324,20 @@ function WorldGridRuntimeService:_ResolveNearestEligibleCoord(worldPos: Vector3,
 	local bestCoord: GridCoord? = nil
 	local bestDistanceSquared = math.huge
 
-	for row = 1, spec.gridRows do
-		if row ~= spec.laneRow then
-			for col = 1, spec.gridCols do
-				local tileCenter = self:CoordToWorld({
-					row = row,
-					col = col,
-				})
+	for row = 1, spec.GridRows do
+		if row ~= spec.LaneRow then
+			for col = 1, spec.GridCols do
+				local coord = {
+					GridId = spec.GridId,
+					Row = row,
+					Col = col,
+				}
+				local tileCenter = self:CoordToWorld(coord)
 				local delta = tileCenter - worldPos
 				local distanceSquared = delta.X * delta.X + delta.Z * delta.Z
 				if distanceSquared < bestDistanceSquared then
 					bestDistanceSquared = distanceSquared
-					bestCoord = {
-						row = row,
-						col = col,
-					}
+					bestCoord = coord
 				end
 			end
 		end
@@ -279,7 +346,7 @@ function WorldGridRuntimeService:_ResolveNearestEligibleCoord(worldPos: Vector3,
 	return bestCoord
 end
 
-function WorldGridRuntimeService:_GetResolvedResourceTiles(spec: GridSpec): ({ [string]: boolean }, { [string]: string })
+function WorldGridRuntimeService:_GetResolvedResourceTiles(): ({ [string]: boolean }, { [string]: string })
 	if self._resourceCoordKeySet ~= nil and self._resourceTypeByKey ~= nil then
 		return self._resourceCoordKeySet, self._resourceTypeByKey
 	end
@@ -287,39 +354,54 @@ function WorldGridRuntimeService:_GetResolvedResourceTiles(spec: GridSpec): ({ [
 	local coordKeySet = {} :: { [string]: boolean }
 	local resourceTypeByKey = {} :: { [string]: string }
 	local resourceParts = self:_GetResourcePartsCached()
-
 	for _, part in ipairs(resourceParts) do
-		local matchedAnyTile = false
 		local partResourceType = _GetPartResourceType(part)
 		if partResourceType == nil then
 			continue
 		end
 
-		for row = 1, spec.gridRows do
-			if row ~= spec.laneRow then
-				for col = 1, spec.gridCols do
-					local tileCenter = self:CoordToWorld({
-						row = row,
-						col = col,
-					})
-
-					if _TileOverlapsPartXZ(part, tileCenter, spec) then
-						local coordKey = _GetCoordKey(row, col)
-						if coordKeySet[coordKey] ~= true then
-							coordKeySet[coordKey] = true
-							resourceTypeByKey[coordKey] = partResourceType
+		local matchedAnyTile = false
+		for _, spec in ipairs(self:GetGridSpecList()) do
+			for row = 1, spec.GridRows do
+				if row ~= spec.LaneRow then
+					for col = 1, spec.GridCols do
+						local coord = {
+							GridId = spec.GridId,
+							Row = row,
+							Col = col,
+						}
+						local tileCenter = self:CoordToWorld(coord)
+						if _TileOverlapsPartXZ(part, tileCenter, spec) then
+							local coordKey = _GetCoordKey(coord)
+							if coordKeySet[coordKey] ~= true then
+								coordKeySet[coordKey] = true
+								resourceTypeByKey[coordKey] = partResourceType
+							end
+							matchedAnyTile = true
 						end
-						matchedAnyTile = true
 					end
 				end
 			end
 		end
 
-		-- Reconcile marker parts that are near the grid but miss tile overlap.
 		if not matchedAnyTile then
-			local nearestCoord = self:_ResolveNearestEligibleCoord(part.Position, spec)
-			if nearestCoord ~= nil then
-				local coordKey = _GetCoordKey(nearestCoord.row, nearestCoord.col)
+			local bestCoord = nil :: GridCoord?
+			local bestDistanceSquared = math.huge
+			for _, spec in ipairs(self:GetGridSpecList()) do
+				local nearestCoord = self:_ResolveNearestEligibleCoord(part.Position, spec)
+				if nearestCoord ~= nil then
+					local tileCenter = self:CoordToWorld(nearestCoord)
+					local delta = tileCenter - part.Position
+					local distanceSquared = delta.X * delta.X + delta.Z * delta.Z
+					if distanceSquared < bestDistanceSquared then
+						bestDistanceSquared = distanceSquared
+						bestCoord = nearestCoord
+					end
+				end
+			end
+
+			if bestCoord ~= nil then
+				local coordKey = _GetCoordKey(bestCoord)
 				if coordKeySet[coordKey] ~= true then
 					coordKeySet[coordKey] = true
 					resourceTypeByKey[coordKey] = partResourceType
@@ -333,38 +415,50 @@ function WorldGridRuntimeService:_GetResolvedResourceTiles(spec: GridSpec): ({ [
 	return coordKeySet, resourceTypeByKey
 end
 
-function WorldGridRuntimeService:_GetResolvedPlacementProhibitedTiles(spec: GridSpec): { [string]: boolean }
+function WorldGridRuntimeService:_GetResolvedPlacementProhibitedTiles(): { [string]: boolean }
 	if self._placementProhibitedCoordKeySet ~= nil then
 		return self._placementProhibitedCoordKeySet
 	end
 
 	local coordKeySet = {} :: { [string]: boolean }
 	local prohibitedParts = self:_GetPlacementProhibitedPartsCached()
-
 	for _, part in ipairs(prohibitedParts) do
 		local matchedAnyTile = false
-
-		for row = 1, spec.gridRows do
-			for col = 1, spec.gridCols do
-				local tileCenter = self:CoordToWorld({
-					row = row,
-					col = col,
-				})
-
-				if _TileOverlapsPartXZ(part, tileCenter, spec) then
-					local coordKey = _GetCoordKey(row, col)
-					coordKeySet[coordKey] = true
-					matchedAnyTile = true
+		for _, spec in ipairs(self:GetGridSpecList()) do
+			for row = 1, spec.GridRows do
+				for col = 1, spec.GridCols do
+					local coord = {
+						GridId = spec.GridId,
+						Row = row,
+						Col = col,
+					}
+					local tileCenter = self:CoordToWorld(coord)
+					if _TileOverlapsPartXZ(part, tileCenter, spec) then
+						coordKeySet[_GetCoordKey(coord)] = true
+						matchedAnyTile = true
+					end
 				end
 			end
 		end
 
-		-- Reconcile marker parts that are near the grid but miss tile overlap.
 		if not matchedAnyTile then
-			local nearestCoord = self:_ResolveNearestEligibleCoord(part.Position, spec)
-			if nearestCoord ~= nil then
-				local coordKey = _GetCoordKey(nearestCoord.row, nearestCoord.col)
-				coordKeySet[coordKey] = true
+			local bestCoord = nil :: GridCoord?
+			local bestDistanceSquared = math.huge
+			for _, spec in ipairs(self:GetGridSpecList()) do
+				local nearestCoord = self:_ResolveNearestEligibleCoord(part.Position, spec)
+				if nearestCoord ~= nil then
+					local tileCenter = self:CoordToWorld(nearestCoord)
+					local delta = tileCenter - part.Position
+					local distanceSquared = delta.X * delta.X + delta.Z * delta.Z
+					if distanceSquared < bestDistanceSquared then
+						bestDistanceSquared = distanceSquared
+						bestCoord = nearestCoord
+					end
+				end
+			end
+
+			if bestCoord ~= nil then
+				coordKeySet[_GetCoordKey(bestCoord)] = true
 			end
 		end
 	end
@@ -373,44 +467,48 @@ function WorldGridRuntimeService:_GetResolvedPlacementProhibitedTiles(spec: Grid
 	return coordKeySet
 end
 
-function WorldGridRuntimeService:GetTileDescriptor(row: number, col: number): TileDescriptor?
-	local spec = self:GetGridSpec()
-	if row < 1 or row > spec.gridRows or col < 1 or col > spec.gridCols then
+function WorldGridRuntimeService:GetTileDescriptor(coord: GridCoord): TileDescriptor?
+	local spec = self:GetGridSpec(coord.GridId)
+	if spec == nil then
+		return nil
+	end
+	if coord.Row < 1 or coord.Row > spec.GridRows or coord.Col < 1 or coord.Col > spec.GridCols then
 		return nil
 	end
 
-	local zone: ZoneType = "buildable"
-	local resourceType: string? = nil
-	if row == spec.laneRow then
+	local zone = "buildable" :: WorldTypes.ZoneType
+	local resourceType = nil :: string?
+	if coord.Row == spec.LaneRow then
 		zone = "lane"
 	else
-		local coordKey = _GetCoordKey(row, col)
-		local resourceCoordKeySet, resourceTypeByKey = self:_GetResolvedResourceTiles(spec)
+		local resourceCoordKeySet, resourceTypeByKey = self:_GetResolvedResourceTiles()
+		local coordKey = _GetCoordKey(coord)
 		if resourceCoordKeySet[coordKey] == true then
 			zone = "side_pocket"
 			resourceType = resourceTypeByKey[coordKey]
 		end
 	end
 
-	local coordKey = _GetCoordKey(row, col)
-	local prohibitedCoordKeySet = self:_GetResolvedPlacementProhibitedTiles(spec)
-	local isPlacementProhibited = prohibitedCoordKeySet[coordKey] == true
+	local prohibitedCoordKeySet = self:_GetResolvedPlacementProhibitedTiles()
 
 	return table.freeze({
-		zone = zone,
-		resourceType = resourceType,
-		isPlacementProhibited = isPlacementProhibited,
+		Zone = zone,
+		ResourceType = resourceType,
+		IsPlacementProhibited = prohibitedCoordKeySet[_GetCoordKey(coord)] == true,
 	})
 end
 
-function WorldGridRuntimeService:BuildZoneLayout(): ZoneLayout
-	local spec = self:GetGridSpec()
-	local zoneLayout = table.create(spec.gridRows)
+function WorldGridRuntimeService:BuildZoneLayout(spec: GridSpec): ZoneLayout
+	local zoneLayout = table.create(spec.GridRows)
 
-	for row = 1, spec.gridRows do
-		local zoneRow = table.create(spec.gridCols)
-		for col = 1, spec.gridCols do
-			local descriptor = self:GetTileDescriptor(row, col)
+	for row = 1, spec.GridRows do
+		local zoneRow = table.create(spec.GridCols)
+		for col = 1, spec.GridCols do
+			local descriptor = self:GetTileDescriptor({
+				GridId = spec.GridId,
+				Row = row,
+				Col = col,
+			})
 			assert(descriptor ~= nil, "WorldContext: failed to build tile descriptor")
 			zoneRow[col] = descriptor
 		end
@@ -418,20 +516,6 @@ function WorldGridRuntimeService:BuildZoneLayout(): ZoneLayout
 	end
 
 	return table.freeze(zoneLayout)
-end
-
-function WorldGridRuntimeService:GetLanePoints(): { spawnPoint: CFrame, goalPoint: CFrame }
-	local spec = self:GetGridSpec()
-	local laneRow = spec.laneRow
-	local laneStart = self:CoordToWorld({ row = laneRow, col = 1 })
-	local laneGoal = self:CoordToWorld({ row = laneRow, col = spec.gridCols })
-	local rightVector = spec.gridCFrame.RightVector
-	local yOffset = Vector3.new(0, WorldConfig.LANE_POINT_Y_OFFSET, 0)
-
-	return table.freeze({
-		spawnPoint = CFrame.new(laneStart - rightVector * spec.tileSize + yOffset),
-		goalPoint = CFrame.new(laneGoal + rightVector * spec.tileSize + yOffset),
-	})
 end
 
 return WorldGridRuntimeService

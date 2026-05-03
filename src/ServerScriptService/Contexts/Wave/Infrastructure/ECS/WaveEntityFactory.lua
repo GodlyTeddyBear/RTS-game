@@ -18,19 +18,19 @@ setmetatable(WaveEntityFactory, { __index = BaseECSEntityFactory })
 
 local function _cloneState(state: WaveRuntimeState): WaveRuntimeState
 	return {
-		isWaveActive = state.isWaveActive,
-		currentWaveNumber = state.currentWaveNumber,
-		pendingSpawnCount = state.pendingSpawnCount,
-		activeEnemyCount = state.activeEnemyCount,
+		IsWaveActive = state.IsWaveActive,
+		CurrentWaveNumber = state.CurrentWaveNumber,
+		PendingSpawnCount = state.PendingSpawnCount,
+		ActiveEnemyCount = state.ActiveEnemyCount,
 	}
 end
 
 local function _defaultState(): WaveRuntimeState
 	return {
-		isWaveActive = false,
-		currentWaveNumber = 0,
-		pendingSpawnCount = 0,
-		activeEnemyCount = 0,
+		IsWaveActive = false,
+		CurrentWaveNumber = 0,
+		PendingSpawnCount = 0,
+		ActiveEnemyCount = 0,
 	}
 end
 

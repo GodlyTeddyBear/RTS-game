@@ -42,7 +42,7 @@ end
 ]=]
 function GetCurrentWaveNumberQuery:Execute(): number
 	local state = self._state:GetStateReadOnly()
-	return state.currentWaveNumber
+	return state.CurrentWaveNumber
 end
 
 return GetCurrentWaveNumberQuery

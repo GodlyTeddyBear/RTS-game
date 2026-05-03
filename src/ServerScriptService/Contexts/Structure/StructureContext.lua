@@ -223,8 +223,8 @@ function StructureContext:KnitStart()
 			Result.MentionError("Structure:OnStructurePlaced", "Failed to register structure", {
 				CauseType = result.type,
 				CauseMessage = result.message,
-				InstanceId = record.instanceId,
-				StructureType = record.structureType,
+				InstanceId = record.InstanceId,
+				StructureType = record.StructureType,
 			}, result.type)
 		end
 	end)

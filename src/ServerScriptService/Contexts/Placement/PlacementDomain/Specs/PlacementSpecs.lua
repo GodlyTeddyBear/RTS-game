@@ -29,17 +29,17 @@ end
 
 -- Occupied tiles can never accept a placement.
 function PlacementSpecs.IsTileAvailable(tile: Tile): boolean
-	return tile.occupied == false
+	return tile.Occupied == false
 end
 
 -- Base disallowed zones are data-driven so map-wide rules stay configurable.
 function PlacementSpecs.IsBaseZoneAllowed(tile: Tile): boolean
-	return PlacementConfig.BASE_DISALLOWED_ZONE_TYPES[tile.zone] ~= true
+	return PlacementConfig.BASE_DISALLOWED_ZONE_TYPES[tile.Zone] ~= true
 end
 
 -- Placement-prohibited markers always deny structure placement.
 function PlacementSpecs.IsNotPlacementProhibited(tile: Tile): boolean
-	return tile.isPlacementProhibited ~= true
+	return tile.IsPlacementProhibited ~= true
 end
 
 -- Requirement is data-driven so future structures can opt into resource-tile constraints.
@@ -49,7 +49,7 @@ end
 
 -- Resource-gated placements require a side-pocket tile with resource metadata.
 function PlacementSpecs.HasRequiredResourceTileData(tile: Tile): boolean
-	return tile.zone == "side_pocket" and tile.resourceType ~= nil
+	return tile.Zone == "side_pocket" and tile.ResourceType ~= nil
 end
 
 -- Capacity is enforced here so commands can fail before any mutation work begins.

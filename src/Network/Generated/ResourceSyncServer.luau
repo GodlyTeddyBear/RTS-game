@@ -159,11 +159,11 @@ local Queue: any = {
 local SerdesEvent = "?"
 local SerdesThread: thread?
 export type ResourceMap = {[string]: number}
-export type WalletPayload = { energy: number?, resources: {[string]: number}? }
-export type InitPayload = { resources: { energy: number?, resources: {[string]: number}? }? }
-export type PatchPayload = { resources: { energy: number?, resources: {[string]: number}? }? }
-export type SyncPayload = { type: "init", data: { resources: { energy: number?, resources: {[string]: number}? }? }? } | { type: "patch", data: { resources: { energy: number?, resources: {[string]: number}? }? }? }
-local function WriteEVENT_SyncResources(Value: { type: "init", data: { resources: { energy: number?, resources: {[string]: number}? }? }? } | { type: "patch", data: { resources: { energy: number?, resources: {[string]: number}? }? }? }): ()
+export type WalletPayload = { Energy: number?, Resources: {[string]: number}? }
+export type InitPayload = { Resources: { Energy: number?, Resources: {[string]: number}? }? }
+export type PatchPayload = { Resources: { Energy: number?, Resources: {[string]: number}? }? }
+export type SyncPayload = { type: "init", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? } | { type: "patch", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? }
+local function WriteEVENT_SyncResources(Value: { type: "init", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? } | { type: "patch", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? }): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
@@ -175,22 +175,22 @@ local function WriteEVENT_SyncResources(Value: { type: "init", data: { resources
 		if Value.data ~= nil then
 			-- Allocate BLOCK: 1 bytes
 			local BLOCK_START = Allocate(1)
-			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.resources ~= nil and 1 or 0)
-			if Value.data.resources ~= nil then
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Resources ~= nil and 1 or 0)
+			if Value.data.Resources ~= nil then
 				-- Allocate BLOCK: 2 bytes
 				local BLOCK_START = Allocate(2)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.resources.energy ~= nil and 1 or 0)
-				if Value.data.resources.energy ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Resources.Energy ~= nil and 1 or 0)
+				if Value.data.Resources.Energy ~= nil then
 					-- Allocate BLOCK: 4 bytes
 					local BLOCK_START = Allocate(4)
-					buffer.writeu32(SendBuffer, BLOCK_START + 0, Value.data.resources.energy)
+					buffer.writeu32(SendBuffer, BLOCK_START + 0, Value.data.Resources.Energy)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.resources.resources ~= nil and 1 or 0)
-				if Value.data.resources.resources ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.Resources.Resources ~= nil and 1 or 0)
+				if Value.data.Resources.Resources ~= nil then
 					-- Allocate BLOCK: 2 bytes
 					local BLOCK_START = Allocate(2)
 					local Elements_5 = 0
-					for Key_5, Element_5 in Value.data.resources.resources do
+					for Key_5, Element_5 in Value.data.Resources.Resources do
 						Elements_5 += 1
 						local Length = #Key_5
 						local OFFSET_0 = Allocate(2)
@@ -212,22 +212,22 @@ local function WriteEVENT_SyncResources(Value: { type: "init", data: { resources
 		if Value.data ~= nil then
 			-- Allocate BLOCK: 1 bytes
 			local BLOCK_START = Allocate(1)
-			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.resources ~= nil and 1 or 0)
-			if Value.data.resources ~= nil then
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Resources ~= nil and 1 or 0)
+			if Value.data.Resources ~= nil then
 				-- Allocate BLOCK: 2 bytes
 				local BLOCK_START = Allocate(2)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.resources.energy ~= nil and 1 or 0)
-				if Value.data.resources.energy ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Resources.Energy ~= nil and 1 or 0)
+				if Value.data.Resources.Energy ~= nil then
 					-- Allocate BLOCK: 4 bytes
 					local BLOCK_START = Allocate(4)
-					buffer.writeu32(SendBuffer, BLOCK_START + 0, Value.data.resources.energy)
+					buffer.writeu32(SendBuffer, BLOCK_START + 0, Value.data.Resources.Energy)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.resources.resources ~= nil and 1 or 0)
-				if Value.data.resources.resources ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.Resources.Resources ~= nil and 1 or 0)
+				if Value.data.Resources.Resources ~= nil then
 					-- Allocate BLOCK: 2 bytes
 					local BLOCK_START = Allocate(2)
 					local Elements_5 = 0
-					for Key_5, Element_5 in Value.data.resources.resources do
+					for Key_5, Element_5 in Value.data.Resources.Resources do
 						Elements_5 += 1
 						local Length = #Key_5
 						local OFFSET_0 = Allocate(2)
@@ -342,12 +342,12 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	SyncResources = {
-		Fire = function(Player: Player, Value: { type: "init", data: { resources: { energy: number?, resources: {[string]: number}? }? }? } | { type: "patch", data: { resources: { energy: number?, resources: {[string]: number}? }? }? }): ()
+		Fire = function(Player: Player, Value: { type: "init", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? } | { type: "patch", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? }): ()
 			Load(PlayersMap[Player])
 			WriteEVENT_SyncResources(Value)
 			PlayersMap[Player] = Save()
 		end,
-		FireAll = function(Value: { type: "init", data: { resources: { energy: number?, resources: {[string]: number}? }? }? } | { type: "patch", data: { resources: { energy: number?, resources: {[string]: number}? }? }? }): ()
+		FireAll = function(Value: { type: "init", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? } | { type: "patch", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncResources(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -359,7 +359,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireList = function(List: {Player}, Value: { type: "init", data: { resources: { energy: number?, resources: {[string]: number}? }? }? } | { type: "patch", data: { resources: { energy: number?, resources: {[string]: number}? }? }? }): ()
+		FireList = function(List: {Player}, Value: { type: "init", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? } | { type: "patch", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncResources(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -371,7 +371,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireExcept = function(Except: Player, Value: { type: "init", data: { resources: { energy: number?, resources: {[string]: number}? }? }? } | { type: "patch", data: { resources: { energy: number?, resources: {[string]: number}? }? }? }): ()
+		FireExcept = function(Except: Player, Value: { type: "init", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? } | { type: "patch", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncResources(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances

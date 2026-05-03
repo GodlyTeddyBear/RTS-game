@@ -159,11 +159,11 @@ local SerdesEvent = "?"
 local SerdesThread: thread?
 Queue.Reliable[0] = table.create(256)
 export type ResourceMap = {[string]: number}
-export type WalletPayload = { energy: number?, resources: {[string]: number}? }
-export type InitPayload = { resources: { energy: number?, resources: {[string]: number}? }? }
-export type PatchPayload = { resources: { energy: number?, resources: {[string]: number}? }? }
-export type SyncPayload = { type: "init", data: { resources: { energy: number?, resources: {[string]: number}? }? }? } | { type: "patch", data: { resources: { energy: number?, resources: {[string]: number}? }? }? }
-local function ReadEVENT_SyncResources(): ({ type: "init", data: { resources: { energy: number?, resources: {[string]: number}? }? }? } | { type: "patch", data: { resources: { energy: number?, resources: {[string]: number}? }? }? })
+export type WalletPayload = { Energy: number?, Resources: {[string]: number}? }
+export type InitPayload = { Resources: { Energy: number?, Resources: {[string]: number}? }? }
+export type PatchPayload = { Resources: { Energy: number?, Resources: {[string]: number}? }? }
+export type SyncPayload = { type: "init", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? } | { type: "patch", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? }
+local function ReadEVENT_SyncResources(): ({ type: "init", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? } | { type: "patch", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? })
 	-- Read BLOCK: 1 bytes
 	local BLOCK_START = Read(1)
 	local Tag = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
@@ -179,16 +179,16 @@ local function ReadEVENT_SyncResources(): ({ type: "init", data: { resources: { 
 			if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 				-- Read BLOCK: 2 bytes
 				local BLOCK_START = Read(2)
-				Value.data.resources = {} :: any
+				Value.data.Resources = {} :: any
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 					-- Read BLOCK: 4 bytes
 					local BLOCK_START = Read(4)
-					Value.data.resources.energy = buffer.readu32(RecieveBuffer, BLOCK_START + 0)
+					Value.data.Resources.Energy = buffer.readu32(RecieveBuffer, BLOCK_START + 0)
 				end
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
 					-- Read BLOCK: 2 bytes
 					local BLOCK_START = Read(2)
-					Value.data.resources.resources = {}
+					Value.data.Resources.Resources = {}
 					local Elements_5 = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
 					for _ = 1, Elements_5 do
 						local OFFSET_0 = Read(2)
@@ -196,7 +196,7 @@ local function ReadEVENT_SyncResources(): ({ type: "init", data: { resources: { 
 						local Key_5 = buffer.readstring(RecieveBuffer, Read(Length), Length)
 						local OFFSET_1 = Read(4)
 						local Element_5 = buffer.readu32(RecieveBuffer, OFFSET_1)
-						Value.data.resources.resources[Key_5] = Element_5
+						Value.data.Resources.Resources[Key_5] = Element_5
 					end
 				end
 			end
@@ -213,16 +213,16 @@ local function ReadEVENT_SyncResources(): ({ type: "init", data: { resources: { 
 			if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 				-- Read BLOCK: 2 bytes
 				local BLOCK_START = Read(2)
-				Value.data.resources = {} :: any
+				Value.data.Resources = {} :: any
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 					-- Read BLOCK: 4 bytes
 					local BLOCK_START = Read(4)
-					Value.data.resources.energy = buffer.readu32(RecieveBuffer, BLOCK_START + 0)
+					Value.data.Resources.Energy = buffer.readu32(RecieveBuffer, BLOCK_START + 0)
 				end
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
 					-- Read BLOCK: 2 bytes
 					local BLOCK_START = Read(2)
-					Value.data.resources.resources = {}
+					Value.data.Resources.Resources = {}
 					local Elements_5 = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
 					for _ = 1, Elements_5 do
 						local OFFSET_0 = Read(2)
@@ -230,7 +230,7 @@ local function ReadEVENT_SyncResources(): ({ type: "init", data: { resources: { 
 						local Key_5 = buffer.readstring(RecieveBuffer, Read(Length), Length)
 						local OFFSET_1 = Read(4)
 						local Element_5 = buffer.readu32(RecieveBuffer, OFFSET_1)
-						Value.data.resources.resources[Key_5] = Element_5
+						Value.data.Resources.Resources[Key_5] = Element_5
 					end
 				end
 			end
@@ -291,7 +291,7 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
 		if Index == 0 then
-			local Value: { type: "init", data: { resources: { energy: number?, resources: {[string]: number}? }? }? } | { type: "patch", data: { resources: { energy: number?, resources: {[string]: number}? }? }? } = ReadEVENT_SyncResources()
+			local Value: { type: "init", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? } | { type: "patch", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? } = ReadEVENT_SyncResources()
 			if Events.Reliable[0] ~= nil then
 				task.spawn(Events.Reliable[0], Value)
 			else
@@ -326,7 +326,7 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	SyncResources = {
-		On = function(Listener: (Value: { type: "init", data: { resources: { energy: number?, resources: {[string]: number}? }? }? } | { type: "patch", data: { resources: { energy: number?, resources: {[string]: number}? }? }? }) -> ()): () -> ()
+		On = function(Listener: (Value: { type: "init", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? } | { type: "patch", data: { Resources: { Energy: number?, Resources: {[string]: number}? }? }? }) -> ()): () -> ()
 			Events.Reliable[0] = Listener
 			for Index, Arguments in Queue.Reliable[0] do
 				task.spawn(Listener, table.unpack(Arguments))

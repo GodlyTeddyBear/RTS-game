@@ -19,18 +19,18 @@ export type RunState = "Idle" | "Prep" | "Wave" | "Resolution" | "Climax" | "End
 --[=[
 	@interface RunSnapshot
 	@within RunTypes
-	.state RunState -- Current authoritative run state.
-	.waveNumber number -- Current authoritative wave counter.
-	.phaseStartedAt number? -- Server timestamp when the current timed phase started.
-	.phaseEndsAt number? -- Server timestamp when the current timed phase ends.
-	.phaseDuration number? -- Current timed phase duration in seconds.
+	.State RunState -- Current authoritative run state.
+	.WaveNumber number -- Current authoritative wave counter.
+	.PhaseStartedAt number? -- Server timestamp when the current timed phase started.
+	.PhaseEndsAt number? -- Server timestamp when the current timed phase ends.
+	.PhaseDuration number? -- Current timed phase duration in seconds.
 ]=]
 export type RunSnapshot = {
-	state: RunState,
-	waveNumber: number,
-	phaseStartedAt: number?,
-	phaseEndsAt: number?,
-	phaseDuration: number?,
+	State: RunState,
+	WaveNumber: number,
+	PhaseStartedAt: number?,
+	PhaseEndsAt: number?,
+	PhaseDuration: number?,
 }
 
 return table.freeze(RunTypes)

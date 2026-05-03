@@ -71,12 +71,12 @@ end
 function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord): number
 	local components = self:GetComponentsOrThrow()
 
-	local structureConfig = StructureConfig.STRUCTURES[record.structureType] :: TStructureConfig?
-	assert(structureConfig ~= nil, "Unknown structure type: " .. tostring(record.structureType))
+	local structureConfig = StructureConfig.STRUCTURES[record.StructureType] :: TStructureConfig?
+	assert(structureConfig ~= nil, "Unknown structure type: " .. tostring(record.StructureType))
 
 	-- Create the entity first so every component write targets the same ECS id.
 	local entity = self:_CreateEntity()
-	local structureId = tostring(record.instanceId)
+	local structureId = tostring(record.InstanceId)
 
 	-- Copy the combat stats from config so later balance changes stay data-driven.
 	if
@@ -87,7 +87,7 @@ function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord)
 		self:_Set(entity, components.AttackStatsComponent, {
 			AttackRange = structureConfig.AttackRange,
 			AttackDamage = structureConfig.AttackDamage,
-			AttackCooldown = structureConfig.AttackCooldown,
+		AttackCooldown = structureConfig.AttackCooldown,
 		} :: TAttackStatsComponent)
 
 		-- Start ready so the first acquired target can be attacked immediately.
@@ -110,15 +110,15 @@ function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord)
 
 	-- Persist the runtime instance id and world-space anchor for targeting queries.
 	self:_Set(entity, components.InstanceRefComponent, {
-		InstanceId = record.instanceId,
-		WorldPos = record.worldPos,
+		InstanceId = record.InstanceId,
+		WorldPos = record.WorldPos,
 	} :: TInstanceRefComponent)
-	self:SetTransformCFrame(entity, CFrame.new(record.worldPos))
+	self:SetTransformCFrame(entity, CFrame.new(record.WorldPos))
 
 	-- Keep the canonical identity separate from the runtime instance ref.
 	self:_Set(entity, components.IdentityComponent, {
 		StructureId = structureId,
-		StructureType = record.structureType,
+		StructureType = record.StructureType,
 	} :: TIdentityComponent)
 
 	-- Mark the entity active so queries and systems can pick it up this frame.

@@ -22,7 +22,7 @@ export type TAbilitySlotProps = {
 }
 
 local function _GetCooldownText(slotData: TAbilitySlotHudData): string
-	local remaining = math.max(1, math.ceil(slotData.cooldownRemaining))
+	local remaining = math.max(1, math.ceil(slotData.CooldownRemaining))
 	return string.format("%ds", remaining)
 end
 
@@ -36,19 +36,19 @@ local function AbilitySlot(props: TAbilitySlotProps)
 		end
 
 		spring(overlayRef, {
-			Size = UDim2.fromScale(1, if props.slotData.isOnCooldown then props.slotData.cooldownProgress else 0),
+			Size = UDim2.fromScale(1, if props.slotData.IsOnCooldown then props.slotData.CooldownProgress else 0),
 		}, "Smooth")
-	end, { props.slotData.cooldownProgress, props.slotData.isOnCooldown })
+	end, { props.slotData.CooldownProgress, props.slotData.IsOnCooldown })
 
-	local onActivated = if props.slotData.isOnCooldown then nil else props.onActivate
-	local costTextColor = if props.slotData.isOnCooldown or props.slotData.canAfford then Colors.Text.Secondary else Colors.Semantic.Error
+	local onActivated = if props.slotData.IsOnCooldown then nil else props.onActivate
+	local costTextColor = if props.slotData.IsOnCooldown or props.slotData.CanAfford then Colors.Text.Secondary else Colors.Semantic.Error
 
 	return e(Button, {
 		Text = "",
 		Size = UDim2.fromScale(0.18, 1),
 		LayoutOrder = props.LayoutOrder,
 		Variant = "secondary",
-		DisableAnimations = props.slotData.isOnCooldown,
+		DisableAnimations = props.slotData.IsOnCooldown,
 		ClipsDescendants = true,
 		StrokeColor = ColorSequence.new(Colors.Border.Subtle, Colors.Border.Subtle),
 		StrokeThickness = Border.Width.Thin,
@@ -56,7 +56,7 @@ local function AbilitySlot(props: TAbilitySlotProps)
 	}, {
 		CooldownOverlay = e(Frame, {
 			ref = overlayRef,
-			Size = UDim2.fromScale(1, if props.slotData.isOnCooldown then props.slotData.cooldownProgress else 0),
+			Size = UDim2.fromScale(1, if props.slotData.IsOnCooldown then props.slotData.CooldownProgress else 0),
 			Position = UDim2.fromScale(0, 1),
 			AnchorPoint = Vector2.new(0, 1),
 			BackgroundColor3 = Colors.Surface.Primary,
@@ -74,7 +74,7 @@ local function AbilitySlot(props: TAbilitySlotProps)
 				Size = UDim2.fromScale(0.9, 0.26),
 				Position = UDim2.fromScale(0.5, 0.08),
 				AnchorPoint = Vector2.new(0.5, 0),
-				Text = props.slotData.displayName,
+				Text = props.slotData.DisplayName,
 				Variant = "label",
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextYAlignment = Enum.TextYAlignment.Center,
@@ -83,13 +83,13 @@ local function AbilitySlot(props: TAbilitySlotProps)
 				Size = UDim2.fromScale(0.56, 0.18),
 				Position = UDim2.fromScale(0.08, 0.78),
 				AnchorPoint = Vector2.new(0, 0),
-				Text = string.format("%d E", props.slotData.energyCost),
+				Text = string.format("%d E", props.slotData.EnergyCost),
 				Variant = "caption",
 				TextColor3 = costTextColor,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextYAlignment = Enum.TextYAlignment.Center,
 			}),
-			Cooldown = props.slotData.isOnCooldown and e(Text, {
+			Cooldown = props.slotData.IsOnCooldown and e(Text, {
 				Size = UDim2.fromScale(0.6, 0.2),
 				Position = UDim2.fromScale(0.5, 0.5),
 				AnchorPoint = Vector2.new(0.5, 0.5),

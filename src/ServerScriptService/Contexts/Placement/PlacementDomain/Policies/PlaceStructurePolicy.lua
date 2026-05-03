@@ -18,8 +18,8 @@ type Tile = WorldTypes.Tile
 type ResourceCostMap = PlacementTypes.ResourceCostMap
 
 export type PlacementDecision = {
-	tile: Tile,
-	costMap: ResourceCostMap,
+	Tile: Tile,
+	CostMap: ResourceCostMap,
 }
 
 local function cloneCostMap(costMap: ResourceCostMap): ResourceCostMap
@@ -84,33 +84,35 @@ function PlaceStructurePolicy:Check(coord: GridCoord, structureType: string): Re
 	-- Tile lookup happens before occupancy checks because the world context owns bounds validation.
 	local tile = Try(self._worldContext:GetTile(coord))
 	Ensure(tile ~= nil, "InvalidCoord", Errors.INVALID_COORD, {
-		row = coord.row,
-		col = coord.col,
+		GridId = coord.GridId,
+		Row = coord.Row,
+		Col = coord.Col,
 	})
 
 	local resolvedTile = tile :: Tile
 
 	Ensure(PlacementSpecs.IsTileAvailable(resolvedTile), "TileUnavailable", Errors.TILE_UNAVAILABLE, {
-		row = coord.row,
-		col = coord.col,
-		zone = resolvedTile.zone,
-		occupied = resolvedTile.occupied,
+		GridId = coord.GridId,
+		Row = coord.Row,
+		Col = coord.Col,
+		Zone = resolvedTile.Zone,
+		Occupied = resolvedTile.Occupied,
 	})
 
 	Ensure(PlacementSpecs.IsBaseZoneAllowed(resolvedTile), "IncompatibleTileZone", Errors.INCOMPATIBLE_TILE_ZONE, {
-		structureType = structureType,
-		zone = resolvedTile.zone,
+		StructureType = structureType,
+		Zone = resolvedTile.Zone,
 	})
 
 	Ensure(PlacementSpecs.IsNotPlacementProhibited(resolvedTile), "PlacementProhibited", Errors.INCOMPATIBLE_TILE_ZONE, {
-		structureType = structureType,
-		zone = resolvedTile.zone,
+		StructureType = structureType,
+		Zone = resolvedTile.Zone,
 	})
 
 	if PlacementSpecs.RequiresResourceTile(structureType) then
 		Ensure(PlacementSpecs.HasRequiredResourceTileData(resolvedTile), "ResourceTileRequired", Errors.RESOURCE_TILE_REQUIRED, {
-			structureType = structureType,
-			zone = resolvedTile.zone,
+			StructureType = structureType,
+			Zone = resolvedTile.Zone,
 		})
 	end
 
@@ -130,8 +132,8 @@ function PlaceStructurePolicy:Check(coord: GridCoord, structureType: string): Re
 	})
 
 	return Ok({
-		tile = resolvedTile,
-		costMap = cloneCostMap(costMap :: ResourceCostMap),
+		Tile = resolvedTile,
+		CostMap = cloneCostMap(costMap :: ResourceCostMap),
 	})
 end
 

@@ -19,7 +19,7 @@ setmetatable(CommanderSyncService, BaseSyncService)
 
 function CommanderSyncService.new()
 	local self = setmetatable({}, CommanderSyncService)
-	self.AtomKey = "commander"
+	self.AtomKey = "Commander"
 	self.BlinkEventName = "SyncCommander"
 	self.CreateAtom = SharedAtoms.CreateServerAtom
 	return self
@@ -54,4 +54,3 @@ function CommanderSyncService:GetStateReadOnly(userId: number): CommanderState?
 end
 
 return CommanderSyncService
-

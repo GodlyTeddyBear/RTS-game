@@ -6,16 +6,16 @@ option RemoteScope = "RESOURCE_SYNC"
 map ResourceMap = { [string]: u32 }
 
 struct WalletPayload {
-	energy: u32?,
-	resources: ResourceMap?,
+	Energy: u32?,
+	Resources: ResourceMap?,
 }
 
 struct InitPayload {
-	resources: WalletPayload?,
+	Resources: WalletPayload?,
 }
 
 struct PatchPayload {
-	resources: WalletPayload?,
+	Resources: WalletPayload?,
 }
 
 enum SyncPayload = "type" {

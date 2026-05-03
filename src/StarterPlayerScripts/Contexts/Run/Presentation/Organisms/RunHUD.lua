@@ -117,8 +117,8 @@ local function RunHUD(props: TRunHUDProps)
 				}, {
 					CommanderHealth = _CreateHealthReadout(
 						"Commander HP",
-						commanderHud.hp,
-						commanderHud.maxHp,
+						commanderHud.Hp,
+						commanderHud.MaxHp,
 						Color3.fromRGB(214, 67, 74),
 						1
 					),

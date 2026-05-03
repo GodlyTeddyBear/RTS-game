@@ -81,14 +81,14 @@ end
 	@param player Player -- The player requesting placement.
 	@param coord GridCoord -- The requested grid coordinate.
 	@param structureType string -- The placement key.
-	@return Result.Result<{ instanceId: number }> -- The spawned instance id on success.
+	@return Result.Result<{ InstanceId: number }> -- The spawned instance id on success.
 ]=]
 -- Validate first, then spend, then spawn, then occupy, then sync.
-function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structureType: string): Result.Result<{ instanceId: number, record: StructureRecord }>
+function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structureType: string): Result.Result<{ InstanceId: number, Record: StructureRecord }>
 	-- Policy resolves the live tile and all gate conditions before any mutation occurs.
 	local decision = Try(self._policy:Check(coord, structureType))
-	local costMap = decision.costMap
-	local tile = decision.tile
+	local costMap = decision.CostMap
+	local tile = decision.Tile
 
 	-- Fail before any wallet mutation if the configured runtime template is missing.
 	Try(self._placementService:ValidateTemplate(structureType))
@@ -97,7 +97,7 @@ function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structu
 	Try(self._economyContext:SpendResources(player, costMap))
 
 	-- Spawn the physical structure only after the purchase succeeds.
-	local spawnResult = self._placementService:SpawnStructure(structureType, tile.worldPos)
+	local spawnResult = self._placementService:SpawnStructure(structureType, tile.WorldPos)
 	if not spawnResult.success then
 		Try(self:_RefundResources(player, costMap, "SpawnFailed"))
 		return spawnResult
@@ -116,38 +116,41 @@ function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structu
 		end
 
 		return Err("OccupancyUpdateFailed", Errors.OCCUPANCY_UPDATE_FAILED, {
-			row = coord.row,
-			col = coord.col,
+			GridId = coord.GridId,
+			Row = coord.Row,
+			Col = coord.Col,
 		})
 	end
 
 	-- Record the placement after all writes succeed so the atom only reflects committed state.
 	local record: StructureRecord = {
-		coord = {
-			row = coord.row,
-			col = coord.col,
+		Coord = {
+			GridId = coord.GridId,
+			Row = coord.Row,
+			Col = coord.Col,
 		},
-		structureType = structureType,
-		instanceId = instanceId,
-		ownerUserId = player.UserId,
-		tier = 1,
-		resourceType = tile.resourceType,
+		StructureType = structureType,
+		InstanceId = instanceId,
+		OwnerUserId = player.UserId,
+		Tier = 1,
+		ResourceType = tile.ResourceType,
 	}
 
 	self._syncService:AddPlacement(record)
 
 	-- Emit a success milestone for telemetry and debugging visibility.
 	Result.MentionSuccess("PlacementContext:PlaceStructureCommand", "Structure placed", {
-		userId = player.UserId,
-		structureType = structureType,
-		row = coord.row,
-		col = coord.col,
-		instanceId = instanceId,
+		UserId = player.UserId,
+		StructureType = structureType,
+		GridId = coord.GridId,
+		Row = coord.Row,
+		Col = coord.Col,
+		InstanceId = instanceId,
 	})
 
 	return Ok({
-		instanceId = instanceId,
-		record = record,
+		InstanceId = instanceId,
+		Record = record,
 	})
 end
 

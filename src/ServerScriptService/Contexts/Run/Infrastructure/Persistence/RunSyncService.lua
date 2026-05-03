@@ -11,12 +11,12 @@ type RunSnapshot = RunTypes.RunSnapshot
 type SyncPayload = {
 	type: "init",
 	data: {
-		runState: {
-			state: string?,
-			waveNumber: number?,
-			phaseStartedAt: number?,
-			phaseEndsAt: number?,
-			phaseDuration: number?,
+		RunState: {
+			State: string?,
+			WaveNumber: number?,
+			PhaseStartedAt: number?,
+			PhaseEndsAt: number?,
+			PhaseDuration: number?,
 		}?,
 	}?,
 }
@@ -37,7 +37,7 @@ RunSyncService.__index = RunSyncService
 function RunSyncService.new()
 	local self = setmetatable({}, RunSyncService)
 	-- BaseSyncService consumes these instance fields during Init(), so they live on the constructor-owned object.
-	self.AtomKey = "runState"
+	self.AtomKey = "RunState"
 	self.BlinkEventName = "SyncRunState"
 	self.CreateAtom = SharedAtoms.CreateServerAtom
 	self.UseRawPayload = true
@@ -66,12 +66,12 @@ function RunSyncService:_BuildInitPayload(): SyncPayload
 	return {
 		type = "init",
 		data = {
-			runState = {
-				state = type(snapshot.state) == "string" and snapshot.state or nil,
-				waveNumber = toFiniteNumber(snapshot.waveNumber),
-				phaseStartedAt = toFiniteNumber(snapshot.phaseStartedAt),
-				phaseEndsAt = toFiniteNumber(snapshot.phaseEndsAt),
-				phaseDuration = toFiniteNumber(snapshot.phaseDuration),
+			RunState = {
+				State = type(snapshot.State) == "string" and snapshot.State or nil,
+				WaveNumber = toFiniteNumber(snapshot.WaveNumber),
+				PhaseStartedAt = toFiniteNumber(snapshot.PhaseStartedAt),
+				PhaseEndsAt = toFiniteNumber(snapshot.PhaseEndsAt),
+				PhaseDuration = toFiniteNumber(snapshot.PhaseDuration),
 			},
 		},
 	}
@@ -103,11 +103,11 @@ function RunSyncService:SetState(snapshot: RunSnapshot)
 	-- This keeps the payload shape stable across server and client mirrors.
 	self.Atom(function()
 		return {
-			state = snapshot.state,
-			waveNumber = snapshot.waveNumber,
-			phaseStartedAt = snapshot.phaseStartedAt,
-			phaseEndsAt = snapshot.phaseEndsAt,
-			phaseDuration = snapshot.phaseDuration,
+			State = snapshot.State,
+			WaveNumber = snapshot.WaveNumber,
+			PhaseStartedAt = snapshot.PhaseStartedAt,
+			PhaseEndsAt = snapshot.PhaseEndsAt,
+			PhaseDuration = snapshot.PhaseDuration,
 		}
 	end)
 end

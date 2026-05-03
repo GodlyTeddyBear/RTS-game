@@ -20,7 +20,7 @@ local function _GetCoordKey(coord: GridCoord?): string?
 	if coord == nil then
 		return nil
 	end
-	return ("%d_%d"):format(coord.row, coord.col)
+	return (`{coord.GridId}:{coord.Row}:{coord.Col}`)
 end
 
 local UpdateHoverStateCommand = {}
@@ -63,7 +63,7 @@ function UpdateHoverStateCommand:Execute(state: any, deps: any)
 	if worldPos == nil then
 		state._ghost:SetValid(false)
 		if state._hoveredKey ~= nil and state._hoveredCoord ~= nil then
-			state._highlightPool:SetHovered(state._hoveredCoord.row, state._hoveredCoord.col, false)
+			state._highlightPool:SetHovered(state._hoveredCoord, false)
 			state._hoveredCoord = nil
 			state._hoveredKey = nil
 			state._isHoveredValid = false
@@ -79,21 +79,21 @@ function UpdateHoverStateCommand:Execute(state: any, deps: any)
 	-- Update highlight state only when the hovered tile actually changes.
 	if hoveredKey ~= state._hoveredKey then
 		if state._hoveredCoord ~= nil then
-			state._highlightPool:SetHovered(state._hoveredCoord.row, state._hoveredCoord.col, false)
+			state._highlightPool:SetHovered(state._hoveredCoord, false)
 		end
 
 		state._hoveredCoord = hoveredCoord
 		state._hoveredKey = hoveredKey
 
 		if hoveredCoord ~= nil then
-			state._highlightPool:SetHovered(hoveredCoord.row, hoveredCoord.col, true)
-			state._ghost:MoveTo(self._gridService.CoordToWorld(hoveredCoord.row, hoveredCoord.col))
+			state._highlightPool:SetHovered(hoveredCoord, true)
+			state._ghost:MoveTo(self._gridService.CoordToWorld(hoveredCoord))
 		end
 	end
 
 	-- Keep the ghost aligned even when the hovered tile did not change.
 	if hoveredCoord ~= nil then
-		state._ghost:MoveTo(self._gridService.CoordToWorld(hoveredCoord.row, hoveredCoord.col))
+		state._ghost:MoveTo(self._gridService.CoordToWorld(hoveredCoord))
 	end
 
 	-- Mirror hover validity to the ghost tint so the preview communicates placement rules.

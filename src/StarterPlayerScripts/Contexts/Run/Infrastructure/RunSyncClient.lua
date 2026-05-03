@@ -33,7 +33,7 @@ RunSyncClient.__index = RunSyncClient
 	@return RunSyncClient -- The new client sync wrapper.
 ]=]
 function RunSyncClient.new()
-	local self = BaseSyncClient.new(BlinkClient, "SyncRunState", "runState", SharedAtoms.CreateClientAtom)
+	local self = BaseSyncClient.new(BlinkClient, "SyncRunState", "RunState", SharedAtoms.CreateClientAtom)
 	return setmetatable(self, RunSyncClient)
 end
 

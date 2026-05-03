@@ -31,7 +31,7 @@ export type TPlacementCursorSessionState = {
 
 export type TPlacementCursorDeps = {
 	placementAtom: () -> PlacementAtom,
-	runAtom: () -> { state: RunState },
+	runAtom: () -> { State: RunState },
 	playerInputController: any,
 	placementRemoteClient: any,
 	ghostModelModule: any,

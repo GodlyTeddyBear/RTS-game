@@ -23,8 +23,8 @@ local EconomyConfig = {}
 	The wallet assigned at the start of each run.
 ]=]
 EconomyConfig.STARTING_WALLET = {
-	energy = 25,
-	resources = {},
+	Energy = 25,
+	Resources = {},
 }
 
 --[=[
@@ -56,7 +56,7 @@ EconomyConfig.RESOURCE_CAPS = {
 }
 
 -- Freeze nested tables so config consumers cannot mutate shared defaults.
-table.freeze(EconomyConfig.STARTING_WALLET.resources)
+table.freeze(EconomyConfig.STARTING_WALLET.Resources)
 table.freeze(EconomyConfig.STARTING_WALLET)
 table.freeze(EconomyConfig.RESOURCE_TYPES)
 table.freeze(EconomyConfig.RESOURCE_CAPS)

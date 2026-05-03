@@ -91,7 +91,7 @@ function HandleWaveStartedCommand:Execute(
 		self._scheduler:CancelAll()
 		self._state:SetState(self._lifecycle:ResetState())
 		Result.MentionEvent("Wave:HandleWaveStartedCommand", Errors.WAVE_ALREADY_ACTIVE, {
-			PreviousWave = currentState.currentWaveNumber,
+			PreviousWave = currentState.CurrentWaveNumber,
 			NextWave = waveNumber,
 			})
 	end

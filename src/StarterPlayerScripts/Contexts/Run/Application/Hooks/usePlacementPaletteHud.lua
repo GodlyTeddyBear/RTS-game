@@ -21,11 +21,11 @@ local ResourceHudViewModel = require(script.Parent.Parent.ViewModels.ResourceHud
 -- [Types]
 
 type RunAtomState = {
-	state: RunTypes.RunState,
-	waveNumber: number,
-	phaseStartedAt: number?,
-	phaseEndsAt: number?,
-	phaseDuration: number?,
+	State: RunTypes.RunState,
+	WaveNumber: number,
+	PhaseStartedAt: number?,
+	PhaseEndsAt: number?,
+	PhaseDuration: number?,
 }
 
 type ResourceClientState = EconomyTypes.ResourceClientState
@@ -52,11 +52,11 @@ export type TStructureCardData = {
 local runAtom: (() -> RunAtomState)? = nil
 local resourceAtom: (() -> ResourceClientState)? = nil
 local DEFAULT_RUN_STATE: RunAtomState = table.freeze({
-	state = "Idle",
-	waveNumber = 0,
-	phaseStartedAt = nil,
-	phaseEndsAt = nil,
-	phaseDuration = nil,
+	State = "Idle",
+	WaveNumber = 0,
+	PhaseStartedAt = nil,
+	PhaseEndsAt = nil,
+	PhaseDuration = nil,
 })
 local STRUCTURE_DISPLAY_ORDER = table.freeze({
 	"turret",
@@ -200,7 +200,7 @@ local function usePlacementPaletteHud(): { isVisible: boolean, structures: { TSt
 	end
 
 	return table.freeze({
-		isVisible = runState.state == "Prep",
+		isVisible = runState.State == "Prep",
 		structures = table.freeze(structures),
 	})
 end

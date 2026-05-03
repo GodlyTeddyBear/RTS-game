@@ -54,14 +54,14 @@ export type ProfileRunStats = {
 --[=[
 	@interface ResourceWallet
 	@within EconomyTypes
-	.energy number -- Current energy balance.
-	.resources ZoneResourceMap -- Current zone resource balances.
-	.runStats ProfileRunStats? -- Optional persisted run stats snapshot for client HUDs.
+	.Energy number -- Current energy balance.
+	.Resources ZoneResourceMap -- Current zone resource balances.
+	.RunStats ProfileRunStats? -- Optional persisted run stats snapshot for client HUDs.
 ]=]
 export type ResourceWallet = {
-	energy: number,
-	resources: ZoneResourceMap,
-	runStats: ProfileRunStats?,
+	Energy: number,
+	Resources: ZoneResourceMap,
+	RunStats: ProfileRunStats?,
 }
 
 --[=[

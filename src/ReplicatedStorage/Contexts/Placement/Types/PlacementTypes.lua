@@ -22,8 +22,9 @@ export type ResourceCostMap = { [string]: number }
 	.col number -- Column index in the placement grid.
 ]=]
 export type GridCoord = {
-	row: number,
-	col: number,
+	GridId: string,
+	Row: number,
+	Col: number,
 }
 
 --[=[
@@ -37,12 +38,12 @@ export type GridCoord = {
 	.resourceType string? -- Resource metadata for extractor-style structures.
 ]=]
 export type StructureRecord = {
-	coord: GridCoord,
-	structureType: string,
-	instanceId: number,
-	ownerUserId: number?,
-	tier: number,
-	resourceType: string?,
+	Coord: GridCoord,
+	StructureType: string,
+	InstanceId: number,
+	OwnerUserId: number?,
+	Tier: number,
+	ResourceType: string?,
 }
 
 --[=[
@@ -51,7 +52,7 @@ export type StructureRecord = {
 	.placements { StructureRecord } -- Global list of placed structures.
 ]=]
 export type PlacementAtom = {
-	placements: { StructureRecord },
+	Placements: { StructureRecord },
 }
 
 --[=[
@@ -62,9 +63,10 @@ export type PlacementAtom = {
 	.structureType string -- Requested placement key.
 ]=]
 export type PlaceRequest = {
-	coord_row: number,
-	coord_col: number,
-	structureType: string,
+	GridId: string,
+	CoordRow: number,
+	CoordCol: number,
+	StructureType: string,
 }
 
 --[=[
@@ -75,9 +77,9 @@ export type PlaceRequest = {
 	.instanceId number? -- Spawned instance identifier on success.
 ]=]
 export type PlaceResponse = {
-	success: boolean,
-	errorMessage: string?,
-	instanceId: number?,
+	Success: boolean,
+	ErrorMessage: string?,
+	InstanceId: number?,
 }
 
 return table.freeze(PlacementTypes)

@@ -42,7 +42,7 @@ end
 function WaveCountingService:GetPlannedSpawnCount(composition: WaveComposition): number
 	local total = 0
 	for _, group in composition do
-		total += group.count
+		total += group.Count
 	end
 	return total
 end
@@ -55,10 +55,10 @@ end
 ]=]
 function WaveCountingService:ApplySpawnActivated(state: WaveRuntimeState): WaveRuntimeState
 	return {
-		isWaveActive = state.isWaveActive,
-		currentWaveNumber = state.currentWaveNumber,
-		pendingSpawnCount = math.max(0, state.pendingSpawnCount - 1),
-		activeEnemyCount = state.activeEnemyCount + 1,
+		IsWaveActive = state.IsWaveActive,
+		CurrentWaveNumber = state.CurrentWaveNumber,
+		PendingSpawnCount = math.max(0, state.PendingSpawnCount - 1),
+		ActiveEnemyCount = state.ActiveEnemyCount + 1,
 	}
 end
 
@@ -70,10 +70,10 @@ end
 ]=]
 function WaveCountingService:ApplyEnemyDied(state: WaveRuntimeState): WaveRuntimeState
 	return {
-		isWaveActive = state.isWaveActive,
-		currentWaveNumber = state.currentWaveNumber,
-		pendingSpawnCount = state.pendingSpawnCount,
-		activeEnemyCount = math.max(0, state.activeEnemyCount - 1),
+		IsWaveActive = state.IsWaveActive,
+		CurrentWaveNumber = state.CurrentWaveNumber,
+		PendingSpawnCount = state.PendingSpawnCount,
+		ActiveEnemyCount = math.max(0, state.ActiveEnemyCount - 1),
 	}
 end
 

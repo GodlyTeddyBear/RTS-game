@@ -4,19 +4,19 @@ option ClientOutput = "Generated/RunSyncClient.luau"
 option RemoteScope = "RUN_SYNC"
 
 struct RunSnapshotPayload {
-    state: string?,
-    waveNumber: f64?,
-    phaseStartedAt: f64?,
-    phaseEndsAt: f64?,
-    phaseDuration: f64?,
+    State: string?,
+    WaveNumber: f64?,
+    PhaseStartedAt: f64?,
+    PhaseEndsAt: f64?,
+    PhaseDuration: f64?,
 }
 
 struct InitPayload {
-    runState: RunSnapshotPayload?,
+    RunState: RunSnapshotPayload?,
 }
 
 struct PatchPayload {
-    runState: RunSnapshotPayload?,
+    RunState: RunSnapshotPayload?,
 }
 
 enum SyncPayload = "type" {

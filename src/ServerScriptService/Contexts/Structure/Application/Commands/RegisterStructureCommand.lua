@@ -58,7 +58,7 @@ function RegisterStructureCommand:Execute(record: StructureRecord): Result.Resul
 	return Result.Catch(function()
 		Ensure(type(record) == "table", "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
 
-		if not StructureSpecs.IsValidStructureType(record.structureType) then
+		if not StructureSpecs.IsValidStructureType(record.StructureType) then
 			return Ok(nil)
 		end
 
@@ -69,17 +69,17 @@ function RegisterStructureCommand:Execute(record: StructureRecord): Result.Resul
 		local entity = self._factory:CreateStructure(resolved)
 		local model = self._instanceFactory:CreateStructureInstance(
 			entity,
-			resolved.structureType,
-			resolved.instanceId,
-			resolved.worldPos
+			resolved.StructureType,
+			resolved.InstanceId,
+			resolved.WorldPos
 		)
 		self._factory:SetModelRef(entity, model)
 		self._syncService:RegisterEntity(entity, model)
 
 		-- Emit a milestone for traceability when a structure becomes active.
 		Result.MentionSuccess("Structure:RegisterStructureCommand", "Registered structure entity", {
-			instanceId = resolved.instanceId,
-			structureType = resolved.structureType,
+			instanceId = resolved.InstanceId,
+			structureType = resolved.StructureType,
 			entity = entity,
 		})
 

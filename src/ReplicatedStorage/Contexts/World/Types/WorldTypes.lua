@@ -36,8 +36,9 @@ export type ResourceType = string
 	.col number -- Column index in the grid.
 ]=]
 export type GridCoord = {
-	row: number,
-	col: number,
+	GridId: string,
+	Row: number,
+	Col: number,
 }
 
 --[=[
@@ -48,9 +49,9 @@ export type GridCoord = {
 	.isPlacementProhibited boolean -- Whether placement-prohibited map markers overlap this tile.
 ]=]
 export type TileDescriptor = {
-	zone: ZoneType,
-	resourceType: ResourceType?,
-	isPlacementProhibited: boolean,
+	Zone: ZoneType,
+	ResourceType: ResourceType?,
+	IsPlacementProhibited: boolean,
 }
 
 --[=[
@@ -65,13 +66,14 @@ export type TileDescriptor = {
 	.sidePocketRows { number } -- Rows adjacent to lane that may host side pockets.
 ]=]
 export type GridSpec = {
-	gridCFrame: CFrame,
-	gridSize: Vector3,
-	tileSize: number,
-	gridRows: number,
-	gridCols: number,
-	laneRow: number,
-	sidePocketRows: { number },
+	GridId: string,
+	GridCFrame: CFrame,
+	GridSize: Vector3,
+	TileSize: number,
+	GridRows: number,
+	GridCols: number,
+	LaneRow: number,
+	SidePocketRows: { number },
 }
 
 --[=[
@@ -96,12 +98,12 @@ export type SpawnArea = {
 	.isPlacementProhibited boolean -- Whether placement-prohibited map markers overlap this tile.
 ]=]
 export type Tile = {
-	coord: GridCoord,
-	worldPos: Vector3,
-	zone: ZoneType,
-	occupied: boolean,
-	resourceType: ResourceType?,
-	isPlacementProhibited: boolean,
+	Coord: GridCoord,
+	WorldPos: Vector3,
+	Zone: ZoneType,
+	Occupied: boolean,
+	ResourceType: ResourceType?,
+	IsPlacementProhibited: boolean,
 }
 
 --[=[

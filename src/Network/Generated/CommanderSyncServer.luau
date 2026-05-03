@@ -158,13 +158,13 @@ local Queue: any = {
 
 local SerdesEvent = "?"
 local SerdesThread: thread?
-export type CooldownEntryPayload = { startedAt: number, duration: number }
-export type CooldownMap = {[string]: { startedAt: number, duration: number }}
-export type CommanderStatePayload = { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }
-export type InitPayload = { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }
-export type PatchPayload = { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }
-export type SyncPayload = { type: "init", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? } | { type: "patch", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? }
-local function WriteEVENT_SyncCommander(Value: { type: "init", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? } | { type: "patch", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? }): ()
+export type CooldownEntryPayload = { StartedAt: number, Duration: number }
+export type CooldownMap = {[string]: { StartedAt: number, Duration: number }}
+export type CommanderStatePayload = { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }
+export type InitPayload = { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }
+export type PatchPayload = { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }
+export type SyncPayload = { type: "init", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? } | { type: "patch", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? }
+local function WriteEVENT_SyncCommander(Value: { type: "init", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? } | { type: "patch", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? }): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
@@ -176,28 +176,28 @@ local function WriteEVENT_SyncCommander(Value: { type: "init", data: { commander
 		if Value.data ~= nil then
 			-- Allocate BLOCK: 1 bytes
 			local BLOCK_START = Allocate(1)
-			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.commander ~= nil and 1 or 0)
-			if Value.data.commander ~= nil then
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Commander ~= nil and 1 or 0)
+			if Value.data.Commander ~= nil then
 				-- Allocate BLOCK: 3 bytes
 				local BLOCK_START = Allocate(3)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.commander.hp ~= nil and 1 or 0)
-				if Value.data.commander.hp ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Commander.Hp ~= nil and 1 or 0)
+				if Value.data.Commander.Hp ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.commander.hp)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.Commander.Hp)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.commander.maxHp ~= nil and 1 or 0)
-				if Value.data.commander.maxHp ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.Commander.MaxHp ~= nil and 1 or 0)
+				if Value.data.Commander.MaxHp ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.commander.maxHp)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.Commander.MaxHp)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.data.commander.cooldowns ~= nil and 1 or 0)
-				if Value.data.commander.cooldowns ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.data.Commander.Cooldowns ~= nil and 1 or 0)
+				if Value.data.Commander.Cooldowns ~= nil then
 					-- Allocate BLOCK: 2 bytes
 					local BLOCK_START = Allocate(2)
 					local Elements_5 = 0
-					for Key_5, Element_5 in Value.data.commander.cooldowns do
+					for Key_5, Element_5 in Value.data.Commander.Cooldowns do
 						Elements_5 += 1
 						local Length = #Key_5
 						local OFFSET_0 = Allocate(2)
@@ -205,9 +205,9 @@ local function WriteEVENT_SyncCommander(Value: { type: "init", data: { commander
 						Allocate(Length)
 						buffer.writestring(SendBuffer, SendOffset, Key_5, Length)
 						local OFFSET_1 = Allocate(8)
-						buffer.writef64(SendBuffer, OFFSET_1, Element_5.startedAt)
+						buffer.writef64(SendBuffer, OFFSET_1, Element_5.StartedAt)
 						local OFFSET_2 = Allocate(8)
-						buffer.writef64(SendBuffer, OFFSET_2, Element_5.duration)
+						buffer.writef64(SendBuffer, OFFSET_2, Element_5.Duration)
 					end
 					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
 				end
@@ -221,28 +221,28 @@ local function WriteEVENT_SyncCommander(Value: { type: "init", data: { commander
 		if Value.data ~= nil then
 			-- Allocate BLOCK: 1 bytes
 			local BLOCK_START = Allocate(1)
-			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.commander ~= nil and 1 or 0)
-			if Value.data.commander ~= nil then
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Commander ~= nil and 1 or 0)
+			if Value.data.Commander ~= nil then
 				-- Allocate BLOCK: 3 bytes
 				local BLOCK_START = Allocate(3)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.commander.hp ~= nil and 1 or 0)
-				if Value.data.commander.hp ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Commander.Hp ~= nil and 1 or 0)
+				if Value.data.Commander.Hp ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.commander.hp)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.Commander.Hp)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.commander.maxHp ~= nil and 1 or 0)
-				if Value.data.commander.maxHp ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.Commander.MaxHp ~= nil and 1 or 0)
+				if Value.data.Commander.MaxHp ~= nil then
 					-- Allocate BLOCK: 8 bytes
 					local BLOCK_START = Allocate(8)
-					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.commander.maxHp)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.Commander.MaxHp)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.data.commander.cooldowns ~= nil and 1 or 0)
-				if Value.data.commander.cooldowns ~= nil then
+				buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.data.Commander.Cooldowns ~= nil and 1 or 0)
+				if Value.data.Commander.Cooldowns ~= nil then
 					-- Allocate BLOCK: 2 bytes
 					local BLOCK_START = Allocate(2)
 					local Elements_5 = 0
-					for Key_5, Element_5 in Value.data.commander.cooldowns do
+					for Key_5, Element_5 in Value.data.Commander.Cooldowns do
 						Elements_5 += 1
 						local Length = #Key_5
 						local OFFSET_0 = Allocate(2)
@@ -250,9 +250,9 @@ local function WriteEVENT_SyncCommander(Value: { type: "init", data: { commander
 						Allocate(Length)
 						buffer.writestring(SendBuffer, SendOffset, Key_5, Length)
 						local OFFSET_1 = Allocate(8)
-						buffer.writef64(SendBuffer, OFFSET_1, Element_5.startedAt)
+						buffer.writef64(SendBuffer, OFFSET_1, Element_5.StartedAt)
 						local OFFSET_2 = Allocate(8)
-						buffer.writef64(SendBuffer, OFFSET_2, Element_5.duration)
+						buffer.writef64(SendBuffer, OFFSET_2, Element_5.Duration)
 					end
 					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
 				end
@@ -359,12 +359,12 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	SyncCommander = {
-		Fire = function(Player: Player, Value: { type: "init", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? } | { type: "patch", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? }): ()
+		Fire = function(Player: Player, Value: { type: "init", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? } | { type: "patch", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? }): ()
 			Load(PlayersMap[Player])
 			WriteEVENT_SyncCommander(Value)
 			PlayersMap[Player] = Save()
 		end,
-		FireAll = function(Value: { type: "init", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? } | { type: "patch", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? }): ()
+		FireAll = function(Value: { type: "init", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? } | { type: "patch", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncCommander(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -376,7 +376,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireList = function(List: {Player}, Value: { type: "init", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? } | { type: "patch", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? }): ()
+		FireList = function(List: {Player}, Value: { type: "init", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? } | { type: "patch", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncCommander(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -388,7 +388,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireExcept = function(Except: Player, Value: { type: "init", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? } | { type: "patch", data: { commander: { hp: number?, maxHp: number?, cooldowns: {[string]: { startedAt: number, duration: number }}? }? }? }): ()
+		FireExcept = function(Except: Player, Value: { type: "init", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? } | { type: "patch", data: { Commander: { Hp: number?, MaxHp: number?, Cooldowns: {[string]: { StartedAt: number, Duration: number }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncCommander(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances

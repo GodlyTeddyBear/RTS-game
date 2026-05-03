@@ -67,7 +67,7 @@ local function _GetStatusText(state: RunState): string
 end
 
 local function _GetCountdownText(snapshot: RunSnapshot, now: number): string
-	local phaseEndsAt = snapshot.phaseEndsAt
+	local phaseEndsAt = snapshot.PhaseEndsAt
 	if phaseEndsAt == nil then
 		return "--"
 	end
@@ -78,19 +78,19 @@ end
 
 function RunPhaseViewModel.fromSnapshot(snapshot: RunSnapshot, now: number): TRunPhaseViewData
 	local rewardText = nil
-	if snapshot.state == "Resolution" then
+	if snapshot.State == "Resolution" then
 		rewardText = string.format("+%d Energy", EconomyConfig.WAVE_CLEAR_BONUS)
 	end
 
 	return table.freeze({
-		runState = snapshot.state,
-		phaseStartedAt = snapshot.phaseStartedAt,
-		phaseEndsAt = snapshot.phaseEndsAt,
-		phaseDuration = snapshot.phaseDuration,
-		phaseLabel = _GetPhaseLabel(snapshot.state),
-		waveLabel = if snapshot.waveNumber > 0 then string.format("Wave %d", snapshot.waveNumber) else "Wave --",
+		runState = snapshot.State,
+		phaseStartedAt = snapshot.PhaseStartedAt,
+		phaseEndsAt = snapshot.PhaseEndsAt,
+		phaseDuration = snapshot.PhaseDuration,
+		phaseLabel = _GetPhaseLabel(snapshot.State),
+		waveLabel = if snapshot.WaveNumber > 0 then string.format("Wave %d", snapshot.WaveNumber) else "Wave --",
 		countdownText = _GetCountdownText(snapshot, now),
-		statusText = _GetStatusText(snapshot.state),
+		statusText = _GetStatusText(snapshot.State),
 		rewardText = rewardText,
 	} :: TRunPhaseViewData)
 end

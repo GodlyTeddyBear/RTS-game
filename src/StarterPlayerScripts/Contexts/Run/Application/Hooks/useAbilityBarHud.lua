@@ -17,14 +17,14 @@ type CommanderClientState = CommanderTypes.CommanderClientState
 type ResourceClientState = EconomyTypes.ResourceClientState
 
 export type TAbilitySlotHudData = {
-	key: string,
-	displayName: string,
-	energyCost: number,
-	cooldownDuration: number,
-	cooldownRemaining: number,
-	cooldownProgress: number,
-	canAfford: boolean,
-	isOnCooldown: boolean,
+	Key: string,
+	DisplayName: string,
+	EnergyCost: number,
+	CooldownDuration: number,
+	CooldownRemaining: number,
+	CooldownProgress: number,
+	CanAfford: boolean,
+	IsOnCooldown: boolean,
 }
 
 local abilityAtom: (() -> CommanderClientState)? = nil
@@ -61,11 +61,11 @@ local function _BuildSlotData(
 	local isOnCooldown = false
 
 	if commanderState then
-		local cooldownEntry = commanderState.cooldowns[slot.key]
+		local cooldownEntry = commanderState.Cooldowns[slot.Key]
 		if cooldownEntry then
-			local duration = slot.cooldownDuration
+			local duration = slot.CooldownDuration
 			if duration > 0 then
-				local remaining = (cooldownEntry.startedAt + duration) - now
+				local remaining = (cooldownEntry.StartedAt + duration) - now
 				cooldownRemaining = math.clamp(remaining, 0, duration)
 				cooldownProgress = cooldownRemaining / duration
 				isOnCooldown = cooldownRemaining > 0
@@ -74,14 +74,14 @@ local function _BuildSlotData(
 	end
 
 	return table.freeze({
-		key = slot.key,
-		displayName = slot.displayName,
-		energyCost = slot.energyCost,
-		cooldownDuration = slot.cooldownDuration,
-		cooldownRemaining = cooldownRemaining,
-		cooldownProgress = cooldownProgress,
-		canAfford = energy >= slot.energyCost,
-		isOnCooldown = isOnCooldown,
+		Key = slot.Key,
+		DisplayName = slot.DisplayName,
+		EnergyCost = slot.EnergyCost,
+		CooldownDuration = slot.CooldownDuration,
+		CooldownRemaining = cooldownRemaining,
+		CooldownProgress = cooldownProgress,
+		CanAfford = energy >= slot.EnergyCost,
+		IsOnCooldown = isOnCooldown,
 	} :: TAbilitySlotHudData)
 end
 

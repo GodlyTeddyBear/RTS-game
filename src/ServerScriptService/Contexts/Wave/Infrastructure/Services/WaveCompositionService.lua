@@ -26,9 +26,9 @@ local function copyComposition(source: WaveComposition): WaveComposition
 	local copy: WaveComposition = table.create(#source)
 	for index, group in source do
 		copy[index] = {
-			role = group.role,
-			count = group.count,
-			groupDelay = group.groupDelay,
+			Role = group.Role,
+			Count = group.Count,
+			GroupDelay = group.GroupDelay,
 		}
 	end
 	return copy
@@ -89,9 +89,9 @@ function WaveCompositionService:BuildWave(
 
 	for index, group in baseWave do
 		scaledComposition[index] = {
-			role = group.role,
-			count = math.floor(group.count * scaleMultiplier),
-			groupDelay = group.groupDelay,
+			Role = group.Role,
+			Count = math.floor(group.Count * scaleMultiplier),
+			GroupDelay = group.GroupDelay,
 		}
 	end
 

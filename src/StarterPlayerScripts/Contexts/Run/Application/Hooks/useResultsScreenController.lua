@@ -65,19 +65,19 @@ local function useResultsScreenController(): TResultScreenController
 	isRestartingRef.current = isRestarting
 
 	useEffect(function()
-		if runState.state == "RunEnd" then
+		if runState.State == "RunEnd" then
 			return
 		end
 
 		navigationActions.reset(GAME_SCREEN)
-	end, { runState.state })
+	end, { runState.State })
 
 	local onPlayAgain = useMemo(function()
 		return _CreatePlayAgainHandler(isRestartingRef, setIsRestarting)
 	end, { setIsRestarting })
 
 	return {
-		waveNumber = runState.waveNumber,
+		waveNumber = runState.WaveNumber,
 		score = PHASE1_SCORE,
 		isRestarting = isRestarting,
 		playAgainText = if isRestarting then "Restarting..." else "Play Again",

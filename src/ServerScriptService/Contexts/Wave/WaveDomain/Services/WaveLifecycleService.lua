@@ -39,10 +39,10 @@ end
 ]=]
 function WaveLifecycleService:ResetState(): WaveRuntimeState
 	return {
-		isWaveActive = false,
-		currentWaveNumber = 0,
-		pendingSpawnCount = 0,
-		activeEnemyCount = 0,
+		IsWaveActive = false,
+		CurrentWaveNumber = 0,
+		PendingSpawnCount = 0,
+		ActiveEnemyCount = 0,
 	}
 end
 
@@ -55,10 +55,10 @@ end
 ]=]
 function WaveLifecycleService:StartWaveSession(waveNumber: number, plannedSpawnCount: number): WaveRuntimeState
 	return {
-		isWaveActive = true,
-		currentWaveNumber = waveNumber,
-		pendingSpawnCount = plannedSpawnCount,
-		activeEnemyCount = 0,
+		IsWaveActive = true,
+		CurrentWaveNumber = waveNumber,
+		PendingSpawnCount = plannedSpawnCount,
+		ActiveEnemyCount = 0,
 	}
 end
 
@@ -69,7 +69,7 @@ end
 	@return boolean -- Whether the wave is active.
 ]=]
 function WaveLifecycleService:IsWaveActive(state: WaveRuntimeState): boolean
-	return state.isWaveActive
+	return state.IsWaveActive
 end
 
 --[=[
@@ -80,7 +80,7 @@ end
 	@return boolean -- Whether the numbers match and the wave is active.
 ]=]
 function WaveLifecycleService:IsCurrentWave(state: WaveRuntimeState, waveNumber: number): boolean
-	return state.isWaveActive and state.currentWaveNumber == waveNumber
+	return state.IsWaveActive and state.CurrentWaveNumber == waveNumber
 end
 
 --[=[
@@ -90,7 +90,7 @@ end
 	@return boolean -- Whether the wave can transition to completion.
 ]=]
 function WaveLifecycleService:ShouldCompleteWave(state: WaveRuntimeState): boolean
-	return state.isWaveActive and state.pendingSpawnCount <= 0 and state.activeEnemyCount <= 0
+	return state.IsWaveActive and state.PendingSpawnCount <= 0 and state.ActiveEnemyCount <= 0
 end
 
 --[=[
@@ -101,10 +101,10 @@ end
 ]=]
 function WaveLifecycleService:MarkWaveCompleted(state: WaveRuntimeState): WaveRuntimeState
 	return {
-		isWaveActive = false,
-		currentWaveNumber = state.currentWaveNumber,
-		pendingSpawnCount = state.pendingSpawnCount,
-		activeEnemyCount = state.activeEnemyCount,
+		IsWaveActive = false,
+		CurrentWaveNumber = state.CurrentWaveNumber,
+		PendingSpawnCount = state.PendingSpawnCount,
+		ActiveEnemyCount = state.ActiveEnemyCount,
 	}
 end
 

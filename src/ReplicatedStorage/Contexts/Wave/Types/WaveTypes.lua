@@ -20,14 +20,14 @@ local WaveTypes = {}
 --[=[
 	@interface SpawnGroup
 	@within WaveTypes
-	.role string -- Enemy role for the group.
-	.count number -- Number of enemies in the group.
-	.groupDelay number -- Delay before the group begins spawning.
+	.Role string -- Enemy role for the group.
+	.Count number -- Number of enemies in the group.
+	.GroupDelay number -- Delay before the group begins spawning.
 ]=]
 export type SpawnGroup = {
-	role: string,
-	count: number,
-	groupDelay: number,
+	Role: string,
+	Count: number,
+	GroupDelay: number,
 }
 
 --[=[
@@ -40,27 +40,27 @@ export type WaveComposition = { SpawnGroup }
 --[=[
 	@interface EndlessRoleThreshold
 	@within WaveTypes
-	.role string -- Enemy role appended when the endless threshold is reached.
-	.count number -- Number of enemies added for the role.
+	.Role string -- Enemy role appended when the endless threshold is reached.
+	.Count number -- Number of enemies added for the role.
 ]=]
 export type EndlessRoleThreshold = {
-	role: string,
-	count: number,
+	Role: string,
+	Count: number,
 }
 
 --[=[
 	@interface WaveRuntimeState
 	@within WaveTypes
-	.isWaveActive boolean -- Whether the current wave session is active.
-	.currentWaveNumber number -- The active wave number.
-	.pendingSpawnCount number -- Spawns scheduled but not yet activated.
-	.activeEnemyCount number -- Enemies currently alive for the wave.
+	.IsWaveActive boolean -- Whether the current wave session is active.
+	.CurrentWaveNumber number -- The active wave number.
+	.PendingSpawnCount number -- Spawns scheduled but not yet activated.
+	.ActiveEnemyCount number -- Enemies currently alive for the wave.
 ]=]
 export type WaveRuntimeState = {
-	isWaveActive: boolean,
-	currentWaveNumber: number,
-	pendingSpawnCount: number,
-	activeEnemyCount: number,
+	IsWaveActive: boolean,
+	CurrentWaveNumber: number,
+	PendingSpawnCount: number,
+	ActiveEnemyCount: number,
 }
 
 return table.freeze(WaveTypes)

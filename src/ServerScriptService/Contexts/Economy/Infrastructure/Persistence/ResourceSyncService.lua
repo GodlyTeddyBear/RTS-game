@@ -44,9 +44,9 @@ ResourceSyncService.__index = ResourceSyncService
 -- Clones a wallet before storing or mutating it so callers never hold an atom reference.
 local function cloneWallet(wallet: ResourceWallet): ResourceWallet
 	return {
-		energy = wallet.energy,
-		resources = table.clone(wallet.resources),
-		runStats = cloneRunStats(wallet.runStats),
+		Energy = wallet.Energy,
+		Resources = table.clone(wallet.Resources),
+		RunStats = cloneRunStats(wallet.RunStats),
 	}
 end
 
@@ -59,7 +59,7 @@ end
 ]=]
 function ResourceSyncService.new()
 	local self = setmetatable({}, ResourceSyncService)
-	self.AtomKey = "resources"
+	self.AtomKey = "Resources"
 	self.BlinkEventName = "SyncResources"
 	self.CreateAtom = SharedAtoms.CreateServerAtom
 	return self
@@ -93,7 +93,7 @@ function ResourceSyncService:SyncRunStats(userId: number, runStats: ProfileRunSt
 
 		local updated = table.clone(current)
 		updated[userId] = cloneWallet(wallet)
-		updated[userId].runStats = cloneRunStats(runStats)
+		updated[userId].RunStats = cloneRunStats(runStats)
 		return updated
 	end)
 end
@@ -121,9 +121,9 @@ function ResourceSyncService:AddResource(userId: number, resourceType: string, a
 
 		-- Apply the grant to the correct balance bucket.
 		if resourceType == "Energy" then
-			updated[userId].energy += amount
+			updated[userId].Energy += amount
 		else
-			updated[userId].resources[resourceType] = (updated[userId].resources[resourceType] or 0) + amount
+			updated[userId].Resources[resourceType] = (updated[userId].Resources[resourceType] or 0) + amount
 		end
 
 		return updated
@@ -153,9 +153,9 @@ function ResourceSyncService:SubtractResource(userId: number, resourceType: stri
 
 		-- Apply the deduction to the correct balance bucket.
 		if resourceType == "Energy" then
-			updated[userId].energy -= cost
+			updated[userId].Energy -= cost
 		else
-			updated[userId].resources[resourceType] = (updated[userId].resources[resourceType] or 0) - cost
+			updated[userId].Resources[resourceType] = (updated[userId].Resources[resourceType] or 0) - cost
 		end
 
 		return updated
@@ -180,9 +180,9 @@ function ResourceSyncService:SubtractResources(userId: number, costMap: Resource
 
 		for resourceType, cost in costMap do
 			if resourceType == "Energy" then
-				updated[userId].energy -= cost
+				updated[userId].Energy -= cost
 			else
-				updated[userId].resources[resourceType] = (updated[userId].resources[resourceType] or 0) - cost
+				updated[userId].Resources[resourceType] = (updated[userId].Resources[resourceType] or 0) - cost
 			end
 		end
 
@@ -205,10 +205,10 @@ function ResourceSyncService:GetBalance(userId: number, resourceType: string): n
 	end
 
 	if resourceType == "Energy" then
-		return wallet.energy
+		return wallet.Energy
 	end
 
-	return wallet.resources[resourceType] or 0
+	return wallet.Resources[resourceType] or 0
 end
 
 --[=[
@@ -237,9 +237,9 @@ function ResourceSyncService:GetBalancesForCostMap(userId: number, costMap: Reso
 	local balances = {}
 	for resourceType in costMap do
 		if resourceType == "Energy" then
-			balances[resourceType] = wallet.energy
+			balances[resourceType] = wallet.Energy
 		else
-			balances[resourceType] = wallet.resources[resourceType] or 0
+			balances[resourceType] = wallet.Resources[resourceType] or 0
 		end
 	end
 

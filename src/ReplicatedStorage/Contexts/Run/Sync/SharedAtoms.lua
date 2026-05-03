@@ -23,11 +23,11 @@ local SharedAtoms = {}
 function SharedAtoms.CreateServerAtom()
 	-- Use the same shape on both sides so Charm-sync can diff snapshots without conversion.
 	return Charm.atom({
-		state = "Idle",
-		waveNumber = 0,
-		phaseStartedAt = nil,
-		phaseEndsAt = nil,
-		phaseDuration = nil,
+		State = "Idle",
+		WaveNumber = 0,
+		PhaseStartedAt = nil,
+		PhaseEndsAt = nil,
+		PhaseDuration = nil,
 	} :: RunSnapshot)
 end
 
@@ -39,11 +39,11 @@ end
 function SharedAtoms.CreateClientAtom()
 	-- Mirror the server atom shape exactly for deterministic sync payload hydration.
 	return Charm.atom({
-		state = "Idle",
-		waveNumber = 0,
-		phaseStartedAt = nil,
-		phaseEndsAt = nil,
-		phaseDuration = nil,
+		State = "Idle",
+		WaveNumber = 0,
+		PhaseStartedAt = nil,
+		PhaseEndsAt = nil,
+		PhaseDuration = nil,
 	} :: RunSnapshot)
 end
 

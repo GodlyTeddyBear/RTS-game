@@ -18,14 +18,14 @@ local SharedAtoms = {}
 -- Mirror the same atom shape on the server so Charm-sync can diff the placements array directly.
 function SharedAtoms.CreateServerAtom()
 	return Charm.atom({
-		placements = {},
+		Placements = {},
 	} :: PlacementAtom)
 end
 
 -- Mirror the same atom shape on the client so hydration can apply payloads without conversion.
 function SharedAtoms.CreateClientAtom()
 	return Charm.atom({
-		placements = {},
+		Placements = {},
 	} :: PlacementAtom)
 end
 

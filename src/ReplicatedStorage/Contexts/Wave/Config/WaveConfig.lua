@@ -57,28 +57,28 @@ local WaveConfig = {
 	-- Scripted wave definitions used before the endless loop starts.
 	WAVE_TABLE = {
 		[1] = {
-			{ role = "Tank", count = 3, groupDelay = 0 },
-			{ role = "Swarm", count = 3, groupDelay = 8 },
+			{ Role = "Tank", Count = 3, GroupDelay = 0 },
+			{ Role = "Swarm", Count = 3, GroupDelay = 8 },
 		},
 		[2] = {
-			{ role = "Swarm", count = 6, groupDelay = 0 },
-			{ role = "Swarm", count = 4, groupDelay = 12 },
+			{ Role = "Swarm", Count = 6, GroupDelay = 0 },
+			{ Role = "Swarm", Count = 4, GroupDelay = 12 },
 		},
 		[3] = {
-			{ role = "Swarm", count = 8, groupDelay = 0 },
-			{ role = "Swarm", count = 4, groupDelay = 10 },
+			{ Role = "Swarm", Count = 8, GroupDelay = 0 },
+			{ Role = "Swarm", Count = 4, GroupDelay = 10 },
 		},
 		[4] = {
-			{ role = "Swarm", count = 10, groupDelay = 0 },
-			{ role = "Swarm", count = 8, groupDelay = 12 },
+			{ Role = "Swarm", Count = 10, GroupDelay = 0 },
+			{ Role = "Swarm", Count = 8, GroupDelay = 12 },
 		},
 		[5] = {
-			{ role = "Swarm", count = 12, groupDelay = 0 },
-			{ role = "Swarm", count = 8, groupDelay = 9 },
+			{ Role = "Swarm", Count = 12, GroupDelay = 0 },
+			{ Role = "Swarm", Count = 8, GroupDelay = 9 },
 		},
 		[6] = {
-			{ role = "Swarm", count = 14, groupDelay = 0 },
-			{ role = "Swarm", count = 12, groupDelay = 10 },
+			{ Role = "Swarm", Count = 14, GroupDelay = 0 },
+			{ Role = "Swarm", Count = 12, GroupDelay = 10 },
 		},
 	},
 

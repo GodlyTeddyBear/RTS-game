@@ -42,9 +42,10 @@ function ConfirmPlacementCommand:Execute(state: any, deps: any)
 
 	-- Marshal the request payload from the current hover target.
 	local request = {
-		coord_row = state._hoveredCoord.row,
-		coord_col = state._hoveredCoord.col,
-		structureType = state._structureType,
+		GridId = state._hoveredCoord.GridId,
+		CoordRow = state._hoveredCoord.Row,
+		CoordCol = state._hoveredCoord.Col,
+		StructureType = state._structureType,
 	}
 
 	-- Wrap the remote invocation so a network failure does not destabilize the session.
@@ -64,7 +65,7 @@ function ConfirmPlacementCommand:Execute(state: any, deps: any)
 	end
 
 	-- Successful placement closes the session and clears the preview state.
-	if response.success then
+	if response.Success then
 		self._exitPlacementModeCommand:Execute(state, deps)
 	end
 end

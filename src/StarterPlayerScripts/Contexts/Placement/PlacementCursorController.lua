@@ -206,9 +206,9 @@ function PlacementCursorController:_OnRenderStepped()
 	end
 
 	local runState = self._runAtom()
-	if runState.state ~= self._runState then
-		self._runState = runState.state
-		if runState.state ~= "Prep" then
+	if runState.State ~= self._runState then
+		self._runState = runState.State
+		if runState.State ~= "Prep" then
 			self:ExitPlacementMode()
 			return
 		end

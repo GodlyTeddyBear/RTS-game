@@ -163,7 +163,7 @@ end
 
 local function _isValidSlot(slotKey: string): boolean
 	for _, slot in CommanderConfig.SLOTS do
-		if slot.key == slotKey then
+		if slot.Key == slotKey then
 			return true
 		end
 	end
@@ -226,14 +226,14 @@ function CommanderContext:_RegisterDeveloperLogCommands()
 			end
 
 			local cooldownCount = 0
-			for _, cooldown in pairs(state.cooldowns) do
+			for _, cooldown in pairs(state.Cooldowns) do
 				if cooldown ~= nil then
 					cooldownCount += 1
 				end
 			end
 
 			return true,
-				string.format("userId=%d hp=%d/%d activeCooldowns=%d", userId, state.hp, state.maxHp, cooldownCount)
+				string.format("userId=%d hp=%d/%d activeCooldowns=%d", userId, state.Hp, state.MaxHp, cooldownCount)
 		end,
 	})
 
@@ -332,7 +332,7 @@ function CommanderContext:ApplyDamage(player: Player, amount: number): Result.Re
 		) :: CommanderState
 
 		if self:IsGodModeEnabled(player.UserId) then
-			return Ok(previousState.hp)
+			return Ok(previousState.Hp)
 		end
 
 		local nextHp = Try(
@@ -345,7 +345,7 @@ function CommanderContext:ApplyDamage(player: Player, amount: number): Result.Re
 		)
 		self._syncService:SyncCommanderState(player.UserId)
 
-		if previousState.hp > 0 and nextHp <= 0 then
+		if previousState.Hp > 0 and nextHp <= 0 then
 			Result.MentionEvent("CommanderContext:CommanderDeath", "Commander HP reached zero", {
 				UserId = player.UserId,
 			})

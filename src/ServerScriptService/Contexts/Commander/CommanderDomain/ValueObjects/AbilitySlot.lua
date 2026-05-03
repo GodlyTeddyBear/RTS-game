@@ -39,11 +39,11 @@ local AbilitySlot = {}
 ]=]
 function AbilitySlot.new(def: AbilitySlotDef): AbilitySlotRecord
 	return table.freeze({
-		Key = def.key,
-		DisplayName = def.displayName,
-		EnergyCost = def.energyCost,
-		CooldownDuration = def.cooldownDuration,
-		Metadata = def.metadata,
+		Key = def.Key,
+		DisplayName = def.DisplayName,
+		EnergyCost = def.EnergyCost,
+		CooldownDuration = def.CooldownDuration,
+		Metadata = def.Metadata,
 	})
 end
 

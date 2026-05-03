@@ -9,13 +9,13 @@ local CommanderTypes = require(ReplicatedStorage.Contexts.Commander.Types.Comman
 type CommanderClientState = CommanderTypes.CommanderClientState
 
 export type TCommanderHudData = {
-	hp: number,
-	maxHp: number,
+	Hp: number,
+	MaxHp: number,
 }
 
 local DEFAULT_COMMANDER_HUD: TCommanderHudData = table.freeze({
-	hp = 0,
-	maxHp = 100,
+	Hp = 0,
+	MaxHp = 100,
 })
 
 local commanderAtom: (() -> CommanderClientState)? = nil
@@ -33,8 +33,8 @@ local function _ToHudData(state: CommanderClientState): TCommanderHudData
 		return DEFAULT_COMMANDER_HUD
 	end
 	return {
-		hp = state.hp,
-		maxHp = state.maxHp,
+		Hp = state.Hp,
+		MaxHp = state.MaxHp,
 	}
 end
 

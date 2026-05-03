@@ -59,28 +59,28 @@ function RegisterExtractorCommand:Execute(record: StructureRecord): Result.Resul
 	Ensure(type(record) == "table", "InvalidExtractorRecord", Errors.INVALID_EXTRACTOR_RECORD)
 
 	-- Ignore non-extractor structures so the placement stream can include unrelated build types.
-	if record.structureType ~= MiningConfig.EXTRACTOR_STRUCTURE_TYPE then
+	if record.StructureType ~= MiningConfig.EXTRACTOR_STRUCTURE_TYPE then
 		return Ok(nil)
 	end
 
 	-- Validate the record fields before creating the ECS payload.
-	Ensure(MiningSpecs.HasValidOwner(record.ownerUserId), "InvalidOwner", Errors.INVALID_OWNER, {
-		ownerUserId = record.ownerUserId,
+	Ensure(MiningSpecs.HasValidOwner(record.OwnerUserId), "InvalidOwner", Errors.INVALID_OWNER, {
+		ownerUserId = record.OwnerUserId,
 	})
-	Ensure(MiningSpecs.HasValidInstanceId(record.instanceId), "InvalidInstanceId", Errors.INVALID_INSTANCE_ID, {
-		instanceId = record.instanceId,
+	Ensure(MiningSpecs.HasValidInstanceId(record.InstanceId), "InvalidInstanceId", Errors.INVALID_INSTANCE_ID, {
+		instanceId = record.InstanceId,
 	})
-	Ensure(MiningSpecs.HasValidResourceType(record.resourceType), "InvalidResourceType", Errors.INVALID_RESOURCE_TYPE, {
-		resourceType = record.resourceType,
+	Ensure(MiningSpecs.HasValidResourceType(record.ResourceType), "InvalidResourceType", Errors.INVALID_RESOURCE_TYPE, {
+		resourceType = record.ResourceType,
 	})
 	Ensure(MiningSpecs.HasValidInterval(MiningConfig.BASE_RATE_SECONDS), "InvalidInterval", Errors.INVALID_INTERVAL)
 	Ensure(MiningSpecs.HasValidAmount(MiningConfig.BASE_AMOUNT_PER_CYCLE), "InvalidAmount", Errors.INVALID_AMOUNT)
 
 	-- Build the immutable extractor payload that the factory expects.
 	local extractorRecord: TExtractorRecord = {
-		InstanceId = record.instanceId,
-		OwnerUserId = record.ownerUserId,
-		ResourceType = record.resourceType :: string,
+		InstanceId = record.InstanceId,
+		OwnerUserId = record.OwnerUserId,
+		ResourceType = record.ResourceType :: string,
 		IntervalSeconds = MiningConfig.BASE_RATE_SECONDS,
 		AmountPerCycle = MiningConfig.BASE_AMOUNT_PER_CYCLE,
 	}
@@ -89,9 +89,9 @@ function RegisterExtractorCommand:Execute(record: StructureRecord): Result.Resul
 	local entity = self._factory:CreateExtractor(extractorRecord)
 	Result.MentionSuccess("Mining:RegisterExtractorCommand", "Registered extractor entity", {
 		Entity = entity,
-		InstanceId = record.instanceId,
-		OwnerUserId = record.ownerUserId,
-		ResourceType = record.resourceType,
+		InstanceId = record.InstanceId,
+		OwnerUserId = record.OwnerUserId,
+		ResourceType = record.ResourceType,
 	})
 
 	return Ok(entity)

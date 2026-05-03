@@ -42,7 +42,7 @@ end
 ]=]
 function GetActiveEnemyCountQuery:Execute(): number
 	local state = self._state:GetStateReadOnly()
-	return state.activeEnemyCount
+	return state.ActiveEnemyCount
 end
 
 return GetActiveEnemyCountQuery

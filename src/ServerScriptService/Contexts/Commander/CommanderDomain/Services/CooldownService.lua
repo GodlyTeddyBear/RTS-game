@@ -40,8 +40,8 @@ local function getRemainingSeconds(cooldownEntry: CooldownEntry?): number
 		return 0
 	end
 
-	local elapsed = os.clock() - cooldownEntry.startedAt
-	return math.max(0, cooldownEntry.duration - elapsed)
+	local elapsed = os.clock() - cooldownEntry.StartedAt
+	return math.max(0, cooldownEntry.Duration - elapsed)
 end
 
 --[=[
@@ -57,7 +57,7 @@ function CooldownService:IsReady(userId: number, slotKey: SlotKey): boolean
 		return false
 	end
 
-	return getRemainingSeconds(state.cooldowns[slotKey]) <= 0
+	return getRemainingSeconds(state.Cooldowns[slotKey]) <= 0
 end
 
 --[=[
@@ -73,7 +73,7 @@ function CooldownService:GetRemainingTime(userId: number, slotKey: SlotKey): num
 		return 0
 	end
 
-	return getRemainingSeconds(state.cooldowns[slotKey])
+	return getRemainingSeconds(state.Cooldowns[slotKey])
 end
 
 return CooldownService
