@@ -142,6 +142,11 @@ function WorldGridService:GetAllTiles(): { Tile }
 	return table.clone(self._allTiles)
 end
 
+function WorldGridService:GetGridSpecList(): { GridSpec }
+	self:_EnsureBuilt()
+	return self._gridRuntimeService:GetGridSpecList()
+end
+
 function WorldGridService:GetBuildableTiles(): { Tile }
 	self:_EnsureBuilt()
 	local buildableTiles = {}

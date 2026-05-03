@@ -19,7 +19,6 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 
 local BlinkSyncServer = require(ReplicatedStorage.Network.Generated.PlacementSyncServer)
-local BlinkRemoteServer = require(ReplicatedStorage.Network.Generated.PlacementRemoteServer)
 local PlacementValidator = require(script.Parent.PlacementDomain.Services.PlacementValidator)
 local PlaceStructurePolicy = require(script.Parent.PlacementDomain.Policies.PlaceStructurePolicy)
 local PlacementService = require(script.Parent.Infrastructure.Services.PlacementService)
@@ -38,10 +37,6 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
 		Name = "BlinkSyncServer",
 		Instance = BlinkSyncServer,
-	},
-	{
-		Name = "BlinkRemoteServer",
-		Instance = BlinkRemoteServer,
 	},
 	{
 		Name = "PlacementService",
@@ -131,11 +126,6 @@ function PlacementContext:KnitInit()
 	self.StructurePlaced = self._structurePlacedSignal.Event
 	self._playerAddedConnection = nil :: RBXScriptConnection?
 	self._stateChangedConnection = nil :: RBXScriptConnection?
-
-	-- Bind the client placement remote to the request validator and command pipeline.
-	BlinkRemoteServer.PlaceStructure.On(function(player: Player, request: any): PlaceResponse
-		return self:_HandlePlaceStructureRequest(player, request)
-	end)
 end
 
 --[=[
@@ -268,6 +258,10 @@ function PlacementContext:GetStructureInstance(instanceId: number): Result.Resul
 	return Catch(function()
 		return Ok(self._placementService:GetStructureInstance(instanceId))
 	end, "Placement:GetStructureInstance")
+end
+
+function PlacementContext.Client:PlaceStructure(player: Player, request: any): PlaceResponse
+	return self.Server:_HandlePlaceStructureRequest(player, request)
 end
 
 -- [Private Helpers]

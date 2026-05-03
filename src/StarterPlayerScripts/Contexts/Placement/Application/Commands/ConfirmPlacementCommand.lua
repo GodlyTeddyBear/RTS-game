@@ -48,9 +48,9 @@ function ConfirmPlacementCommand:Execute(state: any, deps: any)
 		StructureType = state._structureType,
 	}
 
-	-- Wrap the remote invocation so a network failure does not destabilize the session.
+	-- Wrap the context invocation so a network failure does not destabilize the session.
 	local ok, response = pcall(function()
-		return deps.placementRemoteClient.PlaceStructure.Invoke(request)
+		return deps.placementContext:PlaceStructure(request)
 	end)
 
 	state._confirming = false

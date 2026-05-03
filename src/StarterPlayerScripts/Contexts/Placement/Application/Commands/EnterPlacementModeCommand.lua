@@ -20,7 +20,7 @@ local function _GetCoordKey(coord: GridCoord?): string?
 	if coord == nil then
 		return nil
 	end
-	return (`{coord.GridId}:{coord.Row}:{coord.Col}`)
+	return `{coord.GridId}:{coord.Row}:{coord.Col}`
 end
 
 local EnterPlacementModeCommand = {}
@@ -82,14 +82,12 @@ function EnterPlacementModeCommand:Execute(state: any, deps: any, structureType:
 		return self._getValidTilesQuery:Execute(structureType, occupiedSet)
 	end)
 	if not validTilesResultOk then
+		warn(("[PlacementCursor] Failed to resolve valid tiles for '%s': %s"):format(structureType, tostring(validTilesOrError)))
 		return
 	end
 
-	-- Abort if the structure has no legal placement tiles.
+	-- Allow entry even when there are no legal tiles so the player still gets ghost feedback.
 	local validTiles = validTilesOrError
-	if #validTiles == 0 then
-		return
-	end
 
 	-- Initialize the new placement session state before wiring input handlers.
 	state._state = "Active"
@@ -130,12 +128,18 @@ function EnterPlacementModeCommand:Execute(state: any, deps: any, structureType:
 	-- Rebind session-scoped listeners after the ghost and highlights exist.
 	state._sessionJanitor:Destroy()
 	state._sessionJanitor = deps.janitorFactory.new()
-	state._sessionJanitor:Add(deps.runService.RenderStepped:Connect(function()
-		deps.onRenderStepped()
-	end), "Disconnect")
-	state._sessionJanitor:Add(deps.userInputService.InputBegan:Connect(function(input, gameProcessed)
-		deps.onInputBegan(input, gameProcessed)
-	end), "Disconnect")
+	state._sessionJanitor:Add(
+		deps.runService.RenderStepped:Connect(function()
+			deps.onRenderStepped()
+		end),
+		"Disconnect"
+	)
+	state._sessionJanitor:Add(
+		deps.userInputService.InputBegan:Connect(function(input, gameProcessed)
+			deps.onInputBegan(input, gameProcessed)
+		end),
+		"Disconnect"
+	)
 
 	-- Sync the initial hover state so the ghost and highlights match the current cursor.
 	deps.updateHoverState()

@@ -9,6 +9,7 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
@@ -18,7 +19,9 @@ local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 local WorldGridRuntimeService = require(script.Parent.Infrastructure.Services.WorldGridRuntimeService)
 local WorldGridService = require(script.Parent.Infrastructure.Services.WorldGridService)
 local WorldLayoutService = require(script.Parent.Infrastructure.Services.WorldLayoutService)
+local WorldSyncService = require(script.Parent.Infrastructure.Persistence.WorldSyncService)
 local Errors = require(script.Parent.Errors)
+local BlinkServer = require(ReplicatedStorage.Network.Generated.WorldSyncServer)
 
 local GetTileQuery = require(script.Parent.Application.Queries.GetTileQuery)
 local GetSpawnAreasQuery = require(script.Parent.Application.Queries.GetSpawnAreasQuery)
@@ -30,8 +33,17 @@ local GetLaneTilesQuery = require(script.Parent.Application.Queries.GetLaneTiles
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
+		Name = "BlinkServer",
+		Instance = BlinkServer,
+	},
+	{
 		Name = "WorldGridRuntimeService",
 		Module = WorldGridRuntimeService,
+	},
+	{
+		Name = "WorldSyncService",
+		Module = WorldSyncService,
+		CacheAs = "_syncService",
 	},
 	{
 		Name = "WorldGridService",
@@ -100,6 +112,12 @@ local WorldContext = Knit.CreateService({
 	ExternalServices = {
 		{ Name = "MapContext", CacheAs = "_mapContext" },
 	},
+	Teardown = {
+		Fields = {
+			{ Field = "_playerAddedConnection", Method = "Disconnect" },
+			{ Field = "_syncService", Method = "Destroy" },
+		},
+	},
 })
 
 local WorldBaseContext = BaseContext.new(WorldContext)
@@ -116,8 +134,22 @@ type WorldContextService = typeof(WorldContext) & {
 	_getExtractionTilesQuery: any,
 	_getLaneTilesQuery: any,
 	_worldGridService: any,
+	_syncService: any,
 	_mapContext: any,
 }
+
+local function _PublishWorldSnapshot(self: WorldContextService)
+	local ok, errOrNil = pcall(function()
+		local gridSpecs = self._worldGridService:GetGridSpecList()
+		local tiles = self._worldGridService:GetAllTiles()
+		self._syncService:SetSnapshot(gridSpecs, tiles)
+	end)
+	if not ok then
+		Result.MentionError("World:SyncSnapshot", "Failed to publish world snapshot", {
+			CauseMessage = tostring(errOrNil),
+		}, "WorldSnapshotPublishFailed")
+	end
+end
 
 -- [Initialization]
 
@@ -127,6 +159,7 @@ type WorldContextService = typeof(WorldContext) & {
 ]=]
 function WorldContext:KnitInit()
 	WorldBaseContext:KnitInit()
+	self._playerAddedConnection = nil :: RBXScriptConnection?
 	Result.MentionSuccess("World:KnitInit", "World context initialized", nil)
 end
 
@@ -138,6 +171,15 @@ end
 ]=]
 function WorldContext:KnitStart()
 	WorldBaseContext:KnitStart()
+	_PublishWorldSnapshot(self :: any)
+
+	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
+		self._syncService:HydratePlayer(player)
+	end)
+
+	for _, player in Players:GetPlayers() do
+		self._syncService:HydratePlayer(player)
+	end
 	Result.MentionEvent("World:KnitStart", "World context started", nil)
 end
 
@@ -221,7 +263,11 @@ function WorldContext.SetTileOccupied(
 ): Result.Result<boolean>
 	return Catch(function()
 		Ensure(coord, "InvalidCoord", Errors.INVALID_COORD)
-		return Ok(self._worldGridService:SetOccupied(coord, occupied))
+		local didUpdate = self._worldGridService:SetOccupied(coord, occupied)
+		if didUpdate then
+			_PublishWorldSnapshot(self)
+		end
+		return Ok(didUpdate)
 	end, "World:SetTileOccupied")
 end
 
@@ -234,6 +280,7 @@ function WorldContext.RefreshRuntimeGeometry(self: WorldContextService): Result.
 	return Catch(function()
 		self._worldGridService:ResetCache()
 		self._worldGridService:Build()
+		_PublishWorldSnapshot(self)
 		return Ok(true)
 	end, "World:RefreshRuntimeGeometry")
 end

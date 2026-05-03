@@ -59,7 +59,7 @@ local DEFAULT_RUN_STATE: RunAtomState = table.freeze({
 	PhaseDuration = nil,
 })
 local STRUCTURE_DISPLAY_ORDER = table.freeze({
-	"turret",
+	"SentryTurret",
 	"Extractor",
 })
 
@@ -101,7 +101,12 @@ local function _GetBalance(wallet: ResourceClientState, resourceType: string): n
 		return ResourceHudViewModel.getEnergy(wallet)
 	end
 
-	return wallet.resources[resourceType] or 0
+	local resources = wallet.Resources
+	if resources == nil then
+		return 0
+	end
+
+	return resources[resourceType] or 0
 end
 
 local function _CanAfford(wallet: ResourceClientState, costMap: ResourceCostMap): boolean

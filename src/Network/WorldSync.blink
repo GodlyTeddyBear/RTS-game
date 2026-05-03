@@ -1,0 +1,73 @@
+option ServerOutput = "Generated/WorldSyncServer.luau"
+option ClientOutput = "Generated/WorldSyncClient.luau"
+
+option RemoteScope = "WORLD_SYNC"
+
+struct GridSpecPayload {
+	GridId: string?,
+	OriginX: f64?,
+	OriginY: f64?,
+	OriginZ: f64?,
+	RightX: f64?,
+	RightY: f64?,
+	RightZ: f64?,
+	UpX: f64?,
+	UpY: f64?,
+	UpZ: f64?,
+	LookX: f64?,
+	LookY: f64?,
+	LookZ: f64?,
+	GridSizeX: f64?,
+	GridSizeY: f64?,
+	GridSizeZ: f64?,
+	TileSize: f64?,
+	GridRows: f64?,
+	GridCols: f64?,
+	LaneRow: f64?,
+}
+
+map GridSpecList = { [u32]: GridSpecPayload }
+
+struct TileDescriptorPayload {
+	GridId: string?,
+	Row: f64?,
+	Col: f64?,
+	WorldPosX: f64?,
+	WorldPosY: f64?,
+	WorldPosZ: f64?,
+	Zone: string?,
+	ResourceType: string?,
+	IsPlacementProhibited: boolean?,
+	Occupied: boolean?,
+}
+
+map TileDescriptorList = { [u32]: TileDescriptorPayload }
+
+struct WorldGridStatePayload {
+	GridSpecs: GridSpecList?,
+	Tiles: TileDescriptorList?,
+}
+
+struct InitPayload {
+	WorldGrid: WorldGridStatePayload?,
+}
+
+struct PatchPayload {
+	WorldGrid: WorldGridStatePayload?,
+}
+
+enum SyncPayload = "type" {
+	init {
+		data: InitPayload?,
+	},
+	patch {
+		data: PatchPayload?,
+	},
+}
+
+event SyncWorldGrid {
+	from: Server,
+	type: Reliable,
+	call: SingleAsync,
+	data: SyncPayload,
+}

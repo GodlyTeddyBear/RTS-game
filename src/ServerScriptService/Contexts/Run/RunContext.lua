@@ -208,9 +208,11 @@ function RunContext:KnitInit()
 	end
 
 	self.StateChanged = self._machine.StateChanged
-	self._stateChangedConnection = self._machine.StateChanged:Connect(function(newState: RunState, previousState: RunState)
-		self:_OnStateChanged(newState, previousState)
-	end)
+	self._stateChangedConnection = self._machine.StateChanged:Connect(
+		function(newState: RunState, previousState: RunState)
+			self:_OnStateChanged(newState, previousState)
+		end
+	)
 
 	self._sync:SetState(self:_BuildRunSnapshot())
 end
@@ -255,7 +257,8 @@ function RunContext:_RegisterDeveloperLogCommands()
 				State = self._machine:GetState(),
 				WaveNumber = self._machine:GetWaveNumber(),
 			})
-			return true, string.format("Run started. state=%s wave=%d", self._machine:GetState(), self._machine:GetWaveNumber())
+			return true,
+				string.format("Run started. state=%s wave=%d", self._machine:GetState(), self._machine:GetWaveNumber())
 		end,
 	})
 
@@ -274,7 +277,12 @@ function RunContext:_RegisterDeveloperLogCommands()
 				State = self._machine:GetState(),
 				WaveNumber = self._machine:GetWaveNumber(),
 			})
-			return true, string.format("Returned to lobby. state=%s wave=%d", self._machine:GetState(), self._machine:GetWaveNumber())
+			return true,
+				string.format(
+					"Returned to lobby. state=%s wave=%d",
+					self._machine:GetState(),
+					self._machine:GetWaveNumber()
+				)
 		end,
 	})
 
@@ -293,7 +301,8 @@ function RunContext:_RegisterDeveloperLogCommands()
 				State = self._machine:GetState(),
 				WaveNumber = self._machine:GetWaveNumber(),
 			})
-			return true, string.format("Run reset. state=%s wave=%d", self._machine:GetState(), self._machine:GetWaveNumber())
+			return true,
+				string.format("Run reset. state=%s wave=%d", self._machine:GetState(), self._machine:GetWaveNumber())
 		end,
 	})
 
@@ -312,7 +321,12 @@ function RunContext:_RegisterDeveloperLogCommands()
 				State = self._machine:GetState(),
 				WaveNumber = self._machine:GetWaveNumber(),
 			})
-			return true, string.format("Phase skipped. state=%s wave=%d", self._machine:GetState(), self._machine:GetWaveNumber())
+			return true,
+				string.format(
+					"Phase skipped. state=%s wave=%d",
+					self._machine:GetState(),
+					self._machine:GetWaveNumber()
+				)
 		end,
 	})
 end
@@ -337,13 +351,16 @@ function RunContext:KnitStart()
 	end
 
 	-- Listen for commander death through the shared event bus so run termination stays decoupled.
-	self._commanderDiedConnection = GameEvents.Bus:On(GameEvents.Events.Commander.CommanderDied, function(_player: Instance)
-		-- Convert the event into the existing run-termination command flow.
-		Catch(function()
-			Try(self:NotifyCommanderDeath())
-			return Ok(nil)
-		end, "Run:OnCommanderDied")
-	end)
+	self._commanderDiedConnection = GameEvents.Bus:On(
+		GameEvents.Events.Commander.CommanderDied,
+		function(_player: Instance)
+			-- Convert the event into the existing run-termination command flow.
+			Catch(function()
+				Try(self:NotifyCommanderDeath())
+				return Ok(nil)
+			end, "Run:OnCommanderDied")
+		end
+	)
 
 	self._baseDestroyedConnection = GameEvents.Bus:On(GameEvents.Events.Base.BaseDestroyed, function()
 		Catch(function()
@@ -388,6 +405,7 @@ function RunContext:StartRun(): Result.Result<boolean>
 		Ensure(self._mapContext, "MissingDependency", Errors.MISSING_MAP_CONTEXT)
 		Ensure(self._worldContext, "MissingDependency", Errors.MISSING_WORLD_CONTEXT)
 		Ensure(self._baseContext, "MissingDependency", Errors.MISSING_BASE_CONTEXT)
+
 		Try(self._mapContext:PrepareRuntimeMap())
 		Try(self._worldContext:RefreshRuntimeGeometry())
 		Try(self._baseContext:PrepareRunBase())

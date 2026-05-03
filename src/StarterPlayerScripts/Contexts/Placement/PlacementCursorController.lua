@@ -20,7 +20,6 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
-local PlacementRemoteClient = require(ReplicatedStorage.Network.Generated.PlacementRemoteClient)
 
 local PlacementCursorGridService = require(script.Parent.Infrastructure.Services.PlacementCursorGridService)
 local PlacementGhostModel = require(script.Parent.Infrastructure.Services.PlacementGhostModel)
@@ -118,6 +117,7 @@ function PlacementCursorController:KnitStart()
 	self._playerInputController = Knit.GetController("PlayerInputController")
 	self._placementController = Knit.GetController("PlacementController")
 	self._runController = Knit.GetController("RunController")
+	self._placementContext = Knit.GetService("PlacementContext")
 
 	self._placementAtom = self._placementController:GetAtom()
 	self._runAtom = self._runController:GetAtom()
@@ -126,7 +126,7 @@ function PlacementCursorController:KnitStart()
 		placementAtom = self._placementAtom,
 		runAtom = self._runAtom,
 		playerInputController = self._playerInputController,
-		placementRemoteClient = PlacementRemoteClient,
+		placementContext = self._placementContext,
 		ghostModelModule = PlacementGhostModel,
 		gridService = PlacementCursorGridService,
 		runService = RunService,

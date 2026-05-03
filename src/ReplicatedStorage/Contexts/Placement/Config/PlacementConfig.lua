@@ -10,7 +10,7 @@ local PlacementConfig = {}
 
 -- Keep the placement costs frozen so the command layer reads stable pricing.
 PlacementConfig.STRUCTURE_PLACEMENT_COSTS = table.freeze({
-	turret = table.freeze({
+	SentryTurret = table.freeze({
 		Energy = 15,
 		Metal = 5,
 	}),
@@ -26,7 +26,7 @@ PlacementConfig.BASE_DISALLOWED_ZONE_TYPES = table.freeze({
 
 -- Resource-tile requirements stay data-driven for future structures, even in turret-only Phase 2.
 PlacementConfig.REQUIRES_RESOURCE_TILE = table.freeze({
-	turret = false,
+	SentryTurret = false,
 	Extractor = true,
 })
 

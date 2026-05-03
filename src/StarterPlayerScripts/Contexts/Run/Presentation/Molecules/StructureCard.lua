@@ -68,7 +68,6 @@ local function StructureCard(props: TStructureCardProps)
 					props.cardData.structureType,
 					props.cardData.costText
 				))
-				return
 			end
 			props.onSelect(props.cardData.structureType)
 		end,
