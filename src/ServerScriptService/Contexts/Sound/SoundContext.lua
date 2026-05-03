@@ -69,26 +69,32 @@ end
 
 --[[
 	Event-to-sound mapping. Each entry maps a GameEvent to the sound key
-	played on the owning player's client. All events emit userId as arg #1.
+	played either for the owning player (user-scoped) or all players (broadcast).
 ]]
-local EVENT_SOUND_MAP = {
+local USER_SCOPED_EVENT_SOUND_MAP = {
 	[Events.Commander.AbilityUsed] = "CommanderAbilityUse",
+	[Events.Forge.CraftingCompleted] = "CraftComplete",
+}
+
+local BROADCAST_EVENT_SOUND_MAP = {
+	[Events.Run.WaveStarted] = "WaveStart",
+	[Events.Run.WaveEnded] = "WaveClear",
+	[Events.Base.BaseDestroyed] = "BaseDestroyed",
 }
 
 --[[
 	Connect to all server-side GameEvents that should trigger client sounds.
 ]]
 function SoundContext:_ConnectGameEvents()
-	local workerEvents = Events.Worker
+	for eventName, soundKey in USER_SCOPED_EVENT_SOUND_MAP do
+		GameEvents.Bus:On(eventName, function(userId: number)
+			self:_PlayForUser(userId, soundKey, nil)
+		end)
+	end
 
-	for event, soundKey in EVENT_SOUND_MAP do
-		GameEvents.Bus:On(event, function(userId: number, ...)
-			local args = { ... }
-			local options = nil
-			if workerEvents and event == workerEvents.MiningCompleted then
-				options = { WorkerId = args[1] }
-			end
-			self:_PlayForUser(userId, soundKey, options)
+	for eventName, soundKey in BROADCAST_EVENT_SOUND_MAP do
+		GameEvents.Bus:On(eventName, function()
+			self:_PlayForAllPlayers(soundKey, nil)
 		end)
 	end
 end
@@ -96,6 +102,12 @@ end
 function SoundContext:_PlayForUser(userId: number, soundKey: string, options: { [string]: any }?)
 	local player = Players:GetPlayerByUserId(userId)
 	if player then
+		self:PlaySoundForPlayer(player, soundKey, options)
+	end
+end
+
+function SoundContext:_PlayForAllPlayers(soundKey: string, options: { [string]: any }?)
+	for _, player in Players:GetPlayers() do
 		self:PlaySoundForPlayer(player, soundKey, options)
 	end
 end

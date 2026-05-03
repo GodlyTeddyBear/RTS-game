@@ -22,6 +22,7 @@ local Events = GameEvents.Events
 local SoundtrackController = require(ReplicatedStorage.Utilities.SoundtrackController)
 local PositionalSoundService = require(script.Parent.Infrastructure.PositionalSoundService)
 local SoundMap = require(script.Parent.Config.SoundMap)
+local SoundIds = require(ReplicatedStorage.Contexts.Sound.Config.SoundIds)
 
 -- Default volumes matching SoundtrackController.new() defaults
 local DEFAULT_VOLUMES = {
@@ -76,6 +77,10 @@ function SoundController:KnitStart()
 
 	-- Connect client-side GameEvents (UI sounds)
 	self:_ConnectClientEvents()
+	self:PlayMusic(SoundIds.Music.MainTheme, {
+		Loop = true,
+		Volume = DEFAULT_VOLUMES.Music,
+	})
 
 	registry:StartOrdered({ "Infrastructure" })
 
@@ -171,49 +176,26 @@ end
 ]]
 function SoundController:_ConnectClientEvents()
 	local uiEvents = Events.UI
-	if uiEvents then
-		GameEvents.Bus:On(uiEvents.ButtonClicked, function(_variant: string)
-			self:_PlayFromMap("ButtonClicked")
-		end)
 
-		GameEvents.Bus:On(uiEvents.MenuOpened, function(_menuName: string)
-			self:_PlayFromMap("MenuOpened")
-		end)
+	GameEvents.Bus:On(uiEvents.ButtonClicked, function(_variant: string)
+		self:_PlayFromMap("ButtonClicked")
+	end)
 
-		GameEvents.Bus:On(uiEvents.MenuClosed, function(_menuName: string)
-			self:_PlayFromMap("MenuClosed")
-		end)
+	GameEvents.Bus:On(uiEvents.MenuOpened, function(_menuName: string)
+		self:_PlayFromMap("MenuOpened")
+	end)
 
-		GameEvents.Bus:On(uiEvents.TabSwitched, function(_tabName: string)
-			self:_PlayFromMap("TabSwitched")
-		end)
+	GameEvents.Bus:On(uiEvents.MenuClosed, function(_menuName: string)
+		self:_PlayFromMap("MenuClosed")
+	end)
 
-		GameEvents.Bus:On(uiEvents.ErrorOccurred, function(_errorType: string)
-			self:_PlayFromMap("ErrorOccurred")
-		end)
-	end
+	GameEvents.Bus:On(uiEvents.TabSwitched, function(_tabName: string)
+		self:_PlayFromMap("TabSwitched")
+	end)
 
-	local inventoryEvents = Events.Inventory
-	if inventoryEvents then
-		GameEvents.Bus:On(inventoryEvents.ItemBought, function()
-			self:_PlayFromMap("ItemBought")
-		end)
-
-		GameEvents.Bus:On(inventoryEvents.ItemSoldClient, function()
-			self:_PlayFromMap("ItemSoldClient")
-		end)
-	end
-
-	local commissionEvents = Events.Commission
-	if commissionEvents then
-		GameEvents.Bus:On(commissionEvents.CommissionAcceptedClient, function()
-			self:_PlayFromMap("CommissionAcceptedClient")
-		end)
-
-		GameEvents.Bus:On(commissionEvents.CommissionDeliveredClient, function()
-			self:_PlayFromMap("CommissionDeliveredClient")
-		end)
-	end
+	GameEvents.Bus:On(uiEvents.ErrorOccurred, function(_errorType: string)
+		self:_PlayFromMap("ErrorOccurred")
+	end)
 end
 
 --[[

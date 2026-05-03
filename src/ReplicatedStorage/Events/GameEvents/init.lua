@@ -47,6 +47,7 @@ local domainModules = {
 
 	-- Cross-cutting events
 	Persistence = require(script.Misc.Persistence),
+	UI = require(script.Misc.UI),
 }
 
 -- Merge all domain events into a grouped structure (e.g., Events.Run.WaveStarted)

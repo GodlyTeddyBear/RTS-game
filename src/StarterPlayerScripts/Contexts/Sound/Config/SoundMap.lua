@@ -48,6 +48,18 @@ return table.freeze({
 		SoundId = SoundIds.SFX.CraftComplete,
 		Category = "SFX",
 	}),
+	WaveStart = table.freeze({
+		SoundId = SoundIds.SFX.WaveStart,
+		Category = "SFX",
+	}),
+	WaveClear = table.freeze({
+		SoundId = SoundIds.SFX.WaveClear,
+		Category = "SFX",
+	}),
+	BaseDestroyed = table.freeze({
+		SoundId = SoundIds.SFX.BaseDestroyed,
+		Category = "SFX",
+	}),
 	ItemPickup = table.freeze({
 		SoundId = SoundIds.SFX.ItemPickup,
 		Category = "SFX",
@@ -71,7 +83,7 @@ return table.freeze({
 		Category = "SFX",
 	}),
 	CommanderAbilityUse = table.freeze({
-		SoundId = SoundIds.SFX.Equip,
+		SoundId = SoundIds.SFX.CommanderAbilityUse,
 		Category = "SFX",
 		Cooldown = 0.05,
 	}),
