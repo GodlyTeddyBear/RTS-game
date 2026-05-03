@@ -97,7 +97,14 @@ function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structu
 	Try(self._economyContext:SpendResources(player, costMap))
 
 	-- Spawn the physical structure only after the purchase succeeds.
-	local spawnResult = self._placementService:SpawnStructure(structureType, tile.WorldPos)
+	local groundPointResult = self._placementService:ResolveGroundPointFromCoord(coord)
+	if not groundPointResult.success then
+		Try(self:_RefundResources(player, costMap, "GroundResolveFailed"))
+		return groundPointResult
+	end
+
+	local groundPoint = groundPointResult.value
+	local spawnResult = self._placementService:SpawnStructure(structureType, groundPoint)
 	if not spawnResult.success then
 		Try(self:_RefundResources(player, costMap, "SpawnFailed"))
 		return spawnResult
@@ -134,6 +141,9 @@ function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structu
 		OwnerUserId = player.UserId,
 		Tier = 1,
 		ResourceType = tile.ResourceType,
+		GroundPosX = groundPoint.X,
+		GroundPosY = groundPoint.Y,
+		GroundPosZ = groundPoint.Z,
 	}
 
 	self._syncService:AddPlacement(record)

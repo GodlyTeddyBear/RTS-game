@@ -56,6 +56,20 @@ local function _isValidCoord(coord: GridCoord?): boolean
 	return type(coord.GridId) == "string" and type(coord.Row) == "number" and type(coord.Col) == "number"
 end
 
+local function _ExtractGroundWorldPos(record: StructureRecord): Vector3?
+	if type(record.GroundPosX) ~= "number" then
+		return nil
+	end
+	if type(record.GroundPosY) ~= "number" then
+		return nil
+	end
+	if type(record.GroundPosZ) ~= "number" then
+		return nil
+	end
+
+	return Vector3.new(record.GroundPosX, record.GroundPosY, record.GroundPosZ)
+end
+
 --[=[
 	Validates a placement record and resolves the canonical structure data.
 	@within RegisterStructurePolicy
@@ -74,14 +88,25 @@ function RegisterStructurePolicy:Check(record: StructureRecord): Result.Result<R
 	})
 	Ensure(_isValidCoord(record.Coord), "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
 
-	-- Resolve the live tile before any combat component can be created from the record.
-	local tile = Try(self._worldContext:GetTile(record.Coord))
-	Ensure(tile ~= nil, "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD, {
-		GridId = record.Coord.GridId,
-		Row = record.Coord.Row,
-		Col = record.Coord.Col,
-	})
-	Ensure(typeof(tile.WorldPos) == "Vector3", "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
+	local worldPos = _ExtractGroundWorldPos(record)
+	if worldPos == nil then
+		Result.MentionError("Structure:RegisterStructurePolicy", "Placement record missing persisted ground point; falling back to tile world position", {
+			GridId = record.Coord.GridId,
+			Row = record.Coord.Row,
+			Col = record.Coord.Col,
+			InstanceId = record.InstanceId,
+		}, "MissingPlacementGroundPoint")
+
+		local tile = Try(self._worldContext:GetTile(record.Coord))
+		Ensure(tile ~= nil, "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD, {
+			GridId = record.Coord.GridId,
+			Row = record.Coord.Row,
+			Col = record.Coord.Col,
+		})
+		Ensure(typeof(tile.WorldPos) == "Vector3", "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
+		worldPos = tile.WorldPos
+	end
+	Ensure(typeof(worldPos) == "Vector3", "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
 
 	-- Normalize the structure key to the canonical combat type after all guards pass.
 	local resolvedType = StructureSpecs.ResolveStructureType(record.StructureType)
@@ -92,7 +117,7 @@ function RegisterStructurePolicy:Check(record: StructureRecord): Result.Result<R
 	return Ok({
 		StructureType = resolvedType :: StructureType,
 		InstanceId = record.InstanceId,
-		WorldPos = tile.WorldPos,
+		WorldPos = worldPos :: Vector3,
 	})
 end
 

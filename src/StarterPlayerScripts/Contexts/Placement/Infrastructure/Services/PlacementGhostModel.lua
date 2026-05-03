@@ -16,12 +16,14 @@ local Workspace = game:GetService("Workspace")
 local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local MiningConfig = require(ReplicatedStorage.Contexts.Mining.Config.MiningConfig)
+local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
 
 local PlacementGhostModel = {}
 PlacementGhostModel.__index = PlacementGhostModel
 
-local VALID_COLOR = Color3.fromRGB(0, 200, 100)
-local INVALID_COLOR = Color3.fromRGB(200, 50, 50)
+local GHOST_CONFIG = PlacementConfig.GHOST
+local VALID_COLOR = GHOST_CONFIG.ValidColor
+local INVALID_COLOR = GHOST_CONFIG.InvalidColor
 
 -- Applies the translucent, non-interactive ghost styling to every visible part.
 local function _ApplyGhostStyle(model: Model)
@@ -32,7 +34,7 @@ local function _ApplyGhostStyle(model: Model)
 			descendant.CanQuery = false
 			descendant.CanTouch = false
 			descendant.CastShadow = false
-			descendant.Transparency = 0.5
+			descendant.Transparency = GHOST_CONFIG.Transparency
 		end
 	end
 end

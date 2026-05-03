@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local HttpService = game:GetService("HttpService")
 
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -24,7 +25,6 @@ type ZoneMap = { [string]: Instance }
 local RuntimeMapService = {}
 RuntimeMapService.__index = RuntimeMapService
 
-local AUTO_GRID_ID_PREFIX = "AutoGrid"
 local GRID_ID_ATTRIBUTE = "GridId"
 local GRID_QUANTIZATION_SCALE = 1000
 
@@ -44,15 +44,6 @@ local function _QuantizeNumber(value: number): number
 	return math.floor(value * GRID_QUANTIZATION_SCALE + 0.5)
 end
 
-local function _HashString(input: string): string
-	local hash = 2166136261
-	for index = 1, #input do
-		hash = bit32.bxor(hash, string.byte(input, index))
-		hash = (hash * 16777619) % 4294967296
-	end
-	return string.format("%08x", hash)
-end
-
 local function _GetInstancePath(instance: Instance): string
 	local segments = {}
 	local current = instance
@@ -63,7 +54,7 @@ local function _GetInstancePath(instance: Instance): string
 	return table.concat(segments, ".")
 end
 
-local function _BuildGridSignature(gridPart: BasePart): string
+local function _BuildGridSortTieBreaker(gridPart: BasePart): string
 	local position = gridPart.Position
 	local size = gridPart.Size
 	local orientation = gridPart.Orientation
@@ -81,14 +72,40 @@ local function _BuildGridSignature(gridPart: BasePart): string
 	}, "|")
 end
 
+local function _IsGuidLike(value: string): boolean
+	return string.match(value, "^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$") ~= nil
+end
+
+local function _CreateUniqueGuid(usedGridIds: { [string]: boolean }): string
+	local guid = HttpService:GenerateGUID(false)
+	while usedGridIds[guid] == true do
+		guid = HttpService:GenerateGUID(false)
+	end
+	return guid
+end
+
 local function _SortGridPartsByDeterministicOrder(gridParts: { BasePart })
+	local stableOrderByPart = {} :: { [BasePart]: number }
+	for index, gridPart in ipairs(gridParts) do
+		stableOrderByPart[gridPart] = index
+	end
+
 	table.sort(gridParts, function(left: BasePart, right: BasePart): boolean
 		local leftPath = _GetInstancePath(left)
 		local rightPath = _GetInstancePath(right)
 		if leftPath ~= rightPath then
 			return leftPath < rightPath
 		end
-		return left:GetDebugId(0) < right:GetDebugId(0)
+
+		local leftTieBreaker = _BuildGridSortTieBreaker(left)
+		local rightTieBreaker = _BuildGridSortTieBreaker(right)
+		if leftTieBreaker ~= rightTieBreaker then
+			return leftTieBreaker < rightTieBreaker
+		end
+
+		local leftStableOrder = stableOrderByPart[left] or 0
+		local rightStableOrder = stableOrderByPart[right] or 0
+		return leftStableOrder < rightStableOrder
 	end)
 end
 
@@ -200,12 +217,12 @@ function RuntimeMapService:_AssignRuntimePlacementGridIds(runtimeMapModel: Model
 	local placementGridsZonePath = MapConfig.ZONE_PATHS.PlacementGrids
 	if type(placementGridsZonePath) ~= "string" or #placementGridsZonePath == 0 then
 		Result.MentionError(
-			"Map:AutoGridIdAssigned",
-			"PlacementGrids zone path is missing or invalid; skipping auto grid id assignment",
+			"Map:GridIdGuidAssigned",
+			"PlacementGrids zone path is missing or invalid; skipping runtime GridId GUID assignment",
 			{
 				ZonePathType = type(placementGridsZonePath),
 			},
-			"AutoGridIdPathInvalid"
+			"GridIdGuidPathInvalid"
 		)
 		return
 	end
@@ -213,12 +230,12 @@ function RuntimeMapService:_AssignRuntimePlacementGridIds(runtimeMapModel: Model
 	local placementGridsZone = _ResolveZonePath(runtimeMapModel, placementGridsZonePath)
 	if placementGridsZone == nil then
 		Result.MentionError(
-			"Map:AutoGridIdAssigned",
-			"PlacementGrids zone was not found on runtime map; skipping auto grid id assignment",
+			"Map:GridIdGuidAssigned",
+			"PlacementGrids zone was not found on runtime map; skipping runtime GridId GUID assignment",
 			{
 				ZonePath = placementGridsZonePath,
 			},
-			"AutoGridIdZoneMissing"
+			"GridIdGuidZoneMissing"
 		)
 		return
 	end
@@ -235,9 +252,9 @@ function RuntimeMapService:_AssignRuntimePlacementGridIds(runtimeMapModel: Model
 	end
 
 	if #gridParts == 0 then
-		Result.MentionError("Map:AutoGridIdAssigned", "No PlacementGrid parts were found in PlacementGrids zone", {
+		Result.MentionError("Map:GridIdGuidAssigned", "No PlacementGrid parts were found in PlacementGrids zone", {
 			ZonePath = placementGridsZonePath,
-		}, "AutoGridIdNoGridParts")
+		}, "GridIdGuidNoGridParts")
 		return
 	end
 
@@ -246,58 +263,52 @@ function RuntimeMapService:_AssignRuntimePlacementGridIds(runtimeMapModel: Model
 	local usedGridIds = {} :: { [string]: boolean }
 	for _, gridPart in ipairs(gridParts) do
 		local authoredId = gridPart:GetAttribute(GRID_ID_ATTRIBUTE)
-		if type(authoredId) == "string" and #authoredId > 0 then
+		if type(authoredId) == "string" and #authoredId > 0 and _IsGuidLike(authoredId) then
 			usedGridIds[authoredId] = true
 		end
 	end
 
-	local autoAssignedCount = 0
+	local runtimeGuidAssignedCount = 0
 	for index, gridPart in ipairs(gridParts) do
 		local authoredId = gridPart:GetAttribute(GRID_ID_ATTRIBUTE)
-		if type(authoredId) == "string" and #authoredId > 0 then
+		if type(authoredId) == "string" and #authoredId > 0 and _IsGuidLike(authoredId) then
 			continue
 		end
 
-		local signature = _BuildGridSignature(gridPart)
-		local baseAutoId = string.format("%s_%s", AUTO_GRID_ID_PREFIX, _HashString(signature))
-		local resolvedId = baseAutoId
-		local suffix = 1
-		while usedGridIds[resolvedId] == true do
-			resolvedId = string.format("%s_%d", baseAutoId, suffix)
-			suffix += 1
-		end
+		local resolvedId = _CreateUniqueGuid(usedGridIds)
 
 		gridPart:SetAttribute(GRID_ID_ATTRIBUTE, resolvedId)
 		usedGridIds[resolvedId] = true
-		autoAssignedCount += 1
+		runtimeGuidAssignedCount += 1
 
-		Result.MentionEvent("Map:AutoGridIdAssigned", "Auto-assigned PlacementGrid GridId", {
+		Result.MentionEvent("Map:GridIdGuidAssigned", "Assigned runtime GUID GridId for PlacementGrid", {
 			GridId = resolvedId,
 			GridPath = _GetInstancePath(gridPart),
 			GridIndex = index,
+			PreviousGridId = authoredId,
 		})
 	end
 
-	if autoAssignedCount > 0 then
+	if runtimeGuidAssignedCount > 0 then
 		Result.MentionEvent(
-			"Map:AutoGridIdAssigned",
-			"PlacementGrid authoring missing GridId; runtime auto-assigned IDs",
+			"Map:GridIdGuidAssigned",
+			"PlacementGrid GridIds were missing or non-GUID; runtime GUIDs were assigned",
 			{
-				AssignedCount = autoAssignedCount,
+				AssignedCount = runtimeGuidAssignedCount,
 			}
 		)
-		Result.MentionError("Map:AutoGridIdAssigned", "Auto-assigned PlacementGrid GridIds at runtime", {
-			AssignedCount = autoAssignedCount,
+		Result.MentionError("Map:GridIdGuidAssigned", "Assigned runtime GUID GridIds for PlacementGrids", {
+			AssignedCount = runtimeGuidAssignedCount,
 			TotalGridParts = #gridParts,
-		}, "AutoGridIdAssigned")
+		}, "GridIdGuidAssigned")
 	else
 		Result.MentionError(
-			"Map:AutoGridIdAssigned",
-			"All PlacementGrid parts already had GridIds; no runtime assignment was needed",
+			"Map:GridIdGuidAssigned",
+			"All PlacementGrid parts already had GUID GridIds; no runtime assignment was needed",
 			{
 				TotalGridParts = #gridParts,
 			},
-			"AutoGridIdNoOp"
+			"GridIdGuidNoOp"
 		)
 	end
 end

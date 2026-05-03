@@ -33,4 +33,26 @@ PlacementConfig.REQUIRES_RESOURCE_TILE = table.freeze({
 PlacementConfig.MAX_STRUCTURES = 20
 PlacementConfig.PLACEMENT_FOLDER_NAME = "Placements"
 
+PlacementConfig.GROUND_RAYCAST = table.freeze({
+	HeightOffset = 1024,
+	Length = 4096,
+	RequirePerfectlyFlat = true,
+})
+
+PlacementConfig.PREVIEW = table.freeze({
+	HighlightColor = Color3.fromRGB(0, 200, 100),
+	HoverColor = Color3.fromRGB(255, 230, 0),
+	HighlightMaterial = Enum.Material.Neon,
+	HighlightThickness = 0.05,
+	HighlightYOffset = 0.025,
+	HighlightTransparency = 0.8,
+	HoverTransparency = 0.35,
+})
+
+PlacementConfig.GHOST = table.freeze({
+	ValidColor = Color3.fromRGB(0, 200, 100),
+	InvalidColor = Color3.fromRGB(200, 50, 50),
+	Transparency = 0.5,
+})
+
 return table.freeze(PlacementConfig)

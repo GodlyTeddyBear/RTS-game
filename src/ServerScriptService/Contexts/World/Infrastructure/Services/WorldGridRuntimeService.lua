@@ -112,16 +112,15 @@ end
 
 local function _BuildGridSpec(gridPart: BasePart): GridSpec
 	local tileSize = WorldConfig.TILE_SIZE
-	local gridSize = gridPart.Size
+	local authoredGridSize = gridPart.Size
 
 	assert(tileSize > 0, INVALID_DIMENSIONS_CODE)
-	assert(gridSize.X > 0 and gridSize.Z > 0, INVALID_DIMENSIONS_CODE)
-	assert(math.abs(gridSize.X / tileSize - math.floor(gridSize.X / tileSize)) < 1e-6, INVALID_DIMENSIONS_CODE)
-	assert(math.abs(gridSize.Z / tileSize - math.floor(gridSize.Z / tileSize)) < 1e-6, INVALID_DIMENSIONS_CODE)
+	assert(authoredGridSize.X > 0 and authoredGridSize.Z > 0, INVALID_DIMENSIONS_CODE)
 
-	local gridCols = math.floor(gridSize.X / tileSize)
-	local gridRows = math.floor(gridSize.Z / tileSize)
+	local gridCols = math.floor(authoredGridSize.X / tileSize)
+	local gridRows = math.floor(authoredGridSize.Z / tileSize)
 	assert(gridCols >= 1 and gridRows >= 1, INVALID_DIMENSIONS_CODE)
+	local reconciledGridSize = Vector3.new(gridCols * tileSize, authoredGridSize.Y, gridRows * tileSize)
 
 	local laneRow = math.ceil(gridRows / 2)
 	local sidePocketRows = {}
@@ -135,24 +134,13 @@ local function _BuildGridSpec(gridPart: BasePart): GridSpec
 	return table.freeze({
 		GridId = _GetGridId(gridPart),
 		GridCFrame = gridPart.CFrame,
-		GridSize = gridSize,
+		GridSize = reconciledGridSize,
 		TileSize = tileSize,
 		GridRows = gridRows,
 		GridCols = gridCols,
 		LaneRow = laneRow,
 		SidePocketRows = table.freeze(sidePocketRows),
 	})
-end
-
-local function _IsOverlappingXZ(firstPart: BasePart, secondPart: BasePart): boolean
-	local firstHalfSize = firstPart.Size * 0.5
-	local secondHalfSize = secondPart.Size * 0.5
-	local firstCenter = firstPart.Position
-	local secondCenter = secondPart.Position
-	local epsilon = 1e-4
-
-	return math.abs(firstCenter.X - secondCenter.X) < (firstHalfSize.X + secondHalfSize.X - epsilon)
-		and math.abs(firstCenter.Z - secondCenter.Z) < (firstHalfSize.Z + secondHalfSize.Z - epsilon)
 end
 
 function WorldGridRuntimeService:GetValidationCodes(): {
@@ -191,31 +179,17 @@ function WorldGridRuntimeService:GetGridSpecs(): { [string]: GridSpec }
 
 	local specsById = {} :: { [string]: GridSpec }
 	local specList = {} :: { GridSpec }
-	local partById = {} :: { [string]: BasePart }
 
 	for _, gridPart in ipairs(gridParts) do
 		local spec = _BuildGridSpec(gridPart)
 		assert(specsById[spec.GridId] == nil, DUPLICATE_GRID_ID_CODE)
 		specsById[spec.GridId] = spec
-		partById[spec.GridId] = gridPart
 		table.insert(specList, spec)
 	end
 
 	table.sort(specList, function(left: GridSpec, right: GridSpec): boolean
 		return left.GridId < right.GridId
 	end)
-
-	for firstIndex = 1, #specList do
-		local firstSpec = specList[firstIndex]
-		local firstPart = partById[firstSpec.GridId]
-		for secondIndex = firstIndex + 1, #specList do
-			local secondSpec = specList[secondIndex]
-			local secondPart = partById[secondSpec.GridId]
-			if firstPart ~= nil and secondPart ~= nil then
-				assert(not _IsOverlappingXZ(firstPart, secondPart), OVERLAPPING_GRIDS_CODE)
-			end
-		end
-	end
 
 	self._cachedGridSpecsById = specsById
 	self._cachedGridSpecList = specList

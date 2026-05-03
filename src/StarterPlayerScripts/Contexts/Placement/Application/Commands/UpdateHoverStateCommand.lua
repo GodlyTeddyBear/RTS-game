@@ -59,7 +59,10 @@ function UpdateHoverStateCommand:Execute(state: any, deps: any)
 	end
 
 	-- Resolve the cursor onto the grid plane and clear hover state when that fails.
-	local worldPos = self._getMouseWorldPositionQuery:Execute(camera)
+	local worldPos = self._getMouseWorldPositionQuery:Execute(
+		camera,
+		self._gridService:GetCursorRaycastExcludeInstances(state._placementFolder)
+	)
 	if worldPos == nil then
 		state._ghost:SetValid(false)
 		if state._hoveredKey ~= nil and state._hoveredCoord ~= nil then
@@ -74,7 +77,12 @@ function UpdateHoverStateCommand:Execute(state: any, deps: any)
 	-- Translate the world position back into a grid tile and compare it to the cached hover key.
 	local hoveredCoord = self._gridService.WorldToCoord(worldPos)
 	local hoveredKey = _GetCoordKey(hoveredCoord)
-	local isHoveredValid = hoveredCoord ~= nil and state._validTileSet[hoveredKey] == true
+	local hoveredGroundWorldPos = nil :: Vector3?
+	if hoveredCoord ~= nil then
+		hoveredGroundWorldPos = self._gridService:ResolveGroundWorldPositionForCoord(hoveredCoord, state._placementFolder)
+	end
+
+	local isHoveredValid = hoveredCoord ~= nil and hoveredGroundWorldPos ~= nil and state._validTileSet[hoveredKey] == true
 
 	-- Update highlight state only when the hovered tile actually changes.
 	if hoveredKey ~= state._hoveredKey then
@@ -87,13 +95,15 @@ function UpdateHoverStateCommand:Execute(state: any, deps: any)
 
 		if hoveredCoord ~= nil then
 			state._highlightPool:SetHovered(hoveredCoord, true)
-			state._ghost:MoveTo(self._gridService.CoordToWorld(hoveredCoord))
+			if hoveredGroundWorldPos ~= nil then
+				state._ghost:MoveTo(hoveredGroundWorldPos)
+			end
 		end
 	end
 
 	-- Keep the ghost aligned even when the hovered tile did not change.
-	if hoveredCoord ~= nil then
-		state._ghost:MoveTo(self._gridService.CoordToWorld(hoveredCoord))
+	if hoveredGroundWorldPos ~= nil then
+		state._ghost:MoveTo(hoveredGroundWorldPos)
 	end
 
 	-- Mirror hover validity to the ghost tint so the preview communicates placement rules.

@@ -7,6 +7,8 @@ local Workspace = game:GetService("Workspace")
 local Result = require(ReplicatedStorage.Utilities.Result)
 local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
+local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
+local WorldConfig = require(ReplicatedStorage.Contexts.World.Config.WorldConfig)
 local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
 local MiningConfig = require(ReplicatedStorage.Contexts.Mining.Config.MiningConfig)
@@ -14,9 +16,11 @@ local StructureSpecs = require(ServerScriptService.Contexts.Structure.StructureD
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
+local Err = Result.Err
 local Ensure = Result.Ensure
 
 type SpawnedStructure = Model
+type GridCoord = { GridId: string, Row: number, Col: number }
 
 --[=[
 	@class PlacementService
@@ -25,6 +29,7 @@ type SpawnedStructure = Model
 ]=]
 local PlacementService = {}
 PlacementService.__index = PlacementService
+local GROUND_FLAT_DOT = 1
 
 --[=[
 	Creates a new placement service.
@@ -40,6 +45,7 @@ function PlacementService.new()
 	self._animationsFolder = nil :: Folder?
 	self._instanceMap = {} :: { [number]: SpawnedStructure }
 	self._nextId = 1
+	self._worldContext = nil :: any
 	return self
 end
 
@@ -72,6 +78,78 @@ function PlacementService:Init(_registry: any, _name: string)
 	if animationsFolder and animationsFolder:IsA("Folder") then
 		self._animationsFolder = animationsFolder
 	end
+end
+
+function PlacementService:Start(registry: any, _name: string)
+	self._worldContext = registry:Get("WorldContext")
+end
+
+function PlacementService:_ResolveFirstNonGridHit(
+	origin: Vector3,
+	direction: Vector3,
+	baseExclude: { Instance }?
+): RaycastResult?
+	local excludedInstances = {}
+	if baseExclude ~= nil then
+		for _, instance in ipairs(baseExclude) do
+			table.insert(excludedInstances, instance)
+		end
+	end
+
+	while true do
+		local hit = SpatialQuery.Raycast(origin, direction, SpatialQuery.CreateRaycastOptions({
+			FilterType = Enum.RaycastFilterType.Exclude,
+			FilterDescendantsInstances = excludedInstances,
+			RespectCanCollide = true,
+		}))
+		if hit == nil then
+			return nil
+		end
+
+		if hit.Instance.Name ~= WorldConfig.GRID_PART_NAME then
+			return hit
+		end
+
+		table.insert(excludedInstances, hit.Instance)
+	end
+end
+
+function PlacementService:ResolveGroundPointFromCoord(coord: GridCoord): Result.Result<Vector3>
+	local tileResult = self._worldContext:GetTile(coord)
+	if not tileResult.success or tileResult.value == nil then
+		return Err("GroundCoordUnavailable", Errors.INVALID_COORD, {
+			GridId = coord.GridId,
+			Row = coord.Row,
+			Col = coord.Col,
+		})
+	end
+
+	local tileWorldPos = tileResult.value.WorldPos
+	local raycastConfig = PlacementConfig.GROUND_RAYCAST
+	local rayOrigin = Vector3.new(tileWorldPos.X, tileWorldPos.Y + raycastConfig.HeightOffset, tileWorldPos.Z)
+	local rayDirection = Vector3.new(0, -raycastConfig.Length, 0)
+	local hit = self:_ResolveFirstNonGridHit(rayOrigin, rayDirection, nil)
+	if hit == nil then
+		return Err("PlacementGroundHitMissing", Errors.NO_GROUND_HIT, {
+			GridId = coord.GridId,
+			Row = coord.Row,
+			Col = coord.Col,
+		})
+	end
+
+	local hitNormal = hit.Normal
+	if raycastConfig.RequirePerfectlyFlat and hitNormal:Dot(Vector3.yAxis) ~= GROUND_FLAT_DOT then
+		return Err("InvalidGroundSlope", Errors.INVALID_GROUND_SLOPE, {
+			GridId = coord.GridId,
+			Row = coord.Row,
+			Col = coord.Col,
+			NormalX = hitNormal.X,
+			NormalY = hitNormal.Y,
+			NormalZ = hitNormal.Z,
+		})
+	end
+
+	return Ok(hit.Position)
 end
 
 local function _EnsureAnimationsFolderValue(model: Model, animationsFolder: Folder?)

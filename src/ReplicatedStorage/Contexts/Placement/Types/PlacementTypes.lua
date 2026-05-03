@@ -44,6 +44,9 @@ export type StructureRecord = {
 	OwnerUserId: number?,
 	Tier: number,
 	ResourceType: string?,
+	GroundPosX: number?,
+	GroundPosY: number?,
+	GroundPosZ: number?,
 }
 
 --[=[

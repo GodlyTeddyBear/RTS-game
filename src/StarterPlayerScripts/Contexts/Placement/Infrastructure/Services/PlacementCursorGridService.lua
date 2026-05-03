@@ -3,6 +3,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
+local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
+local WorldConfig = require(ReplicatedStorage.Contexts.World.Config.WorldConfig)
 local PlacementGridRuntime = require(script.Parent.PlacementGridRuntime)
 local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 
@@ -37,6 +39,63 @@ function PlacementCursorGridService.WorldToCoord(worldPos: Vector3): GridCoord?
 		return nil
 	end
 	return _CloneCoord(coord)
+end
+
+function PlacementCursorGridService:GetCursorRaycastExcludeInstances(placementCursorFolder: Instance?): { Instance }
+	local excludedInstances = {}
+	if placementCursorFolder ~= nil then
+		table.insert(excludedInstances, placementCursorFolder)
+	end
+
+	return excludedInstances
+end
+
+function PlacementCursorGridService:_ResolveFirstNonGridHit(
+	origin: Vector3,
+	direction: Vector3,
+	baseExclude: { Instance }?
+): RaycastResult?
+	local excludedInstances = {}
+	if baseExclude ~= nil then
+		for _, instance in ipairs(baseExclude) do
+			table.insert(excludedInstances, instance)
+		end
+	end
+
+	while true do
+		local hit = SpatialQuery.Raycast(origin, direction, SpatialQuery.CreateRaycastOptions({
+			FilterType = Enum.RaycastFilterType.Exclude,
+			FilterDescendantsInstances = excludedInstances,
+			RespectCanCollide = true,
+		}))
+		if hit == nil then
+			return nil
+		end
+
+		if hit.Instance.Name ~= WorldConfig.GRID_PART_NAME then
+			return hit
+		end
+
+		table.insert(excludedInstances, hit.Instance)
+	end
+end
+
+function PlacementCursorGridService:ResolveGroundWorldPositionForCoord(
+	coord: GridCoord,
+	placementCursorFolder: Instance?
+): Vector3?
+	local tileCenter = PlacementGridRuntime.CoordToWorld(coord)
+	local raycastConfig = PlacementConfig.GROUND_RAYCAST
+	local rayOrigin = Vector3.new(tileCenter.X, tileCenter.Y + raycastConfig.HeightOffset, tileCenter.Z)
+	local rayDirection = Vector3.new(0, -raycastConfig.Length, 0)
+	local excludedInstances = self:GetCursorRaycastExcludeInstances(placementCursorFolder)
+
+	local hit = self:_ResolveFirstNonGridHit(rayOrigin, rayDirection, excludedInstances)
+	if hit == nil then
+		return nil
+	end
+
+	return hit.Position
 end
 
 function PlacementCursorGridService.GetZone(coord: GridCoord): ZoneType?
