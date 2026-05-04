@@ -82,8 +82,14 @@ function FastFlowHelper.MergeFlowfieldWorld(
 	flowfield: TFastFlowFlowfield,
 	startWorld: Vector3,
 	mapping: TFlowGridMapping
-): TFastFlowFlowfield
-	return pathfinder:MergeFlowfield(flowfield, FastFlowHelper.WorldXZToGridCell(startWorld, mapping))
+): TFastFlowFlowfield?
+	local startCell = FastFlowHelper.WorldXZToGridCell(startWorld, mapping)
+	local openStartCell = pathfinder:FindOpenCell(startCell)
+	if openStartCell == nil then
+		return nil
+	end
+
+	return pathfinder:MergeFlowfield(flowfield, openStartCell)
 end
 
 function FastFlowHelper.FindOpenCellWorld(

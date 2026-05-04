@@ -57,11 +57,11 @@ CombatMovementConfig.PATHFINDING = table.freeze({
 	Debug visualization toggles for FastFlow pathfinder walls and grid.
 ]=]
 CombatMovementConfig.FASTFLOW_VISUALIZATION = table.freeze({
-	Enabled = false,
+	Enabled = true,
 	YLevelOffset = 0.2,
-	ShowWalls = false,
-	ShowCellGrid = true,
-	ShowChunkGrid = false,
+	ShowWalls = true,
+	ShowCellGrid = false,
+	ShowChunkGrid = true,
 	ShowHPA = false,
 })
 
@@ -71,7 +71,7 @@ CombatMovementConfig.FASTFLOW_VISUALIZATION = table.freeze({
 	Core FastFlow grid tuning. `Subdivisions` controls how many FastFlow cells each world tile is split into per axis.
 ]=]
 CombatMovementConfig.FASTFLOW_GRID = table.freeze({
-	Subdivisions = 4,
+	Subdivisions = 2,
 })
 
 --[=[
@@ -80,7 +80,7 @@ CombatMovementConfig.FASTFLOW_GRID = table.freeze({
 	Debug visualization toggles for sampled flow-direction arrows above terrain.
 ]=]
 CombatMovementConfig.FASTFLOW_ARROW_VISUALIZATION = table.freeze({
-	Enabled = true,
+	Enabled = false,
 	SampleStepCells = 6,
 	ArrowLengthStuds = 2,
 	ArrowWidthStuds = 0.35,

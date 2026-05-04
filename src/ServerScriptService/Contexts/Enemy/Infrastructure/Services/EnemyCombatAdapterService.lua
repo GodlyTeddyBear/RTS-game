@@ -87,8 +87,8 @@ local function _BuildFlowGridMapping(spec: GridSpec, subdivisions: number): Fast
 	}
 end
 
-local function _IsTileBlocked(tile: Tile): boolean
-	return tile.Zone == "blocked"
+local function _IsTileBlockedForFlow(tile: Tile): boolean
+	return tile.Zone == "blocked" or tile.IsPlacementProhibited == true
 end
 
 local function _BuildWallsFromTiles(spec: GridSpec, tiles: { Tile }): (any, FastFlowHelper.TFlowGridMapping)
@@ -101,7 +101,7 @@ local function _BuildWallsFromTiles(spec: GridSpec, tiles: { Tile }): (any, Fast
 	for _, tile in ipairs(tiles) do
 		if tile.Coord.GridId == spec.GridId then
 			local centerCell = FastFlowHelper.WorldXZToGridCell(tile.WorldPos, mapping)
-			local isBlocked = _IsTileBlocked(tile)
+			local isBlocked = _IsTileBlockedForFlow(tile)
 			for dx = subCellStart, subCellEnd do
 				for dy = subCellStart, subCellEnd do
 					local cell = Vector2.new(centerCell.X + dx, centerCell.Y + dy)
