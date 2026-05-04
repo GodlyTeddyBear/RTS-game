@@ -68,21 +68,27 @@ return table.freeze({
 	OrbitEscapeEnabled = true,
 
 	-- OrbitEscapeMinTicks: Combat ticks of mostly lateral motion before applying escape nudge.
-	OrbitEscapeMinTicks = 2,
+	OrbitEscapeMinTicks = 1,
 
 	-- OrbitEscapeAlongThreshold: Treat forward (along progress) speed as low below this (steering magnitude scale, comparable to MaxSpeed).
 	OrbitEscapeAlongThreshold = 0.1,
 
 	-- OrbitEscapeLateralThreshold: Lateral magnitude must exceed this to count as orbiting.
-	OrbitEscapeLateralThreshold = 0.12,
+	OrbitEscapeLateralThreshold = 0.1,
 
 	-- OrbitEscapeBiasScale: Forward nudge strength as a fraction of MaxSpeed blended in when escape fires.
-	OrbitEscapeBiasScale = 0.35,
+	OrbitEscapeBiasScale = 0.8,
 
 	-- MinForwardAlongProgress (0+): Floor on motion along path progress axis after blend (waypoint direction, else tangent). Same scale as MaxSpeed.
 	-- Increase: more mandatory forward progress, less pure orbit; can feel rigid. 0 = disabled.
 	-- Decrease: allows more lateral-only motion before floor kicks in.
 	MinForwardAlongProgress = 0.88,
+
+	-- NoBackwardTowardWaypointEnabled: If true, strip seek-backwards motion (XZ): blended steering cannot move opposite the vector toward steeringTarget (lane offset or waypoint). Mitigates separation-driven orbiting/backpedal.
+	NoBackwardTowardWaypointEnabled = true,
+
+	-- MinAlongTowardSeek (0+): After no-backward clamp, minimum forward component along (steeringTarget - position). 0 = only forbid backward (net along >= 0). Small positive values force a little forward creep when neighbors push sideways.
+	MinAlongTowardSeek = 0,
 
 	-- MaxSpeed (0-1): Upper bound on blended steering vector magnitude (XZ).
 	-- Increase: allows stronger combined steering output per tick (still limited by MaxForce/Humanoid).
@@ -132,7 +138,19 @@ return table.freeze({
 	JumpUseMoveTo = true,
 
 	-- JumpMoveToTimeoutSeconds (0+): Abort a stuck Jump MoveTo leg after this many seconds (disconnect, resume boids Move). 0 = no timeout.
-	JumpMoveToTimeoutSeconds = 6,
+	JumpMoveToTimeoutSeconds = 2,
+
+	-- JumpMoveToStuckEnabled: If true, end Jump MoveTo early when XZ displacement stays below JumpMoveToStuckEpsilonStuds for JumpMoveToStuckMinTicks (crowd blocked).
+	JumpMoveToStuckEnabled = true,
+
+	-- JumpMoveToStuckEpsilonStuds (studs, 0+): Max XZ movement between combat ticks to count as stuck during Jump MoveTo.
+	JumpMoveToStuckEpsilonStuds = 0.05,
+
+	-- JumpMoveToStuckMinTicks: Consecutive stuck combat ticks before aborting Jump MoveTo.
+	JumpMoveToStuckMinTicks = 4,
+
+	-- SeparationCrowdingFactor (0+): Sublinear separation dampening when many session neighbors overlap SeparationRadius; raw separation scales by 1/(1 + factor * (neighborCount - 1)). 0 = off.
+	SeparationCrowdingFactor = 0.14,
 
 	-- PathRecomputeGoalDelta (studs, 0+): Min XZ goal movement (after cooldown) to schedule a new path compute.
 	-- Increase: replan less often; cheap but path lags moving goals.
@@ -143,6 +161,18 @@ return table.freeze({
 	-- Increase: fewer ComputeAsync bursts; path may stay stale longer during motion.
 	-- Decrease: fresher routes; more server load spikes.
 	PathRecomputeCooldownSeconds = 0.15,
+
+	-- PathReplenishEnabled: If true, after PathReplenishMinTicks with XZ displacement below PathReplenishEpsilonStuds while a path is still active (and not near arrival), clear waypoints and force an immediate replan on the same combat tick.
+	PathReplenishEnabled = true,
+
+	-- PathReplenishEpsilonStuds (studs, 0+): Max XZ movement between samples to count as no progress for replenishment.
+	PathReplenishEpsilonStuds = 0.2,
+
+	-- PathReplenishMinTicks: Consecutive low-motion combat ticks before replenishing the path.
+	PathReplenishMinTicks = 4,
+
+	-- PathReplenishMinArrivalDistance (studs): Radius around each unit's arrival slot (same as BoidsHelper arrivalPosition: goal + personal GoalSlotRing offset) where path replenishment is disabled. Stops "stuck / low XZ motion" replans while agents are finishing the approach, which would thrash paths and goals. Use 0 or omit to apply the built-in default in code: max(1.5 * ArrivalThreshold, 5).
+	PathReplenishMinArrivalDistance = 0,
 
 	-- MinGroupSize (int, 1+): With MovementMode Any, need at least this many eligible entities to prefer boids over Path.
 	-- Increase: small packs use Path only, boids only for bigger groups.

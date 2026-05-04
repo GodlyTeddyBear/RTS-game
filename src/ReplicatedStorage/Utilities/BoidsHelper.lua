@@ -48,6 +48,8 @@ export type TBoidsConfig = {
 	CorridorLaneOffsetStuds: number?,
 	GoalSlotRingRadius: number?,
 	MinForwardAlongProgress: number?,
+	NoBackwardTowardWaypointEnabled: boolean?,
+	MinAlongTowardSeek: number?,
 	JumpWaypointArrivalThreshold: number?,
 	JumpWhenStuckEnabled: boolean?,
 	JumpStuckEpsilonStuds: number?,
@@ -61,6 +63,14 @@ export type TBoidsConfig = {
 	OrbitEscapeAlongThreshold: number?,
 	OrbitEscapeLateralThreshold: number?,
 	OrbitEscapeBiasScale: number?,
+	JumpMoveToStuckEnabled: boolean?,
+	JumpMoveToStuckEpsilonStuds: number?,
+	JumpMoveToStuckMinTicks: number?,
+	SeparationCrowdingFactor: number?,
+	PathReplenishEnabled: boolean?,
+	PathReplenishEpsilonStuds: number?,
+	PathReplenishMinTicks: number?,
+	PathReplenishMinArrivalDistance: number?,
 }
 
 --[=[
@@ -89,6 +99,8 @@ type TEntityState = {
 	JumpStuckLowMotionTicks: number,
 	JumpMoveToInFlightWaypointIndex: number,
 	OrbitEscapeLowProgressTicks: number,
+	PathReplenishLastSamplePosition: Vector3?,
+	PathReplenishLowMotionTicks: number,
 }
 
 type TSession = {
@@ -268,30 +280,80 @@ end
 local function applyMinForwardAlongProgress(
 	config: TBoidsConfig,
 	progressForwardUnit: Vector3?,
-	smoothed: Vector3
+	smoothed: Vector3,
+	boidPosition: Vector3?,
+	steeringTarget: Vector3?
 ): Vector3
 	local minAlong = getMinForwardAlongProgress(config)
 	if minAlong <= 0 then
 		return smoothed
 	end
 
-	if progressForwardUnit == nil then
+	local forwardUnit: Vector3? = progressForwardUnit
+	if forwardUnit == nil and boidPosition ~= nil and steeringTarget ~= nil then
+		local toSeek = flatten(steeringTarget - boidPosition)
+		if toSeek.Magnitude >= PROGRESS_DIRECTION_MIN_LENGTH then
+			forwardUnit = toSeek.Unit
+		end
+	end
+
+	if forwardUnit == nil then
 		return smoothed
 	end
 
-	local fu = flatten(progressForwardUnit)
+	local fu = flatten(forwardUnit)
 	if fu.Magnitude < 0.01 then
 		return smoothed
 	end
 
-	local forwardUnit = fu.Unit
+	local forwardU = fu.Unit
 	local flat = flatten(smoothed)
-	local along = flat:Dot(forwardUnit)
+	local along = flat:Dot(forwardU)
 	if along >= minAlong then
 		return smoothed
 	end
 
-	flat = flat + forwardUnit * (minAlong - along)
+	flat = flat + forwardU * (minAlong - along)
+	return clampMagnitude(flat, config.MaxSpeed)
+end
+
+-- Remove steering that moves opposite the seek direction (toward offset waypoint or arrival); reduces separation-driven backpedal/orbit.
+local function applyNoBackwardTowardSeek(
+	config: TBoidsConfig,
+	boidPosition: Vector3,
+	steeringTarget: Vector3,
+	smoothed: Vector3
+): Vector3
+	if config.NoBackwardTowardWaypointEnabled == false then
+		return smoothed
+	end
+
+	local toTarget = flatten(steeringTarget - boidPosition)
+	if toTarget.Magnitude < PROGRESS_DIRECTION_MIN_LENGTH then
+		return smoothed
+	end
+
+	local u = toTarget.Unit
+	local flat = flatten(smoothed)
+	local along = flat:Dot(u)
+	local minAlongTowardSeek = config.MinAlongTowardSeek
+	if type(minAlongTowardSeek) ~= "number" then
+		minAlongTowardSeek = 0
+	end
+	minAlongTowardSeek = math.max(0, minAlongTowardSeek)
+
+	if along >= minAlongTowardSeek then
+		return smoothed
+	end
+
+	local lateral = flat - along * u
+	flat = lateral + minAlongTowardSeek * u
+
+	if flat.Magnitude < 1e-5 then
+		local nudge = math.min(config.MaxSpeed, math.max(config.MinSpeed, 0.12))
+		flat = u * nudge
+	end
+
 	return clampMagnitude(flat, config.MaxSpeed)
 end
 
@@ -533,7 +595,7 @@ local function getGoalPosition(entity: any, session: TSession, options: TBoidsOp
 
 	local resolvedGoalPosition = options.GetGoalPosition(entity)
 	if typeof(resolvedGoalPosition) == "Vector3" then
-		session.TargetPosition = resolvedGoalPosition
+		return resolvedGoalPosition
 	end
 
 	return session.TargetPosition
@@ -615,6 +677,8 @@ local function registerEntity(
 		JumpStuckLowMotionTicks = 0,
 		JumpMoveToInFlightWaypointIndex = 0,
 		OrbitEscapeLowProgressTicks = 0,
+		PathReplenishLastSamplePosition = nil,
+		PathReplenishLowMotionTicks = 0,
 	}
 end
 
@@ -672,7 +736,11 @@ local function calculateSeparation(
 			continue
 		end
 
-		local otherPosition = getEntityPosition(otherEntity, options) or state.Position
+		local otherPosition = getEntityPosition(otherEntity, options)
+		if otherPosition == nil then
+			continue
+		end
+
 		local distance = flatten(boidPosition - otherPosition).Magnitude
 		if distance >= config.SeparationRadius then
 			continue
@@ -695,6 +763,11 @@ local function calculateSeparation(
 	end
 
 	local rawAvg = flatten(rawSum / count)
+
+	local crowding = config.SeparationCrowdingFactor
+	if type(crowding) == "number" and crowding > 0 and count > 1 then
+		rawAvg *= 1 / (1 + crowding * (count - 1))
+	end
 
 	if progressForwardUnit ~= nil then
 		local fu = flatten(progressForwardUnit)
@@ -722,7 +795,8 @@ local function calculateAlignment(
 	entity: any,
 	session: TSession,
 	boidPosition: Vector3,
-	previousVelocity: Vector3
+	previousVelocity: Vector3,
+	options: TBoidsOptions
 ): Vector3
 	local velocitySum = Vector3.zero
 	local count = 0
@@ -733,7 +807,12 @@ local function calculateAlignment(
 			continue
 		end
 
-		local offset = flatten(boidPosition - state.Position)
+		local otherPosition = getEntityPosition(otherEntity, options)
+		if otherPosition == nil then
+			continue
+		end
+
+		local offset = flatten(boidPosition - otherPosition)
 		local distance = offset.Magnitude
 		-- Only close entities should influence the shared heading.
 		if distance > 0 and distance < config.NeighborRadius then
@@ -755,7 +834,8 @@ local function calculateCohesion(
 	entity: any,
 	session: TSession,
 	boidPosition: Vector3,
-	previousVelocity: Vector3
+	previousVelocity: Vector3,
+	options: TBoidsOptions
 ): Vector3
 	local positionSum = Vector3.zero
 	local count = 0
@@ -766,11 +846,16 @@ local function calculateCohesion(
 			continue
 		end
 
-		local offset = flatten(boidPosition - state.Position)
+		local otherPosition = getEntityPosition(otherEntity, options)
+		if otherPosition == nil then
+			continue
+		end
+
+		local offset = flatten(boidPosition - otherPosition)
 		local distance = offset.Magnitude
 		-- Only nearby entities should pull the group center toward them.
 		if distance > 0 and distance < config.NeighborRadius then
-			positionSum += state.Position
+			positionSum += otherPosition
 			count += 1
 		end
 	end
@@ -796,8 +881,8 @@ local function calculateBoidsForce(
 	-- Resolve each influence separately so the weights stay easy to tune.
 	local separation =
 		calculateSeparation(config, entity, session, boidPosition, previousVelocity, options, pathProgressForwardUnit)
-	local alignment = calculateAlignment(config, entity, session, boidPosition, previousVelocity)
-	local cohesion = calculateCohesion(config, entity, session, boidPosition, previousVelocity)
+	local alignment = calculateAlignment(config, entity, session, boidPosition, previousVelocity, options)
+	local cohesion = calculateCohesion(config, entity, session, boidPosition, previousVelocity, options)
 	local target = seek(config, boidPosition, steeringTarget, previousVelocity)
 
 	-- Combine the weighted forces before smoothing and clamping.
@@ -809,12 +894,14 @@ local function calculateBoidsForce(
 	-- Cap the force and dampen jitter so movement changes stay stable frame to frame.
 	local clamped = clampMagnitude(flatten(combined), config.MaxSpeed)
 	local smoothed = previousVelocity:Lerp(clamped, config.Smoothing)
-	smoothed = applyMinForwardAlongProgress(config, pathProgressForwardUnit, smoothed)
+	smoothed = applyMinForwardAlongProgress(config, pathProgressForwardUnit, smoothed, boidPosition, steeringTarget)
 
 	local entityState = session.Entities[entity]
 	if entityState ~= nil then
 		smoothed = applyOrbitEscapeBias(config, entityState, pathProgressForwardUnit, smoothed)
 	end
+
+	smoothed = applyNoBackwardTowardSeek(config, boidPosition, steeringTarget, smoothed)
 
 	-- Treat tiny residual motion as idle so callers can stop moving the humanoid.
 	if smoothed.Magnitude < config.MinSpeed then
@@ -822,6 +909,79 @@ local function calculateBoidsForce(
 	end
 
 	return smoothed
+end
+
+local function invalidateEntityPathWaypoints(state: TEntityState)
+	state.Waypoints = nil
+	state.WaypointIndex = 1
+	state.LastJumpWaypointIndex = 0
+	state.JumpStuckLastSamplePosition = nil
+	state.JumpStuckLowMotionTicks = 0
+	state.JumpMoveToInFlightWaypointIndex = 0
+	state.OrbitEscapeLowProgressTicks = 0
+	state.PathReplenishLastSamplePosition = nil
+	state.PathReplenishLowMotionTicks = 0
+end
+
+local function shouldReplenishPathProgress(
+	config: TBoidsConfig,
+	entityState: TEntityState,
+	boidPosition: Vector3,
+	arrivalPosition: Vector3
+): boolean
+	if config.PathReplenishEnabled == false then
+		return false
+	end
+
+	if entityState.Waypoints == nil or entityState.WaypointIndex > #entityState.Waypoints then
+		entityState.PathReplenishLastSamplePosition = nil
+		entityState.PathReplenishLowMotionTicks = 0
+		return false
+	end
+
+	local minArrival = config.PathReplenishMinArrivalDistance
+	if type(minArrival) ~= "number" or minArrival <= 0 then
+		minArrival = math.max(config.ArrivalThreshold * 1.5, 5)
+	end
+
+	local toArrival = flatten(arrivalPosition - boidPosition)
+	if toArrival.Magnitude <= minArrival then
+		entityState.PathReplenishLastSamplePosition = nil
+		entityState.PathReplenishLowMotionTicks = 0
+		return false
+	end
+
+	local epsilon = config.PathReplenishEpsilonStuds
+	if type(epsilon) ~= "number" or epsilon <= 0 then
+		epsilon = 0.2
+	end
+
+	local minTicks = config.PathReplenishMinTicks
+	if type(minTicks) ~= "number" or minTicks < 1 then
+		minTicks = 4
+	end
+
+	local lastSample = entityState.PathReplenishLastSamplePosition
+	if lastSample == nil then
+		entityState.PathReplenishLastSamplePosition = boidPosition
+		entityState.PathReplenishLowMotionTicks = 0
+		return false
+	end
+
+	local delta = flatten(boidPosition - lastSample).Magnitude
+	if delta < epsilon then
+		entityState.PathReplenishLowMotionTicks += 1
+		if entityState.PathReplenishLowMotionTicks >= minTicks then
+			entityState.PathReplenishLowMotionTicks = 0
+			entityState.PathReplenishLastSamplePosition = nil
+			return true
+		end
+	else
+		entityState.PathReplenishLowMotionTicks = 0
+		entityState.PathReplenishLastSamplePosition = boidPosition
+	end
+
+	return false
 end
 
 local function recomputePathIfNeeded(
@@ -833,10 +993,11 @@ local function recomputePathIfNeeded(
 	forceRecompute: boolean
 ): boolean
 	local now = os.clock()
+	if now - state.LastPathComputeTime < getPathRecomputeCooldown(config) then
+		return false
+	end
+
 	if not forceRecompute then
-		if now - state.LastPathComputeTime < getPathRecomputeCooldown(config) then
-			return false
-		end
 		local targetDelta = flatten(targetPosition - state.LastPathTarget).Magnitude
 		if targetDelta < getPathRecomputeGoalDelta(config) and state.Waypoints ~= nil and state.WaypointIndex <= #state.Waypoints then
 			return false
@@ -845,6 +1006,8 @@ local function recomputePathIfNeeded(
 
 	local recomputedWaypoints = computePathWaypoints(entity, targetPosition, options)
 	if recomputedWaypoints == nil then
+		invalidateEntityPathWaypoints(state)
+		state.LastPathComputeTime = now
 		return false
 	end
 
@@ -857,6 +1020,8 @@ local function recomputePathIfNeeded(
 	state.JumpStuckLowMotionTicks = 0
 	state.JumpMoveToInFlightWaypointIndex = 0
 	state.OrbitEscapeLowProgressTicks = 0
+	state.PathReplenishLastSamplePosition = nil
+	state.PathReplenishLowMotionTicks = 0
 	return true
 end
 
@@ -1017,6 +1182,14 @@ function BoidsHelper.TickEntity(
 	local shouldJump = consumeReachedWaypoints(options.Config, entityState, boidPosition)
 
 	local activeWaypoint = if entityState.Waypoints ~= nil then entityState.Waypoints[entityState.WaypointIndex] else nil
+	if activeWaypoint ~= nil and shouldReplenishPathProgress(options.Config, entityState, boidPosition, arrivalPosition) then
+		invalidateEntityPathWaypoints(entityState)
+		entityState.LastPathComputeTime = -1e9
+		recomputePathIfNeeded(options.Config, entity, entityState, goalPosition, options, false)
+		shouldJump = consumeReachedWaypoints(options.Config, entityState, boidPosition)
+		activeWaypoint = if entityState.Waypoints ~= nil then entityState.Waypoints[entityState.WaypointIndex] else nil
+	end
+
 	if activeWaypoint == nil then
 		updateJumpStuckWatchdog(options.Config, entityState, boidPosition, nil)
 		local hasRecomputed = recomputePathIfNeeded(options.Config, entity, entityState, goalPosition, options, true)

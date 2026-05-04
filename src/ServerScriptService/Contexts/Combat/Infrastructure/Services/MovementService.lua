@@ -12,6 +12,12 @@ local EnemyTypes = require(ReplicatedStorage.Contexts.Enemy.Types.EnemyTypes)
 
 local GOAL_POSITION_EPSILON = 0.01
 
+local function xzDisplacement(a: Vector3, b: Vector3): number
+	local dx = a.X - b.X
+	local dz = a.Z - b.Z
+	return math.sqrt(dx * dx + dz * dz)
+end
+
 type EnemyMovementMode = EnemyTypes.EnemyMovementMode
 
 type TPathMovementState = {
@@ -29,6 +35,8 @@ type TBoidsMovementState = {
 	ComputeFailedReason: string?,
 	JumpMoveToConnection: RBXScriptConnection?,
 	JumpMoveToTimeoutToken: number,
+	JumpMoveToStuckLastSample: Vector3?,
+	JumpMoveToStuckLowMotionTicks: number,
 }
 
 type TMovementState = TPathMovementState | TBoidsMovementState
@@ -208,8 +216,9 @@ function MovementService:_GetBoidsMinGroupSize(): number
 end
 
 function MovementService:_BuildBoidsSessionId(goalPosition: Vector3): string
+	-- Enough precision that distinct goal vectors are unlikely to share a session (%.2f could merge nearby goals).
 	return string.format(
-		"CombatAdvanceBase:%.2f:%.2f:%.2f",
+		"CombatAdvanceBase:%.5f:%.5f:%.5f",
 		goalPosition.X,
 		goalPosition.Y,
 		goalPosition.Z
@@ -288,6 +297,8 @@ function MovementService:_StartBoids(entity: number, goalPosition: Vector3): boo
 		ComputeFailedReason = nil,
 		JumpMoveToConnection = nil,
 		JumpMoveToTimeoutToken = 0,
+		JumpMoveToStuckLastSample = nil,
+		JumpMoveToStuckLowMotionTicks = 0,
 	}
 	self._movementByEntity[entity] = movementRecord
 
@@ -342,12 +353,18 @@ function MovementService:_StartPath(entity: number, goalPosition: Vector3): bool
 	return true
 end
 
+function MovementService:_ResetJumpMoveToStuckWatchdog(movementState: TBoidsMovementState)
+	movementState.JumpMoveToStuckLastSample = nil
+	movementState.JumpMoveToStuckLowMotionTicks = 0
+end
+
 function MovementService:_CancelBoidsJumpMoveTo(entity: number, movementState: TBoidsMovementState)
 	if movementState.JumpMoveToConnection ~= nil then
 		movementState.JumpMoveToConnection:Disconnect()
 		movementState.JumpMoveToConnection = nil
 	end
 	movementState.JumpMoveToTimeoutToken += 1
+	self:_ResetJumpMoveToStuckWatchdog(movementState)
 	if movementState.BoidsReady then
 		BoidsHelper.NotifyJumpMoveToFinished(entity, movementState.SessionId)
 	end
@@ -373,6 +390,7 @@ function MovementService:_OnBoidsJumpMoveToFinished(
 	if movementState.BoidsReady then
 		BoidsHelper.NotifyJumpMoveToFinished(entity, movementState.SessionId)
 	end
+	self:_ResetJumpMoveToStuckWatchdog(movementState)
 end
 
 function MovementService:_BeginBoidsJumpMoveTo(
@@ -415,6 +433,15 @@ function MovementService:_BeginBoidsJumpMoveTo(
 	movementState.JumpMoveToConnection = humanoid.MoveToFinished:Connect(function(reached: boolean)
 		self:_OnBoidsJumpMoveToFinished(entity, movementState, humanoid, reached)
 	end)
+
+	local model = self:_GetEntityModel(entity)
+	local primaryPart = if model ~= nil then model.PrimaryPart else nil
+	if primaryPart ~= nil then
+		movementState.JumpMoveToStuckLastSample = primaryPart.Position
+	else
+		movementState.JumpMoveToStuckLastSample = nil
+	end
+	movementState.JumpMoveToStuckLowMotionTicks = 0
 end
 
 function MovementService:_TickBoids(entity: number, movementState: TBoidsMovementState): ("Running" | "Success" | "Fail", string?)
@@ -438,6 +465,38 @@ function MovementService:_TickBoids(entity: number, movementState: TBoidsMovemen
 	end
 
 	if movementState.JumpMoveToConnection ~= nil then
+		if BoidsConfig.JumpMoveToStuckEnabled ~= false then
+			local epsilon = BoidsConfig.JumpMoveToStuckEpsilonStuds
+			if type(epsilon) ~= "number" or epsilon <= 0 then
+				epsilon = 0.15
+			end
+			local minTicks = BoidsConfig.JumpMoveToStuckMinTicks
+			if type(minTicks) ~= "number" or minTicks < 1 then
+				minTicks = 4
+			end
+			local humanoidForStuck = self:_GetHumanoid(entity)
+			local model = self:_GetEntityModel(entity)
+			local primaryPart = if model ~= nil then model.PrimaryPart else nil
+			local pos = if primaryPart ~= nil then primaryPart.Position else nil
+			if humanoidForStuck ~= nil and pos ~= nil then
+				local lastSample = movementState.JumpMoveToStuckLastSample
+				if lastSample == nil then
+					movementState.JumpMoveToStuckLastSample = pos
+					movementState.JumpMoveToStuckLowMotionTicks = 0
+				else
+					local delta = xzDisplacement(pos, lastSample)
+					if delta < epsilon then
+						movementState.JumpMoveToStuckLowMotionTicks += 1
+						if movementState.JumpMoveToStuckLowMotionTicks >= minTicks then
+							self:_OnBoidsJumpMoveToFinished(entity, movementState, humanoidForStuck, false)
+						end
+					else
+						movementState.JumpMoveToStuckLowMotionTicks = 0
+						movementState.JumpMoveToStuckLastSample = pos
+					end
+				end
+			end
+		end
 		self._enemyEntityFactory:SetPathMoving(entity, true)
 		return "Running", nil
 	end

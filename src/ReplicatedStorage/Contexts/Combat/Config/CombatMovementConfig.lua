@@ -48,7 +48,7 @@ CombatMovementConfig.PATHFINDING = table.freeze({
 	InitialRunDelaySeconds = 0.1,
 	RetryComputationErrors = true,
 	ReconcileTargetYOnWaypointFailure = true,
-	MaxTargetYReconcileAttempts = 1,
+	MaxTargetYReconcileAttempts = 2,
 })
 
 return table.freeze(CombatMovementConfig)
