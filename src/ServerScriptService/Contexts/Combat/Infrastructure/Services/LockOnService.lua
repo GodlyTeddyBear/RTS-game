@@ -19,7 +19,9 @@ LockOnService.__index = LockOnService
 	@return LockOnService -- Service instance used to manage facing constraints.
 ]=]
 function LockOnService.new()
-	return setmetatable({}, LockOnService)
+	local self = setmetatable({}, LockOnService)
+	self._boidsFacingFlatForward = {} :: { [number]: Vector3 }
+	return self
 end
 
 --[=[
@@ -43,6 +45,14 @@ function LockOnService:ConfigureFactories(enemyEntityFactory: any, structureEnti
 	self._enemyEntityFactory = enemyEntityFactory
 	self._structureEntityFactory = structureEntityFactory
 	self._baseEntityFactory = baseEntityFactory
+end
+
+function LockOnService:SetBoidsFacingFlatForward(entity: number, flatForward: Vector3?)
+	if flatForward == nil then
+		self._boidsFacingFlatForward[entity] = nil
+		return
+	end
+	self._boidsFacingFlatForward[entity] = flatForward
 end
 
 function LockOnService:CleanupAll()
@@ -121,6 +131,8 @@ end
 	@param entity number -- Enemy entity id to detach.
 ]=]
 function LockOnService:DetachConstraint(entity: number)
+	self._boidsFacingFlatForward[entity] = nil
+
 	local lockOn = self._enemyEntityFactory:GetLockOn(entity)
 	if lockOn == nil then
 		return
@@ -162,6 +174,23 @@ function LockOnService:UpdateAll(entities: { number })
 			continue
 		end
 
+		local selfCFrame = self._enemyEntityFactory:GetEntityCFrame(entity)
+		if selfCFrame == nil then
+			constraint.Enabled = false
+			_setHumanoidAutoRotate(humanoid, true)
+			continue
+		end
+
+		local boidsForward = self._boidsFacingFlatForward[entity]
+		local targetPosition = nil :: Vector3?
+		local lookAt = nil :: CFrame?
+
+		if boidsForward ~= nil then
+			local flatUnit = Orient.SafeUnit(Vector3.new(boidsForward.X, 0, boidsForward.Z))
+			if flatUnit ~= nil then
+				lookAt = Orient.FromFlatLookVector(selfCFrame.Position, flatUnit)
+			end
+		else
 		local target = self._enemyEntityFactory:GetTarget(entity)
 		local targetEntity = target and target.TargetEntity or nil
 		local targetKind = target and target.TargetKind or nil
@@ -171,14 +200,6 @@ function LockOnService:UpdateAll(entities: { number })
 			continue
 		end
 
-		local selfCFrame = self._enemyEntityFactory:GetEntityCFrame(entity)
-		if selfCFrame == nil then
-			constraint.Enabled = false
-			_setHumanoidAutoRotate(humanoid, true)
-			continue
-		end
-
-		local targetPosition = nil :: Vector3?
 		if targetKind == "Base" then
 			if self._baseEntityFactory == nil or not self._baseEntityFactory:IsActive() then
 				constraint.Enabled = false
@@ -219,6 +240,20 @@ function LockOnService:UpdateAll(entities: { number })
 			_setHumanoidAutoRotate(humanoid, true)
 			continue
 		end
+		end
+
+		if boidsForward ~= nil then
+			if lookAt == nil then
+				constraint.Enabled = false
+				_setHumanoidAutoRotate(humanoid, true)
+				continue
+			end
+
+			attachment1.WorldCFrame = lookAt
+			constraint.Enabled = true
+			_setHumanoidAutoRotate(humanoid, false)
+			continue
+		end
 
 		if targetPosition == nil then
 			constraint.Enabled = false
@@ -226,7 +261,7 @@ function LockOnService:UpdateAll(entities: { number })
 			continue
 		end
 
-		local lookAt = Orient.BuildFlatLookAt(selfCFrame.Position, targetPosition)
+		lookAt = Orient.BuildFlatLookAt(selfCFrame.Position, targetPosition)
 		if lookAt == nil then
 			constraint.Enabled = false
 			_setHumanoidAutoRotate(humanoid, true)

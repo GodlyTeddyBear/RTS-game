@@ -22,7 +22,13 @@ type TPathMovementState = {
 type TBoidsMovementState = {
 	Mode: "Boids",
 	SessionId: string,
+	GoalPosition: Vector3,
 	PreviousVelocity: Vector3,
+	ComputePromise: any?,
+	BoidsReady: boolean,
+	ComputeFailedReason: string?,
+	JumpMoveToConnection: RBXScriptConnection?,
+	JumpMoveToTimeoutToken: number,
 }
 
 type TMovementState = TPathMovementState | TBoidsMovementState
@@ -50,6 +56,10 @@ end
 
 function MovementService:ConfigureEnemyEntityFactory(enemyEntityFactory: any)
 	self._enemyEntityFactory = enemyEntityFactory
+end
+
+function MovementService:ConfigureLockOnService(lockOnService: any)
+	self._lockOnService = lockOnService
 end
 
 function MovementService:StartAdvance(entity: number, movementMode: EnemyMovementMode): (boolean, string?)
@@ -105,12 +115,24 @@ function MovementService:StopMovement(entity: number)
 			promise:cancel()
 		end
 	else
-		BoidsHelper.CleanupEntity(entity, movementState.SessionId)
+		local computePromise = movementState.ComputePromise
+		if computePromise ~= nil and type(computePromise.cancel) == "function" then
+			computePromise:cancel()
+		end
+		if movementState.Mode == "Boids" then
+			self:_CancelBoidsJumpMoveTo(entity, movementState)
+		end
+		if movementState.BoidsReady then
+			BoidsHelper.CleanupEntity(entity, movementState.SessionId)
+		end
 		self:_StopHumanoid(entity)
 	end
 
 	self._movementByEntity[entity] = nil
 	self._enemyEntityFactory:SetPathMoving(entity, false)
+	if self._lockOnService ~= nil and type(self._lockOnService.SetBoidsFacingFlatForward) == "function" then
+		self._lockOnService:SetBoidsFacingFlatForward(entity, nil)
+	end
 end
 
 function MovementService:CleanupAll()
@@ -151,6 +173,27 @@ function MovementService:_GetBoidsOptions(): BoidsHelper.TBoidsOptions
 			local model = if modelRef ~= nil then modelRef.Model else nil
 			local primaryPart = if model ~= nil then model.PrimaryPart else nil
 			return if primaryPart ~= nil then primaryPart.Position else nil
+		end,
+		GetGoalPosition = function(entity: number): Vector3?
+			local pathState = self._enemyEntityFactory:GetPathState(entity)
+			return if pathState ~= nil then pathState.GoalPosition else nil
+		end,
+		ComputePathWaypoints = function(entity: number, targetPosition: Vector3): (boolean, { any }?, string?)
+			local path = PathfindingHelper.CreatePath(entity, {
+				EnemyEntityFactory = self._enemyEntityFactory,
+			}, self:_GetAgentParams(entity), CombatMovementConfig.PATHFINDING)
+			if path == nil then
+				return false, nil, "PathCreateFailed"
+			end
+
+			local success, waypoints, reason = PathfindingHelper.ComputeWaypoints(
+				path,
+				targetPosition,
+				entity,
+				CombatMovementConfig.PATHFINDING
+			)
+			path:Destroy()
+			return success, waypoints, reason
 		end,
 	}
 end
@@ -224,17 +267,61 @@ function MovementService:_CanEntityUseBoidsAtGoal(entity: number, goalPosition: 
 end
 
 function MovementService:_StartBoids(entity: number, goalPosition: Vector3): boolean
-	local options = self:_GetBoidsOptions()
-	local sessionId = self:_BuildBoidsSessionId(goalPosition)
-	if not BoidsHelper.InitGroupMovement(entity, sessionId, goalPosition, options) then
+	local path = PathfindingHelper.CreatePath(entity, {
+		EnemyEntityFactory = self._enemyEntityFactory,
+	}, self:_GetAgentParams(entity), CombatMovementConfig.PATHFINDING)
+	if path == nil then
 		return false
 	end
 
-	self._movementByEntity[entity] = {
+	local sessionId = self:_BuildBoidsSessionId(goalPosition)
+	local computePromise =
+		PathfindingHelper.ComputeWaypointsPromise(path, goalPosition, entity, CombatMovementConfig.PATHFINDING)
+
+	local movementRecord: TBoidsMovementState = {
 		Mode = "Boids",
 		SessionId = sessionId,
+		GoalPosition = goalPosition,
 		PreviousVelocity = Vector3.zero,
+		ComputePromise = computePromise,
+		BoidsReady = false,
+		ComputeFailedReason = nil,
+		JumpMoveToConnection = nil,
+		JumpMoveToTimeoutToken = 0,
 	}
+	self._movementByEntity[entity] = movementRecord
+
+	computePromise
+		:andThen(function(waypoints: { any })
+			if self._movementByEntity[entity] ~= movementRecord then
+				return
+			end
+			if movementRecord.ComputePromise ~= computePromise then
+				return
+			end
+
+			local options = self:_GetBoidsOptions()
+			if not BoidsHelper.InitGroupMovementWithWaypoints(entity, sessionId, goalPosition, waypoints, options) then
+				movementRecord.ComputeFailedReason = "BoidsInitFailed"
+				movementRecord.ComputePromise = nil
+				return
+			end
+
+			movementRecord.BoidsReady = true
+			movementRecord.ComputePromise = nil
+		end)
+		:catch(function(reason: any)
+			if self._movementByEntity[entity] ~= movementRecord then
+				return
+			end
+			if movementRecord.ComputePromise ~= computePromise then
+				return
+			end
+
+			movementRecord.ComputeFailedReason = if type(reason) == "string" then reason else tostring(reason)
+			movementRecord.ComputePromise = nil
+		end)
+
 	self._enemyEntityFactory:SetPathMoving(entity, true)
 	return true
 end
@@ -255,8 +342,107 @@ function MovementService:_StartPath(entity: number, goalPosition: Vector3): bool
 	return true
 end
 
+function MovementService:_CancelBoidsJumpMoveTo(entity: number, movementState: TBoidsMovementState)
+	if movementState.JumpMoveToConnection ~= nil then
+		movementState.JumpMoveToConnection:Disconnect()
+		movementState.JumpMoveToConnection = nil
+	end
+	movementState.JumpMoveToTimeoutToken += 1
+	if movementState.BoidsReady then
+		BoidsHelper.NotifyJumpMoveToFinished(entity, movementState.SessionId)
+	end
+end
+
+function MovementService:_OnBoidsJumpMoveToFinished(
+	entity: number,
+	movementState: TBoidsMovementState,
+	_humanoid: Humanoid,
+	_reached: boolean
+)
+	if self._movementByEntity[entity] ~= movementState then
+		return
+	end
+	if movementState.Mode ~= "Boids" then
+		return
+	end
+	if movementState.JumpMoveToConnection ~= nil then
+		movementState.JumpMoveToConnection:Disconnect()
+		movementState.JumpMoveToConnection = nil
+	end
+	movementState.JumpMoveToTimeoutToken += 1
+	if movementState.BoidsReady then
+		BoidsHelper.NotifyJumpMoveToFinished(entity, movementState.SessionId)
+	end
+end
+
+function MovementService:_BeginBoidsJumpMoveTo(
+	entity: number,
+	movementState: TBoidsMovementState,
+	humanoid: Humanoid,
+	jumpTarget: Vector3
+)
+	self:_CancelBoidsJumpMoveTo(entity, movementState)
+
+	self:_TryJumpHumanoid(humanoid)
+	humanoid:MoveTo(jumpTarget)
+
+	if movementState.BoidsReady then
+		BoidsHelper.NotifyJumpMoveToStarted(entity, movementState.SessionId)
+	end
+
+	movementState.JumpMoveToTimeoutToken += 1
+	local scheduleToken = movementState.JumpMoveToTimeoutToken
+	local timeoutSeconds = BoidsConfig.JumpMoveToTimeoutSeconds
+	if type(timeoutSeconds) == "number" and timeoutSeconds > 0 then
+		task.delay(timeoutSeconds, function()
+			local current = self._movementByEntity[entity]
+			if current ~= movementState then
+				return
+			end
+			if movementState.Mode ~= "Boids" then
+				return
+			end
+			if movementState.JumpMoveToTimeoutToken ~= scheduleToken then
+				return
+			end
+			if movementState.JumpMoveToConnection == nil then
+				return
+			end
+			self:_OnBoidsJumpMoveToFinished(entity, movementState, humanoid, false)
+		end)
+	end
+
+	movementState.JumpMoveToConnection = humanoid.MoveToFinished:Connect(function(reached: boolean)
+		self:_OnBoidsJumpMoveToFinished(entity, movementState, humanoid, reached)
+	end)
+end
+
 function MovementService:_TickBoids(entity: number, movementState: TBoidsMovementState): ("Running" | "Success" | "Fail", string?)
-	local moveDirection, hasArrived = BoidsHelper.TickEntity(
+	if movementState.ComputeFailedReason ~= nil then
+		self:StopMovement(entity)
+		return "Fail", movementState.ComputeFailedReason
+	end
+
+	if not movementState.BoidsReady then
+		if self._lockOnService ~= nil and type(self._lockOnService.SetBoidsFacingFlatForward) == "function" then
+			self._lockOnService:SetBoidsFacingFlatForward(entity, nil)
+		end
+		local humanoid = self:_GetHumanoid(entity)
+		if humanoid == nil then
+			self:StopMovement(entity)
+			return "Fail", "MissingHumanoid"
+		end
+		humanoid:Move(Vector3.zero)
+		self._enemyEntityFactory:SetPathMoving(entity, true)
+		return "Running", nil
+	end
+
+	if movementState.JumpMoveToConnection ~= nil then
+		self._enemyEntityFactory:SetPathMoving(entity, true)
+		return "Running", nil
+	end
+
+	local moveDirection, hasArrived, shouldJump, facingFlatForward, jumpMoveToWorld = BoidsHelper.TickEntity(
 		entity,
 		movementState.SessionId,
 		movementState.PreviousVelocity,
@@ -274,9 +460,30 @@ function MovementService:_TickBoids(entity: number, movementState: TBoidsMovemen
 		return "Fail", "MissingHumanoid"
 	end
 
+	if jumpMoveToWorld ~= nil then
+		self:_BeginBoidsJumpMoveTo(entity, movementState, humanoid, jumpMoveToWorld)
+		self._enemyEntityFactory:SetPathMoving(entity, true)
+		if self._lockOnService ~= nil and type(self._lockOnService.SetBoidsFacingFlatForward) == "function" then
+			self._lockOnService:SetBoidsFacingFlatForward(entity, facingFlatForward)
+			if type(self._lockOnService.UpdateAll) == "function" then
+				self._lockOnService:UpdateAll({ entity })
+			end
+		end
+		return "Running", nil
+	end
+
+	if shouldJump then
+		self:_TryJumpHumanoid(humanoid)
+	end
 	humanoid:Move(moveDirection)
 	movementState.PreviousVelocity = moveDirection
 	self._enemyEntityFactory:SetPathMoving(entity, true)
+	if self._lockOnService ~= nil and type(self._lockOnService.SetBoidsFacingFlatForward) == "function" then
+		self._lockOnService:SetBoidsFacingFlatForward(entity, facingFlatForward)
+		if type(self._lockOnService.UpdateAll) == "function" then
+			self._lockOnService:UpdateAll({ entity })
+		end
+	end
 	return "Running", nil
 end
 
@@ -312,6 +519,15 @@ function MovementService:_StopHumanoid(entity: number)
 	if humanoid ~= nil then
 		humanoid:Move(Vector3.zero)
 	end
+end
+
+function MovementService:_TryJumpHumanoid(humanoid: Humanoid)
+	local humanoidState = humanoid:GetState()
+	if humanoidState == Enum.HumanoidStateType.Jumping or humanoidState == Enum.HumanoidStateType.Freefall then
+		return
+	end
+
+	humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
 end
 
 return MovementService

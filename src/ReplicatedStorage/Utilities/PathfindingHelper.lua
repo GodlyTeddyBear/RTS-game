@@ -326,6 +326,29 @@ local function _validatePathRunnable(path: any): (boolean, string)
 	return true, "Ok"
 end
 
+-- Validates that the path object can compute waypoint lists without starting movement.
+local function _validatePathComputable(path: any): (boolean, string)
+	if type(path) ~= "table" then
+		return false, "InvalidPathObject"
+	end
+
+	if type(path.ComputeWaypoints) ~= "function" then
+		return false, "MissingComputeWaypointsMethod"
+	end
+
+	local agent = path._agent
+	if not agent or not agent.Parent then
+		return false, "MissingAgentModel"
+	end
+
+	local primaryPart = agent.PrimaryPart
+	if not primaryPart or not primaryPart.Parent then
+		return false, "MissingPrimaryPart"
+	end
+
+	return true, "Ok"
+end
+
 -- ── Public ───────────────────────────────────────────────────────────────────
 
 --[=[
@@ -367,6 +390,185 @@ function PathfindingHelper.CreatePath(
 	-- Apply visualization only when the caller explicitly enables it.
 	path.Visualize = _resolvePathOption(options, "VisualizeSimplePath") == true
 	return path
+end
+
+--[=[
+    Computes path waypoints for the supplied target without starting `SimplePath` movement.
+    @within PathfindingHelper
+    @param path any -- Path object created by `CreatePath`.
+    @param targetPosition Vector3 -- Target world position used for path computation.
+    @param entity any? -- Entity associated with the path for diagnostics.
+    @param options { [string]: any }? -- Optional runtime and retry overrides.
+    @return boolean -- Whether waypoint computation succeeded.
+    @return { any }? -- Computed waypoint list when successful.
+    @return string? -- Failure reason when computation fails.
+]=]
+function PathfindingHelper.ComputeWaypoints(
+	path: any,
+	targetPosition: Vector3,
+	entity: any?,
+	options: { [string]: any }?
+): (boolean, { any }?, string?)
+	local entityKey = tostring(entity ~= nil and entity or "UnknownEntity")
+
+	if typeof(targetPosition) ~= "Vector3" then
+		_throttledGuardLog(entityKey, "InvalidTargetPosition", {
+			Entity = entity,
+		})
+		return false, nil, "InvalidTargetPosition"
+	end
+
+	local pathIsComputable, pathFailureReason = _validatePathComputable(path)
+	if not pathIsComputable then
+		_throttledGuardLog(entityKey, pathFailureReason, {
+			Entity = entity,
+		})
+		return false, nil, pathFailureReason
+	end
+
+	local activeTargetPosition = targetPosition
+	local originalTargetPosition = targetPosition
+	local latestReconciledTargetPosition = nil :: Vector3?
+	local computationErrorRetries = 0
+	local targetYReconcileAttempts = 0
+
+	while true do
+		local pathSnapshot = _GetPathComputationSnapshot(path)
+		if _resolvePathOption(options, "DebugTarget") == true then
+			_debugPathTarget(
+				path,
+				entity,
+				activeTargetPosition,
+				0,
+				originalTargetPosition,
+				latestReconciledTargetPosition,
+				false,
+				pathSnapshot
+			)
+		end
+
+		local computed, waypoints, computeFailureReason = path:ComputeWaypoints(activeTargetPosition)
+		if computed and waypoints ~= nil and #waypoints >= 2 then
+			return true, waypoints, nil
+		end
+
+		local snapshot = _GetPathComputationSnapshot(path)
+		local failureReason = tostring(computeFailureReason or "PathComputeFailed")
+		local isComputationError = failureReason == SimplePath.ErrorType.ComputationError
+		local maxReconcileAttempts = tonumber(_resolvePathOption(options, "MaxTargetYReconcileAttempts")) or 0
+		local canReconcileTargetY = _resolvePathOption(options, "ReconcileTargetYOnWaypointFailure") == true
+			and isComputationError
+			and _isWaypointComputationFailure(snapshot)
+			and targetYReconcileAttempts < maxReconcileAttempts
+		local shouldRetry = _resolvePathOption(options, "RetryComputationErrors") == true
+			and targetYReconcileAttempts == 0
+			and isComputationError
+			and computationErrorRetries < COMPUTATION_ERROR_RETRY_COUNT
+		local retryDelay = tonumber(_resolvePathOption(options, "InitialRunDelaySeconds")) or 0
+
+		if canReconcileTargetY then
+			local startPosition = _getStartPosition(path)
+			if startPosition ~= nil then
+				targetYReconcileAttempts += 1
+				latestReconciledTargetPosition = _ReconcileTargetYToStart(activeTargetPosition, startPosition)
+				activeTargetPosition = latestReconciledTargetPosition
+				if retryDelay > 0 then
+					task.wait(retryDelay)
+				end
+				continue
+			end
+		end
+
+		if shouldRetry then
+			computationErrorRetries += 1
+			if retryDelay > 0 then
+				task.wait(retryDelay)
+			end
+			continue
+		end
+
+		_throttledGuardLog(entityKey, failureReason, {
+			Entity = entity,
+			TargetPositionText = _formatVector3(activeTargetPosition),
+			OriginalTargetPositionText = _formatVector3(originalTargetPosition),
+			ReconciledTargetPositionText = _formatVector3(latestReconciledTargetPosition),
+			PathStatus = snapshot.StatusName,
+			WaypointCount = snapshot.WaypointCount,
+		})
+		return false, nil, failureReason
+	end
+end
+
+--[=[
+    Computes path waypoints asynchronously so yielding `ComputeAsync` work never runs on the caller thread.
+    Mirrors `RunPath` scheduling: optional initial delay from options, then deferred compute + path cleanup.
+    @within PathfindingHelper
+    @param path any -- Path object created by `CreatePath`.
+    @param targetPosition Vector3 -- Target world position used for path computation.
+    @param entity any? -- Entity associated with the path for diagnostics.
+    @param options { [string]: any }? -- Optional runtime and retry overrides.
+    @return any -- Promise resolving to waypoint array on success, rejecting with reason on failure.
+]=]
+function PathfindingHelper.ComputeWaypointsPromise(
+	path: any,
+	targetPosition: Vector3,
+	entity: any?,
+	options: { [string]: any }?
+): any
+	return Promise.new(function(resolve, reject, onCancel)
+		local cancelled = false
+		local delayThread: thread? = nil
+
+		local function cleanupPathOnce()
+			if type(path) ~= "table" then
+				return
+			end
+			pcall(function()
+				path:Destroy()
+			end)
+		end
+
+		onCancel(function()
+			cancelled = true
+			if delayThread ~= nil then
+				task.cancel(delayThread)
+				delayThread = nil
+			end
+			cleanupPathOnce()
+		end)
+
+		local delaySec = tonumber(_resolvePathOption(options, "InitialRunDelaySeconds")) or 0
+
+		local function computeNow()
+			if cancelled then
+				return
+			end
+
+			Promise.try(function()
+				local ok, waypoints, reason = PathfindingHelper.ComputeWaypoints(path, targetPosition, entity, options)
+				cleanupPathOnce()
+				if cancelled then
+					return
+				end
+				if ok and waypoints ~= nil then
+					resolve(waypoints)
+				else
+					reject(reason or "PathComputeFailed")
+				end
+			end):catch(function(err)
+				cleanupPathOnce()
+				if not cancelled then
+					reject(err)
+				end
+			end)
+		end
+
+		if delaySec > 0 then
+			delayThread = task.delay(delaySec, computeNow)
+		else
+			delayThread = task.defer(computeNow)
+		end
+	end)
 end
 
 --[=[

@@ -268,6 +268,48 @@ function Path:Stop()
 	self._events.Stopped:Fire(self._model)
 end
 
+function Path:ComputeWaypoints(target)
+	--Parameter check
+	if not (target and (typeof(target) == "Vector3" or target:IsA("BasePart"))) then
+		output(error, "Pathfinding target must be a valid Vector3 or BasePart.")
+	end
+
+	--Refer to Settings.TIME_VARIANCE
+	if os.clock() - self._t <= self._settings.TIME_VARIANCE and self._humanoid then
+		task.wait(os.clock() - self._t)
+		declareError(self, self.ErrorType.LimitReached)
+		return false, nil, self.ErrorType.LimitReached
+	elseif self._humanoid then
+		self._t = os.clock()
+	end
+
+	--Compute path
+	local pathComputed, _ = pcall(function()
+		self._path:ComputeAsync(self._agent.PrimaryPart.Position, (typeof(target) == "Vector3" and target) or target.Position)
+	end)
+
+	--Make sure path computation is successful
+	if not pathComputed
+		or self._path.Status == Enum.PathStatus.NoPath
+		or #self._path:GetWaypoints() < 2
+		or (self._humanoid and self._humanoid:GetState() == Enum.HumanoidStateType.Freefall) then
+		self._visualWaypoints = destroyVisualWaypoints(self._visualWaypoints)
+		task.wait()
+		declareError(self, self.ErrorType.ComputationError)
+		return false, nil, self.ErrorType.ComputationError
+	end
+
+	self._status = Path.StatusType.Idle
+	self._target = target
+	self._waypoints = self._path:GetWaypoints()
+	self._currentWaypoint = 2
+
+	destroyVisualWaypoints(self._visualWaypoints)
+	self._visualWaypoints = (self.Visualize and createVisualWaypoints(self._waypoints))
+
+	return true, self._waypoints, nil
+end
+
 function Path:Run(target)
 
 	--Non-humanoid handle case
