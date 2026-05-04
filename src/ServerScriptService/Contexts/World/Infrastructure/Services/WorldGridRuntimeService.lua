@@ -9,6 +9,11 @@ type GridCoord = WorldTypes.GridCoord
 type TileDescriptor = WorldTypes.TileDescriptor
 type ZoneLayout = WorldTypes.ZoneLayout
 type GridSpec = WorldTypes.GridSpec
+type BoundsShape = {
+	CFrame: CFrame,
+	Size: Vector3,
+	Center: Vector3,
+}
 
 local MISSING_PART_CODE = "MissingPlacementGridPart"
 local INVALID_DIMENSIONS_CODE = "InvalidPlacementGridDimensions"
@@ -27,13 +32,13 @@ function WorldGridRuntimeService.new()
 	self._resourceCoordKeySet = nil :: { [string]: boolean }?
 	self._resourceTypeByKey = nil :: { [string]: string }?
 	self._placementProhibitedParts = nil :: { BasePart }?
+	self._blacklistNamedInstances = nil :: { Instance }?
 	self._placementProhibitedCoordKeySet = nil :: { [string]: boolean }?
 	self._mapContext = nil :: any
 	return self
 end
 
-function WorldGridRuntimeService:Init(_registry: any, _name: string)
-end
+function WorldGridRuntimeService:Init(_registry: any, _name: string) end
 
 function WorldGridRuntimeService:Start(registry: any, _name: string)
 	self._mapContext = registry:Get("MapContext")
@@ -148,7 +153,7 @@ function WorldGridRuntimeService:GetValidationCodes(): {
 	InvalidDimensions: string,
 	MissingGridId: string,
 	DuplicateGridId: string,
-	OverlappingGrids: string
+	OverlappingGrids: string,
 }
 	return table.freeze({
 		MissingPart = MISSING_PART_CODE,
@@ -166,6 +171,7 @@ function WorldGridRuntimeService:ResetCache()
 	self._resourceCoordKeySet = nil
 	self._resourceTypeByKey = nil
 	self._placementProhibitedParts = nil
+	self._blacklistNamedInstances = nil
 	self._placementProhibitedCoordKeySet = nil
 end
 
@@ -236,7 +242,7 @@ function WorldGridRuntimeService:WorldToCoord(worldPos: Vector3): GridCoord?
 end
 
 local function _GetCoordKey(coord: GridCoord): string
-	return (`{coord.GridId}:{coord.Row}:{coord.Col}`)
+	return `{coord.GridId}:{coord.Row}:{coord.Col}`
 end
 
 local function _GetPartResourceType(part: BasePart): string?
@@ -244,6 +250,20 @@ local function _GetPartResourceType(part: BasePart): string?
 		return part.Name
 	end
 	return nil
+end
+
+local function _NormalizeName(name: string): string
+	return string.lower(name)
+end
+
+local function _GetBlacklistNameSet(): { [string]: boolean }
+	local nameSet = {} :: { [string]: boolean }
+	for _, name in ipairs(WorldConfig.PLACEMENT_BLACKLIST_NAMES) do
+		if type(name) == "string" and #name > 0 then
+			nameSet[_NormalizeName(name)] = true
+		end
+	end
+	return nameSet
 end
 
 local function _IsInsidePartXZ(part: BasePart, worldPoint: Vector3): boolean
@@ -292,6 +312,135 @@ function WorldGridRuntimeService:_GetPlacementProhibitedPartsCached(): { BasePar
 	local parts = self:_GetPlacementProhibitedParts()
 	self._placementProhibitedParts = parts
 	return parts
+end
+
+function WorldGridRuntimeService:_GetRuntimeMapRoot(): Model?
+	local mapContext = self._mapContext
+	assert(mapContext ~= nil, "WorldGridRuntimeService: MapContext dependency is unavailable")
+
+	local mapResult = mapContext:GetRuntimeMapInstance()
+	assert(mapResult.success, tostring(mapResult.message or mapResult.type or "MapContext runtime map lookup failed"))
+	return mapResult.value
+end
+
+function WorldGridRuntimeService:_GetBlacklistNamedInstances(): { Instance }
+	if self._blacklistNamedInstances ~= nil then
+		return self._blacklistNamedInstances
+	end
+
+	local runtimeMap = self:_GetRuntimeMapRoot()
+	local nameSet = _GetBlacklistNameSet()
+	local matches = {} :: { Instance }
+	if runtimeMap ~= nil and next(nameSet) ~= nil then
+		local function maybeInsert(candidate: Instance)
+			local normalized = _NormalizeName(candidate.Name)
+			if nameSet[normalized] ~= true then
+				return
+			end
+			if candidate:IsA("BasePart") or candidate:IsA("Model") then
+				table.insert(matches, candidate)
+			end
+		end
+
+		maybeInsert(runtimeMap)
+		for _, instance in ipairs(runtimeMap:GetDescendants()) do
+			maybeInsert(instance)
+		end
+	end
+
+	self._blacklistNamedInstances = matches
+	return matches
+end
+
+local function _ResolveBoundsShape(instance: Instance): BoundsShape?
+	if instance:IsA("BasePart") then
+		return {
+			CFrame = instance.CFrame,
+			Size = instance.Size,
+			Center = instance.Position,
+		}
+	end
+
+	if instance:IsA("Model") then
+		local ok, cframe, size = pcall(function()
+			return instance:GetBoundingBox()
+		end)
+		if ok and typeof(cframe) == "CFrame" and typeof(size) == "Vector3" and size.X > 0 and size.Z > 0 then
+			return {
+				CFrame = cframe,
+				Size = size,
+				Center = cframe.Position,
+			}
+		end
+	end
+
+	return nil
+end
+
+local function _GetBoundsCorners(shape: BoundsShape): { Vector3 }
+	local half = shape.Size * 0.5
+	local corners = table.create(8)
+	local index = 1
+	for _, signX in ipairs({ -1, 1 }) do
+		for _, signY in ipairs({ -1, 1 }) do
+			for _, signZ in ipairs({ -1, 1 }) do
+				corners[index] =
+					shape.CFrame:PointToWorldSpace(Vector3.new(half.X * signX, half.Y * signY, half.Z * signZ))
+				index += 1
+			end
+		end
+	end
+	return corners
+end
+
+local function _GetCoveredTileRange(spec: GridSpec, shape: BoundsShape): (number, number, number, number)
+	local corners = _GetBoundsCorners(shape)
+	local minLocalX = math.huge
+	local maxLocalX = -math.huge
+	local minLocalZ = math.huge
+	local maxLocalZ = -math.huge
+
+	for _, corner in ipairs(corners) do
+		local localCorner = spec.GridCFrame:PointToObjectSpace(corner)
+		minLocalX = math.min(minLocalX, localCorner.X)
+		maxLocalX = math.max(maxLocalX, localCorner.X)
+		minLocalZ = math.min(minLocalZ, localCorner.Z)
+		maxLocalZ = math.max(maxLocalZ, localCorner.Z)
+	end
+
+	local gridMinX = -spec.GridSize.X * 0.5
+	local gridMinZ = -spec.GridSize.Z * 0.5
+	local tileSize = spec.TileSize
+	local epsilon = 1e-6
+
+	local minUnitsX = (minLocalX - gridMinX) / tileSize
+	local maxUnitsX = (maxLocalX - gridMinX) / tileSize
+	local minUnitsZ = (minLocalZ - gridMinZ) / tileSize
+	local maxUnitsZ = (maxLocalZ - gridMinZ) / tileSize
+
+	local minFloorX = math.floor(minUnitsX)
+	local minFloorZ = math.floor(minUnitsZ)
+	local colStart = minFloorX + 1
+	local rowStart = minFloorZ + 1
+	if math.abs(minUnitsX - minFloorX) <= epsilon then
+		colStart = minFloorX
+	end
+	if math.abs(minUnitsZ - minFloorZ) <= epsilon then
+		rowStart = minFloorZ
+	end
+	local colEnd = math.ceil(maxUnitsX)
+	local rowEnd = math.ceil(maxUnitsZ)
+
+	colStart = math.max(1, math.min(spec.GridCols, colStart))
+	colEnd = math.max(1, math.min(spec.GridCols, colEnd))
+	rowStart = math.max(1, math.min(spec.GridRows, rowStart))
+	rowEnd = math.max(1, math.min(spec.GridRows, rowEnd))
+
+	if colStart > colEnd or rowStart > rowEnd then
+		return nil
+	end
+
+	return rowStart, rowEnd, colStart, colEnd
 end
 
 function WorldGridRuntimeService:_ResolveNearestEligibleCoord(worldPos: Vector3, spec: GridSpec): GridCoord?
@@ -395,21 +544,38 @@ function WorldGridRuntimeService:_GetResolvedPlacementProhibitedTiles(): { [stri
 	end
 
 	local coordKeySet = {} :: { [string]: boolean }
-	local prohibitedParts = self:_GetPlacementProhibitedPartsCached()
-	for _, part in ipairs(prohibitedParts) do
+	local shapes = {} :: { BoundsShape }
+	local seenInstances = {} :: { [Instance]: boolean }
+
+	for _, part in ipairs(self:_GetPlacementProhibitedPartsCached()) do
+		if seenInstances[part] ~= true then
+			seenInstances[part] = true
+			local shape = _ResolveBoundsShape(part)
+			if shape ~= nil then
+				table.insert(shapes, shape)
+			end
+		end
+	end
+
+	for _, instance in ipairs(self:_GetBlacklistNamedInstances()) do
+		if seenInstances[instance] ~= true then
+			seenInstances[instance] = true
+			local shape = _ResolveBoundsShape(instance)
+			if shape ~= nil then
+				table.insert(shapes, shape)
+			end
+		end
+	end
+
+	for _, shape in ipairs(shapes) do
 		local matchedAnyTile = false
 		for _, spec in ipairs(self:GetGridSpecList()) do
-			for row = 1, spec.GridRows do
-				for col = 1, spec.GridCols do
-					local coord = {
-						GridId = spec.GridId,
-						Row = row,
-						Col = col,
-					}
-					local tileCenter = self:CoordToWorld(coord)
-					if _TileOverlapsPartXZ(part, tileCenter, spec) then
-						coordKeySet[_GetCoordKey(coord)] = true
-						matchedAnyTile = true
+			local rowStart, rowEnd, colStart, colEnd = _GetCoveredTileRange(spec, shape)
+			if rowStart ~= nil and rowEnd ~= nil and colStart ~= nil and colEnd ~= nil then
+				matchedAnyTile = true
+				for row = rowStart, rowEnd do
+					for col = colStart, colEnd do
+						coordKeySet[("%s:%d:%d"):format(spec.GridId, row, col)] = true
 					end
 				end
 			end
@@ -419,10 +585,10 @@ function WorldGridRuntimeService:_GetResolvedPlacementProhibitedTiles(): { [stri
 			local bestCoord = nil :: GridCoord?
 			local bestDistanceSquared = math.huge
 			for _, spec in ipairs(self:GetGridSpecList()) do
-				local nearestCoord = self:_ResolveNearestEligibleCoord(part.Position, spec)
+				local nearestCoord = self:_ResolveNearestEligibleCoord(shape.Center, spec)
 				if nearestCoord ~= nil then
 					local tileCenter = self:CoordToWorld(nearestCoord)
-					local delta = tileCenter - part.Position
+					local delta = tileCenter - shape.Center
 					local distanceSquared = delta.X * delta.X + delta.Z * delta.Z
 					if distanceSquared < bestDistanceSquared then
 						bestDistanceSquared = distanceSquared

@@ -17,6 +17,7 @@ local DEFAULT_VISUALIZATION_SCALE = 1
 local DEFAULT_VISUALIZATION_DURATION = 0.1
 local MIN_VISUALIZATION_DURATION = 0.01
 local ACTIVE_VISUALIZATION_TOKENS = {} :: { [string]: string }
+local ACTIVE_SHAPE_VISUALIZATION_TOKENS = {} :: { [string]: string }
 
 --[=[
     @class SpatialQueryQueries
@@ -55,6 +56,41 @@ local function _ResolveVisualizationOptions(options: TQueryOptions?): TVisualiza
 	}
 end
 
+local function _ResolveVisualizationOptionsForShapeCast(
+	options: TQueryOptions?,
+	visualize: boolean?
+): TVisualizationOptions?
+	if visualize == false then
+		return nil
+	end
+
+	if visualize == true then
+		local source = if options ~= nil then options.Visualization else nil
+		return {
+			Enabled = true,
+			Color = if source ~= nil and source.Color ~= nil then source.Color else DEFAULT_VISUALIZATION_COLOR,
+			Width = _ResolvePositiveNumberOrDefault(
+				if source ~= nil then source.Width else nil,
+				DEFAULT_VISUALIZATION_WIDTH
+			),
+			Scale = _ResolvePositiveNumberOrDefault(
+				if source ~= nil then source.Scale else nil,
+				DEFAULT_VISUALIZATION_SCALE
+			),
+			Duration = math.max(
+				_ResolvePositiveNumberOrDefault(
+					if source ~= nil then source.Duration else nil,
+					DEFAULT_VISUALIZATION_DURATION
+				),
+				MIN_VISUALIZATION_DURATION
+			),
+			Name = if source ~= nil then source.Name else nil,
+		}
+	end
+
+	return _ResolveVisualizationOptions(options)
+end
+
 local function _VisualizeRaycast(origin: Vector3, direction: Vector3, raycastResult: RaycastResult?, options: TQueryOptions?)
 	local visualizationOptions = _ResolveVisualizationOptions(options)
 	if visualizationOptions == nil then
@@ -85,6 +121,79 @@ local function _VisualizeRaycast(origin: Vector3, direction: Vector3, raycastRes
 	end)
 end
 
+local function _CreateShapeDebugPart(name: string, cframe: CFrame, size: Vector3, color: Color3): Part
+	local debugPart = Instance.new("Part")
+	debugPart.Name = name
+	debugPart.Anchored = true
+	debugPart.CanCollide = false
+	debugPart.CanTouch = false
+	debugPart.CanQuery = false
+	debugPart.Transparency = 0.75
+	debugPart.Material = Enum.Material.ForceField
+	debugPart.Color = color
+	debugPart.Size = size
+	debugPart.CFrame = cframe
+	debugPart.Parent = Workspace
+	return debugPart
+end
+
+local function _VisualizeShapeCast(
+	shapePart: BasePart,
+	origin: Vector3,
+	direction: Vector3,
+	shapeCastResult: RaycastResult?,
+	options: TQueryOptions?,
+	visualize: boolean?
+)
+	local visualizationOptions = _ResolveVisualizationOptionsForShapeCast(options, visualize)
+	if visualizationOptions == nil then
+		return
+	end
+
+	local visualName = visualizationOptions.Name or ("SpatialQueryShape_%s"):format(HttpService:GenerateGUID(false))
+	local visualToken = HttpService:GenerateGUID(false)
+	local debugPartNamePrefix = ("%s_Box"):format(visualName)
+	local endPosition = origin + direction
+	if shapeCastResult ~= nil then
+		endPosition = shapeCastResult.Position
+	end
+
+	local startPart = _CreateShapeDebugPart(
+		("%s_Start"):format(debugPartNamePrefix),
+		shapePart.CFrame,
+		shapePart.Size,
+		visualizationOptions.Color :: Color3
+	)
+	local endPart = _CreateShapeDebugPart(
+		("%s_End"):format(debugPartNamePrefix),
+		CFrame.lookAt(endPosition, endPosition + shapePart.CFrame.LookVector),
+		shapePart.Size,
+		visualizationOptions.Color :: Color3
+	)
+
+	ACTIVE_SHAPE_VISUALIZATION_TOKENS[visualName] = visualToken
+	VectorViz:CreateVisualiser(visualName, origin, endPosition - origin, {
+		Colour = visualizationOptions.Color,
+		Width = visualizationOptions.Width,
+		Scale = visualizationOptions.Scale,
+	})
+
+	task.delay(visualizationOptions.Duration :: number, function()
+		if ACTIVE_SHAPE_VISUALIZATION_TOKENS[visualName] ~= visualToken then
+			return
+		end
+
+		ACTIVE_SHAPE_VISUALIZATION_TOKENS[visualName] = nil
+		VectorViz:DestroyVisualiser(visualName)
+		if startPart.Parent ~= nil then
+			startPart:Destroy()
+		end
+		if endPart.Parent ~= nil then
+			endPart:Destroy()
+		end
+	end)
+end
+
 --[=[
     Casts a ray using normalized query options.
     @within SpatialQueryQueries
@@ -101,6 +210,30 @@ function Queries.Raycast(origin: Vector3, direction: Vector3, options: TQueryOpt
 	local raycastResult = Workspace:Raycast(origin, direction, Options.BuildRaycastParams(options))
 	_VisualizeRaycast(origin, direction, raycastResult, options)
 	return raycastResult
+end
+
+--[=[
+    Casts a shape part along a direction using normalized query options.
+    @within SpatialQueryQueries
+    @param shapePart BasePart -- Part that defines the swept shape.
+    @param direction Vector3 -- Cast direction and length.
+    @param options TQueryOptions? -- Query configuration to apply.
+    @param visualize boolean? -- Explicit visualization toggle. `true` forces visualization, `false` suppresses it.
+    @return RaycastResult? -- First hit, or `nil` when the cast hits nothing or the direction is degenerate.
+]=]
+function Queries.ShapeCast(
+	shapePart: BasePart,
+	direction: Vector3,
+	options: TQueryOptions?,
+	visualize: boolean?
+): RaycastResult?
+	if direction.Magnitude <= Shared.EPSILON then
+		return nil
+	end
+
+	local shapeCastResult = Workspace:Shapecast(shapePart, direction, Options.BuildRaycastParams(options))
+	_VisualizeShapeCast(shapePart, shapePart.Position, direction, shapeCastResult, options, visualize)
+	return shapeCastResult
 end
 
 --[=[

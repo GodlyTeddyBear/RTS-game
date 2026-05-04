@@ -101,7 +101,14 @@ local function _warnPathRunFailure(entity: any?, err: any)
 	if type(err) == "table" then
 		local errType = tostring(err.type or "UnknownType")
 		local errMessage = toLogString(err.message ~= nil and err.message or err)
-		warn(string.format("[PathfindingHelper] RunPath rejected for entity=%s type=%s message=%s", entityLabel, errType, errMessage))
+		warn(
+			string.format(
+				"[PathfindingHelper] RunPath rejected for entity=%s type=%s message=%s",
+				entityLabel,
+				errType,
+				errMessage
+			)
+		)
 		return
 	end
 
@@ -214,16 +221,18 @@ local function _debugPathTarget(
 	snapshot: { StatusName: string, WaypointCount: number? }?
 )
 	local startPosition = _getStartPosition(path)
-	warn(string.format(
-		"[PathfindingHelper] entity=%s start=%s target=%s originalTarget=%s reconciledTarget=%s reconcileUsed=%s delay=%.2f",
-		tostring(entity ~= nil and entity or "UnknownEntity"),
-		_formatVector3(startPosition),
-		_formatVector3(activeTargetPosition),
-		_formatVector3(originalTargetPosition),
-		_formatVector3(reconciledTargetPosition),
-		tostring(reconcileUsed),
-		delaySeconds
-	))
+	warn(
+		string.format(
+			"[PathfindingHelper] entity=%s start=%s target=%s originalTarget=%s reconciledTarget=%s reconcileUsed=%s delay=%.2f",
+			tostring(entity ~= nil and entity or "UnknownEntity"),
+			_formatVector3(startPosition),
+			_formatVector3(activeTargetPosition),
+			_formatVector3(originalTargetPosition),
+			_formatVector3(reconciledTargetPosition),
+			tostring(reconcileUsed),
+			delaySeconds
+		)
+	)
 	Result.MentionSuccess(
 		"PathfindingHelper:RunPath",
 		"Path target scheduled",
@@ -258,15 +267,11 @@ local function _buildPathFailure(
 
 	local startPosition = _getStartPosition(path)
 
-	return _mergeDebugData(
-		{
-			type = "PathError",
-			message = lastError,
-			Entity = entity,
-		},
-		_buildPositionDebug("StartPosition", startPosition),
-		_buildPositionDebug("TargetPosition", targetPosition)
-	)
+	return _mergeDebugData({
+		type = "PathError",
+		message = lastError,
+		Entity = entity,
+	}, _buildPositionDebug("StartPosition", startPosition), _buildPositionDebug("TargetPosition", targetPosition))
 end
 
 -- Validates that the entity can provide a live model and primary part for path creation.

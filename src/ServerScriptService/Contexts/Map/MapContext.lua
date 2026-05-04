@@ -156,6 +156,17 @@ end
 
 --[=[
 	@within MapContext
+	Returns the active runtime map model, if one exists.
+	@return Result.Result<Model?> -- The active runtime map model, if present.
+]=]
+function MapContext:GetRuntimeMapInstance(): Result.Result<Model?>
+	return Catch(function()
+		return Ok(self._entityFactory:GetMapInstance())
+	end, "Map:GetRuntimeMapInstance")
+end
+
+--[=[
+	@within MapContext
 	Cleans up runtime map state before tearing down the wrapped BaseContext.
 ]=]
 function MapContext:Destroy()

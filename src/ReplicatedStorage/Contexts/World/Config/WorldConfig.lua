@@ -52,4 +52,13 @@ WorldConfig.SPAWN_PART_NAME = "Spawn"
 ]=]
 WorldConfig.LANE_POINT_Y_OFFSET = 2
 
+--[=[
+	@prop PLACEMENT_BLACKLIST_NAMES { string }
+	@within WorldConfig
+	Case-insensitive exact-name blacklist for parts/models whose bounds should prohibit placement.
+]=]
+WorldConfig.PLACEMENT_BLACKLIST_NAMES = {
+	"Bound",
+}
+
 return table.freeze(WorldConfig)

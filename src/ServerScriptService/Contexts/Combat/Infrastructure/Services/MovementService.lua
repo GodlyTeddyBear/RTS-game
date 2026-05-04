@@ -173,6 +173,11 @@ function MovementService:_BuildBoidsSessionId(goalPosition: Vector3): string
 	)
 end
 
+function MovementService:_GetEntityModel(entity: number): Model?
+	local modelRef = self._enemyEntityFactory:GetModelRef(entity)
+	return if modelRef ~= nil then modelRef.Model else nil
+end
+
 function MovementService:_ResolveAdvanceMode(
 	movementMode: EnemyMovementMode,
 	goalPosition: Vector3
@@ -298,8 +303,7 @@ function MovementService:_TickPath(entity: number, movementState: TPathMovementS
 end
 
 function MovementService:_GetHumanoid(entity: number): Humanoid?
-	local modelRef = self._enemyEntityFactory:GetModelRef(entity)
-	local model = if modelRef ~= nil then modelRef.Model else nil
+	local model = self:_GetEntityModel(entity)
 	return if model ~= nil then model:FindFirstChildWhichIsA("Humanoid") else nil
 end
 

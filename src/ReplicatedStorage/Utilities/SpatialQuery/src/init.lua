@@ -39,6 +39,7 @@ SpatialQuery.BuildRaycastParams = Options.BuildRaycastParams
 SpatialQuery.BuildOverlapParams = Options.BuildOverlapParams
 
 SpatialQuery.Raycast = Queries.Raycast
+SpatialQuery.ShapeCast = Queries.ShapeCast
 SpatialQuery.RaycastTo = Queries.RaycastTo
 SpatialQuery.OverlapBox = Queries.OverlapBox
 SpatialQuery.OverlapRadius = Queries.OverlapRadius

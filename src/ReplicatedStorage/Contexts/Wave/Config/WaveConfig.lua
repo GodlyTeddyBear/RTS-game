@@ -57,8 +57,8 @@ local WaveConfig = {
 	-- Scripted wave definitions used before the endless loop starts.
 	WAVE_TABLE = {
 		[1] = {
-			{ Role = "Tank", Count = 3, GroupDelay = 0 },
-			{ Role = "Swarm", Count = 3, GroupDelay = 8 },
+			{ Role = "Tank", Count = 0, GroupDelay = 0 },
+			{ Role = "Swarm", Count = 2, GroupDelay = 1 },
 		},
 		[2] = {
 			{ Role = "Swarm", Count = 6, GroupDelay = 0 },
