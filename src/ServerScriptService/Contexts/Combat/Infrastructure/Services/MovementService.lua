@@ -4,7 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Promise = require(ReplicatedStorage.Packages.Promise)
 local PathfindingHelper = require(ReplicatedStorage.Utilities.PathfindingHelper)
-local BoidsHelper = require(ReplicatedStorage.Utilities.BoidsHelper)
+local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
 local BoidsConfig = require(ReplicatedStorage.Contexts.Combat.Config.BoidsConfig)
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
@@ -12,10 +12,19 @@ local EnemyTypes = require(ReplicatedStorage.Contexts.Enemy.Types.EnemyTypes)
 
 local GOAL_POSITION_EPSILON = 0.01
 
-local function xzDisplacement(a: Vector3, b: Vector3): number
-	local dx = a.X - b.X
-	local dz = a.Z - b.Z
-	return math.sqrt(dx * dx + dz * dz)
+local function _SeparationCellKey(gx: number, gz: number): string
+	return string.format("%d,%d", gx, gz)
+end
+
+local function _ClampVector2Magnitude(vec: Vector2, maxMagnitude: number): Vector2
+	if maxMagnitude <= 0 then
+		return Vector2.zero
+	end
+	local magnitude = vec.Magnitude
+	if magnitude > maxMagnitude then
+		return vec * (maxMagnitude / magnitude)
+	end
+	return vec
 end
 
 type EnemyMovementMode = EnemyTypes.EnemyMovementMode
@@ -25,25 +34,17 @@ type TPathMovementState = {
 	Promise: any,
 }
 
-type TBoidsMovementState = {
-	Mode: "Boids",
-	SessionId: string,
-	GoalPosition: Vector3,
-	PreviousVelocity: Vector3,
-	ComputePromise: any?,
-	BoidsReady: boolean,
-	ComputeFailedReason: string?,
-	JumpMoveToConnection: RBXScriptConnection?,
-	JumpMoveToTimeoutToken: number,
-	JumpMoveToStuckLastSample: Vector3?,
-	JumpMoveToStuckLowMotionTicks: number,
+type TFlowMovementState = {
+	Mode: "Flow",
+	Flowfield: any,
+	GoalSnapshot: Vector3,
 }
 
-type TMovementState = TPathMovementState | TBoidsMovementState
+type TMovementState = TPathMovementState | TFlowMovementState
 
 --[=[
 	@class MovementService
-	Owns Combat enemy movement runtime coordination for pathfinding and boids movement.
+	Owns Combat enemy movement runtime coordination for pathfinding- and flowfield-based advance.
 	@server
 ]=]
 local MovementService = {}
@@ -52,6 +53,11 @@ MovementService.__index = MovementService
 function MovementService.new()
 	local self = setmetatable({}, MovementService)
 	self._movementByEntity = {} :: { [number]: TMovementState }
+	self._fastFlowPathfinder = nil
+	self._fastFlowMapping = nil
+	self._lastFastFlowEndpointDiagnosticKey = nil :: string?
+	self._flowVelByEntity = {} :: { [number]: Vector2 }
+	self._flowSteeringRepairAtClockByEntity = {} :: { [number]: number }
 	return self
 end
 
@@ -70,6 +76,15 @@ function MovementService:ConfigureLockOnService(lockOnService: any)
 	self._lockOnService = lockOnService
 end
 
+function MovementService:ConfigureFastFlow(pathfinder: any?, mapping: FastFlowHelper.TFlowGridMapping?)
+	self._fastFlowPathfinder = pathfinder
+	self._fastFlowMapping = mapping
+end
+
+function MovementService:ConfigureFlowfieldDebugRenderer(renderer: ((any, FastFlowHelper.TFlowGridMapping, Vector3) -> ())?)
+	self._flowfieldDebugRenderer = renderer
+end
+
 function MovementService:StartAdvance(entity: number, movementMode: EnemyMovementMode): (boolean, string?)
 	self:StopMovement(entity)
 
@@ -83,12 +98,14 @@ function MovementService:StartAdvance(entity: number, movementMode: EnemyMovemen
 		return false, "InvalidMovementMode"
 	end
 
-	if resolvedMode == "Boids" then
-		if self:_StartBoids(entity, pathState.GoalPosition) then
+	if resolvedMode == "Flow" then
+		local startedFlow, flowReason = self:_StartFlow(entity, pathState.GoalPosition)
+		if startedFlow then
 			return true, nil
 		end
-
-		return false, "BoidsStartFailed"
+		if movementMode ~= "Any" or flowReason ~= "FastFlowNotConfigured" then
+			return false, if flowReason ~= nil then flowReason else "FlowStartFailed"
+		end
 	end
 
 	if self:_StartPath(entity, pathState.GoalPosition) then
@@ -104,8 +121,8 @@ function MovementService:TickAdvance(entity: number): ("Running" | "Success" | "
 		return "Fail", "MissingMovementState"
 	end
 
-	if movementState.Mode == "Boids" then
-		return self:_TickBoids(entity, movementState)
+	if movementState.Mode == "Flow" then
+		return self:_TickFlow(entity, movementState)
 	end
 
 	return self:_TickPath(entity, movementState)
@@ -123,20 +140,12 @@ function MovementService:StopMovement(entity: number)
 			promise:cancel()
 		end
 	else
-		local computePromise = movementState.ComputePromise
-		if computePromise ~= nil and type(computePromise.cancel) == "function" then
-			computePromise:cancel()
-		end
-		if movementState.Mode == "Boids" then
-			self:_CancelBoidsJumpMoveTo(entity, movementState)
-		end
-		if movementState.BoidsReady then
-			BoidsHelper.CleanupEntity(entity, movementState.SessionId)
-		end
 		self:_StopHumanoid(entity)
 	end
 
 	self._movementByEntity[entity] = nil
+	self._flowVelByEntity[entity] = nil
+	self._flowSteeringRepairAtClockByEntity[entity] = nil
 	self._enemyEntityFactory:SetPathMoving(entity, false)
 	if self._lockOnService ~= nil and type(self._lockOnService.SetBoidsFacingFlatForward) == "function" then
 		self._lockOnService:SetBoidsFacingFlatForward(entity, nil)
@@ -145,15 +154,16 @@ end
 
 function MovementService:CleanupAll()
 	local entities = {}
-	for entity in self._movementByEntity do
-		table.insert(entities, entity)
+	for entityId in self._movementByEntity do
+		table.insert(entities, entityId)
 	end
 
-	for _, entity in ipairs(entities) do
-		self:StopMovement(entity)
+	for _, entityId in ipairs(entities) do
+		self:StopMovement(entityId)
 	end
 
-	BoidsHelper.CleanupAllSessions()
+	table.clear(self._flowVelByEntity)
+	table.clear(self._flowSteeringRepairAtClockByEntity)
 end
 
 function MovementService:_GetRoleName(entity: number): string?
@@ -173,40 +183,7 @@ function MovementService:_GetAgentParams(entity: number): { [string]: any }
 	return CombatMovementConfig.DEFAULT_AGENT_PARAMS
 end
 
-function MovementService:_GetBoidsOptions(): BoidsHelper.TBoidsOptions
-	return {
-		Config = BoidsConfig,
-		GetPosition = function(entity: number): Vector3?
-			local modelRef = self._enemyEntityFactory:GetModelRef(entity)
-			local model = if modelRef ~= nil then modelRef.Model else nil
-			local primaryPart = if model ~= nil then model.PrimaryPart else nil
-			return if primaryPart ~= nil then primaryPart.Position else nil
-		end,
-		GetGoalPosition = function(entity: number): Vector3?
-			local pathState = self._enemyEntityFactory:GetPathState(entity)
-			return if pathState ~= nil then pathState.GoalPosition else nil
-		end,
-		ComputePathWaypoints = function(entity: number, targetPosition: Vector3): (boolean, { any }?, string?)
-			local path = PathfindingHelper.CreatePath(entity, {
-				EnemyEntityFactory = self._enemyEntityFactory,
-			}, self:_GetAgentParams(entity), CombatMovementConfig.PATHFINDING)
-			if path == nil then
-				return false, nil, "PathCreateFailed"
-			end
-
-			local success, waypoints, reason = PathfindingHelper.ComputeWaypoints(
-				path,
-				targetPosition,
-				entity,
-				CombatMovementConfig.PATHFINDING
-			)
-			path:Destroy()
-			return success, waypoints, reason
-		end,
-	}
-end
-
-function MovementService:_GetBoidsMinGroupSize(): number
+function MovementService:_GetMinGroupSize(): number
 	local configuredMinGroupSize = BoidsConfig.MinGroupSize
 	if type(configuredMinGroupSize) ~= "number" then
 		return 2
@@ -215,48 +192,7 @@ function MovementService:_GetBoidsMinGroupSize(): number
 	return math.max(1, math.floor(configuredMinGroupSize))
 end
 
-function MovementService:_BuildBoidsSessionId(goalPosition: Vector3): string
-	-- Enough precision that distinct goal vectors are unlikely to share a session (%.2f could merge nearby goals).
-	return string.format(
-		"CombatAdvanceBase:%.5f:%.5f:%.5f",
-		goalPosition.X,
-		goalPosition.Y,
-		goalPosition.Z
-	)
-end
-
-function MovementService:_GetEntityModel(entity: number): Model?
-	local modelRef = self._enemyEntityFactory:GetModelRef(entity)
-	return if modelRef ~= nil then modelRef.Model else nil
-end
-
-function MovementService:_ResolveAdvanceMode(
-	movementMode: EnemyMovementMode,
-	goalPosition: Vector3
-): ("Path" | "Boids")?
-	if movementMode == "Path" or movementMode == "Boids" then
-		return movementMode
-	end
-
-	if movementMode == "Any" then
-		return if self:_CountBoidsCapableEntitiesAtGoal(goalPosition) >= self:_GetBoidsMinGroupSize() then "Boids" else "Path"
-	end
-
-	return nil
-end
-
-function MovementService:_CountBoidsCapableEntitiesAtGoal(goalPosition: Vector3): number
-	local groupSize = 0
-	for _, aliveEntity in ipairs(self._enemyEntityFactory:QueryAliveEntities()) do
-		if self:_CanEntityUseBoidsAtGoal(aliveEntity, goalPosition) then
-			groupSize += 1
-		end
-	end
-
-	return groupSize
-end
-
-function MovementService:_CanEntityUseBoidsAtGoal(entity: number, goalPosition: Vector3): boolean
+function MovementService:_CanEntityUseFlowAtGoal(entity: number, goalPosition: Vector3): boolean
 	local pathState = self._enemyEntityFactory:GetPathState(entity)
 	if pathState == nil or pathState.GoalPosition == nil then
 		return false
@@ -275,66 +211,30 @@ function MovementService:_CanEntityUseBoidsAtGoal(entity: number, goalPosition: 
 	return roleConfig.MovementMode == "Any" or roleConfig.MovementMode == "Boids"
 end
 
-function MovementService:_StartBoids(entity: number, goalPosition: Vector3): boolean
-	local path = PathfindingHelper.CreatePath(entity, {
-		EnemyEntityFactory = self._enemyEntityFactory,
-	}, self:_GetAgentParams(entity), CombatMovementConfig.PATHFINDING)
-	if path == nil then
-		return false
+function MovementService:_CountFlowEligibleAtGoal(goalPosition: Vector3): number
+	local groupSize = 0
+	for _, aliveEntity in ipairs(self._enemyEntityFactory:QueryAliveEntities()) do
+		if self:_CanEntityUseFlowAtGoal(aliveEntity, goalPosition) then
+			groupSize += 1
+		end
+	end
+	return groupSize
+end
+
+function MovementService:_ResolveAdvanceMode(movementMode: EnemyMovementMode, goalPosition: Vector3): ("Path" | "Flow")?
+	if movementMode == "Path" then
+		return "Path"
 	end
 
-	local sessionId = self:_BuildBoidsSessionId(goalPosition)
-	local computePromise =
-		PathfindingHelper.ComputeWaypointsPromise(path, goalPosition, entity, CombatMovementConfig.PATHFINDING)
+	if movementMode == "Boids" then
+		return "Flow"
+	end
 
-	local movementRecord: TBoidsMovementState = {
-		Mode = "Boids",
-		SessionId = sessionId,
-		GoalPosition = goalPosition,
-		PreviousVelocity = Vector3.zero,
-		ComputePromise = computePromise,
-		BoidsReady = false,
-		ComputeFailedReason = nil,
-		JumpMoveToConnection = nil,
-		JumpMoveToTimeoutToken = 0,
-		JumpMoveToStuckLastSample = nil,
-		JumpMoveToStuckLowMotionTicks = 0,
-	}
-	self._movementByEntity[entity] = movementRecord
+	if movementMode == "Any" then
+		return if self:_CountFlowEligibleAtGoal(goalPosition) >= self:_GetMinGroupSize() then "Flow" else "Path"
+	end
 
-	computePromise
-		:andThen(function(waypoints: { any })
-			if self._movementByEntity[entity] ~= movementRecord then
-				return
-			end
-			if movementRecord.ComputePromise ~= computePromise then
-				return
-			end
-
-			local options = self:_GetBoidsOptions()
-			if not BoidsHelper.InitGroupMovementWithWaypoints(entity, sessionId, goalPosition, waypoints, options) then
-				movementRecord.ComputeFailedReason = "BoidsInitFailed"
-				movementRecord.ComputePromise = nil
-				return
-			end
-
-			movementRecord.BoidsReady = true
-			movementRecord.ComputePromise = nil
-		end)
-		:catch(function(reason: any)
-			if self._movementByEntity[entity] ~= movementRecord then
-				return
-			end
-			if movementRecord.ComputePromise ~= computePromise then
-				return
-			end
-
-			movementRecord.ComputeFailedReason = if type(reason) == "string" then reason else tostring(reason)
-			movementRecord.ComputePromise = nil
-		end)
-
-	self._enemyEntityFactory:SetPathMoving(entity, true)
-	return true
+	return nil
 end
 
 function MovementService:_StartPath(entity: number, goalPosition: Vector3): boolean
@@ -353,162 +253,361 @@ function MovementService:_StartPath(entity: number, goalPosition: Vector3): bool
 	return true
 end
 
-function MovementService:_ResetJumpMoveToStuckWatchdog(movementState: TBoidsMovementState)
-	movementState.JumpMoveToStuckLastSample = nil
-	movementState.JumpMoveToStuckLowMotionTicks = 0
+function MovementService:_GetEntityModel(entity: number): Model?
+	local modelRef = self._enemyEntityFactory:GetModelRef(entity)
+	return if modelRef ~= nil then modelRef.Model else nil
 end
 
-function MovementService:_CancelBoidsJumpMoveTo(entity: number, movementState: TBoidsMovementState)
-	if movementState.JumpMoveToConnection ~= nil then
-		movementState.JumpMoveToConnection:Disconnect()
-		movementState.JumpMoveToConnection = nil
-	end
-	movementState.JumpMoveToTimeoutToken += 1
-	self:_ResetJumpMoveToStuckWatchdog(movementState)
-	if movementState.BoidsReady then
-		BoidsHelper.NotifyJumpMoveToFinished(entity, movementState.SessionId)
-	end
-end
-
-function MovementService:_OnBoidsJumpMoveToFinished(
-	entity: number,
-	movementState: TBoidsMovementState,
-	_humanoid: Humanoid,
-	_reached: boolean
-)
-	if self._movementByEntity[entity] ~= movementState then
-		return
-	end
-	if movementState.Mode ~= "Boids" then
-		return
-	end
-	if movementState.JumpMoveToConnection ~= nil then
-		movementState.JumpMoveToConnection:Disconnect()
-		movementState.JumpMoveToConnection = nil
-	end
-	movementState.JumpMoveToTimeoutToken += 1
-	if movementState.BoidsReady then
-		BoidsHelper.NotifyJumpMoveToFinished(entity, movementState.SessionId)
-	end
-	self:_ResetJumpMoveToStuckWatchdog(movementState)
-end
-
-function MovementService:_BeginBoidsJumpMoveTo(
-	entity: number,
-	movementState: TBoidsMovementState,
-	humanoid: Humanoid,
-	jumpTarget: Vector3
-)
-	self:_CancelBoidsJumpMoveTo(entity, movementState)
-
-	self:_TryJumpHumanoid(humanoid)
-	humanoid:MoveTo(jumpTarget)
-
-	if movementState.BoidsReady then
-		BoidsHelper.NotifyJumpMoveToStarted(entity, movementState.SessionId)
-	end
-
-	movementState.JumpMoveToTimeoutToken += 1
-	local scheduleToken = movementState.JumpMoveToTimeoutToken
-	local timeoutSeconds = BoidsConfig.JumpMoveToTimeoutSeconds
-	if type(timeoutSeconds) == "number" and timeoutSeconds > 0 then
-		task.delay(timeoutSeconds, function()
-			local current = self._movementByEntity[entity]
-			if current ~= movementState then
-				return
-			end
-			if movementState.Mode ~= "Boids" then
-				return
-			end
-			if movementState.JumpMoveToTimeoutToken ~= scheduleToken then
-				return
-			end
-			if movementState.JumpMoveToConnection == nil then
-				return
-			end
-			self:_OnBoidsJumpMoveToFinished(entity, movementState, humanoid, false)
-		end)
-	end
-
-	movementState.JumpMoveToConnection = humanoid.MoveToFinished:Connect(function(reached: boolean)
-		self:_OnBoidsJumpMoveToFinished(entity, movementState, humanoid, reached)
-	end)
-
+function MovementService:_GetEntityPosition(entity: number): Vector3?
 	local model = self:_GetEntityModel(entity)
 	local primaryPart = if model ~= nil then model.PrimaryPart else nil
-	if primaryPart ~= nil then
-		movementState.JumpMoveToStuckLastSample = primaryPart.Position
-	else
-		movementState.JumpMoveToStuckLastSample = nil
-	end
-	movementState.JumpMoveToStuckLowMotionTicks = 0
+	return if primaryPart ~= nil then primaryPart.Position else nil
 end
 
-function MovementService:_TickBoids(entity: number, movementState: TBoidsMovementState): ("Running" | "Success" | "Fail", string?)
-	if movementState.ComputeFailedReason ~= nil then
-		self:StopMovement(entity)
-		return "Fail", movementState.ComputeFailedReason
-	end
+function MovementService:_GetHumanoid(entity: number): Humanoid?
+	local model = self:_GetEntityModel(entity)
+	return if model ~= nil then model:FindFirstChildWhichIsA("Humanoid") else nil
+end
 
-	if not movementState.BoidsReady then
-		if self._lockOnService ~= nil and type(self._lockOnService.SetBoidsFacingFlatForward) == "function" then
-			self._lockOnService:SetBoidsFacingFlatForward(entity, nil)
-		end
-		local humanoid = self:_GetHumanoid(entity)
-		if humanoid == nil then
-			self:StopMovement(entity)
-			return "Fail", "MissingHumanoid"
-		end
+function MovementService:_StopHumanoid(entity: number)
+	local humanoid = self:_GetHumanoid(entity)
+	if humanoid ~= nil then
 		humanoid:Move(Vector3.zero)
-		self._enemyEntityFactory:SetPathMoving(entity, true)
-		return "Running", nil
+	end
+end
+
+function MovementService:_ResolveFastFlowRuntime(): (any?, FastFlowHelper.TFlowGridMapping?)
+	local mapping = self._fastFlowMapping
+	local pathfinder = self._fastFlowPathfinder
+	if pathfinder == nil or mapping == nil then
+		return nil, nil
+	end
+	if mapping.CellWidthStuds <= 0 then
+		return nil, nil
+	end
+	return pathfinder, mapping
+end
+
+function MovementService:_GenerateFlowfieldForEntity(
+	entity: number,
+	goalPosition: Vector3,
+	usePrunedStart: boolean?
+): (any?, string?)
+	local pathfinder, mapping = self:_ResolveFastFlowRuntime()
+	if pathfinder == nil or mapping == nil then
+		return nil, "FastFlowNotConfigured"
 	end
 
-	if movementState.JumpMoveToConnection ~= nil then
-		if BoidsConfig.JumpMoveToStuckEnabled ~= false then
-			local epsilon = BoidsConfig.JumpMoveToStuckEpsilonStuds
-			if type(epsilon) ~= "number" or epsilon <= 0 then
-				epsilon = 0.15
+	local entityPosition = self:_GetEntityPosition(entity)
+	if entityPosition == nil then
+		return nil, "MissingModelPosition"
+	end
+
+	local prune = if usePrunedStart == nil then true else usePrunedStart
+	local starts = if prune then { entityPosition } else nil
+	local flowfield = FastFlowHelper.GenerateFlowfieldWorld(pathfinder, goalPosition, mapping, starts)
+	if flowfield == nil then
+		self:_EmitFastFlowEndpointDiagnostic(entity, entityPosition, goalPosition, pathfinder, mapping)
+		return nil, "FastFlowGenerateFailed"
+	end
+
+	return flowfield, nil
+end
+
+function MovementService:_BuildEndpointDiagnostic(
+	worldPosition: Vector3,
+	pathfinder: any,
+	mapping: FastFlowHelper.TFlowGridMapping
+): { World: Vector3, Cell: Vector2, InBounds: boolean, IsWall: boolean, IsBorder: boolean, RegionNil: boolean, Size: number }
+	local cell = FastFlowHelper.WorldXZToGridCell(worldPosition, mapping)
+	local walls = pathfinder._Walls
+	local regions = pathfinder._Regions
+	local size = if walls ~= nil then walls._Size else 0
+	local inBounds = if walls ~= nil then walls:IsCellInBounds(cell) else false
+	local isWall = if walls ~= nil then walls:GetCell(cell) == true else false
+	local isBorder = math.abs(cell.X) >= size or math.abs(cell.Y) >= size
+	local regionNil = if regions ~= nil then regions:GetCell(cell) == nil else false
+
+	return {
+		World = worldPosition,
+		Cell = cell,
+		InBounds = inBounds,
+		IsWall = isWall,
+		IsBorder = isBorder,
+		RegionNil = regionNil,
+		Size = size,
+	}
+end
+
+function MovementService:_EmitFastFlowEndpointDiagnostic(
+	entity: number,
+	entityPosition: Vector3,
+	goalPosition: Vector3,
+	pathfinder: any,
+	mapping: FastFlowHelper.TFlowGridMapping
+)
+	local start = self:_BuildEndpointDiagnostic(entityPosition, pathfinder, mapping)
+	local goal = self:_BuildEndpointDiagnostic(goalPosition, pathfinder, mapping)
+	local shouldLog = start.RegionNil or goal.RegionNil or not start.InBounds or not goal.InBounds or start.IsWall or goal.IsWall
+	if not shouldLog then
+		return
+	end
+
+	local diagnosticKey = string.format(
+		"%d|%d,%d|%d,%d|%s|%s|%s|%s|%s|%s",
+		entity,
+		start.Cell.X,
+		start.Cell.Y,
+		goal.Cell.X,
+		goal.Cell.Y,
+		tostring(start.InBounds),
+		tostring(goal.InBounds),
+		tostring(start.IsWall),
+		tostring(goal.IsWall),
+		tostring(start.RegionNil),
+		tostring(goal.RegionNil)
+	)
+	if self._lastFastFlowEndpointDiagnosticKey == diagnosticKey then
+		return
+	end
+	self._lastFastFlowEndpointDiagnosticKey = diagnosticKey
+
+	warn(
+		string.format(
+			"FastFlow endpoint diagnostic | entity=%s | startWorld=(%.2f, %.2f, %.2f) startCell=(%d,%d) inBounds=%s wall=%s border=%s regionNil=%s | goalWorld=(%.2f, %.2f, %.2f) goalCell=(%d,%d) inBounds=%s wall=%s border=%s regionNil=%s | gridHalfSize=%d",
+			tostring(entity),
+			start.World.X,
+			start.World.Y,
+			start.World.Z,
+			start.Cell.X,
+			start.Cell.Y,
+			tostring(start.InBounds),
+			tostring(start.IsWall),
+			tostring(start.IsBorder),
+			tostring(start.RegionNil),
+			goal.World.X,
+			goal.World.Y,
+			goal.World.Z,
+			goal.Cell.X,
+			goal.Cell.Y,
+			tostring(goal.InBounds),
+			tostring(goal.IsWall),
+			tostring(goal.IsBorder),
+			tostring(goal.RegionNil),
+			start.Size
+		)
+	)
+end
+
+function MovementService:_EmitFlowfieldDebug(flowfield: any, goalPosition: Vector3)
+	local renderer = self._flowfieldDebugRenderer
+	local _pathfinder, mapping = self:_ResolveFastFlowRuntime()
+	if renderer == nil or mapping == nil then
+		return
+	end
+
+	renderer(flowfield, mapping, goalPosition)
+end
+
+function MovementService:_StartFlow(entity: number, goalPosition: Vector3): (boolean, string?)
+	local flowfield, reason = self:_GenerateFlowfieldForEntity(entity, goalPosition)
+	if flowfield == nil then
+		return false, reason
+	end
+
+	self._movementByEntity[entity] = {
+		Mode = "Flow",
+		Flowfield = flowfield,
+		GoalSnapshot = goalPosition,
+	}
+	self._enemyEntityFactory:SetPathMoving(entity, true)
+	self:_EmitFlowfieldDebug(flowfield, goalPosition)
+	return true, nil
+end
+
+function MovementService:_GetFlowArrivalThreshold(): number
+	local configuredThreshold = BoidsConfig.ArrivalThreshold
+	if type(configuredThreshold) ~= "number" or configuredThreshold <= 0 then
+		return 2.75
+	end
+	return configuredThreshold
+end
+
+function MovementService:_GetAgentRadiusStuds(entity: number): number
+	local params = self:_GetAgentParams(entity)
+	local agentRadius = params.AgentRadius
+	if type(agentRadius) == "number" and agentRadius > 0 then
+		return agentRadius
+	end
+	return 2
+end
+
+function MovementService:_CollectFlowMovementEntities(): { number }
+	local flowEntities: { number } = {}
+	for entityId, movementState in self._movementByEntity do
+		if movementState.Mode == "Flow" then
+			table.insert(flowEntities, entityId)
+		end
+	end
+	return flowEntities
+end
+
+function MovementService:_CollectFlowEntityPositions(flowEntities: { number }): { [number]: Vector3 }
+	local positions: { [number]: Vector3 } = {}
+	for _, entityId in ipairs(flowEntities) do
+		local worldPosition = self:_GetEntityPosition(entityId)
+		if worldPosition ~= nil then
+			positions[entityId] = worldPosition
+		end
+	end
+	return positions
+end
+
+function MovementService:_GetFlowSeparationHashCellWidth(flowEntities: { number }, positions: { [number]: Vector3 }): number
+	local maxRadius = 0
+	for _, entityId in ipairs(flowEntities) do
+		if positions[entityId] ~= nil then
+			local radius = self:_GetAgentRadiusStuds(entityId)
+			if radius > maxRadius then
+				maxRadius = radius
 			end
-			local minTicks = BoidsConfig.JumpMoveToStuckMinTicks
-			if type(minTicks) ~= "number" or minTicks < 1 then
-				minTicks = 4
+		end
+	end
+	if maxRadius <= 0 then
+		maxRadius = 2
+	end
+	return maxRadius * 2
+end
+
+function MovementService:_BuildFlowSeparationBuckets(
+	flowEntities: { number },
+	positions: { [number]: Vector3 },
+	cellWidthStuds: number
+): { [string]: { number } }
+	local buckets: { [string]: { number } } = {}
+	if cellWidthStuds <= 0 then
+		return buckets
+	end
+
+	for _, entityId in ipairs(flowEntities) do
+		local worldPosition = positions[entityId]
+		if worldPosition ~= nil then
+			local radius = self:_GetAgentRadiusStuds(entityId)
+			local offset = Vector2.new(radius, radius)
+			local flat = Vector2.new(worldPosition.X, worldPosition.Z)
+			local corner0X = math.round((flat.X - offset.X) / cellWidthStuds)
+			local corner0Z = math.round((flat.Y - offset.Y) / cellWidthStuds)
+			local corner1X = math.round((flat.X + offset.X) / cellWidthStuds)
+			local corner1Z = math.round((flat.Y + offset.Y) / cellWidthStuds)
+			local minGx = math.min(corner0X, corner1X)
+			local maxGx = math.max(corner0X, corner1X)
+			local minGz = math.min(corner0Z, corner1Z)
+			local maxGz = math.max(corner0Z, corner1Z)
+
+			for gx = minGx, maxGx do
+				for gz = minGz, maxGz do
+					local key = _SeparationCellKey(gx, gz)
+					local cellList = buckets[key]
+					if cellList == nil then
+						cellList = {}
+						buckets[key] = cellList
+					end
+					table.insert(cellList, entityId)
+				end
 			end
-			local humanoidForStuck = self:_GetHumanoid(entity)
-			local model = self:_GetEntityModel(entity)
-			local primaryPart = if model ~= nil then model.PrimaryPart else nil
-			local pos = if primaryPart ~= nil then primaryPart.Position else nil
-			if humanoidForStuck ~= nil and pos ~= nil then
-				local lastSample = movementState.JumpMoveToStuckLastSample
-				if lastSample == nil then
-					movementState.JumpMoveToStuckLastSample = pos
-					movementState.JumpMoveToStuckLowMotionTicks = 0
-				else
-					local delta = xzDisplacement(pos, lastSample)
-					if delta < epsilon then
-						movementState.JumpMoveToStuckLowMotionTicks += 1
-						if movementState.JumpMoveToStuckLowMotionTicks >= minTicks then
-							self:_OnBoidsJumpMoveToFinished(entity, movementState, humanoidForStuck, false)
+		end
+	end
+
+	return buckets
+end
+
+function MovementService:_ComputeFlowSoftSeparationXZ(selfEntity: number, selfWorld: Vector3, sepConfig: any): Vector2
+	local kForce = if type(sepConfig.KForce) == "number" then sepConfig.KForce else 80
+	local minSeparationDistance = if type(sepConfig.MinSeparationDistance) == "number" then sepConfig.MinSeparationDistance else 1e-4
+
+	local flowEntities = self:_CollectFlowMovementEntities()
+	local positions = self:_CollectFlowEntityPositions(flowEntities)
+	local cellWidthStuds = self:_GetFlowSeparationHashCellWidth(flowEntities, positions)
+	local buckets = self:_BuildFlowSeparationBuckets(flowEntities, positions, cellWidthStuds)
+
+	local selfRadius = self:_GetAgentRadiusStuds(selfEntity)
+	local selfFlat = Vector2.new(selfWorld.X, selfWorld.Z)
+	local offset = Vector2.new(selfRadius, selfRadius)
+
+	local sep = Vector2.zero
+	local dedupe: { [number]: boolean } = {}
+
+	if cellWidthStuds <= 0 then
+		return sep
+	end
+
+	local corner0X = math.round((selfFlat.X - offset.X) / cellWidthStuds)
+	local corner0Z = math.round((selfFlat.Y - offset.Y) / cellWidthStuds)
+	local corner1X = math.round((selfFlat.X + offset.X) / cellWidthStuds)
+	local corner1Z = math.round((selfFlat.Y + offset.Y) / cellWidthStuds)
+	local minGx = math.min(corner0X, corner1X)
+	local maxGx = math.max(corner0X, corner1X)
+	local minGz = math.min(corner0Z, corner1Z)
+	local maxGz = math.max(corner0Z, corner1Z)
+
+	for gx = minGx, maxGx do
+		for gz = minGz, maxGz do
+			local cellList = buckets[_SeparationCellKey(gx, gz)]
+			if cellList ~= nil then
+				for _, otherEntity in ipairs(cellList) do
+					if otherEntity ~= selfEntity and not dedupe[otherEntity] then
+						dedupe[otherEntity] = true
+						local otherPosition = positions[otherEntity]
+						if otherPosition ~= nil then
+							local otherRadius = self:_GetAgentRadiusStuds(otherEntity)
+							local otherFlat = Vector2.new(otherPosition.X, otherPosition.Z)
+							local displacement = selfFlat - otherFlat
+							local distance = displacement.Magnitude
+							local pairSpan = selfRadius + otherRadius
+							local penetration = pairSpan - distance
+
+							if penetration > 0 and distance > minSeparationDistance then
+								sep += kForce * (displacement / distance) * penetration * penetration
+							end
 						end
-					else
-						movementState.JumpMoveToStuckLowMotionTicks = 0
-						movementState.JumpMoveToStuckLastSample = pos
 					end
 				end
 			end
 		end
-		self._enemyEntityFactory:SetPathMoving(entity, true)
-		return "Running", nil
 	end
 
-	local moveDirection, hasArrived, shouldJump, facingFlatForward, jumpMoveToWorld = BoidsHelper.TickEntity(
-		entity,
-		movementState.SessionId,
-		movementState.PreviousVelocity,
-		self:_GetBoidsOptions()
-	)
+	return sep
+end
 
-	if hasArrived then
+function MovementService:_TickFlow(
+	entity: number,
+	movementState: TFlowMovementState
+): ("Running" | "Success" | "Fail", string?)
+	local pathState = self._enemyEntityFactory:GetPathState(entity)
+	local goalPosition = if pathState ~= nil then pathState.GoalPosition else nil
+	if goalPosition == nil then
+		self:StopMovement(entity)
+		return "Fail", "MissingGoalPosition"
+	end
+
+	local entityPosition = self:_GetEntityPosition(entity)
+	if entityPosition == nil then
+		self:StopMovement(entity)
+		return "Fail", "MissingModelPosition"
+	end
+
+	if (goalPosition - movementState.GoalSnapshot).Magnitude > GOAL_POSITION_EPSILON then
+		local flowfield, reason = self:_GenerateFlowfieldForEntity(entity, goalPosition)
+		if flowfield == nil then
+			self:StopMovement(entity)
+			return "Fail", if reason ~= nil then reason else "FastFlowGenerateFailed"
+		end
+		movementState.Flowfield = flowfield
+		movementState.GoalSnapshot = goalPosition
+		self:_EmitFlowfieldDebug(flowfield, goalPosition)
+	end
+
+	if (goalPosition - entityPosition).Magnitude <= self:_GetFlowArrivalThreshold() then
 		self:StopMovement(entity)
 		return "Success", nil
 	end
@@ -519,30 +618,81 @@ function MovementService:_TickBoids(entity: number, movementState: TBoidsMovemen
 		return "Fail", "MissingHumanoid"
 	end
 
-	if jumpMoveToWorld ~= nil then
-		self:_BeginBoidsJumpMoveTo(entity, movementState, humanoid, jumpMoveToWorld)
-		self._enemyEntityFactory:SetPathMoving(entity, true)
-		if self._lockOnService ~= nil and type(self._lockOnService.SetBoidsFacingFlatForward) == "function" then
-			self._lockOnService:SetBoidsFacingFlatForward(entity, facingFlatForward)
-			if type(self._lockOnService.UpdateAll) == "function" then
-				self._lockOnService:UpdateAll({ entity })
-			end
-		end
-		return "Running", nil
+	local pathfinderForMerge, mapping = self:_ResolveFastFlowRuntime()
+	if mapping == nil then
+		self:StopMovement(entity)
+		return "Fail", "FastFlowNotConfigured"
 	end
 
-	if shouldJump then
-		self:_TryJumpHumanoid(humanoid)
+	if movementState.Flowfield == nil then
+		local repairedFlowfield, repairReason = self:_GenerateFlowfieldForEntity(entity, goalPosition, true)
+		if repairedFlowfield == nil then
+			self:StopMovement(entity)
+			return "Fail", if repairReason ~= nil then repairReason else "MissingFlowfield"
+		end
+		movementState.Flowfield = repairedFlowfield
+		self:_EmitFlowfieldDebug(repairedFlowfield, goalPosition)
 	end
-	humanoid:Move(moveDirection)
-	movementState.PreviousVelocity = moveDirection
-	self._enemyEntityFactory:SetPathMoving(entity, true)
-	if self._lockOnService ~= nil and type(self._lockOnService.SetBoidsFacingFlatForward) == "function" then
-		self._lockOnService:SetBoidsFacingFlatForward(entity, facingFlatForward)
-		if type(self._lockOnService.UpdateAll) == "function" then
-			self._lockOnService:UpdateAll({ entity })
+
+	local flowfield = movementState.Flowfield
+	local steering = FastFlowHelper.GetSteeringWorldXZ(flowfield, entityPosition, mapping)
+	if steering == nil and pathfinderForMerge ~= nil then
+		local merged = FastFlowHelper.MergeFlowfieldWorld(pathfinderForMerge, flowfield, entityPosition, mapping)
+		if merged ~= nil then
+			movementState.Flowfield = merged
+			flowfield = merged
+			steering = FastFlowHelper.GetSteeringWorldXZ(flowfield, entityPosition, mapping)
 		end
 	end
+
+	if steering == nil then
+		local now = os.clock()
+		local repairAfter = self._flowSteeringRepairAtClockByEntity[entity] or 0
+		if now >= repairAfter then
+			self._flowSteeringRepairAtClockByEntity[entity] = now + 0.35
+			local regenFlowfield, _regenReason = self:_GenerateFlowfieldForEntity(entity, goalPosition, false)
+			if regenFlowfield ~= nil then
+				movementState.Flowfield = regenFlowfield
+				flowfield = regenFlowfield
+				self:_EmitFlowfieldDebug(regenFlowfield, goalPosition)
+				steering = FastFlowHelper.GetSteeringWorldXZ(flowfield, entityPosition, mapping)
+			end
+		end
+	end
+
+	local sepConfig = CombatMovementConfig.FLOW_SOFT_SEPARATION
+	local useSoftSeparation = sepConfig ~= nil and sepConfig.Enabled == true
+
+	local walkSpeed = humanoid.WalkSpeed
+	if type(walkSpeed) ~= "number" or walkSpeed <= 0 then
+		walkSpeed = 16
+	end
+
+	if useSoftSeparation then
+		local flowXZ = if steering ~= nil then Vector2.new(steering.X, steering.Z) * walkSpeed else Vector2.zero
+		local sepXZ = self:_ComputeFlowSoftSeparationXZ(entity, entityPosition, sepConfig)
+		local velXZ = flowXZ + sepXZ
+		velXZ = _ClampVector2Magnitude(velXZ, walkSpeed)
+		local velAlpha = if type(sepConfig.VelAlpha) == "number" then math.clamp(sepConfig.VelAlpha, 0, 1) else 0.15
+		local previousVel = self._flowVelByEntity[entity] or Vector2.zero
+		velXZ = previousVel * (1 - velAlpha) + velXZ * velAlpha
+		self._flowVelByEntity[entity] = velXZ
+
+		local moveDirection = Vector3.new(velXZ.X, 0, velXZ.Y)
+		if moveDirection.Magnitude > 0.05 then
+			humanoid:Move(moveDirection.Unit)
+		else
+			humanoid:Move(Vector3.zero)
+		end
+	else
+		if steering == nil then
+			humanoid:Move(Vector3.zero)
+		else
+			humanoid:Move(steering)
+		end
+	end
+
+	self._enemyEntityFactory:SetPathMoving(entity, true)
 	return "Running", nil
 end
 
@@ -566,27 +716,6 @@ function MovementService:_TickPath(entity: number, movementState: TPathMovementS
 	end
 
 	return "Fail", "PathPromiseRejected"
-end
-
-function MovementService:_GetHumanoid(entity: number): Humanoid?
-	local model = self:_GetEntityModel(entity)
-	return if model ~= nil then model:FindFirstChildWhichIsA("Humanoid") else nil
-end
-
-function MovementService:_StopHumanoid(entity: number)
-	local humanoid = self:_GetHumanoid(entity)
-	if humanoid ~= nil then
-		humanoid:Move(Vector3.zero)
-	end
-end
-
-function MovementService:_TryJumpHumanoid(humanoid: Humanoid)
-	local humanoidState = humanoid:GetState()
-	if humanoidState == Enum.HumanoidStateType.Jumping or humanoidState == Enum.HumanoidStateType.Freefall then
-		return
-	end
-
-	humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
 end
 
 return MovementService

@@ -7,11 +7,16 @@
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local AI = require(ReplicatedStorage.Utilities.AI)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local FastFlow = require(ReplicatedStorage.Utilities.FastFlow)
+local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
+local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local EnemyTypes = require(ReplicatedStorage.Contexts.Enemy.Types.EnemyTypes)
+local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 local Nodes = require(script.Parent.Parent.BehaviorSystem.Nodes)
 local Executors = require(script.Parent.Parent.BehaviorSystem.Executors)
 local EnemyRuntimeProfiles = require(script.Parent.Parent.Runtime.Profiles.EnemyRuntimeProfiles)
@@ -27,6 +32,8 @@ local EnemyTargetingResolverFactory = require(script.Parent.Parent.Runtime.Resol
 
 type EnemyRole = EnemyTypes.EnemyRole
 type EnemyRoleConfig = EnemyTypes.EnemyRoleConfig
+type GridSpec = WorldTypes.GridSpec
+type Tile = WorldTypes.Tile
 
 local EnemySemanticRequirements = table.freeze({
 	FactsDependOnPolling = true,
@@ -38,6 +45,76 @@ local EnemyRuntimeBinding = table.freeze({
 	PollPhase = "EnemySync",
 	SyncPhase = "EnemySync",
 })
+local FASTFLOW_ARROW_FOLDER_NAME = "FastFlowArrowParts"
+local FLOWFIELD_DIRECTION_EPSILON_SQUARED = 1e-6
+
+local function _GetGridSubdivisions(): number
+	local gridConfig = CombatMovementConfig.FASTFLOW_GRID
+	local configured = if gridConfig ~= nil then gridConfig.Subdivisions else nil
+	if type(configured) ~= "number" then
+		return 1
+	end
+
+	return math.max(1, math.floor(configured))
+end
+
+local function _GetGridOriginWorld(spec: GridSpec): Vector3
+	local midCol = math.floor((spec.GridCols + 1) * 0.5)
+	local midRow = math.floor((spec.GridRows + 1) * 0.5)
+	local localX = -spec.GridSize.X * 0.5 + spec.TileSize * 0.5 + (midCol - 1) * spec.TileSize
+	local localZ = -spec.GridSize.Z * 0.5 + spec.TileSize * 0.5 + (midRow - 1) * spec.TileSize
+	return spec.GridCFrame:PointToWorldSpace(Vector3.new(localX, 0, localZ))
+end
+
+local function _BuildFlowGridMapping(spec: GridSpec, subdivisions: number): FastFlowHelper.TFlowGridMapping
+	local midCol = math.floor((spec.GridCols + 1) * 0.5)
+	local midRow = math.floor((spec.GridRows + 1) * 0.5)
+	local minColCell = (-(midCol - 1)) * subdivisions
+	local maxColCell = (spec.GridCols - midCol) * subdivisions
+	local minRowCell = (-(midRow - 1)) * subdivisions
+	local maxRowCell = (spec.GridRows - midRow) * subdivisions
+	local subCellStart = -math.floor((subdivisions - 1) * 0.5)
+	local subCellEnd = subCellStart + subdivisions - 1
+	return {
+		OriginWorld = _GetGridOriginWorld(spec),
+		CellWidthStuds = spec.TileSize / subdivisions,
+		GridHalfSize = math.max(
+			math.abs(minColCell + subCellStart),
+			math.abs(maxColCell + subCellEnd),
+			math.abs(minRowCell + subCellStart),
+			math.abs(maxRowCell + subCellEnd)
+		),
+	}
+end
+
+local function _IsTileBlocked(tile: Tile): boolean
+	return tile.Zone == "blocked"
+end
+
+local function _BuildWallsFromTiles(spec: GridSpec, tiles: { Tile }): (any, FastFlowHelper.TFlowGridMapping)
+	local subdivisions = _GetGridSubdivisions()
+	local mapping = _BuildFlowGridMapping(spec, subdivisions)
+	local walls = FastFlow.Grid.New(mapping.GridHalfSize, true)
+	local subCellStart = -math.floor((subdivisions - 1) * 0.5)
+	local subCellEnd = subCellStart + subdivisions - 1
+
+	for _, tile in ipairs(tiles) do
+		if tile.Coord.GridId == spec.GridId then
+			local centerCell = FastFlowHelper.WorldXZToGridCell(tile.WorldPos, mapping)
+			local isBlocked = _IsTileBlocked(tile)
+			for dx = subCellStart, subCellEnd do
+				for dy = subCellStart, subCellEnd do
+					local cell = Vector2.new(centerCell.X + dx, centerCell.Y + dy)
+					if walls:IsCellInBounds(cell) then
+						walls:SetCell(cell, if isBlocked then true else nil)
+					end
+				end
+			end
+		end
+	end
+
+	return walls, mapping
+end
 
 local EnemyCombatAdapterService = {}
 EnemyCombatAdapterService.__index = EnemyCombatAdapterService
@@ -54,6 +131,7 @@ function EnemyCombatAdapterService.new()
 	local self = setmetatable({}, EnemyCombatAdapterService)
 	self._configuredCombatServices = false
 	self._runtimeOwner = nil
+	self._isFastFlowConfigured = false
 	return self
 end
 
@@ -80,6 +158,7 @@ function EnemyCombatAdapterService:Start(registry: any, _name: string)
 	self._combatContext = registry:Get("CombatContext")
 	self._structureContext = registry:Get("StructureContext")
 	self._baseContext = registry:Get("BaseContext")
+	self._worldContext = registry:Get("WorldContext")
 	self._structureEntityFactory = self._structureContext:GetEntityFactory().value
 	self._baseEntityFactory = self._baseContext:GetEntityFactory().value
 	self._combatServices = self._combatContext:GetCombatRuntimeServices().value
@@ -109,6 +188,158 @@ function EnemyCombatAdapterService:Start(registry: any, _name: string)
 		EnemyEntityFactory = self._entityFactory,
 	})
 	self:_ConfigureCombatServices()
+end
+
+function EnemyCombatAdapterService:_ResolveFastFlowConfiguration(): (any?, FastFlowHelper.TFlowGridMapping?)
+	if self._worldContext == nil then
+		return nil, nil
+	end
+
+	local gridSpecsResult = self._worldContext:GetGridSpecList()
+	if not gridSpecsResult.success then
+		return nil, nil
+	end
+
+	local gridSpecs = gridSpecsResult.value :: { GridSpec }
+	-- FastFlow currently supports one active authored placement grid; WorldGridRuntimeService sorts by GridId.
+	local selectedGrid = gridSpecs[1]
+	if selectedGrid == nil then
+		return nil, nil
+	end
+
+	local allTilesResult = self._worldContext:GetAllTiles()
+	if not allTilesResult.success then
+		return nil, nil
+	end
+
+	local walls, mapping = _BuildWallsFromTiles(selectedGrid, allTilesResult.value :: { Tile })
+	return FastFlowHelper.CreatePathfinderFromWalls(walls), mapping
+end
+
+function EnemyCombatAdapterService:_EnsureFastFlowConfigured()
+	if self._isFastFlowConfigured then
+		return
+	end
+
+	local fastFlowPathfinder, fastFlowMapping = self:_ResolveFastFlowConfiguration()
+	if fastFlowPathfinder == nil or fastFlowMapping == nil then
+		return
+	end
+
+	self._combatServices.MovementService:ConfigureFastFlow(fastFlowPathfinder, fastFlowMapping)
+	self:_VisualizeFastFlow(fastFlowPathfinder, fastFlowMapping)
+	self._isFastFlowConfigured = true
+end
+
+function EnemyCombatAdapterService:_VisualizeFastFlow(pathfinder: any, mapping: FastFlowHelper.TFlowGridMapping)
+	local visualizeConfig = CombatMovementConfig.FASTFLOW_VISUALIZATION
+	local visualFolder = workspace:FindFirstChild("VisualizeParts")
+	if visualFolder ~= nil and visualFolder:IsA("Folder") then
+		visualFolder:ClearAllChildren()
+	end
+	if visualizeConfig == nil or visualizeConfig.Enabled ~= true then
+		return
+	end
+
+	pathfinder:Visualize(
+		mapping.CellWidthStuds,
+		mapping.OriginWorld.Y + visualizeConfig.YLevelOffset,
+		visualizeConfig.ShowWalls,
+		visualizeConfig.ShowCellGrid,
+		visualizeConfig.ShowChunkGrid,
+		visualizeConfig.ShowHPA
+	)
+
+	local offsetXZ = Vector3.new(mapping.OriginWorld.X, 0, mapping.OriginWorld.Z)
+	local refreshedFolder = workspace:FindFirstChild("VisualizeParts")
+	if refreshedFolder == nil or not refreshedFolder:IsA("Folder") then
+		return
+	end
+
+	for _, child in ipairs(refreshedFolder:GetChildren()) do
+		if child:IsA("BasePart") then
+			child.CFrame += offsetXZ
+		end
+	end
+end
+
+function EnemyCombatAdapterService:_GetOrCreateArrowFolder(): Folder
+	local existing = Workspace:FindFirstChild(FASTFLOW_ARROW_FOLDER_NAME)
+	if existing ~= nil and existing:IsA("Folder") then
+		return existing
+	end
+	if existing ~= nil then
+		existing:Destroy()
+	end
+
+	local folder = Instance.new("Folder")
+	folder.Name = FASTFLOW_ARROW_FOLDER_NAME
+	folder.Parent = Workspace
+	return folder
+end
+
+function EnemyCombatAdapterService:_VisualizeFlowArrows(
+	flowfield: any,
+	mapping: FastFlowHelper.TFlowGridMapping,
+	_goalPosition: Vector3
+)
+	local arrowConfig = CombatMovementConfig.FASTFLOW_ARROW_VISUALIZATION
+	local folder = self:_GetOrCreateArrowFolder()
+	folder:ClearAllChildren()
+	if arrowConfig == nil or arrowConfig.Enabled ~= true then
+		return
+	end
+
+	local sampleStep = math.max(1, math.floor(arrowConfig.SampleStepCells))
+	local arrowWidth = math.max(0.05, arrowConfig.ArrowWidthStuds)
+	local arrowLength = math.max(0.25, arrowConfig.ArrowLengthStuds)
+	local maxArrows = math.max(1, math.floor(arrowConfig.MaxArrows))
+	local halfSize = mapping.GridHalfSize
+
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+	raycastParams.FilterDescendantsInstances = { folder }
+
+	local renderedArrows = 0
+	for x = -halfSize, halfSize, sampleStep do
+		for y = -halfSize, halfSize, sampleStep do
+			if renderedArrows >= maxArrows then
+				return
+			end
+
+			local cell = Vector2.new(x, y)
+			local direction = flowfield:GetDirection(cell)
+			if direction ~= nil then
+				local magnitudeSquared = direction.X * direction.X + direction.Y * direction.Y
+				if magnitudeSquared > FLOWFIELD_DIRECTION_EPSILON_SQUARED then
+					local magnitude = math.sqrt(magnitudeSquared)
+					local unitDirection = Vector3.new(direction.X / magnitude, 0, direction.Y / magnitude)
+					local cellWorld = FastFlowHelper.GridCellToWorldXZ(cell, mapping, mapping.OriginWorld.Y)
+					local rayOrigin = cellWorld + Vector3.new(0, math.max(4, arrowConfig.RaycastHeight), 0)
+					local rayDirection = Vector3.new(0, -math.max(8, arrowConfig.RaycastHeight * 2), 0)
+					local raycastResult = Workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+					local terrainY = if raycastResult ~= nil
+						then raycastResult.Position.Y + arrowConfig.TerrainYOffset
+						else cellWorld.Y + arrowConfig.TerrainYOffset
+					local arrowStart = Vector3.new(cellWorld.X, terrainY, cellWorld.Z)
+					local arrowMidpoint = arrowStart + unitDirection * (arrowLength * 0.5)
+
+					local shaft = Instance.new("Part")
+					shaft.Name = "FlowArrow"
+					shaft.Anchored = true
+					shaft.CanCollide = false
+					shaft.CanTouch = false
+					shaft.CanQuery = false
+					shaft.Color = arrowConfig.Color
+					shaft.Size = Vector3.new(arrowWidth, arrowWidth, arrowLength)
+					shaft.CFrame = CFrame.lookAt(arrowMidpoint, arrowMidpoint + unitDirection)
+					shaft.Parent = folder
+
+					renderedArrows += 1
+				end
+			end
+		end
+	end
 end
 
 -- Registers the enemy actor type so the combat runtime can instantiate enemy behavior trees.
@@ -143,6 +374,8 @@ end
     @return Result.Result<string> -- Actor handle for the registered enemy.
 ]=]
 function EnemyCombatAdapterService:RegisterActor(entity: number): Result.Result<string>
+	self:_EnsureFastFlowConfigured()
+
 	-- Resolve the enemy identity and behavior profile before the runtime sees the actor.
 	local identity = self._entityFactory:GetIdentity(entity)
 	local role = self._entityFactory:GetRole(entity)
@@ -246,6 +479,14 @@ function EnemyCombatAdapterService:_ConfigureCombatServices()
 	end)
 	self._combatServices.MovementService:ConfigureEnemyEntityFactory(self._entityFactory)
 	self._combatServices.MovementService:ConfigureLockOnService(self._combatServices.LockOnService)
+	self._combatServices.MovementService:ConfigureFlowfieldDebugRenderer(function(
+		flowfield: any,
+		mapping: FastFlowHelper.TFlowGridMapping,
+		goalPosition: Vector3
+	)
+		self:_VisualizeFlowArrows(flowfield, mapping, goalPosition)
+	end)
+	self._combatServices.MovementService:ConfigureFastFlow(nil, nil)
 	self._combatServices.LockOnService:ConfigureFactories(
 		self._entityFactory,
 		self._structureEntityFactory,

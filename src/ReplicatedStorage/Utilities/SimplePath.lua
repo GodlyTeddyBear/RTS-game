@@ -224,10 +224,24 @@ function Path.new(agent, agentParameters, override)
 	end
 
 	--Path blocked connection
-	self._path.Blocked:Connect(function(...)
-		if (self._currentWaypoint <= ... and self._currentWaypoint + 1 >= ...) and self._humanoid then
-			setJumpState(self)
-			self._events.Blocked:Fire(self._agent, self._waypoints[...])
+	self._path.Blocked:Connect(function(blockedWaypointIndex: number, ...)
+		if not self._humanoid then
+			return
+		end
+		if self._status == Path.StatusType.Active then
+			if (self._currentWaypoint <= blockedWaypointIndex and self._currentWaypoint + 1 >= blockedWaypointIndex) then
+				setJumpState(self)
+				local wp = if self._waypoints then self._waypoints[blockedWaypointIndex] else nil
+				if wp ~= nil then
+					self._events.Blocked:Fire(self._agent, wp)
+				end
+			end
+			return
+		end
+		-- ComputeWaypoints-only / external steering: forward engine blocks so callers can replan without Run().
+		local wp = if self._waypoints then self._waypoints[blockedWaypointIndex] else nil
+		if wp ~= nil then
+			self._events.Blocked:Fire(self._agent, wp)
 		end
 	end)
 

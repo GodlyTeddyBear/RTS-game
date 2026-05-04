@@ -129,7 +129,7 @@ return table.freeze({
 	JumpWhenStuckEnabled = true,
 
 	-- JumpStuckEpsilonStuds (studs, 0+): Max XZ displacement between samples to count as "stuck" for JumpWhenStuck.
-	JumpStuckEpsilonStuds = 0.15,
+	JumpStuckEpsilonStuds = 0.05,
 
 	-- JumpStuckMinTicks: Consecutive stuck samples before triggering JumpWhenStuck (combat ticks, not Heartbeat).
 	JumpStuckMinTicks = 3,
@@ -162,6 +162,9 @@ return table.freeze({
 	-- Decrease: fresher routes; more server load spikes.
 	PathRecomputeCooldownSeconds = 0.15,
 
+	-- PathRefreshIntervalSeconds (0+): If > 0, schedules an async path refresh at least this often (wall clock since last successful compute), even when the goal barely moves. Uses ComputeWaypointsPromise so combat ticks never yield. 0 = off (only goal-delta / replenish / Blocked / no-waypoint replans).
+	PathRefreshIntervalSeconds = 6,
+
 	-- PathReplenishEnabled: If true, after PathReplenishMinTicks with XZ displacement below PathReplenishEpsilonStuds while a path is still active (and not near arrival), clear waypoints and force an immediate replan on the same combat tick.
 	PathReplenishEnabled = true,
 
@@ -173,6 +176,9 @@ return table.freeze({
 
 	-- PathReplenishMinArrivalDistance (studs): Radius around each unit's arrival slot (same as BoidsHelper arrivalPosition: goal + personal GoalSlotRing offset) where path replenishment is disabled. Stops "stuck / low XZ motion" replans while agents are finishing the approach, which would thrash paths and goals. Use 0 or omit to apply the built-in default in code: max(1.5 * ArrivalThreshold, 5).
 	PathReplenishMinArrivalDistance = 0,
+
+	-- EnginePathBlockedReplanCooldownSeconds (0+): Min seconds between Path.Blocked-driven replans on the boids watch path (throttles burst events).
+	EnginePathBlockedReplanCooldownSeconds = 0.12,
 
 	-- MinGroupSize (int, 1+): With MovementMode Any, need at least this many eligible entities to prefer boids over Path.
 	-- Increase: small packs use Path only, boids only for bigger groups.

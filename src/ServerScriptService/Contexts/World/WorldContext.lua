@@ -127,6 +127,7 @@ local Ensure = Result.Ensure
 type GridCoord = WorldTypes.GridCoord
 type SpawnArea = WorldTypes.SpawnArea
 type Tile = WorldTypes.Tile
+type GridSpec = WorldTypes.GridSpec
 type WorldContextService = typeof(WorldContext) & {
 	_getTileQuery: any,
 	_getSpawnAreasQuery: any,
@@ -238,6 +239,28 @@ function WorldContext.GetLaneTiles(self: WorldContextService): Result.Result<{ T
 	return Catch(function()
 		return Ok(self._getLaneTilesQuery:Execute())
 	end, "World:GetLaneTiles")
+end
+
+--[=[
+	Returns the authoritative placement-grid specifications used to derive world bounds.
+	@within WorldContext
+	@return Result.Result<{ GridSpec }> -- Grid-spec list wrapped in `Result`.
+]=]
+function WorldContext.GetGridSpecList(self: WorldContextService): Result.Result<{ GridSpec }>
+	return Catch(function()
+		return Ok(self._worldGridService:GetGridSpecList())
+	end, "World:GetGridSpecList")
+end
+
+--[=[
+	Returns all authoritative world tiles across all placement grids.
+	@within WorldContext
+	@return Result.Result<{ Tile }> -- Full tile list wrapped in `Result`.
+]=]
+function WorldContext.GetAllTiles(self: WorldContextService): Result.Result<{ Tile }>
+	return Catch(function()
+		return Ok(self._worldGridService:GetAllTiles())
+	end, "World:GetAllTiles")
 end
 
 --[=[

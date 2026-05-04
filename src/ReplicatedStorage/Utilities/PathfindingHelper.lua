@@ -502,6 +502,8 @@ end
 --[=[
     Computes path waypoints asynchronously so yielding `ComputeAsync` work never runs on the caller thread.
     Mirrors `RunPath` scheduling: optional initial delay from options, then deferred compute + path cleanup.
+    When `RetainPathAfterWaypointCompute` is true in `options`, a successful compute leaves `path` intact so
+    callers can subscribe to `path.Blocked` (see `SimplePath`).
     @within PathfindingHelper
     @param path any -- Path object created by `CreatePath`.
     @param targetPosition Vector3 -- Target world position used for path computation.
@@ -546,7 +548,10 @@ function PathfindingHelper.ComputeWaypointsPromise(
 
 			Promise.try(function()
 				local ok, waypoints, reason = PathfindingHelper.ComputeWaypoints(path, targetPosition, entity, options)
-				cleanupPathOnce()
+				local retainOnSuccess = _resolvePathOption(options, "RetainPathAfterWaypointCompute") == true
+				if not ok or not retainOnSuccess then
+					cleanupPathOnce()
+				end
 				if cancelled then
 					return
 				end
