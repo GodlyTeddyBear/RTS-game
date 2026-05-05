@@ -18,7 +18,7 @@ StructureConfig.STRUCTURES = table.freeze({
 		DisplayName = "Sentry Turret",
 		MaxHealth = 100,
 		RuntimeProfileId = "Attack",
-		AttackRange = 30,
+		AttackRange = 90,
 		AttackDamage = 15,
 		AttackCooldown = 1.2,
 		AimRig = table.freeze({
@@ -28,7 +28,8 @@ StructureConfig.STRUCTURES = table.freeze({
 			SmoothTime = 0.15,
 			Weight = 1,
 			Priority = 1,
-			ReturnToNeutralWhenNoTarget = true,
+			-- Keep last tracked orientation until a new target is acquired.
+			ReturnToNeutralWhenNoTarget = false,
 		}),
 	}),
 	Extractor = table.freeze({

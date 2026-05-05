@@ -29,6 +29,10 @@
         }
       }
     },
+    "ServerStorage":{
+      "$path": "src/ServerStorage",
+      "$ignoreUnknownInstances": true
+    },
 
     "StarterPlayer": {
       "StarterPlayerScripts": {
