@@ -5,6 +5,7 @@ local Constants = require(script.Parent.Parent.Parent.Parent.Parent.Constants)
 local PluginTypes = require(script.Parent.Parent.Parent.Parent.Parent.Types.PluginTypes)
 
 type TPluginSettings = PluginTypes.TPluginSettings
+type TPluginWaypoint = PluginTypes.TPluginWaypoint
 
 local SETTINGS_KEY = "BuildingPlugin.Settings"
 local OPEN_KEY = "BuildingPlugin.IsOpen"
@@ -39,6 +40,10 @@ function PluginSettingsService:GetSectionExpansionById(): { [string]: boolean }
 	return table.clone(self.Settings.SectionExpansionById)
 end
 
+function PluginSettingsService:GetWaypoints(): { TPluginWaypoint }
+	return table.clone(self.Settings.Waypoints)
+end
+
 function PluginSettingsService:GetSectionExpanded(sectionId: string): boolean
 	local value = self.Settings.SectionExpansionById[sectionId]
 	if value == nil then
@@ -63,6 +68,11 @@ function PluginSettingsService:SetSectionsExpanded(sectionIds: { string }, isExp
 		self.Settings.SectionExpansionById[sectionId] = isExpanded
 	end
 
+	self:_SaveSettings()
+end
+
+function PluginSettingsService:SetWaypoints(waypoints: { TPluginWaypoint })
+	self.Settings.Waypoints = self:_NormalizeWaypoints(waypoints)
 	self:_SaveSettings()
 end
 
@@ -129,6 +139,10 @@ function PluginSettingsService:_LoadSettings(): TPluginSettings
 		loadedSettings.SectionExpansionById = self:_NormalizeSectionExpansionById(rawSettings.SectionExpansionById)
 	end
 
+	if type(rawSettings.Waypoints) == "table" then
+		loadedSettings.Waypoints = self:_NormalizeWaypoints(rawSettings.Waypoints)
+	end
+
 	return loadedSettings
 end
 
@@ -142,6 +156,7 @@ function PluginSettingsService:_CreateDefaultSettings(): TPluginSettings
 		FolderPresets = table.clone(Constants.DefaultFolderPresets),
 		RecentAssets = {},
 		SectionExpansionById = {},
+		Waypoints = {},
 	}
 end
 
@@ -194,6 +209,47 @@ function PluginSettingsService:_NormalizeSectionExpansionById(rawSectionExpansio
 	end
 
 	return sectionExpansionById
+end
+
+function PluginSettingsService:_NormalizeWaypoints(rawWaypoints: { any }): { TPluginWaypoint }
+	local normalizedWaypoints: { TPluginWaypoint } = {}
+
+	for _, rawWaypoint in rawWaypoints do
+		if type(rawWaypoint) == "table" then
+			local rawName = rawWaypoint.Name
+			local rawComponents = rawWaypoint.CameraCFrameComponents
+			if type(rawName) == "string" and type(rawComponents) == "table" then
+				local name = string.gsub(rawName, "^%s*(.-)%s*$", "%1")
+				if name ~= "" then
+					local components = {}
+					local isValid = true
+
+					for index = 1, 12 do
+						local value = rawComponents[index]
+						if type(value) ~= "number" then
+							isValid = false
+							break
+						end
+
+						components[index] = value
+					end
+
+					if isValid then
+						table.insert(normalizedWaypoints, {
+							Name = name,
+							CameraCFrameComponents = components,
+						})
+
+						if #normalizedWaypoints >= Constants.MaxWaypoints then
+							break
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return normalizedWaypoints
 end
 
 return PluginSettingsService

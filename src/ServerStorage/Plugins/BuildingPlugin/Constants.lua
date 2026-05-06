@@ -12,6 +12,7 @@ return table.freeze({
 	DefaultWidgetSize = Vector2.new(360, 620),
 	MinWidgetSize = Vector2.new(320, 460),
 	MaxRecentAssets = 8,
+	MaxWaypoints = 50,
 	DefaultFolderPresets = {
 		"Props",
 		"Decor",

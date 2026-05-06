@@ -1,6 +1,6 @@
 --!strict
 
-export type TPluginTab = "Building" | "Settings" | "Assets"
+export type TPluginTab = "Building" | "Settings" | "Assets" | "Welding" | "Waypoints"
 
 export type TPluginStatusTone = "Info" | "Success" | "Error"
 
@@ -28,11 +28,23 @@ export type TPluginActionResult = {
 	Path: string?,
 }
 
+export type TPluginWaypoint = {
+	Name: string,
+	CameraCFrameComponents: { number },
+}
+
+export type TWaypointActionResult = {
+	Success: boolean,
+	Message: string,
+	SavedWaypointName: string?,
+}
+
 export type TPluginSettings = {
 	AssetRootName: string,
 	FolderPresets: { string },
 	RecentAssets: { string },
 	SectionExpansionById: { [string]: boolean },
+	Waypoints: { TPluginWaypoint },
 }
 
 return table.freeze({})

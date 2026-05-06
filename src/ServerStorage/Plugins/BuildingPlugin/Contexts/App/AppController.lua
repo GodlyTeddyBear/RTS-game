@@ -14,6 +14,7 @@ local PluginServicesProvider = require(script.Parent.Infrastructure.PluginServic
 local AssetsAtom = require(script.Parent.Parent.Assets.Infrastructure.AssetsAtom)
 local SettingsAtom = require(script.Parent.Parent.Settings.Infrastructure.SettingsAtom)
 local BuildingAtom = require(script.Parent.Parent.Building.Infrastructure.BuildingAtom)
+local WaypointsAtom = require(script.Parent.Parent.Waypoints.Infrastructure.WaypointsAtom)
 local App = require(script.Parent.Presentation.App)
 
 type TPluginContext = {
@@ -99,6 +100,7 @@ function AppController:_RefreshAllState()
 	self:_RefreshBuildingState()
 	self:_RefreshAssetsState()
 	self:_RefreshSettingsState()
+	self:_RefreshWaypointsState()
 end
 
 function AppController:_RefreshBuildingState()
@@ -123,6 +125,10 @@ function AppController:_RefreshSettingsState()
 	SettingsAtom.SetFolderPresets(folderPresets)
 	SettingsAtom.SetPresetText(table.concat(folderPresets, ", "))
 	SettingsAtom.SetSectionExpansionById(self.PluginContext.Services.Settings:GetSectionExpansionById())
+end
+
+function AppController:_RefreshWaypointsState()
+	WaypointsAtom.SetWaypoints(self.PluginContext.Services.Waypoints:GetWaypoints())
 end
 
 return AppController

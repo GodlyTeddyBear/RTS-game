@@ -11,6 +11,8 @@ local StatusBar = require(script.Parent.Atoms.StatusBar)
 local BuildingPresentation = require(script.Parent.Parent.Parent.Building.Presentation)
 local AssetsPresentation = require(script.Parent.Parent.Parent.Assets.Presentation)
 local SettingsPresentation = require(script.Parent.Parent.Parent.Settings.Presentation)
+local WeldingPresentation = require(script.Parent.Parent.Parent.Welding.Presentation)
+local WaypointsPresentation = require(script.Parent.Parent.Parent.Waypoints.Presentation)
 
 local function App()
 	local theme = StudioComponents.useTheme()
@@ -38,6 +40,14 @@ local function App()
 			Assets = {
 				LayoutOrder = 3,
 				Content = React.createElement(AssetsPresentation.Screen),
+			},
+			Welding = {
+				LayoutOrder = 4,
+				Content = React.createElement(WeldingPresentation.Screen),
+			},
+			Waypoints = {
+				LayoutOrder = 5,
+				Content = React.createElement(WaypointsPresentation.Screen),
 			},
 		}),
 		StatusBar = React.createElement(StatusBar, {
