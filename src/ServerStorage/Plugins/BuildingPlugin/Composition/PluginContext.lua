@@ -41,12 +41,16 @@ function PluginContext.new(pluginInstance: Plugin)
 
 	-- Wire services
 	local settingsService = PluginSettingsService.new(pluginInstance)
+	local dataTransferService = PluginDataTransferService.new(settingsService)
+	settingsService:SetOnSettingsSaved(function()
+		dataTransferService:SyncCurrentData()
+	end)
 
 	local services = {
 		History = ChangeHistoryAdapter,
 		Selection = SelectionService,
 		Settings = settingsService,
-		DataTransfer = PluginDataTransferService.new(settingsService),
+		DataTransfer = dataTransferService,
 		Waypoints = WaypointService.new(settingsService),
 		Assets = AssetLibraryService.new(settingsService, ChangeHistoryAdapter, SelectionService),
 		Folder = FolderService.new(ChangeHistoryAdapter, SelectionService),

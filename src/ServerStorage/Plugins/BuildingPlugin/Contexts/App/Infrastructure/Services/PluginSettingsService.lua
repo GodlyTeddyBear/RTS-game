@@ -22,7 +22,12 @@ function PluginSettingsService.new(pluginInstance: Plugin)
 	local self = setmetatable({}, PluginSettingsService)
 	self.Plugin = pluginInstance
 	self.Settings = self:_LoadSettings()
+	self.OnSettingsSaved = nil
 	return self
+end
+
+function PluginSettingsService:SetOnSettingsSaved(callback: (() -> ())?)
+	self.OnSettingsSaved = callback
 end
 
 function PluginSettingsService:GetSettings(): TPluginSettings
@@ -192,8 +197,9 @@ function PluginSettingsService:ApplyDataTransferPayloadByTab(payloadByTab: { [st
 	local assetsTab = rawAssetsTab
 	local waypointsTab = rawWaypointsTab
 
+	local nextAssetRootName = self.Settings.AssetRootName
 	if type(settingsTab.AssetRootName) == "string" and settingsTab.AssetRootName ~= "" then
-		self.Settings.AssetRootName = settingsTab.AssetRootName
+		nextAssetRootName = settingsTab.AssetRootName
 	end
 
 	if type(settingsTab.FolderPresetGroups) ~= "table" then
@@ -205,26 +211,33 @@ function PluginSettingsService:ApplyDataTransferPayloadByTab(payloadByTab: { [st
 		return false, normalizeError
 	end
 
-	self.Settings.FolderPresetGroups = normalizedGroups
-	self.Settings.FolderPresets = table.clone(normalizedGroups[1].FolderNames)
-
+	local nextSectionExpansionById
 	if type(settingsTab.SectionExpansionById) == "table" then
-		self.Settings.SectionExpansionById = self:_NormalizeSectionExpansionById(settingsTab.SectionExpansionById)
+		nextSectionExpansionById = self:_NormalizeSectionExpansionById(settingsTab.SectionExpansionById)
 	else
-		self.Settings.SectionExpansionById = {}
+		nextSectionExpansionById = {}
 	end
 
+	local nextRecentAssets
 	if type(assetsTab.RecentAssets) == "table" then
-		self.Settings.RecentAssets = self:_NormalizeRecentAssets(assetsTab.RecentAssets)
+		nextRecentAssets = self:_NormalizeRecentAssets(assetsTab.RecentAssets)
 	else
 		return false, "Imported Assets tab is missing RecentAssets."
 	end
 
+	local nextWaypoints
 	if type(waypointsTab.Waypoints) == "table" then
-		self.Settings.Waypoints = self:_NormalizeWaypoints(waypointsTab.Waypoints)
+		nextWaypoints = self:_NormalizeWaypoints(waypointsTab.Waypoints)
 	else
 		return false, "Imported Waypoints tab is missing Waypoints."
 	end
+
+	self.Settings.AssetRootName = nextAssetRootName
+	self.Settings.FolderPresetGroups = normalizedGroups
+	self.Settings.FolderPresets = table.clone(normalizedGroups[1].FolderNames)
+	self.Settings.SectionExpansionById = nextSectionExpansionById
+	self.Settings.RecentAssets = nextRecentAssets
+	self.Settings.Waypoints = nextWaypoints
 
 	self:_SaveSettings()
 	return true, "Imported plugin settings data."
@@ -279,6 +292,11 @@ end
 
 function PluginSettingsService:_SaveSettings()
 	self.Plugin:SetSetting(SETTINGS_KEY, self.Settings)
+
+	local callback = self.OnSettingsSaved
+	if callback ~= nil then
+		pcall(callback)
+	end
 end
 
 function PluginSettingsService:_CreateDefaultSettings(): TPluginSettings

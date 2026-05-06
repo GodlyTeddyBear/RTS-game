@@ -9,6 +9,7 @@ type TPluginActionResult = PluginTypes.TPluginActionResult
 
 local DATA_FOLDER_NAME = "__Data__"
 local OLD_FOLDER_NAME = "__Old__"
+local CURRENT_FOLDER_NAME = "__Current__"
 local TAB_SETTINGS = "Settings"
 local TAB_ASSETS = "Assets"
 local TAB_WAYPOINTS = "Waypoints"
@@ -31,7 +32,7 @@ function PluginDataTransferService:GetSnapshotNames(): { string }
 
 	local snapshotNames = {}
 	for _, child in dataFolder:GetChildren() do
-		if child:IsA("Folder") and child.Name ~= OLD_FOLDER_NAME then
+		if child:IsA("Folder") and child.Name ~= OLD_FOLDER_NAME and child.Name ~= CURRENT_FOLDER_NAME then
 			table.insert(snapshotNames, child.Name)
 		end
 	end
@@ -60,7 +61,7 @@ function PluginDataTransferService:ImportSnapshot(snapshotName: string): TPlugin
 	end
 
 	local sourceSnapshot = dataFolder:FindFirstChild(snapshotName)
-	if sourceSnapshot == nil or not sourceSnapshot:IsA("Folder") or sourceSnapshot.Name == OLD_FOLDER_NAME then
+	if sourceSnapshot == nil or not sourceSnapshot:IsA("Folder") or sourceSnapshot.Name == OLD_FOLDER_NAME or sourceSnapshot.Name == CURRENT_FOLDER_NAME then
 		return self:_CreateResult(false, "Selected snapshot was not found.")
 	end
 
@@ -78,7 +79,41 @@ function PluginDataTransferService:ImportSnapshot(snapshotName: string): TPlugin
 		return self:_CreateResult(false, applyMessage)
 	end
 
+	self:SyncCurrentData()
+
 	return self:_CreateResult(true, "Imported snapshot " .. snapshotName .. ". Previous data was backed up to " .. oldSnapshot.Name .. ".")
+end
+
+function PluginDataTransferService:EnsureCurrentDataOnStart(): TPluginActionResult
+	self:_EnsureDataFolder()
+	local currentFolder = self:_GetCurrentFolder()
+
+	if currentFolder == nil then
+		local createdCurrentFolder = self:_EnsureCurrentFolder()
+		self:_WritePayload(createdCurrentFolder, self.Settings:GetDataTransferPayloadByTab())
+		return self:_CreateResult(true, "Created ServerStorage." .. DATA_FOLDER_NAME .. "/" .. CURRENT_FOLDER_NAME .. ".")
+	end
+
+	local decodeSuccess, decodedOrError = self:_DecodePayloadFromFolder(currentFolder)
+	if decodeSuccess then
+		local applySuccess, applyMessage = self.Settings:ApplyDataTransferPayloadByTab(decodedOrError)
+		if applySuccess then
+			return self:_CreateResult(true, "Loaded current data from ServerStorage." .. DATA_FOLDER_NAME .. "/" .. CURRENT_FOLDER_NAME .. ".")
+		end
+
+		local syncResult = self:SyncCurrentData()
+		return self:_CreateResult(false, "Failed to apply current data (" .. applyMessage .. "). " .. syncResult.Message)
+	end
+
+	local syncResult = self:SyncCurrentData()
+	return self:_CreateResult(false, decodedOrError .. " " .. syncResult.Message)
+end
+
+function PluginDataTransferService:SyncCurrentData(): TPluginActionResult
+	local currentFolder = self:_EnsureCurrentFolder()
+	local payloadByTab = self.Settings:GetDataTransferPayloadByTab()
+	self:_WritePayload(currentFolder, payloadByTab)
+	return self:_CreateResult(true, "Synced ServerStorage." .. DATA_FOLDER_NAME .. "/" .. CURRENT_FOLDER_NAME .. ".")
 end
 
 function PluginDataTransferService:_EnsureDataFolder(): Folder
@@ -113,6 +148,33 @@ function PluginDataTransferService:_EnsureOldFolder(): Folder
 	createdOldFolder.Name = OLD_FOLDER_NAME
 	createdOldFolder.Parent = dataFolder
 	return createdOldFolder
+end
+
+function PluginDataTransferService:_GetCurrentFolder(): Folder?
+	local dataFolder = self:_GetDataFolder()
+	if dataFolder == nil then
+		return nil
+	end
+
+	local currentFolder = dataFolder:FindFirstChild(CURRENT_FOLDER_NAME)
+	if currentFolder and currentFolder:IsA("Folder") then
+		return currentFolder
+	end
+
+	return nil
+end
+
+function PluginDataTransferService:_EnsureCurrentFolder(): Folder
+	local dataFolder = self:_EnsureDataFolder()
+	local currentFolder = dataFolder:FindFirstChild(CURRENT_FOLDER_NAME)
+	if currentFolder and currentFolder:IsA("Folder") then
+		return currentFolder
+	end
+
+	local createdCurrentFolder = Instance.new("Folder")
+	createdCurrentFolder.Name = CURRENT_FOLDER_NAME
+	createdCurrentFolder.Parent = dataFolder
+	return createdCurrentFolder
 end
 
 function PluginDataTransferService:_CreateSnapshotFolder(parentFolder: Folder): Folder

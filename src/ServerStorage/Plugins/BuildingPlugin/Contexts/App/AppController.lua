@@ -42,6 +42,10 @@ function AppController:Start()
 	self.Root:render(self:_CreateRootElement())
 
 	self:_ConnectSignals()
+	local currentDataResult = self.PluginContext.Services.DataTransfer:EnsureCurrentDataOnStart()
+	if not currentDataResult.Success then
+		AppAtom.SetStatus(currentDataResult.Message, "Error")
+	end
 	self:_RefreshAllState()
 	self:_SetWidgetEnabled(self.PluginContext.Services.Settings:GetIsOpen())
 end
