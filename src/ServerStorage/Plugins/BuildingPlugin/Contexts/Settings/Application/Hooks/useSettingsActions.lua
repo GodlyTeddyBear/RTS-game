@@ -2,7 +2,9 @@
 
 local AppAtom = require(script.Parent.Parent.Parent.Parent.App.Infrastructure.AppAtom)
 local usePluginServices = require(script.Parent.Parent.Parent.Parent.App.Infrastructure.usePluginServices)
+local AssetsAtom = require(script.Parent.Parent.Parent.Parent.Assets.Infrastructure.AssetsAtom)
 local SettingsAtom = require(script.Parent.Parent.Parent.Infrastructure.SettingsAtom)
+local WaypointsAtom = require(script.Parent.Parent.Parent.Parent.Waypoints.Infrastructure.WaypointsAtom)
 
 local function parseCommaSeparatedText(rawText: string): { string }
 	local values = {}
@@ -24,16 +26,36 @@ local function useSettingsActions()
 		SettingsAtom.SetFolderPresets(folderPresets)
 		SettingsAtom.SetFolderPresetGroups(folderPresetGroups)
 		SettingsAtom.SetSectionExpansionById(services.Settings:GetSectionExpansionById())
+		SettingsAtom.SetBackupSnapshotNames(services.DataTransfer:GetSnapshotNames())
 
 		local selectedLabel = SettingsAtom.GetState().SelectedPresetGroupLabel
 		if selectedLabel ~= nil then
+			local hasSelectedLabel = false
 			for _, presetGroup in folderPresetGroups do
 				if presetGroup.Label == selectedLabel then
-					return
+					hasSelectedLabel = true
+					break
 				end
 			end
 
-			SettingsAtom.SetSelectedPresetGroupLabel(nil)
+			if not hasSelectedLabel then
+				SettingsAtom.SetSelectedPresetGroupLabel(nil)
+			end
+		end
+
+		local selectedBackupSnapshotName = SettingsAtom.GetState().SelectedBackupSnapshotName
+		if selectedBackupSnapshotName ~= nil then
+			local hasSelectedBackupSnapshot = false
+			for _, backupSnapshotName in SettingsAtom.GetState().BackupSnapshotNames do
+				if backupSnapshotName == selectedBackupSnapshotName then
+					hasSelectedBackupSnapshot = true
+					break
+				end
+			end
+
+			if not hasSelectedBackupSnapshot then
+				SettingsAtom.SetSelectedBackupSnapshotName(nil)
+			end
 		end
 	end
 
@@ -41,6 +63,20 @@ local function useSettingsActions()
 		local success, message = services.Settings:SetFolderPresetGroups(nextGroups)
 		refreshSettings()
 		AppAtom.SetStatus(message, if success then "Success" else "Error")
+	end
+
+	local function refreshAssetsAndWaypoints()
+		local assetsState = AssetsAtom.GetState()
+		AssetsAtom.SetAssetRootExists(services.Assets:GetAssetRoot() ~= nil)
+		local recentAssetEntries = services.Assets:GetAssetEntries(nil)
+		local recentAssetPaths = {}
+		for _, assetEntry in recentAssetEntries do
+			table.insert(recentAssetPaths, assetEntry.Path)
+		end
+		AssetsAtom.SetRecentAssets(recentAssetPaths)
+		AssetsAtom.SetAssetEntries(services.Assets:GetAssetEntries(assetsState.SearchText))
+
+		WaypointsAtom.SetWaypoints(services.Waypoints:GetWaypoints())
 	end
 
 	return {
@@ -146,6 +182,33 @@ local function useSettingsActions()
 				nextSectionExpansionById[sectionId] = isExpanded
 			end
 			SettingsAtom.SetSectionExpansionById(nextSectionExpansionById)
+		end,
+		SetSelectedBackupSnapshotName = function(value: string?)
+			SettingsAtom.SetSelectedBackupSnapshotName(value)
+		end,
+		ExportCurrentData = function()
+			local result = services.DataTransfer:ExportCurrentData()
+			AppAtom.SetStatus(result.Message, if result.Success then "Success" else "Error")
+			refreshSettings()
+		end,
+		ImportSelectedData = function()
+			local selectedBackupSnapshotName = SettingsAtom.GetState().SelectedBackupSnapshotName
+			if selectedBackupSnapshotName == nil then
+				AppAtom.SetStatus("Select a backup snapshot before importing.", "Error")
+				return
+			end
+
+			local result = services.DataTransfer:ImportSnapshot(selectedBackupSnapshotName)
+			AppAtom.SetStatus(result.Message, if result.Success then "Success" else "Error")
+			if result.Success then
+				local folderPresets = services.Settings:GetFolderPresets()
+				local folderPresetGroups = services.Settings:GetFolderPresetGroups()
+				SettingsAtom.SetFolderPresets(folderPresets)
+				SettingsAtom.SetFolderPresetGroups(folderPresetGroups)
+				SettingsAtom.SetSectionExpansionById(services.Settings:GetSectionExpansionById())
+				refreshAssetsAndWaypoints()
+			end
+			refreshSettings()
 		end,
 	}
 end

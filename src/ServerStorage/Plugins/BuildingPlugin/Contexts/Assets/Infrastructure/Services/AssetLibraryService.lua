@@ -86,10 +86,22 @@ function AssetLibraryService:InsertAsset(assetPath: string): TPluginActionResult
 		return self:_CreateResult(false, 0, 0, "Selected asset was not found in the library.")
 	end
 
+	local currentCamera = Workspace.CurrentCamera
+	if currentCamera == nil then
+		return self:_CreateResult(false, 0, 0, "Cannot insert asset because no current camera is available.")
+	end
+
 	local insertedClone = assetEntry.Instance:Clone()
+	if not insertedClone:IsA("Model") then
+		return self:_CreateResult(false, 0, 0, "Cannot insert asset because the saved library item is not a model.")
+	end
+
+	local clonePivot = insertedClone:GetPivot()
+	local targetPivot = CFrame.fromMatrix(currentCamera.CFrame.Position, clonePivot.XVector, clonePivot.YVector, clonePivot.ZVector)
 
 	self.History:Run("Insert Asset", function()
 		insertedClone.Parent = Workspace
+		insertedClone:PivotTo(targetPivot)
 	end)
 
 	self.Selection.SetSelection({ insertedClone })

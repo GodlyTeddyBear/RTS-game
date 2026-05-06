@@ -14,6 +14,10 @@ local OPEN_KEY = "BuildingPlugin.IsOpen"
 local PluginSettingsService = {}
 PluginSettingsService.__index = PluginSettingsService
 
+local DATA_TRANSFER_TAB_SETTINGS = "Settings"
+local DATA_TRANSFER_TAB_ASSETS = "Assets"
+local DATA_TRANSFER_TAB_WAYPOINTS = "Waypoints"
+
 function PluginSettingsService.new(pluginInstance: Plugin)
 	local self = setmetatable({}, PluginSettingsService)
 	self.Plugin = pluginInstance
@@ -149,6 +153,81 @@ end
 
 function PluginSettingsService:SetIsOpen(isOpen: boolean)
 	self.Plugin:SetSetting(OPEN_KEY, isOpen)
+end
+
+function PluginSettingsService:GetDataTransferPayloadByTab(): { [string]: any }
+	return {
+		[DATA_TRANSFER_TAB_SETTINGS] = {
+			AssetRootName = self.Settings.AssetRootName,
+			FolderPresetGroups = self:GetFolderPresetGroups(),
+			SectionExpansionById = self:GetSectionExpansionById(),
+		},
+		[DATA_TRANSFER_TAB_ASSETS] = {
+			RecentAssets = self:GetRecentAssets(),
+		},
+		[DATA_TRANSFER_TAB_WAYPOINTS] = {
+			Waypoints = self:GetWaypoints(),
+		},
+	}
+end
+
+function PluginSettingsService:ApplyDataTransferPayloadByTab(payloadByTab: { [string]: any }): (boolean, string)
+	local rawSettingsTab = payloadByTab[DATA_TRANSFER_TAB_SETTINGS]
+	local rawAssetsTab = payloadByTab[DATA_TRANSFER_TAB_ASSETS]
+	local rawWaypointsTab = payloadByTab[DATA_TRANSFER_TAB_WAYPOINTS]
+
+	if type(rawSettingsTab) ~= "table" then
+		return false, "Imported payload is missing Settings data."
+	end
+
+	if type(rawAssetsTab) ~= "table" then
+		return false, "Imported payload is missing Assets data."
+	end
+
+	if type(rawWaypointsTab) ~= "table" then
+		return false, "Imported payload is missing Waypoints data."
+	end
+
+	local settingsTab = rawSettingsTab
+	local assetsTab = rawAssetsTab
+	local waypointsTab = rawWaypointsTab
+
+	if type(settingsTab.AssetRootName) == "string" and settingsTab.AssetRootName ~= "" then
+		self.Settings.AssetRootName = settingsTab.AssetRootName
+	end
+
+	if type(settingsTab.FolderPresetGroups) ~= "table" then
+		return false, "Imported Settings tab is missing FolderPresetGroups."
+	end
+
+	local normalizedGroups, normalizeError = self:_NormalizeFolderPresetGroups(settingsTab.FolderPresetGroups)
+	if normalizeError ~= nil then
+		return false, normalizeError
+	end
+
+	self.Settings.FolderPresetGroups = normalizedGroups
+	self.Settings.FolderPresets = table.clone(normalizedGroups[1].FolderNames)
+
+	if type(settingsTab.SectionExpansionById) == "table" then
+		self.Settings.SectionExpansionById = self:_NormalizeSectionExpansionById(settingsTab.SectionExpansionById)
+	else
+		self.Settings.SectionExpansionById = {}
+	end
+
+	if type(assetsTab.RecentAssets) == "table" then
+		self.Settings.RecentAssets = self:_NormalizeRecentAssets(assetsTab.RecentAssets)
+	else
+		return false, "Imported Assets tab is missing RecentAssets."
+	end
+
+	if type(waypointsTab.Waypoints) == "table" then
+		self.Settings.Waypoints = self:_NormalizeWaypoints(waypointsTab.Waypoints)
+	else
+		return false, "Imported Waypoints tab is missing Waypoints."
+	end
+
+	self:_SaveSettings()
+	return true, "Imported plugin settings data."
 end
 
 function PluginSettingsService:_LoadSettings(): TPluginSettings

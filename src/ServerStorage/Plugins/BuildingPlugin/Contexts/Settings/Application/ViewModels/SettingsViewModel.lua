@@ -83,6 +83,9 @@ function SettingsViewModel.FromState(state)
 		HelpText = helpText,
 		ExampleText = exampleText,
 		StructurePreviewText = structurePreviewText,
+		BackupSnapshotNames = state.BackupSnapshotNames,
+		SelectedBackupSnapshotName = state.SelectedBackupSnapshotName,
+		BackupHelpText = "Export saves current plugin data into ServerStorage.__Data__.<timestamp>. Import always backs up current data into ServerStorage.__Data__.__Old__ before applying selected snapshot.",
 	})
 end
 

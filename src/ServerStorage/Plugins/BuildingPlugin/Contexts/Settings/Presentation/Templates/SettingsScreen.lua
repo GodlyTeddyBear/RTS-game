@@ -8,10 +8,12 @@ local StudioComponents = require(ReplicatedStorage.Packages.StudioComponents)
 local useSettingsState = require(script.Parent.Parent.Parent.Application.Hooks.useSettingsState)
 local useSettingsActions = require(script.Parent.Parent.Parent.Application.Hooks.useSettingsActions)
 local SettingsViewModel = require(script.Parent.Parent.Parent.Application.ViewModels.SettingsViewModel)
+local DataBackupPanel = require(script.Parent.Parent.Organisms.DataBackupPanel)
 local PresetGroupsPanel = require(script.Parent.Parent.Organisms.PresetGroupsPanel)
 
 local SECTION_ID = "folder_preset_groups"
-local SETTINGS_SECTION_IDS = { SECTION_ID }
+local DATA_BACKUP_SECTION_ID = "data_backup"
+local SETTINGS_SECTION_IDS = { SECTION_ID, DATA_BACKUP_SECTION_ID }
 
 local function isSectionExpanded(sectionExpansionById: { [string]: boolean }, sectionId: string): boolean
 	local value = sectionExpansionById[sectionId]
@@ -94,6 +96,17 @@ local function SettingsScreen()
 			OnSavePresetGroup = settingsActions.SavePresetGroup,
 			OnLoadSelectedPresetGroup = settingsActions.LoadSelectedPresetGroup,
 			OnDeleteSelectedPresetGroup = settingsActions.DeleteSelectedPresetGroup,
+		}),
+		DataBackup = React.createElement(DataBackupPanel, {
+			SectionId = DATA_BACKUP_SECTION_ID,
+			IsExpanded = isSectionExpanded(settingsState.SectionExpansionById, DATA_BACKUP_SECTION_ID),
+			OnExpandedChanged = settingsActions.SetSectionExpanded,
+			SnapshotNames = viewModel.BackupSnapshotNames,
+			SelectedSnapshotName = viewModel.SelectedBackupSnapshotName,
+			HelpText = viewModel.BackupHelpText,
+			OnSelectedSnapshotNameChanged = settingsActions.SetSelectedBackupSnapshotName,
+			OnExportCurrentData = settingsActions.ExportCurrentData,
+			OnImportSelectedData = settingsActions.ImportSelectedData,
 		}),
 	})
 end

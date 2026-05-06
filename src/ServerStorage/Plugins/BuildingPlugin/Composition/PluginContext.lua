@@ -4,6 +4,7 @@
 local Constants = require(script.Parent.Parent.Constants)
 local AppController = require(script.Parent.Parent.Contexts.App.AppController)
 local ChangeHistoryAdapter = require(script.Parent.Parent.Contexts.App.Infrastructure.Services.ChangeHistoryAdapter)
+local PluginDataTransferService = require(script.Parent.Parent.Contexts.App.Infrastructure.Services.PluginDataTransferService)
 local PluginSettingsService = require(script.Parent.Parent.Contexts.App.Infrastructure.Services.PluginSettingsService)
 local WaypointService = require(script.Parent.Parent.Contexts.Waypoints.Infrastructure.Services.WaypointService)
 local AssetLibraryService = require(script.Parent.Parent.Contexts.Assets.Infrastructure.Services.AssetLibraryService)
@@ -45,6 +46,7 @@ function PluginContext.new(pluginInstance: Plugin)
 		History = ChangeHistoryAdapter,
 		Selection = SelectionService,
 		Settings = settingsService,
+		DataTransfer = PluginDataTransferService.new(settingsService),
 		Waypoints = WaypointService.new(settingsService),
 		Assets = AssetLibraryService.new(settingsService, ChangeHistoryAdapter, SelectionService),
 		Folder = FolderService.new(ChangeHistoryAdapter, SelectionService),
