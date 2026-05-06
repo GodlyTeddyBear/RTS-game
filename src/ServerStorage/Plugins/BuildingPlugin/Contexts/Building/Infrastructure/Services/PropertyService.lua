@@ -1,43 +1,38 @@
 --!strict
 
-local SelectionHelper = require(script.Parent.SelectionHelper)
+local PluginTypes = require(script.Parent.Parent.Parent.Parent.Parent.Types.PluginTypes)
 
-export type TResult = {
-	Success: boolean,
-	ChangedCount: number,
-	SkippedCount: number,
-	Message: string,
-}
-
+type TPluginActionResult = PluginTypes.TPluginActionResult
 type TPropertyTarget = BasePart | Decal | Texture
 
 local PropertyService = {}
 PropertyService.__index = PropertyService
 
-function PropertyService.new(historyAdapter)
+function PropertyService.new(historyAdapter, selectionService)
 	local self = setmetatable({}, PropertyService)
-	self.HistoryAdapter = historyAdapter
+	self.History = historyAdapter
+	self.Selection = selectionService
 	return self
 end
 
-function PropertyService:SetAnchored(isAnchored: boolean): TResult
+function PropertyService:SetAnchored(isAnchored: boolean): TPluginActionResult
 	return self:_ApplyBasePartProperty("Set Anchored", "Anchored", isAnchored)
 end
 
-function PropertyService:SetCanCollide(canCollide: boolean): TResult
+function PropertyService:SetCanCollide(canCollide: boolean): TPluginActionResult
 	return self:_ApplyBasePartProperty("Set CanCollide", "CanCollide", canCollide)
 end
 
-function PropertyService:SetCanQuery(canQuery: boolean): TResult
+function PropertyService:SetCanQuery(canQuery: boolean): TPluginActionResult
 	return self:_ApplyBasePartProperty("Set CanQuery", "CanQuery", canQuery)
 end
 
-function PropertyService:SetCanTouch(canTouch: boolean): TResult
+function PropertyService:SetCanTouch(canTouch: boolean): TPluginActionResult
 	return self:_ApplyBasePartProperty("Set CanTouch", "CanTouch", canTouch)
 end
 
-function PropertyService:SetTransparency(transparency: number): TResult
-	local selectionRoots = SelectionHelper.GetSelectionRoots()
+function PropertyService:SetTransparency(transparency: number): TPluginActionResult
+	local selectionRoots = self.Selection.GetSelectionRoots()
 	if #selectionRoots == 0 then
 		return self:_CreateResult(false, 0, 0, "Select at least one instance before changing transparency.")
 	end
@@ -47,7 +42,7 @@ function PropertyService:SetTransparency(transparency: number): TResult
 		return self:_CreateResult(false, 0, #selectionRoots, "No selected instances support transparency.")
 	end
 
-	self.HistoryAdapter:Run("Set Transparency", function()
+	self.History:Run("Set Transparency", function()
 		for _, target in targets do
 			target.Transparency = transparency
 		end
@@ -56,13 +51,13 @@ function PropertyService:SetTransparency(transparency: number): TResult
 	return self:_CreateResult(true, #targets, 0, ("Set transparency to %.2f."):format(transparency))
 end
 
-function PropertyService:SetMaterial(material: Enum.Material): TResult
-	local baseParts = self:_CollectBaseParts(SelectionHelper.GetSelectionRoots())
+function PropertyService:SetMaterial(material: Enum.Material): TPluginActionResult
+	local baseParts = self:_CollectBaseParts(self.Selection.GetSelectionRoots())
 	if #baseParts == 0 then
 		return self:_CreateResult(false, 0, 0, "No selected parts support material changes.")
 	end
 
-	self.HistoryAdapter:Run("Set Material", function()
+	self.History:Run("Set Material", function()
 		for _, basePart in baseParts do
 			basePart.Material = material
 		end
@@ -71,13 +66,13 @@ function PropertyService:SetMaterial(material: Enum.Material): TResult
 	return self:_CreateResult(true, #baseParts, 0, "Set material to " .. material.Name .. ".")
 end
 
-function PropertyService:SetColor(color: Color3, colorName: string): TResult
-	local baseParts = self:_CollectBaseParts(SelectionHelper.GetSelectionRoots())
+function PropertyService:SetColor(color: Color3, colorName: string): TPluginActionResult
+	local baseParts = self:_CollectBaseParts(self.Selection.GetSelectionRoots())
 	if #baseParts == 0 then
 		return self:_CreateResult(false, 0, 0, "No selected parts support color changes.")
 	end
 
-	self.HistoryAdapter:Run("Set Color", function()
+	self.History:Run("Set Color", function()
 		for _, basePart in baseParts do
 			basePart.Color = color
 		end
@@ -86,13 +81,17 @@ function PropertyService:SetColor(color: Color3, colorName: string): TResult
 	return self:_CreateResult(true, #baseParts, 0, "Set color to " .. colorName .. ".")
 end
 
-function PropertyService:_ApplyBasePartProperty(waypointName: string, propertyName: "Anchored" | "CanCollide" | "CanQuery" | "CanTouch", propertyValue: boolean): TResult
-	local baseParts = self:_CollectBaseParts(SelectionHelper.GetSelectionRoots())
+function PropertyService:_ApplyBasePartProperty(
+	waypointName: string,
+	propertyName: "Anchored" | "CanCollide" | "CanQuery" | "CanTouch",
+	propertyValue: boolean
+): TPluginActionResult
+	local baseParts = self:_CollectBaseParts(self.Selection.GetSelectionRoots())
 	if #baseParts == 0 then
 		return self:_CreateResult(false, 0, 0, "No selected parts support " .. propertyName .. ".")
 	end
 
-	self.HistoryAdapter:Run(waypointName, function()
+	self.History:Run(waypointName, function()
 		for _, basePart in baseParts do
 			if propertyName == "Anchored" then
 				basePart.Anchored = propertyValue
@@ -113,7 +112,15 @@ function PropertyService:_CollectBaseParts(selectionRoots: { Instance }): { Base
 	local baseParts = {}
 
 	for _, selectionRoot in selectionRoots do
-		self:_CollectDescendantsOfType(selectionRoot, "BasePart", baseParts)
+		if selectionRoot:IsA("BasePart") then
+			table.insert(baseParts, selectionRoot)
+		end
+
+		for _, descendant in selectionRoot:GetDescendants() do
+			if descendant:IsA("BasePart") then
+				table.insert(baseParts, descendant)
+			end
+		end
 	end
 
 	return baseParts
@@ -137,24 +144,13 @@ function PropertyService:_CollectTransparencyTargets(selectionRoots: { Instance 
 	return transparencyTargets
 end
 
-function PropertyService:_CollectDescendantsOfType(selectionRoot: Instance, className: string, results: { BasePart })
-	if className == "BasePart" and selectionRoot:IsA("BasePart") then
-		table.insert(results, selectionRoot :: BasePart)
-	end
-
-	for _, descendant in selectionRoot:GetDescendants() do
-		if className == "BasePart" and descendant:IsA("BasePart") then
-			table.insert(results, descendant :: BasePart)
-		end
-	end
-end
-
-function PropertyService:_CreateResult(success: boolean, changedCount: number, skippedCount: number, message: string): TResult
+function PropertyService:_CreateResult(success: boolean, changedCount: number, skippedCount: number, message: string): TPluginActionResult
 	return {
 		Success = success,
 		ChangedCount = changedCount,
 		SkippedCount = skippedCount,
 		Message = message,
+		Path = nil,
 	}
 end
 

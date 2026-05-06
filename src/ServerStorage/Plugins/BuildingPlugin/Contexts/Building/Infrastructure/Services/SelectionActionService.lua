@@ -1,32 +1,28 @@
 --!strict
 
-local SelectionHelper = require(script.Parent.SelectionHelper)
+local PluginTypes = require(script.Parent.Parent.Parent.Parent.Parent.Types.PluginTypes)
 
-export type TResult = {
-	Success: boolean,
-	ChangedCount: number,
-	SkippedCount: number,
-	Message: string,
-}
+type TPluginActionResult = PluginTypes.TPluginActionResult
 
 local SelectionActionService = {}
 SelectionActionService.__index = SelectionActionService
 
-function SelectionActionService.new(historyAdapter)
+function SelectionActionService.new(historyAdapter, selectionService)
 	local self = setmetatable({}, SelectionActionService)
-	self.HistoryAdapter = historyAdapter
+	self.History = historyAdapter
+	self.Selection = selectionService
 	return self
 end
 
-function SelectionActionService:DuplicateSelection(): TResult
-	local selectionRoots = SelectionHelper.GetSelectionRoots()
+function SelectionActionService:DuplicateSelection(): TPluginActionResult
+	local selectionRoots = self.Selection.GetSelectionRoots()
 	if #selectionRoots == 0 then
 		return self:_CreateResult(false, 0, 0, "Select at least one instance before duplicating.")
 	end
 
 	local duplicatedInstances = {}
 
-	self.HistoryAdapter:Run("Duplicate Selection", function()
+	self.History:Run("Duplicate Selection", function()
 		for _, selectionRoot in selectionRoots do
 			local parentInstance = selectionRoot.Parent
 			if parentInstance ~= nil then
@@ -41,17 +37,18 @@ function SelectionActionService:DuplicateSelection(): TResult
 		return self:_CreateResult(false, 0, #selectionRoots, "No selected instances could be duplicated.")
 	end
 
-	SelectionHelper.SetSelection(duplicatedInstances)
+	self.Selection.SetSelection(duplicatedInstances)
 
 	return self:_CreateResult(true, #duplicatedInstances, #selectionRoots - #duplicatedInstances, "Duplicated current selection.")
 end
 
-function SelectionActionService:_CreateResult(success: boolean, changedCount: number, skippedCount: number, message: string): TResult
+function SelectionActionService:_CreateResult(success: boolean, changedCount: number, skippedCount: number, message: string): TPluginActionResult
 	return {
 		Success = success,
 		ChangedCount = changedCount,
 		SkippedCount = skippedCount,
 		Message = message,
+		Path = nil,
 	}
 end
 

@@ -1,30 +1,26 @@
 --!strict
 
-local SelectionHelper = require(script.Parent.SelectionHelper)
+local PluginTypes = require(script.Parent.Parent.Parent.Parent.Parent.Types.PluginTypes)
 
-export type TResult = {
-	Success: boolean,
-	ChangedCount: number,
-	SkippedCount: number,
-	Message: string,
-}
+type TPluginActionResult = PluginTypes.TPluginActionResult
 
 local FolderService = {}
 FolderService.__index = FolderService
 
-function FolderService.new(historyAdapter)
+function FolderService.new(historyAdapter, selectionService)
 	local self = setmetatable({}, FolderService)
-	self.HistoryAdapter = historyAdapter
+	self.History = historyAdapter
+	self.Selection = selectionService
 	return self
 end
 
-function FolderService:WrapSelection(folderName: string): TResult
+function FolderService:WrapSelection(folderName: string): TPluginActionResult
 	local normalizedFolderName = string.gsub(folderName, "^%s*(.-)%s*$", "%1")
 	if normalizedFolderName == "" then
 		return self:_CreateResult(false, 0, 0, "Enter a folder name before grouping the selection.")
 	end
 
-	local selectionRoots = SelectionHelper.GetSelectionRoots()
+	local selectionRoots = self.Selection.GetSelectionRoots()
 	if #selectionRoots == 0 then
 		return self:_CreateResult(false, 0, 0, "Select at least one instance before creating a folder.")
 	end
@@ -43,7 +39,7 @@ function FolderService:WrapSelection(folderName: string): TResult
 	local folder = Instance.new("Folder")
 	folder.Name = normalizedFolderName
 
-	self.HistoryAdapter:Run("Wrap Selection In Folder", function()
+	self.History:Run("Wrap Selection In Folder", function()
 		folder.Parent = parentInstance
 
 		for _, selectionRoot in selectionRoots do
@@ -51,17 +47,18 @@ function FolderService:WrapSelection(folderName: string): TResult
 		end
 	end)
 
-	SelectionHelper.SetSelection({ folder })
+	self.Selection.SetSelection({ folder })
 
 	return self:_CreateResult(true, #selectionRoots, 0, "Wrapped selection into folder " .. normalizedFolderName .. ".")
 end
 
-function FolderService:_CreateResult(success: boolean, changedCount: number, skippedCount: number, message: string): TResult
+function FolderService:_CreateResult(success: boolean, changedCount: number, skippedCount: number, message: string): TPluginActionResult
 	return {
 		Success = success,
 		ChangedCount = changedCount,
 		SkippedCount = skippedCount,
 		Message = message,
+		Path = nil,
 	}
 end
 
