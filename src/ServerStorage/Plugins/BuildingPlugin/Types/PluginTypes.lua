@@ -32,6 +32,7 @@ export type TPluginSettings = {
 	AssetRootName: string,
 	FolderPresets: { string },
 	RecentAssets: { string },
+	SectionExpansionById: { [string]: boolean },
 }
 
 return table.freeze({})

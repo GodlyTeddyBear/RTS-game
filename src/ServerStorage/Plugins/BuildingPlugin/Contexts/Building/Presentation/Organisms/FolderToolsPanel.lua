@@ -7,6 +7,9 @@ local StudioComponents = require(ReplicatedStorage.Packages.StudioComponents)
 local SectionPanel = require(script.Parent.Parent.Parent.Parent.App.Presentation.Atoms.SectionPanel)
 
 type TFolderToolsPanelProps = {
+	SectionId: string,
+	IsExpanded: boolean,
+	OnExpandedChanged: (sectionId: string, isExpanded: boolean) -> (),
 	FolderName: string,
 	FolderPresets: { string },
 	OnFolderNameChanged: (folderName: string) -> (),
@@ -35,8 +38,10 @@ local function FolderToolsPanel(props: TFolderToolsPanelProps)
 	if #props.FolderPresets > 0 then
 		children.PresetLabel = React.createElement(StudioComponents.Label, {
 			LayoutOrder = 3,
+			Size = UDim2.new(1, 0, 0, 24),
 			Text = "Preset Folder Names",
 			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Center,
 		})
 
 		for index, presetName in ipairs(props.FolderPresets) do
@@ -52,8 +57,11 @@ local function FolderToolsPanel(props: TFolderToolsPanelProps)
 	end
 
 	return React.createElement(SectionPanel, {
+		SectionId = props.SectionId,
 		LayoutOrder = 2,
 		Title = "Folder Tools",
+		IsExpanded = props.IsExpanded,
+		OnExpandedChanged = props.OnExpandedChanged,
 	}, children)
 end
 

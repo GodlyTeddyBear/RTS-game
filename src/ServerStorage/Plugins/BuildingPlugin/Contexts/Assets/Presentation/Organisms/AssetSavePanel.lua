@@ -7,6 +7,9 @@ local StudioComponents = require(ReplicatedStorage.Packages.StudioComponents)
 local SectionPanel = require(script.Parent.Parent.Parent.Parent.App.Presentation.Atoms.SectionPanel)
 
 type TAssetSavePanelProps = {
+	SectionId: string,
+	IsExpanded: boolean,
+	OnExpandedChanged: (sectionId: string, isExpanded: boolean) -> (),
 	AssetName: string,
 	OnAssetNameChanged: (assetName: string) -> (),
 	OnSaveSelection: () -> (),
@@ -14,8 +17,11 @@ type TAssetSavePanelProps = {
 
 local function AssetSavePanel(props: TAssetSavePanelProps)
 	return React.createElement(SectionPanel, {
+		SectionId = props.SectionId,
 		LayoutOrder = 2,
 		Title = "Save Selection",
+		IsExpanded = props.IsExpanded,
+		OnExpandedChanged = props.OnExpandedChanged,
 	}, {
 		NameInput = React.createElement(StudioComponents.TextInput, {
 			ClearTextOnFocus = false,

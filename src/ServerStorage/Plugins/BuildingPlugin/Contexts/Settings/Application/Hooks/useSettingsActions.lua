@@ -21,6 +21,7 @@ local function useSettingsActions()
 		local folderPresets = services.Settings:GetFolderPresets()
 		SettingsAtom.SetFolderPresets(folderPresets)
 		SettingsAtom.SetPresetText(table.concat(folderPresets, ", "))
+		SettingsAtom.SetSectionExpansionById(services.Settings:GetSectionExpansionById())
 	end
 
 	return {
@@ -32,6 +33,19 @@ local function useSettingsActions()
 			services.Settings:SetFolderPresets(parsePresetSettings(SettingsAtom.GetState().PresetText))
 			refreshSettings()
 			AppAtom.SetStatus("Updated folder presets.", "Success")
+		end,
+		SetSectionExpanded = function(sectionId: string, isExpanded: boolean)
+			services.Settings:SetSectionExpanded(sectionId, isExpanded)
+			SettingsAtom.SetSectionExpanded(sectionId, isExpanded)
+		end,
+		SetSectionsExpanded = function(sectionIds: { string }, isExpanded: boolean)
+			services.Settings:SetSectionsExpanded(sectionIds, isExpanded)
+			local sectionExpansionById = SettingsAtom.GetState().SectionExpansionById
+			local nextSectionExpansionById = table.clone(sectionExpansionById)
+			for _, sectionId in sectionIds do
+				nextSectionExpansionById[sectionId] = isExpanded
+			end
+			SettingsAtom.SetSectionExpansionById(nextSectionExpansionById)
 		end,
 	}
 end

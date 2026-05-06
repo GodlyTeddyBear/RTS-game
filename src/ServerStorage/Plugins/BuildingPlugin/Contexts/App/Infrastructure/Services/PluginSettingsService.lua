@@ -35,8 +35,34 @@ function PluginSettingsService:GetRecentAssets(): { string }
 	return table.clone(self.Settings.RecentAssets)
 end
 
+function PluginSettingsService:GetSectionExpansionById(): { [string]: boolean }
+	return table.clone(self.Settings.SectionExpansionById)
+end
+
+function PluginSettingsService:GetSectionExpanded(sectionId: string): boolean
+	local value = self.Settings.SectionExpansionById[sectionId]
+	if value == nil then
+		return true
+	end
+
+	return value
+end
+
 function PluginSettingsService:SetFolderPresets(presetNames: { string })
 	self.Settings.FolderPresets = self:_NormalizePresetNames(presetNames)
+	self:_SaveSettings()
+end
+
+function PluginSettingsService:SetSectionExpanded(sectionId: string, isExpanded: boolean)
+	self.Settings.SectionExpansionById[sectionId] = isExpanded
+	self:_SaveSettings()
+end
+
+function PluginSettingsService:SetSectionsExpanded(sectionIds: { string }, isExpanded: boolean)
+	for _, sectionId in sectionIds do
+		self.Settings.SectionExpansionById[sectionId] = isExpanded
+	end
+
 	self:_SaveSettings()
 end
 
@@ -86,6 +112,10 @@ function PluginSettingsService:_LoadSettings(): TPluginSettings
 		loadedSettings.RecentAssets = self:_NormalizeRecentAssets(rawSettings.RecentAssets)
 	end
 
+	if type(rawSettings.SectionExpansionById) == "table" then
+		loadedSettings.SectionExpansionById = self:_NormalizeSectionExpansionById(rawSettings.SectionExpansionById)
+	end
+
 	return loadedSettings
 end
 
@@ -98,6 +128,7 @@ function PluginSettingsService:_CreateDefaultSettings(): TPluginSettings
 		AssetRootName = Constants.AssetRootName,
 		FolderPresets = table.clone(Constants.DefaultFolderPresets),
 		RecentAssets = {},
+		SectionExpansionById = {},
 	}
 end
 
@@ -138,6 +169,18 @@ function PluginSettingsService:_NormalizeRecentAssets(rawRecentAssets: { any }):
 	end
 
 	return recentAssets
+end
+
+function PluginSettingsService:_NormalizeSectionExpansionById(rawSectionExpansionById: { [string]: any }): { [string]: boolean }
+	local sectionExpansionById: { [string]: boolean } = {}
+
+	for key, value in rawSectionExpansionById do
+		if type(key) == "string" and key ~= "" and type(value) == "boolean" then
+			sectionExpansionById[key] = value
+		end
+	end
+
+	return sectionExpansionById
 end
 
 return PluginSettingsService

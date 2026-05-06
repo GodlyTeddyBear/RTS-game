@@ -7,13 +7,19 @@ local StudioComponents = require(ReplicatedStorage.Packages.StudioComponents)
 local SectionPanel = require(script.Parent.Parent.Parent.Parent.App.Presentation.Atoms.SectionPanel)
 
 type TSelectionActionsPanelProps = {
+	SectionId: string,
+	IsExpanded: boolean,
+	OnExpandedChanged: (sectionId: string, isExpanded: boolean) -> (),
 	OnDuplicateSelection: () -> (),
 }
 
 local function SelectionActionsPanel(props: TSelectionActionsPanelProps)
 	return React.createElement(SectionPanel, {
+		SectionId = props.SectionId,
 		LayoutOrder = 3,
 		Title = "Selection Actions",
+		IsExpanded = props.IsExpanded,
+		OnExpandedChanged = props.OnExpandedChanged,
 	}, {
 		Duplicate = React.createElement(StudioComponents.Button, {
 			LayoutOrder = 1,

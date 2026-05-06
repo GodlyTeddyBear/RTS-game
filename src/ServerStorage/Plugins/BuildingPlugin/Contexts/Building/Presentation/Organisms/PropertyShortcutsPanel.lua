@@ -51,6 +51,9 @@ type TPropertyButtonSpec = {
 }
 
 type TPropertyShortcutsPanelProps = {
+	SectionId: string,
+	IsExpanded: boolean,
+	OnExpandedChanged: (sectionId: string, isExpanded: boolean) -> (),
 	OnPropertyAction: (actionName: string) -> (),
 }
 
@@ -93,8 +96,11 @@ local function PropertyShortcutsPanel(props: TPropertyShortcutsPanelProps)
 	end
 
 	return React.createElement(SectionPanel, {
+		SectionId = props.SectionId,
 		LayoutOrder = 4,
 		Title = "Property Shortcuts",
+		IsExpanded = props.IsExpanded,
+		OnExpandedChanged = props.OnExpandedChanged,
 	}, children)
 end
 

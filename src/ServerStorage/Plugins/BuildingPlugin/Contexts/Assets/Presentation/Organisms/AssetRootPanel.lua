@@ -8,6 +8,9 @@ local SectionPanel = require(script.Parent.Parent.Parent.Parent.App.Presentation
 local TextBlock = require(script.Parent.Parent.Parent.Parent.App.Presentation.Atoms.TextBlock)
 
 type TAssetRootPanelProps = {
+	SectionId: string,
+	IsExpanded: boolean,
+	OnExpandedChanged: (sectionId: string, isExpanded: boolean) -> (),
 	AssetRootExists: boolean,
 	AssetRootStatusText: string,
 	OnCreateAssetRoot: () -> (),
@@ -31,8 +34,11 @@ local function AssetRootPanel(props: TAssetRootPanelProps)
 	end
 
 	return React.createElement(SectionPanel, {
+		SectionId = props.SectionId,
 		LayoutOrder = 1,
 		Title = "Asset Root",
+		IsExpanded = props.IsExpanded,
+		OnExpandedChanged = props.OnExpandedChanged,
 	}, children)
 end
 

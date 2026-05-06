@@ -116,6 +116,7 @@ function AppController:_RefreshSettingsState()
 	local folderPresets = self.PluginContext.Services.Settings:GetFolderPresets()
 	SettingsAtom.SetFolderPresets(folderPresets)
 	SettingsAtom.SetPresetText(table.concat(folderPresets, ", "))
+	SettingsAtom.SetSectionExpansionById(self.PluginContext.Services.Settings:GetSectionExpansionById())
 end
 
 return AppController

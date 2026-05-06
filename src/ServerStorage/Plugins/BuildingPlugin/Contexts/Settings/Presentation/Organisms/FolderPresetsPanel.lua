@@ -8,6 +8,9 @@ local SectionPanel = require(script.Parent.Parent.Parent.Parent.App.Presentation
 local TextBlock = require(script.Parent.Parent.Parent.Parent.App.Presentation.Atoms.TextBlock)
 
 type TFolderPresetsPanelProps = {
+	SectionId: string,
+	IsExpanded: boolean,
+	OnExpandedChanged: (sectionId: string, isExpanded: boolean) -> (),
 	PresetText: string,
 	PreviewText: string,
 	OnPresetTextChanged: (presetText: string) -> (),
@@ -16,8 +19,11 @@ type TFolderPresetsPanelProps = {
 
 local function FolderPresetsPanel(props: TFolderPresetsPanelProps)
 	return React.createElement(SectionPanel, {
+		SectionId = props.SectionId,
 		LayoutOrder = 1,
 		Title = "Folder Presets",
+		IsExpanded = props.IsExpanded,
+		OnExpandedChanged = props.OnExpandedChanged,
 	}, {
 		Help = React.createElement(TextBlock, {
 			LayoutOrder = 1,

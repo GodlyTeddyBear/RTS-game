@@ -14,6 +14,9 @@ type TAssetEntry = {
 }
 
 type TLibraryBrowserPanelProps = {
+	SectionId: string,
+	IsExpanded: boolean,
+	OnExpandedChanged: (sectionId: string, isExpanded: boolean) -> (),
 	SearchText: string,
 	AssetEntries: { TAssetEntry },
 	OnSearchChanged: (searchText: string) -> (),
@@ -51,8 +54,11 @@ local function LibraryBrowserPanel(props: TLibraryBrowserPanelProps)
 	end
 
 	return React.createElement(SectionPanel, {
+		SectionId = props.SectionId,
 		LayoutOrder = 4,
 		Title = "Library Browser",
+		IsExpanded = props.IsExpanded,
+		OnExpandedChanged = props.OnExpandedChanged,
 	}, children)
 end
 
