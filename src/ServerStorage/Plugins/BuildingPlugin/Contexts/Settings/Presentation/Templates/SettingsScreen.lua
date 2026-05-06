@@ -8,9 +8,9 @@ local StudioComponents = require(ReplicatedStorage.Packages.StudioComponents)
 local useSettingsState = require(script.Parent.Parent.Parent.Application.Hooks.useSettingsState)
 local useSettingsActions = require(script.Parent.Parent.Parent.Application.Hooks.useSettingsActions)
 local SettingsViewModel = require(script.Parent.Parent.Parent.Application.ViewModels.SettingsViewModel)
-local FolderPresetsPanel = require(script.Parent.Parent.Organisms.FolderPresetsPanel)
+local PresetGroupsPanel = require(script.Parent.Parent.Organisms.PresetGroupsPanel)
 
-local SECTION_ID = "folder_presets"
+local SECTION_ID = "folder_preset_groups"
 local SETTINGS_SECTION_IDS = { SECTION_ID }
 
 local function isSectionExpanded(sectionExpansionById: { [string]: boolean }, sectionId: string): boolean
@@ -74,14 +74,26 @@ local function SettingsScreen()
 				Text = "Collapse All",
 			}),
 		}),
-		FolderPresets = React.createElement(FolderPresetsPanel, {
+		PresetGroups = React.createElement(PresetGroupsPanel, {
 			SectionId = SECTION_ID,
 			IsExpanded = isSectionExpanded(settingsState.SectionExpansionById, SECTION_ID),
 			OnExpandedChanged = settingsActions.SetSectionExpanded,
-			OnPresetTextChanged = settingsActions.SetPresetText,
-			OnSavePresets = settingsActions.SavePresets,
-			PresetText = viewModel.PresetText,
+			PresetGroupLabelInput = viewModel.PresetGroupLabelInput,
+			PresetGroupFolderNamesInput = viewModel.PresetGroupFolderNamesInput,
+			PresetGroupIncludesInput = viewModel.PresetGroupIncludesInput,
+			GroupLabels = viewModel.GroupLabels,
+			SelectedPresetGroupLabel = viewModel.SelectedPresetGroupLabel,
 			PreviewText = viewModel.PreviewText,
+			HelpText = viewModel.HelpText,
+			ExampleText = viewModel.ExampleText,
+			StructurePreviewText = viewModel.StructurePreviewText,
+			OnPresetGroupLabelInputChanged = settingsActions.SetPresetGroupLabelInput,
+			OnPresetGroupFolderNamesInputChanged = settingsActions.SetPresetGroupFolderNamesInput,
+			OnPresetGroupIncludesInputChanged = settingsActions.SetPresetGroupIncludesInput,
+			OnSelectedPresetGroupLabelChanged = settingsActions.SetSelectedPresetGroupLabel,
+			OnSavePresetGroup = settingsActions.SavePresetGroup,
+			OnLoadSelectedPresetGroup = settingsActions.LoadSelectedPresetGroup,
+			OnDeleteSelectedPresetGroup = settingsActions.DeleteSelectedPresetGroup,
 		}),
 	})
 end

@@ -13,6 +13,7 @@ return table.freeze({
 	MinWidgetSize = Vector2.new(320, 460),
 	MaxRecentAssets = 8,
 	MaxWaypoints = 50,
+	MaxFolderPresetIncludeDepth = 8,
 	DefaultFolderPresets = {
 		"Props",
 		"Decor",
@@ -20,4 +21,5 @@ return table.freeze({
 		"Blockout",
 		"Variant",
 	},
+	DefaultFolderPresetGroupLabel = "Default",
 })

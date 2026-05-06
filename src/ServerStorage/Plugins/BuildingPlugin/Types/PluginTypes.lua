@@ -1,6 +1,6 @@
 --!strict
 
-export type TPluginTab = "Building" | "Settings" | "Assets" | "Welding" | "Waypoints"
+export type TPluginTab = "Building" | "Organization" | "Settings" | "Assets" | "Welding" | "Waypoints"
 
 export type TPluginStatusTone = "Info" | "Success" | "Error"
 
@@ -39,9 +39,16 @@ export type TWaypointActionResult = {
 	SavedWaypointName: string?,
 }
 
+export type TFolderPresetGroup = {
+	Label: string,
+	FolderNames: { string },
+	Includes: { string },
+}
+
 export type TPluginSettings = {
 	AssetRootName: string,
 	FolderPresets: { string },
+	FolderPresetGroups: { TFolderPresetGroup },
 	RecentAssets: { string },
 	SectionExpansionById: { [string]: boolean },
 	Waypoints: { TPluginWaypoint },

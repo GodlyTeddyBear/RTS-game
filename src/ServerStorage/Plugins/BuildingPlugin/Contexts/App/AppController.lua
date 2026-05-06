@@ -14,6 +14,7 @@ local PluginServicesProvider = require(script.Parent.Infrastructure.PluginServic
 local AssetsAtom = require(script.Parent.Parent.Assets.Infrastructure.AssetsAtom)
 local SettingsAtom = require(script.Parent.Parent.Settings.Infrastructure.SettingsAtom)
 local BuildingAtom = require(script.Parent.Parent.Building.Infrastructure.BuildingAtom)
+local OrganizationAtom = require(script.Parent.Parent.Organization.Infrastructure.OrganizationAtom)
 local WaypointsAtom = require(script.Parent.Parent.Waypoints.Infrastructure.WaypointsAtom)
 local App = require(script.Parent.Presentation.App)
 
@@ -86,6 +87,7 @@ function AppController:_ConnectSignals()
 
 	table.insert(self.Connections, Selection.SelectionChanged:Connect(function()
 		self:_RefreshBuildingState()
+		self:_RefreshOrganizationState()
 	end))
 end
 
@@ -98,6 +100,7 @@ end
 
 function AppController:_RefreshAllState()
 	self:_RefreshBuildingState()
+	self:_RefreshOrganizationState()
 	self:_RefreshAssetsState()
 	self:_RefreshSettingsState()
 	self:_RefreshWaypointsState()
@@ -105,6 +108,10 @@ end
 
 function AppController:_RefreshBuildingState()
 	BuildingAtom.SetSelectionSummary(self.PluginContext.Services.Selection.GetSummary())
+end
+
+function AppController:_RefreshOrganizationState()
+	OrganizationAtom.SetAvailableChildNames(self.PluginContext.Services.Selection.GetSelectedParentChildNames())
 end
 
 function AppController:_RefreshAssetsState()
@@ -122,8 +129,9 @@ end
 
 function AppController:_RefreshSettingsState()
 	local folderPresets = self.PluginContext.Services.Settings:GetFolderPresets()
+	local folderPresetGroups = self.PluginContext.Services.Settings:GetFolderPresetGroups()
 	SettingsAtom.SetFolderPresets(folderPresets)
-	SettingsAtom.SetPresetText(table.concat(folderPresets, ", "))
+	SettingsAtom.SetFolderPresetGroups(folderPresetGroups)
 	SettingsAtom.SetSectionExpansionById(self.PluginContext.Services.Settings:GetSectionExpansionById())
 end
 

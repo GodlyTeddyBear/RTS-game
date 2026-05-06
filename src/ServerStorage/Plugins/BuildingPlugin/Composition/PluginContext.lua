@@ -8,6 +8,7 @@ local PluginSettingsService = require(script.Parent.Parent.Contexts.App.Infrastr
 local WaypointService = require(script.Parent.Parent.Contexts.Waypoints.Infrastructure.Services.WaypointService)
 local AssetLibraryService = require(script.Parent.Parent.Contexts.Assets.Infrastructure.Services.AssetLibraryService)
 local FolderService = require(script.Parent.Parent.Contexts.Building.Infrastructure.Services.FolderService)
+local OrganizationService = require(script.Parent.Parent.Contexts.Organization.Infrastructure.Services.OrganizationService)
 local PropertyService = require(script.Parent.Parent.Contexts.Building.Infrastructure.Services.PropertyService)
 local SelectionActionService =
 	require(script.Parent.Parent.Contexts.Building.Infrastructure.Services.SelectionActionService)
@@ -47,6 +48,7 @@ function PluginContext.new(pluginInstance: Plugin)
 		Waypoints = WaypointService.new(settingsService),
 		Assets = AssetLibraryService.new(settingsService, ChangeHistoryAdapter, SelectionService),
 		Folder = FolderService.new(ChangeHistoryAdapter, SelectionService),
+		Organization = OrganizationService.new(ChangeHistoryAdapter, SelectionService, settingsService),
 		Property = PropertyService.new(ChangeHistoryAdapter, SelectionService),
 		SelectionActions = SelectionActionService.new(ChangeHistoryAdapter, SelectionService),
 	}

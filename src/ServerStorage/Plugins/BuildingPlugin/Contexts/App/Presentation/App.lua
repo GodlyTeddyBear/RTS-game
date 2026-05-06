@@ -9,6 +9,7 @@ local useAppState = require(script.Parent.Parent.Application.Hooks.useAppState)
 local useAppActions = require(script.Parent.Parent.Application.Hooks.useAppActions)
 local StatusBar = require(script.Parent.Atoms.StatusBar)
 local BuildingPresentation = require(script.Parent.Parent.Parent.Building.Presentation)
+local OrganizationPresentation = require(script.Parent.Parent.Parent.Organization.Presentation)
 local AssetsPresentation = require(script.Parent.Parent.Parent.Assets.Presentation)
 local SettingsPresentation = require(script.Parent.Parent.Parent.Settings.Presentation)
 local WeldingPresentation = require(script.Parent.Parent.Parent.Welding.Presentation)
@@ -33,20 +34,24 @@ local function App()
 				LayoutOrder = 1,
 				Content = React.createElement(BuildingPresentation.Screen),
 			},
-			Settings = {
+			Organization = {
 				LayoutOrder = 2,
+				Content = React.createElement(OrganizationPresentation.Screen),
+			},
+			Settings = {
+				LayoutOrder = 3,
 				Content = React.createElement(SettingsPresentation.Screen),
 			},
 			Assets = {
-				LayoutOrder = 3,
+				LayoutOrder = 4,
 				Content = React.createElement(AssetsPresentation.Screen),
 			},
 			Welding = {
-				LayoutOrder = 4,
+				LayoutOrder = 5,
 				Content = React.createElement(WeldingPresentation.Screen),
 			},
 			Waypoints = {
-				LayoutOrder = 5,
+				LayoutOrder = 6,
 				Content = React.createElement(WaypointsPresentation.Screen),
 			},
 		}),

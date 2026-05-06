@@ -17,6 +17,8 @@ Then place `StudioPlugins/BuildingPlugin.rbxm` into your Roblox Studio plugins f
 - Browse and insert models from `ReplicatedStorage.__Assets__`
 - Save the current selection into `ReplicatedStorage.__Assets__`
 - Wrap the current selection into a new folder
+- Organize selected parent children by name into folders
+- Create nested folder structures from labeled preset groups
 - Duplicate the current selection
 - Bulk property shortcuts for build-focused part properties
-- Editable preset folder names stored in plugin settings
+- Editable labeled folder preset groups stored in plugin settings

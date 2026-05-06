@@ -47,4 +47,29 @@ function SelectionService.GetSelectionRoots(): { Instance }
 	return roots
 end
 
+function SelectionService.GetSelectedParentChildNames(): { string }
+	local selectedInstances = SelectionService.GetSelection()
+	if #selectedInstances ~= 1 then
+		return {}
+	end
+
+	local selectedParent = selectedInstances[1]
+	if selectedParent == nil then
+		return {}
+	end
+
+	local uniqueNames = {}
+	for _, child in selectedParent:GetChildren() do
+		uniqueNames[child.Name] = true
+	end
+
+	local names = {}
+	for childName, _ in uniqueNames do
+		table.insert(names, childName)
+	end
+	table.sort(names)
+
+	return names
+end
+
 return SelectionService
