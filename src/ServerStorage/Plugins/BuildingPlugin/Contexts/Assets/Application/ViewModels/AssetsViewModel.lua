@@ -14,6 +14,7 @@ function AssetsViewModel.FromState(state)
 		AssetRootStatusText = assetRootStatusText,
 		SearchText = state.SearchText,
 		AssetName = state.AssetName,
+		SelectedLibraryAssetPath = state.SelectedLibraryAssetPath,
 		RecentAssets = state.RecentAssets,
 		AssetEntries = state.AssetEntries,
 	})

@@ -18,12 +18,23 @@ type TLibraryBrowserPanelProps = {
 	IsExpanded: boolean,
 	OnExpandedChanged: (sectionId: string, isExpanded: boolean) -> (),
 	SearchText: string,
+	SelectedAssetPath: string?,
 	AssetEntries: { TAssetEntry },
 	OnSearchChanged: (searchText: string) -> (),
-	OnInsertAsset: (assetPath: string) -> (),
+	OnSelectedAssetPathChanged: (assetPath: string?) -> (),
+	OnInsertSelectedAsset: () -> (),
+	OnDeleteSelectedAsset: () -> (),
 }
 
 local function LibraryBrowserPanel(props: TLibraryBrowserPanelProps)
+	local hasEntries = #props.AssetEntries > 0
+	local hasSelection = props.SelectedAssetPath ~= nil
+	local dropdownItems = {}
+
+	for _, assetEntry in props.AssetEntries do
+		table.insert(dropdownItems, assetEntry.Path)
+	end
+
 	local children: { [string]: React.ReactNode } = {
 		Search = React.createElement(StudioComponents.TextInput, {
 			ClearTextOnFocus = false,
@@ -33,24 +44,35 @@ local function LibraryBrowserPanel(props: TLibraryBrowserPanelProps)
 			Size = UDim2.new(1, 0, 0, 24),
 			Text = props.SearchText,
 		}),
+		AssetDropdown = React.createElement(StudioComponents.Dropdown, {
+			DefaultText = "Select saved asset...",
+			Items = dropdownItems,
+			LayoutOrder = 2,
+			OnItemSelected = props.OnSelectedAssetPathChanged,
+			SelectedItem = props.SelectedAssetPath,
+			Size = UDim2.new(1, 0, 0, 24),
+		}),
+		InsertButton = React.createElement(StudioComponents.MainButton, {
+			Interactable = hasSelection,
+			LayoutOrder = 3,
+			OnActivated = props.OnInsertSelectedAsset,
+			Size = UDim2.new(1, 0, 0, 24),
+			Text = "Insert Selected",
+		}),
+		DeleteButton = React.createElement(StudioComponents.Button, {
+			Interactable = hasSelection,
+			LayoutOrder = 4,
+			OnActivated = props.OnDeleteSelectedAsset,
+			Size = UDim2.new(1, 0, 0, 24),
+			Text = "Delete Selected",
+		}),
 	}
 
-	if #props.AssetEntries == 0 then
+	if not hasEntries then
 		children.Empty = React.createElement(TextBlock, {
-			LayoutOrder = 2,
+			LayoutOrder = 5,
 			Text = "No saved models matched the current search.",
 		})
-	else
-		for index, assetEntry in ipairs(props.AssetEntries) do
-			children["Asset" .. tostring(index)] = React.createElement(StudioComponents.Button, {
-				LayoutOrder = 1 + index,
-				OnActivated = function()
-					props.OnInsertAsset(assetEntry.Path)
-				end,
-				Size = UDim2.new(1, 0, 0, 24),
-				Text = assetEntry.Path,
-			})
-		end
 	end
 
 	return React.createElement(SectionPanel, {

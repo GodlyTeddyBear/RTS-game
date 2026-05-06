@@ -8,6 +8,8 @@ local PluginTypes = require(script.Parent.Parent.Parent.Parent.Parent.Types.Plug
 type TAssetEntry = PluginTypes.TAssetEntry
 type TPluginActionResult = PluginTypes.TPluginActionResult
 
+local DELETE_FOLDER_NAME = "__Delete__"
+
 local AssetLibraryService = {}
 AssetLibraryService.__index = AssetLibraryService
 
@@ -95,22 +97,75 @@ function AssetLibraryService:InsertAsset(assetPath: string): TPluginActionResult
 	return self:_CreateResult(true, 1, 0, "Inserted asset " .. assetEntry.Path .. ".", assetEntry.Path)
 end
 
+function AssetLibraryService:DeleteAsset(assetPath: string): TPluginActionResult
+	local assetEntry = self:_FindAssetByPath(assetPath)
+	if assetEntry == nil then
+		return self:_CreateResult(false, 0, 0, "Selected asset was not found in the library.")
+	end
+
+	local assetRoot = self:GetAssetRoot()
+	if assetRoot == nil then
+		return self:_CreateResult(false, 0, 0, "Asset root is missing. Create it before deleting assets.")
+	end
+
+	local deleteFolder = self:_EnsureDeleteFolder(assetRoot)
+	local targetName = self:_ResolveUniqueChildName(deleteFolder, assetEntry.Instance.Name)
+
+	self.History:Run("Delete Asset", function()
+		assetEntry.Instance.Name = targetName
+		assetEntry.Instance.Parent = deleteFolder
+	end)
+
+	return self:_CreateResult(true, 1, 0, "Moved asset " .. assetEntry.Path .. " to " .. DELETE_FOLDER_NAME .. ".", assetEntry.Path)
+end
+
 function AssetLibraryService:_CollectAssetEntries(rootInstance: Instance, currentPath: string, normalizedSearchTerm: string, assetEntries: { TAssetEntry })
 	for _, childInstance in rootInstance:GetChildren() do
-		local nextPath = if currentPath == "" then childInstance.Name else currentPath .. "/" .. childInstance.Name
+		local isDeleteBucket = currentPath == "" and childInstance:IsA("Folder") and childInstance.Name == DELETE_FOLDER_NAME
+		if not isDeleteBucket then
+			local nextPath = if currentPath == "" then childInstance.Name else currentPath .. "/" .. childInstance.Name
 
-		if childInstance:IsA("Model") then
-			if normalizedSearchTerm == "" or string.find(string.lower(nextPath), normalizedSearchTerm, 1, true) then
-				table.insert(assetEntries, {
-					Name = childInstance.Name,
-					Path = nextPath,
-					Instance = childInstance,
-				})
+			if childInstance:IsA("Model") then
+				if normalizedSearchTerm == "" or string.find(string.lower(nextPath), normalizedSearchTerm, 1, true) then
+					table.insert(assetEntries, {
+						Name = childInstance.Name,
+						Path = nextPath,
+						Instance = childInstance,
+					})
+				end
+			elseif childInstance:IsA("Folder") then
+				self:_CollectAssetEntries(childInstance, nextPath, normalizedSearchTerm, assetEntries)
 			end
-		elseif childInstance:IsA("Folder") then
-			self:_CollectAssetEntries(childInstance, nextPath, normalizedSearchTerm, assetEntries)
 		end
 	end
+end
+
+function AssetLibraryService:_EnsureDeleteFolder(assetRoot: Folder): Folder
+	local existingDeleteFolder = assetRoot:FindFirstChild(DELETE_FOLDER_NAME)
+	if existingDeleteFolder and existingDeleteFolder:IsA("Folder") then
+		return existingDeleteFolder
+	end
+
+	local deleteFolder = Instance.new("Folder")
+	deleteFolder.Name = DELETE_FOLDER_NAME
+	deleteFolder.Parent = assetRoot
+	return deleteFolder
+end
+
+function AssetLibraryService:_ResolveUniqueChildName(parentInstance: Instance, preferredName: string): string
+	if parentInstance:FindFirstChild(preferredName) == nil then
+		return preferredName
+	end
+
+	local suffix = 2
+	local candidateName = preferredName .. "_" .. tostring(suffix)
+
+	while parentInstance:FindFirstChild(candidateName) ~= nil do
+		suffix = suffix + 1
+		candidateName = preferredName .. "_" .. tostring(suffix)
+	end
+
+	return candidateName
 end
 
 function AssetLibraryService:_ResolveAssetName(selectionRoots: { Instance }, assetNameOverride: string?): string
@@ -145,13 +200,26 @@ function AssetLibraryService:_BuildAssetContainer(selectionRoots: { Instance }, 
 end
 
 function AssetLibraryService:_FindAssetByPath(assetPath: string): TAssetEntry?
+	local normalizedLookupPath = self:_NormalizeAssetPath(assetPath)
+
 	for _, assetEntry in self:GetAssetEntries(nil) do
-		if assetEntry.Path == assetPath then
+		if assetEntry.Path == normalizedLookupPath then
 			return assetEntry
 		end
 	end
 
 	return nil
+end
+
+function AssetLibraryService:_NormalizeAssetPath(assetPath: string): string
+	local rootName = self.Settings:GetAssetRootName()
+	local rootPrefix = rootName .. "/"
+
+	if string.sub(assetPath, 1, #rootPrefix) == rootPrefix then
+		return string.sub(assetPath, #rootPrefix + 1)
+	end
+
+	return assetPath
 end
 
 function AssetLibraryService:_CreateResult(success: boolean, changedCount: number, skippedCount: number, message: string, assetPath: string?): TPluginActionResult

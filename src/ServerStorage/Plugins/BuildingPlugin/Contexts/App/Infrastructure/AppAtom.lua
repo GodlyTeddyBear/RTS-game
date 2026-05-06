@@ -33,6 +33,15 @@ local appAtom = Charm.atom({
 
 local AppAtom = {}
 
+local function cancelStatusResetThread()
+	if statusResetThread == nil then
+		return
+	end
+
+	pcall(task.cancel, statusResetThread)
+	statusResetThread = nil
+end
+
 local function _PatchState(nextState: TAppState)
 	appAtom(nextState)
 end
@@ -64,10 +73,7 @@ function AppAtom.SetWidgetEnabled(widgetEnabled: boolean)
 end
 
 function AppAtom.ClearStatus()
-	if statusResetThread ~= nil then
-		task.cancel(statusResetThread)
-		statusResetThread = nil
-	end
+	cancelStatusResetThread()
 
 	local state = appAtom()
 	_PatchState({
@@ -78,10 +84,7 @@ function AppAtom.ClearStatus()
 end
 
 function AppAtom.SetStatus(message: string, tone: TPluginStatusTone)
-	if statusResetThread ~= nil then
-		task.cancel(statusResetThread)
-		statusResetThread = nil
-	end
+	cancelStatusResetThread()
 
 	local state = appAtom()
 	local status = {

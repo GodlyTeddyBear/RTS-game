@@ -108,7 +108,13 @@ end
 function AppController:_RefreshAssetsState()
 	local assetsState = AssetsAtom.GetState()
 	AssetsAtom.SetAssetRootExists(self.PluginContext.Services.Assets:GetAssetRoot() ~= nil)
-	AssetsAtom.SetRecentAssets(self.PluginContext.Services.Settings:GetRecentAssets())
+	local recentAssetEntries = self.PluginContext.Services.Assets:GetAssetEntries(nil)
+	local recentAssetPaths = {}
+	for _, assetEntry in recentAssetEntries do
+		table.insert(recentAssetPaths, assetEntry.Path)
+	end
+
+	AssetsAtom.SetRecentAssets(recentAssetPaths)
 	AssetsAtom.SetAssetEntries(self.PluginContext.Services.Assets:GetAssetEntries(assetsState.SearchText))
 end
 

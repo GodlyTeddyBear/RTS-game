@@ -11,6 +11,7 @@ export type TAssetsState = {
 	AssetRootExists: boolean,
 	SearchText: string,
 	AssetName: string,
+	SelectedLibraryAssetPath: string?,
 	RecentAssets: { string },
 	AssetEntries: { TAssetEntry },
 }
@@ -19,6 +20,7 @@ local assetsAtom = Charm.atom({
 	AssetRootExists = false,
 	SearchText = "",
 	AssetName = "",
+	SelectedLibraryAssetPath = nil,
 	RecentAssets = {},
 	AssetEntries = {},
 } :: TAssetsState)
@@ -39,6 +41,7 @@ function AssetsAtom.SetAssetRootExists(assetRootExists: boolean)
 		AssetRootExists = assetRootExists,
 		SearchText = state.SearchText,
 		AssetName = state.AssetName,
+		SelectedLibraryAssetPath = state.SelectedLibraryAssetPath,
 		RecentAssets = state.RecentAssets,
 		AssetEntries = state.AssetEntries,
 	})
@@ -50,6 +53,7 @@ function AssetsAtom.SetSearchText(searchText: string)
 		AssetRootExists = state.AssetRootExists,
 		SearchText = searchText,
 		AssetName = state.AssetName,
+		SelectedLibraryAssetPath = state.SelectedLibraryAssetPath,
 		RecentAssets = state.RecentAssets,
 		AssetEntries = state.AssetEntries,
 	})
@@ -61,6 +65,19 @@ function AssetsAtom.SetAssetName(assetName: string)
 		AssetRootExists = state.AssetRootExists,
 		SearchText = state.SearchText,
 		AssetName = assetName,
+		SelectedLibraryAssetPath = state.SelectedLibraryAssetPath,
+		RecentAssets = state.RecentAssets,
+		AssetEntries = state.AssetEntries,
+	})
+end
+
+function AssetsAtom.SetSelectedLibraryAssetPath(selectedLibraryAssetPath: string?)
+	local state = assetsAtom()
+	assetsAtom({
+		AssetRootExists = state.AssetRootExists,
+		SearchText = state.SearchText,
+		AssetName = state.AssetName,
+		SelectedLibraryAssetPath = selectedLibraryAssetPath,
 		RecentAssets = state.RecentAssets,
 		AssetEntries = state.AssetEntries,
 	})
@@ -72,6 +89,7 @@ function AssetsAtom.SetRecentAssets(recentAssets: { string })
 		AssetRootExists = state.AssetRootExists,
 		SearchText = state.SearchText,
 		AssetName = state.AssetName,
+		SelectedLibraryAssetPath = state.SelectedLibraryAssetPath,
 		RecentAssets = recentAssets,
 		AssetEntries = state.AssetEntries,
 	})
@@ -83,6 +101,7 @@ function AssetsAtom.SetAssetEntries(assetEntries: { TAssetEntry })
 		AssetRootExists = state.AssetRootExists,
 		SearchText = state.SearchText,
 		AssetName = state.AssetName,
+		SelectedLibraryAssetPath = state.SelectedLibraryAssetPath,
 		RecentAssets = state.RecentAssets,
 		AssetEntries = assetEntries,
 	})

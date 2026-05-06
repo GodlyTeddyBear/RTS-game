@@ -82,6 +82,19 @@ function PluginSettingsService:PushRecentAsset(assetPath: string)
 	self:_SaveSettings()
 end
 
+function PluginSettingsService:RemoveRecentAsset(assetPath: string)
+	local remainingRecentAssets = {}
+
+	for _, recentAssetPath in self.Settings.RecentAssets do
+		if recentAssetPath ~= assetPath then
+			table.insert(remainingRecentAssets, recentAssetPath)
+		end
+	end
+
+	self.Settings.RecentAssets = remainingRecentAssets
+	self:_SaveSettings()
+end
+
 function PluginSettingsService:GetIsOpen(): boolean
 	return self.Plugin:GetSetting(OPEN_KEY) == true
 end
