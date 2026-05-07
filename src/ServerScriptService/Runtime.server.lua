@@ -17,7 +17,6 @@ local Contexts: Folder = script.Parent.Contexts
 
 -- Get contexts
 for _, context in ipairs(Contexts:GetChildren()) do
-	task.wait()
 	if context:FindFirstChildOfClass("ModuleScript") then
 		Knit.AddServices(context)
 	end
@@ -26,8 +25,10 @@ end
 Knit.Start()
 	:andThen(function()
 		-- Restrict jabby access to developer only
-		Jabby.set_check_function(function(player)
-			return player.UserId == DEVELOPER_USER_ID
+		task.spawn(function()
+			Jabby.set_check_function(function(player)
+				return player.UserId == DEVELOPER_USER_ID
+			end)
 		end)
 
 		ServerScheduler:Initialize()

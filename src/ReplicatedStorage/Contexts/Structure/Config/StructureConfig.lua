@@ -42,6 +42,21 @@ StructureConfig.STRUCTURES = table.freeze({
 		MaxHealth = 140,
 		RuntimeProfileId = "Passive",
 	}),
+	ArcPylon = table.freeze({
+		DisplayName = "Arc Pylon",
+		MaxHealth = 140,
+		RuntimeProfileId = "Passive",
+	}),
+	BulwarkProjector = table.freeze({
+		DisplayName = "Bulwark Projector",
+		MaxHealth = 140,
+		RuntimeProfileId = "Passive",
+	}),
+	RelayBeacon = table.freeze({
+		DisplayName = "Relay Beacon",
+		MaxHealth = 140,
+		RuntimeProfileId = "Passive",
+	}),
 })
 
 --[=[
@@ -54,6 +69,12 @@ StructureConfig.TYPE_ALIASES = table.freeze({
 	turret = "SentryTurret",
 	Extractor = "Extractor",
 	StasisField = "StasisField",
+	ArcPylon = "ArcPylon",
+	["Arc Pylon"] = "ArcPylon",
+	BulwarkProjector = "BulwarkProjector",
+	["Bulwark Projector"] = "BulwarkProjector",
+	RelayBeacon = "RelayBeacon",
+	["Relay Beacon"] = "RelayBeacon",
 })
 
 return table.freeze(StructureConfig)

@@ -48,7 +48,6 @@ local function PlacementPalette(props: TPlacementPaletteProps)
 
 	local onStructureSelected = props.onStructureSelected or function(_structureType: string)
 	end
-	local cardHeightScale = if #paletteHud.structures >= 3 then 0.25 else 0.44
 
 	local function _HandleStructureSelected(cardData: TStructureCardData)
 		onStructureSelected(cardData.structureType)
@@ -82,19 +81,32 @@ local function PlacementPalette(props: TPlacementPaletteProps)
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextYAlignment = Enum.TextYAlignment.Center,
 			}),
-			Body = e(VStack, {
+			Body = e("ScrollingFrame", {
 				Size = UDim2.fromScale(1, 0.84),
+				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				CanvasSize = UDim2.new(),
 				BackgroundTransparency = 1,
-				Gap = Spacing.SM,
-				Align = "Start",
-				Justify = "Start",
+				BorderSizePixel = 0,
+				ScrollBarThickness = 4,
+				ScrollBarImageColor3 = Colors.Accent.Yellow,
+				ScrollBarImageTransparency = 0.35,
+				ScrollingDirection = Enum.ScrollingDirection.Y,
+				VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar,
+				ClipsDescendants = true,
 			}, (function()
-				local children = {}
+				local children = {
+					ListLayout = e("UIListLayout", {
+						Padding = UDim.new(0, Spacing.SM),
+						FillDirection = Enum.FillDirection.Vertical,
+						HorizontalAlignment = Enum.HorizontalAlignment.Center,
+						VerticalAlignment = Enum.VerticalAlignment.Top,
+						SortOrder = Enum.SortOrder.LayoutOrder,
+					}),
+				}
 				for _, cardData in paletteHud.structures do
 					children[cardData.structureType] = e(StructureCard, {
 						cardData = cardData,
 						isSelected = selectedType == cardData.structureType,
-						HeightScale = cardHeightScale,
 						onSelect = function(_structureType: string)
 							_HandleStructureSelected(cardData)
 						end,

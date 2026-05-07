@@ -20,6 +20,15 @@ PlacementConfig.STRUCTURE_PLACEMENT_COSTS = table.freeze({
 	StasisField = table.freeze({
 		Energy = 10,
 	}),
+	ArcPylon = table.freeze({
+		Energy = 10,
+	}),
+	BulwarkProjector = table.freeze({
+		Energy = 10,
+	}),
+	RelayBeacon = table.freeze({
+		Energy = 10,
+	}),
 })
 
 -- Base disallowed zones are global: placement is allowed by default outside these zones.
@@ -32,6 +41,9 @@ PlacementConfig.REQUIRES_RESOURCE_TILE = table.freeze({
 	SentryTurret = false,
 	Extractor = true,
 	StasisField = false,
+	ArcPylon = false,
+	BulwarkProjector = false,
+	RelayBeacon = false,
 })
 
 PlacementConfig.MAX_STRUCTURES = 20

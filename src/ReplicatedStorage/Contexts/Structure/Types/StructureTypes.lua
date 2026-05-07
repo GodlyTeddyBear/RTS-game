@@ -9,11 +9,17 @@
 local StructureTypes = {}
 
 --[=[
-	@type StructureType "SentryTurret" | "Extractor" | "StasisField"
+	@type StructureType "SentryTurret" | "Extractor" | "StasisField" | "ArcPylon" | "BulwarkProjector" | "RelayBeacon"
 	@within StructureTypes
 	Canonical structure type identifier.
 ]=]
-export type StructureType = "SentryTurret" | "Extractor" | "StasisField"
+export type StructureType =
+	"SentryTurret"
+	| "Extractor"
+	| "StasisField"
+	| "ArcPylon"
+	| "BulwarkProjector"
+	| "RelayBeacon"
 
 --[=[
 	@type StructureId string

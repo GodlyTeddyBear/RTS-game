@@ -63,6 +63,9 @@ local STRUCTURE_DISPLAY_ORDER = table.freeze({
 	"SentryTurret",
 	"Extractor",
 	"StasisField",
+	"ArcPylon",
+	"BulwarkProjector",
+	"RelayBeacon",
 })
 
 -- [Private Helpers]

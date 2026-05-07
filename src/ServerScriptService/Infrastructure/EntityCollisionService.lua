@@ -24,7 +24,6 @@ end
 local function _applyStructurePartCollisionGroup(descendant: Instance)
 	if descendant:IsA("BasePart") then
 		descendant.CollisionGroup = STRUCTURE_GROUP
-		descendant.CanCollide = false
 	end
 end
 

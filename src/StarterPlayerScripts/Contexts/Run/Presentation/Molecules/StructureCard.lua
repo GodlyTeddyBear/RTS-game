@@ -32,14 +32,12 @@ type TStructureCardData = usePlacementPaletteHud.TStructureCardData
 	.isSelected boolean -- Whether this card is the currently selected option.
 	.onSelect (string) -> () -- Callback invoked when the player selects the card.
 	.LayoutOrder number? -- Optional layout order used by the palette list.
-	.HeightScale number? -- Optional vertical scale used to fit the current palette density.
 ]=]
 export type TStructureCardProps = {
 	cardData: TStructureCardData,
 	isSelected: boolean,
 	onSelect: (string) -> (),
 	LayoutOrder: number?,
-	HeightScale: number?,
 }
 
 --[=[
@@ -55,11 +53,10 @@ export type TStructureCardProps = {
 local function StructureCard(props: TStructureCardProps)
 	local strokeColor = if props.isSelected then Colors.Accent.Yellow else Colors.Border.Subtle
 	local costColor = if props.cardData.canAfford then Colors.Text.Secondary else Colors.Semantic.Error
-	local heightScale = props.HeightScale or 0.44
 
 	return e(Button, {
 		Text = "",
-		Size = UDim2.fromScale(1, heightScale),
+		Size = UDim2.fromScale(0.96, 0.22),
 		LayoutOrder = props.LayoutOrder,
 		Variant = "secondary",
 		ClipsDescendants = true,
