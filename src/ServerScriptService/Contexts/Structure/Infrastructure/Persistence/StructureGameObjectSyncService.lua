@@ -132,11 +132,16 @@ function StructureGameObjectSyncService:_SyncEntity(entity: number, model: Model
 	local combatAction = nil
 	if runtimeProfileId == "Extract" then
 		combatAction = _ResolveMiningRuntimeAction(self, entity) or factory:GetCombatAction(entity)
+	elseif runtimeProfileId == "Passive" then
+		combatAction = factory:GetCombatAction(entity)
 	else
 		combatAction = _ResolveCombatRuntimeAction(self, entity) or factory:GetCombatAction(entity)
 	end
 
-	local targetEnemyEntity = _ResolveRuntimeTargetEnemyEntity(combatAction) or factory:GetTarget(entity)
+	local targetEnemyEntity = nil
+	if runtimeProfileId ~= "Passive" then
+		targetEnemyEntity = _ResolveRuntimeTargetEnemyEntity(combatAction) or factory:GetTarget(entity)
+	end
 
 	local nextAnimationState, isAnimationLooping = StructureRuntimeProfiles.ResolveAnimationState({
 		VariantId = runtimeProfileId,

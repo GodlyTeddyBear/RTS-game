@@ -14,6 +14,7 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 local ReactCharm = require(ReplicatedStorage.Packages["React-charm"])
 
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
+local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.StructureConfig)
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTypes)
 local ResourceHudViewModel = require(script.Parent.Parent.ViewModels.ResourceHudViewModel)
@@ -61,6 +62,7 @@ local DEFAULT_RUN_STATE: RunAtomState = table.freeze({
 local STRUCTURE_DISPLAY_ORDER = table.freeze({
 	"SentryTurret",
 	"Extractor",
+	"StasisField",
 })
 
 -- [Private Helpers]
@@ -85,6 +87,11 @@ end
 
 -- Formats a placement key into a readable label for the palette cards.
 local function _FormatStructureName(structureType: string): string
+	local structureDefinition = StructureConfig.STRUCTURES[structureType]
+	if structureDefinition ~= nil and type(structureDefinition.DisplayName) == "string" and structureDefinition.DisplayName ~= "" then
+		return structureDefinition.DisplayName
+	end
+
 	local head = string.sub(structureType, 1, 1)
 	if head == "" then
 		return structureType

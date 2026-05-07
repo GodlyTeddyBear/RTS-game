@@ -17,6 +17,9 @@ PlacementConfig.STRUCTURE_PLACEMENT_COSTS = table.freeze({
 	Extractor = table.freeze({
 		Energy = 10,
 	}),
+	StasisField = table.freeze({
+		Energy = 10,
+	}),
 })
 
 -- Base disallowed zones are global: placement is allowed by default outside these zones.
@@ -28,6 +31,7 @@ PlacementConfig.BASE_DISALLOWED_ZONE_TYPES = table.freeze({
 PlacementConfig.REQUIRES_RESOURCE_TILE = table.freeze({
 	SentryTurret = false,
 	Extractor = true,
+	StasisField = false,
 })
 
 PlacementConfig.MAX_STRUCTURES = 20

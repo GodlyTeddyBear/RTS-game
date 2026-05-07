@@ -36,6 +36,10 @@ local StructureExtractLoopingMap = {
 	StructureExtract = true,
 }
 
+local StructurePassiveLoopingMap = {
+	Idle = true,
+}
+
 local function _ResolveVariantIdForStructureType(structureType: StructureType?): string?
 	if type(structureType) ~= "string" then
 		return nil
@@ -66,6 +70,14 @@ local BaseProfiles = BaseRuntimeProfileModule.new({
 			DefaultAnimationState = "Idle",
 			AnimationByActionIdAndState = StructureExtractAnimationMap,
 			LoopingByAnimationState = StructureExtractLoopingMap,
+			TickInterval = BehaviorConfig.DEFAULT.TickInterval,
+		}),
+		Passive = BaseRuntimeProfileModule.CreateProfile({
+			VariantId = "Passive",
+			BehaviorDefinition = ExtractorBehavior,
+			DefaultAnimationState = "Idle",
+			AnimationByActionIdAndState = {},
+			LoopingByAnimationState = StructurePassiveLoopingMap,
 			TickInterval = BehaviorConfig.DEFAULT.TickInterval,
 		}),
 	},

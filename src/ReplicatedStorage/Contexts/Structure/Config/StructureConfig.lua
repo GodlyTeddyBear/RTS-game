@@ -37,6 +37,11 @@ StructureConfig.STRUCTURES = table.freeze({
 		MaxHealth = 140,
 		RuntimeProfileId = "Extract",
 	}),
+	StasisField = table.freeze({
+		DisplayName = "Stasis Field",
+		MaxHealth = 140,
+		RuntimeProfileId = "Passive",
+	}),
 })
 
 --[=[
@@ -48,6 +53,7 @@ StructureConfig.TYPE_ALIASES = table.freeze({
 	SentryTurret = "SentryTurret",
 	turret = "SentryTurret",
 	Extractor = "Extractor",
+	StasisField = "StasisField",
 })
 
 return table.freeze(StructureConfig)

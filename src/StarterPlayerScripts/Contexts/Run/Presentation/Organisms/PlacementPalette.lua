@@ -48,6 +48,7 @@ local function PlacementPalette(props: TPlacementPaletteProps)
 
 	local onStructureSelected = props.onStructureSelected or function(_structureType: string)
 	end
+	local cardHeightScale = if #paletteHud.structures >= 3 then 0.25 else 0.44
 
 	local function _HandleStructureSelected(cardData: TStructureCardData)
 		onStructureSelected(cardData.structureType)
@@ -93,6 +94,7 @@ local function PlacementPalette(props: TPlacementPaletteProps)
 					children[cardData.structureType] = e(StructureCard, {
 						cardData = cardData,
 						isSelected = selectedType == cardData.structureType,
+						HeightScale = cardHeightScale,
 						onSelect = function(_structureType: string)
 							_HandleStructureSelected(cardData)
 						end,
