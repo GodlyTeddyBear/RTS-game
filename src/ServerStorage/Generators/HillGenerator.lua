@@ -1,5 +1,7 @@
 --!strict
 
+local GeometryService = game:GetService("GeometryService")
+
 type GenerationFunctionParams<Attributes> = {
 	Attributes: Attributes,
 	Size: Vector3,
@@ -32,6 +34,9 @@ local defaultAttributes = {
 	WedgeColor = Color3.fromRGB(124, 92, 70),
 	WedgeMaterial = Enum.Material.Slate,
 	WedgeMaterialVariant = "",
+	AutoScaleWedgeHeight = false,
+	UseNorthValues = false,
+	EnableCornerCSG = true,
 
 	UseNorth = true,
 	UseSouth = true,
@@ -219,7 +224,7 @@ local function createHillBlock(attributes: HillAttributes, random: Random, root:
 		rotationDegreesY: number,
 		centerDepthAxis: "X" | "Z",
 		wedgeDepthAxis: "X" | "Z"
-	)
+	): WedgePart
 		local centerDepth = getAxisValue(centerSize, centerDepthAxis)
 		local wedgeDepth = getAxisValue(wedgeSize, wedgeDepthAxis)
 		local yOffset = (wedgeSize.Y - centerSize.Y) * 0.5
@@ -236,10 +241,12 @@ local function createHillBlock(attributes: HillAttributes, random: Random, root:
 		-- Build wedge transform fully in local space, then compose with center transform once.
 		local localWedgeCFrame = CFrame.new(localOffset) * CFrame.Angles(0, math.rad(rotationDegreesY), 0)
 		wedge.CFrame = centerCFrame * localWedgeCFrame
+		return wedge
 	end
 
 	local sideDefs = {
 		{
+			key = "North",
 			enabled = attributes.UseNorth,
 			name = "HillNorthWedge",
 			height = attributes.WedgeNorthHeight,
@@ -252,6 +259,7 @@ local function createHillBlock(attributes: HillAttributes, random: Random, root:
 			rotationY = 0,
 		},
 		{
+			key = "South",
 			enabled = attributes.UseSouth,
 			name = "HillSouthWedge",
 			height = attributes.WedgeSouthHeight,
@@ -264,6 +272,7 @@ local function createHillBlock(attributes: HillAttributes, random: Random, root:
 			rotationY = 180,
 		},
 		{
+			key = "East",
 			enabled = attributes.UseEast,
 			name = "HillEastWedge",
 			height = attributes.WedgeEastHeight,
@@ -276,6 +285,7 @@ local function createHillBlock(attributes: HillAttributes, random: Random, root:
 			rotationY = -90,
 		},
 		{
+			key = "West",
 			enabled = attributes.UseWest,
 			name = "HillWestWedge",
 			height = attributes.WedgeWestHeight,
@@ -289,17 +299,32 @@ local function createHillBlock(attributes: HillAttributes, random: Random, root:
 		},
 	}
 
+	local placedSides: { [string]: WedgePart } = {}
+
 	for _, side in sideDefs do
 		if side.enabled then
+			local spanScale = side.spanScale
+			local depthScale = side.depthScale
+			local sideHeight = side.height
+			if attributes.UseNorthValues and side.key ~= "North" then
+				spanScale = attributes.WedgeNorthSpanScale
+				depthScale = attributes.WedgeNorthDepthScale
+				sideHeight = attributes.WedgeNorthHeight
+			end
+
 			local spanBase = getAxisValue(centerSize, side.spanAxis)
 			local depthBase = getAxisValue(centerSize, side.centerDepthAxis)
-			local spanSize = clampPositive(spanBase * side.spanScale, 1)
-			local depthSize = clampPositive(depthBase * side.depthScale, 1)
-			local heightSize = clampPositive(side.height * scale, 1)
+			local spanSize = clampPositive(spanBase * spanScale, 1)
+			local depthSize = clampPositive(depthBase * depthScale, 1)
+			local heightBase = sideHeight * scale
+			if attributes.AutoScaleWedgeHeight then
+				heightBase = centerSize.Y
+			end
+			local heightSize = clampPositive(heightBase, 1)
 
 			local wedgeSize = Vector3.new(spanSize, heightSize, depthSize)
 
-			placeSideWedge(
+			local placedWedge = placeSideWedge(
 				side.name,
 				wedgeSize,
 				side.normal,
@@ -307,6 +332,141 @@ local function createHillBlock(attributes: HillAttributes, random: Random, root:
 				side.centerDepthAxis,
 				side.wedgeDepthAxis
 			)
+			placedSides[side.key] = placedWedge
+		end
+	end
+
+	local function finalizeCornerPart(part: BasePart, cornerName: string): BasePart
+		part.Name = cornerName
+		part.Color = attributes.WedgeColor
+		part.Material = attributes.WedgeMaterial
+		if attributes.WedgeMaterialVariant ~= "" then
+			part.MaterialVariant = attributes.WedgeMaterialVariant
+		else
+			part.MaterialVariant = ""
+		end
+		part.Anchored = true
+		part.CanCollide = false
+		part.CastShadow = true
+		part.Parent = root
+		return part
+	end
+
+	local function getSpanTotal(keys: { string }): number
+		local total = 0
+		for _, key in keys do
+			local wedge = placedSides[key]
+			if wedge ~= nil then
+				total += wedge.Size.X
+			end
+		end
+		return total
+	end
+
+	local function resizeCornerOperandSpan(sideKey: string, wedge: WedgePart)
+		local expandedSpan = wedge.Size.X
+		if sideKey == "North" or sideKey == "South" then
+			expandedSpan += getSpanTotal({ "East", "West" })
+		else
+			expandedSpan += getSpanTotal({ "North", "South" })
+		end
+		wedge.Size = Vector3.new(expandedSpan, wedge.Size.Y, wedge.Size.Z)
+	end
+
+	local function tryCreateCornerPart(
+		cornerName: string,
+		firstSideKey: string,
+		secondSideKey: string,
+		firstWedge: WedgePart,
+		secondWedge: WedgePart
+	)
+		local opA = firstWedge:Clone()
+		local opB = secondWedge:Clone()
+		opA.Name = cornerName .. "_OpA"
+		opB.Name = cornerName .. "_OpB"
+		opA.Parent = root
+		opB.Parent = root
+
+		-- Expand spans directionally so corner operands overlap broadly before CSG.
+		resizeCornerOperandSpan(firstSideKey, opA)
+		resizeCornerOperandSpan(secondSideKey, opB)
+
+		local function getBaseParts(results: { any }): { BasePart }
+			local parts: { BasePart } = {}
+			for _, item in results do
+				if typeof(item) == "Instance" and item:IsA("BasePart") then
+					table.insert(parts, item)
+				end
+			end
+			return parts
+		end
+
+		local okIntersect, intersectResult = pcall(function()
+			return GeometryService:IntersectAsync(opA, { opB }, nil)
+		end)
+
+		if okIntersect and intersectResult ~= nil then
+			local intersectParts = getBaseParts(intersectResult)
+			if #intersectParts > 0 then
+				local unionSource = intersectParts[1]
+				local unionTargets = {}
+				for index = 2, #intersectParts do
+					table.insert(unionTargets, intersectParts[index])
+				end
+
+				if #unionTargets > 0 then
+					local okUnionIntersect, unionIntersectResult = pcall(function()
+						return GeometryService:UnionAsync(unionSource, unionTargets, nil)
+					end)
+					if okUnionIntersect and unionIntersectResult ~= nil then
+						local unionedParts = getBaseParts(unionIntersectResult)
+						if #unionedParts > 0 then
+							local finalized = finalizeCornerPart(unionedParts[1], cornerName)
+							opA:Destroy()
+							opB:Destroy()
+							return finalized
+						end
+					end
+				else
+					local finalized = finalizeCornerPart(unionSource, cornerName)
+					opA:Destroy()
+					opB:Destroy()
+					return finalized
+				end
+			end
+		end
+
+		local okUnion, unionResult = pcall(function()
+			return GeometryService:UnionAsync(opA, { opB }, nil)
+		end)
+
+		if okUnion and unionResult ~= nil then
+			local unionParts = getBaseParts(unionResult)
+			if #unionParts > 0 then
+				local finalized = finalizeCornerPart(unionParts[1], cornerName)
+				opA:Destroy()
+				opB:Destroy()
+				return finalized
+			end
+		end
+
+		opA:Destroy()
+		opB:Destroy()
+		return nil
+	end
+
+	if attributes.EnableCornerCSG then
+		if placedSides.North ~= nil and placedSides.East ~= nil then
+			tryCreateCornerPart("HillCornerNE", "North", "East", placedSides.North, placedSides.East)
+		end
+		if placedSides.North ~= nil and placedSides.West ~= nil then
+			tryCreateCornerPart("HillCornerNW", "North", "West", placedSides.North, placedSides.West)
+		end
+		if placedSides.South ~= nil and placedSides.East ~= nil then
+			tryCreateCornerPart("HillCornerSE", "South", "East", placedSides.South, placedSides.East)
+		end
+		if placedSides.South ~= nil and placedSides.West ~= nil then
+			tryCreateCornerPart("HillCornerSW", "South", "West", placedSides.South, placedSides.West)
 		end
 	end
 end
