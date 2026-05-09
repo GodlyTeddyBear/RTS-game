@@ -40,7 +40,11 @@ StructureConfig.STRUCTURES = table.freeze({
 	StasisField = table.freeze({
 		DisplayName = "Stasis Field",
 		MaxHealth = 140,
-		RuntimeProfileId = "Passive",
+		RuntimeProfileId = "Stasis",
+		-- Aura radius in studs used to detect enemies inside the field.
+		StasisRadius = 18,
+		-- Multiplier applied to enemy base move speed while they remain inside the field.
+		MoveSpeedMultiplier = 0.5,
 	}),
 	ArcPylon = table.freeze({
 		DisplayName = "Arc Pylon",

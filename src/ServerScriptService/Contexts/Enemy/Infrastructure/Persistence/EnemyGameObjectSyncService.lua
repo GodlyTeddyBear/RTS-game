@@ -70,6 +70,8 @@ function EnemyGameObjectSyncService:_SyncEntity(entity: number, model: Model)
 
 	local health = entityFactory:GetHealth(entity)
 	local role = entityFactory:GetRole(entity)
+	local baseMoveSpeed = entityFactory:GetBaseMoveSpeed(entity)
+	local currentMoveSpeed = entityFactory:GetCurrentMoveSpeed(entity)
 	local pathState = entityFactory:GetPathState(entity)
 	local combatAction = _ResolveCombatRuntimeAction(self, entity)
 
@@ -79,13 +81,15 @@ function EnemyGameObjectSyncService:_SyncEntity(entity: number, model: Model)
 	end
 
 	if role then
-		self:SetAttributeIfChanged(model, "MoveSpeed", role.MoveSpeed)
+		self:SetAttributeIfChanged(model, "MoveSpeed", currentMoveSpeed or role.MoveSpeed)
+		self:SetAttributeIfChanged(model, "BaseMoveSpeed", baseMoveSpeed or role.MoveSpeed)
+		self:SetAttributeIfChanged(model, "CurrentMoveSpeed", currentMoveSpeed or role.MoveSpeed)
 		self:SetAttributeIfChanged(model, "Damage", role.Damage)
 		self:SetAttributeIfChanged(model, "TargetPreference", role.TargetPreference)
 	end
 
 	local roleName = if role ~= nil then role.Role else nil
-	local moveSpeed = if role ~= nil then role.MoveSpeed else nil
+	local moveSpeed = if currentMoveSpeed ~= nil then currentMoveSpeed else if role ~= nil then role.MoveSpeed else nil
 	local isMoving = pathState ~= nil and pathState.IsMoving == true
 	local runtimeProfileId = nil :: string?
 	if roleName ~= nil then

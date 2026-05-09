@@ -55,6 +55,12 @@ function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFra
 		AttackCooldown = roleConfig.AttackCooldown,
 		TargetPreference = roleConfig.TargetPreference,
 	})
+	self:_Set(entity, components.BaseMoveSpeedComponent, {
+		Value = roleConfig.MoveSpeed,
+	})
+	self:_Set(entity, components.CurrentMoveSpeedComponent, {
+		Value = roleConfig.MoveSpeed,
+	})
 	self:_Set(entity, components.PathStateComponent, {
 		GoalPosition = nil,
 		IsMoving = false,
@@ -209,6 +215,35 @@ end
 function EnemyEntityFactory:GetRole(entity: number)
 	self:RequireReady()
 	return self:_Get(entity, self._components.RoleComponent)
+end
+
+function EnemyEntityFactory:GetBaseMoveSpeed(entity: number): number?
+	self:RequireReady()
+	local moveSpeed = self:_Get(entity, self._components.BaseMoveSpeedComponent)
+	return if moveSpeed ~= nil then moveSpeed.Value else nil
+end
+
+function EnemyEntityFactory:GetCurrentMoveSpeed(entity: number): number?
+	self:RequireReady()
+	local moveSpeed = self:_Get(entity, self._components.CurrentMoveSpeedComponent)
+	return if moveSpeed ~= nil then moveSpeed.Value else nil
+end
+
+function EnemyEntityFactory:SetCurrentMoveSpeed(entity: number, speed: number)
+	self:RequireReady()
+	if type(speed) ~= "number" then
+		return
+	end
+
+	local currentMoveSpeed = self:_Get(entity, self._components.CurrentMoveSpeedComponent)
+	if currentMoveSpeed ~= nil and currentMoveSpeed.Value == speed then
+		return
+	end
+
+	self:_Set(entity, self._components.CurrentMoveSpeedComponent, {
+		Value = speed,
+	})
+	self:_Add(entity, self._components.DirtyTag)
 end
 
 function EnemyEntityFactory:GetIdentity(entity: number)

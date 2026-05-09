@@ -100,13 +100,28 @@ export type TIdentityComponent = {
 	StructureType: StructureType,
 }
 
+--[=[
+	@interface TStructureConfig
+	@within StructureTypes
+	.DisplayName string -- Player-facing structure name used by placement and combat UI.
+	.MaxHealth number -- Maximum hit points for the structure.
+	.RuntimeProfileId "Attack" | "Extract" | "Passive" | "Stasis" -- Runtime profile that determines the behavior tree.
+	.AttackRange number? -- Optional attack range in studs.
+	.AttackDamage number? -- Optional attack damage.
+	.AttackCooldown number? -- Optional seconds between attacks.
+	.StasisRadius number? -- Optional aura radius used by stasis structures.
+	.MoveSpeedMultiplier number? -- Optional enemy move-speed multiplier applied by stasis structures.
+	.AimRig any? -- Optional aim-rig configuration for combat structures.
+]=]
 export type TStructureConfig = {
 	DisplayName: string,
 	MaxHealth: number,
-	RuntimeProfileId: "Attack" | "Extract" | "Passive",
+	RuntimeProfileId: "Attack" | "Extract" | "Passive" | "Stasis",
 	AttackRange: number?,
 	AttackDamage: number?,
 	AttackCooldown: number?,
+	StasisRadius: number?,
+	MoveSpeedMultiplier: number?,
 	AimRig: any?,
 }
 

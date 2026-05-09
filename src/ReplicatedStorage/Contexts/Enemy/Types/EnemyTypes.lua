@@ -36,6 +36,10 @@ export type RoleComponent = {
 	TargetPreference: EnemyTargetPreference,
 }
 
+export type MoveSpeedComponent = {
+	Value: number,
+}
+
 export type PathStateComponent = {
 	GoalPosition: Vector3?,
 	IsMoving: boolean,

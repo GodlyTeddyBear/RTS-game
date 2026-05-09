@@ -478,6 +478,7 @@ function EnemyCombatAdapterService:_ConfigureCombatServices()
 		return hitTargetResolver.ResolveHitTarget(hitPart)
 	end)
 	self._combatServices.MovementService:ConfigureEnemyEntityFactory(self._entityFactory)
+	self._combatServices.StatusService:ConfigureEnemyEntityFactory(self._entityFactory)
 	self._combatServices.MovementService:ConfigureLockOnService(self._combatServices.LockOnService)
 	self._combatServices.MovementService:ConfigureFlowfieldDebugRenderer(function(
 		flowfield: any,

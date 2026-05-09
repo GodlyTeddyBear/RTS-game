@@ -8,6 +8,7 @@ local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.Struct
 local BaseRuntimeProfileModule = require(ReplicatedStorage.Utilities.BaseRuntimeProfileModule)
 local StructureBehavior = require(script.Parent.Parent.Parent.BehaviorSystem.Behaviors.StructureBehavior)
 local ExtractorBehavior = require(script.Parent.Parent.Parent.BehaviorSystem.Behaviors.ExtractorBehavior)
+local StasisBehavior = require(script.Parent.Parent.Parent.BehaviorSystem.Behaviors.StasisBehavior)
 
 type StructureType = StructureTypes.StructureType
 type TStructureConfig = StructureTypes.TStructureConfig
@@ -75,6 +76,14 @@ local BaseProfiles = BaseRuntimeProfileModule.new({
 		Passive = BaseRuntimeProfileModule.CreateProfile({
 			VariantId = "Passive",
 			BehaviorDefinition = ExtractorBehavior,
+			DefaultAnimationState = "Idle",
+			AnimationByActionIdAndState = {},
+			LoopingByAnimationState = StructurePassiveLoopingMap,
+			TickInterval = BehaviorConfig.DEFAULT.TickInterval,
+		}),
+		Stasis = BaseRuntimeProfileModule.CreateProfile({
+			VariantId = "Stasis",
+			BehaviorDefinition = StasisBehavior,
 			DefaultAnimationState = "Idle",
 			AnimationByActionIdAndState = {},
 			LoopingByAnimationState = StructurePassiveLoopingMap,

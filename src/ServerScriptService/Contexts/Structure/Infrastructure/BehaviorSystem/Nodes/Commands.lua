@@ -31,6 +31,13 @@ local Commands = {
 			task:success()
 		end)
 	end,
+	StructureStasis = function()
+		return BehaviorSystem.Helpers.CreateCommandTask(function(task, context)
+			local actionFactory = _RequireActionFactory(context)
+			actionFactory:SetPendingAction(context.Entity, "Structure.Stasis", nil)
+			task:success()
+		end)
+	end,
 }
 
 return table.freeze(Commands)

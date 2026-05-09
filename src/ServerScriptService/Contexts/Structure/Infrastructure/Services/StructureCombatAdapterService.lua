@@ -14,6 +14,7 @@ local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.Stru
 local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.StructureTypes)
 local Nodes = require(script.Parent.Parent.BehaviorSystem.Nodes)
 local StructureAttackExecutor = require(script.Parent.Parent.BehaviorSystem.Executors.StructureAttackExecutor)
+local StructureStasisExecutor = require(script.Parent.Parent.BehaviorSystem.Executors.StructureStasisExecutor)
 local StructureRuntimeProfiles = require(script.Parent.Parent.Runtime.Profiles.StructureRuntimeProfiles)
 local StructureFactsResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.StructureFactsResolverFactory)
 local StructureFactoryProxyResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.StructureFactoryProxyResolverFactory)
@@ -142,6 +143,10 @@ function StructureCombatAdapterService:RegisterActorType(): Result.Result<boolea
 					ActionId = "Structure.Attack",
 					CreateExecutor = StructureAttackExecutor.new,
 				}),
+				["Structure.Stasis"] = table.freeze({
+					ActionId = "Structure.Stasis",
+					CreateExecutor = StructureStasisExecutor.new,
+				}),
 			},
 			SemanticRequirements = StructureSemanticRequirements,
 			RuntimeBinding = StructureRuntimeBinding,
@@ -167,7 +172,7 @@ function StructureCombatAdapterService:RegisterActor(entity: number): Result.Res
 		("StructureCombatAdapterService: missing config for structure type '%s'"):format(tostring(identity.StructureType))
 	)
 
-	if structureConfig.RuntimeProfileId ~= "Attack" then
+	if structureConfig.RuntimeProfileId ~= "Attack" and structureConfig.RuntimeProfileId ~= "Stasis" then
 		return Result.Ok(self:_BuildActorHandle(entity))
 	end
 
@@ -194,6 +199,9 @@ function StructureCombatAdapterService:RegisterActor(entity: number): Result.Res
 			end,
 			BuildServices = function(currentTime: number): { [string]: any }
 				return self:_BuildServices(entity, currentTime)
+			end,
+			OnRemoved = function()
+				self._combatServices.StatusService:RemoveAuraSource(actorHandle)
 			end,
 			OnActionStateChanged = function(actionState: any)
 				self._entityFactory:SetCombatAction(entity, _CloneActionState(actionState))
@@ -249,7 +257,7 @@ function StructureCombatAdapterService:ShouldRegisterActor(entity: number): bool
 		return false
 	end
 
-	return structureConfig.RuntimeProfileId == "Attack"
+	return structureConfig.RuntimeProfileId == "Attack" or structureConfig.RuntimeProfileId == "Stasis"
 end
 
 -- ── Private ───────────────────────────────────────────────────────────────────
@@ -298,12 +306,21 @@ end
 
 -- Builds the service map exposed to structure behavior executors for the current tick.
 function StructureCombatAdapterService:_BuildServices(entity: number, currentTime: number): { [string]: any }
+	local identity = self._entityFactory:GetIdentity(entity)
+	local stasisConfig = nil
+	if identity ~= nil then
+		stasisConfig = StructureConfig.STRUCTURES[identity.StructureType]
+	end
+
 	return {
 		StructureEntityFactory = self._structureFactoryProxyResolver.CreateProxy(entity),
 		EnemyEntityFactory = self._enemyEntityFactory,
 		CombatPerceptionService = self._perceptionResolver.CreateProxy(),
 		CurrentTime = currentTime,
 		ProjectileService = self._projectileProxyResolver.CreateProxy(entity),
+		StatusService = self._combatServices.StatusService,
+		StatusSourceHandle = self:_BuildActorHandle(entity),
+		StasisConfig = stasisConfig,
 	}
 end
 

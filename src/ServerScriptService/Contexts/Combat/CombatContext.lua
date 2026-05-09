@@ -16,6 +16,7 @@ local HitboxService = require(script.Parent.Infrastructure.Services.HitboxServic
 local LockOnService = require(script.Parent.Infrastructure.Services.LockOnService)
 local MovementService = require(script.Parent.Infrastructure.Services.MovementService)
 local ProjectileService = require(script.Parent.Infrastructure.Services.ProjectileService)
+local StatusService = require(script.Parent.Infrastructure.Services.StatusService)
 
 local StartCombat = require(script.Parent.Application.Commands.StartCombat)
 local ProcessCombatTick = require(script.Parent.Application.Commands.ProcessCombatTick)
@@ -70,6 +71,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "ProjectileService",
 		Module = ProjectileService,
 		CacheAs = "_projectileService",
+	},
+	{
+		Name = "StatusService",
+		Module = StatusService,
+		CacheAs = "_statusService",
 	},
 }
 
@@ -242,6 +248,7 @@ function CombatContext:GetCombatRuntimeServices(): Result.Result<any>
 		MovementService = self._movementService,
 		CombatHitResolutionService = self._combatHitResolutionService,
 		ProjectileService = self._projectileService,
+		StatusService = self._statusService,
 	})
 end
 

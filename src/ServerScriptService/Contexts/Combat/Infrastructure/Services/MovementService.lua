@@ -125,6 +125,8 @@ function MovementService:TickAdvance(entity: number): ("Running" | "Success" | "
 		return self:_TickFlow(entity, movementState)
 	end
 
+	self:_ApplyCurrentMoveSpeed(entity)
+
 	return self:_TickPath(entity, movementState)
 end
 
@@ -267,6 +269,21 @@ end
 function MovementService:_GetHumanoid(entity: number): Humanoid?
 	local model = self:_GetEntityModel(entity)
 	return if model ~= nil then model:FindFirstChildWhichIsA("Humanoid") else nil
+end
+
+function MovementService:_ApplyCurrentMoveSpeed(entity: number): number
+	local humanoid = self:_GetHumanoid(entity)
+	local currentMoveSpeed = nil
+	if self._enemyEntityFactory ~= nil and type(self._enemyEntityFactory.GetCurrentMoveSpeed) == "function" then
+		currentMoveSpeed = self._enemyEntityFactory:GetCurrentMoveSpeed(entity)
+	end
+
+	local resolvedMoveSpeed = if type(currentMoveSpeed) == "number" and currentMoveSpeed > 0 then currentMoveSpeed else 16
+	if humanoid ~= nil and humanoid.WalkSpeed ~= resolvedMoveSpeed then
+		humanoid.WalkSpeed = resolvedMoveSpeed
+	end
+
+	return resolvedMoveSpeed
 end
 
 function MovementService:_StopHumanoid(entity: number)
@@ -618,6 +635,8 @@ function MovementService:_TickFlow(
 		return "Fail", "MissingHumanoid"
 	end
 
+	local walkSpeed = self:_ApplyCurrentMoveSpeed(entity)
+
 	local pathfinderForMerge, mapping = self:_ResolveFastFlowRuntime()
 	if mapping == nil then
 		self:StopMovement(entity)
@@ -662,11 +681,6 @@ function MovementService:_TickFlow(
 
 	local sepConfig = CombatMovementConfig.FLOW_SOFT_SEPARATION
 	local useSoftSeparation = sepConfig ~= nil and sepConfig.Enabled == true
-
-	local walkSpeed = humanoid.WalkSpeed
-	if type(walkSpeed) ~= "number" or walkSpeed <= 0 then
-		walkSpeed = 16
-	end
 
 	if useSoftSeparation then
 		local flowXZ = if steering ~= nil then Vector2.new(steering.X, steering.Z) * walkSpeed else Vector2.zero

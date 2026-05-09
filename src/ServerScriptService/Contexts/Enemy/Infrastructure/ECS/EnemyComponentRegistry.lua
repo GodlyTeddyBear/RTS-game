@@ -20,6 +20,8 @@ function EnemyComponentRegistry:_RegisterComponents(_registry: any, _name: strin
 	self:RegisterComponent("HealthComponent", "Enemy.Health", "AUTHORITATIVE")
 	self:RegisterComponent("TransformComponent", "Enemy.Transform", "DERIVED")
 	self:RegisterComponent("RoleComponent", "Enemy.Role", "AUTHORITATIVE")
+	self:RegisterComponent("BaseMoveSpeedComponent", "Enemy.BaseMoveSpeed", "AUTHORITATIVE")
+	self:RegisterComponent("CurrentMoveSpeedComponent", "Enemy.CurrentMoveSpeed", "AUTHORITATIVE")
 	self:RegisterComponent("PathStateComponent", "Enemy.PathState", "AUTHORITATIVE")
 	self:RegisterComponent("ModelRefComponent", "Enemy.ModelRef", "AUTHORITATIVE")
 	self:RegisterComponent("IdentityComponent", "Enemy.Identity", "AUTHORITATIVE")
