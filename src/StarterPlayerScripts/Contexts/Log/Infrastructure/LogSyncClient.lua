@@ -20,6 +20,7 @@ type LogsAtom = typeof(SharedAtoms.CreateClientAtom())
 type LogSyncClientInstance = {
 	_atom: LogsAtom,
 	_idsByScope: { [string]: { number } },
+	_onLogsChanged: (({ LogEntry }) -> ())?,
 }
 
 type LogSyncClientClass = typeof(setmetatable(
@@ -40,12 +41,21 @@ local function removeEntryById(entries: { LogEntry }, entryId: number): { LogEnt
 	return retained
 end
 
-function LogSyncClient.new(): LogSyncClientClass
+function LogSyncClient.new(onLogsChanged: (({ LogEntry }) -> ())?): LogSyncClientClass
 	local self: LogSyncClientInstance = {
 		_atom = SharedAtoms.CreateClientAtom(),
 		_idsByScope = {},
+		_onLogsChanged = onLogsChanged,
 	}
 	return setmetatable(self, LogSyncClient) :: any
+end
+
+function LogSyncClient:_notifyLogsChanged()
+	local currentLogs = (self :: LogSyncClientInstance)._atom()
+	local onLogsChanged = (self :: LogSyncClientInstance)._onLogsChanged
+	if onLogsChanged then
+		onLogsChanged(table.clone(currentLogs))
+	end
 end
 
 function LogSyncClient:Start()
@@ -82,6 +92,7 @@ function LogSyncClient:_applyEntry(entry: LogEntry)
 
 		return updated
 	end)
+	self:_notifyLogsChanged()
 end
 
 function LogSyncClient:_applyClear(contextFilter: string?, categoryFilter: string?)
@@ -92,6 +103,7 @@ function LogSyncClient:_applyClear(contextFilter: string?, categoryFilter: strin
 	if normalizedContext == nil and normalizedCategory == nil then
 		self_._idsByScope = {}
 		self_._atom({} :: { LogEntry })
+		self:_notifyLogsChanged()
 		return
 	end
 
@@ -119,6 +131,7 @@ function LogSyncClient:_applyClear(contextFilter: string?, categoryFilter: strin
 
 		return retained
 	end)
+	self:_notifyLogsChanged()
 end
 
 function LogSyncClient:GetLogsAtom(): LogsAtom

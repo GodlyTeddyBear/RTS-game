@@ -22,13 +22,14 @@ export type LogEntry = {
 	timestamp: number,
 	level: LogLevel,
 	category: LogCategory,
+	source: "server",
 	context: string,
 	service: string,
 	milestone: string?,
 	message: string,
 	errType: string?,
 	traceback: string?,
-	data: { [string]: any }?,
+	data: string?,
 }
 type CommandExecutionResult = LogCommandTypes.CommandExecutionResult
 
@@ -151,6 +152,7 @@ function LogContext:_Push(level: string, label: string, err: any, category: stri
 		timestamp = DateTime.now().UnixTimestamp,
 		level = level,
 		category = normalizeCategory(level :: LogLevel, err, category),
+		source = "server" :: "server",
 		context = context,
 		service = service,
 		milestone = nil :: string?,

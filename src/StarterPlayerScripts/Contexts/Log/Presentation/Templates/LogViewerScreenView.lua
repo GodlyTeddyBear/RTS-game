@@ -39,10 +39,12 @@ type TLogViewerScreenViewProps = {
 	activePage: string,
 	activeLevel: string,
 	activeCategory: string,
+	activeSource: string,
 	activeContext: string,
 	onPageChange: (string) -> (),
 	onSelectLevel: (string) -> (),
 	onSelectCategory: (string) -> (),
+	onSelectSource: (string) -> (),
 	onSelectContext: (string) -> (),
 	onClearAll: () -> (),
 	onClearFiltered: () -> (),
@@ -320,12 +322,24 @@ local function renderDetailPopup(vd: TLogEntryViewData, onClose: () -> ()): any
 				}),
 				LevelBadge = e("TextLabel", {
 					Size = UDim2.fromOffset(64, 20),
-					Position = UDim2.new(1, -100, 0.5, 0),
+					Position = UDim2.new(1, -168, 0.5, 0),
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					BackgroundTransparency = 1,
 					Text = vd.levelTag,
 					TextColor3 = vd.levelColor,
 					TextSize = 12,
+					Font = Enum.Font.GothamBold,
+					TextXAlignment = Enum.TextXAlignment.Center,
+					ZIndex = 502,
+				}),
+				SourceBadge = e("TextLabel", {
+					Size = UDim2.fromOffset(72, 20),
+					Position = UDim2.new(1, -96, 0.5, 0),
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					BackgroundTransparency = 1,
+					Text = vd.sourceTag,
+					TextColor3 = vd.sourceColor,
+					TextSize = 11,
 					Font = Enum.Font.GothamBold,
 					TextXAlignment = Enum.TextXAlignment.Center,
 					ZIndex = 502,
@@ -382,7 +396,7 @@ local function LogViewerScreenView(props: TLogViewerScreenViewProps)
 	}
 
 	for i, entry in ipairs(props.viewData.filteredLogs) do
-		local key = "Entry_" .. tostring(entry.id)
+		local key = "Entry_" .. entry.source .. "_" .. tostring(entry.id)
 		local vd = LogEntryViewModel.fromEntry(entry)
 		rowChildren[key] = e(LogEntryRow, {
 			ViewData = vd,
@@ -393,7 +407,7 @@ local function LogViewerScreenView(props: TLogViewerScreenViewProps)
 		})
 	end
 
-	local scrollTop = HEADER_HEIGHT + FILTER_ROW_HEIGHT * 3
+	local scrollTop = HEADER_HEIGHT + FILTER_ROW_HEIGHT * 4
 
 	return e("TextButton", {
 		Size = UDim2.fromScale(1, 1),
@@ -500,7 +514,7 @@ local function LogViewerScreenView(props: TLogViewerScreenViewProps)
 			}),
 			Filters = e("Frame", {
 				Position = UDim2.fromOffset(0, HEADER_HEIGHT),
-				Size = UDim2.new(1, 0, 0, FILTER_ROW_HEIGHT * 3),
+				Size = UDim2.new(1, 0, 0, FILTER_ROW_HEIGHT * 4),
 				BackgroundColor3 = HEADER_COLOR,
 				BorderSizePixel = 0,
 				Visible = isLogsPage,
@@ -517,9 +531,10 @@ local function LogViewerScreenView(props: TLogViewerScreenViewProps)
 					props.activeCategory,
 					props.onSelectCategory
 				),
+				SourceRow = createFilterRow("Source", 3, props.viewData.sourceOptions, props.activeSource, props.onSelectSource),
 				ContextRow = createFilterRow(
 					"Context",
-					3,
+					4,
 					props.viewData.contextOptions,
 					props.activeContext,
 					props.onSelectContext

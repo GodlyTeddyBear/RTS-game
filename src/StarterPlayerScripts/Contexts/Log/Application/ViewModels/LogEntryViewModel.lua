@@ -6,6 +6,7 @@ type LogEntry = {
 	timestamp: number,
 	level: string,
 	category: string,
+	source: "client" | "server",
 	context: string,
 	service: string,
 	milestone: string?,
@@ -20,6 +21,8 @@ export type TLogEntryViewData = {
 	displayTime: string,
 	levelTag: string,
 	levelColor: Color3,
+	sourceTag: string,
+	sourceColor: Color3,
 	label: string,
 	message: string,
 	errType: string?,
@@ -34,6 +37,11 @@ local LEVEL_COLORS: { [string]: Color3 } = {
 	debug = Color3.fromRGB(180, 180, 180),
 	warn  = Color3.fromRGB(255, 200, 80),
 	error = Color3.fromRGB(255, 80,  80),
+}
+
+local SOURCE_COLORS: { [string]: Color3 } = {
+	client = Color3.fromRGB(120, 220, 160),
+	server = Color3.fromRGB(120, 170, 255),
 }
 
 local function prettyJson(raw: string): string
@@ -82,6 +90,8 @@ function LogEntryViewModel.fromEntry(entry: LogEntry): TLogEntryViewData
 	local displayTime = formatTime(entry.timestamp)
 	local levelTag = "[" .. string.upper(entry.level) .. "]"
 	local levelColor = LEVEL_COLORS[entry.level] or Color3.fromRGB(180, 180, 180)
+	local sourceTag = "[" .. string.upper(entry.source) .. "]"
+	local sourceColor = SOURCE_COLORS[entry.source] or Color3.fromRGB(180, 180, 180)
 
 	local label = entry.context .. ":" .. entry.service
 	if entry.milestone then
@@ -101,6 +111,8 @@ function LogEntryViewModel.fromEntry(entry: LogEntry): TLogEntryViewData
 		displayTime  = displayTime,
 		levelTag     = levelTag,
 		levelColor   = levelColor,
+		sourceTag    = sourceTag,
+		sourceColor  = sourceColor,
 		label        = label,
 		message      = entry.message,
 		errType      = entry.errType,

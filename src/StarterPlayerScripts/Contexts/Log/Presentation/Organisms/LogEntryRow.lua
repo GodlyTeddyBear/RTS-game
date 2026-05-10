@@ -16,6 +16,7 @@ export type TLogEntryRowProps = {
 local ROW_HEIGHT = 22
 local TIME_WIDTH = 60
 local LEVEL_WIDTH = 70
+local SOURCE_WIDTH = 78
 local LABEL_WIDTH = 220
 local FONT_SIZE = 13
 
@@ -60,21 +61,29 @@ local function LogEntryRow(props: TLogEntryRowProps)
 			LayoutOrder = 2,
 		}),
 
+		Source = e(Text, {
+			Text = vd.sourceTag,
+			Size = UDim2.new(0, SOURCE_WIDTH, 1, 0),
+			TextColor3 = vd.sourceColor,
+			TextSize = FONT_SIZE,
+			LayoutOrder = 3,
+		}),
+
 		Label = e(Text, {
 			Text = vd.label,
 			Size = UDim2.new(0, LABEL_WIDTH, 1, 0),
 			TextColor3 = Color3.fromRGB(220, 220, 220),
 			TextSize = FONT_SIZE,
-			LayoutOrder = 3,
+			LayoutOrder = 4,
 		}),
 
 		Message = e(Text, {
 			Text = vd.message,
-			Size = UDim2.new(1, -(TIME_WIDTH + LEVEL_WIDTH + LABEL_WIDTH + 18 + indicatorOffset), 1, 0),
+			Size = UDim2.new(1, -(TIME_WIDTH + LEVEL_WIDTH + SOURCE_WIDTH + LABEL_WIDTH + 24 + indicatorOffset), 1, 0),
 			TextColor3 = Color3.fromRGB(180, 180, 180),
 			TextSize = FONT_SIZE,
 			TextWrapped = false,
-			LayoutOrder = 4,
+			LayoutOrder = 5,
 		}),
 
 		Indicator = if hasExtra then e("TextLabel", {
@@ -84,7 +93,7 @@ local function LogEntryRow(props: TLogEntryRowProps)
 			TextSize = FONT_SIZE,
 			BackgroundTransparency = 1,
 			Font = Enum.Font.GothamBold,
-			LayoutOrder = 5,
+			LayoutOrder = 6,
 		}) else nil,
 	})
 end

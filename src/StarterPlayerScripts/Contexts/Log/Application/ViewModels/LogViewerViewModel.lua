@@ -5,13 +5,14 @@ type LogEntry = {
 	timestamp: number,
 	level: string,
 	category: string,
+	source: "client" | "server",
 	context: string,
 	service: string,
 	milestone: string?,
 	message: string,
 	errType: string?,
 	traceback: string?,
-	data: { [string]: any }?,
+	data: string?,
 }
 
 export type TFilterOption = {
@@ -23,6 +24,7 @@ export type TFilterOption = {
 export type TFilterState = {
 	level: string,
 	category: string,
+	source: string,
 	context: string,
 }
 
@@ -30,6 +32,7 @@ export type TLogViewerViewData = {
 	filteredLogs: { LogEntry },
 	levelOptions: { TFilterOption },
 	categoryOptions: { TFilterOption },
+	sourceOptions: { TFilterOption },
 	contextOptions: { TFilterOption },
 }
 
@@ -69,6 +72,13 @@ local function matchesFilter(entryValue: string, activeFilter: string): boolean
 	return activeFilter == "all" or entryValue == activeFilter
 end
 
+local function normalizeSource(source: string?): string
+	if source == nil or source == "" then
+		return "server"
+	end
+	return string.lower(source)
+end
+
 local function countWhere(logs: { LogEntry }, predicate: (LogEntry) -> boolean): number
 	local count = 0
 	for _, entry in ipairs(logs) do
@@ -79,13 +89,14 @@ local function countWhere(logs: { LogEntry }, predicate: (LogEntry) -> boolean):
 	return count
 end
 
-local function buildLevelOptions(logs: { LogEntry }, categoryFilter: string, contextFilter: string): { TFilterOption }
+local function buildLevelOptions(logs: { LogEntry }, categoryFilter: string, sourceFilter: string, contextFilter: string): { TFilterOption }
 	local options: { TFilterOption } = {
 		{
 			value = "all",
 			label = "All",
 			count = countWhere(logs, function(entry)
 				return matchesFilter(normalizeCategory(entry.category), categoryFilter)
+					and matchesFilter(normalizeSource(entry.source), sourceFilter)
 					and matchesFilter(string.lower(entry.context), contextFilter)
 			end),
 		},
@@ -98,6 +109,7 @@ local function buildLevelOptions(logs: { LogEntry }, categoryFilter: string, con
 			count = countWhere(logs, function(entry)
 				return string.lower(entry.level) == level
 					and matchesFilter(normalizeCategory(entry.category), categoryFilter)
+					and matchesFilter(normalizeSource(entry.source), sourceFilter)
 					and matchesFilter(string.lower(entry.context), contextFilter)
 			end),
 		})
@@ -106,7 +118,12 @@ local function buildLevelOptions(logs: { LogEntry }, categoryFilter: string, con
 	return options
 end
 
-local function buildCategoryOptions(logs: { LogEntry }, levelFilter: string, contextFilter: string): { TFilterOption }
+local function buildCategoryOptions(
+	logs: { LogEntry },
+	levelFilter: string,
+	sourceFilter: string,
+	contextFilter: string
+): { TFilterOption }
 	local categorySet: { [string]: boolean } = {}
 	for _, entry in ipairs(logs) do
 		categorySet[normalizeCategory(entry.category)] = true
@@ -132,6 +149,7 @@ local function buildCategoryOptions(logs: { LogEntry }, levelFilter: string, con
 			label = "All",
 			count = countWhere(logs, function(entry)
 				return matchesFilter(string.lower(entry.level), levelFilter)
+					and matchesFilter(normalizeSource(entry.source), sourceFilter)
 					and matchesFilter(string.lower(entry.context), contextFilter)
 			end),
 		},
@@ -143,6 +161,7 @@ local function buildCategoryOptions(logs: { LogEntry }, levelFilter: string, con
 			label = toDisplayLabel(category),
 			count = countWhere(logs, function(entry)
 				return matchesFilter(string.lower(entry.level), levelFilter)
+					and matchesFilter(normalizeSource(entry.source), sourceFilter)
 					and normalizeCategory(entry.category) == category
 					and matchesFilter(string.lower(entry.context), contextFilter)
 			end),
@@ -152,7 +171,52 @@ local function buildCategoryOptions(logs: { LogEntry }, levelFilter: string, con
 	return options
 end
 
-local function buildContextOptions(logs: { LogEntry }, levelFilter: string, categoryFilter: string): { TFilterOption }
+local function buildSourceOptions(logs: { LogEntry }, levelFilter: string, categoryFilter: string, contextFilter: string): { TFilterOption }
+	local sourceSet: { [string]: boolean } = {}
+	for _, entry in ipairs(logs) do
+		sourceSet[normalizeSource(entry.source)] = true
+	end
+
+	local sources: { string } = {}
+	for source in sourceSet do
+		table.insert(sources, source)
+	end
+	table.sort(sources)
+
+	local options: { TFilterOption } = {
+		{
+			value = "all",
+			label = "All",
+			count = countWhere(logs, function(entry)
+				return matchesFilter(string.lower(entry.level), levelFilter)
+					and matchesFilter(normalizeCategory(entry.category), categoryFilter)
+					and matchesFilter(string.lower(entry.context), contextFilter)
+			end),
+		},
+	}
+
+	for _, source in ipairs(sources) do
+		table.insert(options, {
+			value = source,
+			label = toDisplayLabel(source),
+			count = countWhere(logs, function(entry)
+				return matchesFilter(string.lower(entry.level), levelFilter)
+					and matchesFilter(normalizeCategory(entry.category), categoryFilter)
+					and normalizeSource(entry.source) == source
+					and matchesFilter(string.lower(entry.context), contextFilter)
+			end),
+		})
+	end
+
+	return options
+end
+
+local function buildContextOptions(
+	logs: { LogEntry },
+	levelFilter: string,
+	categoryFilter: string,
+	sourceFilter: string
+): { TFilterOption }
 	local contextSet: { [string]: boolean } = {}
 	for _, entry in ipairs(logs) do
 		contextSet[string.lower(entry.context)] = true
@@ -171,6 +235,7 @@ local function buildContextOptions(logs: { LogEntry }, levelFilter: string, cate
 			count = countWhere(logs, function(entry)
 				return matchesFilter(string.lower(entry.level), levelFilter)
 					and matchesFilter(normalizeCategory(entry.category), categoryFilter)
+					and matchesFilter(normalizeSource(entry.source), sourceFilter)
 			end),
 		},
 	}
@@ -182,6 +247,7 @@ local function buildContextOptions(logs: { LogEntry }, levelFilter: string, cate
 			count = countWhere(logs, function(entry)
 				return matchesFilter(string.lower(entry.level), levelFilter)
 					and matchesFilter(normalizeCategory(entry.category), categoryFilter)
+					and matchesFilter(normalizeSource(entry.source), sourceFilter)
 					and string.lower(entry.context) == context
 			end),
 		})
@@ -193,12 +259,14 @@ end
 function LogViewerViewModel.build(logs: { LogEntry }, filters: TFilterState): TLogViewerViewData
 	local levelFilter = normalizeFilter(filters.level)
 	local categoryFilter = normalizeFilter(filters.category)
+	local sourceFilter = normalizeFilter(filters.source)
 	local contextFilter = normalizeFilter(filters.context)
 
 	local filteredLogs = {}
 	for _, entry in ipairs(logs) do
 		if matchesFilter(string.lower(entry.level), levelFilter)
 			and matchesFilter(normalizeCategory(entry.category), categoryFilter)
+			and matchesFilter(normalizeSource(entry.source), sourceFilter)
 			and matchesFilter(string.lower(entry.context), contextFilter)
 		then
 			table.insert(filteredLogs, entry)
@@ -207,9 +275,10 @@ function LogViewerViewModel.build(logs: { LogEntry }, filters: TFilterState): TL
 
 	return {
 		filteredLogs = filteredLogs,
-		levelOptions = buildLevelOptions(logs, categoryFilter, contextFilter),
-		categoryOptions = buildCategoryOptions(logs, levelFilter, contextFilter),
-		contextOptions = buildContextOptions(logs, levelFilter, categoryFilter),
+		levelOptions = buildLevelOptions(logs, categoryFilter, sourceFilter, contextFilter),
+		categoryOptions = buildCategoryOptions(logs, levelFilter, sourceFilter, contextFilter),
+		sourceOptions = buildSourceOptions(logs, levelFilter, categoryFilter, contextFilter),
+		contextOptions = buildContextOptions(logs, levelFilter, categoryFilter, sourceFilter),
 	}
 end
 

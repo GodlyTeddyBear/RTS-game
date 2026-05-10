@@ -7,6 +7,7 @@ export type LogEntry = {
 	timestamp: number,
 	level: string,
 	category: string,
+	source: "client" | "server",
 	context: string,
 	service: string,
 	milestone: string?,
