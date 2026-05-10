@@ -88,6 +88,9 @@ function Policies.ResolveOptions(root: Instance, options: TSearchOptions): TReso
 		Attributes = _CloneAttributes(options.Attributes),
 		Tags = _CloneTags(options.Tags),
 		Predicate = options.Predicate,
+		ExcludeAttributes = _CloneAttributes(options.ExcludeAttributes),
+		ExcludeTags = _CloneTags(options.ExcludeTags),
+		ExcludePredicate = options.ExcludePredicate,
 	}
 
 	return table.freeze(resolvedOptions)

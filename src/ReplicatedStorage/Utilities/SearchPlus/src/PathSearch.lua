@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Find = require(ReplicatedStorage.Utilities.Find)
+local Matchers = require(script.Parent.Matchers)
 local Types = require(script.Parent.Types)
 
 type TResolvedSearchOptions = Types.TResolvedSearchOptions
@@ -17,7 +18,7 @@ end
 
 function PathSearch.FindFirst(root: Instance, resolvedOptions: TResolvedSearchOptions): Instance?
 	local ok, instance = _TryFind(root, resolvedOptions.Path :: { string })
-	if ok then
+	if ok and instance ~= nil and Matchers.Matches(instance, resolvedOptions) then
 		return instance
 	end
 
@@ -30,11 +31,20 @@ function PathSearch.FindAll(root: Instance, resolvedOptions: TResolvedSearchOpti
 		return {}
 	end
 
+	if not Matchers.Matches(instance, resolvedOptions) then
+		return {}
+	end
+
 	return { instance }
 end
 
 function PathSearch.FindOne(root: Instance, resolvedOptions: TResolvedSearchOptions): Instance
-	return Find(root, table.unpack(resolvedOptions.Path :: { string }))
+	local instance = Find(root, table.unpack(resolvedOptions.Path :: { string }))
+	if not Matchers.Matches(instance, resolvedOptions) then
+		error("SearchPlus expected exactly one match, got zero", 2)
+	end
+
+	return instance
 end
 
 return table.freeze(PathSearch)

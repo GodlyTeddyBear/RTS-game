@@ -23,6 +23,9 @@ export type TSearchOptions = {
 	Attributes: { [string]: any }?,
 	Tags: { string }?,
 	Predicate: ((Instance) -> boolean)?,
+	ExcludeAttributes: { [string]: any }?,
+	ExcludeTags: { string }?,
+	ExcludePredicate: ((Instance) -> boolean)?,
 }
 
 export type TResolvedSearchMode = typeof(Enums.SearchMode.Selector)
@@ -44,6 +47,9 @@ export type TResolvedSearchOptions = {
 	Attributes: { [string]: any }?,
 	Tags: { string }?,
 	Predicate: ((Instance) -> boolean)?,
+	ExcludeAttributes: { [string]: any }?,
+	ExcludeTags: { string }?,
+	ExcludePredicate: ((Instance) -> boolean)?,
 }
 
 local Types = {}

@@ -18,6 +18,9 @@ local FILTER_FIELDS = table.freeze({
 	"Attributes",
 	"Tags",
 	"Predicate",
+	"ExcludeAttributes",
+	"ExcludeTags",
+	"ExcludePredicate",
 })
 
 local SearchSpecs = {}
@@ -44,19 +47,17 @@ end
 function SearchSpecs.IsSelectorRequest(options: TSearchOptions): boolean
 	return SearchSpecs.HasSelector(options)
 		and not SearchSpecs.HasPath(options)
-		and not SearchSpecs.HasFilterFields(options)
 end
 
 function SearchSpecs.IsPathRequest(options: TSearchOptions): boolean
 	return SearchSpecs.HasPath(options)
 		and not SearchSpecs.HasSelector(options)
-		and not SearchSpecs.HasFilterFields(options)
 end
 
 function SearchSpecs.IsFilterRequest(options: TSearchOptions): boolean
-	return SearchSpecs.HasFilterFields(options)
-		and not SearchSpecs.HasSelector(options)
+	return not SearchSpecs.HasSelector(options)
 		and not SearchSpecs.HasPath(options)
+		and SearchSpecs.HasFilterFields(options)
 end
 
 function SearchSpecs.HasMixedModes(options: TSearchOptions): boolean
@@ -67,10 +68,6 @@ function SearchSpecs.HasMixedModes(options: TSearchOptions): boolean
 	end
 
 	if SearchSpecs.HasPath(options) then
-		modeCount += 1
-	end
-
-	if SearchSpecs.HasFilterFields(options) then
 		modeCount += 1
 	end
 
@@ -107,18 +104,24 @@ function SearchSpecs.HasValidPath(options: TSearchOptions): boolean
 end
 
 function SearchSpecs.HasValidTags(options: TSearchOptions): boolean
-	local tags = options.Tags
-	if tags == nil then
-		return true
-	end
+	local tagLists = {
+		options.Tags,
+		options.ExcludeTags,
+	}
 
-	if type(tags) ~= "table" or #tags == 0 then
-		return false
-	end
+	for _, tags in tagLists do
+		if tags == nil then
+			continue
+		end
 
-	for _, tagName in tags do
-		if type(tagName) ~= "string" or tagName == "" then
+		if type(tags) ~= "table" or #tags == 0 then
 			return false
+		end
+
+		for _, tagName in tags do
+			if type(tagName) ~= "string" or tagName == "" then
+				return false
+			end
 		end
 	end
 
@@ -126,13 +129,33 @@ function SearchSpecs.HasValidTags(options: TSearchOptions): boolean
 end
 
 function SearchSpecs.HasValidAttributes(options: TSearchOptions): boolean
-	local attributes = options.Attributes
-	return attributes == nil or type(attributes) == "table"
+	local attributeTables = {
+		options.Attributes,
+		options.ExcludeAttributes,
+	}
+
+	for _, attributes in attributeTables do
+		if attributes ~= nil and type(attributes) ~= "table" then
+			return false
+		end
+	end
+
+	return true
 end
 
 function SearchSpecs.HasValidPredicate(options: TSearchOptions): boolean
-	local predicate = options.Predicate
-	return predicate == nil or type(predicate) == "function"
+	local predicates = {
+		options.Predicate,
+		options.ExcludePredicate,
+	}
+
+	for _, predicate in predicates do
+		if predicate ~= nil and type(predicate) ~= "function" then
+			return false
+		end
+	end
+
+	return true
 end
 
 function SearchSpecs.HasValidRequestShape(options: TSearchOptions): boolean

@@ -37,25 +37,46 @@ local function _ResolveSearchModule(mode: TResolvedSearchMode)
 	return FilterSearch
 end
 
-function SearchPlus.FindFirst(root: Instance, options: TSearchOptions): Instance?
+local function _ResolveSearch(root: Instance, options: TSearchOptions)
 	_AssertRoot(root)
 	local resolvedOptions = Policies.ResolveOptions(root, options)
 	local searchModule = _ResolveSearchModule(resolvedOptions.Mode)
+	return searchModule, resolvedOptions
+end
+
+function SearchPlus.FindFirst(root: Instance, options: TSearchOptions): Instance?
+	local searchModule, resolvedOptions = _ResolveSearch(root, options)
 	return searchModule.FindFirst(root, resolvedOptions)
 end
 
 function SearchPlus.FindAll(root: Instance, options: TSearchOptions): { Instance }
-	_AssertRoot(root)
-	local resolvedOptions = Policies.ResolveOptions(root, options)
-	local searchModule = _ResolveSearchModule(resolvedOptions.Mode)
+	local searchModule, resolvedOptions = _ResolveSearch(root, options)
 	return searchModule.FindAll(root, resolvedOptions)
 end
 
 function SearchPlus.FindOne(root: Instance, options: TSearchOptions): Instance
-	_AssertRoot(root)
-	local resolvedOptions = Policies.ResolveOptions(root, options)
-	local searchModule = _ResolveSearchModule(resolvedOptions.Mode)
+	local searchModule, resolvedOptions = _ResolveSearch(root, options)
 	return searchModule.FindOne(root, resolvedOptions)
+end
+
+function SearchPlus.TryFindOne(root: Instance, options: TSearchOptions): Instance?
+	local searchModule, resolvedOptions = _ResolveSearch(root, options)
+	local matches = searchModule.FindAll(root, resolvedOptions)
+	if #matches == 1 then
+		return matches[1]
+	end
+
+	return nil
+end
+
+function SearchPlus.Exists(root: Instance, options: TSearchOptions): boolean
+	local searchModule, resolvedOptions = _ResolveSearch(root, options)
+	return searchModule.FindFirst(root, resolvedOptions) ~= nil
+end
+
+function SearchPlus.Count(root: Instance, options: TSearchOptions): number
+	local searchModule, resolvedOptions = _ResolveSearch(root, options)
+	return #searchModule.FindAll(root, resolvedOptions)
 end
 
 return table.freeze(SearchPlus)
