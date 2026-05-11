@@ -41,6 +41,16 @@ local function removeEntryById(entries: { LogEntry }, entryId: number): { LogEnt
 	return retained
 end
 
+local function normalizeIncomingEntry(entry: LogEntry): LogEntry
+	if entry.source ~= nil then
+		return entry
+	end
+
+	local normalizedEntry = table.clone(entry) :: any
+	normalizedEntry.source = "server"
+	return normalizedEntry
+end
+
 function LogSyncClient.new(onLogsChanged: (({ LogEntry }) -> ())?): LogSyncClientClass
 	local self: LogSyncClientInstance = {
 		_atom = SharedAtoms.CreateClientAtom(),
@@ -72,19 +82,20 @@ end
 
 function LogSyncClient:_applyEntry(entry: LogEntry)
 	local self_ = self :: LogSyncClientInstance
+	local normalizedEntry = normalizeIncomingEntry(entry)
 	self_._atom(function(current: { LogEntry })
 		local updated = table.clone(current)
-		table.insert(updated, entry)
+		table.insert(updated, normalizedEntry)
 
-		local scopeKey = LogRetentionConfig.buildScopeKey(entry.context, entry.category)
+		local scopeKey = LogRetentionConfig.buildScopeKey(normalizedEntry.context, normalizedEntry.category)
 		local scopedIds = self_._idsByScope[scopeKey]
 		if not scopedIds then
 			scopedIds = {}
 			self_._idsByScope[scopeKey] = scopedIds
 		end
-		table.insert(scopedIds, entry.id)
+		table.insert(scopedIds, normalizedEntry.id)
 
-		local maxEntries = LogRetentionConfig.resolveScopeLimit(entry.context, entry.category)
+		local maxEntries = LogRetentionConfig.resolveScopeLimit(normalizedEntry.context, normalizedEntry.category)
 		while #scopedIds > maxEntries do
 			local staleId = table.remove(scopedIds, 1)
 			updated = removeEntryById(updated, staleId)

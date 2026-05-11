@@ -396,7 +396,8 @@ local function LogViewerScreenView(props: TLogViewerScreenViewProps)
 	}
 
 	for i, entry in ipairs(props.viewData.filteredLogs) do
-		local key = "Entry_" .. entry.source .. "_" .. tostring(entry.id)
+		local sourceKey = entry.source or "server"
+		local key = "Entry_" .. sourceKey .. "_" .. tostring(entry.id)
 		local vd = LogEntryViewModel.fromEntry(entry)
 		rowChildren[key] = e(LogEntryRow, {
 			ViewData = vd,

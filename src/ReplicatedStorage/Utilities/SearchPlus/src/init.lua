@@ -5,6 +5,7 @@ local FilterSearch = require(script.FilterSearch)
 local PathSearch = require(script.PathSearch)
 local Policies = require(script.Policies)
 local SelectorSearch = require(script.SelectorSearch)
+local ScopeResolver = require(script.ScopeResolver)
 local Types = require(script.Types)
 
 export type TSearchOptions = Types.TSearchOptions
@@ -44,24 +45,69 @@ local function _ResolveSearch(root: Instance, options: TSearchOptions)
 	return searchModule, resolvedOptions
 end
 
+local function _CollectScopedMatches(searchModule, scopeRoots: { Instance }, resolvedOptions: TResolvedSearchOptions): { Instance }
+	local seen = {}
+	local matches = {}
+
+	for _, scopeRoot in scopeRoots do
+		local scopeMatches = searchModule.FindAll(scopeRoot, resolvedOptions)
+		for _, instance in scopeMatches do
+			if not seen[instance] then
+				seen[instance] = true
+				matches[#matches + 1] = instance
+			end
+		end
+	end
+
+	return matches
+end
+
 function SearchPlus.FindFirst(root: Instance, options: TSearchOptions): Instance?
 	local searchModule, resolvedOptions = _ResolveSearch(root, options)
-	return searchModule.FindFirst(root, resolvedOptions)
+	if not ScopeResolver.HasScope(resolvedOptions) then
+		return searchModule.FindFirst(root, resolvedOptions)
+	end
+
+	return _CollectScopedMatches(searchModule, ScopeResolver.Resolve(root, resolvedOptions), resolvedOptions)[1]
 end
 
 function SearchPlus.FindAll(root: Instance, options: TSearchOptions): { Instance }
 	local searchModule, resolvedOptions = _ResolveSearch(root, options)
-	return searchModule.FindAll(root, resolvedOptions)
+	if not ScopeResolver.HasScope(resolvedOptions) then
+		return searchModule.FindAll(root, resolvedOptions)
+	end
+
+	return _CollectScopedMatches(searchModule, ScopeResolver.Resolve(root, resolvedOptions), resolvedOptions)
 end
 
 function SearchPlus.FindOne(root: Instance, options: TSearchOptions): Instance
 	local searchModule, resolvedOptions = _ResolveSearch(root, options)
-	return searchModule.FindOne(root, resolvedOptions)
+	if not ScopeResolver.HasScope(resolvedOptions) then
+		return searchModule.FindOne(root, resolvedOptions)
+	end
+
+	local matches = _CollectScopedMatches(searchModule, ScopeResolver.Resolve(root, resolvedOptions), resolvedOptions)
+	if #matches == 0 then
+		error(Enums.ErrorMessage[Enums.ErrorKey.FindOneNoMatches], 2)
+	end
+
+	if #matches > 1 then
+		error(Enums.ErrorMessage[Enums.ErrorKey.FindOneMultipleMatches], 2)
+	end
+
+	return matches[1]
 end
 
 function SearchPlus.TryFindOne(root: Instance, options: TSearchOptions): Instance?
 	local searchModule, resolvedOptions = _ResolveSearch(root, options)
-	local matches = searchModule.FindAll(root, resolvedOptions)
+	local matches: { Instance }
+
+	if ScopeResolver.HasScope(resolvedOptions) then
+		matches = _CollectScopedMatches(searchModule, ScopeResolver.Resolve(root, resolvedOptions), resolvedOptions)
+	else
+		matches = searchModule.FindAll(root, resolvedOptions)
+	end
+
 	if #matches == 1 then
 		return matches[1]
 	end
@@ -70,13 +116,11 @@ function SearchPlus.TryFindOne(root: Instance, options: TSearchOptions): Instanc
 end
 
 function SearchPlus.Exists(root: Instance, options: TSearchOptions): boolean
-	local searchModule, resolvedOptions = _ResolveSearch(root, options)
-	return searchModule.FindFirst(root, resolvedOptions) ~= nil
+	return SearchPlus.FindFirst(root, options) ~= nil
 end
 
 function SearchPlus.Count(root: Instance, options: TSearchOptions): number
-	local searchModule, resolvedOptions = _ResolveSearch(root, options)
-	return #searchModule.FindAll(root, resolvedOptions)
+	return #SearchPlus.FindAll(root, options)
 end
 
 return table.freeze(SearchPlus)

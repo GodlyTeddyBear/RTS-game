@@ -12,28 +12,24 @@ local Policies = {}
 
 local VALIDATION_SPECS = table.freeze({
 	Specs.HasNoMixedModes,
+	Specs.HasNoMixedScopes,
 	Specs.HasOneRequestMode,
 	Specs.HasValidPathSpec,
+	Specs.HasValidScopeSelectorSpec,
 	Specs.HasValidMaxDepthSpec,
 	Specs.HasValidTagsSpec,
+	Specs.HasValidMatcherListsSpec,
+	Specs.HasValidInstanceFiltersSpec,
 	Specs.HasValidAttributesSpec,
 	Specs.HasValidPredicateSpec,
 })
 
-local function _ClonePath(path: { string }?): { string }?
-	if path == nil then
+local function _CloneStringArray(values: { string }?): { string }?
+	if values == nil then
 		return nil
 	end
 
-	return table.clone(path)
-end
-
-local function _CloneTags(tags: { string }?): { string }?
-	if tags == nil then
-		return nil
-	end
-
-	return table.clone(tags)
+	return table.clone(values)
 end
 
 local function _CloneAttributes(attributes: { [string]: any }?): { [string]: any }?
@@ -42,6 +38,14 @@ local function _CloneAttributes(attributes: { [string]: any }?): { [string]: any
 	end
 
 	return table.clone(attributes)
+end
+
+local function _CloneInstances(instances: { Instance }?): { Instance }?
+	if instances == nil then
+		return nil
+	end
+
+	return table.clone(instances)
 end
 
 local function _RaiseValidationFailure(result: any)
@@ -78,18 +82,32 @@ function Policies.ResolveOptions(root: Instance, options: TSearchOptions): TReso
 		Mode = Policies.ResolveMode(options),
 		Root = root,
 		Selector = options.Selector,
-		Path = _ClonePath(options.Path),
+		Path = _CloneStringArray(options.Path),
+		ScopePath = _CloneStringArray(options.ScopePath),
+		ScopeSelector = options.ScopeSelector,
+		ScopeRecursive = options.ScopeRecursive == true,
+		ScopeMaxDepth = options.ScopeMaxDepth,
+		IncludeScopeRoot = options.IncludeScopeRoot == true,
 		Recursive = options.Recursive == true,
 		MaxDepth = options.MaxDepth,
+		IncludeRoot = options.IncludeRoot == true,
 		Name = options.Name,
+		Names = _CloneStringArray(options.Names),
 		CaseInsensitiveName = options.CaseInsensitiveName == true,
 		ClassName = options.ClassName,
+		ClassNames = _CloneStringArray(options.ClassNames),
 		IsA = options.IsA,
+		IsAAny = _CloneStringArray(options.IsAAny),
 		Attributes = _CloneAttributes(options.Attributes),
-		Tags = _CloneTags(options.Tags),
+		Tags = _CloneStringArray(options.Tags),
+		TagsAny = _CloneStringArray(options.TagsAny),
+		Instances = _CloneInstances(options.Instances),
+		ExcludeInstances = _CloneInstances(options.ExcludeInstances),
+		AncestorOf = options.AncestorOf,
+		DescendantOf = options.DescendantOf,
 		Predicate = options.Predicate,
 		ExcludeAttributes = _CloneAttributes(options.ExcludeAttributes),
-		ExcludeTags = _CloneTags(options.ExcludeTags),
+		ExcludeTags = _CloneStringArray(options.ExcludeTags),
 		ExcludePredicate = options.ExcludePredicate,
 	}
 

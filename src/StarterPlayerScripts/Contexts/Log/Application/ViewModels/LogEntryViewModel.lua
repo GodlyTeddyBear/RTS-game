@@ -86,12 +86,21 @@ local function formatTime(seconds: number): string
 	return dateTime:FormatLocalTime("HH:mm:ss", "en-us")
 end
 
+local function normalizeSource(source: string?): "client" | "server"
+	if source == "client" then
+		return "client"
+	end
+
+	return "server"
+end
+
 function LogEntryViewModel.fromEntry(entry: LogEntry): TLogEntryViewData
 	local displayTime = formatTime(entry.timestamp)
 	local levelTag = "[" .. string.upper(entry.level) .. "]"
 	local levelColor = LEVEL_COLORS[entry.level] or Color3.fromRGB(180, 180, 180)
-	local sourceTag = "[" .. string.upper(entry.source) .. "]"
-	local sourceColor = SOURCE_COLORS[entry.source] or Color3.fromRGB(180, 180, 180)
+	local source = normalizeSource(entry.source)
+	local sourceTag = "[" .. string.upper(source) .. "]"
+	local sourceColor = SOURCE_COLORS[source] or Color3.fromRGB(180, 180, 180)
 
 	local label = entry.context .. ":" .. entry.service
 	if entry.milestone then
