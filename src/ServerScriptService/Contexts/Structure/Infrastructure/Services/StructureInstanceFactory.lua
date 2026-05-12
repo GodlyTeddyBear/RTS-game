@@ -13,6 +13,7 @@ type TCreateStructureInstanceOptions = {
 	structureType: string,
 	instanceId: number,
 	worldPos: Vector3,
+	rotationQuarterTurns: number,
 }
 
 local StructureInstanceFactory = {}
@@ -109,6 +110,9 @@ function StructureInstanceFactory:_PrepareInstance(instance: Instance, _entityId
 	model:SetAttribute("PlacementInstanceId", options.instanceId)
 
 	_PrepareStructureAnimationRuntime(model, self._animationsFolder)
+	if options.rotationQuarterTurns ~= 0 then
+		ModelPlus.RotateYaw(model, math.rad(options.rotationQuarterTurns * 90))
+	end
 	ModelPlus.MoveBottomAligned(model, options.worldPos)
 	EntityCollisionService:ApplyStructureModel(model)
 end
@@ -117,12 +121,14 @@ function StructureInstanceFactory:CreateStructureInstance(
 	entity: number,
 	structureType: string,
 	instanceId: number,
-	worldPos: Vector3
+	worldPos: Vector3,
+	rotationQuarterTurns: number
 ): Model
 	local instance = self:_CreateBoundInstance(entity, {
 		structureType = structureType,
 		instanceId = instanceId,
 		worldPos = worldPos,
+		rotationQuarterTurns = rotationQuarterTurns,
 	})
 
 	assert(instance:IsA("Model"), "StructureInstanceFactory requires Model instances")

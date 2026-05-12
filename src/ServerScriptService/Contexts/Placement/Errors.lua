@@ -24,5 +24,6 @@ Errors.OCCUPANCY_UPDATE_FAILED = "PlacementContext: failed to mark tile occupied
 Errors.OCCUPANCY_RELEASE_FAILED = "PlacementContext: failed to clear tile occupancy"
 Errors.REFUND_FAILED = "PlacementContext: failed to refund energy after placement rollback"
 Errors.INVALID_INSTANCE_ID = "PlacementContext: invalid structure instance id"
+Errors.MISSING_FOOTPRINT_CACHE = "PlacementContext: footprint cache entry missing for structure type or rotation"
 
 return table.freeze(Errors)

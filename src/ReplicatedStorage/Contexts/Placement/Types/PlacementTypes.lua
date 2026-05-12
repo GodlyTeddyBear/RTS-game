@@ -15,6 +15,25 @@ local PlacementTypes = {}
 ]=]
 export type ResourceCostMap = { [string]: number }
 
+export type SpecialTileRequirementMode = "AtLeastOneTile" | "AllTiles"
+
+export type FootprintDimensions = {
+	Width: number,
+	Depth: number,
+}
+
+export type FootprintCacheEntry = {
+	StructureType: string,
+	RotationQuarterTurns: number,
+	WidthTiles: number,
+	DepthTiles: number,
+	SpecialTileRequirementMode: SpecialTileRequirementMode,
+}
+
+export type FootprintCacheLookup = {
+	[string]: FootprintCacheEntry,
+}
+
 --[=[
 	@interface GridCoord
 	@within PlacementTypes
@@ -38,7 +57,11 @@ export type GridCoord = {
 	.resourceType string? -- Resource metadata for extractor-style structures.
 ]=]
 export type StructureRecord = {
-	Coord: GridCoord,
+	AnchorCoord: GridCoord,
+	OccupiedCoords: { GridCoord },
+	RotationQuarterTurns: number,
+	FootprintWidthTiles: number,
+	FootprintDepthTiles: number,
 	StructureType: string,
 	InstanceId: number,
 	OwnerUserId: number?,
@@ -56,6 +79,7 @@ export type StructureRecord = {
 ]=]
 export type PlacementAtom = {
 	Placements: { StructureRecord },
+	FootprintCache: { FootprintCacheEntry },
 }
 
 --[=[
@@ -70,6 +94,7 @@ export type PlaceRequest = {
 	CoordRow: number,
 	CoordCol: number,
 	StructureType: string,
+	RotationQuarterTurns: number,
 }
 
 --[=[
@@ -83,6 +108,15 @@ export type PlaceResponse = {
 	Success: boolean,
 	ErrorMessage: string?,
 	InstanceId: number?,
+}
+
+export type ResolvedFootprint = {
+	AnchorCoord: GridCoord,
+	OccupiedCoords: { GridCoord },
+	RotationQuarterTurns: number,
+	WidthTiles: number,
+	DepthTiles: number,
+	SpecialTileRequirementMode: SpecialTileRequirementMode,
 }
 
 return table.freeze(PlacementTypes)

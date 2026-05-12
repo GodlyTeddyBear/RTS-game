@@ -159,13 +159,16 @@ local SerdesEvent = "?"
 local SerdesThread: thread?
 Queue.Reliable[0] = table.create(256)
 export type GridCoordPayload = { GridId: string?, Row: number?, Col: number? }
-export type StructureRecordPayload = { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }
-export type PlacementList = {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}
-export type PlacementStatePayload = { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }
-export type InitPayload = { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }
-export type PatchPayload = { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }
-export type SyncPayload = { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? }
-local function ReadEVENT_SyncPlacements(): ({ type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? })
+export type OccupiedCoordList = {[number]: { GridId: string?, Row: number?, Col: number? }}
+export type FootprintCacheEntryPayload = { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }
+export type FootprintCacheList = {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}
+export type StructureRecordPayload = { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }
+export type PlacementList = {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}
+export type PlacementStatePayload = { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }
+export type InitPayload = { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }
+export type PatchPayload = { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }
+export type SyncPayload = { type: "init", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? }
+local function ReadEVENT_SyncPlacements(): ({ type: "init", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? })
 	-- Read BLOCK: 1 bytes
 	local BLOCK_START = Read(1)
 	local Tag = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
@@ -179,8 +182,8 @@ local function ReadEVENT_SyncPlacements(): ({ type: "init", data: { Placements: 
 			local BLOCK_START = Read(1)
 			Value.data = {} :: any
 			if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
-				-- Read BLOCK: 1 bytes
-				local BLOCK_START = Read(1)
+				-- Read BLOCK: 2 bytes
+				local BLOCK_START = Read(2)
 				Value.data.Placements = {} :: any
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 					-- Read BLOCK: 2 bytes
@@ -195,57 +198,169 @@ local function ReadEVENT_SyncPlacements(): ({ type: "init", data: { Placements: 
 						if buffer.readu8(RecieveBuffer, OFFSET_1) == 1 then
 							-- Read BLOCK: 3 bytes
 							local BLOCK_START = Read(3)
-							Element_5.Coord = {} :: any
+							Element_5.AnchorCoord = {} :: any
 							if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 								-- Read BLOCK: 2 bytes
 								local BLOCK_START = Read(2)
 								local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
-								Element_5.Coord.GridId = buffer.readstring(RecieveBuffer, Read(Length), Length)
+								Element_5.AnchorCoord.GridId = buffer.readstring(RecieveBuffer, Read(Length), Length)
 							end
 							if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
 								-- Read BLOCK: 8 bytes
 								local BLOCK_START = Read(8)
-								Element_5.Coord.Row = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+								Element_5.AnchorCoord.Row = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 							end
 							if buffer.readu8(RecieveBuffer, BLOCK_START + 2) == 1 then
 								-- Read BLOCK: 8 bytes
 								local BLOCK_START = Read(8)
-								Element_5.Coord.Col = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+								Element_5.AnchorCoord.Col = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 							end
 						end
 						local OFFSET_2 = Read(1)
 						if buffer.readu8(RecieveBuffer, OFFSET_2) == 1 then
 							-- Read BLOCK: 2 bytes
 							local BLOCK_START = Read(2)
-							local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
-							Element_5.StructureType = buffer.readstring(RecieveBuffer, Read(Length), Length)
+							Element_5.OccupiedCoords = {}
+							local Elements_7 = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+							for _ = 1, Elements_7 do
+								local OFFSET_0 = Read(4)
+								local Key_7 = buffer.readu32(RecieveBuffer, OFFSET_0)
+								local Element_7 = {} :: any
+								local OFFSET_1 = Read(1)
+								if buffer.readu8(RecieveBuffer, OFFSET_1) == 1 then
+									-- Read BLOCK: 2 bytes
+									local BLOCK_START = Read(2)
+									local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+									Element_7.GridId = buffer.readstring(RecieveBuffer, Read(Length), Length)
+								end
+								local OFFSET_2 = Read(1)
+								if buffer.readu8(RecieveBuffer, OFFSET_2) == 1 then
+									-- Read BLOCK: 8 bytes
+									local BLOCK_START = Read(8)
+									Element_7.Row = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+								end
+								local OFFSET_3 = Read(1)
+								if buffer.readu8(RecieveBuffer, OFFSET_3) == 1 then
+									-- Read BLOCK: 8 bytes
+									local BLOCK_START = Read(8)
+									Element_7.Col = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+								end
+								Element_5.OccupiedCoords[Key_7] = Element_7
+							end
 						end
 						local OFFSET_3 = Read(1)
 						if buffer.readu8(RecieveBuffer, OFFSET_3) == 1 then
 							-- Read BLOCK: 8 bytes
 							local BLOCK_START = Read(8)
-							Element_5.InstanceId = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+							Element_5.RotationQuarterTurns = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 						end
 						local OFFSET_4 = Read(1)
 						if buffer.readu8(RecieveBuffer, OFFSET_4) == 1 then
 							-- Read BLOCK: 8 bytes
 							local BLOCK_START = Read(8)
-							Element_5.OwnerUserId = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+							Element_5.FootprintWidthTiles = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 						end
 						local OFFSET_5 = Read(1)
 						if buffer.readu8(RecieveBuffer, OFFSET_5) == 1 then
 							-- Read BLOCK: 8 bytes
 							local BLOCK_START = Read(8)
-							Element_5.Tier = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+							Element_5.FootprintDepthTiles = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 						end
 						local OFFSET_6 = Read(1)
 						if buffer.readu8(RecieveBuffer, OFFSET_6) == 1 then
 							-- Read BLOCK: 2 bytes
 							local BLOCK_START = Read(2)
 							local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+							Element_5.StructureType = buffer.readstring(RecieveBuffer, Read(Length), Length)
+						end
+						local OFFSET_7 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_7) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.InstanceId = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_8 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_8) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.OwnerUserId = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_9 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_9) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.Tier = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_10 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_10) == 1 then
+							-- Read BLOCK: 2 bytes
+							local BLOCK_START = Read(2)
+							local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
 							Element_5.ResourceType = buffer.readstring(RecieveBuffer, Read(Length), Length)
 						end
+						local OFFSET_11 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_11) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.GroundPosX = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_12 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_12) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.GroundPosY = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_13 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_13) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.GroundPosZ = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
 						Value.data.Placements.Placements[Key_5] = Element_5
+					end
+				end
+				if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
+					-- Read BLOCK: 2 bytes
+					local BLOCK_START = Read(2)
+					Value.data.Placements.FootprintCache = {}
+					local Elements_5 = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+					for _ = 1, Elements_5 do
+						local OFFSET_0 = Read(4)
+						local Key_5 = buffer.readu32(RecieveBuffer, OFFSET_0)
+						local Element_5 = {} :: any
+						local OFFSET_1 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_1) == 1 then
+							-- Read BLOCK: 2 bytes
+							local BLOCK_START = Read(2)
+							local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+							Element_5.StructureType = buffer.readstring(RecieveBuffer, Read(Length), Length)
+						end
+						local OFFSET_2 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_2) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.RotationQuarterTurns = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_3 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_3) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.WidthTiles = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_4 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_4) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.DepthTiles = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_5 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_5) == 1 then
+							-- Read BLOCK: 2 bytes
+							local BLOCK_START = Read(2)
+							local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+							Element_5.SpecialTileRequirementMode = buffer.readstring(RecieveBuffer, Read(Length), Length)
+						end
+						Value.data.Placements.FootprintCache[Key_5] = Element_5
 					end
 				end
 			end
@@ -260,8 +375,8 @@ local function ReadEVENT_SyncPlacements(): ({ type: "init", data: { Placements: 
 			local BLOCK_START = Read(1)
 			Value.data = {} :: any
 			if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
-				-- Read BLOCK: 1 bytes
-				local BLOCK_START = Read(1)
+				-- Read BLOCK: 2 bytes
+				local BLOCK_START = Read(2)
 				Value.data.Placements = {} :: any
 				if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 					-- Read BLOCK: 2 bytes
@@ -276,57 +391,169 @@ local function ReadEVENT_SyncPlacements(): ({ type: "init", data: { Placements: 
 						if buffer.readu8(RecieveBuffer, OFFSET_1) == 1 then
 							-- Read BLOCK: 3 bytes
 							local BLOCK_START = Read(3)
-							Element_5.Coord = {} :: any
+							Element_5.AnchorCoord = {} :: any
 							if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 								-- Read BLOCK: 2 bytes
 								local BLOCK_START = Read(2)
 								local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
-								Element_5.Coord.GridId = buffer.readstring(RecieveBuffer, Read(Length), Length)
+								Element_5.AnchorCoord.GridId = buffer.readstring(RecieveBuffer, Read(Length), Length)
 							end
 							if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
 								-- Read BLOCK: 8 bytes
 								local BLOCK_START = Read(8)
-								Element_5.Coord.Row = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+								Element_5.AnchorCoord.Row = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 							end
 							if buffer.readu8(RecieveBuffer, BLOCK_START + 2) == 1 then
 								-- Read BLOCK: 8 bytes
 								local BLOCK_START = Read(8)
-								Element_5.Coord.Col = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+								Element_5.AnchorCoord.Col = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 							end
 						end
 						local OFFSET_2 = Read(1)
 						if buffer.readu8(RecieveBuffer, OFFSET_2) == 1 then
 							-- Read BLOCK: 2 bytes
 							local BLOCK_START = Read(2)
-							local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
-							Element_5.StructureType = buffer.readstring(RecieveBuffer, Read(Length), Length)
+							Element_5.OccupiedCoords = {}
+							local Elements_7 = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+							for _ = 1, Elements_7 do
+								local OFFSET_0 = Read(4)
+								local Key_7 = buffer.readu32(RecieveBuffer, OFFSET_0)
+								local Element_7 = {} :: any
+								local OFFSET_1 = Read(1)
+								if buffer.readu8(RecieveBuffer, OFFSET_1) == 1 then
+									-- Read BLOCK: 2 bytes
+									local BLOCK_START = Read(2)
+									local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+									Element_7.GridId = buffer.readstring(RecieveBuffer, Read(Length), Length)
+								end
+								local OFFSET_2 = Read(1)
+								if buffer.readu8(RecieveBuffer, OFFSET_2) == 1 then
+									-- Read BLOCK: 8 bytes
+									local BLOCK_START = Read(8)
+									Element_7.Row = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+								end
+								local OFFSET_3 = Read(1)
+								if buffer.readu8(RecieveBuffer, OFFSET_3) == 1 then
+									-- Read BLOCK: 8 bytes
+									local BLOCK_START = Read(8)
+									Element_7.Col = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+								end
+								Element_5.OccupiedCoords[Key_7] = Element_7
+							end
 						end
 						local OFFSET_3 = Read(1)
 						if buffer.readu8(RecieveBuffer, OFFSET_3) == 1 then
 							-- Read BLOCK: 8 bytes
 							local BLOCK_START = Read(8)
-							Element_5.InstanceId = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+							Element_5.RotationQuarterTurns = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 						end
 						local OFFSET_4 = Read(1)
 						if buffer.readu8(RecieveBuffer, OFFSET_4) == 1 then
 							-- Read BLOCK: 8 bytes
 							local BLOCK_START = Read(8)
-							Element_5.OwnerUserId = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+							Element_5.FootprintWidthTiles = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 						end
 						local OFFSET_5 = Read(1)
 						if buffer.readu8(RecieveBuffer, OFFSET_5) == 1 then
 							-- Read BLOCK: 8 bytes
 							local BLOCK_START = Read(8)
-							Element_5.Tier = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+							Element_5.FootprintDepthTiles = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 						end
 						local OFFSET_6 = Read(1)
 						if buffer.readu8(RecieveBuffer, OFFSET_6) == 1 then
 							-- Read BLOCK: 2 bytes
 							local BLOCK_START = Read(2)
 							local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+							Element_5.StructureType = buffer.readstring(RecieveBuffer, Read(Length), Length)
+						end
+						local OFFSET_7 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_7) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.InstanceId = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_8 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_8) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.OwnerUserId = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_9 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_9) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.Tier = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_10 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_10) == 1 then
+							-- Read BLOCK: 2 bytes
+							local BLOCK_START = Read(2)
+							local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
 							Element_5.ResourceType = buffer.readstring(RecieveBuffer, Read(Length), Length)
 						end
+						local OFFSET_11 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_11) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.GroundPosX = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_12 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_12) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.GroundPosY = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_13 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_13) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.GroundPosZ = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
 						Value.data.Placements.Placements[Key_5] = Element_5
+					end
+				end
+				if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
+					-- Read BLOCK: 2 bytes
+					local BLOCK_START = Read(2)
+					Value.data.Placements.FootprintCache = {}
+					local Elements_5 = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+					for _ = 1, Elements_5 do
+						local OFFSET_0 = Read(4)
+						local Key_5 = buffer.readu32(RecieveBuffer, OFFSET_0)
+						local Element_5 = {} :: any
+						local OFFSET_1 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_1) == 1 then
+							-- Read BLOCK: 2 bytes
+							local BLOCK_START = Read(2)
+							local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+							Element_5.StructureType = buffer.readstring(RecieveBuffer, Read(Length), Length)
+						end
+						local OFFSET_2 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_2) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.RotationQuarterTurns = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_3 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_3) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.WidthTiles = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_4 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_4) == 1 then
+							-- Read BLOCK: 8 bytes
+							local BLOCK_START = Read(8)
+							Element_5.DepthTiles = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
+						end
+						local OFFSET_5 = Read(1)
+						if buffer.readu8(RecieveBuffer, OFFSET_5) == 1 then
+							-- Read BLOCK: 2 bytes
+							local BLOCK_START = Read(2)
+							local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+							Element_5.SpecialTileRequirementMode = buffer.readstring(RecieveBuffer, Read(Length), Length)
+						end
+						Value.data.Placements.FootprintCache[Key_5] = Element_5
 					end
 				end
 			end
@@ -387,7 +614,7 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
 		if Index == 0 then
-			local Value: { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } = ReadEVENT_SyncPlacements()
+			local Value: { type: "init", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? } = ReadEVENT_SyncPlacements()
 			if Events.Reliable[0] ~= nil then
 				task.spawn(Events.Reliable[0], Value)
 			else
@@ -422,7 +649,7 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	SyncPlacements = {
-		On = function(Listener: (Value: { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? }) -> ()): () -> ()
+		On = function(Listener: (Value: { type: "init", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? }) -> ()): () -> ()
 			Events.Reliable[0] = Listener
 			for Index, Arguments in Queue.Reliable[0] do
 				task.spawn(Listener, table.unpack(Arguments))

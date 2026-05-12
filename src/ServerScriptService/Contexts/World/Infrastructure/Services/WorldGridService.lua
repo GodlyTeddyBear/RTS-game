@@ -137,6 +137,15 @@ function WorldGridService:GetTile(coord: GridCoord): Tile?
 	return self._tileByCoordKey[_GetCoordKey(coord)]
 end
 
+function WorldGridService:GetTiles(coords: { GridCoord }): { Tile? }
+	self:_EnsureBuilt()
+	local tiles = table.create(#coords)
+	for index, coord in ipairs(coords) do
+		tiles[index] = self:GetTile(coord)
+	end
+	return tiles
+end
+
 function WorldGridService:GetAllTiles(): { Tile }
 	self:_EnsureBuilt()
 	return table.clone(self._allTiles)
@@ -194,6 +203,24 @@ function WorldGridService:SetOccupied(coord: GridCoord, occupied: boolean): bool
 	end
 
 	tile.Occupied = occupied
+	return true
+end
+
+function WorldGridService:SetOccupiedBatch(coords: { GridCoord }, occupied: boolean): boolean
+	self:_EnsureBuilt()
+	local tiles = table.create(#coords)
+	for index, coord in ipairs(coords) do
+		local tile = self:GetTile(coord)
+		if tile == nil then
+			return false
+		end
+		tiles[index] = tile
+	end
+
+	for _, tile in ipairs(tiles) do
+		tile.Occupied = occupied
+	end
+
 	return true
 end
 

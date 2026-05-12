@@ -84,11 +84,23 @@ end
 	@return Result.Result<{ InstanceId: number }> -- The spawned instance id on success.
 ]=]
 -- Validate first, then spend, then spawn, then occupy, then sync.
-function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structureType: string): Result.Result<{ InstanceId: number, Record: StructureRecord }>
+function PlaceStructureCommand:Execute(
+	player: Player,
+	coord: GridCoord,
+	structureType: string,
+	rotationQuarterTurns: number
+): Result.Result<{ InstanceId: number, Record: StructureRecord }>
 	-- Policy resolves the live tile and all gate conditions before any mutation occurs.
-	local decision = Try(self._policy:Check(coord, structureType))
+	local decision = Try(self._policy:Check(coord, structureType, rotationQuarterTurns))
 	local costMap = decision.CostMap
-	local tile = decision.Tile
+	local resolvedFootprint = decision.ResolvedFootprint
+	local resourceType = nil :: string?
+	for _, tile in ipairs(decision.Tiles) do
+		if tile.ResourceType ~= nil then
+			resourceType = tile.ResourceType
+			break
+		end
+	end
 
 	-- Fail before any wallet mutation if the configured runtime template is missing.
 	Try(self._placementService:ValidateTemplate(structureType))
@@ -97,14 +109,18 @@ function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structu
 	Try(self._economyContext:SpendResources(player, costMap))
 
 	-- Spawn the physical structure only after the purchase succeeds.
-	local groundPointResult = self._placementService:ResolveGroundPointFromCoord(coord)
+	local groundPointResult = self._placementService:ResolveGroundPointFromFootprint(
+		resolvedFootprint.AnchorCoord,
+		resolvedFootprint.WidthTiles,
+		resolvedFootprint.DepthTiles
+	)
 	if not groundPointResult.success then
 		Try(self:_RefundResources(player, costMap, "GroundResolveFailed"))
 		return groundPointResult
 	end
 
 	local groundPoint = groundPointResult.value
-	local spawnResult = self._placementService:SpawnStructure(structureType, groundPoint)
+	local spawnResult = self._placementService:SpawnStructure(structureType, groundPoint, rotationQuarterTurns)
 	if not spawnResult.success then
 		Try(self:_RefundResources(player, costMap, "SpawnFailed"))
 		return spawnResult
@@ -113,7 +129,7 @@ function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structu
 	local instanceId = spawnResult.value
 
 	-- Occupancy is authoritative in WorldContext, so restore the model if this write fails.
-	local occupancyResult = self._worldContext:SetTileOccupied(coord, true)
+	local occupancyResult = self._worldContext:SetTilesOccupied(resolvedFootprint.OccupiedCoords, true)
 	if not occupancyResult.success or occupancyResult.value ~= true then
 		self._placementService:DestroyStructure(instanceId)
 		Try(self:_RefundResources(player, costMap, "OccupancyFailed"))
@@ -123,24 +139,24 @@ function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structu
 		end
 
 		return Err("OccupancyUpdateFailed", Errors.OCCUPANCY_UPDATE_FAILED, {
-			GridId = coord.GridId,
-			Row = coord.Row,
-			Col = coord.Col,
+			GridId = resolvedFootprint.AnchorCoord.GridId,
+			Row = resolvedFootprint.AnchorCoord.Row,
+			Col = resolvedFootprint.AnchorCoord.Col,
 		})
 	end
 
 	-- Record the placement after all writes succeed so the atom only reflects committed state.
 	local record: StructureRecord = {
-		Coord = {
-			GridId = coord.GridId,
-			Row = coord.Row,
-			Col = coord.Col,
-		},
+		AnchorCoord = resolvedFootprint.AnchorCoord,
+		OccupiedCoords = resolvedFootprint.OccupiedCoords,
+		RotationQuarterTurns = resolvedFootprint.RotationQuarterTurns,
+		FootprintWidthTiles = resolvedFootprint.WidthTiles,
+		FootprintDepthTiles = resolvedFootprint.DepthTiles,
 		StructureType = structureType,
 		InstanceId = instanceId,
 		OwnerUserId = player.UserId,
 		Tier = 1,
-		ResourceType = tile.ResourceType,
+		ResourceType = resourceType,
 		GroundPosX = groundPoint.X,
 		GroundPosY = groundPoint.Y,
 		GroundPosZ = groundPoint.Z,
@@ -152,9 +168,9 @@ function PlaceStructureCommand:Execute(player: Player, coord: GridCoord, structu
 	Result.MentionSuccess("PlacementContext:PlaceStructureCommand", "Structure placed", {
 		UserId = player.UserId,
 		StructureType = structureType,
-		GridId = coord.GridId,
-		Row = coord.Row,
-		Col = coord.Col,
+		GridId = resolvedFootprint.AnchorCoord.GridId,
+		Row = resolvedFootprint.AnchorCoord.Row,
+		Col = resolvedFootprint.AnchorCoord.Col,
 		InstanceId = instanceId,
 	})
 

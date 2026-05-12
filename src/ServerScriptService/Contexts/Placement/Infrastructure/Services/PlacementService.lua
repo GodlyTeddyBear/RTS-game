@@ -8,6 +8,7 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
+local PlacementFootprintResolver = require(ReplicatedStorage.Contexts.Placement.PlacementFootprintResolver)
 local WorldConfig = require(ReplicatedStorage.Contexts.World.Config.WorldConfig)
 local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
@@ -21,6 +22,21 @@ local Ensure = Result.Ensure
 
 type SpawnedStructure = Model
 type GridCoord = { GridId: string, Row: number, Col: number }
+
+local function _ResolveGridSpec(gridSpecs: { any }, gridId: string): any?
+	for _, spec in ipairs(gridSpecs) do
+		if spec.GridId == gridId then
+			return spec
+		end
+	end
+	return nil
+end
+
+local function _GridCoordToWorldFromSpec(spec: any, row: number, col: number): Vector3
+	local localX = -spec.GridSize.X * 0.5 + spec.TileSize * 0.5 + (col - 1) * spec.TileSize
+	local localZ = -spec.GridSize.Z * 0.5 + spec.TileSize * 0.5 + (row - 1) * spec.TileSize
+	return spec.GridCFrame:PointToWorldSpace(Vector3.new(localX, 0, localZ))
+end
 
 --[=[
 	@class PlacementService
@@ -114,35 +130,50 @@ function PlacementService:_ResolveFirstNonGridHit(
 	end
 end
 
-function PlacementService:ResolveGroundPointFromCoord(coord: GridCoord): Result.Result<Vector3>
-	local tileResult = self._worldContext:GetTile(coord)
-	if not tileResult.success or tileResult.value == nil then
+function PlacementService:ResolveGroundPointFromFootprint(
+	anchorCoord: GridCoord,
+	widthTiles: number,
+	depthTiles: number
+): Result.Result<Vector3>
+	local gridSpecsResult = self._worldContext:GetGridSpecList()
+	if not gridSpecsResult.success then
 		return Err("GroundCoordUnavailable", Errors.INVALID_COORD, {
-			GridId = coord.GridId,
-			Row = coord.Row,
-			Col = coord.Col,
+			GridId = anchorCoord.GridId,
+			Row = anchorCoord.Row,
+			Col = anchorCoord.Col,
 		})
 	end
 
-	local tileWorldPos = tileResult.value.WorldPos
+	local gridSpec = _ResolveGridSpec(gridSpecsResult.value, anchorCoord.GridId)
+	if gridSpec == nil then
+		return Err("GroundCoordUnavailable", Errors.INVALID_COORD, {
+			GridId = anchorCoord.GridId,
+			Row = anchorCoord.Row,
+			Col = anchorCoord.Col,
+		})
+	end
+
+	local centerRow = anchorCoord.Row + ((depthTiles - 1) * 0.5)
+	local centerCol = anchorCoord.Col + ((widthTiles - 1) * 0.5)
+	local tileWorldPos = _GridCoordToWorldFromSpec(gridSpec, centerRow, centerCol)
 	local raycastConfig = PlacementConfig.GROUND_RAYCAST
 	local rayOrigin = Vector3.new(tileWorldPos.X, tileWorldPos.Y + raycastConfig.HeightOffset, tileWorldPos.Z)
 	local rayDirection = Vector3.new(0, -raycastConfig.Length, 0)
 	local hit = self:_ResolveFirstNonGridHit(rayOrigin, rayDirection, nil)
 	if hit == nil then
 		return Err("PlacementGroundHitMissing", Errors.NO_GROUND_HIT, {
-			GridId = coord.GridId,
-			Row = coord.Row,
-			Col = coord.Col,
+			GridId = anchorCoord.GridId,
+			Row = anchorCoord.Row,
+			Col = anchorCoord.Col,
 		})
 	end
 
 	local hitNormal = hit.Normal
 	if raycastConfig.RequirePerfectlyFlat and hitNormal:Dot(Vector3.yAxis) ~= GROUND_FLAT_DOT then
 		return Err("InvalidGroundSlope", Errors.INVALID_GROUND_SLOPE, {
-			GridId = coord.GridId,
-			Row = coord.Row,
-			Col = coord.Col,
+			GridId = anchorCoord.GridId,
+			Row = anchorCoord.Row,
+			Col = anchorCoord.Col,
 			NormalX = hitNormal.X,
 			NormalY = hitNormal.Y,
 			NormalZ = hitNormal.Z,
@@ -276,7 +307,11 @@ end
 	@return Result.Result<number> -- The runtime instance identifier.
 ]=]
 -- Clone the configured template, place it at the tile position, and remember the runtime id.
-function PlacementService:SpawnStructure(structureType: string, worldPos: Vector3): Result.Result<number>
+function PlacementService:SpawnStructure(
+	structureType: string,
+	worldPos: Vector3,
+	rotationQuarterTurns: number?
+): Result.Result<number>
 	if StructureSpecs.IsValidStructureType(structureType) then
 		local instanceId = self._nextId
 		self._nextId += 1
@@ -286,6 +321,10 @@ function PlacementService:SpawnStructure(structureType: string, worldPos: Vector
 	-- Models and parts both support :PivotTo, which keeps the spawn path generic.
 	local spawnModel = self:_ResolveSpawnModel(structureType)
 	_PrepareStructureAnimationRuntime(spawnModel, self._animationsFolder)
+	local normalizedTurns = PlacementFootprintResolver.NormalizeRotationQuarterTurns(rotationQuarterTurns)
+	if normalizedTurns ~= 0 then
+		ModelPlus.RotateYaw(spawnModel, math.rad(normalizedTurns * 90))
+	end
 	ModelPlus.MoveBottomAligned(spawnModel, worldPos)
 
 	local instanceId = self._nextId

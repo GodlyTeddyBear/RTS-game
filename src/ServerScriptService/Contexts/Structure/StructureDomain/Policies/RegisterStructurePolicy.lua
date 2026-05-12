@@ -86,22 +86,22 @@ function RegisterStructurePolicy:Check(record: StructureRecord): Result.Result<R
 	Ensure(StructureSpecs.HasValidInstanceId(record.InstanceId), "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD, {
 		InstanceId = record.InstanceId,
 	})
-	Ensure(_isValidCoord(record.Coord), "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
+	Ensure(_isValidCoord(record.AnchorCoord), "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
 
 	local worldPos = _ExtractGroundWorldPos(record)
 	if worldPos == nil then
 		Result.MentionError("Structure:RegisterStructurePolicy", "Placement record missing persisted ground point; falling back to tile world position", {
-			GridId = record.Coord.GridId,
-			Row = record.Coord.Row,
-			Col = record.Coord.Col,
+			GridId = record.AnchorCoord.GridId,
+			Row = record.AnchorCoord.Row,
+			Col = record.AnchorCoord.Col,
 			InstanceId = record.InstanceId,
 		}, "MissingPlacementGroundPoint")
 
-		local tile = Try(self._worldContext:GetTile(record.Coord))
+		local tile = Try(self._worldContext:GetTile(record.AnchorCoord))
 		Ensure(tile ~= nil, "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD, {
-			GridId = record.Coord.GridId,
-			Row = record.Coord.Row,
-			Col = record.Coord.Col,
+			GridId = record.AnchorCoord.GridId,
+			Row = record.AnchorCoord.Row,
+			Col = record.AnchorCoord.Col,
 		})
 		Ensure(typeof(tile.WorldPos) == "Vector3", "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
 		worldPos = tile.WorldPos
@@ -118,6 +118,7 @@ function RegisterStructurePolicy:Check(record: StructureRecord): Result.Result<R
 		StructureType = resolvedType :: StructureType,
 		InstanceId = record.InstanceId,
 		WorldPos = worldPos :: Vector3,
+		RotationQuarterTurns = record.RotationQuarterTurns,
 	})
 end
 

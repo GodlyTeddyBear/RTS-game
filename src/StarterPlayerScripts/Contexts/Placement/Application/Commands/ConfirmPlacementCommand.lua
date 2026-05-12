@@ -46,6 +46,7 @@ function ConfirmPlacementCommand:Execute(state: any, deps: any)
 		CoordRow = state._hoveredCoord.Row,
 		CoordCol = state._hoveredCoord.Col,
 		StructureType = state._structureType,
+		RotationQuarterTurns = state._rotationQuarterTurns,
 	}
 
 	-- Wrap the context invocation so a network failure does not destabilize the session.

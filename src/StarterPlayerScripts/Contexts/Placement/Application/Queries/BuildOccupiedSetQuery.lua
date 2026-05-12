@@ -43,7 +43,7 @@ end
 function BuildOccupiedSetQuery:Execute(atom: PlacementAtom?): { [string]: boolean }
 	-- Return an empty lookup when no placement atom is available.
 	local occupiedSet = {}
-	if atom == nil then
+	if atom == nil or type(atom.Placements) ~= "table" then
 		return occupiedSet
 	end
 
@@ -65,7 +65,9 @@ function BuildOccupiedSetQuery:Execute(atom: PlacementAtom?): { [string]: boolea
 			continue
 		end
 
-		occupiedSet[_GetCoordKey(record.Coord.GridId, record.Coord.Row, record.Coord.Col)] = true
+		for _, occupiedCoord in ipairs(record.OccupiedCoords) do
+			occupiedSet[_GetCoordKey(occupiedCoord.GridId, occupiedCoord.Row, occupiedCoord.Col)] = true
+		end
 	end
 
 	return occupiedSet

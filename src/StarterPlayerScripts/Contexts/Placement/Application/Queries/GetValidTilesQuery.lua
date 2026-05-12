@@ -35,8 +35,13 @@ end
     @param occupiedSet { [string]: boolean } -- Occupied coordinate lookup.
     @return { GridCoord } -- Frozen list of valid coordinates.
 ]=]
-function GetValidTilesQuery:Execute(structureType: string, occupiedSet: { [string]: boolean })
-	return self._gridService.GetValidTiles(structureType, occupiedSet)
+function GetValidTilesQuery:Execute(
+	footprintCacheLookup: any,
+	structureType: string,
+	occupiedSet: { [string]: boolean },
+	rotationQuarterTurns: number
+)
+	return self._gridService.GetValidTiles(footprintCacheLookup, structureType, occupiedSet, rotationQuarterTurns)
 end
 
 return GetValidTilesQuery

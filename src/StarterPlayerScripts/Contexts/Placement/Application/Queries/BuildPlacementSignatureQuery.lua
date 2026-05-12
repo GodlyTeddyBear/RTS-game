@@ -34,22 +34,45 @@ end
     @return string -- A stable signature string for change detection.
 ]=]
 function BuildPlacementSignatureQuery:Execute(atom: PlacementAtom?): string
-	if atom == nil then
+	if atom == nil or type(atom.Placements) ~= "table" then
 		return ""
 	end
 
 	local parts = table.create(#atom.Placements)
-	for index, record in ipairs(atom.Placements) do
-		parts[index] = ("%s:%d:%d:%s:%d"):format(
-			record.Coord.GridId,
-			record.Coord.Row,
-			record.Coord.Col,
-			record.StructureType,
-			record.InstanceId
+	local cacheParts = table.create(#atom.FootprintCache)
+
+	for index, entry in ipairs(atom.FootprintCache) do
+		cacheParts[index] = ("%s:%d:%d:%d:%s"):format(
+			entry.StructureType,
+			entry.RotationQuarterTurns,
+			entry.WidthTiles,
+			entry.DepthTiles,
+			entry.SpecialTileRequirementMode
 		)
 	end
 
-	return table.concat(parts, "|")
+	for index, record in ipairs(atom.Placements) do
+		local occupiedParts = table.create(#record.OccupiedCoords)
+		for occupiedIndex, occupiedCoord in ipairs(record.OccupiedCoords) do
+			occupiedParts[occupiedIndex] = ("%s:%d:%d"):format(
+				occupiedCoord.GridId,
+				occupiedCoord.Row,
+				occupiedCoord.Col
+			)
+		end
+
+		parts[index] = ("%s:%d:%d:%s:%d:%d:%s"):format(
+			record.AnchorCoord.GridId,
+			record.AnchorCoord.Row,
+			record.AnchorCoord.Col,
+			record.StructureType,
+			record.InstanceId,
+			record.RotationQuarterTurns,
+			table.concat(occupiedParts, ",")
+		)
+	end
+
+	return table.concat(cacheParts, "|") .. "#" .. table.concat(parts, "|")
 end
 
 return BuildPlacementSignatureQuery

@@ -9,6 +9,7 @@ local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 type RunState = RunTypes.RunState
 type Tile = WorldTypes.Tile
 type ResourceCostMap = { [string]: number }
+type SpecialTileRequirementMode = "AtLeastOneTile" | "AllTiles"
 
 --[=[
 	@class PlacementSpecs
@@ -50,6 +51,28 @@ end
 -- Resource-gated placements require a side-pocket tile with resource metadata.
 function PlacementSpecs.HasRequiredResourceTileData(tile: Tile): boolean
 	return tile.Zone == "side_pocket" and tile.ResourceType ~= nil
+end
+
+function PlacementSpecs.SatisfiesSpecialTileRequirement(
+	tiles: { Tile },
+	mode: SpecialTileRequirementMode
+): boolean
+	if mode == "AllTiles" then
+		for _, tile in ipairs(tiles) do
+			if not PlacementSpecs.HasRequiredResourceTileData(tile) then
+				return false
+			end
+		end
+		return #tiles > 0
+	end
+
+	for _, tile in ipairs(tiles) do
+		if PlacementSpecs.HasRequiredResourceTileData(tile) then
+			return true
+		end
+	end
+
+	return false
 end
 
 -- Capacity is enforced here so commands can fail before any mutation work begins.

@@ -11,6 +11,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local PlacementFootprintResolver = require(ReplicatedStorage.Contexts.Placement.PlacementFootprintResolver)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 
 type GridCoord = PlacementTypes.GridCoord
@@ -77,9 +78,11 @@ function EnterPlacementModeCommand:Execute(state: any, deps: any, structureType:
 	deps.gridService.ResetRuntimeCache()
 
 	-- Build the occupied lookup from the synced placement atom before filtering tiles.
-	local occupiedSet = self._buildOccupiedSetQuery:Execute(deps.placementAtom())
+	local placementAtom = deps.placementAtom()
+	local occupiedSet = self._buildOccupiedSetQuery:Execute(placementAtom)
+	local footprintCacheLookup = PlacementFootprintResolver.BuildLookup(placementAtom.FootprintCache)
 	local validTilesResultOk, validTilesOrError = pcall(function()
-		return self._getValidTilesQuery:Execute(structureType, occupiedSet)
+		return self._getValidTilesQuery:Execute(footprintCacheLookup, structureType, occupiedSet, 0)
 	end)
 	if not validTilesResultOk then
 		warn(("[PlacementCursor] Failed to resolve valid tiles for '%s': %s"):format(structureType, tostring(validTilesOrError)))
@@ -95,10 +98,13 @@ function EnterPlacementModeCommand:Execute(state: any, deps: any, structureType:
 	state._confirming = false
 	state._hoveredCoord = nil
 	state._hoveredKey = nil
+	state._hoveredFootprintCoords = table.freeze({})
 	state._isHoveredValid = false
 	state._runState = runState.State
-	state._placementSignature = self._buildPlacementSignatureQuery:Execute(deps.placementAtom())
+	state._placementSignature = self._buildPlacementSignatureQuery:Execute(placementAtom)
+	state._rotationQuarterTurns = 0
 	state._validTileSet = {}
+	state._footprintCacheLookup = footprintCacheLookup
 	state._sessionId += 1
 
 	-- Switch the player's input context only after the session state is ready.
@@ -123,6 +129,7 @@ function EnterPlacementModeCommand:Execute(state: any, deps: any, structureType:
 	end
 
 	state._ghost = ghostOrError
+	state._ghost:SetRotationQuarterTurns(state._rotationQuarterTurns)
 	state._ghost:SetValid(false)
 
 	-- Rebind session-scoped listeners after the ghost and highlights exist.

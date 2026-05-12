@@ -136,6 +136,7 @@ export type ResolvedStructureRecord = {
 	StructureType: StructureType,
 	InstanceId: number,
 	WorldPos: Vector3,
+	RotationQuarterTurns: number,
 }
 
 --[=[

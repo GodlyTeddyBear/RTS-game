@@ -37,11 +37,14 @@ function ExitPlacementModeCommand:Execute(state: any, deps: any)
 	state._state = "Idle"
 	state._confirming = false
 	state._structureType = nil
+	state._rotationQuarterTurns = 0
 	state._hoveredCoord = nil
 	state._hoveredKey = nil
+	state._hoveredFootprintCoords = table.freeze({})
 	state._isHoveredValid = false
 	state._validTiles = table.freeze({})
 	state._validTileSet = {}
+	state._footprintCacheLookup = {}
 	state._placementSignature = ""
 
 	-- Restore the player's normal input context after the session state is cleared.

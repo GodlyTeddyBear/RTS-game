@@ -67,8 +67,10 @@ function UpdateHoverStateCommand:Execute(state: any, deps: any)
 		state._ghost:SetValid(false)
 		if state._hoveredKey ~= nil and state._hoveredCoord ~= nil then
 			state._highlightPool:SetHovered(state._hoveredCoord, false)
+			state._highlightPool:ShowHoveredFootprint(table.freeze({}), false)
 			state._hoveredCoord = nil
 			state._hoveredKey = nil
+			state._hoveredFootprintCoords = table.freeze({})
 			state._isHoveredValid = false
 		end
 		return
@@ -78,8 +80,24 @@ function UpdateHoverStateCommand:Execute(state: any, deps: any)
 	local hoveredCoord = self._gridService.WorldToCoord(worldPos)
 	local hoveredKey = _GetCoordKey(hoveredCoord)
 	local hoveredGroundWorldPos = nil :: Vector3?
+	local hoveredFootprintCoords = table.freeze({})
 	if hoveredCoord ~= nil then
-		hoveredGroundWorldPos = self._gridService:ResolveGroundWorldPositionForCoord(hoveredCoord, state._placementFolder)
+		local footprint = self._gridService.GetFootprintForAnchor(
+			state._footprintCacheLookup,
+			state._structureType,
+			hoveredCoord,
+			state._rotationQuarterTurns
+		)
+		if footprint ~= nil then
+			hoveredFootprintCoords = footprint.OccupiedCoords
+			hoveredGroundWorldPos = self._gridService:ResolveGroundWorldPositionForFootprint(
+				state._footprintCacheLookup,
+				hoveredCoord,
+				state._structureType,
+				state._rotationQuarterTurns,
+				state._placementFolder
+			)
+		end
 	end
 
 	local isHoveredValid = hoveredCoord ~= nil and hoveredGroundWorldPos ~= nil and state._validTileSet[hoveredKey] == true
@@ -92,17 +110,27 @@ function UpdateHoverStateCommand:Execute(state: any, deps: any)
 
 		state._hoveredCoord = hoveredCoord
 		state._hoveredKey = hoveredKey
+		state._hoveredFootprintCoords = hoveredFootprintCoords
 
 		if hoveredCoord ~= nil then
-			state._highlightPool:SetHovered(hoveredCoord, true)
+			state._highlightPool:ShowHoveredFootprint(hoveredFootprintCoords, isHoveredValid)
 			if hoveredGroundWorldPos ~= nil then
+				state._ghost:SetRotationQuarterTurns(state._rotationQuarterTurns)
 				state._ghost:MoveTo(hoveredGroundWorldPos)
 			end
+		else
+			state._highlightPool:ShowHoveredFootprint(table.freeze({}), false)
 		end
+	end
+
+	if hoveredKey == state._hoveredKey then
+		state._hoveredFootprintCoords = hoveredFootprintCoords
+		state._highlightPool:ShowHoveredFootprint(hoveredFootprintCoords, isHoveredValid)
 	end
 
 	-- Keep the ghost aligned even when the hovered tile did not change.
 	if hoveredGroundWorldPos ~= nil then
+		state._ghost:SetRotationQuarterTurns(state._rotationQuarterTurns)
 		state._ghost:MoveTo(hoveredGroundWorldPos)
 	end
 

@@ -166,15 +166,15 @@ function PlacementContext:_ReleaseOccupiedTilesForCurrentPlacements()
 	local placements = self._syncService:GetPlacementsReadOnly()
 
 	for _, record in ipairs(placements) do
-		local occupancyResult = self._worldContext:SetTileOccupied(record.Coord, false)
+		local occupancyResult = self._worldContext:SetTilesOccupied(record.OccupiedCoords, false)
 		if occupancyResult.success and occupancyResult.value == true then
 			continue
 		end
 
 		Result.MentionError("Placement:ReleaseTileOccupancy", "Failed to clear occupied tile at run end", {
-			GridId = record.Coord.GridId,
-			Row = record.Coord.Row,
-			Col = record.Coord.Col,
+			GridId = record.AnchorCoord.GridId,
+			Row = record.AnchorCoord.Row,
+			Col = record.AnchorCoord.Col,
 			ErrorType = occupancyResult.type,
 			ErrorMessage = occupancyResult.message,
 			OccupancyUpdated = occupancyResult.value,
@@ -196,7 +196,14 @@ function PlacementContext:_HandlePlaceStructureRequest(player: Player, request: 
 	local coordRow = type(request) == "table" and request.CoordRow or nil
 	local coordCol = type(request) == "table" and request.CoordCol or nil
 	local structureType = type(request) == "table" and request.StructureType or nil
-	local validatedResult = self._validator:ValidateRequest(gridId, coordRow, coordCol, structureType)
+	local rotationQuarterTurns = type(request) == "table" and request.RotationQuarterTurns or nil
+	local validatedResult = self._validator:ValidateRequest(
+		gridId,
+		coordRow,
+		coordCol,
+		structureType,
+		rotationQuarterTurns
+	)
 	if not validatedResult.success then
 		return {
 			Success = false,
@@ -210,7 +217,8 @@ function PlacementContext:_HandlePlaceStructureRequest(player: Player, request: 
 		return self._placeStructureCommand:Execute(
 			player,
 			validatedResult.value.Coord,
-			validatedResult.value.StructureType
+			validatedResult.value.StructureType,
+			validatedResult.value.RotationQuarterTurns
 		)
 	end, "Placement:PlaceStructure")
 	if not placementResult.success then

@@ -20,6 +20,7 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
+local PlacementFootprintResolver = require(ReplicatedStorage.Contexts.Placement.PlacementFootprintResolver)
 
 local PlacementCursorGridService = require(script.Parent.Infrastructure.Services.PlacementCursorGridService)
 local PlacementGhostModel = require(script.Parent.Infrastructure.Services.PlacementGhostModel)
@@ -34,6 +35,7 @@ local ExitPlacementModeCommand = require(script.Parent.Application.Commands.Exit
 local EnterPlacementModeCommand = require(script.Parent.Application.Commands.EnterPlacementModeCommand)
 local TogglePlacementModeCommand = require(script.Parent.Application.Commands.TogglePlacementModeCommand)
 local RefreshValidTilesCommand = require(script.Parent.Application.Commands.RefreshValidTilesCommand)
+local RotatePlacementCommand = require(script.Parent.Application.Commands.RotatePlacementCommand)
 local UpdateHoverStateCommand = require(script.Parent.Application.Commands.UpdateHoverStateCommand)
 local ConfirmPlacementCommand = require(script.Parent.Application.Commands.ConfirmPlacementCommand)
 
@@ -58,13 +60,16 @@ function PlacementCursorController:KnitInit()
 	self._confirming = false
 	self._sessionId = 0
 	self._structureType = nil :: string?
+	self._rotationQuarterTurns = 0
 	self._hoveredCoord = nil :: GridCoord?
 	self._hoveredKey = nil :: string?
+	self._hoveredFootprintCoords = table.freeze({})
 	self._isHoveredValid = false
 	self._runState = "Idle" :: RunState
 	self._placementSignature = ""
 	self._validTiles = table.freeze({})
 	self._validTileSet = {}
+	self._footprintCacheLookup = PlacementFootprintResolver.BuildLookup(nil)
 
 	local placementFolder = Workspace:FindFirstChild("PlacementCursor")
 	if placementFolder == nil then
@@ -102,6 +107,7 @@ function PlacementCursorController:KnitInit()
 		self._buildPlacementSignatureQuery,
 		self._getValidTilesQuery
 	)
+	self._rotatePlacementCommand = RotatePlacementCommand.new(self._refreshValidTilesCommand)
 	self._updateHoverStateCommand = UpdateHoverStateCommand.new(
 		self._getMouseWorldPositionQuery,
 		PlacementCursorGridService
@@ -151,11 +157,23 @@ function PlacementCursorController:KnitStart()
 
 		self:ExitPlacementMode()
 	end)
+	self._rotatePlacementUnbind = self._playerInputController:BindAction("RotatePlacement", function(gameProcessed: boolean, _data: any)
+		if gameProcessed or self._confirming or self._state ~= "Active" then
+			return
+		end
+
+		self._rotatePlacementCommand:Execute(self, self._placementAtom())
+		self:_UpdateHoverState()
+	end)
 
 	self._controllerJanitor:Add(function()
 		if self._cancelPlacementUnbind then
 			self._cancelPlacementUnbind()
 			self._cancelPlacementUnbind = nil
+		end
+		if self._rotatePlacementUnbind then
+			self._rotatePlacementUnbind()
+			self._rotatePlacementUnbind = nil
 		end
 	end)
 end

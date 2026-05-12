@@ -6,6 +6,7 @@ local Charm = require(ReplicatedStorage.Packages.Charm)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 
 type PlacementAtom = PlacementTypes.PlacementAtom
+type FootprintCacheEntry = PlacementTypes.FootprintCacheEntry
 
 --[=[
 	@class SharedAtoms
@@ -16,9 +17,10 @@ type PlacementAtom = PlacementTypes.PlacementAtom
 local SharedAtoms = {}
 
 -- Mirror the same atom shape on the server so Charm-sync can diff the placements array directly.
-function SharedAtoms.CreateServerAtom()
+function SharedAtoms.CreateServerAtom(footprintCache: { FootprintCacheEntry }?)
 	return Charm.atom({
 		Placements = {},
+		FootprintCache = footprintCache or {},
 	} :: PlacementAtom)
 end
 
@@ -26,6 +28,7 @@ end
 function SharedAtoms.CreateClientAtom()
 	return Charm.atom({
 		Placements = {},
+		FootprintCache = {},
 	} :: PlacementAtom)
 end
 

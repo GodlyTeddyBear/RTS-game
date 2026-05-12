@@ -14,6 +14,7 @@ PlacementHighlightPool.__index = PlacementHighlightPool
 local PREVIEW_CONFIG = PlacementConfig.PREVIEW
 local VALID_COLOR = PREVIEW_CONFIG.HighlightColor
 local HOVER_COLOR = PREVIEW_CONFIG.HoverColor
+local INVALID_HOVER_COLOR = PREVIEW_CONFIG.InvalidHoverColor
 
 local function _GetCoordKey(coord: GridCoord): string
 	return `{coord.GridId}:{coord.Row}:{coord.Col}`
@@ -45,6 +46,7 @@ function PlacementHighlightPool.new(folder: Folder)
 	self._partsByKey = {}
 	self._activeCoords = {}
 	self._groundWorldPosByKey = {}
+	self._hoverPartsByKey = {}
 	return self
 end
 
@@ -84,12 +86,43 @@ function PlacementHighlightPool:SetHovered(coord: GridCoord, isHovered: boolean)
 	part.Transparency = if isHovered then PREVIEW_CONFIG.HoverTransparency else PREVIEW_CONFIG.HighlightTransparency
 end
 
+function PlacementHighlightPool:ShowHoveredFootprint(coords: { GridCoord }, isValid: boolean)
+	for _, part in pairs(self._hoverPartsByKey) do
+		part:Destroy()
+	end
+	table.clear(self._hoverPartsByKey)
+
+	local hoverColor = if isValid then HOVER_COLOR else INVALID_HOVER_COLOR
+	for _, coord in ipairs(coords) do
+		local key = _GetCoordKey(coord)
+		local groundWorldPos = self._groundWorldPosByKey[key]
+		if groundWorldPos == nil then
+			groundWorldPos = PlacementCursorGridService:ResolveGroundWorldPositionForCoord(coord, self._folder)
+			self._groundWorldPosByKey[key] = groundWorldPos
+		end
+
+		if groundWorldPos == nil then
+			continue
+		end
+
+		local part = _CreateHighlightPart(self._folder, coord, groundWorldPos)
+		part.Name = ("Hover_%s_%d_%d"):format(coord.GridId, coord.Row, coord.Col)
+		part.Color = hoverColor
+		part.Transparency = PREVIEW_CONFIG.HoverTransparency
+		self._hoverPartsByKey[key] = part
+	end
+end
+
 function PlacementHighlightPool:HideAll()
 	for _, part in pairs(self._partsByKey) do
 		part:Destroy()
 	end
+	for _, part in pairs(self._hoverPartsByKey) do
+		part:Destroy()
+	end
 
 	table.clear(self._partsByKey)
+	table.clear(self._hoverPartsByKey)
 	table.clear(self._activeCoords)
 	table.clear(self._groundWorldPosByKey)
 end

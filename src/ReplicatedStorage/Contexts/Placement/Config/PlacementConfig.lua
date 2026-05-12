@@ -46,6 +46,29 @@ PlacementConfig.REQUIRES_RESOURCE_TILE = table.freeze({
 	RelayBeacon = false,
 })
 
+PlacementConfig.DEFAULT_SPECIAL_TILE_REQUIREMENT_MODE = "AtLeastOneTile"
+
+PlacementConfig.STRUCTURE_PLACEMENT_PROFILES = table.freeze({
+	SentryTurret = table.freeze({
+		SpecialTileRequirementMode = PlacementConfig.DEFAULT_SPECIAL_TILE_REQUIREMENT_MODE,
+	}),
+	Extractor = table.freeze({
+		SpecialTileRequirementMode = PlacementConfig.DEFAULT_SPECIAL_TILE_REQUIREMENT_MODE,
+	}),
+	StasisField = table.freeze({
+		SpecialTileRequirementMode = PlacementConfig.DEFAULT_SPECIAL_TILE_REQUIREMENT_MODE,
+	}),
+	ArcPylon = table.freeze({
+		SpecialTileRequirementMode = PlacementConfig.DEFAULT_SPECIAL_TILE_REQUIREMENT_MODE,
+	}),
+	BulwarkProjector = table.freeze({
+		SpecialTileRequirementMode = PlacementConfig.DEFAULT_SPECIAL_TILE_REQUIREMENT_MODE,
+	}),
+	RelayBeacon = table.freeze({
+		SpecialTileRequirementMode = PlacementConfig.DEFAULT_SPECIAL_TILE_REQUIREMENT_MODE,
+	}),
+})
+
 PlacementConfig.MAX_STRUCTURES = 20
 PlacementConfig.PLACEMENT_FOLDER_NAME = "Placements"
 
@@ -58,6 +81,7 @@ PlacementConfig.GROUND_RAYCAST = table.freeze({
 PlacementConfig.PREVIEW = table.freeze({
 	HighlightColor = Color3.fromRGB(0, 200, 100),
 	HoverColor = Color3.fromRGB(255, 230, 0),
+	InvalidHoverColor = Color3.fromRGB(200, 50, 50),
 	HighlightMaterial = Enum.Material.Neon,
 	HighlightThickness = 0.05,
 	HighlightYOffset = 0.025,

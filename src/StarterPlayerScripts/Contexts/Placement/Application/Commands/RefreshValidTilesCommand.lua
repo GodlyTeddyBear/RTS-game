@@ -11,6 +11,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local PlacementFootprintResolver = require(ReplicatedStorage.Contexts.Placement.PlacementFootprintResolver)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 
 type GridCoord = PlacementTypes.GridCoord
@@ -60,8 +61,23 @@ function RefreshValidTilesCommand:Execute(state: any, placementAtom: PlacementAt
 	state._placementSignature = self._buildPlacementSignatureQuery:Execute(placementAtom)
 
 	-- Rebuild the occupied lookup before asking the grid service for valid tiles.
+	state._footprintCacheLookup = PlacementFootprintResolver.BuildLookup(placementAtom and placementAtom.FootprintCache or nil)
 	local occupiedSet = self._buildOccupiedSetQuery:Execute(placementAtom)
-	local validTiles = self._getValidTilesQuery:Execute(state._structureType, occupiedSet)
+	local validTilesOk, validTilesOrError = pcall(function()
+		return self._getValidTilesQuery:Execute(
+			state._footprintCacheLookup,
+			state._structureType,
+			occupiedSet,
+			state._rotationQuarterTurns
+		)
+	end)
+	local validTiles = if validTilesOk then validTilesOrError else table.freeze({})
+	if not validTilesOk then
+		warn(("[PlacementCursor] Failed to refresh valid tiles for '%s': %s"):format(
+			tostring(state._structureType),
+			tostring(validTilesOrError)
+		))
+	end
 
 	-- Cache both the coordinate list and the coordinate lookup for hover checks.
 	state._validTiles = validTiles

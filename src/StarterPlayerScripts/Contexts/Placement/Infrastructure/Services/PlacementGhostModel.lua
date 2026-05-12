@@ -139,12 +139,24 @@ function PlacementGhostModel.new(structureType: string)
 
 	local self = setmetatable({}, PlacementGhostModel)
 	self._model = model
+	self._baseRotation = model:GetPivot() - model:GetPivot().Position
 	return self
 end
 
 -- Moves the ghost so its bottom face stays anchored to the hovered world position.
 function PlacementGhostModel:MoveTo(worldPos: Vector3)
 	ModelPlus.MoveBottomAligned(self._model, worldPos)
+end
+
+function PlacementGhostModel:SetRotationQuarterTurns(rotationQuarterTurns: number)
+	local normalizedTurns = rotationQuarterTurns % 4
+	if normalizedTurns < 0 then
+		normalizedTurns += 4
+	end
+
+	local currentPivot = self._model:GetPivot()
+	local targetRotation = CFrame.Angles(0, math.rad(normalizedTurns * 90), 0) * self._baseRotation
+	self._model:PivotTo(CFrame.new(currentPivot.Position) * targetRotation)
 end
 
 -- Tints the ghost to communicate whether the hovered tile is currently valid.

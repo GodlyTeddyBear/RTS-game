@@ -159,13 +159,16 @@ local Queue: any = {
 local SerdesEvent = "?"
 local SerdesThread: thread?
 export type GridCoordPayload = { GridId: string?, Row: number?, Col: number? }
-export type StructureRecordPayload = { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }
-export type PlacementList = {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}
-export type PlacementStatePayload = { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }
-export type InitPayload = { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }
-export type PatchPayload = { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }
-export type SyncPayload = { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? }
-local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? }): ()
+export type OccupiedCoordList = {[number]: { GridId: string?, Row: number?, Col: number? }}
+export type FootprintCacheEntryPayload = { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }
+export type FootprintCacheList = {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}
+export type StructureRecordPayload = { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }
+export type PlacementList = {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}
+export type PlacementStatePayload = { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }
+export type InitPayload = { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }
+export type PatchPayload = { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }
+export type SyncPayload = { type: "init", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? }
+local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? }): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
@@ -179,8 +182,8 @@ local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { Placemen
 			local BLOCK_START = Allocate(1)
 			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Placements ~= nil and 1 or 0)
 			if Value.data.Placements ~= nil then
-				-- Allocate BLOCK: 1 bytes
-				local BLOCK_START = Allocate(1)
+				-- Allocate BLOCK: 2 bytes
+				local BLOCK_START = Allocate(2)
 				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Placements.Placements ~= nil and 1 or 0)
 				if Value.data.Placements.Placements ~= nil then
 					-- Allocate BLOCK: 2 bytes
@@ -191,34 +194,92 @@ local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { Placemen
 						local OFFSET_0 = Allocate(4)
 						buffer.writeu32(SendBuffer, OFFSET_0, Key_5)
 						local OFFSET_1 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_1, Element_5.Coord ~= nil and 1 or 0)
-						if Element_5.Coord ~= nil then
+						buffer.writeu8(SendBuffer, OFFSET_1, Element_5.AnchorCoord ~= nil and 1 or 0)
+						if Element_5.AnchorCoord ~= nil then
 							-- Allocate BLOCK: 3 bytes
 							local BLOCK_START = Allocate(3)
-							buffer.writeu8(SendBuffer, BLOCK_START + 0, Element_5.Coord.GridId ~= nil and 1 or 0)
-							if Element_5.Coord.GridId ~= nil then
+							buffer.writeu8(SendBuffer, BLOCK_START + 0, Element_5.AnchorCoord.GridId ~= nil and 1 or 0)
+							if Element_5.AnchorCoord.GridId ~= nil then
 								-- Allocate BLOCK: 2 bytes
 								local BLOCK_START = Allocate(2)
-								local Length = #Element_5.Coord.GridId
+								local Length = #Element_5.AnchorCoord.GridId
 								buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
 								Allocate(Length)
-								buffer.writestring(SendBuffer, SendOffset, Element_5.Coord.GridId, Length)
+								buffer.writestring(SendBuffer, SendOffset, Element_5.AnchorCoord.GridId, Length)
 							end
-							buffer.writeu8(SendBuffer, BLOCK_START + 1, Element_5.Coord.Row ~= nil and 1 or 0)
-							if Element_5.Coord.Row ~= nil then
+							buffer.writeu8(SendBuffer, BLOCK_START + 1, Element_5.AnchorCoord.Row ~= nil and 1 or 0)
+							if Element_5.AnchorCoord.Row ~= nil then
 								-- Allocate BLOCK: 8 bytes
 								local BLOCK_START = Allocate(8)
-								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Coord.Row)
+								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.AnchorCoord.Row)
 							end
-							buffer.writeu8(SendBuffer, BLOCK_START + 2, Element_5.Coord.Col ~= nil and 1 or 0)
-							if Element_5.Coord.Col ~= nil then
+							buffer.writeu8(SendBuffer, BLOCK_START + 2, Element_5.AnchorCoord.Col ~= nil and 1 or 0)
+							if Element_5.AnchorCoord.Col ~= nil then
 								-- Allocate BLOCK: 8 bytes
 								local BLOCK_START = Allocate(8)
-								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Coord.Col)
+								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.AnchorCoord.Col)
 							end
 						end
 						local OFFSET_2 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_2, Element_5.StructureType ~= nil and 1 or 0)
+						buffer.writeu8(SendBuffer, OFFSET_2, Element_5.OccupiedCoords ~= nil and 1 or 0)
+						if Element_5.OccupiedCoords ~= nil then
+							-- Allocate BLOCK: 2 bytes
+							local BLOCK_START = Allocate(2)
+							local Elements_7 = 0
+							for Key_7, Element_7 in Element_5.OccupiedCoords do
+								Elements_7 += 1
+								local OFFSET_0 = Allocate(4)
+								buffer.writeu32(SendBuffer, OFFSET_0, Key_7)
+								local OFFSET_1 = Allocate(1)
+								buffer.writeu8(SendBuffer, OFFSET_1, Element_7.GridId ~= nil and 1 or 0)
+								if Element_7.GridId ~= nil then
+									-- Allocate BLOCK: 2 bytes
+									local BLOCK_START = Allocate(2)
+									local Length = #Element_7.GridId
+									buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+									Allocate(Length)
+									buffer.writestring(SendBuffer, SendOffset, Element_7.GridId, Length)
+								end
+								local OFFSET_2 = Allocate(1)
+								buffer.writeu8(SendBuffer, OFFSET_2, Element_7.Row ~= nil and 1 or 0)
+								if Element_7.Row ~= nil then
+									-- Allocate BLOCK: 8 bytes
+									local BLOCK_START = Allocate(8)
+									buffer.writef64(SendBuffer, BLOCK_START + 0, Element_7.Row)
+								end
+								local OFFSET_3 = Allocate(1)
+								buffer.writeu8(SendBuffer, OFFSET_3, Element_7.Col ~= nil and 1 or 0)
+								if Element_7.Col ~= nil then
+									-- Allocate BLOCK: 8 bytes
+									local BLOCK_START = Allocate(8)
+									buffer.writef64(SendBuffer, BLOCK_START + 0, Element_7.Col)
+								end
+							end
+							buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_7)
+						end
+						local OFFSET_3 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_3, Element_5.RotationQuarterTurns ~= nil and 1 or 0)
+						if Element_5.RotationQuarterTurns ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.RotationQuarterTurns)
+						end
+						local OFFSET_4 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_4, Element_5.FootprintWidthTiles ~= nil and 1 or 0)
+						if Element_5.FootprintWidthTiles ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.FootprintWidthTiles)
+						end
+						local OFFSET_5 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_5, Element_5.FootprintDepthTiles ~= nil and 1 or 0)
+						if Element_5.FootprintDepthTiles ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.FootprintDepthTiles)
+						end
+						local OFFSET_6 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_6, Element_5.StructureType ~= nil and 1 or 0)
 						if Element_5.StructureType ~= nil then
 							-- Allocate BLOCK: 2 bytes
 							local BLOCK_START = Allocate(2)
@@ -227,29 +288,29 @@ local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { Placemen
 							Allocate(Length)
 							buffer.writestring(SendBuffer, SendOffset, Element_5.StructureType, Length)
 						end
-						local OFFSET_3 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_3, Element_5.InstanceId ~= nil and 1 or 0)
+						local OFFSET_7 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_7, Element_5.InstanceId ~= nil and 1 or 0)
 						if Element_5.InstanceId ~= nil then
 							-- Allocate BLOCK: 8 bytes
 							local BLOCK_START = Allocate(8)
 							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.InstanceId)
 						end
-						local OFFSET_4 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_4, Element_5.OwnerUserId ~= nil and 1 or 0)
+						local OFFSET_8 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_8, Element_5.OwnerUserId ~= nil and 1 or 0)
 						if Element_5.OwnerUserId ~= nil then
 							-- Allocate BLOCK: 8 bytes
 							local BLOCK_START = Allocate(8)
 							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.OwnerUserId)
 						end
-						local OFFSET_5 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_5, Element_5.Tier ~= nil and 1 or 0)
+						local OFFSET_9 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_9, Element_5.Tier ~= nil and 1 or 0)
 						if Element_5.Tier ~= nil then
 							-- Allocate BLOCK: 8 bytes
 							local BLOCK_START = Allocate(8)
 							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Tier)
 						end
-						local OFFSET_6 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_6, Element_5.ResourceType ~= nil and 1 or 0)
+						local OFFSET_10 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_10, Element_5.ResourceType ~= nil and 1 or 0)
 						if Element_5.ResourceType ~= nil then
 							-- Allocate BLOCK: 2 bytes
 							local BLOCK_START = Allocate(2)
@@ -257,6 +318,80 @@ local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { Placemen
 							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
 							Allocate(Length)
 							buffer.writestring(SendBuffer, SendOffset, Element_5.ResourceType, Length)
+						end
+						local OFFSET_11 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_11, Element_5.GroundPosX ~= nil and 1 or 0)
+						if Element_5.GroundPosX ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.GroundPosX)
+						end
+						local OFFSET_12 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_12, Element_5.GroundPosY ~= nil and 1 or 0)
+						if Element_5.GroundPosY ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.GroundPosY)
+						end
+						local OFFSET_13 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_13, Element_5.GroundPosZ ~= nil and 1 or 0)
+						if Element_5.GroundPosZ ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.GroundPosZ)
+						end
+					end
+					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
+				end
+				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.Placements.FootprintCache ~= nil and 1 or 0)
+				if Value.data.Placements.FootprintCache ~= nil then
+					-- Allocate BLOCK: 2 bytes
+					local BLOCK_START = Allocate(2)
+					local Elements_5 = 0
+					for Key_5, Element_5 in Value.data.Placements.FootprintCache do
+						Elements_5 += 1
+						local OFFSET_0 = Allocate(4)
+						buffer.writeu32(SendBuffer, OFFSET_0, Key_5)
+						local OFFSET_1 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_1, Element_5.StructureType ~= nil and 1 or 0)
+						if Element_5.StructureType ~= nil then
+							-- Allocate BLOCK: 2 bytes
+							local BLOCK_START = Allocate(2)
+							local Length = #Element_5.StructureType
+							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+							Allocate(Length)
+							buffer.writestring(SendBuffer, SendOffset, Element_5.StructureType, Length)
+						end
+						local OFFSET_2 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_2, Element_5.RotationQuarterTurns ~= nil and 1 or 0)
+						if Element_5.RotationQuarterTurns ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.RotationQuarterTurns)
+						end
+						local OFFSET_3 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_3, Element_5.WidthTiles ~= nil and 1 or 0)
+						if Element_5.WidthTiles ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.WidthTiles)
+						end
+						local OFFSET_4 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_4, Element_5.DepthTiles ~= nil and 1 or 0)
+						if Element_5.DepthTiles ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.DepthTiles)
+						end
+						local OFFSET_5 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_5, Element_5.SpecialTileRequirementMode ~= nil and 1 or 0)
+						if Element_5.SpecialTileRequirementMode ~= nil then
+							-- Allocate BLOCK: 2 bytes
+							local BLOCK_START = Allocate(2)
+							local Length = #Element_5.SpecialTileRequirementMode
+							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+							Allocate(Length)
+							buffer.writestring(SendBuffer, SendOffset, Element_5.SpecialTileRequirementMode, Length)
 						end
 					end
 					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
@@ -273,8 +408,8 @@ local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { Placemen
 			local BLOCK_START = Allocate(1)
 			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Placements ~= nil and 1 or 0)
 			if Value.data.Placements ~= nil then
-				-- Allocate BLOCK: 1 bytes
-				local BLOCK_START = Allocate(1)
+				-- Allocate BLOCK: 2 bytes
+				local BLOCK_START = Allocate(2)
 				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.Placements.Placements ~= nil and 1 or 0)
 				if Value.data.Placements.Placements ~= nil then
 					-- Allocate BLOCK: 2 bytes
@@ -285,34 +420,92 @@ local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { Placemen
 						local OFFSET_0 = Allocate(4)
 						buffer.writeu32(SendBuffer, OFFSET_0, Key_5)
 						local OFFSET_1 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_1, Element_5.Coord ~= nil and 1 or 0)
-						if Element_5.Coord ~= nil then
+						buffer.writeu8(SendBuffer, OFFSET_1, Element_5.AnchorCoord ~= nil and 1 or 0)
+						if Element_5.AnchorCoord ~= nil then
 							-- Allocate BLOCK: 3 bytes
 							local BLOCK_START = Allocate(3)
-							buffer.writeu8(SendBuffer, BLOCK_START + 0, Element_5.Coord.GridId ~= nil and 1 or 0)
-							if Element_5.Coord.GridId ~= nil then
+							buffer.writeu8(SendBuffer, BLOCK_START + 0, Element_5.AnchorCoord.GridId ~= nil and 1 or 0)
+							if Element_5.AnchorCoord.GridId ~= nil then
 								-- Allocate BLOCK: 2 bytes
 								local BLOCK_START = Allocate(2)
-								local Length = #Element_5.Coord.GridId
+								local Length = #Element_5.AnchorCoord.GridId
 								buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
 								Allocate(Length)
-								buffer.writestring(SendBuffer, SendOffset, Element_5.Coord.GridId, Length)
+								buffer.writestring(SendBuffer, SendOffset, Element_5.AnchorCoord.GridId, Length)
 							end
-							buffer.writeu8(SendBuffer, BLOCK_START + 1, Element_5.Coord.Row ~= nil and 1 or 0)
-							if Element_5.Coord.Row ~= nil then
+							buffer.writeu8(SendBuffer, BLOCK_START + 1, Element_5.AnchorCoord.Row ~= nil and 1 or 0)
+							if Element_5.AnchorCoord.Row ~= nil then
 								-- Allocate BLOCK: 8 bytes
 								local BLOCK_START = Allocate(8)
-								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Coord.Row)
+								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.AnchorCoord.Row)
 							end
-							buffer.writeu8(SendBuffer, BLOCK_START + 2, Element_5.Coord.Col ~= nil and 1 or 0)
-							if Element_5.Coord.Col ~= nil then
+							buffer.writeu8(SendBuffer, BLOCK_START + 2, Element_5.AnchorCoord.Col ~= nil and 1 or 0)
+							if Element_5.AnchorCoord.Col ~= nil then
 								-- Allocate BLOCK: 8 bytes
 								local BLOCK_START = Allocate(8)
-								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Coord.Col)
+								buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.AnchorCoord.Col)
 							end
 						end
 						local OFFSET_2 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_2, Element_5.StructureType ~= nil and 1 or 0)
+						buffer.writeu8(SendBuffer, OFFSET_2, Element_5.OccupiedCoords ~= nil and 1 or 0)
+						if Element_5.OccupiedCoords ~= nil then
+							-- Allocate BLOCK: 2 bytes
+							local BLOCK_START = Allocate(2)
+							local Elements_7 = 0
+							for Key_7, Element_7 in Element_5.OccupiedCoords do
+								Elements_7 += 1
+								local OFFSET_0 = Allocate(4)
+								buffer.writeu32(SendBuffer, OFFSET_0, Key_7)
+								local OFFSET_1 = Allocate(1)
+								buffer.writeu8(SendBuffer, OFFSET_1, Element_7.GridId ~= nil and 1 or 0)
+								if Element_7.GridId ~= nil then
+									-- Allocate BLOCK: 2 bytes
+									local BLOCK_START = Allocate(2)
+									local Length = #Element_7.GridId
+									buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+									Allocate(Length)
+									buffer.writestring(SendBuffer, SendOffset, Element_7.GridId, Length)
+								end
+								local OFFSET_2 = Allocate(1)
+								buffer.writeu8(SendBuffer, OFFSET_2, Element_7.Row ~= nil and 1 or 0)
+								if Element_7.Row ~= nil then
+									-- Allocate BLOCK: 8 bytes
+									local BLOCK_START = Allocate(8)
+									buffer.writef64(SendBuffer, BLOCK_START + 0, Element_7.Row)
+								end
+								local OFFSET_3 = Allocate(1)
+								buffer.writeu8(SendBuffer, OFFSET_3, Element_7.Col ~= nil and 1 or 0)
+								if Element_7.Col ~= nil then
+									-- Allocate BLOCK: 8 bytes
+									local BLOCK_START = Allocate(8)
+									buffer.writef64(SendBuffer, BLOCK_START + 0, Element_7.Col)
+								end
+							end
+							buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_7)
+						end
+						local OFFSET_3 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_3, Element_5.RotationQuarterTurns ~= nil and 1 or 0)
+						if Element_5.RotationQuarterTurns ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.RotationQuarterTurns)
+						end
+						local OFFSET_4 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_4, Element_5.FootprintWidthTiles ~= nil and 1 or 0)
+						if Element_5.FootprintWidthTiles ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.FootprintWidthTiles)
+						end
+						local OFFSET_5 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_5, Element_5.FootprintDepthTiles ~= nil and 1 or 0)
+						if Element_5.FootprintDepthTiles ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.FootprintDepthTiles)
+						end
+						local OFFSET_6 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_6, Element_5.StructureType ~= nil and 1 or 0)
 						if Element_5.StructureType ~= nil then
 							-- Allocate BLOCK: 2 bytes
 							local BLOCK_START = Allocate(2)
@@ -321,29 +514,29 @@ local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { Placemen
 							Allocate(Length)
 							buffer.writestring(SendBuffer, SendOffset, Element_5.StructureType, Length)
 						end
-						local OFFSET_3 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_3, Element_5.InstanceId ~= nil and 1 or 0)
+						local OFFSET_7 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_7, Element_5.InstanceId ~= nil and 1 or 0)
 						if Element_5.InstanceId ~= nil then
 							-- Allocate BLOCK: 8 bytes
 							local BLOCK_START = Allocate(8)
 							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.InstanceId)
 						end
-						local OFFSET_4 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_4, Element_5.OwnerUserId ~= nil and 1 or 0)
+						local OFFSET_8 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_8, Element_5.OwnerUserId ~= nil and 1 or 0)
 						if Element_5.OwnerUserId ~= nil then
 							-- Allocate BLOCK: 8 bytes
 							local BLOCK_START = Allocate(8)
 							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.OwnerUserId)
 						end
-						local OFFSET_5 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_5, Element_5.Tier ~= nil and 1 or 0)
+						local OFFSET_9 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_9, Element_5.Tier ~= nil and 1 or 0)
 						if Element_5.Tier ~= nil then
 							-- Allocate BLOCK: 8 bytes
 							local BLOCK_START = Allocate(8)
 							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Tier)
 						end
-						local OFFSET_6 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_6, Element_5.ResourceType ~= nil and 1 or 0)
+						local OFFSET_10 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_10, Element_5.ResourceType ~= nil and 1 or 0)
 						if Element_5.ResourceType ~= nil then
 							-- Allocate BLOCK: 2 bytes
 							local BLOCK_START = Allocate(2)
@@ -351,6 +544,80 @@ local function WriteEVENT_SyncPlacements(Value: { type: "init", data: { Placemen
 							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
 							Allocate(Length)
 							buffer.writestring(SendBuffer, SendOffset, Element_5.ResourceType, Length)
+						end
+						local OFFSET_11 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_11, Element_5.GroundPosX ~= nil and 1 or 0)
+						if Element_5.GroundPosX ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.GroundPosX)
+						end
+						local OFFSET_12 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_12, Element_5.GroundPosY ~= nil and 1 or 0)
+						if Element_5.GroundPosY ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.GroundPosY)
+						end
+						local OFFSET_13 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_13, Element_5.GroundPosZ ~= nil and 1 or 0)
+						if Element_5.GroundPosZ ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.GroundPosZ)
+						end
+					end
+					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
+				end
+				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.Placements.FootprintCache ~= nil and 1 or 0)
+				if Value.data.Placements.FootprintCache ~= nil then
+					-- Allocate BLOCK: 2 bytes
+					local BLOCK_START = Allocate(2)
+					local Elements_5 = 0
+					for Key_5, Element_5 in Value.data.Placements.FootprintCache do
+						Elements_5 += 1
+						local OFFSET_0 = Allocate(4)
+						buffer.writeu32(SendBuffer, OFFSET_0, Key_5)
+						local OFFSET_1 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_1, Element_5.StructureType ~= nil and 1 or 0)
+						if Element_5.StructureType ~= nil then
+							-- Allocate BLOCK: 2 bytes
+							local BLOCK_START = Allocate(2)
+							local Length = #Element_5.StructureType
+							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+							Allocate(Length)
+							buffer.writestring(SendBuffer, SendOffset, Element_5.StructureType, Length)
+						end
+						local OFFSET_2 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_2, Element_5.RotationQuarterTurns ~= nil and 1 or 0)
+						if Element_5.RotationQuarterTurns ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.RotationQuarterTurns)
+						end
+						local OFFSET_3 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_3, Element_5.WidthTiles ~= nil and 1 or 0)
+						if Element_5.WidthTiles ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.WidthTiles)
+						end
+						local OFFSET_4 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_4, Element_5.DepthTiles ~= nil and 1 or 0)
+						if Element_5.DepthTiles ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.DepthTiles)
+						end
+						local OFFSET_5 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_5, Element_5.SpecialTileRequirementMode ~= nil and 1 or 0)
+						if Element_5.SpecialTileRequirementMode ~= nil then
+							-- Allocate BLOCK: 2 bytes
+							local BLOCK_START = Allocate(2)
+							local Length = #Element_5.SpecialTileRequirementMode
+							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+							Allocate(Length)
+							buffer.writestring(SendBuffer, SendOffset, Element_5.SpecialTileRequirementMode, Length)
 						end
 					end
 					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
@@ -458,12 +725,12 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	SyncPlacements = {
-		Fire = function(Player: Player, Value: { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? }): ()
+		Fire = function(Player: Player, Value: { type: "init", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? }): ()
 			Load(PlayersMap[Player])
 			WriteEVENT_SyncPlacements(Value)
 			PlayersMap[Player] = Save()
 		end,
-		FireAll = function(Value: { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? }): ()
+		FireAll = function(Value: { type: "init", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncPlacements(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -475,7 +742,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireList = function(List: {Player}, Value: { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? }): ()
+		FireList = function(List: {Player}, Value: { type: "init", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncPlacements(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -487,7 +754,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireExcept = function(Except: Player, Value: { type: "init", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { Coord: { GridId: string?, Row: number?, Col: number? }?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string? }}? }? }? }): ()
+		FireExcept = function(Except: Player, Value: { type: "init", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? } | { type: "patch", data: { Placements: { Placements: {[number]: { AnchorCoord: { GridId: string?, Row: number?, Col: number? }?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}?, RotationQuarterTurns: number?, FootprintWidthTiles: number?, FootprintDepthTiles: number?, StructureType: string?, InstanceId: number?, OwnerUserId: number?, Tier: number?, ResourceType: string?, GroundPosX: number?, GroundPosY: number?, GroundPosZ: number? }}?, FootprintCache: {[number]: { StructureType: string?, RotationQuarterTurns: number?, WidthTiles: number?, DepthTiles: number?, SpecialTileRequirementMode: string? }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncPlacements(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances

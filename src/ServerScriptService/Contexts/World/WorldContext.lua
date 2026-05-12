@@ -197,6 +197,13 @@ function WorldContext.GetTile(self: WorldContextService, coord: GridCoord): Resu
 	end, "World:GetTile")
 end
 
+function WorldContext.GetTiles(self: WorldContextService, coords: { GridCoord }): Result.Result<{ Tile? }>
+	return Catch(function()
+		Ensure(type(coords) == "table", "InvalidCoords", Errors.INVALID_COORD)
+		return Ok(self._worldGridService:GetTiles(coords))
+	end, "World:GetTiles")
+end
+
 --[=[
 	Returns all configured spawn areas for enemy wave entry.
 	@within WorldContext
@@ -292,6 +299,21 @@ function WorldContext.SetTileOccupied(
 		end
 		return Ok(didUpdate)
 	end, "World:SetTileOccupied")
+end
+
+function WorldContext.SetTilesOccupied(
+	self: WorldContextService,
+	coords: { GridCoord },
+	occupied: boolean
+): Result.Result<boolean>
+	return Catch(function()
+		Ensure(type(coords) == "table", "InvalidCoords", Errors.INVALID_COORD)
+		local didUpdate = self._worldGridService:SetOccupiedBatch(coords, occupied)
+		if didUpdate then
+			_PublishWorldSnapshot(self)
+		end
+		return Ok(didUpdate)
+	end, "World:SetTilesOccupied")
 end
 
 --[=[

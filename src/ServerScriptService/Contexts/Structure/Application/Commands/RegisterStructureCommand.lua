@@ -71,7 +71,8 @@ function RegisterStructureCommand:Execute(record: StructureRecord): Result.Resul
 			entity,
 			resolved.StructureType,
 			resolved.InstanceId,
-			resolved.WorldPos
+			resolved.WorldPos,
+			resolved.RotationQuarterTurns
 		)
 		self._factory:SetModelRef(entity, model)
 		self._syncService:RegisterEntity(entity, model)

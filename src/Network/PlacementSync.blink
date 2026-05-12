@@ -9,19 +9,39 @@ struct GridCoordPayload {
 	Col: f64?,
 }
 
+map OccupiedCoordList = { [u32]: GridCoordPayload }
+
+struct FootprintCacheEntryPayload {
+	StructureType: string?,
+	RotationQuarterTurns: f64?,
+	WidthTiles: f64?,
+	DepthTiles: f64?,
+	SpecialTileRequirementMode: string?,
+}
+
+map FootprintCacheList = { [u32]: FootprintCacheEntryPayload }
+
 struct StructureRecordPayload {
-	Coord: GridCoordPayload?,
+	AnchorCoord: GridCoordPayload?,
+	OccupiedCoords: OccupiedCoordList?,
+	RotationQuarterTurns: f64?,
+	FootprintWidthTiles: f64?,
+	FootprintDepthTiles: f64?,
 	StructureType: string?,
 	InstanceId: f64?,
 	OwnerUserId: f64?,
 	Tier: f64?,
 	ResourceType: string?,
+	GroundPosX: f64?,
+	GroundPosY: f64?,
+	GroundPosZ: f64?,
 }
 
 map PlacementList = { [u32]: StructureRecordPayload }
 
 struct PlacementStatePayload {
 	Placements: PlacementList?,
+	FootprintCache: FootprintCacheList?,
 }
 
 struct InitPayload {

@@ -6,8 +6,8 @@ local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.Placem
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 
 type GridCoord = PlacementTypes.GridCoord
-
 type PlacementAtom = PlacementTypes.PlacementAtom
+type FootprintCacheLookup = PlacementTypes.FootprintCacheLookup
 
 type RunState = RunTypes.RunState
 
@@ -16,13 +16,16 @@ export type TPlacementCursorSessionState = {
 	_confirming: boolean,
 	_sessionId: number,
 	_structureType: string?,
+	_rotationQuarterTurns: number,
 	_hoveredCoord: GridCoord?,
 	_hoveredKey: string?,
+	_hoveredFootprintCoords: { GridCoord },
 	_isHoveredValid: boolean,
 	_runState: RunState,
 	_placementSignature: string,
 	_validTiles: { GridCoord },
 	_validTileSet: { [string]: boolean },
+	_footprintCacheLookup: FootprintCacheLookup,
 	_sessionJanitor: any,
 	_highlightPool: any,
 	_ghost: any,
@@ -42,6 +45,7 @@ export type TPlacementCursorDeps = {
 	onRenderStepped: () -> (),
 	onInputBegan: (input: InputObject, gameProcessed: boolean) -> (),
 	updateHoverState: () -> (),
+	janitorFactory: any,
 }
 
 return table.freeze({})

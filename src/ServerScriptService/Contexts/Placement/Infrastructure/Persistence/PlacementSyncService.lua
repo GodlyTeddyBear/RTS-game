@@ -3,11 +3,14 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CharmSync = require(ReplicatedStorage.Packages["Charm-sync"])
+local PlacementFootprintResolver = require(ReplicatedStorage.Contexts.Placement.PlacementFootprintResolver)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 local SharedAtoms = require(ReplicatedStorage.Contexts.Placement.Sync.SharedAtoms)
 
 type PlacementAtom = PlacementTypes.PlacementAtom
 type StructureRecord = PlacementTypes.StructureRecord
+type FootprintCacheEntry = PlacementTypes.FootprintCacheEntry
+type FootprintCacheLookup = PlacementTypes.FootprintCacheLookup
 
 local function deepClone(value: any): any
 	if type(value) ~= "table" then
@@ -40,6 +43,7 @@ function PlacementSyncService.new()
 	self.Syncer = nil :: any
 	self.Cleanup = nil :: (() -> ())?
 	self.BlinkServer = nil :: any
+	self._footprintCacheLookup = {} :: FootprintCacheLookup
 	return self
 end
 
@@ -52,7 +56,9 @@ end
 -- Wire Charm-sync to the placement atom and forward raw delta payloads through Blink.
 function PlacementSyncService:Init(registry: any, _name: string)
 	self.BlinkServer = registry:Get("BlinkSyncServer")
-	self.Atom = SharedAtoms.CreateServerAtom()
+	local footprintCache = PlacementFootprintResolver.BuildCacheEntriesForConfiguredStructures()
+	self._footprintCacheLookup = PlacementFootprintResolver.BuildLookup(footprintCache)
+	self.Atom = SharedAtoms.CreateServerAtom(footprintCache)
 	self.Syncer = CharmSync.server({
 		atoms = { Placements = self.Atom },
 		interval = 0.1,
@@ -96,6 +102,15 @@ end
 function PlacementSyncService:GetPlacementsReadOnly(): { StructureRecord }
 	local state = self.Atom() :: PlacementAtom
 	return deepClone(state.Placements)
+end
+
+function PlacementSyncService:GetFootprintCacheLookup(): FootprintCacheLookup
+	return self._footprintCacheLookup
+end
+
+function PlacementSyncService:GetFootprintCacheReadOnly(): { FootprintCacheEntry }
+	local state = self.Atom() :: PlacementAtom
+	return deepClone(state.FootprintCache)
 end
 
 --[=[
@@ -151,9 +166,10 @@ end
 ]=]
 -- Reset the placement atom at run end so the next run starts empty.
 function PlacementSyncService:ClearAll()
-	self.Atom(function(_current: PlacementAtom)
+	self.Atom(function(current: PlacementAtom)
 		return {
 			Placements = {},
+			FootprintCache = table.clone(current.FootprintCache),
 		}
 	end)
 end

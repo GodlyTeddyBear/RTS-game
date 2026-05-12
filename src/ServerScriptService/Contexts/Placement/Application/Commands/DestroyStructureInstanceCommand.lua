@@ -44,20 +44,20 @@ function DestroyStructureInstanceCommand:Execute(instanceId: number): Result.Res
 		self._placementService:DestroyStructure(instanceId)
 
 		if removedRecord ~= nil then
-			local occupancyResult = self._worldContext:SetTileOccupied(removedRecord.Coord, false)
+			local occupancyResult = self._worldContext:SetTilesOccupied(removedRecord.OccupiedCoords, false)
 			Ensure(occupancyResult.success, "OccupancyReleaseFailed", Errors.OCCUPANCY_RELEASE_FAILED, {
 				InstanceId = instanceId,
-				GridId = removedRecord.Coord.GridId,
-				Row = removedRecord.Coord.Row,
-				Col = removedRecord.Coord.Col,
+				GridId = removedRecord.AnchorCoord.GridId,
+				Row = removedRecord.AnchorCoord.Row,
+				Col = removedRecord.AnchorCoord.Col,
 				CauseType = occupancyResult.type,
 				CauseMessage = occupancyResult.message,
 			})
 			Ensure(occupancyResult.value == true, "OccupancyReleaseFailed", Errors.OCCUPANCY_RELEASE_FAILED, {
 				InstanceId = instanceId,
-				GridId = removedRecord.Coord.GridId,
-				Row = removedRecord.Coord.Row,
-				Col = removedRecord.Coord.Col,
+				GridId = removedRecord.AnchorCoord.GridId,
+				Row = removedRecord.AnchorCoord.Row,
+				Col = removedRecord.AnchorCoord.Col,
 			})
 		end
 

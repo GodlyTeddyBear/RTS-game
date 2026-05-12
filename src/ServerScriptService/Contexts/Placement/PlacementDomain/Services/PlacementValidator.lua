@@ -14,6 +14,7 @@ type GridCoord = PlacementTypes.GridCoord
 export type PlacementRequest = {
 	Coord: GridCoord,
 	StructureType: string,
+	RotationQuarterTurns: number,
 }
 
 --[=[
@@ -43,7 +44,13 @@ end
 	@return Result.Result<PlacementRequest> -- The sanitized request payload.
 ]=]
 -- Validate the request shape before the policy touches any live game state.
-function PlacementValidator:ValidateRequest(gridId: any, coordRow: any, coordCol: any, structureType: any): Result.Result<PlacementRequest>
+function PlacementValidator:ValidateRequest(
+	gridId: any,
+	coordRow: any,
+	coordCol: any,
+	structureType: any,
+	rotationQuarterTurns: any
+): Result.Result<PlacementRequest>
 	Ensure(type(gridId) == "string" and #gridId > 0, "InvalidRequestCoord", Errors.INVALID_REQUEST_COORD)
 	Ensure(type(coordRow) == "number", "InvalidRequestCoord", Errors.INVALID_REQUEST_COORD)
 	Ensure(type(coordCol) == "number", "InvalidRequestCoord", Errors.INVALID_REQUEST_COORD)
@@ -52,6 +59,9 @@ function PlacementValidator:ValidateRequest(gridId: any, coordRow: any, coordCol
 	Ensure(coordRow >= 1 and coordCol >= 1, "InvalidRequestCoord", Errors.INVALID_REQUEST_COORD)
 	Ensure(type(structureType) == "string", "InvalidRequestStructureType", Errors.INVALID_REQUEST_STRUCTURE_TYPE)
 	Ensure(#structureType > 0, "InvalidRequestStructureType", Errors.INVALID_REQUEST_STRUCTURE_TYPE)
+	Ensure(type(rotationQuarterTurns) == "number", "InvalidRequestCoord", Errors.INVALID_REQUEST_COORD)
+	Ensure(math.floor(rotationQuarterTurns) == rotationQuarterTurns, "InvalidRequestCoord", Errors.INVALID_REQUEST_COORD)
+	Ensure(rotationQuarterTurns >= 0 and rotationQuarterTurns <= 3, "InvalidRequestCoord", Errors.INVALID_REQUEST_COORD)
 
 	return Ok({
 		Coord = {
@@ -60,6 +70,7 @@ function PlacementValidator:ValidateRequest(gridId: any, coordRow: any, coordCol
 			Col = coordCol,
 		},
 		StructureType = structureType,
+		RotationQuarterTurns = rotationQuarterTurns,
 	})
 end
 

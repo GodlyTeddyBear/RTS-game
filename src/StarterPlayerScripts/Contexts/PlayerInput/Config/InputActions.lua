@@ -28,5 +28,8 @@ return {
 		CancelPlacement = {
 			PC = { Input = Enum.KeyCode.Q },
 		},
+		RotatePlacement = {
+			PC = { Input = Enum.KeyCode.R },
+		},
 	},
 }

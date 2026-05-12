@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local PlacementFootprintResolver = require(ReplicatedStorage.Contexts.Placement.PlacementFootprintResolver)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local PlacementSpecs = require(script.Parent.Parent.Specs.PlacementSpecs)
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
@@ -16,9 +17,11 @@ local Ensure = Result.Ensure
 type GridCoord = PlacementTypes.GridCoord
 type Tile = WorldTypes.Tile
 type ResourceCostMap = PlacementTypes.ResourceCostMap
+type ResolvedFootprint = PlacementTypes.ResolvedFootprint
 
 export type PlacementDecision = {
-	Tile: Tile,
+	Tiles: { Tile },
+	ResolvedFootprint: ResolvedFootprint,
 	CostMap: ResourceCostMap,
 }
 
@@ -68,7 +71,11 @@ end
 	@return Result.Result<PlacementDecision> -- The resolved placement decision.
 ]=]
 -- Resolve every required read before the command performs any mutation.
-function PlaceStructurePolicy:Check(coord: GridCoord, structureType: string): Result.Result<PlacementDecision>
+function PlaceStructurePolicy:Check(
+	coord: GridCoord,
+	structureType: string,
+	rotationQuarterTurns: number
+): Result.Result<PlacementDecision>
 	-- Run state gates the whole feature, so it is the first live lookup.
 	local runState = Try(self._runContext:GetState())
 	Ensure(PlacementSpecs.IsPrepState(runState), "NotPrepState", Errors.NOT_PREP_STATE, {
@@ -81,39 +88,59 @@ function PlaceStructurePolicy:Check(coord: GridCoord, structureType: string): Re
 
 	-- TODO: Inject Structure/Crafting unlock provider and enforce unlock status here.
 
-	-- Tile lookup happens before occupancy checks because the world context owns bounds validation.
-	local tile = Try(self._worldContext:GetTile(coord))
-	Ensure(tile ~= nil, "InvalidCoord", Errors.INVALID_COORD, {
-		GridId = coord.GridId,
-		Row = coord.Row,
-		Col = coord.Col,
-	})
-
-	local resolvedTile = tile :: Tile
-
-	Ensure(PlacementSpecs.IsTileAvailable(resolvedTile), "TileUnavailable", Errors.TILE_UNAVAILABLE, {
-		GridId = coord.GridId,
-		Row = coord.Row,
-		Col = coord.Col,
-		Zone = resolvedTile.Zone,
-		Occupied = resolvedTile.Occupied,
-	})
-
-	Ensure(PlacementSpecs.IsBaseZoneAllowed(resolvedTile), "IncompatibleTileZone", Errors.INCOMPATIBLE_TILE_ZONE, {
+	local resolvedFootprint = PlacementFootprintResolver.Resolve(
+		self._syncService:GetFootprintCacheLookup(),
+		structureType,
+		coord,
+		rotationQuarterTurns
+	)
+	Ensure(resolvedFootprint ~= nil, "MissingFootprintCache", Errors.MISSING_FOOTPRINT_CACHE, {
 		StructureType = structureType,
-		Zone = resolvedTile.Zone,
+		RotationQuarterTurns = rotationQuarterTurns,
 	})
+	local tileResults = Try(self._worldContext:GetTiles(resolvedFootprint.OccupiedCoords))
+	local resolvedTiles = table.create(#resolvedFootprint.OccupiedCoords)
 
-	Ensure(PlacementSpecs.IsNotPlacementProhibited(resolvedTile), "PlacementProhibited", Errors.INCOMPATIBLE_TILE_ZONE, {
-		StructureType = structureType,
-		Zone = resolvedTile.Zone,
-	})
+	for index, tile in ipairs(tileResults) do
+		local occupiedCoord = resolvedFootprint.OccupiedCoords[index]
+		Ensure(tile ~= nil, "InvalidCoord", Errors.INVALID_COORD, {
+			GridId = occupiedCoord.GridId,
+			Row = occupiedCoord.Row,
+			Col = occupiedCoord.Col,
+		})
 
-	if PlacementSpecs.RequiresResourceTile(structureType) then
-		Ensure(PlacementSpecs.HasRequiredResourceTileData(resolvedTile), "ResourceTileRequired", Errors.RESOURCE_TILE_REQUIRED, {
+		local resolvedTile = tile :: Tile
+		Ensure(PlacementSpecs.IsTileAvailable(resolvedTile), "TileUnavailable", Errors.TILE_UNAVAILABLE, {
+			GridId = occupiedCoord.GridId,
+			Row = occupiedCoord.Row,
+			Col = occupiedCoord.Col,
+			Zone = resolvedTile.Zone,
+			Occupied = resolvedTile.Occupied,
+		})
+
+		Ensure(PlacementSpecs.IsBaseZoneAllowed(resolvedTile), "IncompatibleTileZone", Errors.INCOMPATIBLE_TILE_ZONE, {
 			StructureType = structureType,
 			Zone = resolvedTile.Zone,
 		})
+
+		Ensure(PlacementSpecs.IsNotPlacementProhibited(resolvedTile), "PlacementProhibited", Errors.INCOMPATIBLE_TILE_ZONE, {
+			StructureType = structureType,
+			Zone = resolvedTile.Zone,
+		})
+
+		resolvedTiles[index] = resolvedTile
+	end
+
+	if PlacementSpecs.RequiresResourceTile(structureType) then
+		Ensure(
+			PlacementSpecs.SatisfiesSpecialTileRequirement(resolvedTiles, resolvedFootprint.SpecialTileRequirementMode),
+			"ResourceTileRequired",
+			Errors.RESOURCE_TILE_REQUIRED,
+			{
+				StructureType = structureType,
+				SpecialTileRequirementMode = resolvedFootprint.SpecialTileRequirementMode,
+			}
+		)
 	end
 
 	-- Capacity is read from the placement atom so the command never overshoots the run cap.
@@ -132,7 +159,8 @@ function PlaceStructurePolicy:Check(coord: GridCoord, structureType: string): Re
 	})
 
 	return Ok({
-		Tile = resolvedTile,
+		Tiles = resolvedTiles,
+		ResolvedFootprint = resolvedFootprint,
 		CostMap = cloneCostMap(costMap :: ResourceCostMap),
 	})
 end
