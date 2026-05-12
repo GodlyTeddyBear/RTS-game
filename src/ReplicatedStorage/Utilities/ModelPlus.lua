@@ -10,9 +10,7 @@
 
 type TGridSize = number | Vector3
 
-local Find = require(script.Parent.Find)
-local Query = require(script.Parent.Query)
-local TableUtil = require(script.Parent.TableUtil)
+local SearchPlus = require(script.Parent.SearchPlus)
 
 local _AssertModel: (model: Model) -> ()
 local _GetPivotRotation: (cframe: CFrame) -> CFrame
@@ -120,8 +118,14 @@ end
 function ModelPlus.Find(model: Model, ...: string): Instance?
 	_AssertModel(model)
 	local path = table.pack(...)
+	if path.n == 0 then
+		return model
+	end
+
 	local ok, instance = pcall(function()
-		return Find(model, table.unpack(path, 1, path.n))
+		return SearchPlus.FindFirst(model, {
+			Path = path,
+		})
 	end)
 	if not ok then
 		return nil
@@ -140,7 +144,14 @@ end
 ]=]
 function ModelPlus.Require(model: Model, ...: string): Instance
 	_AssertModel(model)
-	return Find(model, ...)
+	local path = table.pack(...)
+	if path.n == 0 then
+		return model
+	end
+
+	return SearchPlus.FindOne(model, {
+		Path = path,
+	})
 end
 
 --[=[
@@ -153,7 +164,9 @@ end
 ]=]
 function ModelPlus.QueryAll(model: Model, selector: string): { Instance }
 	_AssertModel(model)
-	return Query.all(model, selector)
+	return SearchPlus.FindAll(model, {
+		Selector = selector,
+	})
 end
 
 --[=[
@@ -166,7 +179,9 @@ end
 ]=]
 function ModelPlus.QueryFirst(model: Model, selector: string): Instance?
 	_AssertModel(model)
-	return Query.first(model, selector)
+	return SearchPlus.FindFirst(model, {
+		Selector = selector,
+	})
 end
 
 --[=[
@@ -179,7 +194,9 @@ end
 ]=]
 function ModelPlus.QueryOne(model: Model, selector: string): Instance
 	_AssertModel(model)
-	return Query.one(model, selector)
+	return SearchPlus.FindOne(model, {
+		Selector = selector,
+	})
 end
 
 --[=[
@@ -192,9 +209,11 @@ end
 ]=]
 function ModelPlus.FilterChildren(model: Model, predicate: (Instance) -> boolean): { Instance }
 	_AssertModel(model)
-	return TableUtil.Filter(model:GetChildren(), function(instance: Instance)
-		return predicate(instance)
-	end)
+	return SearchPlus.FindAll(model, {
+		Predicate = function(instance: Instance)
+			return predicate(instance)
+		end,
+	})
 end
 
 --[=[
@@ -207,9 +226,12 @@ end
 ]=]
 function ModelPlus.FilterDescendants(model: Model, predicate: (Instance) -> boolean): { Instance }
 	_AssertModel(model)
-	return TableUtil.Filter(model:GetDescendants(), function(instance: Instance)
-		return predicate(instance)
-	end)
+	return SearchPlus.FindAll(model, {
+		Predicate = function(instance: Instance)
+			return predicate(instance)
+		end,
+		Recursive = true,
+	})
 end
 
 --[=[
@@ -222,10 +244,11 @@ end
 ]=]
 function ModelPlus.FindChild(model: Model, predicate: (Instance) -> boolean): Instance?
 	_AssertModel(model)
-	local instance = select(1, TableUtil.Find(model:GetChildren(), function(child: Instance)
-		return predicate(child)
-	end))
-	return instance
+	return SearchPlus.FindFirst(model, {
+		Predicate = function(child: Instance)
+			return predicate(child)
+		end,
+	})
 end
 
 --[=[
@@ -238,10 +261,12 @@ end
 ]=]
 function ModelPlus.FindDescendant(model: Model, predicate: (Instance) -> boolean): Instance?
 	_AssertModel(model)
-	local instance = select(1, TableUtil.Find(model:GetDescendants(), function(descendant: Instance)
-		return predicate(descendant)
-	end))
-	return instance
+	return SearchPlus.FindFirst(model, {
+		Predicate = function(descendant: Instance)
+			return predicate(descendant)
+		end,
+		Recursive = true,
+	})
 end
 
 --[=[
@@ -253,9 +278,10 @@ end
     @error string -- Thrown when `model` is nil or not a `Model`.
 ]=]
 function ModelPlus.FindAllChildrenOfClass(model: Model, className: string): { Instance }
-	return ModelPlus.FilterChildren(model, function(instance: Instance)
-		return instance.ClassName == className
-	end)
+	_AssertModel(model)
+	return SearchPlus.FindAll(model, {
+		ClassName = className,
+	})
 end
 
 --[=[
@@ -267,9 +293,11 @@ end
     @error string -- Thrown when `model` is nil or not a `Model`.
 ]=]
 function ModelPlus.FindAllDescendantsOfClass(model: Model, className: string): { Instance }
-	return ModelPlus.FilterDescendants(model, function(instance: Instance)
-		return instance.ClassName == className
-	end)
+	_AssertModel(model)
+	return SearchPlus.FindAll(model, {
+		ClassName = className,
+		Recursive = true,
+	})
 end
 
 --[=[
@@ -281,9 +309,10 @@ end
     @error string -- Thrown when `model` is nil or not a `Model`.
 ]=]
 function ModelPlus.FindAllChildrenWhichIsA(model: Model, className: string): { Instance }
-	return ModelPlus.FilterChildren(model, function(instance: Instance)
-		return instance:IsA(className)
-	end)
+	_AssertModel(model)
+	return SearchPlus.FindAll(model, {
+		IsA = className,
+	})
 end
 
 --[=[
@@ -295,9 +324,11 @@ end
     @error string -- Thrown when `model` is nil or not a `Model`.
 ]=]
 function ModelPlus.FindAllDescendantsWhichIsA(model: Model, className: string): { Instance }
-	return ModelPlus.FilterDescendants(model, function(instance: Instance)
-		return instance:IsA(className)
-	end)
+	_AssertModel(model)
+	return SearchPlus.FindAll(model, {
+		IsA = className,
+		Recursive = true,
+	})
 end
 
 --[=[
@@ -380,11 +411,7 @@ function ModelPlus.BuildBottomAlignedPivot(model: Model, targetWorldPos: Vector3
 
 	-- Offset the pivot in Y until the model's bottom face touches the target world position.
 	local yOffset = targetWorldPos.Y - currentBottomY
-	local targetPivotPosition = Vector3.new(
-		targetWorldPos.X,
-		currentPivot.Position.Y + yOffset,
-		targetWorldPos.Z
-	)
+	local targetPivotPosition = Vector3.new(targetWorldPos.X, currentPivot.Position.Y + yOffset, targetWorldPos.Z)
 
 	-- Rebuild the pivot from the preserved rotation and new target position.
 	return _BuildPivotWithPositionAndRotation(targetPivotPosition, _GetPivotRotation(currentPivot))
@@ -405,11 +432,7 @@ function ModelPlus.BuildTopAlignedPivot(model: Model, targetWorldPos: Vector3): 
 
 	-- Offset the pivot in Y until the model's top face touches the target world position.
 	local yOffset = targetWorldPos.Y - currentTopY
-	local targetPivotPosition = Vector3.new(
-		targetWorldPos.X,
-		currentPivot.Position.Y + yOffset,
-		targetWorldPos.Z
-	)
+	local targetPivotPosition = Vector3.new(targetWorldPos.X, currentPivot.Position.Y + yOffset, targetWorldPos.Z)
 
 	-- Rebuild the pivot from the preserved rotation and new target position.
 	return _BuildPivotWithPositionAndRotation(targetPivotPosition, _GetPivotRotation(currentPivot))
