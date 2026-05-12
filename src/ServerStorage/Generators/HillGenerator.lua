@@ -2,18 +2,18 @@
 
 local GeometryService = game:GetService("GeometryService")
 
-type GenerationFunctionParams<Attributes> = {
+type TGenerationParams<Attributes> = {
 	Attributes: Attributes,
 	Size: Vector3,
-	Pause: (self: GenerationFunctionParams<Attributes>) -> (),
+	Pause: (self: TGenerationParams<Attributes>) -> (),
 }
 
-type GeneratorModuleDefinition<Attributes> = {
-	Attributes: Attributes,
-	OnGenerate: (parameters: GenerationFunctionParams<Attributes>, targetContainer: GeneratedFolder) -> (),
+type TGeneratorDefinition<Attributes> = {
+	Defaults: Attributes,
+	Generate: (parameters: TGenerationParams<Attributes>, targetContainer: Instance) -> (),
 }
 
-type GeneratorHelpers = {
+type TGeneratorHelpers = {
 	assignProperties: (instance: Instance, properties: { [string]: any }?) -> Instance,
 	createInstance: (className: string, properties: { [string]: any }?) -> Instance,
 	createFolder: (properties: { [string]: any }?) -> Folder,
@@ -21,7 +21,7 @@ type GeneratorHelpers = {
 	createPart: (properties: { [string]: any }?) -> Part,
 }
 
-local defaultAttributes = {
+local DEFAULTS = table.freeze({
 	RandomSeed = 12345,
 
 	CenterColor = Color3.fromRGB(110, 165, 90),
@@ -73,11 +73,11 @@ local defaultAttributes = {
 	RandomYawMaxDeg = 360,
 	RandomScaleMin = 0.9,
 	RandomScaleMax = 1.1,
-}
+})
 
-type HillAttributes = typeof(defaultAttributes)
+type THillAttributes = typeof(DEFAULTS)
 
-local Helpers: GeneratorHelpers = {}
+local Helpers: TGeneratorHelpers = {}
 
 function Helpers.assignProperties(instance: Instance, properties: { [string]: any }?): Instance
 	if properties == nil then
@@ -121,6 +121,7 @@ function Helpers.createPart(properties: { [string]: any }?): Part
 		TopSurface = Enum.SurfaceType.Smooth,
 		BottomSurface = Enum.SurfaceType.Smooth,
 	}) :: Part
+
 	return Helpers.assignProperties(part, properties) :: Part
 end
 
@@ -143,7 +144,7 @@ local function getScaledSize(x: number, y: number, z: number, scale: number): Ve
 	return Vector3.new(clampPositive(x * scale, 1), clampPositive(y * scale, 1), clampPositive(z * scale, 1))
 end
 
-local function applyRandomization(attributes: HillAttributes, random: Random): (number, number)
+local function applyRandomization(attributes: THillAttributes, random: Random): (number, number)
 	if not attributes.RandomizeEnabled then
 		return 0, 1
 	end
@@ -189,7 +190,7 @@ local function createWedge(
 	return wedge
 end
 
-local function createHillBlock(attributes: HillAttributes, random: Random, root: Instance, centerXZ: Vector3)
+local function createHillBlock(attributes: THillAttributes, random: Random, root: Instance, centerXZ: Vector3)
 	local yawDeg, scale = applyRandomization(attributes, random)
 	local yaw = CFrame.fromAxisAngle(Vector3.yAxis, math.rad(yawDeg))
 
@@ -238,7 +239,6 @@ local function createHillBlock(attributes: HillAttributes, random: Random, root:
 			attributes.WedgeMaterialVariant
 		)
 
-		-- Build wedge transform fully in local space, then compose with center transform once.
 		local localWedgeCFrame = CFrame.new(localOffset) * CFrame.Angles(0, math.rad(rotationDegreesY), 0)
 		wedge.CFrame = centerCFrame * localWedgeCFrame
 		return wedge
@@ -387,7 +387,6 @@ local function createHillBlock(attributes: HillAttributes, random: Random, root:
 		opA.Parent = root
 		opB.Parent = root
 
-		-- Expand spans directionally so corner operands overlap broadly before CSG.
 		resizeCornerOperandSpan(firstSideKey, opA)
 		resizeCornerOperandSpan(secondSideKey, opB)
 
@@ -471,7 +470,7 @@ local function createHillBlock(attributes: HillAttributes, random: Random, root:
 	end
 end
 
-local function createArray(attributes: HillAttributes, random: Random, root: Instance)
+local function createArray(attributes: THillAttributes, random: Random, root: Instance)
 	local rows = floorAtLeastOne(attributes.ArrayRows)
 	local columns = floorAtLeastOne(attributes.ArrayColumns)
 	local spacingX = attributes.ArraySpacingX
@@ -503,7 +502,7 @@ local function createArray(attributes: HillAttributes, random: Random, root: Ins
 	end
 end
 
-local function Generate(parameters: GenerationFunctionParams<HillAttributes>, targetContainer: GeneratedFolder)
+local function Generate(parameters: TGenerationParams<THillAttributes>, targetContainer: Instance)
 	local attributes = parameters.Attributes
 	local random = Random.new(os.time())
 
@@ -515,11 +514,9 @@ local function Generate(parameters: GenerationFunctionParams<HillAttributes>, ta
 	createArray(attributes, random, root)
 end
 
-local Generator: GeneratorModuleDefinition<HillAttributes> = {
-	Attributes = defaultAttributes,
-	OnGenerate = function(parameters, targetContainer)
-		Generate(parameters, targetContainer)
-	end,
+local Generator: TGeneratorDefinition<THillAttributes> = {
+	Defaults = DEFAULTS,
+	Generate = Generate,
 }
 
-return Generator
+return table.freeze(Generator)

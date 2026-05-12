@@ -2,18 +2,18 @@
 
 local InsertService = game:GetService("InsertService")
 
-type GenerationFunctionParams<Attributes> = {
+type TGenerationParams<Attributes> = {
 	Attributes: Attributes,
 	Size: Vector3,
-	Pause: (self: GenerationFunctionParams<Attributes>) -> (),
+	Pause: (self: TGenerationParams<Attributes>) -> (),
 }
 
-type GeneratorModuleDefinition<Attributes> = {
-	Attributes: Attributes,
-	OnGenerate: (parameters: GenerationFunctionParams<Attributes>, targetContainer: GeneratedFolder) -> (),
+type TGeneratorDefinition<Attributes> = {
+	Defaults: Attributes,
+	Generate: (parameters: TGenerationParams<Attributes>, targetContainer: Instance) -> (),
 }
 
-type GeneratorHelpers = {
+type TGeneratorHelpers = {
 	assignProperties: (instance: Instance, properties: { [string]: any }?) -> Instance,
 	createInstance: (className: string, properties: { [string]: any }?) -> Instance,
 	createFolder: (properties: { [string]: any }?) -> Folder,
@@ -27,11 +27,11 @@ type GeneratorHelpers = {
 	) -> MeshPart,
 }
 
-local defaultAttributes = {
+local DEFAULTS = table.freeze({
 	RandomSeed = 12345,
-}
+})
 
-local Helpers: GeneratorHelpers = {}
+local Helpers: TGeneratorHelpers = {}
 
 function Helpers.assignProperties(instance: Instance, properties: { [string]: any }?): Instance
 	if properties == nil then
@@ -63,6 +63,7 @@ end
 Helpers.createFolder = function(properties)
 	return e("Folder", properties) :: Folder
 end
+
 Helpers.createModle = function(properties)
 	return e("Model", properties) :: Model
 end
@@ -75,6 +76,7 @@ function Helpers.createPart(properties: { [string]: any }?): Part
 		TopSurface = Enum.SurfaceType.Smooth,
 		BottomSurface = Enum.SurfaceType.Smooth,
 	})
+
 	return Helpers.assignProperties(part, properties) :: Part
 end
 
@@ -93,10 +95,7 @@ function Helpers.createMeshPartFromMeshId(
 	return Helpers.assignProperties(meshPart, properties) :: MeshPart
 end
 
-local function Generate(
-	parameters: GenerationFunctionParams<typeof(defaultAttributes)>,
-	targetContainer: GeneratedFolder
-)
+local function Generate(parameters: TGenerationParams<typeof(DEFAULTS)>, targetContainer: Instance)
 	local _random = Random.new(parameters.Attributes.RandomSeed)
 
 	Helpers.createPart({
@@ -107,11 +106,9 @@ local function Generate(
 	})
 end
 
-local Generator: GeneratorModuleDefinition<typeof(defaultAttributes)> = {
-	Attributes = defaultAttributes,
-	OnGenerate = function(parameters, targetContainer)
-		Generate(parameters, targetContainer)
-	end,
+local Generator: TGeneratorDefinition<typeof(DEFAULTS)> = {
+	Defaults = DEFAULTS,
+	Generate = Generate,
 }
 
-return Generator
+return table.freeze(Generator)

@@ -12,15 +12,12 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
-local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 local RunConfig = require(ReplicatedStorage.Contexts.Run.Config.RunConfig)
-local RunTravelConfig = require(ReplicatedStorage.Contexts.Run.Config.RunTravelConfig)
 local CommandRegistry = require(ReplicatedStorage.Contexts.Log.CommandRegistry)
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
@@ -28,6 +25,7 @@ local BlinkServer = require(ReplicatedStorage.Network.Generated.RunSyncServer)
 
 local RunStateMachine = require(script.Parent.Infrastructure.Services.RunStateMachine)
 local RunTimerService = require(script.Parent.Infrastructure.Services.RunTimerService)
+local RunTravelService = require(script.Parent.Infrastructure.Services.RunTravelService)
 local RunSyncService = require(script.Parent.Infrastructure.Persistence.RunSyncService)
 local RunTransitionPolicy = require(script.Parent.RunDomain.Policies.RunTransitionPolicy)
 local StartRunCommand = require(script.Parent.Application.Commands.StartRunCommand)
@@ -72,6 +70,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "RunSyncService",
 		Module = RunSyncService,
 		CacheAs = "_sync",
+	},
+	{
+		Name = "RunTravelService",
+		Module = RunTravelService,
+		CacheAs = "_travelService",
 	},
 }
 
@@ -155,6 +158,7 @@ local RunContext = Knit.CreateService({
 	Teardown = {
 		Fields = {
 			{ Field = "_playerAddedConnection", Method = "Disconnect" },
+			{ Field = "_playerRemovingConnection", Method = "Disconnect" },
 			{ Field = "_commanderDiedConnection", Method = "Disconnect" },
 			{ Field = "_baseDestroyedConnection", Method = "Disconnect" },
 			{ Field = "_stateChangedConnection", Method = "Disconnect" },
@@ -221,23 +225,6 @@ end
 
 local function _formatCommandFailure(commandName: string, result: Result.Result<any>): (boolean, string)
 	return false, string.format("%s failed: %s", commandName, result.message)
-end
-
-local function _ResolveSpawnCFrame(markerName: string, fallbackCFrame: CFrame): CFrame
-	local marker = Workspace:FindFirstChild(markerName, true)
-	if marker == nil then
-		return fallbackCFrame
-	end
-
-	if marker:IsA("BasePart") then
-		return marker.CFrame
-	end
-
-	if marker:IsA("Model") then
-		return ModelPlus.GetPivot(marker)
-	end
-
-	return fallbackCFrame
 end
 
 -- Registers developer-only commands that map to the public run API.
@@ -343,11 +330,17 @@ function RunContext:KnitStart()
 	-- Hydrate late joiners so they receive the current global run snapshot.
 	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
 		self._sync:HydratePlayer(player)
+		self:_TrackPlayerCharacterRouting(player)
+	end)
+
+	self._playerRemovingConnection = Players.PlayerRemoving:Connect(function(player: Player)
+		self:_DisconnectPlayerCharacterRouting(player)
 	end)
 
 	-- Hydrate players already in the server before this context finished starting.
 	for _, player in Players:GetPlayers() do
 		self._sync:HydratePlayer(player)
+		self:_TrackPlayerCharacterRouting(player)
 	end
 
 	-- Listen for commander death through the shared event bus so run termination stays decoupled.
@@ -410,7 +403,7 @@ function RunContext:StartRun(): Result.Result<boolean>
 		Try(self._worldContext:RefreshRuntimeGeometry())
 		Try(self._baseContext:PrepareRunBase())
 		-- Teleport first so the prep countdown starts from the correct phase entry point.
-		self:_TeleportPlayersToCFrame(self:_GetPhase2EntryCFrame())
+		Try(self._travelService:TeleportAllPlayersToRunEntry())
 		return self._startRunCommand:Execute(self._onPrepTimeout)
 	end, "Run:StartRun")
 end
@@ -576,29 +569,6 @@ end
 
 -- [Private Helpers]
 
-function RunContext:_GetPhase2EntryCFrame(): CFrame
-	return _ResolveSpawnCFrame(RunTravelConfig.PHASE2_ENTRY_MARKER_NAME, RunTravelConfig.PHASE2_ENTRY_CFRAME)
-end
-
-function RunContext:_GetLobbyReturnCFrame(): CFrame
-	return _ResolveSpawnCFrame(RunTravelConfig.LOBBY_RETURN_MARKER_NAME, RunTravelConfig.LOBBY_RETURN_CFRAME)
-end
-
-function RunContext:_TeleportPlayersToCFrame(targetCFrame: CFrame)
-	-- Clear velocity before teleporting so players do not carry momentum across phases.
-	for _, player in Players:GetPlayers() do
-		local character = player.Character
-		if character then
-			local rootPart = character:FindFirstChild("HumanoidRootPart")
-			if rootPart and rootPart:IsA("BasePart") then
-				rootPart.AssemblyLinearVelocity = Vector3.zero
-				rootPart.AssemblyAngularVelocity = Vector3.zero
-				rootPart.CFrame = targetCFrame
-			end
-		end
-	end
-end
-
 function RunContext:_BuildRunSnapshot(): RunSnapshot
 	local phaseClock = self._timer:GetPhaseClock()
 	return {
@@ -639,7 +609,10 @@ function RunContext:_OnStateChanged(newState: RunState, previousState: RunState)
 			return Ok(nil)
 		end, "Run:CleanupRuntimeMapOnRunEnd")
 
-		self:_TeleportPlayersToCFrame(self:_GetLobbyReturnCFrame())
+		Catch(function()
+			Try(self._travelService:TeleportAllPlayersToLobby())
+			return Ok(nil)
+		end, "Run:TeleportPlayersToLobbyOnRunEnd")
 		Result.MentionEvent("RunContext:RunEnd", "Run ended; lifecycle cleanup hook", {
 			WaveNumber = self._machine:GetWaveNumber(),
 		})
@@ -657,6 +630,40 @@ function RunContext:_OnStateChanged(newState: RunState, previousState: RunState)
 	end
 end
 
+function RunContext:_TrackPlayerCharacterRouting(player: Player)
+	self._characterAddedConnections = self._characterAddedConnections or {}
+
+	self:_DisconnectPlayerCharacterRouting(player)
+
+	self._characterAddedConnections[player] = player.CharacterAdded:Connect(function()
+		self:_PositionPlayerForCurrentRunState(player)
+	end)
+
+	if player.Character ~= nil then
+		self:_PositionPlayerForCurrentRunState(player)
+	end
+end
+
+function RunContext:_DisconnectPlayerCharacterRouting(player: Player)
+	local characterAddedConnections = self._characterAddedConnections
+	if characterAddedConnections == nil then
+		return
+	end
+
+	local connection = characterAddedConnections[player]
+	if connection ~= nil then
+		connection:Disconnect()
+		characterAddedConnections[player] = nil
+	end
+end
+
+function RunContext:_PositionPlayerForCurrentRunState(player: Player)
+	Catch(function()
+		Try(self._travelService:PositionPlayerForState(player, self._machine:GetState()))
+		return Ok(nil)
+	end, "Run:PositionPlayerForCurrentRunState")
+end
+
 -- [Shutdown]
 
 --[=[
@@ -664,6 +671,13 @@ end
 	@within RunContext
 ]=]
 function RunContext:Destroy()
+	if self._characterAddedConnections ~= nil then
+		for player, connection in pairs(self._characterAddedConnections) do
+			connection:Disconnect()
+			self._characterAddedConnections[player] = nil
+		end
+	end
+
 	local destroyResult = RunBaseContext:Destroy()
 	if not destroyResult.success then
 		Result.MentionError("Run:Destroy", "BaseContext teardown failed", {

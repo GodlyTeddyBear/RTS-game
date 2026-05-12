@@ -6,7 +6,12 @@ MapConfig.RUNTIME_MAP_NAME = "Map"
 MapConfig.TEMPLATE_NAME = "Default"
 MapConfig.WORKSPACE_MAP_CONTAINER_NAME = "Map"
 MapConfig.WORKSPACE_GAME_CONTAINER_NAME = "Game"
+MapConfig.WORKSPACE_LOBBY_CONTAINER_NAME = "Lobby"
 MapConfig.RUNTIME_MAP_TARGET_POSITION = Vector3.new(800, 0, 500)
+MapConfig.LOBBY_SPAWN_PATH = "LobbyReturnSpawn"
+MapConfig.LOBBY_SPAWN_MARKER_NAME = "LobbyReturnSpawn"
+MapConfig.RUN_ENTRY_PATH = "Phase2EntrySpawn"
+MapConfig.RUN_ENTRY_MARKER_NAME = "Phase2EntrySpawn"
 
 MapConfig.ZONE_PATHS = table.freeze({
 	Bases = "Environment.Zones.Bases",

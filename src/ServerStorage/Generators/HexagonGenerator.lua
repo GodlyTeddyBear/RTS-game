@@ -2,18 +2,18 @@
 
 local InsertService = game:GetService("InsertService")
 
-type GenerationFunctionParams<Attributes> = {
+type TGenerationParams<Attributes> = {
 	Attributes: Attributes,
 	Size: Vector3,
-	Pause: (self: GenerationFunctionParams<Attributes>) -> (),
+	Pause: (self: TGenerationParams<Attributes>) -> (),
 }
 
-type GeneratorModuleDefinition<Attributes> = {
-	Attributes: Attributes,
-	OnGenerate: (parameters: GenerationFunctionParams<Attributes>, targetContainer: GeneratedFolder) -> (),
+type TGeneratorDefinition<Attributes> = {
+	Defaults: Attributes,
+	Generate: (parameters: TGenerationParams<Attributes>, targetContainer: Instance) -> (),
 }
 
-type GeneratorHelpers = {
+type TGeneratorHelpers = {
 	assignProperties: (instance: Instance, properties: { [string]: any }?) -> Instance,
 	createInstance: (className: string, properties: { [string]: any }?) -> Instance,
 	createFolder: (properties: { [string]: any }?) -> Folder,
@@ -27,7 +27,7 @@ type GeneratorHelpers = {
 	) -> MeshPart,
 }
 
-local defaultAttributes = {
+local DEFAULTS = table.freeze({
 	MeshId = "rbxassetid://0",
 	RandomSeed = 12345,
 	BottomColor = Color3.fromRGB(86, 125, 70),
@@ -49,11 +49,11 @@ local defaultAttributes = {
 	RandomYawMaxDeg = 360,
 	RandomScaleMin = 0.9,
 	RandomScaleMax = 1.1,
-}
+})
 
-type HexagonAttributes = typeof(defaultAttributes)
+type THexagonAttributes = typeof(DEFAULTS)
 
-local Helpers: GeneratorHelpers = {}
+local Helpers: TGeneratorHelpers = {}
 
 function Helpers.assignProperties(instance: Instance, properties: { [string]: any }?): Instance
 	if properties == nil then
@@ -98,6 +98,7 @@ function Helpers.createPart(properties: { [string]: any }?): Part
 		TopSurface = Enum.SurfaceType.Smooth,
 		BottomSurface = Enum.SurfaceType.Smooth,
 	})
+
 	return Helpers.assignProperties(part, properties) :: Part
 end
 
@@ -131,10 +132,7 @@ local function floorAtLeastOne(value: number): number
 	return floored
 end
 
-local function applyRandomization(
-	attributes: HexagonAttributes,
-	random: Random
-): (number, number)
+local function applyRandomization(attributes: THexagonAttributes, random: Random): (number, number)
 	if not attributes.RandomizeEnabled then
 		return 0, 1
 	end
@@ -154,7 +152,7 @@ local function applyRandomization(
 end
 
 local function createHexBlock(
-	attributes: HexagonAttributes,
+	attributes: THexagonAttributes,
 	random: Random,
 	root: Instance,
 	centerXZ: Vector3
@@ -202,11 +200,7 @@ local function createHexBlock(
 	topPart.CFrame = CFrame.new(topCenter) * yawCFrame
 end
 
-local function createArray(
-	attributes: HexagonAttributes,
-	random: Random,
-	root: Instance
-)
+local function createArray(attributes: THexagonAttributes, random: Random, root: Instance)
 	local rows = floorAtLeastOne(attributes.ArrayRows)
 	local columns = floorAtLeastOne(attributes.ArrayColumns)
 	local spacingX = attributes.ArraySpacingX
@@ -238,10 +232,7 @@ local function createArray(
 	end
 end
 
-local function Generate(
-	parameters: GenerationFunctionParams<HexagonAttributes>,
-	targetContainer: GeneratedFolder
-)
+local function Generate(parameters: TGenerationParams<THexagonAttributes>, targetContainer: Instance)
 	local attributes = parameters.Attributes
 	local random = Random.new(os.time())
 
@@ -253,11 +244,9 @@ local function Generate(
 	createArray(attributes, random, root)
 end
 
-local Generator: GeneratorModuleDefinition<HexagonAttributes> = {
-	Attributes = defaultAttributes,
-	OnGenerate = function(parameters, targetContainer)
-		Generate(parameters, targetContainer)
-	end,
+local Generator: TGeneratorDefinition<THexagonAttributes> = {
+	Defaults = DEFAULTS,
+	Generate = Generate,
 }
 
-return Generator
+return table.freeze(Generator)

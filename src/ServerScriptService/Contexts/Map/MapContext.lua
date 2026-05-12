@@ -10,6 +10,7 @@ local Errors = require(script.Parent.Errors)
 local MapECSWorldService = require(script.Parent.Infrastructure.ECS.MapECSWorldService)
 local MapComponentRegistry = require(script.Parent.Infrastructure.ECS.MapComponentRegistry)
 local MapEntityFactory = require(script.Parent.Infrastructure.ECS.MapEntityFactory)
+local AuthoredMapLookupService = require(script.Parent.Infrastructure.Services.AuthoredMapLookupService)
 local RuntimeMapService = require(script.Parent.Infrastructure.Services.RuntimeMapService)
 
 local Catch = Result.Catch
@@ -31,6 +32,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Module = RuntimeMapService,
 		CacheAs = "_runtimeMapService",
 	},
+	{
+		Name = "AuthoredMapLookupService",
+		Module = AuthoredMapLookupService,
+		CacheAs = "_authoredMapLookupService",
+	},
 }
 
 local MapModules: BaseContext.TModuleLayers = {
@@ -43,6 +49,7 @@ local MapModules: BaseContext.TModuleLayers = {
 	`KnitInit()` and `KnitStart()` delegate shared context lifecycle into `BaseContext`.
 	`PrepareRuntimeMap()` and `CleanupRuntimeMap()` proxy the runtime map service.
 	`GetZoneInstance()`, `GetSpawnInstance()`, `GetBaseInstance()`, and `GetBaseAnchor()` expose the active map's discovered instances.
+	`GetLobbyInstance()`, `GetLobbySpawnInstance()`, `GetLobbySpawnCFrame()`, and `GetRunEntryCFrame()` expose authored session-space markers.
 	@server
 ]=]
 local MapContext = Knit.CreateService({
@@ -163,6 +170,61 @@ function MapContext:GetRuntimeMapInstance(): Result.Result<Model?>
 	return Catch(function()
 		return Ok(self._entityFactory:GetMapInstance())
 	end, "Map:GetRuntimeMapInstance")
+end
+
+--[=[
+	@within MapContext
+	Returns the authored lobby model, if one exists under `Workspace.Map.Lobby`.
+	@return Result.Result<Model?> -- The authored lobby model, if present.
+]=]
+function MapContext:GetLobbyInstance(): Result.Result<Model?>
+	return Catch(function()
+		return Ok(self._authoredMapLookupService:GetLobbyInstance())
+	end, "Map:GetLobbyInstance")
+end
+
+--[=[
+	@within MapContext
+	Returns the authored lobby spawn anchor, if one exists.
+	@return Result.Result<BasePart?> -- The authored lobby spawn anchor, if present.
+]=]
+function MapContext:GetLobbySpawnInstance(): Result.Result<BasePart?>
+	return Catch(function()
+		return Ok(self._authoredMapLookupService:GetLobbySpawnInstance())
+	end, "Map:GetLobbySpawnInstance")
+end
+
+--[=[
+	@within MapContext
+	Returns the authored lobby spawn CFrame.
+	@return Result.Result<CFrame> -- The authored lobby spawn CFrame.
+]=]
+function MapContext:GetLobbySpawnCFrame(): Result.Result<CFrame>
+	return Catch(function()
+		return self._authoredMapLookupService:GetLobbySpawnCFrame()
+	end, "Map:GetLobbySpawnCFrame")
+end
+
+--[=[
+	@within MapContext
+	Returns the authored run-entry anchor, if one exists.
+	@return Result.Result<BasePart?> -- The authored run-entry anchor, if present.
+]=]
+function MapContext:GetRunEntryInstance(): Result.Result<BasePart?>
+	return Catch(function()
+		return Ok(self._authoredMapLookupService:GetRunEntryInstance())
+	end, "Map:GetRunEntryInstance")
+end
+
+--[=[
+	@within MapContext
+	Returns the authored run-entry CFrame.
+	@return Result.Result<CFrame> -- The authored run-entry CFrame.
+]=]
+function MapContext:GetRunEntryCFrame(): Result.Result<CFrame>
+	return Catch(function()
+		return self._authoredMapLookupService:GetRunEntryCFrame()
+	end, "Map:GetRunEntryCFrame")
 end
 
 --[=[
