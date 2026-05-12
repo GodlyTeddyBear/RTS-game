@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Parallelizer = require(ReplicatedStorage.Packages.Parallelizer)
+local Promise = require(ReplicatedStorage.Packages.Promise)
 
 local Types = require(script.Types)
 local Validation = require(script.Validation)
@@ -13,10 +14,18 @@ export type TFieldType = Types.TFieldType
 export type TResultField = Types.TResultField
 export type TOperationDefinition = Types.TOperationDefinition
 export type TParallelQueryConfig = Types.TParallelQueryConfig
+export type TParallelQueryError = Types.TParallelQueryError
 export type TRunRequest = Types.TRunRequest
 export type TParallelQueryRunner = Types.TParallelQueryRunner
 
+type TDispatchHandle = Types.TDispatchHandle
 type TRegisteredOperation = Types.TRegisteredOperation
+
+type TFailureReport = {
+	TaskId: number,
+	Message: string,
+	Traceback: string?,
+}
 
 local WORKER_SCRIPT_NAME = "Worker"
 local WORKER_BOOTSTRAP_MODULE_NAME = "WorkerBootstrap"
@@ -114,6 +123,45 @@ local function _RequireOperationDefinitions(operationModules: { ModuleScript }):
 	return definitions
 end
 
+local function _BuildWorkerError(operationName: string, failureReports: { TFailureReport }): TParallelQueryError
+	local taskIds = table.create(#failureReports)
+	for index, failureReport in ipairs(failureReports) do
+		taskIds[index] = failureReport.TaskId
+	end
+
+	local firstFailure = failureReports[1]
+	local message = if #failureReports == 1
+		then firstFailure.Message
+		else (`ParallelQuery operation "{operationName}" failed in {#failureReports} tasks; first failure: {firstFailure.Message}`)
+
+	return {
+		Kind = "WorkerError",
+		OperationName = operationName,
+		Message = message,
+		TaskIds = taskIds,
+		Traceback = firstFailure.Traceback,
+	}
+end
+
+function ParallelQuery:_IncrementActiveRun(operationName: string)
+	local currentCount = self._activeRunCounts[operationName] or 0
+	self._activeRunCounts[operationName] = currentCount + 1
+end
+
+function ParallelQuery:_DecrementActiveRun(operationName: string)
+	local currentCount = self._activeRunCounts[operationName]
+	if currentCount == nil then
+		return
+	end
+
+	if currentCount <= 1 then
+		self._activeRunCounts[operationName] = nil
+		return
+	end
+
+	self._activeRunCounts[operationName] = currentCount - 1
+end
+
 --[=[
     Creates a managed `ParallelQuery` runner and registers every supplied operation module.
     @within ParallelQueryPackage
@@ -127,7 +175,6 @@ function ParallelQuery.new(config: TParallelQueryConfig): TParallelQueryRunner
 	local runtimeName = _BuildRuntimeName(config.Name)
 	local actorStorage = _CreateActorStorage(runtimeName, config.ActorParent)
 
-	-- Clone one self-contained worker template so each actor receives the same operation modules.
 	local workerTemplate = _CloneWorkerTemplate(config.Operations)
 	local coordinator = Parallelizer.CreateTaskCoordinator(workerTemplate, actorStorage, config.ActorCount)
 	workerTemplate:Destroy()
@@ -138,9 +185,9 @@ function ParallelQuery.new(config: TParallelQueryConfig): TParallelQueryRunner
 	self._actorStorage = actorStorage
 	self._coordinator = coordinator
 	self._operations = {}
+	self._activeRunCounts = {}
 	self._destroyed = false
 
-	-- Register every operation with the underlying task coordinator once at construction time.
 	for _, operationModule in ipairs(config.Operations) do
 		local definition = definitions[(require(operationModule) :: TOperationDefinition).Name]
 		local registeredOperation = {
@@ -171,6 +218,7 @@ function ParallelQuery:SetLocalMemory(operationName: string, sharedMemory: Share
 	local operation = self._operations[operationName]
 	assert(operation ~= nil, (`ParallelQuery operation "{operationName}" is not registered`))
 	assert(operation.CacheLocalMemory, (`ParallelQuery operation "{operationName}" did not enable CacheLocalMemory`))
+	assert((self._activeRunCounts[operationName] or 0) == 0, (`ParallelQuery:SetLocalMemory("{operationName}") cannot run while that operation is in flight`))
 	Validation.AssertSharedMemory(sharedMemory, operationName)
 
 	operation.LocalMemory = sharedMemory
@@ -181,10 +229,14 @@ end
     Dispatches one registered operation and decodes the flat callback payload into ordered row tables.
     @within ParallelQueryPackage
     @param operationName string -- Registered operation name.
-    @param request TRunRequest -- Dispatch options for work count, batching, arguments, and optional shared memory.
-    @param onComplete function -- Completion callback that receives decoded row tables.
+    @param request TRunRequest -- Dispatch options for work count, batching, arguments, and timeout.
+    @param onComplete function -- Completion callback that receives decoded row tables or a structured error.
 ]=]
-function ParallelQuery:Run(operationName: string, request: TRunRequest, onComplete: ({ [string]: any }) -> ())
+function ParallelQuery:Run(
+	operationName: string,
+	request: TRunRequest,
+	onComplete: ({ [string]: any }?, TParallelQueryError?) -> ()
+)
 	self:_AssertAlive()
 
 	local operation = self._operations[operationName]
@@ -194,28 +246,108 @@ function ParallelQuery:Run(operationName: string, request: TRunRequest, onComple
 
 	local workCount = request.WorkCount
 	if workCount == 0 then
-		onComplete({})
+		onComplete({}, nil)
 		return
 	end
 
 	local argumentsList = if request.Arguments ~= nil then request.Arguments else {}
 	Validation.AssertArguments(argumentsList, operationName)
 
-	-- Allow one-off local memory updates while keeping the explicit SetLocalMemory API for steady-state usage.
-	if request.LocalMemory ~= nil then
-		self:SetLocalMemory(operationName, request.LocalMemory)
-	elseif operation.CacheLocalMemory and operation.LocalMemory == nil then
+	if operation.CacheLocalMemory and operation.LocalMemory == nil then
 		error((`ParallelQuery operation "{operationName}" requires local memory before Run can be called`))
 	end
 
-	-- The vendored Parallelizer package assumes full batches, so pad to a safe count and trim on decode.
 	local batchSize = _ComputeBatchSize(workCount, self._actorCount, request.BatchSize)
 	local paddedWorkCount = math.ceil(workCount / batchSize) * batchSize
+	local failureReports = {} :: { TFailureReport }
+	local failureBindable = Instance.new("BindableEvent")
+	local failureConnection = failureBindable.Event:Connect(function(taskId: number, message: string, tracebackMessage: string?)
+		table.insert(failureReports, {
+			TaskId = taskId,
+			Message = message,
+			Traceback = tracebackMessage,
+		})
+	end)
 
-	self._coordinator:DispatchTask(operation.TaskObject, paddedWorkCount, batchSize, function(flattenedResults)
-		local rows = _BuildDecodedRows(operation.Schema, flattenedResults, workCount)
-		onComplete(rows)
-	end, false, workCount, table.unpack(argumentsList))
+	local settled = false
+	local cleanedUp = false
+	local dispatchHandle: TDispatchHandle? = nil
+	local timeoutThread: thread? = nil
+
+	self:_IncrementActiveRun(operationName)
+
+	local function cleanup()
+		if cleanedUp then
+			return
+		end
+
+		cleanedUp = true
+
+		if timeoutThread ~= nil then
+			task.cancel(timeoutThread)
+			timeoutThread = nil
+		end
+
+		failureConnection:Disconnect()
+		self:_DecrementActiveRun(operationName)
+	end
+
+	local function settle(rows: { [string]: any }?, err: TParallelQueryError?, cancelDispatch: boolean?)
+		if settled then
+			return
+		end
+
+		settled = true
+
+		if cancelDispatch == true and dispatchHandle ~= nil then
+			dispatchHandle:Cancel()
+		end
+
+		cleanup()
+		onComplete(rows, err)
+	end
+
+	if request.TimeoutSeconds ~= nil then
+		timeoutThread = task.delay(request.TimeoutSeconds, function()
+			settle(nil, {
+				Kind = "Timeout",
+				OperationName = operationName,
+				Message = (`ParallelQuery operation "{operationName}" timed out after {request.TimeoutSeconds} seconds`),
+				TimeoutSeconds = request.TimeoutSeconds,
+			}, true)
+		end)
+	end
+
+	dispatchHandle = self._coordinator:DispatchTask(operation.TaskObject, paddedWorkCount, batchSize, function(flattenedResults)
+		task.defer(function()
+			if settled then
+				return
+			end
+
+			if #failureReports > 0 then
+				settle(nil, _BuildWorkerError(operationName, failureReports), false)
+				return
+			end
+
+			local rows = _BuildDecodedRows(operation.Schema, flattenedResults, workCount)
+			settle(rows, nil, false)
+		end)
+	end, false, workCount, failureBindable, table.unpack(argumentsList))
+end
+
+function ParallelQuery:RunAsync(operationName: string, request: TRunRequest)
+	self:_AssertAlive()
+
+	return Promise.new(function(resolve, reject)
+		self:Run(operationName, request, function(rows, err)
+			if err ~= nil then
+				reject(err)
+				return
+			end
+
+			resolve(rows)
+		end)
+	end)
 end
 
 --[=[
@@ -232,6 +364,7 @@ function ParallelQuery:Destroy()
 	self._actorStorage:Destroy()
 
 	table.clear(self._operations)
+	table.clear(self._activeRunCounts)
 end
 
 function ParallelQuery:_AssertAlive()

@@ -37,6 +37,13 @@ export type TOperationDefinition = ParallelQuery.TOperationDefinition
 export type TParallelQueryConfig = ParallelQuery.TParallelQueryConfig
 
 --[=[
+    @type TParallelQueryError
+    @within ParallelQuery
+    Structured failure payload emitted by `Run` and `RunAsync`.
+]=]
+export type TParallelQueryError = ParallelQuery.TParallelQueryError
+
+--[=[
     @type TRunRequest
     @within ParallelQuery
     Per-run dispatch options for one registered operation.

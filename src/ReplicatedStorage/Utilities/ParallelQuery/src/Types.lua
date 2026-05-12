@@ -28,6 +28,15 @@ export type TOperationDefinition = {
 	InitialLocalMemory: SharedTable?,
 }
 
+export type TParallelQueryError = {
+	Kind: "WorkerError" | "Timeout",
+	OperationName: string,
+	Message: string,
+	TaskIds: { number }?,
+	TimeoutSeconds: number?,
+	Traceback: string?,
+}
+
 export type TParallelQueryConfig = {
 	Name: string?,
 	ActorCount: number,
@@ -39,7 +48,12 @@ export type TRunRequest = {
 	WorkCount: number,
 	BatchSize: number?,
 	Arguments: { any }?,
+	TimeoutSeconds: number?,
 	LocalMemory: SharedTable?,
+}
+
+export type TDispatchHandle = {
+	Cancel: (self: TDispatchHandle) -> (),
 }
 
 export type TTaskObject = {
@@ -59,7 +73,7 @@ export type TTaskCoordinator = {
 		callback: (any) -> (),
 		returnMergedRawBuffer: boolean?,
 		...any
-	) -> (),
+	) -> TDispatchHandle,
 	Destroy: (self: TTaskCoordinator) -> (),
 }
 
@@ -76,14 +90,20 @@ export type TParallelQueryRunner = {
 	_actorStorage: Folder,
 	_coordinator: TTaskCoordinator,
 	_operations: { [string]: TRegisteredOperation },
+	_activeRunCounts: { [string]: number },
 	_destroyed: boolean,
 
 	Run: (
 		self: TParallelQueryRunner,
 		operationName: string,
 		request: TRunRequest,
-		onComplete: ({ [string]: any }) -> ()
+		onComplete: ({ [string]: any }?, TParallelQueryError?) -> ()
 	) -> (),
+	RunAsync: (
+		self: TParallelQueryRunner,
+		operationName: string,
+		request: TRunRequest
+	) -> any,
 	SetLocalMemory: (self: TParallelQueryRunner, operationName: string, sharedMemory: SharedTable) -> (),
 	Destroy: (self: TParallelQueryRunner) -> (),
 }

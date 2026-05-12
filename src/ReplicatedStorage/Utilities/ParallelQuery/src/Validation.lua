@@ -123,8 +123,11 @@ function Validation.AssertRunRequest(request: TRunRequest, operationName: string
 	if request.Arguments ~= nil then
 		assert(type(request.Arguments) == "table", (`ParallelQuery:Run("{operationName}") Arguments must be an array when provided`))
 	end
+	if request.TimeoutSeconds ~= nil then
+		assert(type(request.TimeoutSeconds) == "number" and request.TimeoutSeconds > 0, (`ParallelQuery:Run("{operationName}") TimeoutSeconds must be a positive number`))
+	end
 	if request.LocalMemory ~= nil then
-		assert(typeof(request.LocalMemory) == "SharedTable", (`ParallelQuery:Run("{operationName}") LocalMemory must be a SharedTable`))
+		error((`ParallelQuery:Run("{operationName}") no longer accepts request.LocalMemory; call SetLocalMemory("{operationName}", sharedMemory) before running cached-memory operations`), 2)
 	end
 end
 

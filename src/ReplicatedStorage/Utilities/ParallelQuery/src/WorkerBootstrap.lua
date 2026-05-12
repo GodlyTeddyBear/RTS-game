@@ -58,6 +58,14 @@ local function _BuildResponseRow(schema, defaults, row)
 	return values
 end
 
+local function _ReportFailure(failureBindable: BindableEvent?, taskId: number, message: string, tracebackMessage: string)
+	if failureBindable == nil then
+		return
+	end
+
+	failureBindable:Fire(taskId, message, tracebackMessage)
+end
+
 local Bootstrap = {}
 
 function Bootstrap.RegisterOperations(workerScript: Script)
@@ -78,12 +86,31 @@ function Bootstrap.RegisterOperations(workerScript: Script)
 		local schema = definition.ResultSchema
 		local defaults = _BuildDefaults(schema)
 
-		Parallelizer.ListenToTask(actor, definition.Name, function(taskId: number, memory: SharedTable?, logicalWorkCount: number, ...)
+		Parallelizer.ListenToTask(actor, definition.Name, function(
+			taskId: number,
+			memory: SharedTable?,
+			logicalWorkCount: number,
+			failureBindable: BindableEvent?,
+			...
+		)
 			if taskId > logicalWorkCount then
 				return defaults
 			end
 
-			local row = definition.Execute(taskId, memory, ...)
+			local errorMessage: string? = nil
+			local ok, rowOrTraceback = xpcall(function()
+				return definition.Execute(taskId, memory, ...)
+			end, function(err)
+				errorMessage = tostring(err)
+				return debug.traceback(errorMessage, 2)
+			end)
+
+			if not ok then
+				_ReportFailure(failureBindable, taskId, errorMessage or tostring(rowOrTraceback), rowOrTraceback)
+				return defaults
+			end
+
+			local row = rowOrTraceback
 			assert(type(row) == "table", (`ParallelQuery operation "{definition.Name}" must return a table row`))
 			return _BuildResponseRow(schema, defaults, row)
 		end, definition.CacheLocalMemory == true)
