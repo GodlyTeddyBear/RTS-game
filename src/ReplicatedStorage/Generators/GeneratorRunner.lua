@@ -1,8 +1,5 @@
 --!strict
 
-local RunService = game:GetService("RunService")
-local ServerStorage = game:GetService("ServerStorage")
-
 local DEFAULT_REFERENCE_NAME = "GeneratorModule"
 
 export type TGenerationParams<T> = {
@@ -25,13 +22,9 @@ export type TRunOptions = {
 
 local GeneratorRunner = {}
 
-local function _AssertServer()
-	assert(RunService:IsServer(), "[GeneratorRunner] Generator modules can only run on the server")
-end
-
 local function _GetGeneratorsFolder(): Folder
-	local generatorsFolder = ServerStorage:FindFirstChild("Generators")
-	assert(generatorsFolder ~= nil and generatorsFolder:IsA("Folder"), "[GeneratorRunner] ServerStorage.Generators is missing")
+	local generatorsFolder = script.Parent
+	assert(generatorsFolder:IsA("Folder"), "[GeneratorRunner] GeneratorRunner must live under a Generators folder")
 	return generatorsFolder
 end
 
@@ -122,8 +115,6 @@ end
 local function _Pause(_self: any) end
 
 function GeneratorRunner.RequireGeneratorModule(generatorModule: ModuleScript): TGeneratorDefinition<any>
-	_AssertServer()
-
 	local generatorsFolder = _GetGeneratorsFolder()
 	assert(
 		generatorModule:IsDescendantOf(generatorsFolder),
@@ -144,8 +135,6 @@ function GeneratorRunner.RequireGeneratorModule(generatorModule: ModuleScript): 
 end
 
 function GeneratorRunner.ResolveGeneratorModule(sourceInstance: Instance, referenceName: string?): ModuleScript
-	_AssertServer()
-
 	local resolvedReferenceName = referenceName or DEFAULT_REFERENCE_NAME
 	local referenceValue = sourceInstance:FindFirstChild(resolvedReferenceName)
 	assert(
