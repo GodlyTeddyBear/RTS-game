@@ -385,11 +385,11 @@ local function createHillBlock(attributes: THillAttributes, random: Random, root
 				West = 1,
 			},
 			HillCornerSE = {
-				South = 1,
+				South = -1,
 				East = 1,
 			},
 			HillCornerSW = {
-				South = -1,
+				South = 1,
 				West = -1,
 			},
 		}

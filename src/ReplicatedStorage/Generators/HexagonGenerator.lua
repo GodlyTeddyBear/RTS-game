@@ -1,6 +1,6 @@
 --!strict
 
-local InsertService = game:GetService("InsertService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GeneratorRunner = require(script.Parent.GeneratorRunner)
 
@@ -21,19 +21,18 @@ type TGeneratorHelpers = {
 	createFolder: (properties: { [string]: any }?) -> Folder,
 	createModle: (properties: { [string]: any }?) -> Model,
 	createPart: (properties: { [string]: any }?) -> Part,
-	createMeshPartFromMeshId: (
-		meshId: string,
-		properties: { [string]: any }?,
-		collisionFidelity: Enum.CollisionFidelity?,
-		renderFidelity: Enum.RenderFidelity?
-	) -> MeshPart,
+	createHexagonPart: (properties: { [string]: any }?) -> BasePart,
 }
 
 type TRunOptions = GeneratorRunner.TRunOptions
 
+local DEFAULT_RANDOM_SEED = 12345
+local ARRAY_ROOT_NAME = "HexagonArray"
+local ASSET_ROOT_NAME = "__Assets__"
+local HEXAGON_ASSET_NAME = "BaseHexagon"
+
 local DEFAULTS = table.freeze({
-	MeshId = "rbxassetid://0",
-	RandomSeed = 12345,
+	RandomSeed = DEFAULT_RANDOM_SEED,
 	BottomColor = Color3.fromRGB(86, 125, 70),
 	TopColor = Color3.fromRGB(110, 165, 90),
 	BottomSizeXZ = 6,
@@ -108,19 +107,22 @@ function Helpers.createPart(properties: { [string]: any }?): Part
 	return Helpers.assignProperties(part, properties) :: Part
 end
 
-function Helpers.createMeshPartFromMeshId(
-	meshId: string,
-	properties: { [string]: any }?,
-	collisionFidelity: Enum.CollisionFidelity?,
-	renderFidelity: Enum.RenderFidelity?
-): MeshPart
-	local meshPart = InsertService:CreateMeshPartAsync(
-		meshId,
-		collisionFidelity or Enum.CollisionFidelity.Default,
-		renderFidelity or Enum.RenderFidelity.Automatic
-	)
-	meshPart.Anchored = true
-	return Helpers.assignProperties(meshPart, properties) :: MeshPart
+local function resolveHexagonAsset(): BasePart
+	local assetRoot = ReplicatedStorage:FindFirstChild(ASSET_ROOT_NAME)
+	assert(assetRoot ~= nil and assetRoot:IsA("Folder"), "[HexagonGenerator] ReplicatedStorage.__Assets__ is missing")
+
+	local hexagonAsset = assetRoot:FindFirstChild(HEXAGON_ASSET_NAME, true)
+	assert(hexagonAsset ~= nil, "[HexagonGenerator] __Assets__.BaseHexagon is missing")
+	assert(hexagonAsset:IsA("BasePart"), "[HexagonGenerator] __Assets__.BaseHexagon must be a BasePart")
+
+	return hexagonAsset
+end
+
+function Helpers.createHexagonPart(properties: { [string]: any }?): BasePart
+	local hexagonPart = resolveHexagonAsset():Clone()
+	hexagonPart.Anchored = true
+	hexagonPart.CanCollide = false
+	return Helpers.assignProperties(hexagonPart, properties) :: BasePart
 end
 
 local function clampPositive(value: number, fallback: number): number
@@ -157,12 +159,7 @@ local function applyRandomization(attributes: THexagonAttributes, random: Random
 	return yawDeg, scale
 end
 
-local function createHexBlock(
-	attributes: THexagonAttributes,
-	random: Random,
-	root: Instance,
-	centerXZ: Vector3
-)
+local function createHexBlock(attributes: THexagonAttributes, random: Random, root: Instance, centerXZ: Vector3)
 	local yawDeg, scale = applyRandomization(attributes, random)
 	local yawCFrame = CFrame.fromAxisAngle(Vector3.yAxis, math.rad(yawDeg))
 	local useTopHexagon = attributes.UseTopHexagon
@@ -170,7 +167,7 @@ local function createHexBlock(
 	local bottomHeight = clampPositive(attributes.BottomHeight * scale, 1)
 	local bottomSizeXZ = clampPositive(attributes.BottomSizeXZ * scale, 1)
 
-	local bottomPart = Helpers.createMeshPartFromMeshId(attributes.MeshId, {
+	local bottomPart = Helpers.createHexagonPart({
 		Name = "HexBottom",
 		Parent = root,
 		Color = attributes.BottomColor,
@@ -192,7 +189,7 @@ local function createHexBlock(
 
 	local topHeight = clampPositive(attributes.TopHeight * scale, 0.5)
 	local topScaleXZ = math.clamp(attributes.TopScaleXZ, 0.01, 1)
-	local topPart = Helpers.createMeshPartFromMeshId(attributes.MeshId, {
+	local topPart = Helpers.createHexagonPart({
 		Name = "HexTop",
 		Parent = root,
 		Color = attributes.TopColor,
@@ -200,11 +197,7 @@ local function createHexBlock(
 		Material = Enum.Material.LeafyGrass,
 		MaterialVariant = "Grass2",
 	})
-	local targetTopSize = Vector3.new(
-		targetBottomSize.X * topScaleXZ,
-		topHeight,
-		targetBottomSize.Z * topScaleXZ
-	)
+	local targetTopSize = Vector3.new(targetBottomSize.X * topScaleXZ, topHeight, targetBottomSize.Z * topScaleXZ)
 	local topCenter = Vector3.new(centerXZ.X, groundY + targetBottomSize.Y + targetTopSize.Y * 0.5, centerXZ.Z)
 
 	topPart.Size = targetTopSize
@@ -220,6 +213,22 @@ local function resolveArrayDimensions(attributes: THexagonAttributes, random: Ra
 	end
 
 	return random:NextInteger(1, rows), random:NextInteger(1, columns)
+end
+
+local function destroyExistingArrayRoots(targetContainer: Instance)
+	for _, child in ipairs(targetContainer:GetChildren()) do
+		if child.Name == ARRAY_ROOT_NAME then
+			child:Destroy()
+		end
+	end
+end
+
+local function resolveRunSeed(attributes: THexagonAttributes): number
+	if attributes.RandomSeed ~= DEFAULT_RANDOM_SEED then
+		return attributes.RandomSeed
+	end
+
+	return os.time() + math.floor(os.clock() * 1000)
 end
 
 local function createArray(attributes: THexagonAttributes, random: Random, root: Instance)
@@ -255,10 +264,12 @@ end
 
 local function Generate(parameters: TGenerationParams<THexagonAttributes>, targetContainer: Instance)
 	local attributes = parameters.Attributes
-	local random = Random.new(attributes.RandomSeed)
+	local random = Random.new(resolveRunSeed(attributes))
+
+	destroyExistingArrayRoots(targetContainer)
 
 	local root = Helpers.createFolder({
-		Name = "HexagonArray",
+		Name = ARRAY_ROOT_NAME,
 		Parent = targetContainer,
 	})
 
@@ -269,14 +280,15 @@ local Generator: TGeneratorDefinition<THexagonAttributes> & {
 	Attributes: THexagonAttributes,
 	OnGenerate: (parameters: TGenerationParams<THexagonAttributes>, targetContainer: Instance) -> (),
 	Run: (sourceInstance: Instance, targetContainer: Instance, options: TRunOptions?) -> { [string]: any },
-} = {
-	Defaults = DEFAULTS,
-	Generate = Generate,
-	Attributes = DEFAULTS,
-	OnGenerate = Generate,
-	Run = function(sourceInstance: Instance, targetContainer: Instance, options: TRunOptions?)
-		return GeneratorRunner.RunGeneratorModule(script, sourceInstance, targetContainer, options)
-	end,
-}
+} =
+	{
+		Defaults = DEFAULTS,
+		Generate = Generate,
+		Attributes = DEFAULTS,
+		OnGenerate = Generate,
+		Run = function(sourceInstance: Instance, targetContainer: Instance, options: TRunOptions?)
+			return GeneratorRunner.RunGeneratorModule(script, sourceInstance, targetContainer, options)
+		end,
+	}
 
 return table.freeze(Generator)

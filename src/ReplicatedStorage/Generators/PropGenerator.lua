@@ -258,7 +258,11 @@ function PropGenerator.Generate(parameters: TGenerationParams<TPropAttributes>, 
 	end
 end
 
-function PropGenerator.Run(sourceInstance: Instance, targetContainer: Instance, options: TRunOptions?): { [string]: any }
+function PropGenerator.Run(
+	sourceInstance: Instance,
+	targetContainer: Instance,
+	options: TRunOptions?
+): { [string]: any }
 	return GeneratorRunner.RunGeneratorModule(script, sourceInstance, targetContainer, options)
 end
 
@@ -266,13 +270,14 @@ local Generator: TGeneratorDefinition<TPropAttributes> & {
 	Attributes: TPropAttributes,
 	OnGenerate: (parameters: TGenerationParams<TPropAttributes>, targetContainer: Instance) -> (),
 	Run: (sourceInstance: Instance, targetContainer: Instance, options: TRunOptions?) -> { [string]: any },
-} = {
-	Defaults = DEFAULTS,
-	Generate = PropGenerator.Generate,
-	Attributes = DEFAULTS,
-	OnGenerate = PropGenerator.Generate,
-	Run = PropGenerator.Run,
-}
+} =
+	{
+		Defaults = DEFAULTS,
+		Generate = PropGenerator.Generate,
+		Attributes = DEFAULTS,
+		OnGenerate = PropGenerator.Generate,
+		Run = PropGenerator.Run,
+	}
 
 -- Helpers
 function _CreatePatchRoot(targetContainer: Instance): Folder
@@ -380,9 +385,7 @@ end
 function _CalculateTargetCount(categoryRuntime: TCategoryRuntime, patchArea: number, baseSpacing: number): number
 	local spacing = math.max(baseSpacing, MIN_SPACING)
 	local basePlacementCount = patchArea / (spacing * spacing)
-	local scaledCount = basePlacementCount
-		* categoryRuntime.Settings.DensityScale
-		* categoryRuntime.EffectiveDensity
+	local scaledCount = basePlacementCount * categoryRuntime.Settings.DensityScale * categoryRuntime.EffectiveDensity
 
 	if scaledCount <= 0 then
 		return 0
@@ -419,16 +422,18 @@ function _GenerateCategory(
 				parameters:Pause()
 			end
 
-			if _TryPlaceAsset(
-				random,
-				categoryRuntime.Folder.Parent :: Folder,
-				boundsCenter,
-				boundsSize,
-				attributes,
-				categoryRuntime,
-				hitQueryOptions,
-				occupiedEntries
-			) then
+			if
+				_TryPlaceAsset(
+					random,
+					categoryRuntime.Folder.Parent :: Folder,
+					boundsCenter,
+					boundsSize,
+					attributes,
+					categoryRuntime,
+					hitQueryOptions,
+					occupiedEntries
+				)
+			then
 				placed = true
 				break
 			end
@@ -468,18 +473,10 @@ function _TryPlaceAsset(
 		return false
 	end
 
-	local footprint, clearanceSize, occupiedRadius = _BuildPlacementFootprint(
-		cloneModel,
-		attributes.BaseSpacing,
-		categoryRuntime.Settings.SpacingScale
-	)
-	local validationOptions = _BuildValidationOptions(
-		patchRoot,
-		footprint,
-		clearanceSize,
-		occupiedRadius,
-		occupiedEntries
-	)
+	local footprint, clearanceSize, occupiedRadius =
+		_BuildPlacementFootprint(cloneModel, attributes.BaseSpacing, categoryRuntime.Settings.SpacingScale)
+	local validationOptions =
+		_BuildValidationOptions(patchRoot, footprint, clearanceSize, occupiedRadius, occupiedEntries)
 
 	-- Ask PlacementPlus to build and validate the grounded candidate before committing the clone to the patch root.
 	local placementResult = PlacementPlus.ResolvePlacementCandidate({
