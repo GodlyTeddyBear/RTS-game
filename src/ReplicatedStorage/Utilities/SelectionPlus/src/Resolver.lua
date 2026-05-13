@@ -9,79 +9,127 @@ local Validation = require(script.Parent.Validation)
 type TResolvedSelectionTarget = Types.TResolvedSelectionTarget
 type TSelectionResolverOptions = Types.TSelectionResolverOptions
 
---[=[
-    @class SelectionPlusResolver
-    Resolves raycast hits and direct instances into normalized `SelectionPlus` targets.
-    @client
-]=]
 local Resolver = {}
 
 local DEFAULT_RAY_LENGTH = 1000
 
-local _ResolveTargetFromInstance
-local _ResolveRoot
-local _ResolveAdornee
-local _ResolveWorldPosition
-local _ResolveModel
-local _ResolveBounds
-local _ResolveInstanceWorldPosition
-
---[=[
-    Resolves a target from either an instance or a pre-resolved target payload.
-    @within SelectionPlusResolver
-    @param target Instance | TResolvedSelectionTarget? -- Value to normalize.
-    @param options TSelectionResolverOptions? -- Resolver options.
-    @return TResolvedSelectionTarget? -- Resolved target, or `nil` when no valid target is available.
-]=]
-function Resolver.ResolveTarget(
-	target: (Instance | TResolvedSelectionTarget)?,
-	options: TSelectionResolverOptions?
-): TResolvedSelectionTarget?
-	if target == nil then
+local function _ResolveInstanceWorldPosition(instance: Instance?): Vector3?
+	if instance == nil then
 		return nil
 	end
 
-	if Validation.IsResolvedTarget(target) then
-		local resolvedTarget = target :: TResolvedSelectionTarget
-		Validation.AssertResolvedTarget(resolvedTarget)
-		return resolvedTarget
+	if instance:IsA("Attachment") then
+		return instance.WorldPosition
 	end
 
-	if typeof(target) ~= "Instance" then
-		return nil
+	if instance:IsA("BasePart") then
+		return instance.Position
 	end
 
-	return _ResolveTargetFromInstance(target, nil, options)
+	if instance:IsA("Model") then
+		return ModelPlus.GetCenterPosition(instance)
+	end
+
+	return nil
 end
 
---[=[
-    Resolves a target from a camera screen point using `SpatialQuery.Raycast`.
-    @within SelectionPlusResolver
-    @param camera Camera -- Camera used to produce the cursor ray.
-    @param screenPoint Vector2 -- Viewport-space cursor position.
-    @param options TSelectionResolverOptions? -- Resolver options.
-    @return TResolvedSelectionTarget? -- Resolved target, or `nil` when the ray hits nothing valid.
-]=]
-function Resolver.ResolveTargetFromScreenPoint(
-	camera: Camera,
-	screenPoint: Vector2,
+local function _ResolveRoot(
+	hitInstance: Instance,
+	hit: RaycastResult?,
 	options: TSelectionResolverOptions?
-): TResolvedSelectionTarget?
-	local rayLength = if options ~= nil and options.RayLength ~= nil then options.RayLength else DEFAULT_RAY_LENGTH
-	if rayLength <= 0 then
-		return nil
+): Instance?
+	if options ~= nil and options.ResolveRoot ~= nil then
+		return options.ResolveRoot(hitInstance, hit)
 	end
 
-	local ray = camera:ViewportPointToRay(screenPoint.X, screenPoint.Y, 0)
-	local hit = SpatialQuery.Raycast(ray.Origin, ray.Direction * rayLength, if options ~= nil then options.QueryOptions else nil)
-	if hit == nil then
-		return nil
+	local modelAncestor = hitInstance:FindFirstAncestorWhichIsA("Model")
+	if modelAncestor ~= nil then
+		return modelAncestor
 	end
 
-	return _ResolveTargetFromInstance(hit.Instance, hit, options)
+	if hitInstance:IsA("BasePart") then
+		return hitInstance
+	end
+
+	return hitInstance:FindFirstAncestorWhichIsA("BasePart")
 end
 
-_ResolveTargetFromInstance = function(
+local function _ResolveAdornee(root: Instance, hit: RaycastResult?, options: TSelectionResolverOptions?): Instance?
+	if options ~= nil and options.ResolveAdornee ~= nil then
+		return options.ResolveAdornee(root, hit)
+	end
+
+	local selector = if options ~= nil then options.AdorneeSelector else nil
+	if selector ~= nil and selector ~= "" then
+		local queriedAdornee = Query.first(root, selector)
+		if queriedAdornee ~= nil and (queriedAdornee:IsA("Model") or queriedAdornee:IsA("BasePart")) then
+			return queriedAdornee
+		end
+	end
+
+	if root:IsA("Model") or root:IsA("BasePart") then
+		return root
+	end
+
+	return nil
+end
+
+local function _ResolveWorldPosition(
+	root: Instance,
+	model: Model?,
+	hit: RaycastResult?,
+	options: TSelectionResolverOptions?
+): Vector3?
+	if options ~= nil and options.ResolveWorldPosition ~= nil then
+		return options.ResolveWorldPosition(root, hit)
+	end
+
+	local selector = if options ~= nil then options.WorldPositionSelector else nil
+	if selector ~= nil and selector ~= "" then
+		local queriedAnchor = Query.first(root, selector)
+		local queriedPosition = _ResolveInstanceWorldPosition(queriedAnchor)
+		if queriedPosition ~= nil then
+			return queriedPosition
+		end
+	end
+
+	if model ~= nil then
+		return ModelPlus.GetCenterPosition(model)
+	end
+
+	local rootPosition = _ResolveInstanceWorldPosition(root)
+	if rootPosition ~= nil then
+		return rootPosition
+	end
+
+	if hit ~= nil then
+		return hit.Position
+	end
+
+	return nil
+end
+
+local function _ResolveModel(root: Instance): Model?
+	if root:IsA("Model") then
+		return root
+	end
+
+	return root:FindFirstAncestorWhichIsA("Model")
+end
+
+local function _ResolveBounds(root: Instance, model: Model?): (CFrame?, Vector3?)
+	if model ~= nil then
+		return ModelPlus.GetBounds(model)
+	end
+
+	if root:IsA("BasePart") then
+		return root.CFrame, root.Size
+	end
+
+	return nil, nil
+end
+
+local function _ResolveTargetFromInstance(
 	hitInstance: Instance,
 	hit: RaycastResult?,
 	options: TSelectionResolverOptions?
@@ -117,116 +165,44 @@ _ResolveTargetFromInstance = function(
 	return resolvedTarget
 end
 
-_ResolveRoot = function(hitInstance: Instance, hit: RaycastResult?, options: TSelectionResolverOptions?): Instance?
-	if options ~= nil and options.ResolveRoot ~= nil then
-		return options.ResolveRoot(hitInstance, hit)
-	end
-
-	local modelAncestor = hitInstance:FindFirstAncestorWhichIsA("Model")
-	if modelAncestor ~= nil then
-		return modelAncestor
-	end
-
-	if hitInstance:IsA("BasePart") then
-		return hitInstance
-	end
-
-	return hitInstance:FindFirstAncestorWhichIsA("BasePart")
-end
-
-_ResolveAdornee = function(root: Instance, hit: RaycastResult?, options: TSelectionResolverOptions?): Instance?
-	if options ~= nil and options.ResolveAdornee ~= nil then
-		return options.ResolveAdornee(root, hit)
-	end
-
-	local selector = if options ~= nil then options.AdorneeSelector else nil
-	if selector ~= nil and selector ~= "" then
-		local queriedAdornee = Query.first(root, selector)
-		if queriedAdornee ~= nil and (queriedAdornee:IsA("Model") or queriedAdornee:IsA("BasePart")) then
-			return queriedAdornee
-		end
-	end
-
-	if root:IsA("Model") or root:IsA("BasePart") then
-		return root
-	end
-
-	return nil
-end
-
-_ResolveWorldPosition = function(
-	root: Instance,
-	model: Model?,
-	hit: RaycastResult?,
+function Resolver.ResolveTarget(
+	target: (Instance | TResolvedSelectionTarget)?,
 	options: TSelectionResolverOptions?
-): Vector3?
-	if options ~= nil and options.ResolveWorldPosition ~= nil then
-		return options.ResolveWorldPosition(root, hit)
-	end
-
-	local selector = if options ~= nil then options.WorldPositionSelector else nil
-	if selector ~= nil and selector ~= "" then
-		local queriedAnchor = Query.first(root, selector)
-		local queriedPosition = _ResolveInstanceWorldPosition(queriedAnchor)
-		if queriedPosition ~= nil then
-			return queriedPosition
-		end
-	end
-
-	if model ~= nil then
-		return ModelPlus.GetCenterPosition(model)
-	end
-
-	local rootPosition = _ResolveInstanceWorldPosition(root)
-	if rootPosition ~= nil then
-		return rootPosition
-	end
-
-	if hit ~= nil then
-		return hit.Position
-	end
-
-	return nil
-end
-
-_ResolveModel = function(root: Instance): Model?
-	if root:IsA("Model") then
-		return root
-	end
-
-	return root:FindFirstAncestorWhichIsA("Model")
-end
-
-_ResolveBounds = function(root: Instance, model: Model?): (CFrame?, Vector3?)
-	if model ~= nil then
-		return ModelPlus.GetBounds(model)
-	end
-
-	if root:IsA("BasePart") then
-		return root.CFrame, root.Size
-	end
-
-	return nil, nil
-end
-
-_ResolveInstanceWorldPosition = function(instance: Instance?): Vector3?
-	if instance == nil then
+): TResolvedSelectionTarget?
+	if target == nil then
 		return nil
 	end
 
-	if instance:IsA("Attachment") then
-		return instance.WorldPosition
+	if Validation.IsResolvedTarget(target) then
+		local resolvedTarget = target :: TResolvedSelectionTarget
+		Validation.AssertResolvedTarget(resolvedTarget)
+		return resolvedTarget
 	end
 
-	if instance:IsA("BasePart") then
-		return instance.Position
+	if typeof(target) ~= "Instance" then
+		return nil
 	end
 
-	if instance:IsA("Model") then
-		return ModelPlus.GetCenterPosition(instance)
+	return _ResolveTargetFromInstance(target, nil, options)
+end
+
+function Resolver.ResolveTargetFromScreenPoint(
+	camera: Camera,
+	screenPoint: Vector2,
+	options: TSelectionResolverOptions?
+): TResolvedSelectionTarget?
+	local rayLength = if options ~= nil and options.RayLength ~= nil then options.RayLength else DEFAULT_RAY_LENGTH
+	if rayLength <= 0 then
+		return nil
 	end
 
-	return nil
+	local ray = camera:ViewportPointToRay(screenPoint.X, screenPoint.Y, 0)
+	local hit = SpatialQuery.Raycast(ray.Origin, ray.Direction * rayLength, if options ~= nil then options.QueryOptions else nil)
+	if hit == nil then
+		return nil
+	end
+
+	return _ResolveTargetFromInstance(hit.Instance, hit, options)
 end
 
 return table.freeze(Resolver)

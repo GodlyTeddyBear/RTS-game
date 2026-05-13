@@ -45,6 +45,13 @@ export type TRadiusConfig = SelectionPlus.TRadiusConfig
 export type TSelectionRequest = SelectionPlus.TSelectionRequest
 
 --[=[
+    @type TSelectionSetRequest
+    @within SelectionPlus
+    Multi-target request consumed by `SetSelectionSet`.
+]=]
+export type TSelectionSetRequest = SelectionPlus.TSelectionSetRequest
+
+--[=[
     @type TResolvedSelectionTarget
     @within SelectionPlus
     Normalized selection target resolved from either a hit or a direct instance.
@@ -64,5 +71,33 @@ export type TSelectionHandle = SelectionPlus.TSelectionHandle
     Stateful selection manager that owns active channels and cleanup.
 ]=]
 export type TSelectionManager = SelectionPlus.TSelectionManager
+
+--[=[
+    @type TSelectionSnapshot
+    @within SelectionPlus
+    Immutable selection snapshot for one channel.
+]=]
+export type TSelectionSnapshot = SelectionPlus.TSelectionSnapshot
+
+--[=[
+    @type TSelectionHandleState
+    @within SelectionPlus
+    Enum item from `SelectionPlus.HandleState`.
+]=]
+export type TSelectionHandleState = SelectionPlus.TSelectionHandleState
+
+--[=[
+    @type TSelectionMode
+    @within SelectionPlus
+    Enum item from `SelectionPlus.SelectionMode`.
+]=]
+export type TSelectionMode = SelectionPlus.TSelectionMode
+
+--[=[
+    @type TInvalidationReason
+    @within SelectionPlus
+    Enum item from `SelectionPlus.InvalidationReason`.
+]=]
+export type TInvalidationReason = SelectionPlus.TInvalidationReason
 
 return SelectionPlus

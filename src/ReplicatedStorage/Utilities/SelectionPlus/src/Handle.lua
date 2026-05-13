@@ -2,111 +2,162 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local StateMachine = require(ReplicatedStorage.Utilities.StateMachine)
 
+local Enums = require(script.Parent.Enums)
+local Policies = require(script.Parent.Policies)
 local Types = require(script.Parent.Types)
-local Validation = require(script.Parent.Validation)
 local Visuals = require(script.Parent.Visuals)
 
-type TResolvedSelectionTarget = Types.TResolvedSelectionTarget
+type TInvalidationReason = Types.TInvalidationReason
 type TSelectionHandle = Types.TSelectionHandle
-type TSelectionRequest = Types.TSelectionRequest
-type TSelectionState = Types.TSelectionState
+type TSelectionHandleState = Types.TSelectionHandleState
+type TSelectionSnapshot = Types.TSelectionSnapshot
 
---[=[
-    @class SelectionPlusHandle
-    Owns the visuals and lifecycle state for one active selection channel.
-    @client
-]=]
+local STATE_MACHINE_KEY = "StateMachine"
+local VISUAL_SCOPE_NAME = "Visuals"
+local INVALIDATION_SCOPE_NAME = "Invalidation"
+local CHANNEL_FOLDER_KEY = "ChannelFolder"
+
+local TRANSITIONS: { [TSelectionHandleState]: { [TSelectionHandleState]: boolean } } = {
+	[Enums.HandleState.Active] = {
+		[Enums.HandleState.Cleared] = true,
+		[Enums.HandleState.Destroyed] = true,
+	},
+	[Enums.HandleState.Cleared] = {
+		[Enums.HandleState.Destroyed] = true,
+	},
+	[Enums.HandleState.Destroyed] = {},
+}
+
 local Handle = {}
 Handle.__index = Handle
 
-local TRANSITIONS: { [TSelectionState]: { [TSelectionState]: boolean } } = {
-	Idle = {
-		Active = true,
-		Destroyed = true,
-	},
-	Active = {
-		Cleared = true,
-		Destroyed = true,
-	},
-	Cleared = {
-		Destroyed = true,
-	},
-	Destroyed = {},
-}
-
---[=[
-    Creates a handle for one active channel selection and its visuals.
-    @within SelectionPlusHandle
-    @param channelName string -- Owning selection channel.
-    @param target TResolvedSelectionTarget -- Resolved selection target.
-    @param request TSelectionRequest -- Normalized selection request.
-    @param parent Instance -- Runtime visual parent.
-    @return TSelectionHandle -- The new selection handle.
-]=]
 function Handle.new(
+	manager: any,
 	channelName: string,
-	target: TResolvedSelectionTarget,
-	request: TSelectionRequest,
-	parent: Instance
+	snapshot: TSelectionSnapshot,
+	request: any,
+	visualParent: Instance,
+	stash: any
 ): TSelectionHandle
-	Validation.AssertChannelName(channelName)
-	Validation.AssertResolvedTarget(target)
-
-	local self = setmetatable({}, Handle)
+	local self = setmetatable({}, Handle) :: any
+	self._manager = manager
+	self._stash = stash
+	self._snapshot = snapshot
+	self._isDestroyed = false
+	self._lastReason = nil :: TInvalidationReason?
 	self.Channel = channelName
-	self.Target = target
-	self.Metadata = request.Metadata
-	self._janitor = Janitor.new()
-	self._destroyed = false
-
-	self.StateMachine = StateMachine.new({
-		InitialState = "Idle",
+	self.Target = if snapshot.PrimaryEntry ~= nil then snapshot.PrimaryEntry.Target else nil
+	self.Metadata = snapshot.Metadata
+	self._stateMachine = StateMachine.new({
+		InitialState = Enums.HandleState.Active,
 		Transitions = TRANSITIONS,
-		ErrorType = "IllegalSelectionHandleTransition",
-		ErrorMessage = "Selection handle transition is not allowed",
+		ErrorType = Enums.ErrorKey.IllegalSelectionHandleTransition.Name,
+		ErrorMessage = Enums.ErrorMessage[Enums.ErrorKey.IllegalSelectionHandleTransition],
+		ErrorDataBuilder = function(fromState: TSelectionHandleState, toState: TSelectionHandleState)
+			return {
+				From = fromState.Name,
+				To = toState.Name,
+			}
+		end,
 	})
-	self._janitor:Add(self.StateMachine, "Destroy")
+	self.StateChanged = self._stateMachine.StateChanged
 
-	-- Enter the active state before visuals are created so downstream listeners see a live handle.
-	self.StateMachine:Transition("Active")
+	self._stash:Add(self._stateMachine, {
+		CleanupMethod = "Destroy",
+		Key = STATE_MACHINE_KEY,
+		Label = STATE_MACHINE_KEY,
+	})
 
-	-- Create the configured visuals and register their cleanup with this handle's Janitor.
-	Visuals.BuildSelectionVisuals(request, target, parent, self._janitor)
+	local visualsScope = self._stash:Scope(VISUAL_SCOPE_NAME)
+	local channelFolder = Instance.new("Folder")
+	channelFolder.Name = channelName
+	channelFolder.Parent = visualParent
+	visualsScope:AddInstance(channelFolder, {
+		Key = CHANNEL_FOLDER_KEY,
+		Label = CHANNEL_FOLDER_KEY,
+	})
+	Visuals.BuildSelectionVisuals(snapshot, request.Highlight, request.Radius, channelFolder, visualsScope)
 
-	return self :: any
+	self:_ConnectInvalidationWatchers()
+
+	return self
 end
 
---[=[
-    Destroys the handle and all resources created for its channel.
-    @within SelectionPlusHandle
-]=]
-function Handle:Destroy()
-	if self._destroyed then
+function Handle:GetSnapshot(): TSelectionSnapshot
+	return self._snapshot
+end
+
+function Handle:GetState(): TSelectionHandleState
+	return self._stateMachine:GetState()
+end
+
+function Handle:IsActive(): boolean
+	return self._stateMachine:GetState() == Enums.HandleState.Active
+end
+
+function Handle:Clear()
+	if self._isDestroyed then
 		return
 	end
 
-	-- Transition through the cleared state before final teardown so lifecycle listeners can react cleanly.
-	if self.StateMachine:GetState() == "Active" then
-		self.StateMachine:Transition("Cleared")
-	end
-	if self.StateMachine:GetState() ~= "Destroyed" then
-		self.StateMachine:Transition("Destroyed")
-	end
-
-	self._destroyed = true
-	self._janitor:Destroy()
+	self._manager:Clear(self.Channel)
 end
 
---[=[
-    Returns whether the handle has already been destroyed.
-    @within SelectionPlusHandle
-    @return boolean -- `true` when the handle is no longer active.
-]=]
-function Handle:IsDestroyed(): boolean
-	return self._destroyed
+function Handle:Destroy()
+	if self._isDestroyed then
+		return
+	end
+
+	self._manager:Clear(self.Channel)
 end
 
-return Handle
+function Handle:_ClearWithReason(reason: TInvalidationReason)
+	if self._isDestroyed then
+		return
+	end
+
+	local currentState = self._stateMachine:GetState()
+	if currentState == Enums.HandleState.Active then
+		Policies.CheckHandleTransition(self, Enums.HandleState.Cleared)
+		self._stateMachine:Transition(Enums.HandleState.Cleared)
+	end
+
+	if self._stateMachine:GetState() ~= Enums.HandleState.Destroyed then
+		Policies.CheckHandleTransition(self, Enums.HandleState.Destroyed)
+		self._stateMachine:Transition(Enums.HandleState.Destroyed)
+	end
+
+	self._lastReason = reason
+	self._isDestroyed = true
+	self._stash:Destroy()
+end
+
+function Handle:_ConnectInvalidationWatchers()
+	local invalidationScope = self._stash:Scope(INVALIDATION_SCOPE_NAME)
+	local watchedInstances = {}
+
+	for _, entry in ipairs(self._snapshot.Entries) do
+		local root = entry.Target.Root
+		local adornee = entry.Target.Adornee
+
+		for _, instance in ipairs({ root, adornee }) do
+			if watchedInstances[instance] ~= true then
+				watchedInstances[instance] = true
+				invalidationScope:AddConnection(instance.Destroying:Connect(function()
+					if not self:IsActive() then
+						return
+					end
+
+					local reason = if instance == root
+						then Enums.InvalidationReason.TargetDestroyed
+						else Enums.InvalidationReason.AdorneeInvalid
+					self._manager:_HandleInvalidated(self, reason)
+				end))
+			end
+		end
+	end
+end
+
+return table.freeze(Handle)
