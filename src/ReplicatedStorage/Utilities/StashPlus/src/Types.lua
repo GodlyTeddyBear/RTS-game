@@ -2,6 +2,14 @@
 
 export type TCleanupMethod = boolean | string
 export type TStashState = "Active" | "Cleaning" | "Destroyed"
+export type TCleanupOperation =
+	"Cleanup"
+	| "Destroy"
+	| "Detach"
+	| "RemoveAndCleanup"
+	| "DestroyScope"
+	| "DestroyAllScopes"
+	| "StaticCleanup"
 
 export type TAddOptions = {
 	CleanupMethod: TCleanupMethod?,
@@ -15,6 +23,7 @@ export type TCleanupFailure = {
 	Resource: any?,
 	ResourceType: string?,
 	CleanupMethod: TCleanupMethod?,
+	Operation: TCleanupOperation,
 	ErrorMessage: string,
 	ScopeName: string?,
 	ScopePath: string?,
@@ -25,6 +34,7 @@ export type TCleanupReport = {
 	FailureCount: number,
 	ResourceCountCleaned: number,
 	ScopeCountCleaned: number,
+	Operation: TCleanupOperation,
 	Failures: { TCleanupFailure },
 	CleanedChildren: { string }?,
 }
@@ -35,11 +45,12 @@ export type TStash = {
 	AddConnection: (self: TStash, connection: RBXScriptConnection, keyOrOptions: any?) -> RBXScriptConnection,
 	AddFunction: (self: TStash, callback: () -> (), keyOrOptions: any?) -> (() -> ()),
 	AddInstance: (self: TStash, instance: Instance, keyOrOptions: any?) -> Instance,
-	AddPromise: (self: TStash, promiseObject: any, key: any?) -> any,
+	AddPromise: (self: TStash, promiseObject: any, keyOrOptions: any?) -> any,
 	AddStash: (self: TStash, stash: TStash, keyOrOptions: any?) -> TStash,
 	AddTask: (self: TStash, cleanupThread: thread, keyOrOptions: any?) -> thread,
 	AddThread: (self: TStash, cleanupThread: thread, keyOrOptions: any?) -> thread,
 	Cleanup: (self: TStash) -> TCleanupReport,
+	Detach: (self: TStash, key: any) -> boolean,
 	Destroy: (self: TStash) -> TCleanupReport,
 	DestroyScope: (self: TStash, name: string) -> TCleanupReport,
 	DestroyAllScopes: (self: TStash) -> TCleanupReport,
@@ -54,7 +65,7 @@ export type TStash = {
 	HasScope: (self: TStash, name: string) -> boolean,
 	IsCleaning: (self: TStash) -> boolean,
 	IsDestroyed: (self: TStash) -> boolean,
-	Remove: (self: TStash, key: any) -> boolean,
+	LinkToInstance: (self: TStash, instance: Instance, allowMultiple: boolean?) -> RBXScriptConnection,
 	RemoveAndCleanup: (self: TStash, key: any) -> TCleanupReport,
 	RemoveScope: (self: TStash, name: string) -> boolean,
 	Scope: (self: TStash, name: string) -> TStash,
@@ -65,7 +76,6 @@ export type TStashPlus = {
 	CanCleanup: (resource: any, cleanupMethod: TCleanupMethod?) -> (boolean, string?),
 	Cleanup: (resource: any, cleanupMethod: TCleanupMethod?) -> TCleanupReport,
 	ResolveCleanupMethod: (resource: any, cleanupMethod: TCleanupMethod?) -> TCleanupMethod,
-	ResolveMethod: (resource: any, cleanupMethod: TCleanupMethod?) -> TCleanupMethod,
 }
 
 local Types = {}

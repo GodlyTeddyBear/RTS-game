@@ -40,8 +40,10 @@ local DEFAULTS = table.freeze({
 	BottomHeight = 4,
 	TopHeight = 2,
 	TopScaleXZ = 0.9,
+	UseTopHexagon = true,
 	ArrayRows = 1,
 	ArrayColumns = 1,
+	RandomizeArraySizeEnabled = false,
 	ArraySpacingX = 8,
 	ArraySpacingZ = 8,
 	StaggerRowsEnabled = false,
@@ -163,11 +165,10 @@ local function createHexBlock(
 )
 	local yawDeg, scale = applyRandomization(attributes, random)
 	local yawCFrame = CFrame.fromAxisAngle(Vector3.yAxis, math.rad(yawDeg))
+	local useTopHexagon = attributes.UseTopHexagon
 
 	local bottomHeight = clampPositive(attributes.BottomHeight * scale, 1)
-	local topHeight = clampPositive(attributes.TopHeight * scale, 0.5)
 	local bottomSizeXZ = clampPositive(attributes.BottomSizeXZ * scale, 1)
-	local topScaleXZ = math.clamp(attributes.TopScaleXZ, 0.01, 1)
 
 	local bottomPart = Helpers.createMeshPartFromMeshId(attributes.MeshId, {
 		Name = "HexBottom",
@@ -177,6 +178,20 @@ local function createHexBlock(
 		Material = Enum.Material.Slate,
 	})
 
+	local targetBottomSize = Vector3.new(bottomSizeXZ, bottomHeight, bottomSizeXZ)
+	bottomPart.Size = targetBottomSize
+
+	local groundY = centerXZ.Y
+	local bottomCenter = Vector3.new(centerXZ.X, groundY + targetBottomSize.Y * 0.5, centerXZ.Z)
+
+	bottomPart.CFrame = CFrame.new(bottomCenter) * yawCFrame
+
+	if not useTopHexagon then
+		return
+	end
+
+	local topHeight = clampPositive(attributes.TopHeight * scale, 0.5)
+	local topScaleXZ = math.clamp(attributes.TopScaleXZ, 0.01, 1)
 	local topPart = Helpers.createMeshPartFromMeshId(attributes.MeshId, {
 		Name = "HexTop",
 		Parent = root,
@@ -185,28 +200,30 @@ local function createHexBlock(
 		Material = Enum.Material.LeafyGrass,
 		MaterialVariant = "Grass2",
 	})
-
-	local targetBottomSize = Vector3.new(bottomSizeXZ, bottomHeight, bottomSizeXZ)
-	bottomPart.Size = targetBottomSize
-
 	local targetTopSize = Vector3.new(
 		targetBottomSize.X * topScaleXZ,
 		topHeight,
 		targetBottomSize.Z * topScaleXZ
 	)
-	topPart.Size = targetTopSize
-
-	local groundY = centerXZ.Y
-	local bottomCenter = Vector3.new(centerXZ.X, groundY + targetBottomSize.Y * 0.5, centerXZ.Z)
 	local topCenter = Vector3.new(centerXZ.X, groundY + targetBottomSize.Y + targetTopSize.Y * 0.5, centerXZ.Z)
 
-	bottomPart.CFrame = CFrame.new(bottomCenter) * yawCFrame
+	topPart.Size = targetTopSize
 	topPart.CFrame = CFrame.new(topCenter) * yawCFrame
 end
 
-local function createArray(attributes: THexagonAttributes, random: Random, root: Instance)
+local function resolveArrayDimensions(attributes: THexagonAttributes, random: Random): (number, number)
 	local rows = floorAtLeastOne(attributes.ArrayRows)
 	local columns = floorAtLeastOne(attributes.ArrayColumns)
+
+	if not attributes.RandomizeArraySizeEnabled then
+		return rows, columns
+	end
+
+	return random:NextInteger(1, rows), random:NextInteger(1, columns)
+end
+
+local function createArray(attributes: THexagonAttributes, random: Random, root: Instance)
+	local rows, columns = resolveArrayDimensions(attributes, random)
 	local spacingX = attributes.ArraySpacingX
 	local spacingZ = attributes.ArraySpacingZ
 	local staggerEnabled = attributes.StaggerRowsEnabled
@@ -238,7 +255,7 @@ end
 
 local function Generate(parameters: TGenerationParams<THexagonAttributes>, targetContainer: Instance)
 	local attributes = parameters.Attributes
-	local random = Random.new(os.time())
+	local random = Random.new(attributes.RandomSeed)
 
 	local root = Helpers.createFolder({
 		Name = "HexagonArray",

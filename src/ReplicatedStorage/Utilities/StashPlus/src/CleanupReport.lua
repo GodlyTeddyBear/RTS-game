@@ -4,6 +4,7 @@ local Types = require(script.Parent.Types)
 
 type TCleanupFailure = Types.TCleanupFailure
 type TCleanupMethod = Types.TCleanupMethod
+type TCleanupOperation = Types.TCleanupOperation
 type TCleanupReport = Types.TCleanupReport
 
 export type TMutableCleanupReport = {
@@ -11,18 +12,20 @@ export type TMutableCleanupReport = {
 	FailureCount: number,
 	ResourceCountCleaned: number,
 	ScopeCountCleaned: number,
+	Operation: TCleanupOperation,
 	Failures: { TCleanupFailure },
 	CleanedChildren: { string },
 }
 
 local CleanupReport = {}
 
-function CleanupReport.new(): TMutableCleanupReport
+function CleanupReport.new(operation: TCleanupOperation): TMutableCleanupReport
 	return {
 		Success = true,
 		FailureCount = 0,
 		ResourceCountCleaned = 0,
 		ScopeCountCleaned = 0,
+		Operation = operation,
 		Failures = {},
 		CleanedChildren = {},
 	}
@@ -34,6 +37,7 @@ function CleanupReport.RecordFailure(
 	key: any?,
 	resource: any?,
 	cleanupMethod: TCleanupMethod?,
+	operation: TCleanupOperation,
 	errorMessage: string,
 	scopeName: string?,
 	scopePath: string?
@@ -47,6 +51,7 @@ function CleanupReport.RecordFailure(
 		Resource = resource,
 		ResourceType = if resource ~= nil then typeof(resource) else nil,
 		CleanupMethod = cleanupMethod,
+		Operation = operation,
 		ErrorMessage = errorMessage,
 		ScopeName = scopeName,
 		ScopePath = scopePath,
@@ -93,6 +98,7 @@ function CleanupReport.Finalize(report: TMutableCleanupReport): TCleanupReport
 		FailureCount = report.FailureCount,
 		ResourceCountCleaned = report.ResourceCountCleaned,
 		ScopeCountCleaned = report.ScopeCountCleaned,
+		Operation = report.Operation,
 		Failures = table.freeze(table.clone(report.Failures)),
 		CleanedChildren = finalizedChildren,
 	})

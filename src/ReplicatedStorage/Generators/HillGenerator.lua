@@ -356,25 +356,158 @@ local function createHillBlock(attributes: THillAttributes, random: Random, root
 		return part
 	end
 
-	local function getSpanTotal(keys: { string }): number
-		local total = 0
-		for _, key in keys do
-			local wedge = placedSides[key]
-			if wedge ~= nil then
-				total += wedge.Size.X
+	local function getBaseParts(results: { any }): { BasePart }
+		local parts: { BasePart } = {}
+		for _, item in results do
+			if typeof(item) == "Instance" and item:IsA("BasePart") then
+				table.insert(parts, item)
 			end
 		end
-		return total
+		return parts
 	end
 
-	local function resizeCornerOperandSpan(sideKey: string, wedge: WedgePart)
-		local expandedSpan = wedge.Size.X
-		if sideKey == "North" or sideKey == "South" then
-			expandedSpan += getSpanTotal({ "East", "West" })
-		else
-			expandedSpan += getSpanTotal({ "North", "South" })
+	local function cleanupCornerTemporaryParts(parts: { Instance })
+		for _, part in parts do
+			if part.Parent ~= nil then
+				part:Destroy()
+			end
 		end
-		wedge.Size = Vector3.new(expandedSpan, wedge.Size.Y, wedge.Size.Z)
+	end
+
+	local function getCornerOperandShiftDirection(cornerName: string, sideKey: string): number
+		local cornerDirections = {
+			HillCornerNE = {
+				North = 1,
+				East = -1,
+			},
+			HillCornerNW = {
+				North = -1,
+				West = 1,
+			},
+			HillCornerSE = {
+				South = 1,
+				East = 1,
+			},
+			HillCornerSW = {
+				South = -1,
+				West = -1,
+			},
+		}
+
+		local cornerDirection = cornerDirections[cornerName]
+		if cornerDirection == nil then
+			return 0
+		end
+
+		return cornerDirection[sideKey] or 0
+	end
+
+	local function createCornerBaseOperand(
+		cornerName: string,
+		sideKey: string,
+		sourceWedge: WedgePart
+	): WedgePart
+		local baseOperand = sourceWedge:Clone()
+		baseOperand.Name = cornerName .. "_" .. sideKey .. "_Base"
+		baseOperand.Parent = root
+		return baseOperand
+	end
+
+	local function createCornerExtensionOperand(
+		cornerName: string,
+		sideKey: string,
+		sourceWedge: WedgePart,
+		adjacentWedge: WedgePart
+	): WedgePart
+		local extensionOperand = sourceWedge:Clone()
+		extensionOperand.Name = cornerName .. "_" .. sideKey .. "_Extension"
+		extensionOperand.Parent = root
+
+		local addedSpan = adjacentWedge.Size.Z
+		if addedSpan <= 0 then
+			return extensionOperand
+		end
+
+		local shiftDirection = getCornerOperandShiftDirection(cornerName, sideKey)
+		if shiftDirection == 0 then
+			return extensionOperand
+		end
+
+		local expandedSpan = extensionOperand.Size.X + addedSpan
+		local localShiftX = shiftDirection * addedSpan * 0.5
+		extensionOperand.Size = Vector3.new(expandedSpan, extensionOperand.Size.Y, extensionOperand.Size.Z)
+		extensionOperand.CFrame *= CFrame.new(localShiftX, 0, 0)
+		return extensionOperand
+	end
+
+	local function unionCornerOperandPair(
+		cornerName: string,
+		sideKey: string,
+		baseOperand: BasePart,
+		extensionOperand: BasePart
+	): BasePart?
+		local okUnion, unionResult = pcall(function()
+			return GeometryService:UnionAsync(baseOperand, { extensionOperand }, nil)
+		end)
+
+		if not okUnion or unionResult == nil then
+			return nil
+		end
+
+		local unionParts = getBaseParts(unionResult)
+		if #unionParts == 0 then
+			return nil
+		end
+
+		local unionSource = unionParts[1]
+		local unionTargets = {}
+		for index = 2, #unionParts do
+			table.insert(unionTargets, unionParts[index])
+		end
+
+		if #unionTargets == 0 then
+			unionSource.Name = cornerName .. "_" .. sideKey .. "_Composite"
+			unionSource.Parent = root
+			return unionSource
+		end
+
+		local okUnionMerged, unionMergedResult = pcall(function()
+			return GeometryService:UnionAsync(unionSource, unionTargets, nil)
+		end)
+
+		if not okUnionMerged or unionMergedResult == nil then
+			return nil
+		end
+
+		local mergedParts = getBaseParts(unionMergedResult)
+		if #mergedParts == 0 then
+			return nil
+		end
+
+		local compositeOperand = mergedParts[1]
+		compositeOperand.Name = cornerName .. "_" .. sideKey .. "_Composite"
+		compositeOperand.Parent = root
+		return compositeOperand
+	end
+
+	local function createCornerCompositeOperand(
+		cornerName: string,
+		sideKey: string,
+		sourceWedge: WedgePart,
+		adjacentWedge: WedgePart,
+		temporaryParts: { Instance }
+	): BasePart?
+		local baseOperand = createCornerBaseOperand(cornerName, sideKey, sourceWedge)
+		local extensionOperand = createCornerExtensionOperand(cornerName, sideKey, sourceWedge, adjacentWedge)
+		table.insert(temporaryParts, baseOperand)
+		table.insert(temporaryParts, extensionOperand)
+
+		local compositeOperand = unionCornerOperandPair(cornerName, sideKey, baseOperand, extensionOperand)
+		if compositeOperand ~= nil then
+			table.insert(temporaryParts, compositeOperand)
+		end
+
+		return compositeOperand
 	end
 
 	local function tryCreateCornerPart(
@@ -384,28 +517,32 @@ local function createHillBlock(attributes: THillAttributes, random: Random, root
 		firstWedge: WedgePart,
 		secondWedge: WedgePart
 	)
-		local opA = firstWedge:Clone()
-		local opB = secondWedge:Clone()
-		opA.Name = cornerName .. "_OpA"
-		opB.Name = cornerName .. "_OpB"
-		opA.Parent = root
-		opB.Parent = root
+		local temporaryParts: { Instance } = {}
 
-		resizeCornerOperandSpan(firstSideKey, opA)
-		resizeCornerOperandSpan(secondSideKey, opB)
+		-- Build a composite operand for each participating side
+		local firstComposite = createCornerCompositeOperand(
+			cornerName,
+			firstSideKey,
+			firstWedge,
+			secondWedge,
+			temporaryParts
+		)
+		local secondComposite = createCornerCompositeOperand(
+			cornerName,
+			secondSideKey,
+			secondWedge,
+			firstWedge,
+			temporaryParts
+		)
 
-		local function getBaseParts(results: { any }): { BasePart }
-			local parts: { BasePart } = {}
-			for _, item in results do
-				if typeof(item) == "Instance" and item:IsA("BasePart") then
-					table.insert(parts, item)
-				end
-			end
-			return parts
+		if firstComposite == nil or secondComposite == nil then
+			cleanupCornerTemporaryParts(temporaryParts)
+			return nil
 		end
 
+		-- Intersect the two side composites to form the corner body
 		local okIntersect, intersectResult = pcall(function()
-			return GeometryService:IntersectAsync(opA, { opB }, nil)
+			return GeometryService:IntersectAsync(firstComposite, { secondComposite }, nil)
 		end)
 
 		if okIntersect and intersectResult ~= nil then
@@ -425,36 +562,33 @@ local function createHillBlock(attributes: THillAttributes, random: Random, root
 						local unionedParts = getBaseParts(unionIntersectResult)
 						if #unionedParts > 0 then
 							local finalized = finalizeCornerPart(unionedParts[1], cornerName)
-							opA:Destroy()
-							opB:Destroy()
+							cleanupCornerTemporaryParts(temporaryParts)
 							return finalized
 						end
 					end
 				else
 					local finalized = finalizeCornerPart(unionSource, cornerName)
-					opA:Destroy()
-					opB:Destroy()
+					cleanupCornerTemporaryParts(temporaryParts)
 					return finalized
 				end
 			end
 		end
 
+		-- Fallback to a union of the two composites if intersection fails
 		local okUnion, unionResult = pcall(function()
-			return GeometryService:UnionAsync(opA, { opB }, nil)
+			return GeometryService:UnionAsync(firstComposite, { secondComposite }, nil)
 		end)
 
 		if okUnion and unionResult ~= nil then
 			local unionParts = getBaseParts(unionResult)
 			if #unionParts > 0 then
 				local finalized = finalizeCornerPart(unionParts[1], cornerName)
-				opA:Destroy()
-				opB:Destroy()
+				cleanupCornerTemporaryParts(temporaryParts)
 				return finalized
 			end
 		end
 
-		opA:Destroy()
-		opB:Destroy()
+		cleanupCornerTemporaryParts(temporaryParts)
 		return nil
 	end
 

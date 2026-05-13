@@ -1,5 +1,23 @@
 --!strict
 
+--[=[
+	@class StashPlus
+	A repo-opinionated cleanup owner built on Janitor.
+
+	`Cleanup()` flushes tracked resources and child scopes while keeping the stash reusable.
+	`Destroy()` performs final cleanup and permanently disables future mutation.
+	`Scope(name)` creates a named child stash owned by the parent until `RemoveScope()` detaches it
+	or `DestroyScope()` destroys it.
+	`Detach(key)` removes a keyed resource from tracking without cleaning it, while
+	`RemoveAndCleanup(key)` removes it and cleans it immediately.
+	Keyed `Add(..., { Key = key })` preserves Janitor overwrite semantics and cleans the previously
+	registered resource before tracking the replacement at that key.
+	`AddFunction(callback)` is for unlabeled cleanup callbacks, while `AddCallback(label, callback)`
+	adds a label that improves cleanup failure reports.
+	`LinkToInstance(instance)` ties the stash lifetime to an Instance destroying and routes through
+	`StashPlus:Destroy()` so linked instance ownership ends the stash permanently.
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
@@ -12,6 +30,7 @@ local Types = require(script.Types)
 type TAddOptions = Types.TAddOptions
 type TMutableCleanupReport = CleanupReport.TMutableCleanupReport
 type TCleanupMethod = Types.TCleanupMethod
+type TCleanupOperation = Types.TCleanupOperation
 type TCleanupReport = Types.TCleanupReport
 type TStash = Types.TStash
 type TStashPlus = Types.TStashPlus
@@ -36,7 +55,15 @@ type TStashInternal = TStash & {
 
 	_AssertAlive: (self: TStashInternal) -> (),
 	_AssertNotCleaning: (self: TStashInternal, operationName: string) -> (),
-	_BeginCleanup: (self: TStashInternal) -> TMutableCleanupReport,
+	_BeginCleanup: (self: TStashInternal, operation: TCleanupOperation) -> TMutableCleanupReport,
+	_BuildSingleCleanupReport: (
+		self: TStashInternal,
+		operation: TCleanupOperation,
+		resource: any,
+		cleanupMethod: TCleanupMethod?,
+		label: string?,
+		key: any?
+	) -> TCleanupReport,
 	_BuildCleanupTask: (
 		self: TStashInternal,
 		resource: any,
@@ -44,7 +71,12 @@ type TStashInternal = TStash & {
 		label: string?,
 		key: any?
 	) -> () -> (),
-	_EndCleanup: (self: TStashInternal, report: TMutableCleanupReport, shouldDestroy: boolean) -> TCleanupReport,
+	_EndCleanup: (
+		self: TStashInternal,
+		report: TMutableCleanupReport,
+		shouldDestroy: boolean,
+		operation: TCleanupOperation
+	) -> TCleanupReport,
 	_ForEachChild: (self: TStashInternal, callback: (string, TStashInternal) -> ()) -> (),
 	_ForgetChild: (self: TStashInternal, childName: string, child: TStashInternal) -> (),
 	_GetScopePath: (self: TStashInternal) -> string?,
@@ -59,19 +91,11 @@ type TStashInternal = TStash & {
 		key: any?,
 		resource: any?,
 		cleanupMethod: TCleanupMethod?,
+		operation: TCleanupOperation,
 		errorMessage: string
 	) -> (),
 	_SnapshotReport: (self: TStashInternal) -> TCleanupReport,
 }
-
-local EMPTY_REPORT = table.freeze({
-	Success = true,
-	FailureCount = 0,
-	ResourceCountCleaned = 0,
-	ScopeCountCleaned = 0,
-	Failures = table.freeze({}),
-	CleanedChildren = nil,
-}) :: TCleanupReport
 
 local StashPlus = {} :: TStashPlus & { [string]: any }
 local StashMethods = {}
@@ -81,6 +105,34 @@ local function _ApplyMethods(target: any, methods: { [string]: any })
 	for methodName, method in pairs(methods) do
 		target[methodName] = method
 	end
+end
+
+local function _GetEmptyReport(operation: TCleanupOperation): TCleanupReport
+	return table.freeze({
+		Success = true,
+		FailureCount = 0,
+		ResourceCountCleaned = 0,
+		ScopeCountCleaned = 0,
+		Operation = operation,
+		Failures = table.freeze({}),
+		CleanedChildren = nil,
+	})
+end
+
+local function _CreateReportWithOperation(report: TCleanupReport, operation: TCleanupOperation): TCleanupReport
+	if report.Operation == operation then
+		return report
+	end
+
+	return table.freeze({
+		Success = report.Success,
+		FailureCount = report.FailureCount,
+		ResourceCountCleaned = report.ResourceCountCleaned,
+		ScopeCountCleaned = report.ScopeCountCleaned,
+		Operation = operation,
+		Failures = report.Failures,
+		CleanedChildren = report.CleanedChildren,
+	})
 end
 
 local function _CreateStash(parent: TStashInternal?, scopeName: string?): TStashInternal
@@ -103,21 +155,8 @@ function StashPlus.new(): TStash
 end
 
 function StashPlus.Cleanup(resource: any, cleanupMethod: TCleanupMethod?): TCleanupReport
-	local report = CleanupReport.new()
-	local resolvedMethod = Resolution.ResolveMethod(resource, cleanupMethod)
-	local ok, errorMessage = xpcall(function()
-		Resolution.CleanupResource(resource, resolvedMethod)
-	end, function(err)
-		return tostring(err)
-	end)
-
-	if not ok then
-		CleanupReport.RecordFailure(report, nil, nil, resource, resolvedMethod, errorMessage, nil, nil)
-	else
-		CleanupReport.RecordSuccess(report)
-	end
-
-	return CleanupReport.Finalize(report)
+	local stash = _CreateStash(nil, nil)
+	return stash:_BuildSingleCleanupReport("StaticCleanup", resource, cleanupMethod, nil, nil)
 end
 
 function StashPlus.CanCleanup(resource: any, cleanupMethod: TCleanupMethod?): (boolean, string?)
@@ -213,15 +252,15 @@ function StashMethods:HasScope(name: string): boolean
 	return self:GetScope(name) ~= nil
 end
 
-function StashMethods:Remove(key: any): boolean
-	self:_AssertNotCleaning("Remove")
+function StashMethods:Detach(key: any): boolean
+	self:_AssertNotCleaning("Detach")
 
 	local tracked = self._janitor:Get(key)
 	if tracked == nil then
 		return false
 	end
 
-	self._janitor:Remove(key)
+	self._janitor:RemoveNoClean(key)
 	self._trackedKeys[key] = nil
 	self._trackedMetadata[key] = nil
 	return true
@@ -232,37 +271,20 @@ function StashMethods:RemoveAndCleanup(key: any): TCleanupReport
 
 	local metadata = self._trackedMetadata[key]
 	if metadata == nil then
-		return EMPTY_REPORT
+		return _GetEmptyReport("RemoveAndCleanup")
 	end
 
 	self._janitor:Remove(key)
 	self._trackedKeys[key] = nil
 	self._trackedMetadata[key] = nil
 
-	local report = CleanupReport.new()
-	local resolvedMethod = Resolution.ResolveMethod(metadata.Resource, metadata.CleanupMethod)
-	local ok, errorMessage = xpcall(function()
-		Resolution.CleanupResource(metadata.Resource, resolvedMethod)
-	end, function(err)
-		return tostring(err)
-	end)
-
-	if not ok then
-		CleanupReport.RecordFailure(
-			report,
-			metadata.Label,
-			key,
-			metadata.Resource,
-			resolvedMethod,
-			errorMessage,
-			self._scopeName,
-			self:_GetScopePath()
-		)
-	else
-		CleanupReport.RecordSuccess(report)
-	end
-
-	return CleanupReport.Finalize(report)
+	return self:_BuildSingleCleanupReport(
+		"RemoveAndCleanup",
+		metadata.Resource,
+		metadata.CleanupMethod,
+		metadata.Label,
+		key
+	)
 end
 
 function StashMethods:Scope(name: string): TStash
@@ -299,16 +321,16 @@ function StashMethods:DestroyScope(name: string): TCleanupReport
 
 	local child = self:GetScope(name)
 	if child == nil then
-		return EMPTY_REPORT
+		return _GetEmptyReport("DestroyScope")
 	end
 
-	return child:Destroy()
+	return _CreateReportWithOperation(child:Destroy(), "DestroyScope")
 end
 
 function StashMethods:DestroyAllScopes(): TCleanupReport
 	self:_AssertNotCleaning("DestroyAllScopes")
 
-	local report = CleanupReport.new()
+	local report = CleanupReport.new("DestroyAllScopes")
 	for _, childName in ipairs(self:GetScopeNames()) do
 		local child = self._childStashes[childName]
 		if child ~= nil and not child:IsDestroyed() then
@@ -322,13 +344,13 @@ end
 
 function StashMethods:Cleanup(): TCleanupReport
 	if self._state == "Destroyed" then
-		return self._destroyReport or EMPTY_REPORT
+		return _GetEmptyReport("Cleanup")
 	end
 	if self._state == "Cleaning" then
 		return self:_SnapshotReport()
 	end
 
-	local report = self:_BeginCleanup()
+	local report = self:_BeginCleanup("Cleanup")
 
 	self:_ForEachChild(function(childName: string, child: TStashInternal)
 		if child:IsDestroyed() then
@@ -343,19 +365,19 @@ function StashMethods:Cleanup(): TCleanupReport
 	table.clear(self._trackedKeys)
 	table.clear(self._trackedMetadata)
 
-	return self:_EndCleanup(report, self._destroyRequested)
+	return self:_EndCleanup(report, self._destroyRequested, "Cleanup")
 end
 
 function StashMethods:Destroy(): TCleanupReport
 	if self._state == "Destroyed" then
-		return self._destroyReport or EMPTY_REPORT
+		return self._destroyReport or _GetEmptyReport("Destroy")
 	end
 	if self._state == "Cleaning" then
 		self._destroyRequested = true
 		return self:_SnapshotReport()
 	end
 
-	local report = self:_BeginCleanup()
+	local report = self:_BeginCleanup("Destroy")
 	self._destroyRequested = true
 
 	self:_ForEachChild(function(childName: string, child: TStashInternal)
@@ -371,7 +393,7 @@ function StashMethods:Destroy(): TCleanupReport
 	table.clear(self._trackedKeys)
 	table.clear(self._trackedMetadata)
 
-	return self:_EndCleanup(report, true)
+	return self:_EndCleanup(report, true, "Destroy")
 end
 
 function StashMethods:IsDestroyed(): boolean
@@ -384,6 +406,40 @@ end
 
 function StashMethods:_AssertNotCleaning(operationName: string)
 	assert(self._state ~= "Cleaning", string.format("StashPlus:%s is not allowed during cleanup", operationName))
+end
+
+function StashMethods:_BuildSingleCleanupReport(
+	operation: TCleanupOperation,
+	resource: any,
+	cleanupMethod: TCleanupMethod?,
+	label: string?,
+	key: any?
+): TCleanupReport
+	local report = CleanupReport.new(operation)
+	local resolvedMethod = Resolution.ResolveMethod(resource, cleanupMethod)
+	local ok, errorMessage = xpcall(function()
+		Resolution.CleanupResource(resource, resolvedMethod)
+	end, function(err)
+		return tostring(err)
+	end)
+
+	if not ok then
+		CleanupReport.RecordFailure(
+			report,
+			label,
+			key,
+			resource,
+			resolvedMethod,
+			operation,
+			errorMessage,
+			self._scopeName,
+			self:_GetScopePath()
+		)
+	else
+		CleanupReport.RecordSuccess(report)
+	end
+
+	return CleanupReport.Finalize(report)
 end
 
 function StashMethods:_BuildCleanupTask(resource: any, cleanupMethod: TCleanupMethod?, label: string?, key: any?): () -> ()
@@ -403,7 +459,7 @@ function StashMethods:_BuildCleanupTask(resource: any, cleanupMethod: TCleanupMe
 			return
 		end
 
-		self:_RecordFailure(label, key, resource, resolvedMethod, errorMessage)
+		self:_RecordFailure(label, key, resource, resolvedMethod, "Cleanup", errorMessage)
 	end
 end
 
@@ -451,15 +507,20 @@ function StashMethods:_NormalizeAddOptions(
 	return cleanupMethod, key, label
 end
 
-function StashMethods:_BeginCleanup(): TMutableCleanupReport
-	local report = CleanupReport.new()
+function StashMethods:_BeginCleanup(operation: TCleanupOperation): TMutableCleanupReport
+	local report = CleanupReport.new(operation)
 	self._state = "Cleaning"
 	self._activeReport = report
 	return report
 end
 
-function StashMethods:_EndCleanup(report: TMutableCleanupReport, shouldDestroy: boolean): TCleanupReport
+function StashMethods:_EndCleanup(
+	report: TMutableCleanupReport,
+	shouldDestroy: boolean,
+	operation: TCleanupOperation
+): TCleanupReport
 	self._activeReport = nil
+	report.Operation = operation
 
 	local finalizedReport = CleanupReport.Finalize(report)
 	local willDestroy = shouldDestroy or self._destroyRequested
@@ -515,6 +576,7 @@ function StashMethods:_RecordFailure(
 	key: any?,
 	resource: any?,
 	cleanupMethod: TCleanupMethod?,
+	operation: TCleanupOperation,
 	errorMessage: string
 )
 	local activeReport = self._activeReport
@@ -525,6 +587,7 @@ function StashMethods:_RecordFailure(
 			key,
 			resource,
 			cleanupMethod,
+			operation,
 			errorMessage,
 			self._scopeName,
 			self:_GetScopePath()
@@ -556,14 +619,12 @@ end
 function StashMethods:_SnapshotReport(): TCleanupReport
 	local activeReport = self._activeReport
 	if activeReport == nil then
-		return self._destroyReport or EMPTY_REPORT
+		return self._destroyReport or _GetEmptyReport("Destroy")
 	end
 
 	return CleanupReport.Finalize(activeReport)
 end
 
 _ApplyMethods(StashMethods, HelperMethods)
-
-StashPlus.ResolveMethod = Resolution.ResolveMethod
 
 return table.freeze(StashPlus)
