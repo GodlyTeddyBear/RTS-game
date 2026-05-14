@@ -34,10 +34,17 @@ function Policies.CheckManagerConfig(config: any)
 		RayLength = if config ~= nil then config.RayLength else nil,
 		ResolveTarget = if config ~= nil then config.ResolveTarget else nil,
 		DragMode = nil,
+		EnabledButtons = if config ~= nil then config.DefaultEnabledButtons else nil,
 		QueryOptions = if config ~= nil then config.QueryOptions else nil,
 		SelectionOptions = if config ~= nil then config.SelectionOptions else nil,
 		ProjectionPlane = if config ~= nil then config.ProjectionPlane else nil,
 		BaseExclude = if config ~= nil then config.BaseExclude else nil,
+		Metadata = nil,
+		ClickMaxMovement = if config ~= nil then config.ClickMaxMovement else nil,
+		DoubleClickWindow = if config ~= nil then config.DoubleClickWindow else nil,
+		DoubleClickMaxMovement = if config ~= nil then config.DoubleClickMaxMovement else nil,
+		HoldDuration = if config ~= nil then config.HoldDuration else nil,
+		DragStartThreshold = if config ~= nil then config.DragStartThreshold else nil,
 		MirrorSelection = if config ~= nil then config.MirrorSelections else nil,
 		MirrorHover = if config ~= nil then config.MirrorHovers else nil,
 		MirrorPreviewSelection = nil,
@@ -50,6 +57,41 @@ function Policies.CheckManagerConfig(config: any)
 		MarqueeSelectionOptions = nil,
 		MarqueeMetadata = nil,
 	}))
+end
+
+function Policies.CheckGestureRequest(request: any): Result.Result<boolean>
+	local result = Specs.HasValidGestureRequestSpec:IsSatisfiedBy({
+		Request = request,
+		ScreenPoint = if request ~= nil then request.ScreenPoint else nil,
+		CameraProvider = if request ~= nil then request.CameraProvider else nil,
+		RayLength = if request ~= nil then request.RayLength else nil,
+		ResolveTarget = if request ~= nil then request.ResolveTarget else nil,
+		EnabledButtons = if request ~= nil then request.EnabledButtons else nil,
+		QueryOptions = if request ~= nil then request.QueryOptions else nil,
+		SelectionOptions = if request ~= nil then request.SelectionOptions else nil,
+		ProjectionPlane = if request ~= nil then request.ProjectionPlane else nil,
+		BaseExclude = if request ~= nil then request.BaseExclude else nil,
+		Metadata = if request ~= nil then request.Metadata else nil,
+		ClickMaxMovement = if request ~= nil then request.ClickMaxMovement else nil,
+		DoubleClickWindow = if request ~= nil then request.DoubleClickWindow else nil,
+		DoubleClickMaxMovement = if request ~= nil then request.DoubleClickMaxMovement else nil,
+		HoldDuration = if request ~= nil then request.HoldDuration else nil,
+		DragStartThreshold = if request ~= nil then request.DragStartThreshold else nil,
+	})
+	if result.success then
+		return Result.Ok(true)
+	end
+
+	local errorKey = Enums.ErrorKey[result.type]
+	return _BuildValidationErr(
+		if errorKey ~= nil then errorKey else Enums.ErrorKey.InvalidGestureRequest,
+		result.message,
+		{
+			ScreenPoint = if request ~= nil then request.ScreenPoint else nil,
+			RayLength = if request ~= nil then request.RayLength else nil,
+			Reason = result.message,
+		}
+	)
 end
 
 function Policies.AssertClientRuntime()
@@ -295,6 +337,29 @@ function Policies.CheckHoverTransition(channelName: string, currentState: any, a
 			then currentState.Snapshot.State.Name
 			else nil
 	)
+	return Result.Err(errorType, message, data)
+end
+
+function Policies.CheckGestureTransition(channelName: string, currentState: any, actionName: string): Result.Result<boolean>
+	local hasSession = currentState ~= nil
+	local result = if actionName == "Begin"
+		then Specs.CanBeginGestureSpec:IsSatisfiedBy({
+			HasSession = hasSession,
+		})
+		else Specs.CanOperateOnGestureSpec:IsSatisfiedBy({
+			HasSession = hasSession,
+		})
+
+	if result.success then
+		return Result.Ok(true)
+	end
+
+	if actionName == "Begin" then
+		local errorType, message, data = Errors.BuildDuplicateGestureSession(channelName)
+		return Result.Err(errorType, message, data)
+	end
+
+	local errorType, message, data = Errors.BuildMissingGestureSession(channelName)
 	return Result.Err(errorType, message, data)
 end
 

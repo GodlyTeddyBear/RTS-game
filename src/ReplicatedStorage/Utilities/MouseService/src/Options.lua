@@ -8,6 +8,7 @@ local Enums = require(script.Parent.Enums)
 local Types = require(script.Parent.Types)
 
 type TMouseDragRequest = Types.TMouseDragRequest
+type TMouseGestureRequest = Types.TMouseGestureRequest
 type THoverRequest = Types.THoverRequest
 type TMouseManagerConfig = Types.TMouseManagerConfig
 type TMouseRequest = Types.TMouseRequest
@@ -15,10 +16,20 @@ type TMouseSelectionRequest = Types.TMouseSelectionRequest
 type TProjectionPlane = Types.TProjectionPlane
 type TResolvedHoverRequest = Types.TResolvedHoverRequest
 type TResolvedMouseDragRequest = Types.TResolvedMouseDragRequest
+type TResolvedMouseGestureRequest = Types.TResolvedMouseGestureRequest
 type TResolvedMouseRequest = Types.TResolvedMouseRequest
 type TResolvedMouseSelectionRequest = Types.TResolvedMouseSelectionRequest
 
 local DEFAULT_RAY_LENGTH = 2000
+local DEFAULT_CLICK_MAX_MOVEMENT = 6
+local DEFAULT_DOUBLE_CLICK_WINDOW = 0.3
+local DEFAULT_DOUBLE_CLICK_MAX_MOVEMENT = 8
+local DEFAULT_HOLD_DURATION = 0.4
+local DEFAULT_DRAG_START_THRESHOLD = 8
+local DEFAULT_ENABLED_BUTTONS = table.freeze({
+	Enums.MouseButton.Left,
+	Enums.MouseButton.Right,
+})
 
 local Options = {}
 
@@ -36,6 +47,14 @@ local function _CloneDictionary(value: { [string]: any }?): { [string]: any }?
 	end
 
 	return table.freeze(table.clone(value))
+end
+
+local function _CloneEnabledButtons(value: { Types.TMouseButton }?): { Types.TMouseButton }?
+	if value == nil then
+		return nil
+	end
+
+	return table.clone(value)
 end
 
 local function _CloneProjectionPlane(value: TProjectionPlane?): TProjectionPlane?
@@ -123,6 +142,12 @@ function Options.CreateConfig(config: TMouseManagerConfig?): TMouseManagerConfig
 		MirrorHovers = config.MirrorHovers,
 		DefaultHoverHighlight = _CloneHighlightOptions(config.DefaultHoverHighlight),
 		DefaultHoverRadius = _CloneRadiusOptions(config.DefaultHoverRadius),
+		DefaultEnabledButtons = _CloneEnabledButtons(config.DefaultEnabledButtons),
+		ClickMaxMovement = config.ClickMaxMovement,
+		DoubleClickWindow = config.DoubleClickWindow,
+		DoubleClickMaxMovement = config.DoubleClickMaxMovement,
+		HoldDuration = config.HoldDuration,
+		DragStartThreshold = config.DragStartThreshold,
 	}
 end
 
@@ -309,6 +334,47 @@ function Options.CreateHoverRequest(request: THoverRequest?): THoverRequest
 	}
 end
 
+function Options.CreateGestureRequest(request: TMouseGestureRequest?): TMouseGestureRequest
+	local baseRequest = Options.CreateRequest(request)
+	if request == nil then
+		return {
+			ScreenPoint = baseRequest.ScreenPoint,
+			CameraProvider = baseRequest.CameraProvider,
+			RayLength = baseRequest.RayLength,
+			ResolveTarget = baseRequest.ResolveTarget,
+			QueryOptions = baseRequest.QueryOptions,
+			SelectionOptions = baseRequest.SelectionOptions,
+			ProjectionPlane = baseRequest.ProjectionPlane,
+			BaseExclude = baseRequest.BaseExclude,
+			Metadata = nil,
+			EnabledButtons = nil,
+			ClickMaxMovement = nil,
+			DoubleClickWindow = nil,
+			DoubleClickMaxMovement = nil,
+			HoldDuration = nil,
+			DragStartThreshold = nil,
+		}
+	end
+
+	return {
+		ScreenPoint = baseRequest.ScreenPoint,
+		CameraProvider = baseRequest.CameraProvider,
+		RayLength = baseRequest.RayLength,
+		ResolveTarget = baseRequest.ResolveTarget,
+		QueryOptions = baseRequest.QueryOptions,
+		SelectionOptions = baseRequest.SelectionOptions,
+		ProjectionPlane = baseRequest.ProjectionPlane,
+		BaseExclude = baseRequest.BaseExclude,
+		Metadata = _CloneDictionary(request.Metadata),
+		EnabledButtons = if request.EnabledButtons ~= nil then _CloneEnabledButtons(request.EnabledButtons) else nil,
+		ClickMaxMovement = request.ClickMaxMovement,
+		DoubleClickWindow = request.DoubleClickWindow,
+		DoubleClickMaxMovement = request.DoubleClickMaxMovement,
+		HoldDuration = request.HoldDuration,
+		DragStartThreshold = request.DragStartThreshold,
+	}
+end
+
 function Options.ResolveHoverRequest(config: TMouseManagerConfig, request: THoverRequest?): TResolvedHoverRequest
 	local baseConfig = Options.CreateConfig(config)
 	local resolvedMouseRequest = Options.ResolveRequest(baseConfig, request)
@@ -361,6 +427,51 @@ function Options.ResolveDragRequest(config: TMouseManagerConfig, request: TMouse
 			resolvedDragRequest.MarqueeSelectionOptions
 		),
 		MarqueeMetadata = resolvedDragRequest.MarqueeMetadata,
+	})
+end
+
+function Options.ResolveGestureRequest(
+	config: TMouseManagerConfig,
+	request: TMouseGestureRequest?
+): TResolvedMouseGestureRequest
+	local baseConfig = Options.CreateConfig(config)
+	local resolvedMouseRequest = Options.ResolveRequest(baseConfig, request)
+	local resolvedGestureRequest = Options.CreateGestureRequest(request)
+
+	return table.freeze({
+		ScreenPoint = resolvedMouseRequest.ScreenPoint,
+		CameraProvider = resolvedMouseRequest.CameraProvider,
+		RayLength = resolvedMouseRequest.RayLength,
+		ResolveTarget = true,
+		QueryOptions = resolvedMouseRequest.QueryOptions,
+		SelectionOptions = resolvedMouseRequest.SelectionOptions,
+		ProjectionPlane = resolvedMouseRequest.ProjectionPlane,
+		BaseExclude = resolvedMouseRequest.BaseExclude,
+		Metadata = resolvedGestureRequest.Metadata,
+		EnabledButtons = table.freeze(
+			(if resolvedGestureRequest.EnabledButtons ~= nil
+				then _CloneEnabledButtons(resolvedGestureRequest.EnabledButtons)
+				else if baseConfig.DefaultEnabledButtons ~= nil
+					then _CloneEnabledButtons(baseConfig.DefaultEnabledButtons)
+					else table.clone(DEFAULT_ENABLED_BUTTONS)) :: { Types.TMouseButton }
+		),
+		ClickMaxMovement = if resolvedGestureRequest.ClickMaxMovement ~= nil
+			then resolvedGestureRequest.ClickMaxMovement
+			else if baseConfig.ClickMaxMovement ~= nil then baseConfig.ClickMaxMovement else DEFAULT_CLICK_MAX_MOVEMENT,
+		DoubleClickWindow = if resolvedGestureRequest.DoubleClickWindow ~= nil
+			then resolvedGestureRequest.DoubleClickWindow
+			else if baseConfig.DoubleClickWindow ~= nil then baseConfig.DoubleClickWindow else DEFAULT_DOUBLE_CLICK_WINDOW,
+		DoubleClickMaxMovement = if resolvedGestureRequest.DoubleClickMaxMovement ~= nil
+			then resolvedGestureRequest.DoubleClickMaxMovement
+			else if baseConfig.DoubleClickMaxMovement ~= nil
+				then baseConfig.DoubleClickMaxMovement
+				else DEFAULT_DOUBLE_CLICK_MAX_MOVEMENT,
+		HoldDuration = if resolvedGestureRequest.HoldDuration ~= nil
+			then resolvedGestureRequest.HoldDuration
+			else if baseConfig.HoldDuration ~= nil then baseConfig.HoldDuration else DEFAULT_HOLD_DURATION,
+		DragStartThreshold = if resolvedGestureRequest.DragStartThreshold ~= nil
+			then resolvedGestureRequest.DragStartThreshold
+			else if baseConfig.DragStartThreshold ~= nil then baseConfig.DragStartThreshold else DEFAULT_DRAG_START_THRESHOLD,
 	})
 end
 

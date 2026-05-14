@@ -10,6 +10,7 @@ local StashPlus = require(ReplicatedStorage.Utilities.StashPlus)
 
 local Drag = require(script.Parent.Drag)
 local Enums = require(script.Parent.Enums)
+local Gesture = require(script.Parent.Gesture)
 local Hover = require(script.Parent.Hover)
 local Options = require(script.Parent.Options)
 local Policies = require(script.Parent.Policies)
@@ -20,6 +21,8 @@ local Types = require(script.Parent.Types)
 
 type TMouseDragRequest = Types.TMouseDragRequest
 type TMouseDragSnapshot = Types.TMouseDragSnapshot
+type TMouseGestureRequest = Types.TMouseGestureRequest
+type TMouseGestureSnapshot = Types.TMouseGestureSnapshot
 type TMarqueeRequest = Types.TMarqueeRequest
 type THoverRequest = Types.THoverRequest
 type THoverSnapshot = Types.THoverSnapshot
@@ -36,6 +39,12 @@ local SELECTION_CHANGED_SIGNAL_KEY = "SelectionChanged"
 local SELECTION_CLEARED_SIGNAL_KEY = "SelectionCleared"
 local HOVER_CHANGED_SIGNAL_KEY = "HoverChanged"
 local HOVER_CLEARED_SIGNAL_KEY = "HoverCleared"
+local GESTURE_PRESSED_SIGNAL_KEY = "GesturePressed"
+local GESTURE_RELEASED_SIGNAL_KEY = "GestureReleased"
+local GESTURE_CLICKED_SIGNAL_KEY = "GestureClicked"
+local GESTURE_DOUBLE_CLICKED_SIGNAL_KEY = "GestureDoubleClicked"
+local GESTURE_HELD_SIGNAL_KEY = "GestureHeld"
+local GESTURE_DRAG_THRESHOLD_SIGNAL_KEY = "GestureDragThresholdReached"
 local MARQUEE_PREVIEW_CHANGED_SIGNAL_KEY = "MarqueePreviewChanged"
 local DRAG_STARTED_SIGNAL_KEY = "DragStarted"
 local DRAG_UPDATED_SIGNAL_KEY = "DragUpdated"
@@ -58,13 +67,23 @@ function Manager.new(config: TMouseManagerConfig?): TMouseManager
 	self._hoverSelectionManager = nil
 	self._dragPreviewSelectionManager = nil
 	self._hoverLoopConnection = nil
+	self._gestureInputBeganConnection = nil
+	self._gestureInputEndedConnection = nil
+	self._gestureUpdateConnection = nil
 	self._selectionStateByChannel = {}
 	self._hoverStateByChannel = {}
+	self._gestureStateByChannel = {}
 	self._dragStateByChannel = {}
 	self.SelectionChanged = Signals.Create(self._stash, SELECTION_CHANGED_SIGNAL_KEY)
 	self.SelectionCleared = Signals.Create(self._stash, SELECTION_CLEARED_SIGNAL_KEY)
 	self.HoverChanged = Signals.Create(self._stash, HOVER_CHANGED_SIGNAL_KEY)
 	self.HoverCleared = Signals.Create(self._stash, HOVER_CLEARED_SIGNAL_KEY)
+	self.GesturePressed = Signals.Create(self._stash, GESTURE_PRESSED_SIGNAL_KEY)
+	self.GestureReleased = Signals.Create(self._stash, GESTURE_RELEASED_SIGNAL_KEY)
+	self.GestureClicked = Signals.Create(self._stash, GESTURE_CLICKED_SIGNAL_KEY)
+	self.GestureDoubleClicked = Signals.Create(self._stash, GESTURE_DOUBLE_CLICKED_SIGNAL_KEY)
+	self.GestureHeld = Signals.Create(self._stash, GESTURE_HELD_SIGNAL_KEY)
+	self.GestureDragThresholdReached = Signals.Create(self._stash, GESTURE_DRAG_THRESHOLD_SIGNAL_KEY)
 	self.MarqueePreviewChanged = Signals.Create(self._stash, MARQUEE_PREVIEW_CHANGED_SIGNAL_KEY)
 	self.DragStarted = Signals.Create(self._stash, DRAG_STARTED_SIGNAL_KEY)
 	self.DragUpdated = Signals.Create(self._stash, DRAG_UPDATED_SIGNAL_KEY)
@@ -283,6 +302,52 @@ function Manager:IsHovering(channelName: string): boolean
 	return self:GetHoverSnapshot(channelName) ~= nil
 end
 
+function Manager:BeginGesture(channelName: string, request: TMouseGestureRequest?): Result.Result<TMouseGestureSnapshot>
+	local aliveResult = Policies.CheckServiceAlive(self)
+	if not aliveResult.success then
+		return aliveResult
+	end
+
+	local channelResult = Policies.CheckChannelName(channelName)
+	if not channelResult.success then
+		return channelResult
+	end
+
+	return Gesture.BeginGesture(self, channelName, request)
+end
+
+function Manager:EndGesture(channelName: string): Result.Result<TMouseGestureSnapshot?>
+	local aliveResult = Policies.CheckServiceAlive(self)
+	if not aliveResult.success then
+		return aliveResult
+	end
+
+	local channelResult = Policies.CheckChannelName(channelName)
+	if not channelResult.success then
+		return channelResult
+	end
+
+	return Gesture.EndGesture(self, channelName)
+end
+
+function Manager:GetGestureSnapshot(channelName: string): TMouseGestureSnapshot?
+	local channelResult = Policies.CheckChannelName(channelName)
+	if not channelResult.success then
+		return nil
+	end
+
+	local gestureSession = self._gestureStateByChannel[channelName]
+	if gestureSession == nil then
+		return nil
+	end
+
+	return gestureSession.Snapshot
+end
+
+function Manager:IsGestureActive(channelName: string): boolean
+	return self:GetGestureSnapshot(channelName) ~= nil
+end
+
 function Manager:BeginDrag(channelName: string, request: TMouseDragRequest?): Result.Result<TMouseDragSnapshot>
 	local aliveResult = Policies.CheckServiceAlive(self)
 	if not aliveResult.success then
@@ -411,7 +476,9 @@ function Manager:Destroy()
 
 	self:ClearAllSelections()
 	Hover.ClearAllHovers(self)
+	Gesture.ClearAllGestures(self)
 	self._dragStateByChannel = {}
+	self._gestureStateByChannel = {}
 	self._hoverStateByChannel = {}
 	self._selectionStateByChannel = {}
 	if self._hoverLoopConnection ~= nil then

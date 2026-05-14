@@ -8,6 +8,15 @@ local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 
 local Enums = require(script.Parent.Enums)
 
+export type TMouseSnapshotSource = typeof(Enums.SnapshotSource.CurrentMouse)
+export type TMouseSelectionMode = typeof(Enums.SelectionMode.Single)
+export type TMouseHoverState = typeof(Enums.HoverState.Active)
+export type TMouseButton = typeof(Enums.MouseButton.Left)
+export type TMouseGesturePhase = typeof(Enums.GesturePhase.Pressed)
+export type TMouseDragMode = typeof(Enums.DragMode.World)
+export type TMouseDragState = typeof(Enums.DragState.Active)
+export type TMouseDragEndReason = typeof(Enums.DragEndReason.Completed)
+
 export type TProjectionPlane = {
 	Point: Vector3,
 	Normal: Vector3,
@@ -30,6 +39,12 @@ export type TMouseManagerConfig = {
 	MirrorHovers: boolean?,
 	DefaultHoverHighlight: SelectionPlus.THighlightConfig?,
 	DefaultHoverRadius: SelectionPlus.TRadiusConfig?,
+	DefaultEnabledButtons: { TMouseButton }?,
+	ClickMaxMovement: number?,
+	DoubleClickWindow: number?,
+	DoubleClickMaxMovement: number?,
+	HoldDuration: number?,
+	DragStartThreshold: number?,
 }
 
 export type TMouseRequest = {
@@ -75,13 +90,6 @@ export type TMouseErrorData = {
 	State: string?,
 }
 
-export type TMouseSnapshotSource = typeof(Enums.SnapshotSource.CurrentMouse)
-export type TMouseSelectionMode = typeof(Enums.SelectionMode.Single)
-export type TMouseHoverState = typeof(Enums.HoverState.Active)
-export type TMouseDragMode = typeof(Enums.DragMode.World)
-export type TMouseDragState = typeof(Enums.DragState.Active)
-export type TMouseDragEndReason = typeof(Enums.DragEndReason.Completed)
-
 export type TMouseSelectionRequest = TMouseRequest & {
 	Metadata: { [string]: any }?,
 	MirrorSelection: boolean?,
@@ -126,6 +134,62 @@ export type THoverSnapshot = {
 	Target: SelectionPlus.TResolvedSelectionTarget,
 	Metadata: { [string]: any }?,
 	Mirrored: boolean,
+}
+
+export type TMouseGestureRequest = TMouseRequest & {
+	Metadata: { [string]: any }?,
+	EnabledButtons: { TMouseButton }?,
+	ClickMaxMovement: number?,
+	DoubleClickWindow: number?,
+	DoubleClickMaxMovement: number?,
+	HoldDuration: number?,
+	DragStartThreshold: number?,
+}
+
+export type TResolvedMouseGestureRequest = TResolvedMouseRequest & {
+	Metadata: { [string]: any }?,
+	EnabledButtons: { TMouseButton },
+	ClickMaxMovement: number,
+	DoubleClickWindow: number,
+	DoubleClickMaxMovement: number,
+	HoldDuration: number,
+	DragStartThreshold: number,
+}
+
+export type TMouseGestureButtonState = {
+	Button: TMouseButton,
+	IsPressed: boolean,
+	PressedAt: number?,
+	PressScreenPoint: Vector2?,
+	LatestScreenPoint: Vector2?,
+	HoldFired: boolean,
+	DragThresholdReached: boolean,
+	LastClickAt: number?,
+	LastClickScreenPoint: Vector2?,
+	LastReleaseSnapshot: TMouseSnapshot?,
+	LastReleaseTarget: SelectionPlus.TResolvedSelectionTarget?,
+}
+
+export type TMouseGestureSnapshot = {
+	Channel: string,
+	ActiveButtons: { TMouseButton },
+	LastPressedButton: TMouseButton?,
+	LastEventPhase: TMouseGesturePhase?,
+	LastMouseSnapshot: TMouseSnapshot?,
+	LastResolvedTarget: SelectionPlus.TResolvedSelectionTarget?,
+	Metadata: { [string]: any }?,
+	ButtonStates: { [string]: TMouseGestureButtonState },
+}
+
+export type TMouseGestureEvent = {
+	Channel: string,
+	Button: TMouseButton,
+	Phase: TMouseGesturePhase,
+	MouseSnapshot: TMouseSnapshot,
+	ResolvedTarget: SelectionPlus.TResolvedSelectionTarget?,
+	ElapsedTime: number,
+	ScreenDelta: Vector2,
+	Metadata: { [string]: any }?,
 }
 
 export type TScreenRect = {
@@ -297,12 +361,36 @@ export type TMouseDragEndedSignal = {
 }
 
 export type TMarqueePreviewChangedSignal = TMouseDragChangedSignal
+export type TMouseGestureSignal = {
+	Connect: (
+		self: TMouseGestureSignal,
+		callback: (channelName: string, event: TMouseGestureEvent, snapshot: TMouseGestureSnapshot) -> ()
+	) -> TMouseConnection,
+	Once: (
+		self: TMouseGestureSignal,
+		callback: (channelName: string, event: TMouseGestureEvent, snapshot: TMouseGestureSnapshot) -> ()
+	) -> TMouseConnection,
+	Fire: (
+		self: TMouseGestureSignal,
+		channelName: string,
+		event: TMouseGestureEvent,
+		snapshot: TMouseGestureSnapshot
+	) -> (),
+	Wait: (self: TMouseGestureSignal) -> (string, TMouseGestureEvent, TMouseGestureSnapshot),
+	DisconnectAll: (self: TMouseGestureSignal) -> (),
+}
 
 export type TMouseManager = {
 	SelectionChanged: TMouseSelectionChangedSignal,
 	SelectionCleared: TMouseSelectionClearedSignal,
 	HoverChanged: THoverChangedSignal,
 	HoverCleared: THoverClearedSignal,
+	GesturePressed: TMouseGestureSignal,
+	GestureReleased: TMouseGestureSignal,
+	GestureClicked: TMouseGestureSignal,
+	GestureDoubleClicked: TMouseGestureSignal,
+	GestureHeld: TMouseGestureSignal,
+	GestureDragThresholdReached: TMouseGestureSignal,
 	MarqueePreviewChanged: TMarqueePreviewChangedSignal,
 	DragStarted: TMouseDragChangedSignal,
 	DragUpdated: TMouseDragChangedSignal,
@@ -329,6 +417,10 @@ export type TMouseManager = {
 	GetHoverSnapshot: (self: TMouseManager, channelName: string) -> THoverSnapshot?,
 	GetHoverTarget: (self: TMouseManager, channelName: string) -> SelectionPlus.TResolvedSelectionTarget?,
 	IsHovering: (self: TMouseManager, channelName: string) -> boolean,
+	BeginGesture: (self: TMouseManager, channelName: string, request: TMouseGestureRequest?) -> Result.Result<TMouseGestureSnapshot>,
+	EndGesture: (self: TMouseManager, channelName: string) -> Result.Result<TMouseGestureSnapshot?>,
+	GetGestureSnapshot: (self: TMouseManager, channelName: string) -> TMouseGestureSnapshot?,
+	IsGestureActive: (self: TMouseManager, channelName: string) -> boolean,
 	BeginDrag: (self: TMouseManager, channelName: string, request: TMouseDragRequest?) -> Result.Result<TMouseDragSnapshot>,
 	UpdateDrag: (self: TMouseManager, channelName: string, request: TMouseDragRequest?) -> Result.Result<TMouseDragSnapshot>,
 	EndDrag: (self: TMouseManager, channelName: string, request: TMouseDragRequest?) -> Result.Result<TMouseDragSnapshot>,

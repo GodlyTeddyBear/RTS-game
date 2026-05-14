@@ -70,6 +70,27 @@ function Errors.BuildHoverTargetNotFound(channelName: string): (string, string, 
 	})
 end
 
+function Errors.BuildMissingGestureSession(channelName: string): (string, string, TMouseErrorData?)
+	return _BuildError(Enums.ErrorKey.MissingGestureSession, nil, {
+		ChannelName = channelName,
+		Reason = "Gesture session is not active for this channel",
+	})
+end
+
+function Errors.BuildDuplicateGestureSession(channelName: string): (string, string, TMouseErrorData?)
+	return _BuildError(Enums.ErrorKey.DuplicateGestureSession, nil, {
+		ChannelName = channelName,
+		Reason = "Gesture session is already active for this channel",
+	})
+end
+
+function Errors.BuildIllegalGestureTransition(channelName: string, reason: string): (string, string, TMouseErrorData?)
+	return _BuildError(Enums.ErrorKey.IllegalGestureTransition, nil, {
+		ChannelName = channelName,
+		Reason = reason,
+	})
+end
+
 function Errors.BuildDragWorldPointNotFound(channelName: string): (string, string, TMouseErrorData?)
 	return _BuildError(Enums.ErrorKey.DragWorldPointNotFound, nil, {
 		ChannelName = channelName,

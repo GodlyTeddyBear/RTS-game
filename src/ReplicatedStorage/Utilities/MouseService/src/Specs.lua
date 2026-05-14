@@ -44,6 +44,28 @@ function Specs.IsValidDragMode(dragMode: any): boolean
 	return dragMode == nil or dragMode == Enums.DragMode.World or dragMode == Enums.DragMode.Marquee
 end
 
+function Specs.IsValidMouseButton(mouseButton: any): boolean
+	return mouseButton == Enums.MouseButton.Left or mouseButton == Enums.MouseButton.Right
+end
+
+function Specs.IsValidEnabledButtons(enabledButtons: any): boolean
+	if enabledButtons == nil then
+		return true
+	end
+
+	if type(enabledButtons) ~= "table" then
+		return false
+	end
+
+	for index, mouseButton in ipairs(enabledButtons) do
+		if type(index) ~= "number" or not Specs.IsValidMouseButton(mouseButton) then
+			return false
+		end
+	end
+
+	return true
+end
+
 function Specs.IsValidQueryOptions(queryOptions: any): boolean
 	return queryOptions == nil or type(queryOptions) == "table"
 end
@@ -82,6 +104,14 @@ end
 
 function Specs.IsValidMetadata(metadata: any): boolean
 	return metadata == nil or type(metadata) == "table"
+end
+
+function Specs.IsValidNonNegativeNumber(value: any): boolean
+	return value == nil or (type(value) == "number" and value >= 0)
+end
+
+function Specs.IsValidPositiveNumber(value: any): boolean
+	return value == nil or (type(value) == "number" and value > 0)
 end
 
 function Specs.IsValidMirrorSelection(mirrorSelection: any): boolean
@@ -133,6 +163,14 @@ function Specs.CanBeginHover(hasSession: boolean): boolean
 end
 
 function Specs.CanOperateOnHover(hasSession: boolean): boolean
+	return hasSession
+end
+
+function Specs.CanBeginGesture(hasSession: boolean): boolean
+	return not hasSession
+end
+
+function Specs.CanOperateOnGesture(hasSession: boolean): boolean
 	return hasSession
 end
 
@@ -200,6 +238,14 @@ local HasValidDragMode = Specification.new(
 	end
 )
 
+local HasValidEnabledButtons = Specification.new(
+	_ErrorName(Enums.ErrorKey.InvalidEnabledButtons),
+	Enums.ErrorMessage[Enums.ErrorKey.InvalidEnabledButtons],
+	function(candidate): boolean
+		return Specs.IsValidEnabledButtons(candidate.EnabledButtons)
+	end
+)
+
 local HasValidQueryOptions = Specification.new(
 	_ErrorName(Enums.ErrorKey.InvalidQueryOptions),
 	Enums.ErrorMessage[Enums.ErrorKey.InvalidQueryOptions],
@@ -237,6 +283,46 @@ local HasValidMetadata = Specification.new(
 	Enums.ErrorMessage[Enums.ErrorKey.InvalidMetadata],
 	function(candidate): boolean
 		return Specs.IsValidMetadata(candidate.Metadata)
+	end
+)
+
+local HasValidClickMaxMovement = Specification.new(
+	_ErrorName(Enums.ErrorKey.InvalidClickMaxMovement),
+	Enums.ErrorMessage[Enums.ErrorKey.InvalidClickMaxMovement],
+	function(candidate): boolean
+		return Specs.IsValidNonNegativeNumber(candidate.ClickMaxMovement)
+	end
+)
+
+local HasValidDoubleClickWindow = Specification.new(
+	_ErrorName(Enums.ErrorKey.InvalidDoubleClickWindow),
+	Enums.ErrorMessage[Enums.ErrorKey.InvalidDoubleClickWindow],
+	function(candidate): boolean
+		return Specs.IsValidPositiveNumber(candidate.DoubleClickWindow)
+	end
+)
+
+local HasValidDoubleClickMaxMovement = Specification.new(
+	_ErrorName(Enums.ErrorKey.InvalidDoubleClickMaxMovement),
+	Enums.ErrorMessage[Enums.ErrorKey.InvalidDoubleClickMaxMovement],
+	function(candidate): boolean
+		return Specs.IsValidNonNegativeNumber(candidate.DoubleClickMaxMovement)
+	end
+)
+
+local HasValidHoldDuration = Specification.new(
+	_ErrorName(Enums.ErrorKey.InvalidHoldDuration),
+	Enums.ErrorMessage[Enums.ErrorKey.InvalidHoldDuration],
+	function(candidate): boolean
+		return Specs.IsValidPositiveNumber(candidate.HoldDuration)
+	end
+)
+
+local HasValidDragStartThreshold = Specification.new(
+	_ErrorName(Enums.ErrorKey.InvalidDragStartThreshold),
+	Enums.ErrorMessage[Enums.ErrorKey.InvalidDragStartThreshold],
+	function(candidate): boolean
+		return Specs.IsValidNonNegativeNumber(candidate.DragStartThreshold)
 	end
 )
 
@@ -384,6 +470,22 @@ local CanOperateOnHover = Specification.new(
 	end
 )
 
+local CanBeginGesture = Specification.new(
+	_ErrorName(Enums.ErrorKey.DuplicateGestureSession),
+	Enums.ErrorMessage[Enums.ErrorKey.DuplicateGestureSession],
+	function(candidate): boolean
+		return Specs.CanBeginGesture(candidate.HasSession)
+	end
+)
+
+local CanOperateOnGesture = Specification.new(
+	_ErrorName(Enums.ErrorKey.MissingGestureSession),
+	Enums.ErrorMessage[Enums.ErrorKey.MissingGestureSession],
+	function(candidate): boolean
+		return Specs.CanOperateOnGesture(candidate.HasSession)
+	end
+)
+
 Specs.HasValidConfigSpec = HasValidConfig
 Specs.HasValidRequestSpec = HasValidRequest
 Specs.HasValidChannelNameSpec = HasValidChannelName
@@ -392,11 +494,17 @@ Specs.HasValidCameraProviderSpec = HasValidCameraProvider
 Specs.HasValidRayLengthSpec = HasValidRayLength
 Specs.HasValidResolveTargetSpec = HasValidResolveTarget
 Specs.HasValidDragModeSpec = HasValidDragMode
+Specs.HasValidEnabledButtonsSpec = HasValidEnabledButtons
 Specs.HasValidQueryOptionsSpec = HasValidQueryOptions
 Specs.HasValidSelectionOptionsSpec = HasValidSelectionOptions
 Specs.HasValidProjectionPlaneSpec = HasValidProjectionPlane
 Specs.HasValidBaseExcludeSpec = HasValidBaseExclude
 Specs.HasValidMetadataSpec = HasValidMetadata
+Specs.HasValidClickMaxMovementSpec = HasValidClickMaxMovement
+Specs.HasValidDoubleClickWindowSpec = HasValidDoubleClickWindow
+Specs.HasValidDoubleClickMaxMovementSpec = HasValidDoubleClickMaxMovement
+Specs.HasValidHoldDurationSpec = HasValidHoldDuration
+Specs.HasValidDragStartThresholdSpec = HasValidDragStartThreshold
 Specs.HasValidMirrorSelectionSpec = HasValidMirrorSelection
 Specs.HasValidMirrorHoverSpec = HasValidMirrorHover
 Specs.HasValidMirrorPreviewSelectionSpec = HasValidMirrorPreviewSelection
@@ -415,16 +523,25 @@ Specs.CanBeginDragSpec = CanBeginDrag
 Specs.CanOperateOnDragSpec = CanOperateOnDrag
 Specs.CanBeginHoverSpec = CanBeginHover
 Specs.CanOperateOnHoverSpec = CanOperateOnHover
+Specs.CanBeginGestureSpec = CanBeginGesture
+Specs.CanOperateOnGestureSpec = CanOperateOnGesture
 Specs.HasValidManagerConfigSpec = Specification.All({
 	HasValidConfig,
 	HasValidCameraProvider,
 	HasValidRayLength,
 	HasValidResolveTarget,
 	HasValidDragMode,
+	HasValidEnabledButtons,
 	HasValidQueryOptions,
 	HasValidSelectionOptions,
 	HasValidProjectionPlane,
 	HasValidBaseExclude,
+	HasValidMetadata,
+	HasValidClickMaxMovement,
+	HasValidDoubleClickWindow,
+	HasValidDoubleClickMaxMovement,
+	HasValidHoldDuration,
+	HasValidDragStartThreshold,
 	HasValidMirrorSelection,
 	HasValidHighlightOptions,
 	HasValidRadiusOptions,
@@ -444,10 +561,16 @@ Specs.HasValidRequestShapeSpec = Specification.All({
 	HasValidRayLength,
 	HasValidResolveTarget,
 	HasValidDragMode,
+	HasValidEnabledButtons,
 	HasValidQueryOptions,
 	HasValidSelectionOptions,
 	HasValidProjectionPlane,
 	HasValidBaseExclude,
+	HasValidClickMaxMovement,
+	HasValidDoubleClickWindow,
+	HasValidDoubleClickMaxMovement,
+	HasValidHoldDuration,
+	HasValidDragStartThreshold,
 })
 Specs.HasValidSelectionRequestSpec = Specification.All({
 	HasValidRequest,
@@ -478,6 +601,24 @@ Specs.HasValidHoverRequestSpec = Specification.All({
 	HasValidMirrorHover,
 	HasValidHoverHighlightOptions,
 	HasValidHoverRadiusOptions,
+})
+Specs.HasValidGestureRequestSpec = Specification.All({
+	HasValidRequest,
+	HasValidScreenPoint,
+	HasValidCameraProvider,
+	HasValidRayLength,
+	HasValidResolveTarget,
+	HasValidEnabledButtons,
+	HasValidQueryOptions,
+	HasValidSelectionOptions,
+	HasValidProjectionPlane,
+	HasValidBaseExclude,
+	HasValidMetadata,
+	HasValidClickMaxMovement,
+	HasValidDoubleClickWindow,
+	HasValidDoubleClickMaxMovement,
+	HasValidHoldDuration,
+	HasValidDragStartThreshold,
 })
 Specs.HasValidDragRequestSpec = Specification.All({
 	HasValidRequest,
