@@ -3,17 +3,17 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
 
 local ClickService = require(ReplicatedStorage.Utilities.ClickService)
 local Option = require(ReplicatedStorage.Utilities.Option)
-local BaseConfig = require(ReplicatedStorage.Contexts.Base.Config.BaseConfig)
 local BaseTypes = require(ReplicatedStorage.Contexts.Base.Types.BaseTypes)
-local MapConfig = require(ReplicatedStorage.Contexts.Map.Config.MapConfig)
 
 type BaseState = BaseTypes.BaseState
 type BaseAtom = () -> BaseState?
 type BaseClickCallback = (Instance) -> ()
+type BaseDiscoveryService = {
+	GetActiveBaseInstance: (self: BaseDiscoveryService) -> Instance?,
+}
 
 local CLICK_DETECTOR_NAME = "BaseProductionClickDetector"
 local CLICK_REFRESH_INTERVAL = 0.25
@@ -63,32 +63,10 @@ local function _AsClickTarget(instance: Instance?): (Model | BasePart)?
 	return _FindFirstBasePart(instance)
 end
 
-local function _ResolveRuntimeMap(): Instance?
-	local mapContainer = Workspace:FindFirstChild(MapConfig.WORKSPACE_MAP_CONTAINER_NAME)
-	if mapContainer == nil then
-		return nil
-	end
-
-	local gameContainer = mapContainer:FindFirstChild(MapConfig.WORKSPACE_GAME_CONTAINER_NAME)
-	if gameContainer == nil then
-		return nil
-	end
-
-	return gameContainer:FindFirstChild(MapConfig.RUNTIME_MAP_NAME)
-end
-
-local function _FindRuntimeBase(): (Model | BasePart)?
-	local runtimeMap = _ResolveRuntimeMap()
-	if runtimeMap == nil then
-		return nil
-	end
-
-	return _AsClickTarget(runtimeMap:FindFirstChild(BaseConfig.BASE_MARKER_NAME, true))
-end
-
-function BaseClickService.new(baseAtom: BaseAtom, onClicked: BaseClickCallback)
+function BaseClickService.new(baseAtom: BaseAtom, discoveryService: BaseDiscoveryService, onClicked: BaseClickCallback)
 	local self = setmetatable({}, BaseClickService)
 	self._baseAtom = baseAtom
+	self._discoveryService = discoveryService
 	self._onClicked = onClicked
 	self._clickService = ClickService.new({
 		Name = CLICK_DETECTOR_NAME,
@@ -135,7 +113,7 @@ function BaseClickService:_RefreshAttachment()
 		return
 	end
 
-	local target = _FindRuntimeBase()
+	local target = _AsClickTarget(self._discoveryService:GetActiveBaseInstance())
 	if target == nil or target.Parent == nil then
 		self:_DetachCurrentTarget()
 		return

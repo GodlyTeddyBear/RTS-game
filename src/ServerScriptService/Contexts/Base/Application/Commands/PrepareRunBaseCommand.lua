@@ -40,6 +40,7 @@ end
 function PrepareRunBaseCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_entityFactory = "BaseEntityFactory",
+		_instanceFactory = "BaseInstanceFactory",
 		_syncService = "BaseSyncService",
 	})
 end
@@ -69,7 +70,8 @@ function PrepareRunBaseCommand:Execute(): Result.Result<boolean>
 		local baseAnchor = Try(self._mapContext:GetBaseAnchor())
 		Ensure(baseAnchor ~= nil, "BaseAnchorNotFound", Errors.BASE_ANCHOR_NOT_FOUND)
 
-		self._entityFactory:CreateOrResetBase(BaseConfig.BASE_ID, BaseConfig.MAX_HP, baseInstance, baseAnchor)
+		local entity = self._entityFactory:CreateOrResetBase(BaseConfig.BASE_ID, BaseConfig.MAX_HP, baseInstance, baseAnchor)
+		self._instanceFactory:BindBaseInstance(entity, baseInstance, baseAnchor, BaseConfig.BASE_ID)
 		self._syncService:SyncBaseState()
 		self._syncService:HydrateAllPlayers()
 

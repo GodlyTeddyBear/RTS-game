@@ -36,6 +36,7 @@ end
 function CleanupBaseCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_entityFactory = "BaseEntityFactory",
+		_instanceFactory = "BaseInstanceFactory",
 		_syncService = "BaseSyncService",
 		_applyDamageCommand = "ApplyDamageBaseCommand",
 	})
@@ -48,6 +49,11 @@ end
 ]=]
 function CleanupBaseCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
+		local baseEntity = self._entityFactory:GetBaseEntity()
+		if baseEntity ~= nil then
+			self._instanceFactory:UnbindBaseInstance(baseEntity)
+		end
+
 		self._entityFactory:ClearBase()
 		self._syncService:ClearState()
 		self._applyDamageCommand:ResetDeathEmission()

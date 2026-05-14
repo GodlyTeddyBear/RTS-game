@@ -18,6 +18,7 @@ local BlinkServer = require(ReplicatedStorage.Network.Generated.BaseSyncServer)
 local BaseECSWorldService = require(script.Parent.Infrastructure.ECS.BaseECSWorldService)
 local BaseComponentRegistry = require(script.Parent.Infrastructure.ECS.BaseComponentRegistry)
 local BaseEntityFactory = require(script.Parent.Infrastructure.ECS.BaseEntityFactory)
+local BaseInstanceFactory = require(script.Parent.Infrastructure.Services.BaseInstanceFactory)
 local BaseSyncService = require(script.Parent.Infrastructure.Persistence.BaseSyncService)
 local PrepareRunBaseCommand = require(script.Parent.Application.Commands.PrepareRunBaseCommand)
 local ApplyDamageBaseCommand = require(script.Parent.Application.Commands.ApplyDamageBaseCommand)
@@ -45,6 +46,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "BaseEntityFactory",
 		Module = BaseEntityFactory,
 		CacheAs = "_entityFactory",
+	},
+	{
+		Name = "BaseInstanceFactory",
+		Module = BaseInstanceFactory,
+		CacheAs = "_instanceFactory",
 	},
 	{
 		Name = "BaseSyncService",
@@ -100,6 +106,7 @@ local BaseContextService = Knit.CreateService({
 	Teardown = {
 		Fields = {
 			{ Field = "_playerAddedConnection", Method = "Disconnect" },
+			{ Field = "_instanceFactory", Method = "Destroy" },
 			{ Field = "_syncService", Method = "Destroy" },
 		},
 	},
