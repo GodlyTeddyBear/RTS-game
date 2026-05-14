@@ -41,6 +41,8 @@ function ExitPlacementModeCommand:Execute(state: any, deps: any)
 	state._hoveredCoord = nil
 	state._hoveredKey = nil
 	state._hoveredFootprintCoords = table.freeze({})
+	state._hoveredGroundWorldPos = nil
+	state._hoveredRotationQuarterTurns = 0
 	state._isHoveredValid = false
 	state._validTiles = table.freeze({})
 	state._validTileSet = {}

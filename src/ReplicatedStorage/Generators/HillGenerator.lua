@@ -121,7 +121,7 @@ end
 function Helpers.createPart(properties: { [string]: any }?): Part
 	local part = e("Part", {
 		Anchored = true,
-		CanCollide = false,
+		CanCollide = true,
 		TopSurface = Enum.SurfaceType.Smooth,
 		BottomSurface = Enum.SurfaceType.Smooth,
 	}) :: Part
@@ -402,11 +402,7 @@ local function createHillBlock(attributes: THillAttributes, random: Random, root
 		return cornerDirection[sideKey] or 0
 	end
 
-	local function createCornerBaseOperand(
-		cornerName: string,
-		sideKey: string,
-		sourceWedge: WedgePart
-	): WedgePart
+	local function createCornerBaseOperand(cornerName: string, sideKey: string, sourceWedge: WedgePart): WedgePart
 		local baseOperand = sourceWedge:Clone()
 		baseOperand.Name = cornerName .. "_" .. sideKey .. "_Base"
 		baseOperand.Parent = root
@@ -520,20 +516,10 @@ local function createHillBlock(attributes: THillAttributes, random: Random, root
 		local temporaryParts: { Instance } = {}
 
 		-- Build a composite operand for each participating side
-		local firstComposite = createCornerCompositeOperand(
-			cornerName,
-			firstSideKey,
-			firstWedge,
-			secondWedge,
-			temporaryParts
-		)
-		local secondComposite = createCornerCompositeOperand(
-			cornerName,
-			secondSideKey,
-			secondWedge,
-			firstWedge,
-			temporaryParts
-		)
+		local firstComposite =
+			createCornerCompositeOperand(cornerName, firstSideKey, firstWedge, secondWedge, temporaryParts)
+		local secondComposite =
+			createCornerCompositeOperand(cornerName, secondSideKey, secondWedge, firstWedge, temporaryParts)
 
 		if firstComposite == nil or secondComposite == nil then
 			cleanupCornerTemporaryParts(temporaryParts)
@@ -656,14 +642,15 @@ local Generator: TGeneratorDefinition<THillAttributes> & {
 	Attributes: THillAttributes,
 	OnGenerate: (parameters: TGenerationParams<THillAttributes>, targetContainer: Instance) -> (),
 	Run: (sourceInstance: Instance, targetContainer: Instance, options: TRunOptions?) -> { [string]: any },
-} = {
-	Defaults = DEFAULTS,
-	Generate = Generate,
-	Attributes = DEFAULTS,
-	OnGenerate = Generate,
-	Run = function(sourceInstance: Instance, targetContainer: Instance, options: TRunOptions?)
-		return GeneratorRunner.RunGeneratorModule(script, sourceInstance, targetContainer, options)
-	end,
-}
+} =
+	{
+		Defaults = DEFAULTS,
+		Generate = Generate,
+		Attributes = DEFAULTS,
+		OnGenerate = Generate,
+		Run = function(sourceInstance: Instance, targetContainer: Instance, options: TRunOptions?)
+			return GeneratorRunner.RunGeneratorModule(script, sourceInstance, targetContainer, options)
+		end,
+	}
 
 return table.freeze(Generator)

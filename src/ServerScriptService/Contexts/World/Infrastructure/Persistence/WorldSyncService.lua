@@ -55,7 +55,18 @@ local function _FreezeTiles(tiles: { Tile }): { [number]: any }
 			Zone = tile.Zone,
 			ResourceType = tile.ResourceType,
 			IsPlacementProhibited = tile.IsPlacementProhibited,
-			Occupied = tile.Occupied,
+		})
+	end
+	return table.freeze(payload)
+end
+
+local function _FreezeOccupiedCoords(coords: { GridSpec | any }): { [number]: any }
+	local payload = table.create(#coords)
+	for index, coord in ipairs(coords) do
+		payload[index] = table.freeze({
+			GridId = coord.GridId,
+			Row = coord.Row,
+			Col = coord.Col,
 		})
 	end
 	return table.freeze(payload)
@@ -89,14 +100,32 @@ function WorldSyncService:HydratePlayer(player: Player)
 	self.Syncer:hydrate(player)
 end
 
-function WorldSyncService:SetSnapshot(gridSpecs: { GridSpec }, tiles: { Tile })
+function WorldSyncService:SetSnapshot(gridSpecs: { GridSpec }, tiles: { Tile }, occupiedCoords: { any }?)
 	local frozenGridSpecs = _FreezeGridSpecs(gridSpecs)
 	local frozenTiles = _FreezeTiles(tiles)
+	local frozenOccupiedCoords = _FreezeOccupiedCoords(occupiedCoords or {})
 
-	self.Atom(function()
+	self.Atom(function(current)
 		return {
+			StaticVersion = current.StaticVersion + 1,
+			OccupancyVersion = current.OccupancyVersion + 1,
 			GridSpecs = frozenGridSpecs,
 			Tiles = frozenTiles,
+			OccupiedCoords = frozenOccupiedCoords,
+		}
+	end)
+end
+
+function WorldSyncService:SetOccupancySnapshot(occupiedCoords: { any })
+	local frozenOccupiedCoords = _FreezeOccupiedCoords(occupiedCoords)
+
+	self.Atom(function(current)
+		return {
+			StaticVersion = current.StaticVersion,
+			OccupancyVersion = current.OccupancyVersion + 1,
+			GridSpecs = current.GridSpecs,
+			Tiles = current.Tiles,
+			OccupiedCoords = frozenOccupiedCoords,
 		}
 	end)
 end

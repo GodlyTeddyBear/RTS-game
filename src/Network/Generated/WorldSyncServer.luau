@@ -160,13 +160,15 @@ local SerdesEvent = "?"
 local SerdesThread: thread?
 export type GridSpecPayload = { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }
 export type GridSpecList = {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}
-export type TileDescriptorPayload = { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }
-export type TileDescriptorList = {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}
-export type WorldGridStatePayload = { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }
-export type InitPayload = { WorldGrid: { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }? }
-export type PatchPayload = { WorldGrid: { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }? }
-export type SyncPayload = { type: "init", data: { WorldGrid: { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }? }? } | { type: "patch", data: { WorldGrid: { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }? }? }
-local function WriteEVENT_SyncWorldGrid(Value: { type: "init", data: { WorldGrid: { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }? }? } | { type: "patch", data: { WorldGrid: { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }? }? }): ()
+export type GridCoordPayload = { GridId: string?, Row: number?, Col: number? }
+export type OccupiedCoordList = {[number]: { GridId: string?, Row: number?, Col: number? }}
+export type TileDescriptorPayload = { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }
+export type TileDescriptorList = {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}
+export type WorldGridStatePayload = { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }
+export type InitPayload = { WorldGrid: { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }? }
+export type PatchPayload = { WorldGrid: { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }? }
+export type SyncPayload = { type: "init", data: { WorldGrid: { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }? }? } | { type: "patch", data: { WorldGrid: { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }? }? }
+local function WriteEVENT_SyncWorldGrid(Value: { type: "init", data: { WorldGrid: { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }? }? } | { type: "patch", data: { WorldGrid: { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }? }? }): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
@@ -180,9 +182,21 @@ local function WriteEVENT_SyncWorldGrid(Value: { type: "init", data: { WorldGrid
 			local BLOCK_START = Allocate(1)
 			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.WorldGrid ~= nil and 1 or 0)
 			if Value.data.WorldGrid ~= nil then
-				-- Allocate BLOCK: 2 bytes
-				local BLOCK_START = Allocate(2)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.WorldGrid.GridSpecs ~= nil and 1 or 0)
+				-- Allocate BLOCK: 5 bytes
+				local BLOCK_START = Allocate(5)
+				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.WorldGrid.StaticVersion ~= nil and 1 or 0)
+				if Value.data.WorldGrid.StaticVersion ~= nil then
+					-- Allocate BLOCK: 8 bytes
+					local BLOCK_START = Allocate(8)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.WorldGrid.StaticVersion)
+				end
+				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.WorldGrid.OccupancyVersion ~= nil and 1 or 0)
+				if Value.data.WorldGrid.OccupancyVersion ~= nil then
+					-- Allocate BLOCK: 8 bytes
+					local BLOCK_START = Allocate(8)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.WorldGrid.OccupancyVersion)
+				end
+				buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.data.WorldGrid.GridSpecs ~= nil and 1 or 0)
 				if Value.data.WorldGrid.GridSpecs ~= nil then
 					-- Allocate BLOCK: 2 bytes
 					local BLOCK_START = Allocate(2)
@@ -337,7 +351,7 @@ local function WriteEVENT_SyncWorldGrid(Value: { type: "init", data: { WorldGrid
 					end
 					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.WorldGrid.Tiles ~= nil and 1 or 0)
+				buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.data.WorldGrid.Tiles ~= nil and 1 or 0)
 				if Value.data.WorldGrid.Tiles ~= nil then
 					-- Allocate BLOCK: 2 bytes
 					local BLOCK_START = Allocate(2)
@@ -418,12 +432,41 @@ local function WriteEVENT_SyncWorldGrid(Value: { type: "init", data: { WorldGrid
 							local BLOCK_START = Allocate(1)
 							buffer.writeu8(SendBuffer, BLOCK_START + 0, Element_5.IsPlacementProhibited and 1 or 0)
 						end
-						local OFFSET_10 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_10, Element_5.Occupied ~= nil and 1 or 0)
-						if Element_5.Occupied ~= nil then
-							-- Allocate BLOCK: 1 bytes
-							local BLOCK_START = Allocate(1)
-							buffer.writeu8(SendBuffer, BLOCK_START + 0, Element_5.Occupied and 1 or 0)
+					end
+					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
+				end
+				buffer.writeu8(SendBuffer, BLOCK_START + 4, Value.data.WorldGrid.OccupiedCoords ~= nil and 1 or 0)
+				if Value.data.WorldGrid.OccupiedCoords ~= nil then
+					-- Allocate BLOCK: 2 bytes
+					local BLOCK_START = Allocate(2)
+					local Elements_5 = 0
+					for Key_5, Element_5 in Value.data.WorldGrid.OccupiedCoords do
+						Elements_5 += 1
+						local OFFSET_0 = Allocate(4)
+						buffer.writeu32(SendBuffer, OFFSET_0, Key_5)
+						local OFFSET_1 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_1, Element_5.GridId ~= nil and 1 or 0)
+						if Element_5.GridId ~= nil then
+							-- Allocate BLOCK: 2 bytes
+							local BLOCK_START = Allocate(2)
+							local Length = #Element_5.GridId
+							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+							Allocate(Length)
+							buffer.writestring(SendBuffer, SendOffset, Element_5.GridId, Length)
+						end
+						local OFFSET_2 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_2, Element_5.Row ~= nil and 1 or 0)
+						if Element_5.Row ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Row)
+						end
+						local OFFSET_3 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_3, Element_5.Col ~= nil and 1 or 0)
+						if Element_5.Col ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Col)
 						end
 					end
 					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
@@ -440,9 +483,21 @@ local function WriteEVENT_SyncWorldGrid(Value: { type: "init", data: { WorldGrid
 			local BLOCK_START = Allocate(1)
 			buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.WorldGrid ~= nil and 1 or 0)
 			if Value.data.WorldGrid ~= nil then
-				-- Allocate BLOCK: 2 bytes
-				local BLOCK_START = Allocate(2)
-				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.WorldGrid.GridSpecs ~= nil and 1 or 0)
+				-- Allocate BLOCK: 5 bytes
+				local BLOCK_START = Allocate(5)
+				buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.data.WorldGrid.StaticVersion ~= nil and 1 or 0)
+				if Value.data.WorldGrid.StaticVersion ~= nil then
+					-- Allocate BLOCK: 8 bytes
+					local BLOCK_START = Allocate(8)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.WorldGrid.StaticVersion)
+				end
+				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.WorldGrid.OccupancyVersion ~= nil and 1 or 0)
+				if Value.data.WorldGrid.OccupancyVersion ~= nil then
+					-- Allocate BLOCK: 8 bytes
+					local BLOCK_START = Allocate(8)
+					buffer.writef64(SendBuffer, BLOCK_START + 0, Value.data.WorldGrid.OccupancyVersion)
+				end
+				buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.data.WorldGrid.GridSpecs ~= nil and 1 or 0)
 				if Value.data.WorldGrid.GridSpecs ~= nil then
 					-- Allocate BLOCK: 2 bytes
 					local BLOCK_START = Allocate(2)
@@ -597,7 +652,7 @@ local function WriteEVENT_SyncWorldGrid(Value: { type: "init", data: { WorldGrid
 					end
 					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
 				end
-				buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.data.WorldGrid.Tiles ~= nil and 1 or 0)
+				buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.data.WorldGrid.Tiles ~= nil and 1 or 0)
 				if Value.data.WorldGrid.Tiles ~= nil then
 					-- Allocate BLOCK: 2 bytes
 					local BLOCK_START = Allocate(2)
@@ -678,12 +733,41 @@ local function WriteEVENT_SyncWorldGrid(Value: { type: "init", data: { WorldGrid
 							local BLOCK_START = Allocate(1)
 							buffer.writeu8(SendBuffer, BLOCK_START + 0, Element_5.IsPlacementProhibited and 1 or 0)
 						end
-						local OFFSET_10 = Allocate(1)
-						buffer.writeu8(SendBuffer, OFFSET_10, Element_5.Occupied ~= nil and 1 or 0)
-						if Element_5.Occupied ~= nil then
-							-- Allocate BLOCK: 1 bytes
-							local BLOCK_START = Allocate(1)
-							buffer.writeu8(SendBuffer, BLOCK_START + 0, Element_5.Occupied and 1 or 0)
+					end
+					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
+				end
+				buffer.writeu8(SendBuffer, BLOCK_START + 4, Value.data.WorldGrid.OccupiedCoords ~= nil and 1 or 0)
+				if Value.data.WorldGrid.OccupiedCoords ~= nil then
+					-- Allocate BLOCK: 2 bytes
+					local BLOCK_START = Allocate(2)
+					local Elements_5 = 0
+					for Key_5, Element_5 in Value.data.WorldGrid.OccupiedCoords do
+						Elements_5 += 1
+						local OFFSET_0 = Allocate(4)
+						buffer.writeu32(SendBuffer, OFFSET_0, Key_5)
+						local OFFSET_1 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_1, Element_5.GridId ~= nil and 1 or 0)
+						if Element_5.GridId ~= nil then
+							-- Allocate BLOCK: 2 bytes
+							local BLOCK_START = Allocate(2)
+							local Length = #Element_5.GridId
+							buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+							Allocate(Length)
+							buffer.writestring(SendBuffer, SendOffset, Element_5.GridId, Length)
+						end
+						local OFFSET_2 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_2, Element_5.Row ~= nil and 1 or 0)
+						if Element_5.Row ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Row)
+						end
+						local OFFSET_3 = Allocate(1)
+						buffer.writeu8(SendBuffer, OFFSET_3, Element_5.Col ~= nil and 1 or 0)
+						if Element_5.Col ~= nil then
+							-- Allocate BLOCK: 8 bytes
+							local BLOCK_START = Allocate(8)
+							buffer.writef64(SendBuffer, BLOCK_START + 0, Element_5.Col)
 						end
 					end
 					buffer.writeu16(SendBuffer, BLOCK_START + 0, Elements_5)
@@ -791,12 +875,12 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	SyncWorldGrid = {
-		Fire = function(Player: Player, Value: { type: "init", data: { WorldGrid: { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }? }? } | { type: "patch", data: { WorldGrid: { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }? }? }): ()
+		Fire = function(Player: Player, Value: { type: "init", data: { WorldGrid: { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }? }? } | { type: "patch", data: { WorldGrid: { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }? }? }): ()
 			Load(PlayersMap[Player])
 			WriteEVENT_SyncWorldGrid(Value)
 			PlayersMap[Player] = Save()
 		end,
-		FireAll = function(Value: { type: "init", data: { WorldGrid: { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }? }? } | { type: "patch", data: { WorldGrid: { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }? }? }): ()
+		FireAll = function(Value: { type: "init", data: { WorldGrid: { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }? }? } | { type: "patch", data: { WorldGrid: { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncWorldGrid(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -808,7 +892,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireList = function(List: {Player}, Value: { type: "init", data: { WorldGrid: { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }? }? } | { type: "patch", data: { WorldGrid: { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }? }? }): ()
+		FireList = function(List: {Player}, Value: { type: "init", data: { WorldGrid: { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }? }? } | { type: "patch", data: { WorldGrid: { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncWorldGrid(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -820,7 +904,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireExcept = function(Except: Player, Value: { type: "init", data: { WorldGrid: { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }? }? } | { type: "patch", data: { WorldGrid: { GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean?, Occupied: boolean? }}? }? }? }): ()
+		FireExcept = function(Except: Player, Value: { type: "init", data: { WorldGrid: { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }? }? } | { type: "patch", data: { WorldGrid: { StaticVersion: number?, OccupancyVersion: number?, GridSpecs: {[number]: { GridId: string?, OriginX: number?, OriginY: number?, OriginZ: number?, RightX: number?, RightY: number?, RightZ: number?, UpX: number?, UpY: number?, UpZ: number?, LookX: number?, LookY: number?, LookZ: number?, GridSizeX: number?, GridSizeY: number?, GridSizeZ: number?, TileSize: number?, GridRows: number?, GridCols: number?, LaneRow: number? }}?, Tiles: {[number]: { GridId: string?, Row: number?, Col: number?, WorldPosX: number?, WorldPosY: number?, WorldPosZ: number?, Zone: string?, ResourceType: string?, IsPlacementProhibited: boolean? }}?, OccupiedCoords: {[number]: { GridId: string?, Row: number?, Col: number? }}? }? }? }): ()
 			Load()
 			WriteEVENT_SyncWorldGrid(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances

@@ -195,6 +195,19 @@ function WorldGridService:GetLaneTiles(): { Tile }
 	return laneTiles
 end
 
+function WorldGridService:GetOccupiedCoords(): { GridCoord }
+	self:_EnsureBuilt()
+	local occupiedCoords = {}
+
+	for _, tile in ipairs(self._allTiles) do
+		if tile.Occupied == true then
+			table.insert(occupiedCoords, tile.Coord)
+		end
+	end
+
+	return occupiedCoords
+end
+
 function WorldGridService:SetOccupied(coord: GridCoord, occupied: boolean): boolean
 	self:_EnsureBuilt()
 	local tile = self:GetTile(coord)

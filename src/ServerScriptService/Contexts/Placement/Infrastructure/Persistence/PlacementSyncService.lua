@@ -123,6 +123,7 @@ function PlacementSyncService:AddPlacement(record: StructureRecord)
 	self.Atom(function(current: PlacementAtom)
 		local updated = table.clone(current)
 		updated.Placements = table.clone(current.Placements)
+		updated.Revision = current.Revision + 1
 		table.insert(updated.Placements, deepClone(record))
 		return updated
 	end)
@@ -153,6 +154,7 @@ function PlacementSyncService:RemovePlacementByInstanceId(instanceId: number): S
 
 		local updated = table.clone(current)
 		updated.Placements = table.clone(current.Placements)
+		updated.Revision = current.Revision + 1
 		table.remove(updated.Placements, removeIndex)
 		return updated
 	end)
@@ -170,6 +172,7 @@ function PlacementSyncService:ClearAll()
 		return {
 			Placements = {},
 			FootprintCache = table.clone(current.FootprintCache),
+			Revision = current.Revision + 1,
 		}
 	end)
 end

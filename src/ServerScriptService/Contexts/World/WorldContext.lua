@@ -143,12 +143,25 @@ local function _PublishWorldSnapshot(self: WorldContextService)
 	local ok, errOrNil = pcall(function()
 		local gridSpecs = self._worldGridService:GetGridSpecList()
 		local tiles = self._worldGridService:GetAllTiles()
-		self._syncService:SetSnapshot(gridSpecs, tiles)
+		local occupiedCoords = self._worldGridService:GetOccupiedCoords()
+		self._syncService:SetSnapshot(gridSpecs, tiles, occupiedCoords)
 	end)
 	if not ok then
 		Result.MentionError("World:SyncSnapshot", "Failed to publish world snapshot", {
 			CauseMessage = tostring(errOrNil),
 		}, "WorldSnapshotPublishFailed")
+	end
+end
+
+local function _PublishWorldOccupancy(self: WorldContextService)
+	local ok, errOrNil = pcall(function()
+		local occupiedCoords = self._worldGridService:GetOccupiedCoords()
+		self._syncService:SetOccupancySnapshot(occupiedCoords)
+	end)
+	if not ok then
+		Result.MentionError("World:SyncOccupancy", "Failed to publish world occupancy", {
+			CauseMessage = tostring(errOrNil),
+		}, "WorldOccupancyPublishFailed")
 	end
 end
 
@@ -295,7 +308,7 @@ function WorldContext.SetTileOccupied(
 		Ensure(coord, "InvalidCoord", Errors.INVALID_COORD)
 		local didUpdate = self._worldGridService:SetOccupied(coord, occupied)
 		if didUpdate then
-			_PublishWorldSnapshot(self)
+			_PublishWorldOccupancy(self)
 		end
 		return Ok(didUpdate)
 	end, "World:SetTileOccupied")
@@ -310,7 +323,7 @@ function WorldContext.SetTilesOccupied(
 		Ensure(type(coords) == "table", "InvalidCoords", Errors.INVALID_COORD)
 		local didUpdate = self._worldGridService:SetOccupiedBatch(coords, occupied)
 		if didUpdate then
-			_PublishWorldSnapshot(self)
+			_PublishWorldOccupancy(self)
 		end
 		return Ok(didUpdate)
 	end, "World:SetTilesOccupied")

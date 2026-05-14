@@ -99,10 +99,12 @@ function EnterPlacementModeCommand:Execute(state: any, deps: any, structureType:
 	state._hoveredCoord = nil
 	state._hoveredKey = nil
 	state._hoveredFootprintCoords = table.freeze({})
+	state._hoveredGroundWorldPos = nil
 	state._isHoveredValid = false
 	state._runState = runState.State
 	state._placementSignature = self._buildPlacementSignatureQuery:Execute(placementAtom)
 	state._rotationQuarterTurns = 0
+	state._hoveredRotationQuarterTurns = state._rotationQuarterTurns
 	state._validTileSet = {}
 	state._footprintCacheLookup = footprintCacheLookup
 	state._sessionId += 1

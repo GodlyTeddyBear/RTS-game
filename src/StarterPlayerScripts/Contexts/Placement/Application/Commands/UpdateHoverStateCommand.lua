@@ -71,6 +71,7 @@ function UpdateHoverStateCommand:Execute(state: any, deps: any)
 			state._hoveredCoord = nil
 			state._hoveredKey = nil
 			state._hoveredFootprintCoords = table.freeze({})
+			state._hoveredGroundWorldPos = nil
 			state._isHoveredValid = false
 		end
 		return
@@ -101,38 +102,39 @@ function UpdateHoverStateCommand:Execute(state: any, deps: any)
 	end
 
 	local isHoveredValid = hoveredCoord ~= nil and hoveredGroundWorldPos ~= nil and state._validTileSet[hoveredKey] == true
+	local didHoverKeyChange = hoveredKey ~= state._hoveredKey
+	local didHoverValidityChange = isHoveredValid ~= state._isHoveredValid
+	local didHoverGroundChange = hoveredGroundWorldPos ~= state._hoveredGroundWorldPos
+	local didHoverFootprintChange = didHoverKeyChange or state._hoveredRotationQuarterTurns ~= state._rotationQuarterTurns
 
 	-- Update highlight state only when the hovered tile actually changes.
-	if hoveredKey ~= state._hoveredKey then
+	if didHoverKeyChange then
 		if state._hoveredCoord ~= nil then
 			state._highlightPool:SetHovered(state._hoveredCoord, false)
 		end
 
 		state._hoveredCoord = hoveredCoord
 		state._hoveredKey = hoveredKey
-		state._hoveredFootprintCoords = hoveredFootprintCoords
 
 		if hoveredCoord ~= nil then
-			state._highlightPool:ShowHoveredFootprint(hoveredFootprintCoords, isHoveredValid)
-			if hoveredGroundWorldPos ~= nil then
-				state._ghost:SetRotationQuarterTurns(state._rotationQuarterTurns)
-				state._ghost:MoveTo(hoveredGroundWorldPos)
-			end
+			state._highlightPool:SetHovered(hoveredCoord, true)
 		else
 			state._highlightPool:ShowHoveredFootprint(table.freeze({}), false)
 		end
 	end
 
-	if hoveredKey == state._hoveredKey then
+	if didHoverKeyChange or didHoverValidityChange or didHoverFootprintChange then
 		state._hoveredFootprintCoords = hoveredFootprintCoords
+		state._hoveredRotationQuarterTurns = state._rotationQuarterTurns
 		state._highlightPool:ShowHoveredFootprint(hoveredFootprintCoords, isHoveredValid)
 	end
 
-	-- Keep the ghost aligned even when the hovered tile did not change.
-	if hoveredGroundWorldPos ~= nil then
+	if hoveredGroundWorldPos ~= nil and (didHoverKeyChange or didHoverGroundChange) then
 		state._ghost:SetRotationQuarterTurns(state._rotationQuarterTurns)
 		state._ghost:MoveTo(hoveredGroundWorldPos)
 	end
+
+	state._hoveredGroundWorldPos = hoveredGroundWorldPos
 
 	-- Mirror hover validity to the ghost tint so the preview communicates placement rules.
 	state._isHoveredValid = isHoveredValid

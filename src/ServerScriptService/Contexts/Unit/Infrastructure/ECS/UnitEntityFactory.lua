@@ -104,6 +104,7 @@ function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitReques
 	} :: HealthComponent)
 
 	self:_Set(entity, self._components.RoleComponent, {
+		Role = definition.Role,
 		DisplayName = definition.DisplayName,
 		MaxHp = definition.MaxHp,
 	} :: RoleComponent)

@@ -64,6 +64,8 @@ function PlacementCursorController:KnitInit()
 	self._hoveredCoord = nil :: GridCoord?
 	self._hoveredKey = nil :: string?
 	self._hoveredFootprintCoords = table.freeze({})
+	self._hoveredGroundWorldPos = nil :: Vector3?
+	self._hoveredRotationQuarterTurns = 0
 	self._isHoveredValid = false
 	self._runState = "Idle" :: RunState
 	self._placementSignature = ""

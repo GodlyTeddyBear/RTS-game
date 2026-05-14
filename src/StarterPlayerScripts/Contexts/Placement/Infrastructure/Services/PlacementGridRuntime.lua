@@ -125,6 +125,10 @@ function PlacementGridRuntime.ResetCache()
 	return
 end
 
+function PlacementGridRuntime.GetStaticVersion(): number
+	return _GetWorldController():GetStaticVersion()
+end
+
 function PlacementGridRuntime.CoordToWorld(coord: GridCoord): Vector3
 	return _GetWorldController():CoordToWorld(coord)
 end

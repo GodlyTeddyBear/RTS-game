@@ -62,6 +62,7 @@ function PlacementService.new()
 	self._instanceMap = {} :: { [number]: SpawnedStructure }
 	self._nextId = 1
 	self._worldContext = nil :: any
+	self._validatedStructureTypes = {} :: { [string]: boolean }
 	return self
 end
 
@@ -344,7 +345,24 @@ end
 	@return Result.Result<nil> -- `Ok(nil)` when a spawnable template exists.
 ]=]
 function PlacementService:ValidateTemplate(structureType: string): Result.Result<nil>
-	self:_ResolveSpawnModel(structureType):Destroy()
+	if self._validatedStructureTypes[structureType] == true then
+		return Ok(nil)
+	end
+
+	local validated = false
+	if structureType == MiningConfig.EXTRACTOR_STRUCTURE_TYPE then
+		validated = true
+	elseif self._structureRegistry ~= nil and self._structureRegistry:StructureModelExists(structureType) then
+		validated = true
+	elseif self._structureRegistry ~= nil and self._structureRegistry:StructureModelExists("Default") then
+		validated = true
+	end
+
+	if not validated then
+		self:_ResolveSpawnModel(structureType)
+	end
+
+	self._validatedStructureTypes[structureType] = true
 	return Ok(nil)
 end
 

@@ -80,6 +80,7 @@ export type StructureRecord = {
 export type PlacementAtom = {
 	Placements: { StructureRecord },
 	FootprintCache: { FootprintCacheEntry },
+	Revision: number,
 }
 
 --[=[

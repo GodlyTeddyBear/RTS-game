@@ -98,7 +98,7 @@ end
 function Helpers.createPart(properties: { [string]: any }?): Part
 	local part = e("Part", {
 		Anchored = true,
-		CanCollide = false,
+		CanCollide = true,
 		Material = Enum.Material.SmoothPlastic,
 		TopSurface = Enum.SurfaceType.Smooth,
 		BottomSurface = Enum.SurfaceType.Smooth,

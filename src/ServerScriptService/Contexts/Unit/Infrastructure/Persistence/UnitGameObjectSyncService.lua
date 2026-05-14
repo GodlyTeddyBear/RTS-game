@@ -64,6 +64,7 @@ function UnitGameObjectSyncService:_SyncEntity(entity: number, model: Model)
 	end
 
 	if role ~= nil then
+		self:SetAttributeIfChanged(model, "UnitRole", role.Role)
 		self:SetAttributeIfChanged(model, "UnitDisplayName", role.DisplayName)
 	end
 

@@ -18,11 +18,39 @@ type FootprintCacheLookup = PlacementTypes.FootprintCacheLookup
 type ResolvedFootprint = PlacementTypes.ResolvedFootprint
 
 type OccupiedSet = { [string]: boolean }
+type AnchorValidationCache = {
+	StaticVersion: number,
+	AnchorKeysOrdered: { string },
+	AnchorCoordByKey: { [string]: GridCoord },
+	AnchorOccupiedCoordsByKey: { [string]: { GridCoord } },
+	AnchorOccupiedCoordKeysByKey: { [string]: { string } },
+	AffectedAnchorKeysByOccupiedKey: { [string]: { [string]: boolean } },
+	LastOccupiedSet: OccupiedSet?,
+	ValidAnchorKeySet: { [string]: boolean },
+	ValidTiles: { GridCoord },
+}
 
 local PlacementCursorGridService = {}
 
+local _cachedStaticVersion = -1
+local _groundWorldPosByCoordKey = {} :: { [string]: Vector3 | boolean }
+local _groundWorldPosByFootprintKey = {} :: { [string]: Vector3 | boolean }
+local _anchorValidationCaches = {} :: { [string]: AnchorValidationCache }
+
 local function _GetCoordKey(coord: GridCoord): string
 	return (`{coord.GridId}:{coord.Row}:{coord.Col}`)
+end
+
+local function _GetValidationCacheKey(structureType: string, rotationQuarterTurns: number): string
+	return (`{structureType}:{rotationQuarterTurns}`)
+end
+
+local function _GetFootprintGroundCacheKey(
+	structureType: string,
+	rotationQuarterTurns: number,
+	anchorCoord: GridCoord
+): string
+	return (`{structureType}:{rotationQuarterTurns}:{anchorCoord.GridId}:{anchorCoord.Row}:{anchorCoord.Col}`)
 end
 
 local function _CloneCoord(coord: GridCoord): GridCoord
@@ -33,14 +61,184 @@ local function _CloneCoord(coord: GridCoord): GridCoord
 	})
 end
 
-function PlacementCursorGridService.CoordToWorld(coord: GridCoord): Vector3
-	return PlacementGridRuntime.CoordToWorld(coord)
-end
-
 local function _GridCoordToWorldFromSpec(spec: GridSpec, row: number, col: number): Vector3
 	local localX = -spec.GridSize.X * 0.5 + spec.TileSize * 0.5 + (col - 1) * spec.TileSize
 	local localZ = -spec.GridSize.Z * 0.5 + spec.TileSize * 0.5 + (row - 1) * spec.TileSize
 	return spec.GridCFrame:PointToWorldSpace(Vector3.new(localX, 0, localZ))
+end
+
+local function _ClearStaticCaches()
+	_groundWorldPosByCoordKey = {}
+	_groundWorldPosByFootprintKey = {}
+	_anchorValidationCaches = {}
+end
+
+local function _EnsureStaticCachesCurrent()
+	local staticVersion = PlacementGridRuntime.GetStaticVersion()
+	if _cachedStaticVersion == staticVersion then
+		return
+	end
+
+	_cachedStaticVersion = staticVersion
+	_ClearStaticCaches()
+end
+
+local function _CloneOccupiedSet(occupiedSet: OccupiedSet): OccupiedSet
+	local clone = {}
+	for key, value in occupiedSet do
+		if value == true then
+			clone[key] = true
+		end
+	end
+	return clone
+end
+
+local function _CollectChangedOccupiedKeys(previous: OccupiedSet?, current: OccupiedSet): { [string]: boolean }
+	local changedKeys = {}
+	if previous == nil then
+		for key, value in current do
+			if value == true then
+				changedKeys[key] = true
+			end
+		end
+		return changedKeys
+	end
+
+	for key, value in previous do
+		if value ~= (current[key] == true) then
+			changedKeys[key] = true
+		end
+	end
+
+	for key, value in current do
+		if value ~= (previous[key] == true) then
+			changedKeys[key] = true
+		end
+	end
+
+	return changedKeys
+end
+
+local function _CreateAnchorValidationCache(
+	footprintEntry: PlacementTypes.FootprintCacheEntry,
+	structureType: string
+): AnchorValidationCache
+	local cache: AnchorValidationCache = {
+		StaticVersion = _cachedStaticVersion,
+		AnchorKeysOrdered = {},
+		AnchorCoordByKey = {},
+		AnchorOccupiedCoordsByKey = {},
+		AnchorOccupiedCoordKeysByKey = {},
+		AffectedAnchorKeysByOccupiedKey = {},
+		LastOccupiedSet = nil,
+		ValidAnchorKeySet = {},
+		ValidTiles = table.freeze({}),
+	}
+
+	local requiresResourceTile = PlacementConfig.REQUIRES_RESOURCE_TILE[structureType] == true
+	for _, spec in ipairs(PlacementGridRuntime.GetGridSpecList()) do
+		for row = 1, spec.GridRows do
+			for col = 1, spec.GridCols do
+				local anchorCoord = {
+					GridId = spec.GridId,
+					Row = row,
+					Col = col,
+				}
+				local footprint = PlacementFootprintResolver.BuildOccupiedCoords(
+					anchorCoord,
+					footprintEntry.WidthTiles,
+					footprintEntry.DepthTiles
+				)
+				local specialTileCount = 0
+				local isStaticValid = true
+				local occupiedCoordKeys = table.create(#footprint)
+
+				for occupiedIndex, occupiedCoord in ipairs(footprint) do
+					if occupiedCoord.Row < 1 or occupiedCoord.Row > spec.GridRows or occupiedCoord.Col < 1 or occupiedCoord.Col > spec.GridCols then
+						isStaticValid = false
+						break
+					end
+
+					local descriptor = PlacementGridRuntime.GetTileDescriptor(occupiedCoord)
+					local coordKey = _GetCoordKey(occupiedCoord)
+					occupiedCoordKeys[occupiedIndex] = coordKey
+
+					local zone = descriptor and descriptor.Zone or nil
+					local isZoneDisallowed = zone ~= nil and PlacementConfig.BASE_DISALLOWED_ZONE_TYPES[zone] == true
+					local isPlacementProhibited = descriptor ~= nil and descriptor.IsPlacementProhibited == true
+
+					if descriptor == nil or isZoneDisallowed or isPlacementProhibited then
+						isStaticValid = false
+						break
+					end
+
+					if descriptor.Zone == "side_pocket" and descriptor.ResourceType ~= nil then
+						specialTileCount += 1
+					end
+				end
+
+				if requiresResourceTile then
+					if footprintEntry.SpecialTileRequirementMode == "AllTiles" then
+						isStaticValid = isStaticValid and specialTileCount == #footprint
+					else
+						isStaticValid = isStaticValid and specialTileCount >= 1
+					end
+				end
+
+				if not isStaticValid then
+					continue
+				end
+
+				local anchorKey = _GetCoordKey(anchorCoord)
+				local clonedAnchorCoord = _CloneCoord(anchorCoord)
+				cache.AnchorKeysOrdered[#cache.AnchorKeysOrdered + 1] = anchorKey
+				cache.AnchorCoordByKey[anchorKey] = clonedAnchorCoord
+				cache.AnchorOccupiedCoordsByKey[anchorKey] = footprint
+				cache.AnchorOccupiedCoordKeysByKey[anchorKey] = table.freeze(occupiedCoordKeys)
+
+				for _, occupiedCoordKey in ipairs(occupiedCoordKeys) do
+					local affectedAnchorKeys = cache.AffectedAnchorKeysByOccupiedKey[occupiedCoordKey]
+					if affectedAnchorKeys == nil then
+						affectedAnchorKeys = {}
+						cache.AffectedAnchorKeysByOccupiedKey[occupiedCoordKey] = affectedAnchorKeys
+					end
+					affectedAnchorKeys[anchorKey] = true
+				end
+			end
+		end
+	end
+
+	return cache
+end
+
+local function _IsAnchorAvailable(cache: AnchorValidationCache, anchorKey: string, occupiedSet: OccupiedSet): boolean
+	local occupiedCoordKeys = cache.AnchorOccupiedCoordKeysByKey[anchorKey]
+	if occupiedCoordKeys == nil then
+		return false
+	end
+
+	for _, occupiedCoordKey in ipairs(occupiedCoordKeys) do
+		if occupiedSet[occupiedCoordKey] == true then
+			return false
+		end
+	end
+
+	return true
+end
+
+local function _RebuildValidTiles(cache: AnchorValidationCache)
+	local validTiles = {}
+	for _, anchorKey in ipairs(cache.AnchorKeysOrdered) do
+		if cache.ValidAnchorKeySet[anchorKey] == true then
+			validTiles[#validTiles + 1] = cache.AnchorCoordByKey[anchorKey]
+		end
+	end
+
+	cache.ValidTiles = table.freeze(validTiles)
+end
+
+function PlacementCursorGridService.CoordToWorld(coord: GridCoord): Vector3
+	return PlacementGridRuntime.CoordToWorld(coord)
 end
 
 function PlacementCursorGridService.WorldToCoord(worldPos: Vector3): GridCoord?
@@ -94,6 +292,14 @@ function PlacementCursorGridService:ResolveGroundWorldPositionForCoord(
 	coord: GridCoord,
 	placementCursorFolder: Instance?
 ): Vector3?
+	_EnsureStaticCachesCurrent()
+
+	local coordKey = _GetCoordKey(coord)
+	local cached = _groundWorldPosByCoordKey[coordKey]
+	if cached ~= nil then
+		return if cached == false then nil else cached
+	end
+
 	local tileCenter = PlacementGridRuntime.CoordToWorld(coord)
 	local raycastConfig = PlacementConfig.GROUND_RAYCAST
 	local rayOrigin = Vector3.new(tileCenter.X, tileCenter.Y + raycastConfig.HeightOffset, tileCenter.Z)
@@ -101,11 +307,10 @@ function PlacementCursorGridService:ResolveGroundWorldPositionForCoord(
 	local excludedInstances = self:GetCursorRaycastExcludeInstances(placementCursorFolder)
 
 	local hit = self:_ResolveFirstNonGridHit(rayOrigin, rayDirection, excludedInstances)
-	if hit == nil then
-		return nil
-	end
+	local resolved = if hit == nil then false else hit.Position
+	_groundWorldPosByCoordKey[coordKey] = resolved
 
-	return hit.Position
+	return if resolved == false then nil else resolved
 end
 
 function PlacementCursorGridService.GetFootprintForAnchor(
@@ -129,6 +334,14 @@ function PlacementCursorGridService:ResolveGroundWorldPositionForFootprint(
 	rotationQuarterTurns: number,
 	placementCursorFolder: Instance?
 ): Vector3?
+	_EnsureStaticCachesCurrent()
+
+	local cacheKey = _GetFootprintGroundCacheKey(structureType, rotationQuarterTurns, anchorCoord)
+	local cached = _groundWorldPosByFootprintKey[cacheKey]
+	if cached ~= nil then
+		return if cached == false then nil else cached
+	end
+
 	local footprint = self.GetFootprintForAnchor(
 		footprintCacheLookup,
 		structureType,
@@ -136,11 +349,13 @@ function PlacementCursorGridService:ResolveGroundWorldPositionForFootprint(
 		rotationQuarterTurns
 	)
 	if footprint == nil then
+		_groundWorldPosByFootprintKey[cacheKey] = false
 		return nil
 	end
 
 	local gridSpec = self.GetGridSpec(anchorCoord.GridId)
 	if gridSpec == nil then
+		_groundWorldPosByFootprintKey[cacheKey] = false
 		return nil
 	end
 
@@ -153,11 +368,10 @@ function PlacementCursorGridService:ResolveGroundWorldPositionForFootprint(
 	local excludedInstances = self:GetCursorRaycastExcludeInstances(placementCursorFolder)
 
 	local hit = self:_ResolveFirstNonGridHit(rayOrigin, rayDirection, excludedInstances)
-	if hit == nil then
-		return nil
-	end
+	local resolved = if hit == nil then false else hit.Position
+	_groundWorldPosByFootprintKey[cacheKey] = resolved
 
-	return hit.Position
+	return if resolved == false then nil else resolved
 end
 
 function PlacementCursorGridService.GetZone(coord: GridCoord): ZoneType?
@@ -173,7 +387,7 @@ function PlacementCursorGridService.GetTileDescriptor(coord: GridCoord): TileDes
 end
 
 function PlacementCursorGridService.ResetRuntimeCache()
-	PlacementGridRuntime.ResetCache()
+	_EnsureStaticCachesCurrent()
 end
 
 function PlacementCursorGridService.GetGridSpecList(): { GridSpec }
@@ -190,6 +404,8 @@ function PlacementCursorGridService.GetValidTiles(
 	occupiedSet: OccupiedSet,
 	rotationQuarterTurns: number
 ): { GridCoord }
+	_EnsureStaticCachesCurrent()
+
 	local placementCost = PlacementConfig.STRUCTURE_PLACEMENT_COSTS[structureType]
 	if placementCost == nil then
 		return table.freeze({})
@@ -207,66 +423,41 @@ function PlacementCursorGridService.GetValidTiles(
 		))
 	end
 
-	local validTiles = {}
-	local footprintWidthTiles = footprintEntry.WidthTiles
-	local footprintDepthTiles = footprintEntry.DepthTiles
-	local specialTileRequirementMode = footprintEntry.SpecialTileRequirementMode
-	local requiresResourceTile = PlacementConfig.REQUIRES_RESOURCE_TILE[structureType] == true
+	local validationCacheKey = _GetValidationCacheKey(structureType, footprintEntry.RotationQuarterTurns)
+	local cache = _anchorValidationCaches[validationCacheKey]
+	if cache == nil or cache.StaticVersion ~= _cachedStaticVersion then
+		cache = _CreateAnchorValidationCache(footprintEntry, structureType)
+		_anchorValidationCaches[validationCacheKey] = cache
+	end
 
-	for _, spec in ipairs(PlacementGridRuntime.GetGridSpecList()) do
-		for row = 1, spec.GridRows do
-			for col = 1, spec.GridCols do
-				local coord = {
-					GridId = spec.GridId,
-					Row = row,
-					Col = col,
-				}
-				local footprint = PlacementFootprintResolver.BuildOccupiedCoords(
-					coord,
-					footprintWidthTiles,
-					footprintDepthTiles
-				)
-				local specialTileCount = 0
-				local isValidAnchor = true
+	local changedOccupiedKeys = _CollectChangedOccupiedKeys(cache.LastOccupiedSet, occupiedSet)
+	local didChange = cache.LastOccupiedSet == nil
+	for changedKey in changedOccupiedKeys do
+		local affectedAnchorKeys = cache.AffectedAnchorKeysByOccupiedKey[changedKey]
+		if affectedAnchorKeys == nil then
+			continue
+		end
 
-				for _, occupiedCoord in ipairs(footprint) do
-					if occupiedCoord.Row < 1 or occupiedCoord.Row > spec.GridRows or occupiedCoord.Col < 1 or occupiedCoord.Col > spec.GridCols then
-						isValidAnchor = false
-						break
-					end
-
-					local descriptor = PlacementCursorGridService.GetTileDescriptor(occupiedCoord)
-					local coordKey = _GetCoordKey(occupiedCoord)
-					local zone = descriptor and descriptor.Zone or nil
-					local isZoneDisallowed = zone ~= nil and PlacementConfig.BASE_DISALLOWED_ZONE_TYPES[zone] == true
-					local isPlacementProhibited = descriptor ~= nil and descriptor.IsPlacementProhibited == true
-
-					if descriptor == nil or isZoneDisallowed or isPlacementProhibited or occupiedSet[coordKey] == true then
-						isValidAnchor = false
-						break
-					end
-
-					if descriptor.Zone == "side_pocket" and descriptor.ResourceType ~= nil then
-						specialTileCount += 1
-					end
-				end
-
-				if requiresResourceTile then
-					if specialTileRequirementMode == "AllTiles" then
-						isValidAnchor = isValidAnchor and specialTileCount == #footprint
-					else
-						isValidAnchor = isValidAnchor and specialTileCount >= 1
-					end
-				end
-
-				if isValidAnchor then
-					table.insert(validTiles, _CloneCoord(coord))
-				end
-			end
+		didChange = true
+		for anchorKey in affectedAnchorKeys do
+			cache.ValidAnchorKeySet[anchorKey] = _IsAnchorAvailable(cache, anchorKey, occupiedSet)
 		end
 	end
 
-	return table.freeze(validTiles)
+	if cache.LastOccupiedSet == nil then
+		for _, anchorKey in ipairs(cache.AnchorKeysOrdered) do
+			cache.ValidAnchorKeySet[anchorKey] = _IsAnchorAvailable(cache, anchorKey, occupiedSet)
+		end
+		didChange = true
+	end
+
+	cache.LastOccupiedSet = _CloneOccupiedSet(occupiedSet)
+
+	if didChange then
+		_RebuildValidTiles(cache)
+	end
+
+	return cache.ValidTiles
 end
 
 return table.freeze(PlacementCursorGridService)

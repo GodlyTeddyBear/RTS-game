@@ -42,6 +42,7 @@ map PlacementList = { [u32]: StructureRecordPayload }
 struct PlacementStatePayload {
 	Placements: PlacementList?,
 	FootprintCache: FootprintCacheList?,
+	Revision: f64?,
 }
 
 struct InitPayload {

@@ -28,6 +28,14 @@ struct GridSpecPayload {
 
 map GridSpecList = { [u32]: GridSpecPayload }
 
+struct GridCoordPayload {
+	GridId: string?,
+	Row: f64?,
+	Col: f64?,
+}
+
+map OccupiedCoordList = { [u32]: GridCoordPayload }
+
 struct TileDescriptorPayload {
 	GridId: string?,
 	Row: f64?,
@@ -38,14 +46,16 @@ struct TileDescriptorPayload {
 	Zone: string?,
 	ResourceType: string?,
 	IsPlacementProhibited: boolean?,
-	Occupied: boolean?,
 }
 
 map TileDescriptorList = { [u32]: TileDescriptorPayload }
 
 struct WorldGridStatePayload {
+	StaticVersion: f64?,
+	OccupancyVersion: f64?,
 	GridSpecs: GridSpecList?,
 	Tiles: TileDescriptorList?,
+	OccupiedCoords: OccupiedCoordList?,
 }
 
 struct InitPayload {

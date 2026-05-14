@@ -11,10 +11,12 @@ local UnitTypes = {}
 export type UnitDefinitionId = string
 export type UnitFaction = "Player" | "Enemy"
 export type UnitOwnerKind = "Player" | "PlayerBase" | "EnemyBase"
+export type UnitRole = "Combat" | "Builder"
 
 export type UnitDefinition = {
 	UnitId: UnitDefinitionId,
 	RuntimeProfileId: string,
+	Role: UnitRole,
 	DisplayName: string,
 	MaxHp: number,
 	ModelScale: Vector3,
@@ -57,6 +59,7 @@ export type HealthComponent = {
 }
 
 export type RoleComponent = {
+	Role: UnitRole,
 	DisplayName: string,
 	MaxHp: number,
 }

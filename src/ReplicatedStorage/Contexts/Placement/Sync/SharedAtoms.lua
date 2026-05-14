@@ -21,6 +21,7 @@ function SharedAtoms.CreateServerAtom(footprintCache: { FootprintCacheEntry }?)
 	return Charm.atom({
 		Placements = {},
 		FootprintCache = footprintCache or {},
+		Revision = 0,
 	} :: PlacementAtom)
 end
 
@@ -29,6 +30,7 @@ function SharedAtoms.CreateClientAtom()
 	return Charm.atom({
 		Placements = {},
 		FootprintCache = {},
+		Revision = 0,
 	} :: PlacementAtom)
 end
 
