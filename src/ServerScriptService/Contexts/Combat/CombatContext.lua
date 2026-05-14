@@ -172,6 +172,7 @@ function CombatContext:KnitStart()
 
 	CombatBaseContext:RegisterSchedulerSystem("CombatTick", function()
 		local dt = CombatBaseContext:GetSchedulerDeltaTime()
+		self._hitboxService:Tick(dt)
 		for userId in pairs(self._combatLoopService:GetSessions()) do
 			self._processCombatTickCommand:Execute(userId, dt)
 		end

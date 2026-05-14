@@ -5,7 +5,6 @@ local Workspace = game:GetService("Workspace")
 
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local MuchachoHitbox = require(ReplicatedStorage.Utilities.MuchachoHitbox)
-local Result = require(ReplicatedStorage.Utilities.Result)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 
 local HITBOX_PROFILING_ENABLED = false
@@ -79,6 +78,7 @@ function HitboxService.new()
 	self._hitEntityKeys = {} :: { [THitboxHandle]: { [string]: boolean } }
 	self._hitboxFolder = EnsureHitboxFolder()
 	self._targetResolvers = {} :: { (BasePart) -> THitEntity? }
+	self._runner = nil :: any
 	return self
 end
 
@@ -96,10 +96,23 @@ end
 	@within HitboxService
 	Stores the context dependencies used while translating touches into combat targets.
 ]=]
-function HitboxService:Start() end
+function HitboxService:Start()
+	if self._runner == nil then
+		self._runner = MuchachoHitbox.CreateRunner()
+	end
+end
 
 function HitboxService:RegisterTargetResolver(resolver: (BasePart) -> THitEntity?)
 	table.insert(self._targetResolvers, resolver)
+end
+
+function HitboxService:Tick(dt: number)
+	local runner = self._runner
+	if runner == nil then
+		return
+	end
+
+	runner:Step(dt)
 end
 
 local function _buildHitKey(kind: TEntityKind, entity: number): string
@@ -169,9 +182,14 @@ function HitboxService:CreateAttackHitboxForModel(
 		hitbox.Offset = config.Offset
 		hitbox.CFrame = primaryPart
 		hitbox.Visualizer = config.Visualize
+		hitbox.VisualizerContainer = self._hitboxFolder
 		hitbox.AutoDestroy = false
 
 		hitbox.OverlapParams = SpatialQuery.BuildOverlapParams(SpatialQuery.Presets.ExcludeModel(model))
+
+		if self._runner == nil then
+			self._runner = MuchachoHitbox.CreateRunner()
+		end
 
 		local handle: THitboxHandle = hitbox.Key
 		local janitor = Janitor.new()
@@ -204,7 +222,7 @@ function HitboxService:CreateAttackHitboxForModel(
 			"Disconnect"
 		)
 
-		hitbox:Start()
+		hitbox:Start(self._runner)
 
 		return {
 			success = true,
@@ -282,6 +300,16 @@ function HitboxService:CleanupAll()
 
 	for _, handle in ipairs(handles) do
 		self:DestroyHitbox(handle)
+	end
+end
+
+function HitboxService:Destroy()
+	self:CleanupAll()
+
+	local runner = self._runner
+	if runner ~= nil then
+		runner:Destroy()
+		self._runner = nil
 	end
 end
 

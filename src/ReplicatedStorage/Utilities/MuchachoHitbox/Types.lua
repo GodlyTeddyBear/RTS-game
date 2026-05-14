@@ -9,6 +9,13 @@ local GoodSignal = require(script.Parent.GoodSignal)
 
 local types = {}
 
+export type HitboxRunner = {
+	Register: (self: HitboxRunner, hitbox: any) -> (),
+	Unregister: (self: HitboxRunner, hitbox: any) -> (),
+	Step: (self: HitboxRunner, deltaTime: number) -> (),
+	Destroy: (self: HitboxRunner) -> (),
+} & any
+
 --[=[
 	@interface HitboxProperties
 	@within Types
@@ -36,9 +43,9 @@ export type HitboxProperties = {
 
 	OverlapParams: OverlapParams,
 
-	Size: Vector3,
+	Size: Vector3 | number,
 	Shape: Enum.PartType,
-	CFrame: CFrame,
+	CFrame: CFrame | BasePart,
 	Offset: CFrame,
 
 	VelocityPredictionTime: number?,
@@ -69,9 +76,9 @@ export type Hitbox = {
 	OverlapParams: OverlapParams,
 
 	-- Geometry
-	Size: Vector3,
+	Size: Vector3 | number,
 	Shape: Enum.PartType,
-	CFrame: CFrame,
+	CFrame: CFrame | BasePart,
 	Offset: CFrame,
 
 	-- Velocity prediction
@@ -82,19 +89,25 @@ export type Hitbox = {
 	Touched: GoodSignal.Signal<BasePart, Humanoid?>,
 	TouchEnded: GoodSignal.Signal<BasePart, Humanoid?>,
 
+	VisualizerContainer: Instance?,
+
 	-- Throttle state
 	_UpdateAccumulator: number?,
+	_Runner: HitboxRunner?,
+	HitListSet: { [Humanoid]: boolean }?,
+	TouchingPartsSet: { [BasePart]: boolean }?,
 
 	-- Lifecycle methods
-	Start: (self: Hitbox) -> (),
+	Start: (self: Hitbox, runner: HitboxRunner?) -> (),
 	Stop: (self: Hitbox) -> (),
-	Destroy: (self: Hitbox) -> (boolean),
+	Destroy: (self: Hitbox) -> (),
+	Step: (self: Hitbox, deltaTime: number) -> (),
 
 	-- Internal state (for debugging)
-	HitList: {Model}?,
-	TouchingParts: {BasePart}?,
-	Connection: RBXScriptConnection?,
-	Box: BoxHandleAdornment? | SphereHandleAdornment?,
+	HitList: { Humanoid }?,
+	TouchingParts: { BasePart }?,
+	_Connection: RBXScriptConnection?,
+	_Box: Part?,
 } & any
 
 return types
