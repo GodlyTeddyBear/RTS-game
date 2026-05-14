@@ -12,6 +12,21 @@ local CategoryConfig: { [string]: CategorySettings } = {
 		TotalCapacity = 200,
 		DisplayOrder = 1,
 	},
+	Tool = {
+		MaxStack = 1,
+		TotalCapacity = 50,
+		DisplayOrder = 2,
+	},
+	Armor = {
+		MaxStack = 1,
+		TotalCapacity = 50,
+		DisplayOrder = 3,
+	},
+	Accessory = {
+		MaxStack = 1,
+		TotalCapacity = 50,
+		DisplayOrder = 4,
+	},
 }
 
 return table.freeze(CategoryConfig)

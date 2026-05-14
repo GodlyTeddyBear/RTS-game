@@ -1,0 +1,51 @@
+option ServerOutput = "Generated/EquipmentSyncServer.luau"
+option ClientOutput = "Generated/EquipmentSyncClient.luau"
+
+option RemoteScope = "EQUIPMENT_SYNC"
+
+struct EquippedItemPayload {
+	ItemId: string,
+	SlotId: string,
+	AssetFamily: string,
+	AssetId: string,
+	OwnerKind: string,
+	OwnerId: string,
+	EquippedAt: f64,
+	AttachmentId: string,
+}
+
+map EquipmentSlotMap = { [string]: EquippedItemPayload }
+
+struct OwnerEquipmentPayload {
+	Slots: EquipmentSlotMap,
+}
+
+map OwnerEquipmentMap = { [string]: OwnerEquipmentPayload }
+
+struct EquipmentStatePayload {
+	Owners: OwnerEquipmentMap,
+}
+
+struct InitPayload {
+	EquipmentState: EquipmentStatePayload?,
+}
+
+struct PatchPayload {
+	EquipmentState: EquipmentStatePayload?,
+}
+
+enum SyncPayload = "type" {
+	init {
+		data: InitPayload?,
+	},
+	patch {
+		data: PatchPayload?,
+	},
+}
+
+event SyncEquipment {
+	from: Server,
+	type: Reliable,
+	call: SingleAsync,
+	data: SyncPayload,
+}
