@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 
+local Enums = require(script.Parent.Enums)
 local Types = require(script.Parent.Types)
 
 type TMouseDragRequest = Types.TMouseDragRequest
@@ -243,6 +244,12 @@ function Options.CreateDragRequest(request: TMouseDragRequest?): TMouseDragReque
 			ProjectionPlane = baseRequest.ProjectionPlane,
 			BaseExclude = baseRequest.BaseExclude,
 			Metadata = nil,
+			DragMode = nil,
+			PreviewSelectionChannel = nil,
+			MirrorPreviewSelection = nil,
+			MarqueeQueryOptions = nil,
+			MarqueeSelectionOptions = nil,
+			MarqueeMetadata = nil,
 		}
 	end
 
@@ -256,6 +263,14 @@ function Options.CreateDragRequest(request: TMouseDragRequest?): TMouseDragReque
 		ProjectionPlane = baseRequest.ProjectionPlane,
 		BaseExclude = baseRequest.BaseExclude,
 		Metadata = _CloneDictionary(request.Metadata),
+		DragMode = request.DragMode,
+		PreviewSelectionChannel = request.PreviewSelectionChannel,
+		MirrorPreviewSelection = request.MirrorPreviewSelection,
+		MarqueeQueryOptions = if request.MarqueeQueryOptions ~= nil
+			then SpatialQuery.MergeOptions(nil, request.MarqueeQueryOptions)
+			else nil,
+		MarqueeSelectionOptions = _CloneSelectionOptions(request.MarqueeSelectionOptions),
+		MarqueeMetadata = _CloneDictionary(request.MarqueeMetadata),
 	}
 end
 
@@ -335,6 +350,17 @@ function Options.ResolveDragRequest(config: TMouseManagerConfig, request: TMouse
 		ProjectionPlane = resolvedMouseRequest.ProjectionPlane,
 		BaseExclude = resolvedMouseRequest.BaseExclude,
 		Metadata = resolvedDragRequest.Metadata,
+		DragMode = if resolvedDragRequest.DragMode ~= nil then resolvedDragRequest.DragMode else Enums.DragMode.World,
+		PreviewSelectionChannel = resolvedDragRequest.PreviewSelectionChannel,
+		MirrorPreviewSelection = if resolvedDragRequest.MirrorPreviewSelection ~= nil
+			then resolvedDragRequest.MirrorPreviewSelection
+			else false,
+		MarqueeQueryOptions = SpatialQuery.MergeOptions(resolvedMouseRequest.QueryOptions, resolvedDragRequest.MarqueeQueryOptions),
+		MarqueeSelectionOptions = _MergeSelectionOptions(
+			resolvedMouseRequest.SelectionOptions,
+			resolvedDragRequest.MarqueeSelectionOptions
+		),
+		MarqueeMetadata = resolvedDragRequest.MarqueeMetadata,
 	})
 end
 

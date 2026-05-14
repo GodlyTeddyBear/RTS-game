@@ -78,6 +78,7 @@ export type TMouseErrorData = {
 export type TMouseSnapshotSource = typeof(Enums.SnapshotSource.CurrentMouse)
 export type TMouseSelectionMode = typeof(Enums.SelectionMode.Single)
 export type TMouseHoverState = typeof(Enums.HoverState.Active)
+export type TMouseDragMode = typeof(Enums.DragMode.World)
 export type TMouseDragState = typeof(Enums.DragState.Active)
 export type TMouseDragEndReason = typeof(Enums.DragEndReason.Completed)
 
@@ -127,29 +128,63 @@ export type THoverSnapshot = {
 	Mirrored: boolean,
 }
 
+export type TScreenRect = {
+	Min: Vector2,
+	Max: Vector2,
+	Center: Vector2,
+	Size: Vector2,
+}
+
+export type TMarqueeTargetEntry = {
+	Key: Instance,
+	Target: SelectionPlus.TResolvedSelectionTarget,
+	ScreenPoint: Vector2,
+	BoundsRect: TScreenRect?,
+}
+
 export type TMouseDragRequest = TMouseRequest & {
 	Metadata: { [string]: any }?,
+	DragMode: TMouseDragMode?,
+	PreviewSelectionChannel: string?,
+	MirrorPreviewSelection: boolean?,
+	MarqueeQueryOptions: SpatialQuery.TQueryOptions?,
+	MarqueeSelectionOptions: SelectionPlus.TSelectionResolverOptions?,
+	MarqueeMetadata: { [string]: any }?,
 }
 
 export type TResolvedMouseDragRequest = TResolvedMouseRequest & {
 	Metadata: { [string]: any }?,
+	DragMode: TMouseDragMode,
+	PreviewSelectionChannel: string?,
+	MirrorPreviewSelection: boolean,
+	MarqueeQueryOptions: SpatialQuery.TQueryOptions?,
+	MarqueeSelectionOptions: SelectionPlus.TSelectionResolverOptions?,
+	MarqueeMetadata: { [string]: any }?,
 }
+
+export type TMarqueeRequest = TMouseDragRequest
+export type TResolvedMarqueeRequest = TResolvedMouseDragRequest
 
 export type TMouseDragSnapshot = {
 	Channel: string,
+	Mode: TMouseDragMode,
 	State: TMouseDragState,
 	EndReason: TMouseDragEndReason?,
 	StartSnapshot: TMouseSnapshot,
 	CurrentSnapshot: TMouseSnapshot,
 	EndSnapshot: TMouseSnapshot?,
-	StartWorldPoint: Vector3,
-	CurrentWorldPoint: Vector3,
+	StartWorldPoint: Vector3?,
+	CurrentWorldPoint: Vector3?,
 	EndWorldPoint: Vector3?,
 	StartProjectedWorldPoint: Vector3?,
 	CurrentProjectedWorldPoint: Vector3?,
 	EndProjectedWorldPoint: Vector3?,
 	ScreenDelta: Vector2,
-	WorldDelta: Vector3,
+	WorldDelta: Vector3?,
+	NormalizedScreenRect: TScreenRect?,
+	PreviewTargets: { TMarqueeTargetEntry }?,
+	PreviewTargetCount: number?,
+	PreviewMirrored: boolean?,
 	Metadata: { [string]: any }?,
 }
 
@@ -261,11 +296,14 @@ export type TMouseDragEndedSignal = {
 	DisconnectAll: (self: TMouseDragEndedSignal) -> (),
 }
 
+export type TMarqueePreviewChangedSignal = TMouseDragChangedSignal
+
 export type TMouseManager = {
 	SelectionChanged: TMouseSelectionChangedSignal,
 	SelectionCleared: TMouseSelectionClearedSignal,
 	HoverChanged: THoverChangedSignal,
 	HoverCleared: THoverClearedSignal,
+	MarqueePreviewChanged: TMarqueePreviewChangedSignal,
 	DragStarted: TMouseDragChangedSignal,
 	DragUpdated: TMouseDragChangedSignal,
 	DragEnded: TMouseDragEndedSignal,
@@ -295,8 +333,14 @@ export type TMouseManager = {
 	UpdateDrag: (self: TMouseManager, channelName: string, request: TMouseDragRequest?) -> Result.Result<TMouseDragSnapshot>,
 	EndDrag: (self: TMouseManager, channelName: string, request: TMouseDragRequest?) -> Result.Result<TMouseDragSnapshot>,
 	CancelDrag: (self: TMouseManager, channelName: string) -> Result.Result<TMouseDragSnapshot>,
+	BeginMarquee: (self: TMouseManager, channelName: string, request: TMarqueeRequest?) -> Result.Result<TMouseDragSnapshot>,
+	UpdateMarquee: (self: TMouseManager, channelName: string, request: TMarqueeRequest?) -> Result.Result<TMouseDragSnapshot>,
+	EndMarquee: (self: TMouseManager, channelName: string, request: TMarqueeRequest?) -> Result.Result<TMouseDragSnapshot>,
+	CancelMarquee: (self: TMouseManager, channelName: string) -> Result.Result<TMouseDragSnapshot>,
 	GetDragSnapshot: (self: TMouseManager, channelName: string) -> TMouseDragSnapshot?,
 	IsDragging: (self: TMouseManager, channelName: string) -> boolean,
+	GetMarqueeSnapshot: (self: TMouseManager, channelName: string) -> TMouseDragSnapshot?,
+	IsMarqueeActive: (self: TMouseManager, channelName: string) -> boolean,
 	GetLastSnapshot: (self: TMouseManager) -> TMouseSnapshot?,
 	ClearLastSnapshot: (self: TMouseManager) -> (),
 	Destroy: (self: TMouseManager) -> (),

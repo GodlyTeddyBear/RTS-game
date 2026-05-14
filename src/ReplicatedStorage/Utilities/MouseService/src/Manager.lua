@@ -20,6 +20,7 @@ local Types = require(script.Parent.Types)
 
 type TMouseDragRequest = Types.TMouseDragRequest
 type TMouseDragSnapshot = Types.TMouseDragSnapshot
+type TMarqueeRequest = Types.TMarqueeRequest
 type THoverRequest = Types.THoverRequest
 type THoverSnapshot = Types.THoverSnapshot
 type TMouseManager = Types.TMouseManager
@@ -35,6 +36,7 @@ local SELECTION_CHANGED_SIGNAL_KEY = "SelectionChanged"
 local SELECTION_CLEARED_SIGNAL_KEY = "SelectionCleared"
 local HOVER_CHANGED_SIGNAL_KEY = "HoverChanged"
 local HOVER_CLEARED_SIGNAL_KEY = "HoverCleared"
+local MARQUEE_PREVIEW_CHANGED_SIGNAL_KEY = "MarqueePreviewChanged"
 local DRAG_STARTED_SIGNAL_KEY = "DragStarted"
 local DRAG_UPDATED_SIGNAL_KEY = "DragUpdated"
 local DRAG_ENDED_SIGNAL_KEY = "DragEnded"
@@ -54,6 +56,7 @@ function Manager.new(config: TMouseManagerConfig?): TMouseManager
 	self._lastSnapshotOption = Option.None
 	self._selectionManager = nil
 	self._hoverSelectionManager = nil
+	self._dragPreviewSelectionManager = nil
 	self._hoverLoopConnection = nil
 	self._selectionStateByChannel = {}
 	self._hoverStateByChannel = {}
@@ -62,6 +65,7 @@ function Manager.new(config: TMouseManagerConfig?): TMouseManager
 	self.SelectionCleared = Signals.Create(self._stash, SELECTION_CLEARED_SIGNAL_KEY)
 	self.HoverChanged = Signals.Create(self._stash, HOVER_CHANGED_SIGNAL_KEY)
 	self.HoverCleared = Signals.Create(self._stash, HOVER_CLEARED_SIGNAL_KEY)
+	self.MarqueePreviewChanged = Signals.Create(self._stash, MARQUEE_PREVIEW_CHANGED_SIGNAL_KEY)
 	self.DragStarted = Signals.Create(self._stash, DRAG_STARTED_SIGNAL_KEY)
 	self.DragUpdated = Signals.Create(self._stash, DRAG_UPDATED_SIGNAL_KEY)
 	self.DragEnded = Signals.Create(self._stash, DRAG_ENDED_SIGNAL_KEY)
@@ -293,6 +297,12 @@ function Manager:BeginDrag(channelName: string, request: TMouseDragRequest?): Re
 	return Drag.BeginDrag(self, channelName, request)
 end
 
+function Manager:BeginMarquee(channelName: string, request: TMarqueeRequest?): Result.Result<TMouseDragSnapshot>
+	local marqueeRequest = Options.CreateDragRequest(request)
+	marqueeRequest.DragMode = Enums.DragMode.Marquee
+	return self:BeginDrag(channelName, marqueeRequest)
+end
+
 function Manager:UpdateDrag(channelName: string, request: TMouseDragRequest?): Result.Result<TMouseDragSnapshot>
 	local aliveResult = Policies.CheckServiceAlive(self)
 	if not aliveResult.success then
@@ -305,6 +315,12 @@ function Manager:UpdateDrag(channelName: string, request: TMouseDragRequest?): R
 	end
 
 	return Drag.UpdateDrag(self, channelName, request)
+end
+
+function Manager:UpdateMarquee(channelName: string, request: TMarqueeRequest?): Result.Result<TMouseDragSnapshot>
+	local marqueeRequest = Options.CreateDragRequest(request)
+	marqueeRequest.DragMode = Enums.DragMode.Marquee
+	return self:UpdateDrag(channelName, marqueeRequest)
 end
 
 function Manager:EndDrag(channelName: string, request: TMouseDragRequest?): Result.Result<TMouseDragSnapshot>
@@ -321,6 +337,14 @@ function Manager:EndDrag(channelName: string, request: TMouseDragRequest?): Resu
 	return Drag.EndDrag(self, channelName, request)
 end
 
+function Manager:EndMarquee(channelName: string, request: TMarqueeRequest?): Result.Result<TMouseDragSnapshot>
+	local marqueeRequest = if request ~= nil then Options.CreateDragRequest(request) else nil
+	if marqueeRequest ~= nil then
+		marqueeRequest.DragMode = Enums.DragMode.Marquee
+	end
+	return self:EndDrag(channelName, marqueeRequest)
+end
+
 function Manager:CancelDrag(channelName: string): Result.Result<TMouseDragSnapshot>
 	local aliveResult = Policies.CheckServiceAlive(self)
 	if not aliveResult.success then
@@ -335,18 +359,41 @@ function Manager:CancelDrag(channelName: string): Result.Result<TMouseDragSnapsh
 	return Drag.CancelDrag(self, channelName)
 end
 
+function Manager:CancelMarquee(channelName: string): Result.Result<TMouseDragSnapshot>
+	return self:CancelDrag(channelName)
+end
+
 function Manager:GetDragSnapshot(channelName: string): TMouseDragSnapshot?
 	local channelResult = Policies.CheckChannelName(channelName)
 	if not channelResult.success then
 		return nil
 	end
 
-	return self._dragStateByChannel[channelName]
+	local dragSession = self._dragStateByChannel[channelName]
+	if dragSession == nil then
+		return nil
+	end
+
+	return dragSession.Snapshot
 end
 
 function Manager:IsDragging(channelName: string): boolean
 	local dragSnapshot = self:GetDragSnapshot(channelName)
 	return dragSnapshot ~= nil and dragSnapshot.State == Enums.DragState.Active
+end
+
+function Manager:GetMarqueeSnapshot(channelName: string): TMouseDragSnapshot?
+	local dragSnapshot = self:GetDragSnapshot(channelName)
+	if dragSnapshot == nil or dragSnapshot.Mode ~= Enums.DragMode.Marquee then
+		return nil
+	end
+
+	return dragSnapshot
+end
+
+function Manager:IsMarqueeActive(channelName: string): boolean
+	local marqueeSnapshot = self:GetMarqueeSnapshot(channelName)
+	return marqueeSnapshot ~= nil and marqueeSnapshot.State == Enums.DragState.Active
 end
 
 function Manager:GetLastSnapshot(): TMouseSnapshot?

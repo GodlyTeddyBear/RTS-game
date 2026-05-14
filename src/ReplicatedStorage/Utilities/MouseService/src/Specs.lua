@@ -40,6 +40,10 @@ function Specs.IsValidResolveTarget(resolveTarget: any): boolean
 	return resolveTarget == nil or type(resolveTarget) == "boolean"
 end
 
+function Specs.IsValidDragMode(dragMode: any): boolean
+	return dragMode == nil or dragMode == Enums.DragMode.World or dragMode == Enums.DragMode.Marquee
+end
+
 function Specs.IsValidQueryOptions(queryOptions: any): boolean
 	return queryOptions == nil or type(queryOptions) == "table"
 end
@@ -86,6 +90,14 @@ end
 
 function Specs.IsValidMirrorHover(mirrorHover: any): boolean
 	return mirrorHover == nil or type(mirrorHover) == "boolean"
+end
+
+function Specs.IsValidMirrorPreviewSelection(mirrorPreviewSelection: any): boolean
+	return mirrorPreviewSelection == nil or type(mirrorPreviewSelection) == "boolean"
+end
+
+function Specs.IsValidPreviewSelectionChannel(previewSelectionChannel: any): boolean
+	return previewSelectionChannel == nil or Specs.IsValidChannelName(previewSelectionChannel)
 end
 
 function Specs.IsValidHighlightOptions(highlight: any): boolean
@@ -180,6 +192,14 @@ local HasValidResolveTarget = Specification.new(
 	end
 )
 
+local HasValidDragMode = Specification.new(
+	_ErrorName(Enums.ErrorKey.InvalidDragMode),
+	Enums.ErrorMessage[Enums.ErrorKey.InvalidDragMode],
+	function(candidate): boolean
+		return Specs.IsValidDragMode(candidate.DragMode)
+	end
+)
+
 local HasValidQueryOptions = Specification.new(
 	_ErrorName(Enums.ErrorKey.InvalidQueryOptions),
 	Enums.ErrorMessage[Enums.ErrorKey.InvalidQueryOptions],
@@ -236,6 +256,22 @@ local HasValidMirrorHover = Specification.new(
 	end
 )
 
+local HasValidMirrorPreviewSelection = Specification.new(
+	_ErrorName(Enums.ErrorKey.InvalidPreviewSelectionMirror),
+	Enums.ErrorMessage[Enums.ErrorKey.InvalidPreviewSelectionMirror],
+	function(candidate): boolean
+		return Specs.IsValidMirrorPreviewSelection(candidate.MirrorPreviewSelection)
+	end
+)
+
+local HasValidPreviewSelectionChannel = Specification.new(
+	_ErrorName(Enums.ErrorKey.InvalidPreviewSelectionChannel),
+	Enums.ErrorMessage[Enums.ErrorKey.InvalidPreviewSelectionChannel],
+	function(candidate): boolean
+		return Specs.IsValidPreviewSelectionChannel(candidate.PreviewSelectionChannel)
+	end
+)
+
 local HasValidHighlightOptions = Specification.new(
 	_ErrorName(Enums.ErrorKey.InvalidSelectionHighlight),
 	Enums.ErrorMessage[Enums.ErrorKey.InvalidSelectionHighlight],
@@ -265,6 +301,30 @@ local HasValidHoverRadiusOptions = Specification.new(
 	Enums.ErrorMessage[Enums.ErrorKey.InvalidHoverRadius],
 	function(candidate): boolean
 		return Specs.IsValidRadiusOptions(if candidate.HoverRadius ~= nil then candidate.HoverRadius else candidate.Radius)
+	end
+)
+
+local HasValidMarqueeQueryOptions = Specification.new(
+	_ErrorName(Enums.ErrorKey.InvalidMarqueeQueryOptions),
+	Enums.ErrorMessage[Enums.ErrorKey.InvalidMarqueeQueryOptions],
+	function(candidate): boolean
+		return Specs.IsValidQueryOptions(candidate.MarqueeQueryOptions)
+	end
+)
+
+local HasValidMarqueeSelectionOptions = Specification.new(
+	_ErrorName(Enums.ErrorKey.InvalidMarqueeSelectionOptions),
+	Enums.ErrorMessage[Enums.ErrorKey.InvalidMarqueeSelectionOptions],
+	function(candidate): boolean
+		return Specs.IsValidSelectionOptions(candidate.MarqueeSelectionOptions)
+	end
+)
+
+local HasValidMarqueeMetadata = Specification.new(
+	_ErrorName(Enums.ErrorKey.InvalidMarqueeMetadata),
+	Enums.ErrorMessage[Enums.ErrorKey.InvalidMarqueeMetadata],
+	function(candidate): boolean
+		return Specs.IsValidMetadata(candidate.MarqueeMetadata)
 	end
 )
 
@@ -331,6 +391,7 @@ Specs.HasValidScreenPointSpec = HasValidScreenPoint
 Specs.HasValidCameraProviderSpec = HasValidCameraProvider
 Specs.HasValidRayLengthSpec = HasValidRayLength
 Specs.HasValidResolveTargetSpec = HasValidResolveTarget
+Specs.HasValidDragModeSpec = HasValidDragMode
 Specs.HasValidQueryOptionsSpec = HasValidQueryOptions
 Specs.HasValidSelectionOptionsSpec = HasValidSelectionOptions
 Specs.HasValidProjectionPlaneSpec = HasValidProjectionPlane
@@ -338,10 +399,15 @@ Specs.HasValidBaseExcludeSpec = HasValidBaseExclude
 Specs.HasValidMetadataSpec = HasValidMetadata
 Specs.HasValidMirrorSelectionSpec = HasValidMirrorSelection
 Specs.HasValidMirrorHoverSpec = HasValidMirrorHover
+Specs.HasValidMirrorPreviewSelectionSpec = HasValidMirrorPreviewSelection
+Specs.HasValidPreviewSelectionChannelSpec = HasValidPreviewSelectionChannel
 Specs.HasValidHighlightOptionsSpec = HasValidHighlightOptions
 Specs.HasValidRadiusOptionsSpec = HasValidRadiusOptions
 Specs.HasValidHoverHighlightOptionsSpec = HasValidHoverHighlightOptions
 Specs.HasValidHoverRadiusOptionsSpec = HasValidHoverRadiusOptions
+Specs.HasValidMarqueeQueryOptionsSpec = HasValidMarqueeQueryOptions
+Specs.HasValidMarqueeSelectionOptionsSpec = HasValidMarqueeSelectionOptions
+Specs.HasValidMarqueeMetadataSpec = HasValidMarqueeMetadata
 Specs.HasClientRuntimeSpec = HasClientRuntime
 Specs.HasCameraSpec = HasCamera
 Specs.HasAliveServiceSpec = HasAliveService
@@ -354,6 +420,7 @@ Specs.HasValidManagerConfigSpec = Specification.All({
 	HasValidCameraProvider,
 	HasValidRayLength,
 	HasValidResolveTarget,
+	HasValidDragMode,
 	HasValidQueryOptions,
 	HasValidSelectionOptions,
 	HasValidProjectionPlane,
@@ -364,6 +431,11 @@ Specs.HasValidManagerConfigSpec = Specification.All({
 	HasValidMirrorHover,
 	HasValidHoverHighlightOptions,
 	HasValidHoverRadiusOptions,
+	HasValidMirrorPreviewSelection,
+	HasValidPreviewSelectionChannel,
+	HasValidMarqueeQueryOptions,
+	HasValidMarqueeSelectionOptions,
+	HasValidMarqueeMetadata,
 })
 Specs.HasValidRequestShapeSpec = Specification.All({
 	HasValidRequest,
@@ -371,6 +443,7 @@ Specs.HasValidRequestShapeSpec = Specification.All({
 	HasValidCameraProvider,
 	HasValidRayLength,
 	HasValidResolveTarget,
+	HasValidDragMode,
 	HasValidQueryOptions,
 	HasValidSelectionOptions,
 	HasValidProjectionPlane,
@@ -417,6 +490,11 @@ Specs.HasValidDragRequestSpec = Specification.All({
 	HasValidProjectionPlane,
 	HasValidBaseExclude,
 	HasValidMetadata,
+	HasValidMirrorPreviewSelection,
+	HasValidPreviewSelectionChannel,
+	HasValidMarqueeQueryOptions,
+	HasValidMarqueeSelectionOptions,
+	HasValidMarqueeMetadata,
 })
 
 return table.freeze(Specs)

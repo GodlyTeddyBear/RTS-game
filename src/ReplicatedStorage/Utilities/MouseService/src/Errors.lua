@@ -77,6 +77,13 @@ function Errors.BuildDragWorldPointNotFound(channelName: string): (string, strin
 	})
 end
 
+function Errors.BuildMarqueeCandidateQueryFailed(channelName: string, reason: string): (string, string, TMouseErrorData?)
+	return _BuildError(Enums.ErrorKey.MarqueeCandidateQueryFailed, nil, {
+		ChannelName = channelName,
+		Reason = reason,
+	})
+end
+
 function Errors.BuildMissingHoverSession(channelName: string, state: string?): (string, string, TMouseErrorData?)
 	return _BuildError(Enums.ErrorKey.MissingHoverSession, nil, {
 		ChannelName = channelName,

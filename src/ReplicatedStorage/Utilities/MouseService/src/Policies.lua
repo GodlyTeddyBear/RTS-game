@@ -33,16 +33,22 @@ function Policies.CheckManagerConfig(config: any)
 		CameraProvider = if config ~= nil then config.CameraProvider else nil,
 		RayLength = if config ~= nil then config.RayLength else nil,
 		ResolveTarget = if config ~= nil then config.ResolveTarget else nil,
+		DragMode = nil,
 		QueryOptions = if config ~= nil then config.QueryOptions else nil,
 		SelectionOptions = if config ~= nil then config.SelectionOptions else nil,
 		ProjectionPlane = if config ~= nil then config.ProjectionPlane else nil,
 		BaseExclude = if config ~= nil then config.BaseExclude else nil,
 		MirrorSelection = if config ~= nil then config.MirrorSelections else nil,
 		MirrorHover = if config ~= nil then config.MirrorHovers else nil,
+		MirrorPreviewSelection = nil,
+		PreviewSelectionChannel = nil,
 		Highlight = if config ~= nil then config.DefaultSelectionHighlight else nil,
 		Radius = if config ~= nil then config.DefaultSelectionRadius else nil,
 		HoverHighlight = if config ~= nil then config.DefaultHoverHighlight else nil,
 		HoverRadius = if config ~= nil then config.DefaultHoverRadius else nil,
+		MarqueeQueryOptions = nil,
+		MarqueeSelectionOptions = nil,
+		MarqueeMetadata = nil,
 	}))
 end
 
@@ -119,11 +125,17 @@ function Policies.CheckDragRequest(request: any): Result.Result<boolean>
 		CameraProvider = if request ~= nil then request.CameraProvider else nil,
 		RayLength = if request ~= nil then request.RayLength else nil,
 		ResolveTarget = if request ~= nil then request.ResolveTarget else nil,
+		DragMode = if request ~= nil then request.DragMode else nil,
 		QueryOptions = if request ~= nil then request.QueryOptions else nil,
 		SelectionOptions = if request ~= nil then request.SelectionOptions else nil,
 		ProjectionPlane = if request ~= nil then request.ProjectionPlane else nil,
 		BaseExclude = if request ~= nil then request.BaseExclude else nil,
 		Metadata = if request ~= nil then request.Metadata else nil,
+		MirrorPreviewSelection = if request ~= nil then request.MirrorPreviewSelection else nil,
+		PreviewSelectionChannel = if request ~= nil then request.PreviewSelectionChannel else nil,
+		MarqueeQueryOptions = if request ~= nil then request.MarqueeQueryOptions else nil,
+		MarqueeSelectionOptions = if request ~= nil then request.MarqueeSelectionOptions else nil,
+		MarqueeMetadata = if request ~= nil then request.MarqueeMetadata else nil,
 	})
 	if result.success then
 		return Result.Ok(true)
