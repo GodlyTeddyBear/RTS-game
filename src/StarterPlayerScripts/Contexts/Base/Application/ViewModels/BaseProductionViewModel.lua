@@ -48,14 +48,14 @@ function BaseProductionViewModel.fromUnitConfig(selectedUnitId: string?): TBaseP
 			hpText = ("%d HP"):format(definition.MaxHp),
 			capText = ("Cap %d"):format(definition.MaxConcurrentUnitsPerOwner),
 			isSelected = selectedUnitId == unitId,
-			isProduceEnabled = false,
+			isProduceEnabled = true,
 			layoutOrder = index,
 		} :: TUnitProductionCardData)
 	end
 
 	return table.freeze({
 		title = "BASE PRODUCTION",
-		subtitle = "Unit production unavailable",
+		subtitle = "Select a unit to deploy",
 		selectedUnitId = selectedUnitId,
 		units = table.freeze(units),
 	} :: TBaseProductionViewData)

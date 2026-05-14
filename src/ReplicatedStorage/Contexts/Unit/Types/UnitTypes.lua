@@ -19,6 +19,7 @@ export type UnitDefinition = {
 	Role: UnitRole,
 	DisplayName: string,
 	MaxHp: number,
+	MoveSpeed: number,
 	ModelScale: Vector3,
 	ModelColor: Color3,
 	MaxConcurrentUnitsPerOwner: number,

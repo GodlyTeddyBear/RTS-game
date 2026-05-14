@@ -23,7 +23,7 @@ local function BaseProductionPanel()
 		viewModel = viewModel,
 		onClose = controller.actions.close,
 		onSelectUnit = controller.actions.selectUnit,
-		onProduce = controller.actions.produceUnavailable,
+		onProduce = controller.actions.produceUnit,
 	})
 end
 

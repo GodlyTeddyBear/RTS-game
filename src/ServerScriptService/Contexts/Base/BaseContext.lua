@@ -13,6 +13,7 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local BaseTypes = require(ReplicatedStorage.Contexts.Base.Types.BaseTypes)
+local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 local BlinkServer = require(ReplicatedStorage.Network.Generated.BaseSyncServer)
 
 local BaseECSWorldService = require(script.Parent.Infrastructure.ECS.BaseECSWorldService)
@@ -23,6 +24,7 @@ local BaseSyncService = require(script.Parent.Infrastructure.Persistence.BaseSyn
 local PrepareRunBaseCommand = require(script.Parent.Application.Commands.PrepareRunBaseCommand)
 local ApplyDamageBaseCommand = require(script.Parent.Application.Commands.ApplyDamageBaseCommand)
 local CleanupBaseCommand = require(script.Parent.Application.Commands.CleanupBaseCommand)
+local ProduceUnitCommand = require(script.Parent.Application.Commands.ProduceUnitCommand)
 local GetBaseStateQuery = require(script.Parent.Application.Queries.GetBaseStateQuery)
 local GetBaseTargetCFrameQuery = require(script.Parent.Application.Queries.GetBaseTargetCFrameQuery)
 
@@ -30,6 +32,7 @@ local Catch = Result.Catch
 local Ok = Result.Ok
 
 type BaseState = BaseTypes.BaseState
+type SpawnUnitResult = UnitTypes.SpawnUnitResult
 
 -- â”€â”€ Initialization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -76,6 +79,11 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		CacheAs = "_cleanupBaseCommand",
 	},
 	{
+		Name = "ProduceUnitCommand",
+		Module = ProduceUnitCommand,
+		CacheAs = "_produceUnitCommand",
+	},
+	{
 		Name = "GetBaseStateQuery",
 		Module = GetBaseStateQuery,
 		CacheAs = "_getBaseStateQuery",
@@ -102,6 +110,7 @@ local BaseContextService = Knit.CreateService({
 	Modules = BaseModules,
 	ExternalServices = {
 		{ Name = "MapContext" },
+		{ Name = "UnitContext" },
 	},
 	Teardown = {
 		Fields = {
@@ -185,6 +194,16 @@ function BaseContextService:GetBaseTargetCFrame(): Result.Result<CFrame>
 	return Catch(function()
 		return self._getBaseTargetCFrameQuery:Execute()
 	end, "Base:GetBaseTargetCFrame")
+end
+
+function BaseContextService:ProduceUnit(player: Player, unitId: string): Result.Result<SpawnUnitResult>
+	return Catch(function()
+		return self._produceUnitCommand:Execute(player, unitId)
+	end, "Base:ProduceUnit")
+end
+
+function BaseContextService.Client:ProduceUnit(player: Player, unitId: string)
+	return self.Server:ProduceUnit(player, unitId)
 end
 
 --[=[

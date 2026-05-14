@@ -69,6 +69,21 @@ function AssetFetcher.CreateEnemyRegistry(folder: Folder)
 end
 
 --[=[
+	Creates a UnitRegistry for loading unit models with Default fallback.
+
+	@param folder Folder - The root Units folder
+	@return UnitRegistry - Registry instance for loading unit models
+
+	Example:
+		local unitRegistry = AssetFetcher.CreateUnitRegistry(Assets.Units)
+		local builderModel = unitRegistry:GetUnitModel("Builder")
+]=]
+function AssetFetcher.CreateUnitRegistry(folder: Folder)
+	local UnitRegistry = require(script.Parent.UnitRegistry)
+	return UnitRegistry.new(folder)
+end
+
+--[=[
 	Creates an EffectRegistry for loading visual effects for skills and status effects.
 
 	@param folder Folder - The root Effects folder
