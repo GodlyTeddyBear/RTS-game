@@ -9,9 +9,9 @@
     @client
 ]=]
 
-local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local MouseService = require(ReplicatedStorage.Utilities.MouseService)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 local WorldConfig = require(ReplicatedStorage.Contexts.World.Config.WorldConfig)
 
@@ -24,12 +24,14 @@ GetMouseWorldPositionQuery.__index = GetMouseWorldPositionQuery
     @return GetMouseWorldPositionQuery -- The query instance.
 ]=]
 function GetMouseWorldPositionQuery.new()
-	return setmetatable({}, GetMouseWorldPositionQuery)
+	local self = setmetatable({}, GetMouseWorldPositionQuery)
+	self._mouseService = MouseService.new()
+	return self
 end
 
 local function _ResolveFirstNonGridHit(
-	origin: Vector3,
-	direction: Vector3,
+	mouseService: MouseService.TMouseManager,
+	camera: Camera,
 	baseExclude: { Instance }?
 ): RaycastResult?
 	local excludedInstances = {}
@@ -40,11 +42,22 @@ local function _ResolveFirstNonGridHit(
 	end
 
 	while true do
-		local hit = SpatialQuery.Raycast(origin, direction, SpatialQuery.CreateRaycastOptions({
-			FilterType = Enum.RaycastFilterType.Exclude,
-			FilterDescendantsInstances = excludedInstances,
-			RespectCanCollide = true,
-		}))
+		local result = mouseService:ResolveSnapshot({
+			CameraProvider = function(): Camera
+				return camera
+			end,
+			BaseExclude = excludedInstances,
+			QueryOptions = SpatialQuery.CreateRaycastOptions({
+				FilterType = Enum.RaycastFilterType.Exclude,
+				FilterDescendantsInstances = excludedInstances,
+				RespectCanCollide = true,
+			}),
+		})
+		if not result.success then
+			return nil
+		end
+
+		local hit = result.value.Hit
 		if hit == nil then
 			return nil
 		end
@@ -64,9 +77,7 @@ end
     @return Vector3? -- The world hit point, or nil when no valid hit is found.
 ]=]
 function GetMouseWorldPositionQuery:Execute(camera: Camera, baseExclude: { Instance }?): Vector3?
-	local mouseLocation = UserInputService:GetMouseLocation()
-	local ray = camera:ViewportPointToRay(mouseLocation.X, mouseLocation.Y, 0)
-	local hit = _ResolveFirstNonGridHit(ray.Origin, ray.Direction * 2000, baseExclude)
+	local hit = _ResolveFirstNonGridHit(self._mouseService, camera, baseExclude)
 	if hit == nil then
 		return nil
 	end

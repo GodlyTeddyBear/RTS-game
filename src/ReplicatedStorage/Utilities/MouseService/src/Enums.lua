@@ -1,0 +1,100 @@
+--!strict
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local EnumList = require(ReplicatedStorage.Utilities.EnumList)
+
+local Enums = {
+	SnapshotSource = EnumList.new("MouseServiceSnapshotSource", {
+		"CurrentMouse",
+		"ScreenPoint",
+	}),
+	SelectionMode = EnumList.new("MouseServiceSelectionMode", {
+		"Single",
+	}),
+	HoverState = EnumList.new("MouseServiceHoverState", {
+		"Active",
+	}),
+	DragState = EnumList.new("MouseServiceDragState", {
+		"Active",
+		"Ended",
+		"Cancelled",
+	}),
+	DragEndReason = EnumList.new("MouseServiceDragEndReason", {
+		"Completed",
+		"Cancelled",
+	}),
+	ErrorKey = EnumList.new("MouseServiceErrorKey", {
+		"InvalidConfig",
+		"InvalidRequest",
+		"InvalidChannelName",
+		"InvalidSelectionRequest",
+		"InvalidHoverRequest",
+		"InvalidDragRequest",
+		"InvalidScreenPoint",
+		"InvalidCameraProvider",
+		"InvalidRayLength",
+		"InvalidResolveTarget",
+		"InvalidQueryOptions",
+		"InvalidSelectionOptions",
+		"InvalidProjectionPlane",
+		"InvalidBaseExclude",
+		"InvalidSelectionHighlight",
+		"InvalidSelectionRadius",
+		"InvalidSelectionMirror",
+		"InvalidHoverHighlight",
+		"InvalidHoverRadius",
+		"InvalidHoverMirror",
+		"InvalidMetadata",
+		"MissingCamera",
+		"SelectionTargetNotFound",
+		"HoverTargetNotFound",
+		"DragWorldPointNotFound",
+		"MissingHoverSession",
+		"DuplicateHoverSession",
+		"IllegalHoverTransition",
+		"MissingDragSession",
+		"DuplicateDragSession",
+		"IllegalDragTransition",
+		"UnsupportedRuntime",
+		"MouseServiceDestroyed",
+	}),
+}
+
+Enums.ErrorMessage = table.freeze({
+	[Enums.ErrorKey.InvalidConfig] = "MouseService config must be a table when provided",
+	[Enums.ErrorKey.InvalidRequest] = "MouseService request must be a table when provided",
+	[Enums.ErrorKey.InvalidChannelName] = "MouseService channelName must be a non-empty string",
+	[Enums.ErrorKey.InvalidSelectionRequest] = "MouseService selection request is invalid",
+	[Enums.ErrorKey.InvalidHoverRequest] = "MouseService hover request is invalid",
+	[Enums.ErrorKey.InvalidDragRequest] = "MouseService drag request is invalid",
+	[Enums.ErrorKey.InvalidScreenPoint] = "MouseService ScreenPoint must be a Vector2",
+	[Enums.ErrorKey.InvalidCameraProvider] = "MouseService CameraProvider must be a function",
+	[Enums.ErrorKey.InvalidRayLength] = "MouseService RayLength must be a positive number",
+	[Enums.ErrorKey.InvalidResolveTarget] = "MouseService ResolveTarget must be a boolean when provided",
+	[Enums.ErrorKey.InvalidQueryOptions] = "MouseService QueryOptions must be a table when provided",
+	[Enums.ErrorKey.InvalidSelectionOptions] = "MouseService SelectionOptions must be a table when provided",
+	[Enums.ErrorKey.InvalidProjectionPlane] = "MouseService ProjectionPlane must contain a non-zero Normal and Point",
+	[Enums.ErrorKey.InvalidBaseExclude] = "MouseService BaseExclude must be an array of Instances",
+	[Enums.ErrorKey.InvalidSelectionHighlight] = "MouseService Highlight must be a table when provided",
+	[Enums.ErrorKey.InvalidSelectionRadius] = "MouseService Radius must be a table when provided",
+	[Enums.ErrorKey.InvalidSelectionMirror] = "MouseService MirrorSelection must be a boolean when provided",
+	[Enums.ErrorKey.InvalidHoverHighlight] = "MouseService hover Highlight must be a table when provided",
+	[Enums.ErrorKey.InvalidHoverRadius] = "MouseService hover Radius must be a table when provided",
+	[Enums.ErrorKey.InvalidHoverMirror] = "MouseService MirrorHover must be a boolean when provided",
+	[Enums.ErrorKey.InvalidMetadata] = "MouseService Metadata must be a table when provided",
+	[Enums.ErrorKey.MissingCamera] = "MouseService requires a live Camera",
+	[Enums.ErrorKey.SelectionTargetNotFound] = "MouseService could not resolve a selection target",
+	[Enums.ErrorKey.HoverTargetNotFound] = "MouseService could not resolve a hover target",
+	[Enums.ErrorKey.DragWorldPointNotFound] = "MouseService drag requires a resolved world point",
+	[Enums.ErrorKey.MissingHoverSession] = "MouseService hover session does not exist for this channel",
+	[Enums.ErrorKey.DuplicateHoverSession] = "MouseService hover session already exists for this channel",
+	[Enums.ErrorKey.IllegalHoverTransition] = "MouseService hover transition is not allowed",
+	[Enums.ErrorKey.MissingDragSession] = "MouseService drag session does not exist for this channel",
+	[Enums.ErrorKey.DuplicateDragSession] = "MouseService drag session already exists for this channel",
+	[Enums.ErrorKey.IllegalDragTransition] = "MouseService drag transition is not allowed",
+	[Enums.ErrorKey.UnsupportedRuntime] = "MouseService is client-only",
+	[Enums.ErrorKey.MouseServiceDestroyed] = "MouseService has already been destroyed",
+})
+
+return table.freeze(Enums)

@@ -10,6 +10,7 @@ local React = require(ReplicatedStorage.Packages.React)
 local e = React.createElement
 local RunPresentation = require(script.Parent.Parent.Parent.Parent.Run.Presentation)
 local InventoryPresentation = require(script.Parent.Parent.Parent.Parent.Inventory.Presentation)
+local BasePresentation = require(script.Parent.Parent.Parent.Parent.Base.Presentation)
 local Button = require(script.Parent.Parent.Atoms.Button)
 local Text = require(script.Parent.Parent.Atoms.Text)
 local VStack = require(script.Parent.Parent.Layouts.VStack)
@@ -59,6 +60,7 @@ local function GameViewView(props: TGameViewViewProps)
 					onClose = props.onCloseInventory,
 				}
 			) or nil,
+			BaseProductionPanel = props.isHudEnabled and props.isRunActive and e(BasePresentation.BaseProductionPanel) or nil,
 			Phase2Launch = (not props.isRunActive) and e("Frame", {
 			Size = UDim2.fromScale(1, 1),
 			BackgroundColor3 = Color3.fromRGB(10, 14, 24),

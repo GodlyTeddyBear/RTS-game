@@ -2,8 +2,10 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local GoodSignal = require(ReplicatedStorage.Packages.Goodsignal)
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseSyncClient = require(script.Parent.Infrastructure.BaseSyncClient)
+local BaseClickService = require(script.Parent.Infrastructure.Services.BaseClickService)
 
 local BaseController = Knit.CreateController({
 	Name = "BaseController",
@@ -11,14 +13,31 @@ local BaseController = Knit.CreateController({
 
 function BaseController:KnitInit()
 	self._syncClient = BaseSyncClient.new()
+	self._clickService = nil
+	self.BaseClicked = GoodSignal.new()
 end
 
 function BaseController:KnitStart()
 	self._syncClient:Start()
+	self._clickService = BaseClickService.new(self:GetAtom(), function(baseInstance: Instance)
+		self.BaseClicked:Fire(baseInstance)
+	end)
+	self._clickService:Start()
 end
 
 function BaseController:GetAtom()
 	return self._syncClient:GetAtom()
+end
+
+function BaseController:Destroy()
+	if self._clickService ~= nil then
+		self._clickService:Destroy()
+		self._clickService = nil
+	end
+
+	if self.BaseClicked ~= nil then
+		self.BaseClicked:DisconnectAll()
+	end
 end
 
 return BaseController

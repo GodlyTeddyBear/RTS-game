@@ -205,4 +205,11 @@ function Resolver.ResolveTargetFromScreenPoint(
 	return _ResolveTargetFromInstance(hit.Instance, hit, options)
 end
 
+function Resolver.ResolveTargetFromHit(
+	hit: RaycastResult,
+	options: TSelectionResolverOptions?
+): TResolvedSelectionTarget?
+	return _ResolveTargetFromInstance(hit.Instance, hit, options)
+end
+
 return table.freeze(Resolver)

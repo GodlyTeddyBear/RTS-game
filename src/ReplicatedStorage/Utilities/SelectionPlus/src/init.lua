@@ -45,4 +45,11 @@ function SelectionPlus.ResolveTargetFromScreenPoint(
 	return Resolver.ResolveTargetFromScreenPoint(camera, screenPoint, options)
 end
 
+function SelectionPlus.ResolveTargetFromHit(
+	hit: RaycastResult,
+	options: TSelectionResolverOptions?
+): TResolvedSelectionTarget?
+	return Resolver.ResolveTargetFromHit(hit, options)
+end
+
 return table.freeze(SelectionPlus)
