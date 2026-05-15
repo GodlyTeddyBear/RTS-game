@@ -85,6 +85,9 @@ function Validation.AssertOperationModule(operationModule: ModuleScript, definit
 	if definition.CacheLocalMemory ~= nil then
 		assert(type(definition.CacheLocalMemory) == "boolean", (`Operation "{definition.Name}" CacheLocalMemory must be boolean when provided`))
 	end
+	if definition.InitialLocalMemory ~= nil then
+		assert(typeof(definition.InitialLocalMemory) == "SharedTable", (`Operation "{definition.Name}" InitialLocalMemory must be a SharedTable when provided`))
+	end
 end
 
 function Validation.AssertSchema(schema: { TResultField }, operationName: string)
@@ -126,7 +129,7 @@ function Validation.AssertRunRequest(request: TRunRequest, operationName: string
 	if request.TimeoutSeconds ~= nil then
 		assert(type(request.TimeoutSeconds) == "number" and request.TimeoutSeconds > 0, (`ParallelQuery:Run("{operationName}") TimeoutSeconds must be a positive number`))
 	end
-	if request.LocalMemory ~= nil then
+	if (request :: any).LocalMemory ~= nil then
 		error((`ParallelQuery:Run("{operationName}") no longer accepts request.LocalMemory; call SetLocalMemory("{operationName}", sharedMemory) before running cached-memory operations`), 2)
 	end
 end

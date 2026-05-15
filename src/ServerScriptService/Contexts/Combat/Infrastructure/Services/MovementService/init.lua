@@ -13,6 +13,7 @@ type TSharedFlowfieldEntry = MovementTypes.TSharedFlowfieldEntry
 type TFlowSeparationRuntime = MovementTypes.TFlowSeparationRuntime
 type TFlowActorRefs = MovementTypes.TFlowActorRefs
 type TFastFlowProfileCounters = MovementTypes.TFastFlowProfileCounters
+type TFlowVelocitySolveInput = MovementTypes.TFlowVelocitySolveInput
 
 --[=[
 	@class MovementService
@@ -46,6 +47,8 @@ function MovementService.new()
 	self._flowSettledByEntity = {} :: { [number]: boolean }
 	self._flowSettleAnchorGoalKeyByEntity = {} :: { [number]: string }
 	self._flowActorRefsByEntity = {} :: { [number]: TFlowActorRefs }
+	self._flowSeparationParallelRunner = nil
+	self._flowSeparationPairAsyncState = nil
 	self._fastFlowProfileCounters = nil :: TFastFlowProfileCounters?
 	self._lastFastFlowProfileLogAt = 0
 	return self
@@ -84,6 +87,8 @@ function MovementService:ResetFastFlowRuntime()
 	table.clear(self._activeFlowEntitiesByGoalKey)
 	table.clear(self._flowSettledByEntity)
 	table.clear(self._flowSettleAnchorGoalKeyByEntity)
+	self:_DestroyFlowSeparationParallelRunner()
+	self:_ClearFlowSeparationPairAsyncState()
 	self._flowSeparationRuntime = nil
 	self._lastFastFlowEndpointDiagnosticKey = nil
 end
@@ -120,11 +125,31 @@ function MovementService:TickMovementFrame(_dt: number)
 		table.insert(activeEntities, entity)
 	end
 
+	local pendingFlowVelocityInputs = {}
+
 	for _, entity in ipairs(activeEntities) do
-		local status, reason = self:TickAdvance(entity)
-		self._advanceFrameResultByEntity[entity] = {
-			Status = status,
-			Reason = reason,
+		local status, reason, pendingVelocityInput = self:_TickAdvanceInternal(entity)
+		if pendingVelocityInput ~= nil then
+			table.insert(pendingFlowVelocityInputs, pendingVelocityInput)
+		else
+			self._advanceFrameResultByEntity[entity] = {
+				Status = status,
+				Reason = reason,
+				FrameId = self._movementFrameId,
+			}
+		end
+	end
+
+	if #pendingFlowVelocityInputs == 0 then
+		return
+	end
+
+	local resultsByEntity = self:_ResolvePendingFlowVelocityMoves(pendingFlowVelocityInputs)
+	for _, input in ipairs(pendingFlowVelocityInputs) do
+		local result = resultsByEntity[input.Entity]
+		self._advanceFrameResultByEntity[input.Entity] = {
+			Status = if result ~= nil then result.Status else "Running",
+			Reason = if result ~= nil then result.Reason else nil,
 			FrameId = self._movementFrameId,
 		}
 	end
@@ -176,10 +201,10 @@ function MovementService:StartAdvance(entity: number, movementMode: EnemyMovemen
 end
 
 
-function MovementService:TickAdvance(entity: number): ("Running" | "Success" | "Fail", string?)
+function MovementService:_TickAdvanceInternal(entity: number): ("Running" | "Success" | "Fail", string?, TFlowVelocitySolveInput?)
 	local movementState = self._movementByEntity[entity]
 	if movementState == nil then
-		return "Fail", "MissingMovementState"
+		return "Fail", "MissingMovementState", nil
 	end
 
 	if movementState.Mode == "Flow" then
@@ -188,7 +213,22 @@ function MovementService:TickAdvance(entity: number): ("Running" | "Success" | "
 
 	self:_ApplyCurrentMoveSpeed(entity)
 
-	return self:_TickPath(entity, movementState)
+	local status, reason = self:_TickPath(entity, movementState)
+	return status, reason, nil
+end
+
+
+function MovementService:TickAdvance(entity: number): ("Running" | "Success" | "Fail", string?)
+	local status, reason, pendingVelocityInput = self:_TickAdvanceInternal(entity)
+	if pendingVelocityInput ~= nil then
+		local resultsByEntity = self:_ResolvePendingFlowVelocityMoves({ pendingVelocityInput })
+		local result = resultsByEntity[pendingVelocityInput.Entity]
+		if result ~= nil then
+			return result.Status, result.Reason
+		end
+	end
+
+	return status, reason
 end
 
 
@@ -240,6 +280,8 @@ function MovementService:CleanupAll()
 	table.clear(self._flowSettleAnchorGoalKeyByEntity)
 	table.clear(self._flowActorRefsByEntity)
 	table.clear(self._advanceFrameResultByEntity)
+	self:_DestroyFlowSeparationParallelRunner()
+	self:_ClearFlowSeparationPairAsyncState()
 	self._flowSeparationRuntime = nil
 end
 

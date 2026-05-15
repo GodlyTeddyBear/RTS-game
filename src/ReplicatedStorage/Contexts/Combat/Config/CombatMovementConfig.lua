@@ -57,7 +57,7 @@ CombatMovementConfig.PATHFINDING = table.freeze({
 	Debug visualization toggles for FastFlow pathfinder walls and grid.
 ]=]
 CombatMovementConfig.FASTFLOW_VISUALIZATION = table.freeze({
-	Enabled = false,
+	Enabled = true,
 	YLevelOffset = 0.2,
 	ShowWalls = true,
 	ShowCellGrid = false,
@@ -134,6 +134,18 @@ CombatMovementConfig.FLOW_SOFT_SEPARATION = table.freeze({
 	ClumpIdleRadiusStuds = 8,
 	ClumpTouchDistancePaddingStuds = 0.5,
 	SharedFlowfieldRefreshCooldownSeconds = 0.35,
+	ParallelEnabled = true,
+	ParallelActorCount = 16,
+	ParallelBatchSize = 64,
+	ParallelTimeoutSeconds = 0.02,
+	ParallelMinPairCount = 256,
+	ParallelMinVelocityEntityCount = 64,
+	ParallelVelocityBatchSize = 64,
+	ParallelVelocityTimeoutSeconds = 0.02,
+	ParallelAsyncEnabled = true,
+	ParallelAsyncMaxInFlightSeconds = 0.05,
+	ParallelAsyncUsePreviousResult = true,
+	ParallelFallbackOnError = true,
 })
 
 return table.freeze(CombatMovementConfig)

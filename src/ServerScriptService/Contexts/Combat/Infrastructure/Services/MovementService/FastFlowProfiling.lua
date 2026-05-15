@@ -41,6 +41,19 @@ function MovementService:_ResetFastFlowProfileCounters()
 		NearGoalBandRecomputes = 0,
 		DirtyMarksTriggered = 0,
 		DirtyMarksSkipped = 0,
+		ParallelPairDispatches = 0,
+		ParallelPairsDispatched = 0,
+		ParallelPairRowsApplied = 0,
+		ParallelVelocityDispatches = 0,
+		ParallelVelocityEntitiesDispatched = 0,
+		ParallelVelocityRowsApplied = 0,
+		ParallelFallbacks = 0,
+		ParallelAsyncDispatches = 0,
+		ParallelAsyncCompleted = 0,
+		ParallelAsyncApplied = 0,
+		ParallelAsyncStaleResults = 0,
+		ParallelAsyncDroppedResults = 0,
+		ParallelAsyncInFlightSkips = 0,
 	}
 end
 
@@ -82,7 +95,7 @@ function MovementService:_EmitFastFlowProfileCounters()
 
 	self._lastFastFlowProfileLogAt = now
 	warn(string.format(
-		"FastFlow profile | sharedCreates=%d sharedRefreshes=%d merges=%d tracked=%d activeSeparation=%d dirtyEntities=%d dirtyCells=%d localPairs=%d bucketUpdates=%d rootHits=%d rootMisses=%d humanoidHits=%d humanoidMisses=%d spatialRefreshes=%d cellRecomputes=%d nearGoalRecomputes=%d dirtyTriggered=%d dirtySkipped=%d denseCells=%d denseFallbacks=%d",
+		"FastFlow profile | sharedCreates=%d sharedRefreshes=%d merges=%d tracked=%d activeSeparation=%d dirtyEntities=%d dirtyCells=%d localPairs=%d parallelDispatches=%d parallelPairs=%d parallelRows=%d velocityDispatches=%d velocityEntities=%d velocityRows=%d parallelFallbacks=%d asyncDispatches=%d asyncCompleted=%d asyncApplied=%d asyncStale=%d asyncDropped=%d asyncInFlightSkips=%d bucketUpdates=%d rootHits=%d rootMisses=%d humanoidHits=%d humanoidMisses=%d spatialRefreshes=%d cellRecomputes=%d nearGoalRecomputes=%d dirtyTriggered=%d dirtySkipped=%d denseCells=%d denseFallbacks=%d",
 		counters.SharedFieldCreations,
 		counters.SharedFieldRefreshes,
 		counters.MergeAttempts,
@@ -91,6 +104,19 @@ function MovementService:_EmitFastFlowProfileCounters()
 		counters.DirtyEntitiesProcessed,
 		counters.DirtyCellsProcessed,
 		counters.LocalPairSolves,
+		counters.ParallelPairDispatches,
+		counters.ParallelPairsDispatched,
+		counters.ParallelPairRowsApplied,
+		counters.ParallelVelocityDispatches,
+		counters.ParallelVelocityEntitiesDispatched,
+		counters.ParallelVelocityRowsApplied,
+		counters.ParallelFallbacks,
+		counters.ParallelAsyncDispatches,
+		counters.ParallelAsyncCompleted,
+		counters.ParallelAsyncApplied,
+		counters.ParallelAsyncStaleResults,
+		counters.ParallelAsyncDroppedResults,
+		counters.ParallelAsyncInFlightSkips,
 		counters.BucketMembershipUpdates,
 		counters.CachedRootPartHits,
 		counters.CachedRootPartMisses,

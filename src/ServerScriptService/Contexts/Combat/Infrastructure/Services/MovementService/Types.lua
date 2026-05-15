@@ -74,6 +74,35 @@ export type TFlowSeparationRuntime = {
 	ActiveSolveEntities: { [number]: boolean },
 }
 
+export type TFlowVelocitySolveInput = {
+	Entity: number,
+	FlowXZ: Vector2,
+	SeparationXZ: Vector2,
+	PreviousVelocityXZ: Vector2,
+	WalkSpeed: number,
+	VelAlpha: number,
+}
+
+export type TFlowVelocitySolveSnapshot = {
+	EntityIds: { number },
+	EntityIndexById: { [number]: number },
+	FlowX: { [number]: number },
+	FlowY: { [number]: number },
+	SeparationX: { [number]: number },
+	SeparationY: { [number]: number },
+	PreviousVelocityX: { [number]: number },
+	PreviousVelocityY: { [number]: number },
+	WalkSpeed: { [number]: number },
+	VelAlpha: { [number]: number },
+}
+
+export type TFlowVelocitySolveRow = {
+	EntityIndex: number,
+	VelocityX: number,
+	VelocityY: number,
+	ShouldMove: boolean,
+}
+
 export type TFastFlowProfileCounters = {
 	SharedFieldCreations: number,
 	SharedFieldRefreshes: number,
@@ -95,6 +124,19 @@ export type TFastFlowProfileCounters = {
 	NearGoalBandRecomputes: number,
 	DirtyMarksTriggered: number,
 	DirtyMarksSkipped: number,
+	ParallelPairDispatches: number,
+	ParallelPairsDispatched: number,
+	ParallelPairRowsApplied: number,
+	ParallelVelocityDispatches: number,
+	ParallelVelocityEntitiesDispatched: number,
+	ParallelVelocityRowsApplied: number,
+	ParallelFallbacks: number,
+	ParallelAsyncDispatches: number,
+	ParallelAsyncCompleted: number,
+	ParallelAsyncApplied: number,
+	ParallelAsyncStaleResults: number,
+	ParallelAsyncDroppedResults: number,
+	ParallelAsyncInFlightSkips: number,
 }
 
 export type TFlowActorRefs = {

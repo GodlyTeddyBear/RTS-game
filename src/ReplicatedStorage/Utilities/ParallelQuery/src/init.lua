@@ -289,6 +289,7 @@ function ParallelQuery:Run(
 		end
 
 		failureConnection:Disconnect()
+		failureBindable:Destroy()
 		self:_DecrementActiveRun(operationName)
 	end
 

@@ -49,7 +49,6 @@ export type TRunRequest = {
 	BatchSize: number?,
 	Arguments: { any }?,
 	TimeoutSeconds: number?,
-	LocalMemory: SharedTable?,
 }
 
 export type TDispatchHandle = {

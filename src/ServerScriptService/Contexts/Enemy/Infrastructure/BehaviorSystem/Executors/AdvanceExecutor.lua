@@ -6,6 +6,8 @@ local BaseExecutor = require(ReplicatedStorage.Utilities.BaseExecutor)
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local Result = require(ReplicatedStorage.Utilities.Result)
 
+local START_FAILURE_REASON_KEY = "StartFailureReason"
+
 --[=[
 	@class AdvanceExecutor
 	Drives enemy movement toward the current base goal.
@@ -40,7 +42,32 @@ function AdvanceExecutor:CanStart(entity: number, _data: any?, services: any): (
 		return false, "InvalidMovementMode"
 	end
 
-	return services.MovementService:StartAdvance(entity, roleConfig.MovementMode)
+	return true, nil
+end
+
+function AdvanceExecutor:OnStart(entity: number, _data: any?, services: any)
+	local role = services.EnemyEntityFactory:GetRole(entity)
+	if role == nil then
+		self:SetEntityValue(entity, START_FAILURE_REASON_KEY, "MissingRole")
+		services.MovementService:StopMovement(entity)
+		return
+	end
+
+	local roleConfig = EnemyConfig.Roles[role.Role]
+	if roleConfig == nil or roleConfig.MovementMode == nil then
+		self:SetEntityValue(entity, START_FAILURE_REASON_KEY, "InvalidMovementMode")
+		services.MovementService:StopMovement(entity)
+		return
+	end
+
+	local started, reason = services.MovementService:StartAdvance(entity, roleConfig.MovementMode)
+	if not started then
+		self:SetEntityValue(entity, START_FAILURE_REASON_KEY, if reason ~= nil then reason else "StartAdvanceFailed")
+		services.MovementService:StopMovement(entity)
+		return
+	end
+
+	self:ClearEntityValue(entity, START_FAILURE_REASON_KEY)
 end
 
 function AdvanceExecutor:CanContinue(entity: number, services: any): (boolean, string?)
@@ -57,6 +84,11 @@ function AdvanceExecutor:CanContinue(entity: number, services: any): (boolean, s
 end
 
 function AdvanceExecutor:OnTick(entity: number, _dt: number, services: any): string
+	local startFailureReason = self:GetEntityValue(entity, START_FAILURE_REASON_KEY)
+	if type(startFailureReason) == "string" then
+		return self:Fail(entity, startFailureReason)
+	end
+
 	local status, reason = services.MovementService:GetAdvanceStatus(entity)
 	if status == "Running" then
 		return self:Running()
@@ -70,10 +102,12 @@ function AdvanceExecutor:OnTick(entity: number, _dt: number, services: any): str
 end
 
 function AdvanceExecutor:OnCancel(entity: number, services: any)
+	self:ClearEntityValue(entity, START_FAILURE_REASON_KEY)
 	services.MovementService:StopMovement(entity)
 end
 
 function AdvanceExecutor:OnComplete(entity: number, services: any)
+	self:ClearEntityValue(entity, START_FAILURE_REASON_KEY)
 	services.MovementService:StopMovement(entity)
 
 	local enemyContext = services.EnemyContext

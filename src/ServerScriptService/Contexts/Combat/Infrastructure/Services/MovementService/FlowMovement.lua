@@ -8,8 +8,19 @@ local MovementTypes = require(script.Parent.Types)
 local MovementMath = require(script.Parent.MovementMath)
 
 type TFlowMovementState = MovementTypes.TFlowMovementState
+type TAdvanceStatus = MovementTypes.TAdvanceStatus
+type TFlowVelocitySolveInput = MovementTypes.TFlowVelocitySolveInput
+type TFlowVelocitySolveSnapshot = MovementTypes.TFlowVelocitySolveSnapshot
+type TFlowVelocitySolveRow = MovementTypes.TFlowVelocitySolveRow
 
 local GOAL_POSITION_EPSILON = 0.01
+local FLOW_VELOCITY_OPERATION_NAME = "FlowVelocitySolve"
+local MOVE_DIRECTION_EPSILON = 0.05
+
+type TFlowVelocityApplyResult = {
+	Status: TAdvanceStatus,
+	Reason: string?,
+}
 
 return function(MovementService: any)
 function MovementService:_StartFlow(entity: number, goalPosition: Vector3): (boolean, string?)
@@ -203,28 +214,266 @@ function MovementService:_ResolveFlowSteering(
 end
 
 
+function MovementService:_BuildPendingFlowVelocityInput(
+	entity: number,
+	steering: Vector3?,
+	walkSpeed: number,
+	sepConfig: any
+): TFlowVelocitySolveInput
+	local flowXZ = if steering ~= nil then Vector2.new(steering.X, steering.Z) * walkSpeed else Vector2.zero
+	local velAlpha = if type(sepConfig.VelAlpha) == "number" then math.clamp(sepConfig.VelAlpha, 0, 1) else 0.15
+
+	return {
+		Entity = entity,
+		FlowXZ = flowXZ,
+		SeparationXZ = self:_GetFlowSoftSeparationXZ(entity, sepConfig),
+		PreviousVelocityXZ = self._flowVelByEntity[entity] or Vector2.zero,
+		WalkSpeed = walkSpeed,
+		VelAlpha = velAlpha,
+	}
+end
+
+
+function MovementService:_ApplyFlowMoveDirection(entity: number, velocityXZ: Vector2): (TAdvanceStatus, string?)
+	local humanoid = self:_GetHumanoid(entity)
+	if humanoid == nil then
+		self:StopMovement(entity)
+		return "Fail", "MissingHumanoid"
+	end
+
+	self._flowVelByEntity[entity] = velocityXZ
+
+	local moveDirection = Vector3.new(velocityXZ.X, 0, velocityXZ.Y)
+	if moveDirection.Magnitude > MOVE_DIRECTION_EPSILON then
+		humanoid:Move(moveDirection.Unit)
+	else
+		humanoid:Move(Vector3.zero)
+	end
+
+	self._enemyEntityFactory:SetPathMoving(entity, true)
+	return "Running", nil
+end
+
+
+function MovementService:_SolveFlowVelocityLocally(input: TFlowVelocitySolveInput): Vector2
+	local targetVelocityXZ = MovementMath.ClampVector2Magnitude(input.FlowXZ + input.SeparationXZ, input.WalkSpeed)
+	return input.PreviousVelocityXZ * (1 - input.VelAlpha) + targetVelocityXZ * input.VelAlpha
+end
+
+
+function MovementService:_CreateFlowVelocitySolveSnapshot(
+	inputs: { TFlowVelocitySolveInput }
+): TFlowVelocitySolveSnapshot
+	local snapshot: TFlowVelocitySolveSnapshot = {
+		EntityIds = {},
+		EntityIndexById = {},
+		FlowX = {},
+		FlowY = {},
+		SeparationX = {},
+		SeparationY = {},
+		PreviousVelocityX = {},
+		PreviousVelocityY = {},
+		WalkSpeed = {},
+		VelAlpha = {},
+	}
+
+	for index, input in ipairs(inputs) do
+		snapshot.EntityIds[index] = input.Entity
+		snapshot.EntityIndexById[input.Entity] = index
+		snapshot.FlowX[index] = input.FlowXZ.X
+		snapshot.FlowY[index] = input.FlowXZ.Y
+		snapshot.SeparationX[index] = input.SeparationXZ.X
+		snapshot.SeparationY[index] = input.SeparationXZ.Y
+		snapshot.PreviousVelocityX[index] = input.PreviousVelocityXZ.X
+		snapshot.PreviousVelocityY[index] = input.PreviousVelocityXZ.Y
+		snapshot.WalkSpeed[index] = input.WalkSpeed
+		snapshot.VelAlpha[index] = input.VelAlpha
+	end
+
+	return snapshot
+end
+
+
+function MovementService:_CreateFlowVelocitySolveSharedMemory(snapshot: TFlowVelocitySolveSnapshot): SharedTable
+	local memory = SharedTable.new()
+	local flowX = SharedTable.new()
+	local flowY = SharedTable.new()
+	local separationX = SharedTable.new()
+	local separationY = SharedTable.new()
+	local previousVelocityX = SharedTable.new()
+	local previousVelocityY = SharedTable.new()
+	local walkSpeed = SharedTable.new()
+	local velAlpha = SharedTable.new()
+
+	for index, value in ipairs(snapshot.FlowX) do
+		flowX[index] = value
+	end
+	for index, value in ipairs(snapshot.FlowY) do
+		flowY[index] = value
+	end
+	for index, value in ipairs(snapshot.SeparationX) do
+		separationX[index] = value
+	end
+	for index, value in ipairs(snapshot.SeparationY) do
+		separationY[index] = value
+	end
+	for index, value in ipairs(snapshot.PreviousVelocityX) do
+		previousVelocityX[index] = value
+	end
+	for index, value in ipairs(snapshot.PreviousVelocityY) do
+		previousVelocityY[index] = value
+	end
+	for index, value in ipairs(snapshot.WalkSpeed) do
+		walkSpeed[index] = value
+	end
+	for index, value in ipairs(snapshot.VelAlpha) do
+		velAlpha[index] = value
+	end
+
+	memory.FlowX = flowX
+	memory.FlowY = flowY
+	memory.SeparationX = separationX
+	memory.SeparationY = separationY
+	memory.PreviousVelocityX = previousVelocityX
+	memory.PreviousVelocityY = previousVelocityY
+	memory.WalkSpeed = walkSpeed
+	memory.VelAlpha = velAlpha
+
+	return memory
+end
+
+
+function MovementService:_ApplyFlowVelocityRows(
+	snapshot: TFlowVelocitySolveSnapshot,
+	rows: { TFlowVelocitySolveRow }
+): { [number]: TFlowVelocityApplyResult }
+	local resultsByEntity = {}
+
+	for _, row in ipairs(rows) do
+		local entityIndex = row.EntityIndex
+		if type(entityIndex) ~= "number" then
+			continue
+		end
+
+		local entity = snapshot.EntityIds[entityIndex]
+		if entity == nil then
+			continue
+		end
+
+		local velocityX = row.VelocityX
+		local velocityY = row.VelocityY
+		if type(velocityX) ~= "number" or type(velocityY) ~= "number" then
+			continue
+		end
+
+		local status, reason = self:_ApplyFlowMoveDirection(entity, Vector2.new(velocityX, velocityY))
+		resultsByEntity[entity] = {
+			Status = status,
+			Reason = reason,
+		}
+		self:_IncrementFastFlowProfileCounter("ParallelVelocityRowsApplied")
+	end
+
+	return resultsByEntity
+end
+
+
+function MovementService:_ResolveFlowVelocityWithParallelQuery(
+	snapshot: TFlowVelocitySolveSnapshot,
+	sepConfig: any
+): { TFlowVelocitySolveRow }?
+	local entityCount = #snapshot.EntityIds
+	if entityCount < self:_GetFlowVelocityParallelMinEntityCount(sepConfig) then
+		return nil
+	end
+
+	local rows: { TFlowVelocitySolveRow }? = nil
+	local err: any = nil
+	local completed = false
+	local ok = pcall(function()
+		local runner = self:_GetOrCreateFlowSeparationParallelRunner(sepConfig)
+		runner:SetLocalMemory(FLOW_VELOCITY_OPERATION_NAME, self:_CreateFlowVelocitySolveSharedMemory(snapshot))
+		runner:Run(FLOW_VELOCITY_OPERATION_NAME, {
+			WorkCount = entityCount,
+			BatchSize = self:_GetFlowVelocityParallelBatchSize(sepConfig),
+			TimeoutSeconds = self:_GetFlowVelocityParallelTimeoutSeconds(sepConfig),
+		}, function(resultRows, resultErr)
+			rows = resultRows :: any
+			err = resultErr
+			completed = true
+		end)
+	end)
+
+	if not ok then
+		self:_IncrementFastFlowProfileCounter("ParallelFallbacks")
+		return nil
+	end
+
+	while not completed do
+		task.wait()
+	end
+
+	if err ~= nil or rows == nil then
+		self:_IncrementFastFlowProfileCounter("ParallelFallbacks")
+		return nil
+	end
+
+	self:_IncrementFastFlowProfileCounter("ParallelVelocityDispatches")
+	self:_IncrementFastFlowProfileCounter("ParallelVelocityEntitiesDispatched", entityCount)
+	return rows
+end
+
+
+function MovementService:_ResolvePendingFlowVelocityMoves(
+	inputs: { TFlowVelocitySolveInput }
+): { [number]: TFlowVelocityApplyResult }
+	local sepConfig = CombatMovementConfig.FLOW_SOFT_SEPARATION
+	local snapshot = self:_CreateFlowVelocitySolveSnapshot(inputs)
+
+	-- Solve final blended velocities in workers when the batch is large enough.
+	if self:_IsFlowSeparationParallelEnabled(sepConfig) then
+		local rows = self:_ResolveFlowVelocityWithParallelQuery(snapshot, sepConfig)
+		if rows ~= nil then
+			return self:_ApplyFlowVelocityRows(snapshot, rows)
+		end
+	end
+
+	-- Keep a synchronous fallback so movement remains stable on small batches and worker failures.
+	local resultsByEntity = {}
+	for _, input in ipairs(inputs) do
+		local status, reason = self:_ApplyFlowMoveDirection(input.Entity, self:_SolveFlowVelocityLocally(input))
+		resultsByEntity[input.Entity] = {
+			Status = status,
+			Reason = reason,
+		}
+	end
+
+	return resultsByEntity
+end
+
+
 function MovementService:_TickFlow(
 	entity: number,
 	movementState: TFlowMovementState
-): ("Running" | "Success" | "Fail", string?)
+): ("Running" | "Success" | "Fail", string?, TFlowVelocitySolveInput?)
 	local pathState = self._enemyEntityFactory:GetPathState(entity)
 	local goalPosition = if pathState ~= nil then pathState.GoalPosition else nil
 	if goalPosition == nil then
 		self:StopMovement(entity)
-		return "Fail", "MissingGoalPosition"
+		return "Fail", "MissingGoalPosition", nil
 	end
 
 	local entityPosition = self:_GetEntityPosition(entity)
 	if entityPosition == nil then
 		self:StopMovement(entity)
-		return "Fail", "MissingModelPosition"
+		return "Fail", "MissingModelPosition", nil
 	end
 
 	-- Reattach shared flow state when the goal changes.
 	local handledGoalChange, goalChangeReason = self:_HandleGoalChange(entity, movementState, goalPosition)
 	if not handledGoalChange then
 		self:StopMovement(entity)
-		return "Fail", if goalChangeReason ~= nil then goalChangeReason else "FastFlowGenerateFailed"
+		return "Fail", if goalChangeReason ~= nil then goalChangeReason else "FastFlowGenerateFailed", nil
 	end
 
 	local sepConfig = CombatMovementConfig.FLOW_SOFT_SEPARATION
@@ -233,57 +482,44 @@ function MovementService:_TickFlow(
 	-- Stop or settle before doing any new steering work.
 	local arrivalResult = self:_HandleFlowArrival(entity, movementState, entityPosition, goalPosition, sepConfig)
 	if arrivalResult == "Success" then
-		return "Success", nil
+		return "Success", nil, nil
 	end
 
 	local humanoid = self:_GetHumanoid(entity)
 	if humanoid == nil then
 		self:StopMovement(entity)
-		return "Fail", "MissingHumanoid"
+		return "Fail", "MissingHumanoid", nil
 	end
 
 	if arrivalResult == "Settled" then
 		self._enemyEntityFactory:SetPathMoving(entity, true)
-		return "Running", nil
+		return "Running", nil, nil
 	end
 
 	-- Resolve steering from the shared goal-cell flowfield.
 	local steering, steeringReason = self:_ResolveFlowSteering(entity, movementState, entityPosition, goalPosition, sepConfig)
 	if steering == nil and steeringReason ~= nil then
 		self:StopMovement(entity)
-		return "Fail", steeringReason
+		return "Fail", steeringReason, nil
 	end
 
 	local walkSpeed = self:_ApplyCurrentMoveSpeed(entity, sepConfig)
 	local useSoftSeparation = sepConfig ~= nil and sepConfig.Enabled == true
 
-	-- Blend shared steering with local separation for still-active movers.
+	-- Queue the final velocity solve so the batch can run through ParallelQuery.
 	if useSoftSeparation then
-		local flowXZ = if steering ~= nil then Vector2.new(steering.X, steering.Z) * walkSpeed else Vector2.zero
-		local sepXZ = self:_GetFlowSoftSeparationXZ(entity, sepConfig)
-		local velXZ = flowXZ + sepXZ
-		velXZ = MovementMath.ClampVector2Magnitude(velXZ, walkSpeed)
-		local velAlpha = if type(sepConfig.VelAlpha) == "number" then math.clamp(sepConfig.VelAlpha, 0, 1) else 0.15
-		local previousVel = self._flowVelByEntity[entity] or Vector2.zero
-		velXZ = previousVel * (1 - velAlpha) + velXZ * velAlpha
-		self._flowVelByEntity[entity] = velXZ
+		return "Running", nil, self:_BuildPendingFlowVelocityInput(entity, steering, walkSpeed, sepConfig)
+	end
 
-		local moveDirection = Vector3.new(velXZ.X, 0, velXZ.Y)
-		if moveDirection.Magnitude > 0.05 then
-			humanoid:Move(moveDirection.Unit)
-		else
-			humanoid:Move(Vector3.zero)
-		end
+	-- Keep the non-soft-separation path fully serial.
+	if steering == nil then
+		humanoid:Move(Vector3.zero)
 	else
-		if steering == nil then
-			humanoid:Move(Vector3.zero)
-		else
-			humanoid:Move(steering)
-		end
+		humanoid:Move(steering)
 	end
 
 	self._enemyEntityFactory:SetPathMoving(entity, true)
-	return "Running", nil
+	return "Running", nil, nil
 end
 
 end
