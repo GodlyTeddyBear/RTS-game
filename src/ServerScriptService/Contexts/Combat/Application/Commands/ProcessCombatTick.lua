@@ -37,6 +37,7 @@ function ProcessCombatTick:Init(registry: any, _name: string)
 		_loopService = "CombatLoopService",
 		_behaviorRuntimeService = "CombatBehaviorRuntimeService",
 		_actorRegistryService = "CombatActorRegistryService",
+		_movementService = "MovementService",
 		_statusService = "StatusService",
 	})
 end
@@ -55,13 +56,20 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 		end
 
 		local currentTime = os.clock()
-		local frameResult = self._behaviorRuntimeService:RunFrame({
-			CurrentTime = currentTime,
-			DeltaTime = dt,
-			Services = {
-				CombatActorRegistryService = self._actorRegistryService,
-			},
-		})
+		self._movementService:BeginCombatFrame(userId, currentTime)
+		local ok, frameResult = pcall(function()
+			return self._behaviorRuntimeService:RunFrame({
+				CurrentTime = currentTime,
+				DeltaTime = dt,
+				Services = {
+					CombatActorRegistryService = self._actorRegistryService,
+				},
+			})
+		end)
+		self._movementService:EndCombatFrame(userId)
+		if not ok then
+			error(frameResult)
+		end
 		self:_NotifyActorResults(frameResult)
 		-- Recompute enemy move speed after all actor actions so status effects stay in sync with the frame.
 		self._statusService:EvaluateEnemyMoveSpeedEffects()

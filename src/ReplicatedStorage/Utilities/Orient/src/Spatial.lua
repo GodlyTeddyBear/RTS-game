@@ -1,12 +1,15 @@
 --!strict
+--!optimize 2
 
 local Facing = require(script.Parent.Facing)
 
+@native
 local function _FlatVector(vector: Vector3): Vector3
 	-- Drop the Y component so distance math stays on the XZ plane.
 	return Vector3.new(vector.X, 0, vector.Z)
 end
 
+@native
 local function _AngleBetweenVectors(a: Vector3, b: Vector3): number?
 	-- Return `nil` when either vector cannot produce a stable unit direction.
 	local aUnit = Facing.SafeUnit(a)
@@ -48,6 +51,7 @@ end
     @param b Vector3 -- The second point.
     @return number -- The squared distance.
 ]=]
+@native
 function Spatial.DistanceSquared(a: Vector3, b: Vector3): number
 	local delta = b - a
 	return delta:Dot(delta)
@@ -71,6 +75,7 @@ end
     @param b Vector3 -- The second point.
     @return number -- The squared flat distance.
 ]=]
+@native
 function Spatial.FlatDistanceSquared(a: Vector3, b: Vector3): number
 	local delta = _FlatVector(b - a)
 	return delta:Dot(delta)
@@ -84,6 +89,7 @@ end
     @param range number -- The maximum range.
     @return boolean -- Whether the points are within range.
 ]=]
+@native
 function Spatial.IsWithinRange(a: Vector3, b: Vector3, range: number): boolean
 	return Spatial.DistanceSquared(a, b) <= range * range
 end
@@ -96,6 +102,7 @@ end
     @param range number -- The maximum range.
     @return boolean -- Whether the points are within range.
 ]=]
+@native
 function Spatial.IsWithinFlatRange(a: Vector3, b: Vector3, range: number): boolean
 	return Spatial.FlatDistanceSquared(a, b) <= range * range
 end
@@ -216,6 +223,7 @@ end
     @param targetPosition Vector3 -- The target position.
     @return number -- The facing dot product, or `0` for a degenerate target.
 ]=]
+@native
 function Spatial.DotToTarget(observer: CFrame, targetPosition: Vector3): number
 	local direction = targetPosition - observer.Position
 	local directionUnit = Facing.SafeUnit(direction)
@@ -233,6 +241,7 @@ end
     @param targetPosition Vector3 -- The target position.
     @return number -- The flat facing dot product, or `0` for a degenerate target.
 ]=]
+@native
 function Spatial.FlatDotToTarget(observer: CFrame, targetPosition: Vector3): number
 	local forward = Spatial.GetFlatForward(observer)
 	local direction = Facing.GetFlatDirection(observer.Position, targetPosition)
@@ -297,6 +306,7 @@ end
     @param targetPosition Vector3 -- The target position.
     @return number? -- The angle in radians, or `nil` for degenerate input.
 ]=]
+@native
 function Spatial.AngleToTarget(observer: CFrame, targetPosition: Vector3): number?
 	return _AngleBetweenVectors(observer.LookVector, targetPosition - observer.Position)
 end
@@ -308,6 +318,7 @@ end
     @param targetPosition Vector3 -- The target position.
     @return number? -- The angle in radians, or `nil` for degenerate input.
 ]=]
+@native
 function Spatial.FlatAngleToTarget(observer: CFrame, targetPosition: Vector3): number?
 	local forward = Spatial.GetFlatForward(observer)
 	local direction = Facing.GetFlatDirection(observer.Position, targetPosition)

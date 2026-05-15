@@ -1,8 +1,10 @@
 --!strict
+--!optimize 2
 
 local Facing = require(script.Parent.Facing)
 local Validation = require(script.Parent.Validation)
 
+@native
 local function _BlendAlpha(speed: number, dt: number): number
 	-- Convert a speed and timestep into an exponential blend factor.
 	Validation.AssertNonNegative(speed, "speed")
@@ -10,6 +12,7 @@ local function _BlendAlpha(speed: number, dt: number): number
 	return 1 - math.exp(-speed * dt)
 end
 
+@native
 local function _LerpAngleRadians(fromAngle: number, toAngle: number, alpha: number): number
 	-- Interpolate across the shortest wrapped angle delta.
 	local delta = math.atan2(math.sin(toAngle - fromAngle), math.cos(toAngle - fromAngle))
@@ -75,6 +78,7 @@ end
     @param alpha number -- The interpolation factor.
     @return CFrame -- The transform with blended yaw.
 ]=]
+@native
 function Interpolation.LerpYaw(from: CFrame, to: CFrame, alpha: number): CFrame
 	local fromYaw = Facing.GetYaw(from)
 	local toYaw = Facing.GetYaw(to)
@@ -91,6 +95,7 @@ end
     @param dt number -- The elapsed time in seconds.
     @return Vector3 -- The blended position.
 ]=]
+@native
 function Interpolation.BlendPosition(current: Vector3, target: Vector3, speed: number, dt: number): Vector3
 	return Interpolation.LerpPosition(current, target, _BlendAlpha(speed, dt))
 end
@@ -104,6 +109,7 @@ end
     @param dt number -- The elapsed time in seconds.
     @return CFrame -- The blended transform.
 ]=]
+@native
 function Interpolation.BlendCFrame(current: CFrame, target: CFrame, speed: number, dt: number): CFrame
 	return Interpolation.LerpCFrame(current, target, _BlendAlpha(speed, dt))
 end
@@ -117,6 +123,7 @@ end
     @param dt number -- The elapsed time in seconds.
     @return CFrame -- The blended transform.
 ]=]
+@native
 function Interpolation.BlendYaw(current: CFrame, target: CFrame, speed: number, dt: number): CFrame
 	return Interpolation.LerpYaw(current, target, _BlendAlpha(speed, dt))
 end

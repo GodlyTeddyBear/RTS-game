@@ -1,4 +1,5 @@
 --!strict
+--!optimize 2
 
 local Types = require(script.Parent.Types)
 
@@ -65,14 +66,17 @@ function Shared.FreezeOptions(options: TQueryOptions?): TQueryOptions
 	return table.freeze(frozenOptions)
 end
 
+@native
 function Shared.IsPositiveNumber(value: number): boolean
 	return value > 0 and value == value and value < math.huge
 end
 
+@native
 function Shared.IsPositiveVector(size: Vector3): boolean
 	return Shared.IsPositiveNumber(size.X) and Shared.IsPositiveNumber(size.Y) and Shared.IsPositiveNumber(size.Z)
 end
 
+@native
 function Shared.GetDistanceSquared(a: Vector3, b: Vector3): number
 	local delta = b - a
 	return delta:Dot(delta)
@@ -90,6 +94,7 @@ function Shared.ResolveAttachmentPosition(attachment: Attachment): Vector3
 	return attachment.WorldPosition
 end
 
+@native
 function Shared.ResolvePositionIndices(positions: { Vector3 }): { number }
 	local indices = table.create(#positions)
 	for index = 1, #positions do

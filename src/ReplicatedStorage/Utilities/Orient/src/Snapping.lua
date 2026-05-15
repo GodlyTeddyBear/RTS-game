@@ -1,4 +1,5 @@
 --!strict
+--!optimize 2
 
 local Conversion = require(script.Parent.Conversion)
 local Facing = require(script.Parent.Facing)
@@ -36,6 +37,7 @@ local Snapping = {}
     @param step number -- The snap step.
     @return number -- The snapped value.
 ]=]
+@native
 function Snapping.SnapScalar(value: number, step: number): number
 	Validation.AssertPositive(step, "step")
 	return math.round(value / step) * step
@@ -48,6 +50,7 @@ end
     @param gridSize number | Vector3 -- The snap grid size.
     @return Vector3 -- The snapped position.
 ]=]
+@native
 function Snapping.SnapPosition(position: Vector3, gridSize: TGridSize): Vector3
 	local resolvedGridSize = _ResolveGridSize(gridSize)
 	return Vector3.new(
@@ -77,6 +80,7 @@ end
     @param stepRadians number -- The radian step.
     @return number -- The snapped angle.
 ]=]
+@native
 function Snapping.SnapAngleRadians(angle: number, stepRadians: number): number
 	Validation.AssertPositive(stepRadians, "stepRadians")
 	return Snapping.SnapScalar(angle, stepRadians)
@@ -101,6 +105,7 @@ end
     @param angleStepDegrees number -- The yaw step in degrees.
     @return CFrame -- The transform with snapped yaw.
 ]=]
+@native
 function Snapping.SnapYaw(cframe: CFrame, angleStepDegrees: number): CFrame
 	Validation.AssertPositive(angleStepDegrees, "angleStepDegrees")
 	local currentYaw = Facing.GetYaw(cframe)
@@ -121,6 +126,7 @@ end
     @param angleStepDegrees number -- The yaw step in degrees.
     @return CFrame -- The snapped transform.
 ]=]
+@native
 function Snapping.SnapTransform(cframe: CFrame, positionGridSize: TGridSize, angleStepDegrees: number): CFrame
 	local snappedPosition = Snapping.SnapPosition(cframe.Position, positionGridSize)
 	local snappedRotation = Snapping.SnapYaw(cframe, angleStepDegrees)

@@ -207,7 +207,7 @@ function EnemyCombatAdapterService:_ResolveFastFlowConfiguration(): (any?, FastF
 		return nil, nil
 	end
 
-	local allTilesResult = self._worldContext:GetAllTiles()
+	local allTilesResult = self._worldContext:GetAllTilesView()
 	if not allTilesResult.success then
 		return nil, nil
 	end
@@ -229,6 +229,18 @@ function EnemyCombatAdapterService:_EnsureFastFlowConfigured()
 	self._combatServices.MovementService:ConfigureFastFlow(fastFlowPathfinder, fastFlowMapping)
 	self:_VisualizeFastFlow(fastFlowPathfinder, fastFlowMapping)
 	self._isFastFlowConfigured = true
+end
+
+function EnemyCombatAdapterService:_ResetFastFlowConfiguration()
+	self._combatServices.MovementService:ResetFastFlowRuntime()
+	self._combatServices.MovementService:ConfigureFastFlow(nil, nil)
+	self._isFastFlowConfigured = false
+end
+
+function EnemyCombatAdapterService:WarmFastFlowForRun(): boolean
+	self:_ResetFastFlowConfiguration()
+	self:_EnsureFastFlowConfigured()
+	return self._isFastFlowConfigured == true
 end
 
 function EnemyCombatAdapterService:_VisualizeFastFlow(pathfinder: any, mapping: FastFlowHelper.TFlowGridMapping)

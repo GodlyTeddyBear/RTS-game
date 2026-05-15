@@ -1,9 +1,11 @@
 --!strict
+--!optimize 2
 
 local Conversion = require(script.Parent.Conversion)
 local Facing = require(script.Parent.Facing)
 local Validation = require(script.Parent.Validation)
 
+@native
 local function _ProjectScalar(vector: Vector3, ontoUnit: Vector3): number
 	-- Project `vector` onto an already-normalized direction.
 	return vector:Dot(ontoUnit)
@@ -64,6 +66,7 @@ end
     @param lineDirection Vector3 -- The line direction.
     @return Vector3? -- The projected point, or `nil` for a degenerate direction.
 ]=]
+@native
 function Projection.ProjectPointToLine(point: Vector3, lineOrigin: Vector3, lineDirection: Vector3): Vector3?
 	local directionUnit = Facing.SafeUnit(lineDirection)
 	if directionUnit == nil then
@@ -82,6 +85,7 @@ end
     @param segmentEnd Vector3 -- The segment end.
     @return Vector3 -- The closest point on the segment.
 ]=]
+@native
 function Projection.ClosestPointOnSegment(point: Vector3, segmentStart: Vector3, segmentEnd: Vector3): Vector3
 	-- Handle a collapsed segment by returning its only endpoint.
 	local segment = segmentEnd - segmentStart
@@ -102,6 +106,7 @@ end
     @param rayDirection Vector3 -- The ray direction.
     @return Vector3? -- The closest point, or `nil` for a degenerate direction.
 ]=]
+@native
 function Projection.ClosestPointOnRay(point: Vector3, rayOrigin: Vector3, rayDirection: Vector3): Vector3?
 	local directionUnit = Facing.SafeUnit(rayDirection)
 	if directionUnit == nil then
@@ -121,6 +126,7 @@ end
     @param maxBounds Vector3 -- The maximum corner.
     @return Vector3 -- The clamped position.
 ]=]
+@native
 function Projection.ClampPosition(position: Vector3, minBounds: Vector3, maxBounds: Vector3): Vector3
 	return Vector3.new(
 		math.clamp(position.X, minBounds.X, maxBounds.X),
@@ -153,6 +159,7 @@ end
     @param maxMagnitude number -- The maximum magnitude.
     @return Vector3 -- The clamped vector.
 ]=]
+@native
 function Projection.ClampMagnitude(vector: Vector3, maxMagnitude: number): Vector3
 	Validation.AssertNonNegative(maxMagnitude, "maxMagnitude")
 	local magnitude = vector.Magnitude
@@ -222,6 +229,7 @@ end
     @param planeNormal Vector3 -- The plane normal.
     @return number? -- The signed distance, or `nil` for a degenerate normal.
 ]=]
+@native
 function Projection.SignedDistanceToPlane(point: Vector3, planePoint: Vector3, planeNormal: Vector3): number?
 	local normalUnit = Facing.SafeUnit(planeNormal)
 	if normalUnit == nil then

@@ -284,6 +284,17 @@ function WorldContext.GetAllTiles(self: WorldContextService): Result.Result<{ Ti
 end
 
 --[=[
+	Returns the authoritative world tile cache without cloning for server-only infrastructure consumers.
+	@within WorldContext
+	@return Result.Result<{ Tile }> -- Shared tile cache wrapped in `Result`.
+]=]
+function WorldContext.GetAllTilesView(self: WorldContextService): Result.Result<{ Tile }>
+	return Catch(function()
+		return Ok(self._worldGridService:GetAllTilesView())
+	end, "World:GetAllTilesView")
+end
+
+--[=[
 	Returns buildable tiles under the older placement-zone name.
 	@within WorldContext
 	@return Result.Result<{ Tile }> -- Buildable tile list wrapped in `Result`.

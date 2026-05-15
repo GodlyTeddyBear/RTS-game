@@ -1,4 +1,5 @@
 --!strict
+--!optimize 2
 
 local Constants = require(script.Parent.Constants)
 local Conversion = require(script.Parent.Conversion)
@@ -33,6 +34,7 @@ local Facing = {}
     @param cframe CFrame -- The transform to split.
     @return CFrame -- The transform with translation removed.
 ]=]
+@native
 function Facing.GetRotation(cframe: CFrame): CFrame
 	return cframe - cframe.Position
 end
@@ -114,6 +116,7 @@ end
     @param direction Vector3 -- The vector to normalize.
     @return Vector3? -- The unit vector, or `nil` for near-zero input.
 ]=]
+@native
 function Facing.SafeUnit(direction: Vector3): Vector3?
 	if direction.Magnitude <= DEGENERATE_EPSILON then
 		return nil
@@ -130,6 +133,7 @@ end
     @param yawRadians number -- The yaw delta in radians.
     @return CFrame -- The rotated transform.
 ]=]
+@native
 function Facing.RotateYaw(cframe: CFrame, yawRadians: number): CFrame
 	return CFrame.new(cframe.Position) * CFrame.Angles(0, yawRadians, 0) * Facing.GetRotation(cframe)
 end
@@ -140,6 +144,7 @@ end
     @param rotation CFrame -- The rotation to inspect.
     @return number -- The yaw angle in radians.
 ]=]
+@native
 function Facing.GetYaw(rotation: CFrame): number
 	local lookVector = rotation.LookVector
 	return math.atan2(-lookVector.X, -lookVector.Z)

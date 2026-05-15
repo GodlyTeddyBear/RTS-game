@@ -315,6 +315,17 @@ end
 
 --[=[
 	@within EnemyContext
+	Rebuilds FastFlow against the current runtime map geometry before a run begins.
+	@return Result.Result<boolean> -- Whether FastFlow was configured successfully for the current run.
+]=]
+function EnemyContext:WarmFastFlowForRun(): Result.Result<boolean>
+	return Catch(function()
+		return Ok(self._combatAdapterService:WarmFastFlowForRun())
+	end, "Enemy:WarmFastFlowForRun")
+end
+
+--[=[
+	@within EnemyContext
 	Returns the current alive enemy entity list.
 	@return Result.Result<{ any }> -- Live enemy entities in the enemy world.
 ]=]

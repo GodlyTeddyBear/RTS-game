@@ -153,6 +153,7 @@ local RunContext = Knit.CreateService({
 	ExternalServices = {
 		{ Name = "MapContext", CacheAs = "_mapContext" },
 		{ Name = "WorldContext", CacheAs = "_worldContext" },
+		{ Name = "EnemyContext", CacheAs = "_enemyContext" },
 		{ Name = "BaseContext", CacheAs = "_baseContext" },
 	},
 	Teardown = {
@@ -397,10 +398,19 @@ function RunContext:StartRun(): Result.Result<boolean>
 		Try(self._transitionPolicy:CheckCanStartRun(self._machine:GetState()))
 		Ensure(self._mapContext, "MissingDependency", Errors.MISSING_MAP_CONTEXT)
 		Ensure(self._worldContext, "MissingDependency", Errors.MISSING_WORLD_CONTEXT)
+		Ensure(self._enemyContext, "MissingDependency", Errors.MISSING_ENEMY_CONTEXT)
 		Ensure(self._baseContext, "MissingDependency", Errors.MISSING_BASE_CONTEXT)
 
 		Try(self._mapContext:PrepareRuntimeMap())
 		Try(self._worldContext:RefreshRuntimeGeometry())
+		local warmFastFlowResult = self._enemyContext:WarmFastFlowForRun()
+		if not warmFastFlowResult.success then
+			Result.MentionError("Run:StartRun", "Enemy FastFlow warm-up failed; continuing with lazy fallback", {
+				CauseType = warmFastFlowResult.type,
+				CauseMessage = warmFastFlowResult.message,
+				Details = warmFastFlowResult.data,
+			}, warmFastFlowResult.type)
+		end
 		Try(self._baseContext:PrepareRunBase())
 		-- Teleport first so the prep countdown starts from the correct phase entry point.
 		Try(self._travelService:TeleportAllPlayersToRunEntry())

@@ -57,7 +57,7 @@ CombatMovementConfig.PATHFINDING = table.freeze({
 	Debug visualization toggles for FastFlow pathfinder walls and grid.
 ]=]
 CombatMovementConfig.FASTFLOW_VISUALIZATION = table.freeze({
-	Enabled = true,
+	Enabled = false,
 	YLevelOffset = 0.2,
 	ShowWalls = true,
 	ShowCellGrid = false,
@@ -91,6 +91,28 @@ CombatMovementConfig.FASTFLOW_ARROW_VISUALIZATION = table.freeze({
 })
 
 --[=[
+	@prop FASTFLOW_SHARED_FIELDS table
+	@within CombatMovementConfig
+	Shared flowfield generation and refresh throttles for FastFlow goal groups.
+]=]
+CombatMovementConfig.FASTFLOW_SHARED_FIELDS = table.freeze({
+	UsePrunedGeneration = true,
+	RefreshCooldownSeconds = 0.35,
+	AllowSingleRefreshPerCooldown = true,
+	RepresentativeStartCap = 8,
+})
+
+--[=[
+	@prop FASTFLOW_PROFILING table
+	@within CombatMovementConfig
+	Debug-only throttled counters for FastFlow runtime profiling.
+]=]
+CombatMovementConfig.FASTFLOW_PROFILING = table.freeze({
+	Enabled = false,
+	LogIntervalSeconds = 1,
+})
+
+--[=[
 	@prop FLOW_SOFT_SEPARATION table
 	@within CombatMovementConfig
 	FastFlow advance only: overlaps flow steering with local pairwise soft collision (spatial hash + quadratic penetration push), matching FlowExample.lua-style separation.
@@ -100,6 +122,18 @@ CombatMovementConfig.FLOW_SOFT_SEPARATION = table.freeze({
 	KForce = 80,
 	VelAlpha = 0.15,
 	MinSeparationDistance = 1e-4,
+	IsolationSkipEnabled = true,
+	IsolationSkipRadiusStuds = 6,
+	DenseCellFallbackEnabled = true,
+	DenseCellOccupancyThreshold = 10,
+	NearGoalSeparationScale = 0.35,
+	NearGoalSeparationRadiusStuds = 8,
+	NeighborDirtyMoveThresholdStuds = 2,
+	WalkSpeedWriteEpsilon = 0.05,
+	ClumpIdleEnabled = true,
+	ClumpIdleRadiusStuds = 8,
+	ClumpTouchDistancePaddingStuds = 0.5,
+	SharedFlowfieldRefreshCooldownSeconds = 0.35,
 })
 
 return table.freeze(CombatMovementConfig)

@@ -1,4 +1,5 @@
 --!strict
+--!optimize 2
 
 local Constants = require(script.Parent.Constants)
 local Facing = require(script.Parent.Facing)
@@ -6,6 +7,7 @@ local Validation = require(script.Parent.Validation)
 
 local TAU = Constants.TAU
 
+@native
 local function _AngleStep(count: number): number
 	-- Evenly partition a full turn across the requested count.
 	return TAU / count
@@ -31,6 +33,7 @@ local Patterns = {}
     @param angleRadians number -- The angle around the circle.
     @return Vector3 -- The sampled point.
 ]=]
+@native
 function Patterns.GetPointOnCircle(center: Vector3, radius: number, angleRadians: number): Vector3
 	return Vector3.new(
 		center.X + math.cos(angleRadians) * radius,
@@ -51,6 +54,7 @@ end
     @param count number -- The number of points to generate.
     @return { Vector3 } -- The sampled circle points.
 ]=]
+@native
 function Patterns.GetPointsOnCircle(center: Vector3, radius: number, count: number): { Vector3 }
 	Validation.AssertCount(count, "count")
 	local points = table.create(count)
@@ -71,6 +75,7 @@ end
     @param count number -- The number of points to generate.
     @return { Vector3 } -- The sampled arc points.
 ]=]
+@native
 function Patterns.GetPointsOnArc(
 	center: Vector3,
 	radius: number,
@@ -198,6 +203,7 @@ end
     @param spacing number -- The spacing between positions.
     @return { Vector3 } -- The line positions.
 ]=]
+@native
 function Patterns.GetFormationLine(origin: CFrame, count: number, spacing: number): { Vector3 }
 	Validation.AssertCount(count, "count")
 	local points = table.create(count)
@@ -217,6 +223,7 @@ end
     @param spacing number -- The spacing between positions.
     @return { Vector3 } -- The column positions.
 ]=]
+@native
 function Patterns.GetFormationColumn(origin: CFrame, count: number, spacing: number): { Vector3 }
 	Validation.AssertCount(count, "count")
 	local points = table.create(count)
@@ -238,6 +245,7 @@ end
     @param spacingZ number -- The depth spacing.
     @return { Vector3 } -- The grid positions.
 ]=]
+@native
 function Patterns.GetFormationGrid(
 	origin: CFrame,
 	rows: number,
@@ -271,6 +279,7 @@ end
     @param angleStepRadians number -- The angle increase per step.
     @return { Vector3 } -- The spiral positions.
 ]=]
+@native
 function Patterns.GetSpiralPositions(
 	center: Vector3,
 	count: number,

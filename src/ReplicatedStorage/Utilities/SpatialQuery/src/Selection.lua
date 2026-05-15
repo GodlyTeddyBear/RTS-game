@@ -1,4 +1,5 @@
 --!strict
+--!optimize 2
 
 local Shared = require(script.Parent.Shared)
 local Queries = require(script.Parent.Queries)
@@ -19,6 +20,7 @@ type TScoredCandidate<T> = Types.TScoredCandidate<T>
 local Selection = {}
 
 -- Select the best candidate by score, breaking ties in favor of the closer item.
+@native
 local function _FindBestScoredCandidate<T>(
 	origin: Vector3,
 	candidates: { T },
@@ -68,6 +70,7 @@ local function _FindBestScoredCandidate<T>(
 end
 
 -- Reuses the scoring helper for nearest lookups by inverting distance into a score.
+@native
 local function _FindNearestCandidate<T>(
 	origin: Vector3,
 	candidates: { T },
@@ -112,6 +115,7 @@ end
     @return Vector3? -- Nearest position value.
     @return number? -- Distance to the returned position.
 ]=]
+@native
 function Selection.FindNearestPosition(origin: Vector3, positions: { Vector3 }, maxRange: number?): (number?, Vector3?, number?)
 	local bestIndex = nil :: number?
 	local bestPosition = nil :: Vector3?
@@ -177,6 +181,7 @@ end
     @param maxRange number -- Maximum distance.
     @return { number } -- Indices of the positions that are inside range.
 ]=]
+@native
 function Selection.FindAllInRange(origin: Vector3, positions: { Vector3 }, maxRange: number): { number }
 	if not Shared.IsPositiveNumber(maxRange) then
 		return {}
@@ -201,6 +206,7 @@ end
     @param maxRange number -- Maximum distance.
     @return { BasePart } -- Parts that are inside range.
 ]=]
+@native
 function Selection.FindAllPartsInRange(origin: Vector3, parts: { BasePart }, maxRange: number): { BasePart }
 	if not Shared.IsPositiveNumber(maxRange) then
 		return {}
@@ -239,6 +245,7 @@ end
     @param positions { Vector3 } -- Positions to sort.
     @return { number } -- Indices sorted from nearest to farthest.
 ]=]
+@native
 function Selection.SortPositionsByDistance(origin: Vector3, positions: { Vector3 }): { number }
 	local indices = Shared.ResolvePositionIndices(positions)
 	table.sort(indices, function(leftIndex: number, rightIndex: number): boolean
@@ -339,6 +346,7 @@ end
     @return T? -- Best candidate, or `nil` when no candidate matches.
     @return number? -- Distance to the returned candidate.
 ]=]
+@native
 function Selection.FindBestCandidate<T>(
 	origin: Vector3,
 	candidates: { T },
