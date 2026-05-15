@@ -4,7 +4,7 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
-local Parallelizer = require(ReplicatedStorage.Packages.Parallelizer)
+local Parallelizer = require(ReplicatedStorage.Utilities.Parallelizer)
 local Promise = require(ReplicatedStorage.Packages.Promise)
 
 local Types = require(script.Types)
@@ -30,6 +30,7 @@ type TFailureReport = {
 local WORKER_SCRIPT_NAME = "Worker"
 local WORKER_BOOTSTRAP_MODULE_NAME = "WorkerBootstrap"
 local OPERATION_CLONES_FOLDER_NAME = "Operations"
+local OPERATION_CONFIG_JSON_ATTRIBUTE_NAME = "ParallelQueryOperationConfigJson"
 
 --[=[
     @class ParallelQueryPackage
@@ -39,11 +40,17 @@ local OPERATION_CLONES_FOLDER_NAME = "Operations"
 local ParallelQuery = {}
 ParallelQuery.__index = ParallelQuery
 
-local function _CloneWorkerTemplate(operationModules: { ModuleScript }): Script
+local function _CloneWorkerTemplate(
+	operationModules: { ModuleScript },
+	operationConfigsByName: { [string]: any }?
+): Script
 	local workerTemplate = script:FindFirstChild(WORKER_SCRIPT_NAME)
 	assert(workerTemplate ~= nil and workerTemplate:IsA("Script"), "ParallelQuery is missing its worker template")
 	local workerBootstrapModule = script:FindFirstChild(WORKER_BOOTSTRAP_MODULE_NAME)
-	assert(workerBootstrapModule ~= nil and workerBootstrapModule:IsA("ModuleScript"), "ParallelQuery is missing its worker bootstrap module")
+	assert(
+		workerBootstrapModule ~= nil and workerBootstrapModule:IsA("ModuleScript"),
+		"ParallelQuery is missing its worker bootstrap module"
+	)
 
 	local clonedWorker = workerTemplate:Clone()
 	workerBootstrapModule:Clone().Parent = clonedWorker
@@ -53,6 +60,12 @@ local function _CloneWorkerTemplate(operationModules: { ModuleScript }): Script
 
 	for _, operationModule in ipairs(operationModules) do
 		local clone = operationModule:Clone()
+		local definition = require(operationModule) :: TOperationDefinition
+		local operationConfig = if operationConfigsByName ~= nil then operationConfigsByName[definition.Name] else nil
+		if operationConfig ~= nil then
+			Validation.AssertOperationConfigEncodable(definition.Name, operationConfig)
+			clone:SetAttribute(OPERATION_CONFIG_JSON_ATTRIBUTE_NAME, HttpService:JSONEncode(operationConfig))
+		end
 		clone.Parent = operationsFolder
 	end
 
@@ -91,7 +104,11 @@ local function _BuildRuntimeName(name: string?): string
 	return ("ParallelQuery_%s"):format(HttpService:GenerateGUID(false))
 end
 
-local function _BuildDecodedRows(schema: { TResultField }, flattenedResults: { any }, workCount: number): { [string]: any }
+local function _BuildDecodedRows(
+	schema: { TResultField },
+	flattenedResults: { any },
+	workCount: number
+): { [string]: any }
 	local fieldCount = #schema
 	local rows = table.create(workCount)
 
@@ -109,15 +126,22 @@ local function _BuildDecodedRows(schema: { TResultField }, flattenedResults: { a
 	return rows
 end
 
-local function _RequireOperationDefinitions(operationModules: { ModuleScript }): { [string]: TOperationDefinition }
+local function _RequireOperationDefinitions(
+	operationModules: { ModuleScript },
+	operationConfigsByName: { [string]: any }?
+): { [string]: TOperationDefinition }
 	local definitions = {}
 
 	for _, operationModule in ipairs(operationModules) do
 		local definition = require(operationModule) :: TOperationDefinition
 		Validation.AssertOperationModule(operationModule, definition)
-		Validation.AssertSchema(definition.ResultSchema, definition.Name)
-		assert(definitions[definition.Name] == nil, (`ParallelQuery has duplicate operation name "{definition.Name}"`))
-		definitions[definition.Name] = definition
+		local operationConfig = if operationConfigsByName ~= nil then operationConfigsByName[definition.Name] else nil
+		local resolvedSchema = Validation.ResolveSchema(definition, operationConfig)
+		Validation.AssertSchema(resolvedSchema, definition.Name)
+		local resolvedDefinition = table.clone(definition)
+		resolvedDefinition.ResultSchema = resolvedSchema
+		assert(definitions[definition.Name] == nil, `ParallelQuery has duplicate operation name "{definition.Name}"`)
+		definitions[definition.Name] = resolvedDefinition
 	end
 
 	return definitions
@@ -132,7 +156,7 @@ local function _BuildWorkerError(operationName: string, failureReports: { TFailu
 	local firstFailure = failureReports[1]
 	local message = if #failureReports == 1
 		then firstFailure.Message
-		else (`ParallelQuery operation "{operationName}" failed in {#failureReports} tasks; first failure: {firstFailure.Message}`)
+		else `ParallelQuery operation "{operationName}" failed in {#failureReports} tasks; first failure: {firstFailure.Message}`
 
 	return {
 		Kind = "WorkerError",
@@ -171,11 +195,12 @@ end
 function ParallelQuery.new(config: TParallelQueryConfig): TParallelQueryRunner
 	Validation.AssertConfig(config)
 
-	local definitions = _RequireOperationDefinitions(config.Operations)
+	local operationConfigsByName = config.OperationConfigs
+	local definitions = _RequireOperationDefinitions(config.Operations, operationConfigsByName)
 	local runtimeName = _BuildRuntimeName(config.Name)
 	local actorStorage = _CreateActorStorage(runtimeName, config.ActorParent)
 
-	local workerTemplate = _CloneWorkerTemplate(config.Operations)
+	local workerTemplate = _CloneWorkerTemplate(config.Operations, operationConfigsByName)
 	local coordinator = Parallelizer.CreateTaskCoordinator(workerTemplate, actorStorage, config.ActorCount)
 	workerTemplate:Destroy()
 
@@ -189,7 +214,8 @@ function ParallelQuery.new(config: TParallelQueryConfig): TParallelQueryRunner
 	self._destroyed = false
 
 	for _, operationModule in ipairs(config.Operations) do
-		local definition = definitions[(require(operationModule) :: TOperationDefinition).Name]
+		local definitionName = (require(operationModule) :: TOperationDefinition).Name
+		local definition = definitions[definitionName]
 		local registeredOperation = {
 			CacheLocalMemory = definition.CacheLocalMemory == true,
 			Schema = definition.ResultSchema,
@@ -216,9 +242,12 @@ function ParallelQuery:SetLocalMemory(operationName: string, sharedMemory: Share
 	self:_AssertAlive()
 
 	local operation = self._operations[operationName]
-	assert(operation ~= nil, (`ParallelQuery operation "{operationName}" is not registered`))
-	assert(operation.CacheLocalMemory, (`ParallelQuery operation "{operationName}" did not enable CacheLocalMemory`))
-	assert((self._activeRunCounts[operationName] or 0) == 0, (`ParallelQuery:SetLocalMemory("{operationName}") cannot run while that operation is in flight`))
+	assert(operation ~= nil, `ParallelQuery operation "{operationName}" is not registered`)
+	assert(operation.CacheLocalMemory, `ParallelQuery operation "{operationName}" did not enable CacheLocalMemory`)
+	assert(
+		(self._activeRunCounts[operationName] or 0) == 0,
+		`ParallelQuery:SetLocalMemory("{operationName}") cannot run while that operation is in flight`
+	)
 	Validation.AssertSharedMemory(sharedMemory, operationName)
 
 	operation.LocalMemory = sharedMemory
@@ -241,8 +270,8 @@ function ParallelQuery:Run(
 	self:_AssertAlive()
 
 	local operation = self._operations[operationName]
-	assert(operation ~= nil, (`ParallelQuery operation "{operationName}" is not registered`))
-	assert(type(onComplete) == "function", (`ParallelQuery:Run("{operationName}") requires an onComplete callback`))
+	assert(operation ~= nil, `ParallelQuery operation "{operationName}" is not registered`)
+	assert(type(onComplete) == "function", `ParallelQuery:Run("{operationName}") requires an onComplete callback`)
 	Validation.AssertRunRequest(request, operationName)
 
 	local workCount = request.WorkCount
@@ -255,20 +284,22 @@ function ParallelQuery:Run(
 	Validation.AssertArguments(argumentsList, operationName)
 
 	if operation.CacheLocalMemory and operation.LocalMemory == nil then
-		error((`ParallelQuery operation "{operationName}" requires local memory before Run can be called`))
+		error(`ParallelQuery operation "{operationName}" requires local memory before Run can be called`)
 	end
 
 	local batchSize = _ComputeBatchSize(workCount, self._actorCount, request.BatchSize)
 	local paddedWorkCount = math.ceil(workCount / batchSize) * batchSize
 	local failureReports = {} :: { TFailureReport }
 	local failureBindable = Instance.new("BindableEvent")
-	local failureConnection = failureBindable.Event:Connect(function(taskId: number, message: string, tracebackMessage: string?)
-		table.insert(failureReports, {
-			TaskId = taskId,
-			Message = message,
-			Traceback = tracebackMessage,
-		})
-	end)
+	local failureConnection = failureBindable.Event:Connect(
+		function(taskId: number, message: string, tracebackMessage: string?)
+			table.insert(failureReports, {
+				TaskId = taskId,
+				Message = message,
+				Traceback = tracebackMessage,
+			})
+		end
+	)
 
 	local settled = false
 	local cleanedUp = false
@@ -314,27 +345,36 @@ function ParallelQuery:Run(
 			settle(nil, {
 				Kind = "Timeout",
 				OperationName = operationName,
-				Message = (`ParallelQuery operation "{operationName}" timed out after {request.TimeoutSeconds} seconds`),
+				Message = `ParallelQuery operation "{operationName}" timed out after {request.TimeoutSeconds} seconds`,
 				TimeoutSeconds = request.TimeoutSeconds,
 			}, true)
 		end)
 	end
 
-	dispatchHandle = self._coordinator:DispatchTask(operation.TaskObject, paddedWorkCount, batchSize, function(flattenedResults)
-		task.defer(function()
-			if settled then
-				return
-			end
+	dispatchHandle = self._coordinator:DispatchTask(
+		operation.TaskObject,
+		paddedWorkCount,
+		batchSize,
+		function(flattenedResults)
+			task.defer(function()
+				if settled then
+					return
+				end
 
-			if #failureReports > 0 then
-				settle(nil, _BuildWorkerError(operationName, failureReports), false)
-				return
-			end
+				if #failureReports > 0 then
+					settle(nil, _BuildWorkerError(operationName, failureReports), false)
+					return
+				end
 
-			local rows = _BuildDecodedRows(operation.Schema, flattenedResults, workCount)
-			settle(rows, nil, false)
-		end)
-	end, false, workCount, failureBindable, table.unpack(argumentsList))
+				local rows = _BuildDecodedRows(operation.Schema, flattenedResults, workCount)
+				settle(rows, nil, false)
+			end)
+		end,
+		false,
+		workCount,
+		failureBindable,
+		table.unpack(argumentsList)
+	)
 end
 
 --[=[

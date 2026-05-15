@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BehaviorSystem = require(ReplicatedStorage.Utilities.AI.Behavior)
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 
 local HookRunner = require(script.Parent.HookRunner)
 local RuntimeEnums = require(script.Parent.RuntimeEnums)
@@ -32,6 +33,29 @@ type TEntityFrameState = {
 	Result: TRunFrameEntityResult,
 	HookOutcome: THookOutcome,
 	BehaviorTree: TCompiledBehaviorTree?,
+	ShouldEvaluateTree: boolean,
+	NeedsTransitionPhase: boolean,
+	NeedsActionPhase: boolean,
+	NeedsFacts: boolean,
+	SkipAllPhases: boolean,
+}
+
+type TRuntimeFrameProfile = {
+	FrameStartedAt: number,
+	ActorEnumerationMilliseconds: number,
+	BuildEntityStateMilliseconds: number,
+	HookMilliseconds: number,
+	FactBuildMilliseconds: number,
+	ServiceBuildMilliseconds: number,
+	TreeMilliseconds: number,
+	TransitionMilliseconds: number,
+	ActionMilliseconds: number,
+	ActorCount: number,
+	FullSkipCount: number,
+	ActionOnlyCount: number,
+	TreeEvaluatedCount: number,
+	FactBuildCount: number,
+	ServiceBuildCount: number,
 }
 
 local _ResolveActorTypes
@@ -39,6 +63,14 @@ local _BuildTreeContext
 local _CloneActionState
 local _GetActorLabel
 local _BuildCleanupResult
+local _CreateRuntimeFrameProfile
+local _CaptureMilliseconds
+
+local EMPTY_HOOK_OUTCOME: THookOutcome = table.freeze({
+	Facts = table.freeze({}),
+	BehaviorContext = table.freeze({}),
+	Services = table.freeze({}),
+})
 
 --[=[
 	@class AiRuntimeService
@@ -70,6 +102,7 @@ function Runtime.new(config: TConfig)
 	self._actorAdapters = {}
 	self._actorOrder = {}
 	self._lastFrameTime = nil
+	self._lastProfileLogAt = 0
 
 	return self
 end
@@ -197,22 +230,24 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 	-- Frame execution is deliberately staged so defects can be attributed to the exact phase that failed.
 	local defects = {}
 	local entityResults = {}
+	local frameProfile = _CreateRuntimeFrameProfile()
 	local actorTypes = _ResolveActorTypes(frameContext, self._actorAdapters, self._actorOrder)
 
 	for _, actorType in ipairs(actorTypes) do
 		local adapter = self._actorAdapters[actorType]
 		-- Build a single snapshot list so the later phases work from the same entity set.
-		local entityStates = self:_BuildEntityStates(actorType, adapter, frameContext, defects, entityResults)
+		local entityStates = self:_BuildEntityStates(actorType, adapter, frameContext, defects, entityResults, frameProfile)
 
 		-- Tree evaluation decides whether the entity should issue a new pending action.
-		self:_RunTreePhase(entityStates, frameContext, defects)
+		self:_RunTreePhase(entityStates, frameContext, defects, frameProfile)
 		-- Transition handling promotes pending actions into the active action slot.
-		self:_RunTransitionPhase(entityStates, frameContext, defects)
+		self:_RunTransitionPhase(entityStates, frameContext, defects, frameProfile)
 		-- Tick handling advances the active action and resolves terminal results.
-		self:_RunActionPhase(entityStates, frameContext, defects)
+		self:_RunActionPhase(entityStates, frameContext, defects, frameProfile)
 	end
 
 	self._lastFrameTime = frameContext.CurrentTime
+	self:_EmitFrameProfile(frameProfile)
 
 	return table.freeze({
 		EntityResults = entityResults,
@@ -236,15 +271,25 @@ function Runtime:_BuildEntityStates(
 	adapter: TActorAdapter,
 	frameContext: TFrameContext,
 	defects: { TErrorSinkPayload },
-	entityResults: { TRunFrameEntityResult }
+	entityResults: { TRunFrameEntityResult },
+	frameProfile: TRuntimeFrameProfile?
 ): { TEntityFrameState }
 	-- Entity state snapshots let the three runtime phases share the same per-entity inputs without repeated adapter calls.
 	local entityStates = {}
+	local enumerationStartedAt = if frameProfile ~= nil then os.clock() else nil
 	local entities = adapter:QueryActiveEntities(frameContext)
 	Validation.ValidateQueryActiveEntitiesResult(actorType, entities)
+	if frameProfile ~= nil then
+		frameProfile.ActorEnumerationMilliseconds += _CaptureMilliseconds(enumerationStartedAt)
+	end
+
+	local buildEntityStateStartedAt = if frameProfile ~= nil then os.clock() else nil
 
 	for _, entity in ipairs(entities) do
 		Validation.ValidateEntityId(actorType, entity, "QueryActiveEntities")
+		if frameProfile ~= nil then
+			frameProfile.ActorCount += 1
+		end
 
 		-- Seed a result record before the per-phase work fills in status fields.
 		local result = {
@@ -262,11 +307,52 @@ function Runtime:_BuildEntityStates(
 		local actionStateSnapshot = adapter:GetActionState(entity)
 		Validation.ValidateActionState(actionStateSnapshot, "AiRuntime BuildEntityStates GetActionState")
 		local actionState = _CloneActionState(actionStateSnapshot)
-
-		-- Pull hook output before tree execution so facts and services are ready for the behavior tree.
-		local hookOutcome = self:_BuildHookOutcome(actorType, entity, adapter, actionState, frameContext, defects)
 		local behaviorTree = adapter:GetCompiledBehaviorTree(entity)
 		Validation.ValidateBehaviorTree(actorType, entity, behaviorTree)
+		local hasCurrentAction = type(actionState.CurrentActionId) == "string"
+		local hasPendingAction = type(actionState.PendingActionId) == "string"
+		local shouldEvaluateTree = false
+		if behaviorTree ~= nil then
+			shouldEvaluateTree = adapter:ShouldEvaluate(entity, frameContext.CurrentTime)
+			Validation.ValidateShouldEvaluateResult(actorType, entity, shouldEvaluateTree)
+		end
+
+		if behaviorTree == nil then
+			result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name
+		elseif not shouldEvaluateTree then
+			result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNotReady.Name
+		end
+
+		local skipAllPhases = not hasCurrentAction and not hasPendingAction and not shouldEvaluateTree
+		local needsTransitionPhase = hasPendingAction or shouldEvaluateTree
+		local needsActionPhase = hasCurrentAction or hasPendingAction or shouldEvaluateTree
+		local needsFacts = shouldEvaluateTree
+		local hookOutcome = EMPTY_HOOK_OUTCOME
+
+		if frameProfile ~= nil then
+			if skipAllPhases then
+				frameProfile.FullSkipCount += 1
+			elseif shouldEvaluateTree then
+				frameProfile.TreeEvaluatedCount += 1
+			else
+				frameProfile.ActionOnlyCount += 1
+			end
+		end
+
+		if not skipAllPhases then
+			hookOutcome = self:_BuildHookOutcome(
+				actorType,
+				entity,
+				adapter,
+				actionState,
+				frameContext,
+				defects,
+				needsFacts,
+				shouldEvaluateTree,
+				hasCurrentAction or hasPendingAction or shouldEvaluateTree,
+				frameProfile
+			)
+		end
 
 		table.insert(entityStates, {
 			Entity = entity,
@@ -276,7 +362,16 @@ function Runtime:_BuildEntityStates(
 			Result = result,
 			HookOutcome = hookOutcome,
 			BehaviorTree = behaviorTree,
+			ShouldEvaluateTree = shouldEvaluateTree,
+			NeedsTransitionPhase = needsTransitionPhase,
+			NeedsActionPhase = needsActionPhase,
+			NeedsFacts = needsFacts,
+			SkipAllPhases = skipAllPhases,
 		})
+	end
+
+	if frameProfile ~= nil then
+		frameProfile.BuildEntityStateMilliseconds += _CaptureMilliseconds(buildEntityStateStartedAt)
 	end
 
 	return entityStates
@@ -312,7 +407,18 @@ function Runtime:_CleanupActorAction(
 	Validation.ValidateActionState(actionStateSnapshot, "AiRuntime Cleanup GetActionState")
 	local actionState = _CloneActionState(actionStateSnapshot)
 	-- Reuse the normal hook merge path so cleanup sees the same service bag as frame execution.
-	local hookOutcome = self:_BuildHookOutcome(actorType, entity, adapter, actionState, frameContext, defects)
+	local hookOutcome = self:_BuildHookOutcome(
+		actorType,
+		entity,
+		adapter,
+		actionState,
+		frameContext,
+		defects,
+		false,
+		false,
+		true,
+		nil
+	)
 	local runtimeContext = {
 		DeltaTime = frameContext.DeltaTime,
 		Services = hookOutcome.Services,
@@ -387,7 +493,11 @@ function Runtime:_BuildHookOutcome(
 	adapter: TActorAdapter,
 	actionState: TActionState,
 	frameContext: TFrameContext,
-	defects: { TErrorSinkPayload }
+	defects: { TErrorSinkPayload },
+	needsFacts: boolean,
+	needsBehaviorContext: boolean,
+	needsServices: boolean,
+	frameProfile: TRuntimeFrameProfile?
 ): THookOutcome
 	local baseServices = if frameContext.Services ~= nil then frameContext.Services else {}
 	local hookContext = {
@@ -397,9 +507,18 @@ function Runtime:_BuildHookOutcome(
 		FrameContext = frameContext,
 		Services = baseServices,
 		Adapter = adapter,
+		NeedsFacts = needsFacts,
+		NeedsBehaviorContext = needsBehaviorContext,
+		NeedsServices = needsServices,
+		RuntimeProfile = frameProfile,
 	}
 
-	return self:_RunHooks(entity, actorType, adapter, hookContext, defects)
+	local hookStartedAt = if frameProfile ~= nil then os.clock() else nil
+	local hookOutcome = self:_RunHooks(entity, actorType, adapter, hookContext, defects)
+	if frameProfile ~= nil then
+		frameProfile.HookMilliseconds += _CaptureMilliseconds(hookStartedAt)
+	end
+	return hookOutcome
 end
 
 --[=[
@@ -413,20 +532,18 @@ end
 function Runtime:_RunTreePhase(
 	entityStates: { TEntityFrameState },
 	frameContext: TFrameContext,
-	defects: { TErrorSinkPayload }
+	defects: { TErrorSinkPayload },
+	frameProfile: TRuntimeFrameProfile?
 )
+	local treePhaseStartedAt = if frameProfile ~= nil then os.clock() else nil
 	for _, entityState in ipairs(entityStates) do
-		if entityState.BehaviorTree == nil then
-			-- No tree means there is nothing to evaluate for this entity.
-			entityState.Result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name
+		if not entityState.ShouldEvaluateTree then
 			continue
 		end
 
-		local shouldEvaluate = entityState.Adapter:ShouldEvaluate(entityState.Entity, frameContext.CurrentTime)
-		Validation.ValidateShouldEvaluateResult(entityState.ActorType, entityState.Entity, shouldEvaluate)
-		if not shouldEvaluate then
-			-- The adapter owns the tick gate, so the runtime skips entities that are not ready yet.
-			entityState.Result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNotReady.Name
+		if entityState.BehaviorTree == nil then
+			-- No tree means there is nothing to evaluate for this entity.
+			entityState.Result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name
 			continue
 		end
 
@@ -453,6 +570,18 @@ function Runtime:_RunTreePhase(
 		entityState.Result.TreeStatus = RuntimeEnums.TreeStatus.Ran.Name
 		-- The tree advanced successfully, so the adapter records the new tick time for the next frame.
 		entityState.Adapter:UpdateLastTickTime(entityState.Entity, frameContext.CurrentTime)
+
+		local refreshedActionState = entityState.Adapter:GetActionState(entityState.Entity)
+		Validation.ValidateActionState(refreshedActionState, "AiRuntime TreeRun RefreshActionState")
+		entityState.ActionState = _CloneActionState(refreshedActionState)
+		local hasCurrentAction = type(entityState.ActionState.CurrentActionId) == "string"
+		local hasPendingAction = type(entityState.ActionState.PendingActionId) == "string"
+		entityState.NeedsTransitionPhase = hasPendingAction
+		entityState.NeedsActionPhase = hasCurrentAction or hasPendingAction
+	end
+
+	if frameProfile ~= nil then
+		frameProfile.TreeMilliseconds += _CaptureMilliseconds(treePhaseStartedAt)
 	end
 end
 
@@ -467,13 +596,16 @@ end
 function Runtime:_RunTransitionPhase(
 	entityStates: { TEntityFrameState },
 	frameContext: TFrameContext,
-	defects: { TErrorSinkPayload }
+	defects: { TErrorSinkPayload },
+	frameProfile: TRuntimeFrameProfile?
 )
+	local transitionPhaseStartedAt = if frameProfile ~= nil then os.clock() else nil
 	for _, entityState in ipairs(entityStates) do
-		local actionStateSnapshot = entityState.Adapter:GetActionState(entityState.Entity)
-		Validation.ValidateActionState(actionStateSnapshot, "AiRuntime StartPendingAction GetActionState")
-		local actionState = _CloneActionState(actionStateSnapshot)
-		entityState.ActionState = actionState
+		if not entityState.NeedsTransitionPhase then
+			continue
+		end
+
+		local actionState = entityState.ActionState
 		local runtimeContext = {
 			DeltaTime = frameContext.DeltaTime,
 			Services = entityState.HookOutcome.Services,
@@ -502,6 +634,8 @@ function Runtime:_RunTransitionPhase(
 			or startStatus == RuntimeEnums.StartStatus.Blocked.Name
 		then
 			-- These statuses intentionally leave the action state unchanged.
+			local hasCurrentAction = type(actionState.CurrentActionId) == "string"
+			entityState.NeedsActionPhase = hasCurrentAction
 			continue
 		end
 
@@ -511,6 +645,7 @@ function Runtime:_RunTransitionPhase(
 			actionState.PendingActionData = nil
 			entityState.ActionState = actionState
 			entityState.Adapter:SetActionState(entityState.Entity, actionState)
+			entityState.NeedsActionPhase = type(actionState.CurrentActionId) == "string"
 			continue
 		end
 
@@ -520,6 +655,7 @@ function Runtime:_RunTransitionPhase(
 			-- Missing or failed starts reset the adapter state so the entity does not retain a bad pending action.
 			entityState.ActionState = _CloneActionState(nil)
 			entityState.Adapter:ClearActionState(entityState.Entity)
+			entityState.NeedsActionPhase = false
 			continue
 		end
 
@@ -530,6 +666,7 @@ function Runtime:_RunTransitionPhase(
 			-- A successful commit writes the updated action state back to the adapter.
 			entityState.ActionState = actionState
 			entityState.Adapter:SetActionState(entityState.Entity, actionState)
+			entityState.NeedsActionPhase = true
 			continue
 		end
 
@@ -548,6 +685,11 @@ function Runtime:_RunTransitionPhase(
 		})
 		entityState.ActionState = _CloneActionState(nil)
 		entityState.Adapter:ClearActionState(entityState.Entity)
+		entityState.NeedsActionPhase = false
+	end
+
+	if frameProfile ~= nil then
+		frameProfile.TransitionMilliseconds += _CaptureMilliseconds(transitionPhaseStartedAt)
 	end
 end
 
@@ -562,9 +704,15 @@ end
 function Runtime:_RunActionPhase(
 	entityStates: { TEntityFrameState },
 	frameContext: TFrameContext,
-	defects: { TErrorSinkPayload }
+	defects: { TErrorSinkPayload },
+	frameProfile: TRuntimeFrameProfile?
 )
+	local actionPhaseStartedAt = if frameProfile ~= nil then os.clock() else nil
 	for _, entityState in ipairs(entityStates) do
+		if not entityState.NeedsActionPhase then
+			continue
+		end
+
 		local actionState = entityState.ActionState
 		entityState.HookOutcome.Services.ActionState = actionState
 		local runtimeContext = {
@@ -619,6 +767,10 @@ function Runtime:_RunActionPhase(
 			entityState.ActionState = _CloneActionState(nil)
 			entityState.Adapter:ClearActionState(entityState.Entity)
 		end
+	end
+
+	if frameProfile ~= nil then
+		frameProfile.ActionMilliseconds += _CaptureMilliseconds(actionPhaseStartedAt)
 	end
 end
 
@@ -688,6 +840,44 @@ function Runtime:_PushDefect(defects: { TErrorSinkPayload }, payload: TErrorSink
 	end
 end
 
+function Runtime:_EmitFrameProfile(frameProfile: TRuntimeFrameProfile?)
+	if frameProfile == nil or DebugConfig.ENABLED ~= true then
+		return
+	end
+
+	local logInterval = DebugConfig.AI_RUNTIME_PROFILING_LOG_INTERVAL_SECONDS
+	if type(logInterval) ~= "number" then
+		logInterval = 1
+	end
+	logInterval = math.max(0.25, logInterval)
+
+	local now = os.clock()
+	if now - self._lastProfileLogAt < logInterval then
+		return
+	end
+
+	self._lastProfileLogAt = now
+	local totalMilliseconds = _CaptureMilliseconds(frameProfile.FrameStartedAt)
+	warn(string.format(
+		"AiRuntime profile | totalMs=%.3f actors=%d fullSkip=%d actionOnly=%d treeActors=%d enumMs=%.3f buildMs=%.3f hookMs=%.3f factsMs=%.3f facts=%d servicesMs=%.3f services=%d treeMs=%.3f transitionMs=%.3f actionMs=%.3f",
+		totalMilliseconds,
+		frameProfile.ActorCount,
+		frameProfile.FullSkipCount,
+		frameProfile.ActionOnlyCount,
+		frameProfile.TreeEvaluatedCount,
+		frameProfile.ActorEnumerationMilliseconds,
+		frameProfile.BuildEntityStateMilliseconds,
+		frameProfile.HookMilliseconds,
+		frameProfile.FactBuildMilliseconds,
+		frameProfile.FactBuildCount,
+		frameProfile.ServiceBuildMilliseconds,
+		frameProfile.ServiceBuildCount,
+		frameProfile.TreeMilliseconds,
+		frameProfile.TransitionMilliseconds,
+		frameProfile.ActionMilliseconds
+	))
+end
+
 --[=[
 	@private
 	Selects the actor types for one frame from the optional frame filter or registration order.
@@ -713,6 +903,38 @@ function _ResolveActorTypes(
 	end
 
 	return frameContext.ActorTypes
+end
+
+function _CreateRuntimeFrameProfile(): TRuntimeFrameProfile?
+	if DebugConfig.ENABLED ~= true or DebugConfig.AI_RUNTIME_PROFILING ~= true then
+		return nil
+	end
+
+	return {
+		FrameStartedAt = os.clock(),
+		ActorEnumerationMilliseconds = 0,
+		BuildEntityStateMilliseconds = 0,
+		HookMilliseconds = 0,
+		FactBuildMilliseconds = 0,
+		ServiceBuildMilliseconds = 0,
+		TreeMilliseconds = 0,
+		TransitionMilliseconds = 0,
+		ActionMilliseconds = 0,
+		ActorCount = 0,
+		FullSkipCount = 0,
+		ActionOnlyCount = 0,
+		TreeEvaluatedCount = 0,
+		FactBuildCount = 0,
+		ServiceBuildCount = 0,
+	}
+end
+
+function _CaptureMilliseconds(startedAt: number?): number
+	if startedAt == nil then
+		return 0
+	end
+
+	return (os.clock() - startedAt) * 1000
 end
 
 --[=[

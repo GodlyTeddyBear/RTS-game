@@ -9,7 +9,8 @@ local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
 local MovementTypes = require(script.Parent.Types)
 local MovementMath = require(script.Parent.MovementMath)
 local FlowSeparationPairMath = require(script.Parent.FlowSeparationPairMath)
-local FlowSeparationPairSnapshotCodec = require(script.Parent.FlowSeparationPairSnapshotCodec)
+local FlowSeparationPairSnapshotCodec = require(script.Parent.Parallel.FlowSeparationPairSnapshotCodec)
+local FlowSeparationPairSnapshotSchema = require(script.Parent.Parallel.FlowSeparationPairSnapshotSchema)
 
 type TFlowSeparationCoveredCell = MovementTypes.TFlowSeparationCoveredCell
 type TFlowSeparationEntityState = MovementTypes.TFlowSeparationEntityState
@@ -219,6 +220,36 @@ function MovementService:_GetFlowSeparationParallelSnapshotBuildMinCandidateCoun
 		return math.max(0, math.floor(configuredMinCandidateCount))
 	end
 	return 16
+end
+
+
+function MovementService:_GetFlowSeparationParallelSnapshotBuildMaxPairsPerTask(sepConfig: any): number
+	return FlowSeparationPairSnapshotSchema.GetFixedMaxPairsPerTask()
+end
+
+
+function MovementService:_GetFlowSeparationParallelSnapshotBuildMaxEntitiesPerTask(
+	sepConfig: any,
+	maxPairsPerTask: number
+): number
+	local configuredMaxEntitiesPerTask = if sepConfig ~= nil then sepConfig.ParallelSnapshotBuildMaxEntitiesPerTask else nil
+	assert(type(maxPairsPerTask) == "number" and maxPairsPerTask > 0 and maxPairsPerTask % 1 == 0, "maxPairsPerTask must be a positive integer")
+	assert(
+		type(configuredMaxEntitiesPerTask) == "number"
+			and configuredMaxEntitiesPerTask >= 2
+			and configuredMaxEntitiesPerTask % 1 == 0,
+		"FLOW_SOFT_SEPARATION.ParallelSnapshotBuildMaxEntitiesPerTask must be an integer >= 2"
+	)
+	return configuredMaxEntitiesPerTask
+end
+
+
+function MovementService:_GetFlowSeparationParallelSnapshotBuildOverflowMode(sepConfig: any): "Chunk" | "Local"
+	local configuredMode = if sepConfig ~= nil then sepConfig.ParallelSnapshotBuildOverflowMode else nil
+	if configuredMode == "Local" then
+		return "Local"
+	end
+	return "Chunk"
 end
 
 
@@ -804,9 +835,9 @@ function MovementService:_GetOrCreateFlowSeparationParallelRunner(sepConfig: any
 		Name = "CombatFlowSeparation",
 		ActorCount = self:_GetFlowSeparationParallelActorCount(sepConfig),
 		Operations = {
-			script.Parent.FlowSeparationPairOperation,
-			script.Parent.FlowSeparationPairSnapshotOperation,
-			script.Parent.FlowVelocitySolveOperation,
+			script.Parent.Parallel.FlowSeparationPairOperation,
+			script.Parent.Parallel.FlowSeparationPairSnapshotOperation,
+			script.Parent.Parallel.FlowVelocitySolveOperation,
 		},
 	})
 	self._flowSeparationParallelRunner = runner
@@ -943,21 +974,49 @@ function MovementService:_CreateFlowSeparationPairSnapshotBuildInput(
 	candidateCellSet: { [number]: boolean },
 	activeSolveEntitySet: { [number]: boolean },
 	denseFallbackEntitySet: { [number]: boolean },
+	sepConfig: any,
 	kForce: number,
 	minSeparationDistance: number
 ): TFlowSeparationPairSnapshotBuildInput
 	local runtime = self:_GetOrCreateFlowSeparationRuntime()
+	local maxPairsPerTask = self:_GetFlowSeparationParallelSnapshotBuildMaxPairsPerTask(sepConfig)
+	local maxEntitiesPerTask = self:_GetFlowSeparationParallelSnapshotBuildMaxEntitiesPerTask(
+		sepConfig,
+		maxPairsPerTask
+	)
+
+	local overflowMode = self:_GetFlowSeparationParallelSnapshotBuildOverflowMode(sepConfig)
 	local input: TFlowSeparationPairSnapshotBuildInput = {
 		CandidateCellKeys = {},
 		CellEntityStarts = {},
 		CellEntityCounts = {},
 		EligibleEntityIds = {},
+		TaskCellIndices = {},
+		TaskOuterStartOffsets = {},
+		TaskOuterEndOffsets = {},
+		TaskEntityStartIndices = {},
+		TaskEntityCounts = {},
 		EntityPositionXById = {},
 		EntityPositionYById = {},
 		EntityRadiusById = {},
 		KForce = kForce,
 		MinSeparationDistance = minSeparationDistance,
+		RequiresLocalFallback = false,
 	}
+
+	local function addTask(cellIndex: number, cellStart: number, cellCount: number, outerStartOffset: number, outerEndOffset: number)
+		local taskIndex = #input.TaskCellIndices + 1
+		input.TaskCellIndices[taskIndex] = cellIndex
+		input.TaskOuterStartOffsets[taskIndex] = outerStartOffset
+		input.TaskOuterEndOffsets[taskIndex] = outerEndOffset
+		input.TaskEntityStartIndices[taskIndex] = cellStart
+		input.TaskEntityCounts[taskIndex] = cellCount
+	end
+
+	local function markLocalFallback()
+		input.RequiresLocalFallback = true
+		self:_IncrementFastFlowProfileCounter("ParallelPairSnapshotOverflowLocalFallbacks")
+	end
 
 	for candidateCellKey in candidateCellSet do
 		local bucket = runtime.BucketsByCell[candidateCellKey]
@@ -986,6 +1045,55 @@ function MovementService:_CreateFlowSeparationPairSnapshotBuildInput(
 			input.CandidateCellKeys[cellIndex] = candidateCellKey
 			input.CellEntityStarts[cellIndex] = cellEligibleStart
 			input.CellEntityCounts[cellIndex] = cellEligibleCount
+
+			if cellEligibleCount > maxEntitiesPerTask then
+				markLocalFallback()
+				return input
+			end
+
+			local maxPairsInCell = (cellEligibleCount * (cellEligibleCount - 1)) / 2
+			if overflowMode == "Local" and maxPairsInCell > maxPairsPerTask then
+				markLocalFallback()
+				return input
+			end
+
+			local generatedTaskCount = 0
+			local outerStartOffset = 0
+			local lastOuterOffset = cellEligibleCount - 2
+
+			while outerStartOffset <= lastOuterOffset do
+				local outerEndOffset = outerStartOffset - 1
+				local pairBudget = 0
+
+				while outerEndOffset + 1 <= lastOuterOffset do
+					local nextOuterOffset = outerEndOffset + 1
+					local pairsForAnchor = cellEligibleCount - nextOuterOffset - 1
+					if pairsForAnchor > maxPairsPerTask then
+						markLocalFallback()
+						return input
+					end
+					if pairBudget > 0 and pairBudget + pairsForAnchor > maxPairsPerTask then
+						break
+					end
+
+					pairBudget += pairsForAnchor
+					outerEndOffset = nextOuterOffset
+				end
+
+				if outerEndOffset < outerStartOffset then
+					markLocalFallback()
+					return input
+				end
+
+				addTask(cellIndex, cellEligibleStart, cellEligibleCount, outerStartOffset, outerEndOffset)
+				generatedTaskCount += 1
+				outerStartOffset = outerEndOffset + 1
+			end
+
+			if generatedTaskCount > 1 then
+				self:_IncrementFastFlowProfileCounter("ParallelPairSnapshotChunkedCells")
+			end
+			self:_IncrementFastFlowProfileCounter("ParallelPairSnapshotTasksGenerated", generatedTaskCount)
 		end
 	end
 
@@ -1000,6 +1108,11 @@ function MovementService:_CreateFlowSeparationPairSnapshotBuildSharedMemory(
 	local cellEntityStarts = SharedTable.new()
 	local cellEntityCounts = SharedTable.new()
 	local eligibleEntityIds = SharedTable.new()
+	local taskCellIndices = SharedTable.new()
+	local taskOuterStartOffsets = SharedTable.new()
+	local taskOuterEndOffsets = SharedTable.new()
+	local taskEntityStartIndices = SharedTable.new()
+	local taskEntityCounts = SharedTable.new()
 
 	for index, value in ipairs(input.CellEntityStarts) do
 		cellEntityStarts[index] = value
@@ -1010,10 +1123,30 @@ function MovementService:_CreateFlowSeparationPairSnapshotBuildSharedMemory(
 	for index, value in ipairs(input.EligibleEntityIds) do
 		eligibleEntityIds[index] = value
 	end
+	for index, value in ipairs(input.TaskCellIndices) do
+		taskCellIndices[index] = value
+	end
+	for index, value in ipairs(input.TaskOuterStartOffsets) do
+		taskOuterStartOffsets[index] = value
+	end
+	for index, value in ipairs(input.TaskOuterEndOffsets) do
+		taskOuterEndOffsets[index] = value
+	end
+	for index, value in ipairs(input.TaskEntityStartIndices) do
+		taskEntityStartIndices[index] = value
+	end
+	for index, value in ipairs(input.TaskEntityCounts) do
+		taskEntityCounts[index] = value
+	end
 
 	memory.CellEntityStarts = cellEntityStarts
 	memory.CellEntityCounts = cellEntityCounts
 	memory.EligibleEntityIds = eligibleEntityIds
+	memory.TaskCellIndices = taskCellIndices
+	memory.TaskOuterStartOffsets = taskOuterStartOffsets
+	memory.TaskOuterEndOffsets = taskOuterEndOffsets
+	memory.TaskEntityStartIndices = taskEntityStartIndices
+	memory.TaskEntityCounts = taskEntityCounts
 	return memory
 end
 
@@ -1103,14 +1236,13 @@ function MovementService:_BuildFlowSeparationPairSnapshotFromBuildInput(
 			end
 
 			local pairCount = row.PairCount
-			local pairsBuffer = row.PairsBuffer
-			if type(pairCount) ~= "number" or typeof(pairsBuffer) ~= "buffer" then
+			if type(pairCount) ~= "number" then
 				continue
 			end
 
 			for pairIndex = 1, pairCount do
-				local entityA, entityB = FlowSeparationPairSnapshotCodec.ReadPair(pairsBuffer, pairIndex)
-				if entityA ~= 0 and entityB ~= 0 then
+				local entityA, entityB = FlowSeparationPairSnapshotCodec.ReadPair(row, pairIndex)
+				if entityA ~= nil and entityB ~= nil and entityA ~= 0 and entityB ~= 0 then
 					appendPair(entityA, entityB)
 				end
 			end
@@ -1284,7 +1416,7 @@ function MovementService:_DispatchFlowSeparationPairSnapshotBuildAsync(
 		return "BelowThreshold"
 	end
 
-	if self:_GetDenseCellOccupancyThreshold(sepConfig) > FlowSeparationPairSnapshotCodec.GetMaxSupportedEntityCountPerCell() then
+	if input.RequiresLocalFallback then
 		self:_IncrementFastFlowProfileCounter("ParallelFallbacks")
 		self:_IncrementFastFlowProfileCounter("ParallelPairSnapshotAsyncErrorFallbacks")
 		return "Failed"
@@ -1308,13 +1440,14 @@ function MovementService:_DispatchFlowSeparationPairSnapshotBuildAsync(
 	local promise: typeof(Promise.new(function() end))? = nil
 	local ok = pcall(function()
 		local runner = self:_GetOrCreateFlowSeparationParallelRunner(sepConfig)
+		local batchSize = self:_GetFlowSeparationParallelSnapshotBuildBatchSize(sepConfig)
 		runner:SetLocalMemory(
 			FLOW_SEPARATION_PAIR_SNAPSHOT_OPERATION_NAME,
 			self:_CreateFlowSeparationPairSnapshotBuildSharedMemory(input)
 		)
 		promise = runner:RunAsync(FLOW_SEPARATION_PAIR_SNAPSHOT_OPERATION_NAME, {
-			WorkCount = candidateCellCount,
-			BatchSize = self:_GetFlowSeparationParallelSnapshotBuildBatchSize(sepConfig),
+			WorkCount = #input.TaskCellIndices,
+			BatchSize = batchSize,
 			TimeoutSeconds = self:_GetFlowSeparationParallelSnapshotBuildTimeoutSeconds(sepConfig),
 		})
 	end)
@@ -1571,10 +1704,11 @@ function MovementService:_DispatchFlowSeparationPairsWithParallelQueryAsync(
 	local promise: typeof(Promise.new(function() end))? = nil
 	local ok = pcall(function()
 		local runner = self:_GetOrCreateFlowSeparationParallelRunner(sepConfig)
+		local batchSize = self:_GetFlowSeparationParallelBatchSize(sepConfig)
 		runner:SetLocalMemory(FLOW_SEPARATION_PAIR_OPERATION_NAME, self:_CreateFlowSeparationSharedMemory(snapshot))
 		promise = runner:RunAsync(FLOW_SEPARATION_PAIR_OPERATION_NAME, {
 			WorkCount = pairCount,
-			BatchSize = self:_GetFlowSeparationParallelBatchSize(sepConfig),
+			BatchSize = batchSize,
 			TimeoutSeconds = self:_GetFlowSeparationParallelTimeoutSeconds(sepConfig),
 		})
 	end)
@@ -1790,6 +1924,7 @@ function MovementService:_RecomputeDirtyFlowSeparation(sepConfig: any)
 			candidateCellSet,
 			activeSolveEntitySet,
 			denseFallbackEntitySet,
+			sepConfig,
 			kForce,
 			minSeparationDistance
 		)

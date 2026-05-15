@@ -132,6 +132,7 @@ function EnemyCombatAdapterService.new()
 	self._configuredCombatServices = false
 	self._runtimeOwner = nil
 	self._isFastFlowConfigured = false
+	self._cachedExecutorServicesByEntity = {}
 	return self
 end
 
@@ -427,6 +428,7 @@ function EnemyCombatAdapterService:RegisterActor(entity: number): Result.Result<
 				self._combatServices.MovementService:StopMovement(entity)
 			end,
 			OnRemoved = function()
+				self:_ClearCachedExecutorServices(entity)
 				self._combatServices.MovementService:StopMovement(entity)
 				self._combatServices.LockOnService:DetachConstraint(entity)
 			end,
@@ -448,6 +450,7 @@ end
     @return Result.Result<boolean> -- Whether the actor was removed successfully.
 ]=]
 function EnemyCombatAdapterService:UnregisterActor(entity: number): Result.Result<boolean>
+	self:_ClearCachedExecutorServices(entity)
 	return self._combatContext:UnregisterCombatActor(self:_BuildActorHandle(entity))
 end
 
@@ -531,9 +534,17 @@ function EnemyCombatAdapterService:_BuildFacts(entity: number, _currentTime: num
 	return self._factsResolver.BuildFacts(entity, _currentTime)
 end
 
--- Builds the service map exposed to enemy behavior executors for the current tick.
-function EnemyCombatAdapterService:_BuildServices(entity: number, currentTime: number): { [string]: any }
-	return {
+function EnemyCombatAdapterService:_ClearCachedExecutorServices(entity: number)
+	self._cachedExecutorServicesByEntity[entity] = nil
+end
+
+function EnemyCombatAdapterService:_GetOrCreateCachedExecutorServices(entity: number): { [string]: any }
+	local cachedServices = self._cachedExecutorServicesByEntity[entity]
+	if cachedServices ~= nil then
+		return cachedServices
+	end
+
+	cachedServices = {
 		EnemyEntityFactory = self._enemyFactoryProxyResolver.CreateProxy(entity),
 		StructureEntityFactory = self._structureEntityFactory,
 		BaseEntityFactory = self._baseEntityFactory,
@@ -541,11 +552,21 @@ function EnemyCombatAdapterService:_BuildServices(entity: number, currentTime: n
 		EnemyContext = self._runtimeOwner,
 		StructureContext = self._structureContext,
 		BaseContext = self._baseContext,
-		CurrentTime = currentTime,
+		CurrentTime = 0,
 		HitboxService = self._hitboxProxyResolver.CreateProxy(entity),
 		MovementService = self._movementProxyResolver.CreateProxy(entity),
 		CombatHitResolutionService = self._combatServices.CombatHitResolutionService,
 	}
+	self._cachedExecutorServicesByEntity[entity] = cachedServices
+	return cachedServices
+end
+
+-- Builds the service map exposed to enemy behavior executors for the current tick.
+function EnemyCombatAdapterService:_BuildServices(entity: number, currentTime: number): { [string]: any }
+	local cachedServices = self:_GetOrCreateCachedExecutorServices(entity)
+	cachedServices.CurrentTime = currentTime
+	cachedServices.EnemyContext = self._runtimeOwner
+	return cachedServices
 end
 
 -- Refreshes lock-on state after the combat runtime reports an action result.

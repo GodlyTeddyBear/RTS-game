@@ -55,6 +55,9 @@ function MovementService:_ResetFastFlowProfileCounters()
 		ParallelPairSnapshotAsyncDroppedResults = 0,
 		ParallelPairSnapshotAsyncInFlightSkips = 0,
 		ParallelPairSnapshotAsyncErrorFallbacks = 0,
+		ParallelPairSnapshotChunkedCells = 0,
+		ParallelPairSnapshotTasksGenerated = 0,
+		ParallelPairSnapshotOverflowLocalFallbacks = 0,
 		ParallelPairBelowThresholdSkips = 0,
 		ParallelPairFailedFallbacks = 0,
 		ParallelPairAsyncErrorFallbacks = 0,
@@ -116,7 +119,7 @@ function MovementService:_EmitFastFlowProfileCounters()
 
 	self._lastFastFlowProfileLogAt = now
 	warn(string.format(
-		"FastFlow profile | sharedCreates=%d sharedRefreshes=%d merges=%d tracked=%d activeSeparation=%d dirtyEntities=%d dirtyCells=%d localPairs=%d parallelDispatches=%d parallelPairs=%d parallelRows=%d pairSnapshots=%d pairSnapshotEntities=%d pairSnapshotPairs=%d pairSnapshotMs=%.3f pairSnapshotAsyncDispatches=%d pairSnapshotAsyncCompleted=%d pairSnapshotAsyncApplied=%d pairSnapshotAsyncStale=%d pairSnapshotAsyncDropped=%d pairSnapshotAsyncInFlightSkips=%d pairSnapshotAsyncErrorFallbacks=%d pairBelowThreshold=%d pairFailedFallbacks=%d pairAsyncErrorFallbacks=%d velocityDispatches=%d velocityEntities=%d velocityRows=%d velocityAsyncDispatches=%d velocityAsyncCompleted=%d velocityAsyncApplied=%d velocityAsyncStale=%d velocityAsyncDropped=%d velocityAsyncInFlightSkips=%d velocityAsyncErrorFallbacks=%d parallelFallbacks=%d asyncDispatches=%d asyncCompleted=%d asyncApplied=%d asyncStale=%d asyncDropped=%d asyncInFlightSkips=%d bucketUpdates=%d rootHits=%d rootMisses=%d humanoidHits=%d humanoidMisses=%d spatialRefreshes=%d cellRecomputes=%d nearGoalRecomputes=%d dirtyTriggered=%d dirtySkipped=%d denseCells=%d denseFallbacks=%d",
+		"FastFlow profile | sharedCreates=%d sharedRefreshes=%d merges=%d tracked=%d activeSeparation=%d dirtyEntities=%d dirtyCells=%d localPairs=%d parallelDispatches=%d parallelPairs=%d parallelRows=%d pairSnapshots=%d pairSnapshotEntities=%d pairSnapshotPairs=%d pairSnapshotMs=%.3f pairSnapshotAsyncDispatches=%d pairSnapshotAsyncCompleted=%d pairSnapshotAsyncApplied=%d pairSnapshotAsyncStale=%d pairSnapshotAsyncDropped=%d pairSnapshotAsyncInFlightSkips=%d pairSnapshotAsyncErrorFallbacks=%d pairSnapshotChunkedCells=%d pairSnapshotTasks=%d pairSnapshotOverflowLocalFallbacks=%d pairBelowThreshold=%d pairFailedFallbacks=%d pairAsyncErrorFallbacks=%d velocityDispatches=%d velocityEntities=%d velocityRows=%d velocityAsyncDispatches=%d velocityAsyncCompleted=%d velocityAsyncApplied=%d velocityAsyncStale=%d velocityAsyncDropped=%d velocityAsyncInFlightSkips=%d velocityAsyncErrorFallbacks=%d parallelFallbacks=%d asyncDispatches=%d asyncCompleted=%d asyncApplied=%d asyncStale=%d asyncDropped=%d asyncInFlightSkips=%d bucketUpdates=%d rootHits=%d rootMisses=%d humanoidHits=%d humanoidMisses=%d spatialRefreshes=%d cellRecomputes=%d nearGoalRecomputes=%d dirtyTriggered=%d dirtySkipped=%d denseCells=%d denseFallbacks=%d",
 		counters.SharedFieldCreations,
 		counters.SharedFieldRefreshes,
 		counters.MergeAttempts,
@@ -139,6 +142,9 @@ function MovementService:_EmitFastFlowProfileCounters()
 		counters.ParallelPairSnapshotAsyncDroppedResults,
 		counters.ParallelPairSnapshotAsyncInFlightSkips,
 		counters.ParallelPairSnapshotAsyncErrorFallbacks,
+		counters.ParallelPairSnapshotChunkedCells,
+		counters.ParallelPairSnapshotTasksGenerated,
+		counters.ParallelPairSnapshotOverflowLocalFallbacks,
 		counters.ParallelPairBelowThresholdSkips,
 		counters.ParallelPairFailedFallbacks,
 		counters.ParallelPairAsyncErrorFallbacks,

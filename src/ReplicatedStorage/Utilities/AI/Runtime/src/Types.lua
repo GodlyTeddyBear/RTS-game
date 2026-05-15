@@ -80,6 +80,10 @@ export type THookContext = {
 	FrameContext: TFrameContext,
 	Services: { [string]: any },
 	Adapter: TActorAdapter,
+	NeedsFacts: boolean,
+	NeedsBehaviorContext: boolean,
+	NeedsServices: boolean,
+	RuntimeProfile: { [string]: any }?,
 }
 
 --[=[

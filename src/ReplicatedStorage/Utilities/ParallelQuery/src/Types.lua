@@ -14,7 +14,6 @@ export type TFieldType =
 	| "vector3" | "vector3i16"
 	| "cframe" | "cframef32" | "cframe18"
 	| "color3" | "color3b16"
-	| "buffer"
 
 export type TResultField = {
 	Name: string,
@@ -26,7 +25,8 @@ export type TOperationRow = { [string]: any } | { any }
 
 export type TOperationDefinition = {
 	Name: string,
-	ResultSchema: { TResultField },
+	ResultSchema: { TResultField }?,
+	GetResultSchema: ((operationConfig: any?) -> { TResultField })?,
 	CacheLocalMemory: boolean?,
 	Execute: (taskId: number, memory: SharedTable?, ...any) -> TOperationRow,
 	InitialLocalMemory: SharedTable?,
@@ -46,6 +46,7 @@ export type TParallelQueryConfig = {
 	ActorCount: number,
 	ActorParent: Instance?,
 	Operations: { ModuleScript },
+	OperationConfigs: { [string]: any }?,
 }
 
 export type TRunRequest = {

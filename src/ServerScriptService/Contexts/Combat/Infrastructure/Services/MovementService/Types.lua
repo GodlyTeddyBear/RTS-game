@@ -127,11 +127,17 @@ export type TFlowSeparationPairSnapshotBuildInput = {
 	CellEntityStarts: { [number]: number },
 	CellEntityCounts: { [number]: number },
 	EligibleEntityIds: { [number]: number },
+	TaskCellIndices: { [number]: number },
+	TaskOuterStartOffsets: { [number]: number },
+	TaskOuterEndOffsets: { [number]: number },
+	TaskEntityStartIndices: { [number]: number },
+	TaskEntityCounts: { [number]: number },
 	EntityPositionXById: { [number]: number },
 	EntityPositionYById: { [number]: number },
 	EntityRadiusById: { [number]: number },
 	KForce: number,
 	MinSeparationDistance: number,
+	RequiresLocalFallback: boolean,
 }
 
 export type TFlowSeparationPairSnapshotBuildAsyncResult = {
@@ -187,6 +193,9 @@ export type TFastFlowProfileCounters = {
 	ParallelPairSnapshotAsyncDroppedResults: number,
 	ParallelPairSnapshotAsyncInFlightSkips: number,
 	ParallelPairSnapshotAsyncErrorFallbacks: number,
+	ParallelPairSnapshotChunkedCells: number,
+	ParallelPairSnapshotTasksGenerated: number,
+	ParallelPairSnapshotOverflowLocalFallbacks: number,
 	ParallelPairBelowThresholdSkips: number,
 	ParallelPairFailedFallbacks: number,
 	ParallelPairAsyncErrorFallbacks: number,

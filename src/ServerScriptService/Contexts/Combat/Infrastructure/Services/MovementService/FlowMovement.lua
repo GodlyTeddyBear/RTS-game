@@ -594,10 +594,11 @@ function MovementService:_DispatchFlowVelocityWithParallelQueryAsync(
 	local promise: typeof(Promise.new(function() end))? = nil
 	local ok = pcall(function()
 		local runner = self:_GetOrCreateFlowSeparationParallelRunner(sepConfig)
+		local batchSize = self:_GetFlowVelocityParallelBatchSize(sepConfig)
 		runner:SetLocalMemory(FLOW_VELOCITY_OPERATION_NAME, self:_CreateFlowVelocitySolveSharedMemory(snapshot))
 		promise = runner:RunAsync(FLOW_VELOCITY_OPERATION_NAME, {
 			WorkCount = entityCount,
-			BatchSize = self:_GetFlowVelocityParallelBatchSize(sepConfig),
+			BatchSize = batchSize,
 			TimeoutSeconds = self:_GetFlowVelocityParallelTimeoutSeconds(sepConfig),
 		})
 	end)

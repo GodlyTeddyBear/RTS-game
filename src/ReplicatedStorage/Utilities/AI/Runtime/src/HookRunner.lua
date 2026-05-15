@@ -13,14 +13,15 @@ export type THookOutcome = {
 }
 
 local _MergeBucket
+local EMPTY_BUCKET = table.freeze({})
 
 local HookRunner = {}
 
 function HookRunner.Run(hooks: { THook }, entity: number, hookContext: THookContext): THookOutcome
 	-- Hooks contribute in order so later modules can intentionally override earlier buckets.
-	local facts = {}
-	local behaviorContext = {}
-	local mergedServices = table.clone(hookContext.Services)
+	local facts = if hookContext.NeedsFacts then {} else nil
+	local behaviorContext = if hookContext.NeedsBehaviorContext then {} else nil
+	local mergedServices = if hookContext.NeedsServices then table.clone(hookContext.Services) else nil
 
 	for index, hook in ipairs(hooks) do
 		local contribution = hook:Use(entity, hookContext)
@@ -37,14 +38,14 @@ function HookRunner.Run(hooks: { THook }, entity: number, hookContext: THookCont
 	end
 
 	return {
-		Facts = facts,
-		BehaviorContext = behaviorContext,
-		Services = mergedServices,
+		Facts = if facts ~= nil then facts else EMPTY_BUCKET,
+		BehaviorContext = if behaviorContext ~= nil then behaviorContext else EMPTY_BUCKET,
+		Services = if mergedServices ~= nil then mergedServices else EMPTY_BUCKET,
 	}
 end
 
-function _MergeBucket(target: { [string]: any }, source: { [string]: any }?)
-	if source == nil then
+function _MergeBucket(target: { [string]: any }?, source: { [string]: any }?)
+	if target == nil or source == nil then
 		return
 	end
 

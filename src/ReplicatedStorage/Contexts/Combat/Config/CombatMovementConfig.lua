@@ -118,37 +118,69 @@ CombatMovementConfig.FASTFLOW_PROFILING = table.freeze({
 	FastFlow advance only: overlaps flow steering with local pairwise soft collision (spatial hash + quadratic penetration push), matching FlowExample.lua-style separation.
 ]=]
 CombatMovementConfig.FLOW_SOFT_SEPARATION = table.freeze({
+	-- Master switch for the flow separation parallel path.
 	Enabled = true,
 	KForce = 80,
 	VelAlpha = 0.15,
 	MinSeparationDistance = 1e-4,
+	-- Skip isolation checks when nearby entities are obviously too far away to matter.
 	IsolationSkipEnabled = true,
+	-- Radius used by the isolation skip check.
 	IsolationSkipRadiusStuds = 6,
+	-- Enable the fallback path for very dense cells.
 	DenseCellFallbackEnabled = true,
+	-- Cell occupancy limit before dense-cell fallback kicks in.
 	DenseCellOccupancyThreshold = 10,
+	-- Reduce separation force near the goal so units can clump more naturally.
 	NearGoalSeparationScale = 0.35,
+	-- Radius around the goal where the reduced separation scale applies.
 	NearGoalSeparationRadiusStuds = 8,
+	-- Minimum movement before neighboring separation cells are marked dirty again.
 	NeighborDirtyMoveThresholdStuds = 2,
 	WalkSpeedWriteEpsilon = 0.05,
+	-- Let settled units stop actively pushing movement while they are already clumped.
 	ClumpIdleEnabled = true,
+	-- Radius inside which clump-idle behavior can activate.
 	ClumpIdleRadiusStuds = 8,
+	-- Extra padding used when checking whether settled units are touching.
 	ClumpTouchDistancePaddingStuds = 0.5,
+	-- Minimum time between shared flowfield refreshes for the same goal.
 	SharedFlowfieldRefreshCooldownSeconds = 0.35,
+	-- Master switch for worker-based separation and velocity solves.
 	ParallelEnabled = true,
-	ParallelActorCount = 64,
+	-- Number of worker actors available for separation jobs.
+	ParallelActorCount = 256,
+	-- Chunk size used when dispatching separation work to workers.
 	ParallelBatchSize = 64,
-	ParallelTimeoutSeconds = 0.02,
-	ParallelMinPairCount = 256,
+	-- Timeout for separation worker jobs.
+	ParallelTimeoutSeconds = 0.1,
+	-- Minimum pair count before pair solving is offloaded to workers.
+	ParallelMinPairCount = 8,
+	-- Master switch for worker-based pair snapshot building.
 	ParallelSnapshotBuildEnabled = true,
-	ParallelSnapshotBuildMinCandidateCount = 16,
+	-- Minimum candidate cell count before snapshot building is offloaded.
+	ParallelSnapshotBuildMinCandidateCount = 6,
+	-- Maximum entity count a snapshot-build worker task may inspect before the planner falls back locally.
+	ParallelSnapshotBuildMaxEntitiesPerTask = 256,
+	-- Oversized snapshot-build work is either chunked into multiple tasks or resolved locally.
+	ParallelSnapshotBuildOverflowMode = "Chunk",
+	-- Chunk size used when building pair snapshots in parallel.
 	ParallelSnapshotBuildBatchSize = 32,
-	ParallelSnapshotBuildTimeoutSeconds = 0.02,
-	ParallelMinVelocityEntityCount = 64,
-	ParallelVelocityBatchSize = 64,
-	ParallelVelocityTimeoutSeconds = 0.02,
+	-- Timeout for snapshot-building worker jobs.
+	ParallelSnapshotBuildTimeoutSeconds = 0.1,
+	-- Minimum entity count before velocity solving is offloaded to workers.
+	ParallelMinVelocityEntityCount = 6,
+	-- Chunk size used when dispatching velocity solve work.
+	ParallelVelocityBatchSize = 32,
+	-- Timeout for velocity solve worker jobs.
+	ParallelVelocityTimeoutSeconds = 0.1,
+	-- Allow the movement system to keep using async worker results.
 	ParallelAsyncEnabled = true,
-	ParallelAsyncMaxInFlightSeconds = 0.05,
+	-- Maximum time a worker job may stay in flight before it is dropped.
+	ParallelAsyncMaxInFlightSeconds = 0.1,
+	-- Reuse the most recent completed result while a newer one is still running.
 	ParallelAsyncUsePreviousResult = true,
+	-- Fall back to the local solver if the worker path errors.
 	ParallelFallbackOnError = true,
 })
 
