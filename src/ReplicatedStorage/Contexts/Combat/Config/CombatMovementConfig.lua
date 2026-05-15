@@ -127,8 +127,8 @@ CombatMovementConfig.FLOW_SOFT_SEPARATION = table.freeze({
 	IsolationSkipEnabled = true,
 	-- Radius used by the isolation skip check.
 	IsolationSkipRadiusStuds = 6,
-	-- Enable the fallback path for very dense cells.
-	DenseCellFallbackEnabled = true,
+	-- Deprecated: dense-cell local calculation fallback is disabled in parallel-only mode.
+	DenseCellFallbackEnabled = false,
 	-- Cell occupancy limit before dense-cell fallback kicks in.
 	DenseCellOccupancyThreshold = 10,
 	-- Reduce separation force near the goal so units can clump more naturally.
@@ -155,11 +155,11 @@ CombatMovementConfig.FLOW_SOFT_SEPARATION = table.freeze({
 	-- Timeout for separation worker jobs.
 	ParallelTimeoutSeconds = 0.1,
 	-- Minimum pair count before pair solving is offloaded to workers.
-	ParallelMinPairCount = 8,
+	ParallelMinPairCount = 1,
 	-- Master switch for worker-based pair snapshot building.
 	ParallelSnapshotBuildEnabled = true,
 	-- Minimum candidate cell count before snapshot building is offloaded.
-	ParallelSnapshotBuildMinCandidateCount = 6,
+	ParallelSnapshotBuildMinCandidateCount = 1,
 	-- Maximum entity count a snapshot-build worker task may inspect before the planner falls back locally.
 	ParallelSnapshotBuildMaxEntitiesPerTask = 256,
 	-- Oversized snapshot-build work is either chunked into multiple tasks or resolved locally.
@@ -169,7 +169,7 @@ CombatMovementConfig.FLOW_SOFT_SEPARATION = table.freeze({
 	-- Timeout for snapshot-building worker jobs.
 	ParallelSnapshotBuildTimeoutSeconds = 0.1,
 	-- Minimum entity count before velocity solving is offloaded to workers.
-	ParallelMinVelocityEntityCount = 6,
+	ParallelMinVelocityEntityCount = 1,
 	-- Chunk size used when dispatching velocity solve work.
 	ParallelVelocityBatchSize = 32,
 	-- Timeout for velocity solve worker jobs.
@@ -180,8 +180,8 @@ CombatMovementConfig.FLOW_SOFT_SEPARATION = table.freeze({
 	ParallelAsyncMaxInFlightSeconds = 0.1,
 	-- Reuse the most recent completed result while a newer one is still running.
 	ParallelAsyncUsePreviousResult = true,
-	-- Fall back to the local solver if the worker path errors.
-	ParallelFallbackOnError = true,
+	-- Deprecated: local calculation fallback is disabled in parallel-only mode.
+	ParallelFallbackOnError = false,
 })
 
 return table.freeze(CombatMovementConfig)

@@ -258,12 +258,6 @@ function MovementService:_ApplyFlowMoveDirection(entity: number, velocityXZ: Vec
 end
 
 
-function MovementService:_SolveFlowVelocityLocally(input: TFlowVelocitySolveInput): Vector2
-	local targetVelocityXZ = MovementMath.ClampVector2Magnitude(input.FlowXZ + input.SeparationXZ, input.WalkSpeed)
-	return input.PreviousVelocityXZ * (1 - input.VelAlpha) + targetVelocityXZ * input.VelAlpha
-end
-
-
 function MovementService:_CreateFlowVelocitySolveSnapshot(
 	inputs: { TFlowVelocitySolveInput }
 ): TFlowVelocitySolveSnapshot
@@ -427,11 +421,6 @@ function MovementService:_ShouldUsePreviousFlowVelocityParallelResult(sepConfig:
 end
 
 
-function MovementService:_ShouldFallbackFlowVelocityParallel(sepConfig: any): boolean
-	return sepConfig == nil or sepConfig.ParallelFallbackOnError ~= false
-end
-
-
 function MovementService:_ExpireFlowVelocityAsyncRequestIfNeeded(sepConfig: any)
 	local state = self._flowVelocityAsyncState
 	if state == nil or not state.InFlight then
@@ -475,60 +464,6 @@ function MovementService:_CompleteFlowVelocityAsyncRequest(result: TFlowVelocity
 end
 
 
-function MovementService:_SolveFlowVelocitySnapshotLocally(
-	snapshot: TFlowVelocitySolveSnapshot
-): { [number]: TFlowVelocityApplyResult }
-	local resultsByEntity = {}
-
-	for index, entity in ipairs(snapshot.EntityIds) do
-		local flowX = snapshot.FlowX[index]
-		local flowY = snapshot.FlowY[index]
-		local separationX = snapshot.SeparationX[index]
-		local separationY = snapshot.SeparationY[index]
-		local previousVelocityX = snapshot.PreviousVelocityX[index]
-		local previousVelocityY = snapshot.PreviousVelocityY[index]
-		local walkSpeed = snapshot.WalkSpeed[index]
-		local velAlpha = snapshot.VelAlpha[index]
-
-		if entity == nil then
-			continue
-		end
-
-		local movementState = self._movementByEntity[entity]
-		if movementState == nil or movementState.Mode ~= "Flow" then
-			continue
-		end
-		if type(flowX) ~= "number" or type(flowY) ~= "number" then
-			continue
-		end
-		if type(separationX) ~= "number" or type(separationY) ~= "number" then
-			continue
-		end
-		if type(previousVelocityX) ~= "number" or type(previousVelocityY) ~= "number" then
-			continue
-		end
-		if type(walkSpeed) ~= "number" or type(velAlpha) ~= "number" then
-			continue
-		end
-
-		local status, reason = self:_ApplyFlowMoveDirection(entity, self:_SolveFlowVelocityLocally({
-			Entity = entity,
-			FlowXZ = Vector2.new(flowX, flowY),
-			SeparationXZ = Vector2.new(separationX, separationY),
-			PreviousVelocityXZ = Vector2.new(previousVelocityX, previousVelocityY),
-			WalkSpeed = walkSpeed,
-			VelAlpha = velAlpha,
-		}))
-		resultsByEntity[entity] = {
-			Status = status,
-			Reason = reason,
-		}
-	end
-
-	return resultsByEntity
-end
-
-
 function MovementService:_ApplyCompletedFlowVelocityAsyncResult(
 	sepConfig: any
 ): { [number]: TFlowVelocityApplyResult }?
@@ -553,10 +488,7 @@ function MovementService:_ApplyCompletedFlowVelocityAsyncResult(
 	if result.Err ~= nil or result.Rows == nil then
 		self:_IncrementFastFlowProfileCounter("ParallelFallbacks")
 		self:_IncrementFastFlowProfileCounter("ParallelVelocityAsyncErrorFallbacks")
-		if self:_ShouldFallbackFlowVelocityParallel(sepConfig) then
-			return self:_SolveFlowVelocitySnapshotLocally(result.Snapshot)
-		end
-		return {}
+		return nil
 	end
 
 	local resultsByEntity = self:_ApplyFlowVelocityRows(result.Snapshot, result.Rows)
@@ -640,15 +572,18 @@ end
 
 function MovementService:_ResolvePendingFlowVelocityMoves(
 	inputs: { TFlowVelocitySolveInput }
-): { [number]: TFlowVelocityApplyResult }
-	local snapshot = self:_CreateFlowVelocitySolveSnapshot(inputs)
-
-	-- Keep the direct/local path synchronous for compatibility with non-scheduler callers.
-	local resultsByEntity = {}
-	for entity, result in self:_SolveFlowVelocitySnapshotLocally(snapshot) do
-		resultsByEntity[entity] = result
+): ()
+	if #inputs == 0 then
+		return
 	end
-	return resultsByEntity
+
+	local sepConfig = CombatMovementConfig.FLOW_SOFT_SEPARATION
+	if not self:_IsFlowSeparationParallelEnabled(sepConfig) or not self:_IsFlowVelocityParallelAsyncEnabled(sepConfig) then
+		return
+	end
+
+	local snapshot = self:_CreateFlowVelocitySolveSnapshot(inputs)
+	self:_DispatchFlowVelocityWithParallelQueryAsync(snapshot, sepConfig)
 end
 
 

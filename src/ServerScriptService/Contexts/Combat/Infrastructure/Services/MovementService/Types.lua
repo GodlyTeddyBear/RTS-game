@@ -137,7 +137,6 @@ export type TFlowSeparationPairSnapshotBuildInput = {
 	EntityRadiusById: { [number]: number },
 	KForce: number,
 	MinSeparationDistance: number,
-	RequiresLocalFallback: boolean,
 }
 
 export type TFlowSeparationPairSnapshotBuildAsyncResult = {

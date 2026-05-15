@@ -159,25 +159,7 @@ function MovementService:TickMovementFrame(_dt: number)
 	end
 
 	if #pendingFlowVelocityInputs > 0 then
-		local localResultsByEntity: { [number]: { Status: TAdvanceStatus, Reason: string? } }? = nil
-
-		if self:_IsFlowSeparationParallelEnabled(sepConfig) and self:_IsFlowVelocityParallelAsyncEnabled(sepConfig) then
-			local velocitySnapshot = self:_CreateFlowVelocitySolveSnapshot(pendingFlowVelocityInputs)
-			local dispatchStatus = self:_DispatchFlowVelocityWithParallelQueryAsync(velocitySnapshot, sepConfig)
-			if dispatchStatus == "BelowThreshold" or dispatchStatus == "Failed" then
-				localResultsByEntity = self:_ResolvePendingFlowVelocityMoves(pendingFlowVelocityInputs)
-			elseif dispatchStatus == "InFlight" and not self:_ShouldUsePreviousFlowVelocityParallelResult(sepConfig) then
-				localResultsByEntity = self:_ResolvePendingFlowVelocityMoves(pendingFlowVelocityInputs)
-			end
-		else
-			localResultsByEntity = self:_ResolvePendingFlowVelocityMoves(pendingFlowVelocityInputs)
-		end
-
-		if localResultsByEntity ~= nil then
-			for entity, result in localResultsByEntity do
-				frameResultsByEntity[entity] = result
-			end
-		end
+		self:_ResolvePendingFlowVelocityMoves(pendingFlowVelocityInputs)
 	end
 
 	for entity, result in frameResultsByEntity do
@@ -253,13 +235,18 @@ end
 
 
 function MovementService:TickAdvance(entity: number): ("Running" | "Success" | "Fail", string?)
+	local sepConfig = CombatMovementConfig.FLOW_SOFT_SEPARATION
+	local completedVelocityResults = self:_ApplyCompletedFlowVelocityAsyncResult(sepConfig)
+	if completedVelocityResults ~= nil then
+		local completedVelocityResult = completedVelocityResults[entity]
+		if completedVelocityResult ~= nil then
+			return completedVelocityResult.Status, completedVelocityResult.Reason
+		end
+	end
+
 	local status, reason, pendingVelocityInput = self:_TickAdvanceInternal(entity)
 	if pendingVelocityInput ~= nil then
-		local resultsByEntity = self:_ResolvePendingFlowVelocityMoves({ pendingVelocityInput })
-		local result = resultsByEntity[pendingVelocityInput.Entity]
-		if result ~= nil then
-			return result.Status, result.Reason
-		end
+		self:_ResolvePendingFlowVelocityMoves({ pendingVelocityInput })
 	end
 
 	return status, reason
