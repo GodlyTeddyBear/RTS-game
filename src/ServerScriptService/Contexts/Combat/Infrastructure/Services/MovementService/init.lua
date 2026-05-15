@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
 local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
 local MovementTypes = require(script.Types)
 
@@ -14,6 +15,7 @@ type TFlowSeparationRuntime = MovementTypes.TFlowSeparationRuntime
 type TFlowActorRefs = MovementTypes.TFlowActorRefs
 type TFastFlowProfileCounters = MovementTypes.TFastFlowProfileCounters
 type TFlowVelocitySolveInput = MovementTypes.TFlowVelocitySolveInput
+type TFlowVelocityAsyncState = MovementTypes.TFlowVelocityAsyncState
 
 --[=[
 	@class MovementService
@@ -49,6 +51,7 @@ function MovementService.new()
 	self._flowActorRefsByEntity = {} :: { [number]: TFlowActorRefs }
 	self._flowSeparationParallelRunner = nil
 	self._flowSeparationPairAsyncState = nil
+	self._flowVelocityAsyncState = nil :: TFlowVelocityAsyncState?
 	self._fastFlowProfileCounters = nil :: TFastFlowProfileCounters?
 	self._lastFastFlowProfileLogAt = 0
 	return self
@@ -89,6 +92,7 @@ function MovementService:ResetFastFlowRuntime()
 	table.clear(self._flowSettleAnchorGoalKeyByEntity)
 	self:_DestroyFlowSeparationParallelRunner()
 	self:_ClearFlowSeparationPairAsyncState()
+	self:_ClearFlowVelocityAsyncState()
 	self._flowSeparationRuntime = nil
 	self._lastFastFlowEndpointDiagnosticKey = nil
 end
@@ -116,6 +120,12 @@ end
 function MovementService:TickMovementFrame(_dt: number)
 	self._movementFrameId += 1
 
+	local sepConfig = CombatMovementConfig.FLOW_SOFT_SEPARATION
+
+	-- This method runs inside the scheduler, so it must never yield while staging async movement work.
+	local frameResultsByEntity: { [number]: { Status: TAdvanceStatus, Reason: string? } } =
+		self:_ApplyCompletedFlowVelocityAsyncResult(sepConfig) or {}
+
 	if next(self._movementByEntity) == nil then
 		return
 	end
@@ -131,25 +141,46 @@ function MovementService:TickMovementFrame(_dt: number)
 		local status, reason, pendingVelocityInput = self:_TickAdvanceInternal(entity)
 		if pendingVelocityInput ~= nil then
 			table.insert(pendingFlowVelocityInputs, pendingVelocityInput)
+			if frameResultsByEntity[entity] == nil then
+				frameResultsByEntity[entity] = {
+					Status = "Running",
+					Reason = nil,
+				}
+			end
 		else
-			self._advanceFrameResultByEntity[entity] = {
+			frameResultsByEntity[entity] = {
 				Status = status,
 				Reason = reason,
-				FrameId = self._movementFrameId,
 			}
 		end
 	end
 
-	if #pendingFlowVelocityInputs == 0 then
-		return
+	if #pendingFlowVelocityInputs > 0 then
+		local localResultsByEntity: { [number]: { Status: TAdvanceStatus, Reason: string? } }? = nil
+
+		if self:_IsFlowSeparationParallelEnabled(sepConfig) and self:_IsFlowVelocityParallelAsyncEnabled(sepConfig) then
+			local velocitySnapshot = self:_CreateFlowVelocitySolveSnapshot(pendingFlowVelocityInputs)
+			local dispatchStatus = self:_DispatchFlowVelocityWithParallelQueryAsync(velocitySnapshot, sepConfig)
+			if dispatchStatus == "BelowThreshold" or dispatchStatus == "Failed" then
+				localResultsByEntity = self:_ResolvePendingFlowVelocityMoves(pendingFlowVelocityInputs)
+			elseif dispatchStatus == "InFlight" and not self:_ShouldUsePreviousFlowVelocityParallelResult(sepConfig) then
+				localResultsByEntity = self:_ResolvePendingFlowVelocityMoves(pendingFlowVelocityInputs)
+			end
+		else
+			localResultsByEntity = self:_ResolvePendingFlowVelocityMoves(pendingFlowVelocityInputs)
+		end
+
+		if localResultsByEntity ~= nil then
+			for entity, result in localResultsByEntity do
+				frameResultsByEntity[entity] = result
+			end
+		end
 	end
 
-	local resultsByEntity = self:_ResolvePendingFlowVelocityMoves(pendingFlowVelocityInputs)
-	for _, input in ipairs(pendingFlowVelocityInputs) do
-		local result = resultsByEntity[input.Entity]
-		self._advanceFrameResultByEntity[input.Entity] = {
-			Status = if result ~= nil then result.Status else "Running",
-			Reason = if result ~= nil then result.Reason else nil,
+	for entity, result in frameResultsByEntity do
+		self._advanceFrameResultByEntity[entity] = {
+			Status = result.Status,
+			Reason = result.Reason,
 			FrameId = self._movementFrameId,
 		}
 	end
@@ -282,6 +313,7 @@ function MovementService:CleanupAll()
 	table.clear(self._advanceFrameResultByEntity)
 	self:_DestroyFlowSeparationParallelRunner()
 	self:_ClearFlowSeparationPairAsyncState()
+	self:_ClearFlowVelocityAsyncState()
 	self._flowSeparationRuntime = nil
 end
 

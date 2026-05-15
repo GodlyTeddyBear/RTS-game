@@ -227,6 +227,7 @@ end
 
 --[=[
     Dispatches one registered operation and decodes the flat callback payload into ordered row tables.
+    This is the low-level callback API. Prefer `RunAsync` when the caller can use Promise composition or `:await()`.
     @within ParallelQueryPackage
     @param operationName string -- Registered operation name.
     @param request TRunRequest -- Dispatch options for work count, batching, arguments, and timeout.
@@ -336,7 +337,16 @@ function ParallelQuery:Run(
 	end, false, workCount, failureBindable, table.unpack(argumentsList))
 end
 
-function ParallelQuery:RunAsync(operationName: string, request: TRunRequest)
+--[=[
+    Dispatches one registered operation and resolves with decoded row tables.
+    Rejects with the same structured error payload that `Run` passes to `onComplete`.
+    This is the canonical caller-facing API for Promise users.
+    @within ParallelQueryPackage
+    @param operationName string -- Registered operation name.
+    @param request TRunRequest -- Dispatch options for work count, batching, arguments, and timeout.
+    @return Promise -- Promise that resolves with decoded row tables or rejects with `TParallelQueryError`.
+]=]
+function ParallelQuery:RunAsync(operationName: string, request: TRunRequest): typeof(Promise.new(function() end))
 	self:_AssertAlive()
 
 	return Promise.new(function(resolve, reject)

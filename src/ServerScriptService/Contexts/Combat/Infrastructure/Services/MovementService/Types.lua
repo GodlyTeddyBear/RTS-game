@@ -103,6 +103,25 @@ export type TFlowVelocitySolveRow = {
 	ShouldMove: boolean,
 }
 
+export type TFlowVelocityAsyncResult = {
+	RequestId: number,
+	SessionUserId: number?,
+	Snapshot: TFlowVelocitySolveSnapshot,
+	Rows: { TFlowVelocitySolveRow }?,
+	Err: any?,
+}
+
+export type TFlowVelocityAsyncState = {
+	PendingRequestId: number,
+	LatestAppliedRequestId: number,
+	LatestCompletedResult: TFlowVelocityAsyncResult?,
+	InFlight: boolean,
+	InFlightRequestId: number?,
+	InFlightSessionUserId: number?,
+	InFlightSnapshot: TFlowVelocitySolveSnapshot?,
+	LastDispatchClock: number,
+}
+
 export type TFastFlowProfileCounters = {
 	SharedFieldCreations: number,
 	SharedFieldRefreshes: number,
@@ -127,9 +146,23 @@ export type TFastFlowProfileCounters = {
 	ParallelPairDispatches: number,
 	ParallelPairsDispatched: number,
 	ParallelPairRowsApplied: number,
+	ParallelPairSnapshotBuilds: number,
+	ParallelPairSnapshotEntities: number,
+	ParallelPairSnapshotPairs: number,
+	ParallelPairSnapshotBuildMilliseconds: number,
+	ParallelPairBelowThresholdSkips: number,
+	ParallelPairFailedFallbacks: number,
+	ParallelPairAsyncErrorFallbacks: number,
 	ParallelVelocityDispatches: number,
 	ParallelVelocityEntitiesDispatched: number,
 	ParallelVelocityRowsApplied: number,
+	ParallelVelocityAsyncDispatches: number,
+	ParallelVelocityAsyncCompleted: number,
+	ParallelVelocityAsyncApplied: number,
+	ParallelVelocityAsyncStaleResults: number,
+	ParallelVelocityAsyncDroppedResults: number,
+	ParallelVelocityAsyncInFlightSkips: number,
+	ParallelVelocityAsyncErrorFallbacks: number,
 	ParallelFallbacks: number,
 	ParallelAsyncDispatches: number,
 	ParallelAsyncCompleted: number,

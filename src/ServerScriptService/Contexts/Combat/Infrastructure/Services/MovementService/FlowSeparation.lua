@@ -2,11 +2,13 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Promise = require(ReplicatedStorage.Packages.Promise)
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
 local BoidsConfig = require(ReplicatedStorage.Contexts.Combat.Config.BoidsConfig)
 local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
 local MovementTypes = require(script.Parent.Types)
 local MovementMath = require(script.Parent.MovementMath)
+local FlowSeparationPairMath = require(script.Parent.FlowSeparationPairMath)
 
 type TFlowSeparationCoveredCell = MovementTypes.TFlowSeparationCoveredCell
 type TFlowSeparationEntityState = MovementTypes.TFlowSeparationEntityState
@@ -768,8 +770,6 @@ function MovementService:_GetOrCreateFlowSeparationParallelRunner(sepConfig: any
 		},
 	})
 	self._flowSeparationParallelRunner = runner
-	-- Let newly cloned actors bind operation listeners before the first dispatch.
-	task.wait()
 	return runner
 end
 
@@ -824,7 +824,8 @@ function MovementService:_ExpireFlowSeparationPairAsyncRequestIfNeeded(sepConfig
 		return
 	end
 
-	self:_DestroyFlowSeparationParallelRunner()
+	-- Pair and velocity operations share the same runner, so expiring a stale pair request
+	-- must not tear down unrelated in-flight velocity work.
 	state.InFlight = false
 	state.InFlightRequestId = nil
 	state.InFlightSessionUserId = nil
@@ -850,6 +851,7 @@ function MovementService:_CreateFlowSeparationPairSnapshot(
 	minSeparationDistance: number
 ): TFlowSeparationPairSnapshot
 	local runtime = self:_GetOrCreateFlowSeparationRuntime()
+	local buildStartedAt = os.clock()
 	local snapshot: TFlowSeparationPairSnapshot = {
 		EntityIds = {},
 		EntityIndexById = {},
@@ -881,6 +883,7 @@ function MovementService:_CreateFlowSeparationPairSnapshot(
 		return entityIndex
 	end
 
+	-- Build a pure snapshot before any pair math so workers never touch runtime tables directly.
 	for candidateCellKey in candidateCellSet do
 		local bucket = runtime.BucketsByCell[candidateCellKey]
 		if bucket == nil then
@@ -922,6 +925,10 @@ function MovementService:_CreateFlowSeparationPairSnapshot(
 		end
 	end
 
+	self:_IncrementFastFlowProfileCounter("ParallelPairSnapshotBuilds")
+	self:_IncrementFastFlowProfileCounter("ParallelPairSnapshotEntities", #snapshot.EntityIds)
+	self:_IncrementFastFlowProfileCounter("ParallelPairSnapshotPairs", #snapshot.PairA)
+	self:_IncrementFastFlowProfileCounter("ParallelPairSnapshotBuildMilliseconds", (os.clock() - buildStartedAt) * 1000)
 	return snapshot
 end
 
@@ -989,10 +996,14 @@ function MovementService:_ApplyFlowSeparationPairRows(
 	rows: TFlowSeparationPairRows,
 	scaleDeltas: boolean?
 )
+	-- Treat worker output as untrusted: ignore malformed or stale row references.
 	for _, row in ipairs(rows) do
 		local entityIndexA = row.EntityIndexA
 		local entityIndexB = row.EntityIndexB
 		if type(entityIndexA) ~= "number" or type(entityIndexB) ~= "number" then
+			continue
+		end
+		if snapshot.EntityIds[entityIndexA] == nil or snapshot.EntityIds[entityIndexB] == nil then
 			continue
 		end
 
@@ -1034,6 +1045,7 @@ function MovementService:_ApplyCompletedFlowSeparationPairAsyncResult(sepConfig:
 	state.LatestAppliedRequestId = result.RequestId
 	if result.Err ~= nil or result.Rows == nil then
 		self:_IncrementFastFlowProfileCounter("ParallelFallbacks")
+		self:_IncrementFastFlowProfileCounter("ParallelPairAsyncErrorFallbacks")
 		if self:_ShouldFallbackFlowSeparationParallel(sepConfig) then
 			self:_SolveFlowSeparationPairsSynchronously(result.Snapshot, true)
 		end
@@ -1047,6 +1059,7 @@ end
 
 function MovementService:_SolveFlowSeparationPairsSynchronously(snapshot: TFlowSeparationPairSnapshot, scaleDeltas: boolean?)
 	local runtime = self:_GetOrCreateFlowSeparationRuntime()
+	-- Keep the main-thread solver mathematically aligned with the worker protocol.
 	for pairIndex, entityIndexA in ipairs(snapshot.PairA) do
 		local entityIndexB = snapshot.PairB[pairIndex]
 		local entityA = snapshot.EntityIds[entityIndexA]
@@ -1054,11 +1067,18 @@ function MovementService:_SolveFlowSeparationPairsSynchronously(snapshot: TFlowS
 		local entityStateA = if entityA ~= nil then runtime.EntityStateById[entityA] else nil
 		local entityStateB = if entityB ~= nil then runtime.EntityStateById[entityB] else nil
 		if entityStateA ~= nil and entityStateB ~= nil and entityStateA.FlatPosition ~= nil and entityStateB.FlatPosition ~= nil then
-			local displacement = entityStateA.FlatPosition - entityStateB.FlatPosition
-			local distance = displacement.Magnitude
-			local penetration = entityStateA.Radius + entityStateB.Radius - distance
-			if penetration > 0 and distance > snapshot.MinSeparationDistance then
-				local separationDelta = snapshot.KForce * (displacement / distance) * penetration * penetration
+			local separationDeltaX, separationDeltaY, shouldApply = FlowSeparationPairMath.ComputePairDelta(
+				entityStateA.FlatPosition.X,
+				entityStateA.FlatPosition.Y,
+				entityStateB.FlatPosition.X,
+				entityStateB.FlatPosition.Y,
+				entityStateA.Radius,
+				entityStateB.Radius,
+				snapshot.KForce,
+				snapshot.MinSeparationDistance
+			)
+			if shouldApply then
+				local separationDelta = Vector2.new(separationDeltaX, separationDeltaY)
 				local nearGoalScaleA = if scaleDeltas == true then entityStateA.NearGoalScale else 1
 				local nearGoalScaleB = if scaleDeltas == true then entityStateB.NearGoalScale else 1
 				entityStateA.Separation += separationDelta * nearGoalScaleA
@@ -1098,6 +1118,7 @@ function MovementService:_DispatchFlowSeparationPairsWithParallelQueryAsync(
 ): "Dispatched" | "InFlight" | "BelowThreshold" | "Failed"
 	local pairCount = #snapshot.PairA
 	if pairCount < self:_GetFlowSeparationParallelMinPairCount(sepConfig) then
+		self:_IncrementFastFlowProfileCounter("ParallelPairBelowThresholdSkips")
 		return "BelowThreshold"
 	end
 
@@ -1115,32 +1136,45 @@ function MovementService:_DispatchFlowSeparationPairsWithParallelQueryAsync(
 	state.InFlightSessionUserId = sessionUserId
 	state.LastDispatchClock = os.clock()
 
+	local promise: typeof(Promise.new(function() end))? = nil
 	local ok = pcall(function()
 		local runner = self:_GetOrCreateFlowSeparationParallelRunner(sepConfig)
 		runner:SetLocalMemory(FLOW_SEPARATION_PAIR_OPERATION_NAME, self:_CreateFlowSeparationSharedMemory(snapshot))
-		runner:Run(FLOW_SEPARATION_PAIR_OPERATION_NAME, {
+		promise = runner:RunAsync(FLOW_SEPARATION_PAIR_OPERATION_NAME, {
 			WorkCount = pairCount,
 			BatchSize = self:_GetFlowSeparationParallelBatchSize(sepConfig),
 			TimeoutSeconds = self:_GetFlowSeparationParallelTimeoutSeconds(sepConfig),
-		}, function(resultRows, resultErr)
-			self:_CompleteFlowSeparationPairAsyncRequest({
-				RequestId = requestId,
-				SessionUserId = sessionUserId,
-				Snapshot = snapshot,
-				Rows = resultRows :: any,
-				Err = resultErr,
-			})
-		end)
+		})
 	end)
 
-	if not ok then
+	if not ok or promise == nil then
 		state.InFlight = false
 		state.InFlightRequestId = nil
 		state.InFlightSessionUserId = nil
 		self:_IncrementFastFlowProfileCounter("ParallelFallbacks")
+		self:_IncrementFastFlowProfileCounter("ParallelPairFailedFallbacks")
 		return "Failed"
 	end
 
+	promise:andThen(function(resultRows)
+		self:_CompleteFlowSeparationPairAsyncRequest({
+			RequestId = requestId,
+			SessionUserId = sessionUserId,
+			Snapshot = snapshot,
+			Rows = resultRows :: any,
+			Err = nil,
+		})
+	end):catch(function(resultErr)
+		self:_CompleteFlowSeparationPairAsyncRequest({
+			RequestId = requestId,
+			SessionUserId = sessionUserId,
+			Snapshot = snapshot,
+			Rows = nil,
+			Err = resultErr,
+		})
+	end)
+
+	-- The pairwise stage is the canonical async path: snapshot -> dispatch -> apply/fallback.
 	self:_IncrementFastFlowProfileCounter("ParallelPairDispatches")
 	self:_IncrementFastFlowProfileCounter("ParallelPairsDispatched", pairCount)
 	self:_IncrementFastFlowProfileCounter("ParallelAsyncDispatches")
@@ -1154,44 +1188,15 @@ function MovementService:_SolveFlowSeparationPairsWithParallelQuery(
 ): boolean
 	local pairCount = #snapshot.PairA
 	if pairCount < self:_GetFlowSeparationParallelMinPairCount(sepConfig) then
+		self:_IncrementFastFlowProfileCounter("ParallelPairBelowThresholdSkips")
 		return false
 	end
 
-	local rows: TFlowSeparationPairRows? = nil
-	local err: any = nil
-	local completed = false
-	local ok = pcall(function()
-		local runner = self:_GetOrCreateFlowSeparationParallelRunner(sepConfig)
-		runner:SetLocalMemory(FLOW_SEPARATION_PAIR_OPERATION_NAME, self:_CreateFlowSeparationSharedMemory(snapshot))
-		runner:Run(FLOW_SEPARATION_PAIR_OPERATION_NAME, {
-			WorkCount = pairCount,
-			BatchSize = self:_GetFlowSeparationParallelBatchSize(sepConfig),
-			TimeoutSeconds = self:_GetFlowSeparationParallelTimeoutSeconds(sepConfig),
-		}, function(resultRows, resultErr)
-			rows = resultRows :: any
-			err = resultErr
-			completed = true
-		end)
-	end)
-
-	if not ok then
-		self:_IncrementFastFlowProfileCounter("ParallelFallbacks")
-		return false
-	end
-
-	while not completed do
-		task.wait()
-	end
-
-	if err ~= nil or rows == nil then
-		self:_IncrementFastFlowProfileCounter("ParallelFallbacks")
-		return false
-	end
-
-	self:_IncrementFastFlowProfileCounter("ParallelPairDispatches")
-	self:_IncrementFastFlowProfileCounter("ParallelPairsDispatched", pairCount)
-	self:_ApplyFlowSeparationPairRows(snapshot, rows)
-	return true
+	-- The scheduler-owned movement tick cannot block for pair results, so the non-async branch
+	-- falls through to the existing local synchronous solver instead of waiting on ParallelQuery.
+	self:_IncrementFastFlowProfileCounter("ParallelFallbacks")
+	self:_IncrementFastFlowProfileCounter("ParallelPairFailedFallbacks")
+	return false
 end
 
 
@@ -1313,6 +1318,8 @@ function MovementService:_RecomputeDirtyFlowSeparation(sepConfig: any)
 		minSeparationDistance
 	)
 	local solvedWithParallel = false
+
+	-- Separate snapshot build, dispatch policy, and fallback so each stage can be profiled independently.
 	if self:_IsFlowSeparationParallelEnabled(sepConfig) then
 		if self:_IsFlowSeparationParallelAsyncEnabled(sepConfig) then
 			local asyncStatus = self:_DispatchFlowSeparationPairsWithParallelQueryAsync(pairSnapshot, sepConfig)

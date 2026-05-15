@@ -1,5 +1,9 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Promise = require(ReplicatedStorage.Packages.Promise)
+
 export type TFieldType =
 	"u8" | "u16" | "u32"
 	| "i8" | "i16" | "i32"
@@ -102,7 +106,7 @@ export type TParallelQueryRunner = {
 		self: TParallelQueryRunner,
 		operationName: string,
 		request: TRunRequest
-	) -> any,
+	) -> typeof(Promise.new(function() end)),
 	SetLocalMemory: (self: TParallelQueryRunner, operationName: string, sharedMemory: SharedTable) -> (),
 	Destroy: (self: TParallelQueryRunner) -> (),
 }

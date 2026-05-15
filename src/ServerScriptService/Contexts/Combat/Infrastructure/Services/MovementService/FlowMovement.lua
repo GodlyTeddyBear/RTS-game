@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
+local Promise = require(ReplicatedStorage.Packages.Promise)
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
 local MovementTypes = require(script.Parent.Types)
 local MovementMath = require(script.Parent.MovementMath)
@@ -12,6 +13,8 @@ type TAdvanceStatus = MovementTypes.TAdvanceStatus
 type TFlowVelocitySolveInput = MovementTypes.TFlowVelocitySolveInput
 type TFlowVelocitySolveSnapshot = MovementTypes.TFlowVelocitySolveSnapshot
 type TFlowVelocitySolveRow = MovementTypes.TFlowVelocitySolveRow
+type TFlowVelocityAsyncResult = MovementTypes.TFlowVelocityAsyncResult
+type TFlowVelocityAsyncState = MovementTypes.TFlowVelocityAsyncState
 
 local GOAL_POSITION_EPSILON = 0.01
 local FLOW_VELOCITY_OPERATION_NAME = "FlowVelocitySolve"
@@ -360,6 +363,11 @@ function MovementService:_ApplyFlowVelocityRows(
 			continue
 		end
 
+		local movementState = self._movementByEntity[entity]
+		if movementState == nil or movementState.Mode ~= "Flow" then
+			continue
+		end
+
 		local velocityX = row.VelocityX
 		local velocityY = row.VelocityY
 		if type(velocityX) ~= "number" or type(velocityY) ~= "number" then
@@ -378,76 +386,267 @@ function MovementService:_ApplyFlowVelocityRows(
 end
 
 
-function MovementService:_ResolveFlowVelocityWithParallelQuery(
-	snapshot: TFlowVelocitySolveSnapshot,
+function MovementService:_CreateFlowVelocityAsyncState(): TFlowVelocityAsyncState
+	return {
+		PendingRequestId = 0,
+		LatestAppliedRequestId = 0,
+		LatestCompletedResult = nil,
+		InFlight = false,
+		InFlightRequestId = nil,
+		InFlightSessionUserId = nil,
+		InFlightSnapshot = nil,
+		LastDispatchClock = 0,
+	}
+end
+
+
+function MovementService:_GetOrCreateFlowVelocityAsyncState(): TFlowVelocityAsyncState
+	local state = self._flowVelocityAsyncState
+	if state == nil then
+		state = self:_CreateFlowVelocityAsyncState()
+		self._flowVelocityAsyncState = state
+	end
+	return state
+end
+
+
+function MovementService:_ClearFlowVelocityAsyncState()
+	self._flowVelocityAsyncState = nil
+end
+
+
+function MovementService:_IsFlowVelocityParallelAsyncEnabled(sepConfig: any): boolean
+	return self:_IsFlowSeparationParallelEnabled(sepConfig)
+		and sepConfig ~= nil
+		and sepConfig.ParallelAsyncEnabled ~= false
+end
+
+
+function MovementService:_ShouldUsePreviousFlowVelocityParallelResult(sepConfig: any): boolean
+	return sepConfig == nil or sepConfig.ParallelAsyncUsePreviousResult ~= false
+end
+
+
+function MovementService:_ShouldFallbackFlowVelocityParallel(sepConfig: any): boolean
+	return sepConfig == nil or sepConfig.ParallelFallbackOnError ~= false
+end
+
+
+function MovementService:_ExpireFlowVelocityAsyncRequestIfNeeded(sepConfig: any)
+	local state = self._flowVelocityAsyncState
+	if state == nil or not state.InFlight then
+		return
+	end
+
+	local maxInFlightSeconds = self:_GetFlowSeparationParallelAsyncMaxInFlightSeconds(sepConfig)
+	if os.clock() - state.LastDispatchClock <= maxInFlightSeconds then
+		return
+	end
+
+	state.InFlight = false
+	state.InFlightRequestId = nil
+	state.InFlightSessionUserId = nil
+	state.InFlightSnapshot = nil
+	self:_IncrementFastFlowProfileCounter("ParallelFallbacks")
+	self:_IncrementFastFlowProfileCounter("ParallelVelocityAsyncDroppedResults")
+end
+
+
+function MovementService:_CompleteFlowVelocityAsyncRequest(result: TFlowVelocityAsyncResult)
+	local state = self._flowVelocityAsyncState
+	if state == nil then
+		return
+	end
+
+	if state.InFlightRequestId ~= result.RequestId then
+		self:_IncrementFastFlowProfileCounter("ParallelVelocityAsyncStaleResults")
+		return
+	end
+
+	if state.LatestCompletedResult ~= nil then
+		self:_IncrementFastFlowProfileCounter("ParallelVelocityAsyncDroppedResults")
+	end
+
+	state.InFlight = false
+	state.InFlightRequestId = nil
+	state.InFlightSessionUserId = nil
+	state.InFlightSnapshot = nil
+	state.LatestCompletedResult = result
+end
+
+
+function MovementService:_SolveFlowVelocitySnapshotLocally(
+	snapshot: TFlowVelocitySolveSnapshot
+): { [number]: TFlowVelocityApplyResult }
+	local resultsByEntity = {}
+
+	for index, entity in ipairs(snapshot.EntityIds) do
+		local flowX = snapshot.FlowX[index]
+		local flowY = snapshot.FlowY[index]
+		local separationX = snapshot.SeparationX[index]
+		local separationY = snapshot.SeparationY[index]
+		local previousVelocityX = snapshot.PreviousVelocityX[index]
+		local previousVelocityY = snapshot.PreviousVelocityY[index]
+		local walkSpeed = snapshot.WalkSpeed[index]
+		local velAlpha = snapshot.VelAlpha[index]
+
+		if entity == nil then
+			continue
+		end
+
+		local movementState = self._movementByEntity[entity]
+		if movementState == nil or movementState.Mode ~= "Flow" then
+			continue
+		end
+		if type(flowX) ~= "number" or type(flowY) ~= "number" then
+			continue
+		end
+		if type(separationX) ~= "number" or type(separationY) ~= "number" then
+			continue
+		end
+		if type(previousVelocityX) ~= "number" or type(previousVelocityY) ~= "number" then
+			continue
+		end
+		if type(walkSpeed) ~= "number" or type(velAlpha) ~= "number" then
+			continue
+		end
+
+		local status, reason = self:_ApplyFlowMoveDirection(entity, self:_SolveFlowVelocityLocally({
+			Entity = entity,
+			FlowXZ = Vector2.new(flowX, flowY),
+			SeparationXZ = Vector2.new(separationX, separationY),
+			PreviousVelocityXZ = Vector2.new(previousVelocityX, previousVelocityY),
+			WalkSpeed = walkSpeed,
+			VelAlpha = velAlpha,
+		}))
+		resultsByEntity[entity] = {
+			Status = status,
+			Reason = reason,
+		}
+	end
+
+	return resultsByEntity
+end
+
+
+function MovementService:_ApplyCompletedFlowVelocityAsyncResult(
 	sepConfig: any
-): { TFlowVelocitySolveRow }?
-	local entityCount = #snapshot.EntityIds
-	if entityCount < self:_GetFlowVelocityParallelMinEntityCount(sepConfig) then
+): { [number]: TFlowVelocityApplyResult }?
+	local state = self._flowVelocityAsyncState
+	if state == nil or state.LatestCompletedResult == nil then
 		return nil
 	end
 
-	local rows: { TFlowVelocitySolveRow }? = nil
-	local err: any = nil
-	local completed = false
+	local result = state.LatestCompletedResult
+	state.LatestCompletedResult = nil
+	self:_IncrementFastFlowProfileCounter("ParallelVelocityAsyncCompleted")
+
+	local runtime = self:_GetOrCreateFlowSeparationRuntime()
+	local isStaleResult = result.RequestId <= state.LatestAppliedRequestId
+		or result.SessionUserId ~= runtime.SessionUserId
+	if isStaleResult then
+		self:_IncrementFastFlowProfileCounter("ParallelVelocityAsyncStaleResults")
+		return nil
+	end
+
+	state.LatestAppliedRequestId = result.RequestId
+	if result.Err ~= nil or result.Rows == nil then
+		self:_IncrementFastFlowProfileCounter("ParallelFallbacks")
+		self:_IncrementFastFlowProfileCounter("ParallelVelocityAsyncErrorFallbacks")
+		if self:_ShouldFallbackFlowVelocityParallel(sepConfig) then
+			return self:_SolveFlowVelocitySnapshotLocally(result.Snapshot)
+		end
+		return {}
+	end
+
+	local resultsByEntity = self:_ApplyFlowVelocityRows(result.Snapshot, result.Rows)
+	self:_IncrementFastFlowProfileCounter("ParallelVelocityAsyncApplied")
+	return resultsByEntity
+end
+
+
+function MovementService:_DispatchFlowVelocityWithParallelQueryAsync(
+	snapshot: TFlowVelocitySolveSnapshot,
+	sepConfig: any
+): "Dispatched" | "InFlight" | "BelowThreshold" | "Failed"
+	local entityCount = #snapshot.EntityIds
+	if entityCount < self:_GetFlowVelocityParallelMinEntityCount(sepConfig) then
+		return "BelowThreshold"
+	end
+
+	local state = self:_GetOrCreateFlowVelocityAsyncState()
+	self:_ExpireFlowVelocityAsyncRequestIfNeeded(sepConfig)
+	if state.InFlight then
+		self:_IncrementFastFlowProfileCounter("ParallelVelocityAsyncInFlightSkips")
+		return "InFlight"
+	end
+
+	local runtime = self:_GetOrCreateFlowSeparationRuntime()
+	local requestId = state.PendingRequestId + 1
+	local sessionUserId = runtime.SessionUserId
+	state.PendingRequestId = requestId
+	state.InFlight = true
+	state.InFlightRequestId = requestId
+	state.InFlightSessionUserId = sessionUserId
+	state.InFlightSnapshot = snapshot
+	state.LastDispatchClock = os.clock()
+
+	local promise: typeof(Promise.new(function() end))? = nil
 	local ok = pcall(function()
 		local runner = self:_GetOrCreateFlowSeparationParallelRunner(sepConfig)
 		runner:SetLocalMemory(FLOW_VELOCITY_OPERATION_NAME, self:_CreateFlowVelocitySolveSharedMemory(snapshot))
-		runner:Run(FLOW_VELOCITY_OPERATION_NAME, {
+		promise = runner:RunAsync(FLOW_VELOCITY_OPERATION_NAME, {
 			WorkCount = entityCount,
 			BatchSize = self:_GetFlowVelocityParallelBatchSize(sepConfig),
 			TimeoutSeconds = self:_GetFlowVelocityParallelTimeoutSeconds(sepConfig),
-		}, function(resultRows, resultErr)
-			rows = resultRows :: any
-			err = resultErr
-			completed = true
-		end)
+		})
 	end)
 
-	if not ok then
+	if not ok or promise == nil then
+		state.InFlight = false
+		state.InFlightRequestId = nil
+		state.InFlightSessionUserId = nil
+		state.InFlightSnapshot = nil
 		self:_IncrementFastFlowProfileCounter("ParallelFallbacks")
-		return nil
+		self:_IncrementFastFlowProfileCounter("ParallelVelocityAsyncErrorFallbacks")
+		return "Failed"
 	end
 
-	while not completed do
-		task.wait()
-	end
-
-	if err ~= nil or rows == nil then
-		self:_IncrementFastFlowProfileCounter("ParallelFallbacks")
-		return nil
-	end
+	promise:andThen(function(resultRows)
+		self:_CompleteFlowVelocityAsyncRequest({
+			RequestId = requestId,
+			SessionUserId = sessionUserId,
+			Snapshot = snapshot,
+			Rows = resultRows :: any,
+			Err = nil,
+		})
+	end):catch(function(resultErr)
+		self:_CompleteFlowVelocityAsyncRequest({
+			RequestId = requestId,
+			SessionUserId = sessionUserId,
+			Snapshot = snapshot,
+			Rows = nil,
+			Err = resultErr,
+		})
+	end)
 
 	self:_IncrementFastFlowProfileCounter("ParallelVelocityDispatches")
 	self:_IncrementFastFlowProfileCounter("ParallelVelocityEntitiesDispatched", entityCount)
-	return rows
+	self:_IncrementFastFlowProfileCounter("ParallelVelocityAsyncDispatches")
+	return "Dispatched"
 end
 
 
 function MovementService:_ResolvePendingFlowVelocityMoves(
 	inputs: { TFlowVelocitySolveInput }
 ): { [number]: TFlowVelocityApplyResult }
-	local sepConfig = CombatMovementConfig.FLOW_SOFT_SEPARATION
 	local snapshot = self:_CreateFlowVelocitySolveSnapshot(inputs)
 
-	-- Solve final blended velocities in workers when the batch is large enough.
-	if self:_IsFlowSeparationParallelEnabled(sepConfig) then
-		local rows = self:_ResolveFlowVelocityWithParallelQuery(snapshot, sepConfig)
-		if rows ~= nil then
-			return self:_ApplyFlowVelocityRows(snapshot, rows)
-		end
-	end
-
-	-- Keep a synchronous fallback so movement remains stable on small batches and worker failures.
+	-- Keep the direct/local path synchronous for compatibility with non-scheduler callers.
 	local resultsByEntity = {}
-	for _, input in ipairs(inputs) do
-		local status, reason = self:_ApplyFlowMoveDirection(input.Entity, self:_SolveFlowVelocityLocally(input))
-		resultsByEntity[input.Entity] = {
-			Status = status,
-			Reason = reason,
-		}
+	for entity, result in self:_SolveFlowVelocitySnapshotLocally(snapshot) do
+		resultsByEntity[entity] = result
 	end
-
 	return resultsByEntity
 end
 

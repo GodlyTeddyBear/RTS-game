@@ -93,13 +93,15 @@ function Bootstrap.RegisterOperations(workerScript: Script)
 			failureBindable: BindableEvent?,
 			...
 		)
+			local packedArgs = table.pack(...)
+
 			if taskId > logicalWorkCount then
 				return defaults
 			end
 
 			local errorMessage: string? = nil
 			local ok, rowOrTraceback = xpcall(function()
-				return definition.Execute(taskId, memory, ...)
+				return definition.Execute(taskId, memory, table.unpack(packedArgs, 1, packedArgs.n))
 			end, function(err)
 				errorMessage = tostring(err)
 				return debug.traceback(errorMessage, 2)

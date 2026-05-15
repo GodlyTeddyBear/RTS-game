@@ -1,5 +1,11 @@
 --!strict
 
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local FlowSeparationPairMath = require(
+	ServerScriptService.Contexts.Combat.Infrastructure.Services.MovementService.FlowSeparationPairMath
+)
+
 local OPERATION_NAME = "FlowSeparationPair"
 
 local FlowSeparationPairOperation = {
@@ -59,12 +65,18 @@ function FlowSeparationPairOperation.Execute(taskId: number, memory: SharedTable
 		return _EmptyRow()
 	end
 
-	local dx = ax - bx
-	local dy = ay - by
-	local distance = math.sqrt(dx * dx + dy * dy)
 	local minSeparationDistance = if type(memory.MinSeparationDistance) == "number" then memory.MinSeparationDistance else 1e-4
-	local penetration = radiusA + radiusB - distance
-	if penetration <= 0 or distance <= minSeparationDistance then
+	local deltaX, deltaY, shouldApply = FlowSeparationPairMath.ComputePairDelta(
+		ax,
+		ay,
+		bx,
+		by,
+		radiusA,
+		radiusB,
+		if type(memory.KForce) == "number" then memory.KForce else 80,
+		minSeparationDistance
+	)
+	if not shouldApply then
 		return {
 			EntityIndexA = entityIndexA,
 			EntityIndexB = entityIndexB,
@@ -74,11 +86,6 @@ function FlowSeparationPairOperation.Execute(taskId: number, memory: SharedTable
 			DeltaBY = 0,
 		}
 	end
-
-	local kForce = if type(memory.KForce) == "number" then memory.KForce else 80
-	local force = kForce * penetration * penetration / distance
-	local deltaX = dx * force
-	local deltaY = dy * force
 
 	return {
 		EntityIndexA = entityIndexA,
