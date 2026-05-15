@@ -28,6 +28,7 @@ type TEntityFrameState = {
 	Entity: number,
 	ActorType: string,
 	Adapter: TActorAdapter,
+	ActionState: TActionState,
 	Result: TRunFrameEntityResult,
 	HookOutcome: THookOutcome,
 	BehaviorTree: TCompiledBehaviorTree?,
@@ -258,8 +259,12 @@ function Runtime:_BuildEntityStates(
 		}
 		table.insert(entityResults, result)
 
+		local actionStateSnapshot = adapter:GetActionState(entity)
+		Validation.ValidateActionState(actionStateSnapshot, "AiRuntime BuildEntityStates GetActionState")
+		local actionState = _CloneActionState(actionStateSnapshot)
+
 		-- Pull hook output before tree execution so facts and services are ready for the behavior tree.
-		local hookOutcome = self:_BuildHookOutcome(actorType, entity, adapter, frameContext, defects)
+		local hookOutcome = self:_BuildHookOutcome(actorType, entity, adapter, actionState, frameContext, defects)
 		local behaviorTree = adapter:GetCompiledBehaviorTree(entity)
 		Validation.ValidateBehaviorTree(actorType, entity, behaviorTree)
 
@@ -267,6 +272,7 @@ function Runtime:_BuildEntityStates(
 			Entity = entity,
 			ActorType = actorType,
 			Adapter = adapter,
+			ActionState = actionState,
 			Result = result,
 			HookOutcome = hookOutcome,
 			BehaviorTree = behaviorTree,
@@ -306,7 +312,7 @@ function Runtime:_CleanupActorAction(
 	Validation.ValidateActionState(actionStateSnapshot, "AiRuntime Cleanup GetActionState")
 	local actionState = _CloneActionState(actionStateSnapshot)
 	-- Reuse the normal hook merge path so cleanup sees the same service bag as frame execution.
-	local hookOutcome = self:_BuildHookOutcome(actorType, entity, adapter, frameContext, defects)
+	local hookOutcome = self:_BuildHookOutcome(actorType, entity, adapter, actionState, frameContext, defects)
 	local runtimeContext = {
 		DeltaTime = frameContext.DeltaTime,
 		Services = hookOutcome.Services,
@@ -370,6 +376,7 @@ end
 	@param actorType string
 	@param entity number
 	@param adapter TActorAdapter
+	@param actionState TActionState
 	@param frameContext TFrameContext
 	@param defects { TErrorSinkPayload }
 	@return THookOutcome
@@ -378,12 +385,10 @@ function Runtime:_BuildHookOutcome(
 	actorType: string,
 	entity: number,
 	adapter: TActorAdapter,
+	actionState: TActionState,
 	frameContext: TFrameContext,
 	defects: { TErrorSinkPayload }
 ): THookOutcome
-	local actionStateSnapshot = adapter:GetActionState(entity)
-	Validation.ValidateActionState(actionStateSnapshot, "AiRuntime HookContext GetActionState")
-	local actionState = _CloneActionState(actionStateSnapshot)
 	local baseServices = if frameContext.Services ~= nil then frameContext.Services else {}
 	local hookContext = {
 		Entity = entity,
@@ -468,6 +473,7 @@ function Runtime:_RunTransitionPhase(
 		local actionStateSnapshot = entityState.Adapter:GetActionState(entityState.Entity)
 		Validation.ValidateActionState(actionStateSnapshot, "AiRuntime StartPendingAction GetActionState")
 		local actionState = _CloneActionState(actionStateSnapshot)
+		entityState.ActionState = actionState
 		local runtimeContext = {
 			DeltaTime = frameContext.DeltaTime,
 			Services = entityState.HookOutcome.Services,
@@ -484,6 +490,7 @@ function Runtime:_RunTransitionPhase(
 				startResult.message,
 				nil
 			)
+			entityState.ActionState = _CloneActionState(nil)
 			entityState.Adapter:ClearActionState(entityState.Entity)
 			continue
 		end
@@ -502,6 +509,7 @@ function Runtime:_RunTransitionPhase(
 			-- No-change means the pending action should be dropped but the current action should stay intact.
 			actionState.PendingActionId = nil
 			actionState.PendingActionData = nil
+			entityState.ActionState = actionState
 			entityState.Adapter:SetActionState(entityState.Entity, actionState)
 			continue
 		end
@@ -510,6 +518,7 @@ function Runtime:_RunTransitionPhase(
 			or startStatus == RuntimeEnums.StartStatus.FailedToStart.Name
 		then
 			-- Missing or failed starts reset the adapter state so the entity does not retain a bad pending action.
+			entityState.ActionState = _CloneActionState(nil)
 			entityState.Adapter:ClearActionState(entityState.Entity)
 			continue
 		end
@@ -519,6 +528,7 @@ function Runtime:_RunTransitionPhase(
 
 		if commitResult.Status == RuntimeEnums.CommitStatus.Committed.Name then
 			-- A successful commit writes the updated action state back to the adapter.
+			entityState.ActionState = actionState
 			entityState.Adapter:SetActionState(entityState.Entity, actionState)
 			continue
 		end
@@ -536,6 +546,7 @@ function Runtime:_RunTransitionPhase(
 				CommitStatus = commitResult.Status,
 			},
 		})
+		entityState.ActionState = _CloneActionState(nil)
 		entityState.Adapter:ClearActionState(entityState.Entity)
 	end
 end
@@ -554,9 +565,7 @@ function Runtime:_RunActionPhase(
 	defects: { TErrorSinkPayload }
 )
 	for _, entityState in ipairs(entityStates) do
-		local actionStateSnapshot = entityState.Adapter:GetActionState(entityState.Entity)
-		Validation.ValidateActionState(actionStateSnapshot, "AiRuntime TickCurrentAction GetActionState")
-		local actionState = _CloneActionState(actionStateSnapshot)
+		local actionState = entityState.ActionState
 		entityState.HookOutcome.Services.ActionState = actionState
 		local runtimeContext = {
 			DeltaTime = frameContext.DeltaTime,
@@ -574,6 +583,7 @@ function Runtime:_RunActionPhase(
 				tickResult.message,
 				nil
 			)
+			entityState.ActionState = _CloneActionState(nil)
 			entityState.Adapter:ClearActionState(entityState.Entity)
 			continue
 		end
@@ -587,6 +597,7 @@ function Runtime:_RunActionPhase(
 
 		if resolveResult.Status == RuntimeEnums.ResolveStatus.Resolved.Name then
 			-- Resolved actions keep the updated state because the action may have advanced into a new terminal status.
+			entityState.ActionState = actionState
 			entityState.Adapter:SetActionState(entityState.Entity, actionState)
 			continue
 		end
@@ -605,6 +616,7 @@ function Runtime:_RunActionPhase(
 					ActionId = tickResult.value.ActionId,
 				},
 			})
+			entityState.ActionState = _CloneActionState(nil)
 			entityState.Adapter:ClearActionState(entityState.Entity)
 		end
 	end

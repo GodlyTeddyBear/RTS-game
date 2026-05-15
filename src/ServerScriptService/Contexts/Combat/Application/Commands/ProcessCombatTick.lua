@@ -2,7 +2,7 @@
 
 --[=[
 	@class ProcessCombatTick
-	Advances the combat runtime by one frame and refreshes derived status effects.
+	Advances the combat runtime by one frame.
 	@server
 ]=]
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -37,7 +37,6 @@ function ProcessCombatTick:Init(registry: any, _name: string)
 		_loopService = "CombatLoopService",
 		_behaviorRuntimeService = "CombatBehaviorRuntimeService",
 		_actorRegistryService = "CombatActorRegistryService",
-		_statusService = "StatusService",
 	})
 end
 
@@ -68,8 +67,6 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 			error(frameResult)
 		end
 		self:_NotifyActorResults(frameResult)
-		-- Recompute enemy move speed after all actor actions so status effects stay in sync with the frame.
-		self._statusService:EvaluateEnemyMoveSpeedEffects()
 
 		return Ok(true)
 	end, self:_Label())

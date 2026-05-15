@@ -309,6 +309,36 @@ end
 
 --[=[
 	@within CombatLoopService
+	Iterates active combat session ids without cloning session snapshots.
+	Iteration stops early when `callback` returns `false`.
+	@param callback (userId: number) -> (boolean?) -- Callback invoked for each active session id.
+]=]
+function CombatLoopService:ForEachSession(callback: (userId: number) -> (boolean?))
+	for userId in pairs(self.ActiveCombats) do
+		if callback(userId) == false then
+			break
+		end
+	end
+end
+
+--[=[
+	@within CombatLoopService
+	Iterates runnable combat session ids without cloning session snapshots.
+	Iteration stops early when `callback` returns `false`.
+	@param callback (userId: number) -> (boolean?) -- Callback invoked for each runnable session id.
+]=]
+function CombatLoopService:ForEachRunnableSession(callback: (userId: number) -> (boolean?))
+	for userId, record in pairs(self.ActiveCombats) do
+		if record.Machine:GetState() == "Active" and not record.IsPaused then
+			if callback(userId) == false then
+				break
+			end
+		end
+	end
+end
+
+--[=[
+	@within CombatLoopService
 	Returns the current state for one combat session without removing it.
 	@param userId number -- User id whose session should be read.
 	@return InternalCombatSessionState? -- Session state or `nil` when no session exists.

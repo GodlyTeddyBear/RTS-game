@@ -172,12 +172,10 @@ function CombatContext:KnitStart()
 
 	CombatBaseContext:RegisterSchedulerSystem("MovementTick", function()
 		local runnableSessionUserId = nil :: number?
-		for userId in pairs(self._combatLoopService:GetSessions()) do
-			if self._combatLoopService:IsRunnable(userId) then
-				runnableSessionUserId = userId
-				break
-			end
-		end
+		self._combatLoopService:ForEachRunnableSession(function(userId: number)
+			runnableSessionUserId = userId
+			return false
+		end)
 
 		if runnableSessionUserId == nil then
 			return
@@ -193,8 +191,19 @@ function CombatContext:KnitStart()
 	CombatBaseContext:RegisterSchedulerSystem("CombatTick", function()
 		local dt = CombatBaseContext:GetSchedulerDeltaTime()
 		self._hitboxService:Tick(dt)
-		for userId in pairs(self._combatLoopService:GetSessions()) do
-			self._processCombatTickCommand:Execute(userId, dt)
+
+		local didRunCombatFrame = false
+		self._combatLoopService:ForEachSession(function(userId: number)
+			local tickResult = self._processCombatTickCommand:Execute(userId, dt)
+			if tickResult.success and tickResult.value then
+				didRunCombatFrame = true
+			end
+			return nil
+		end)
+
+		if didRunCombatFrame then
+			-- Enemy move speed is derived from shared live combat state, so refresh it once per frame.
+			self._statusService:EvaluateEnemyMoveSpeedEffects()
 		end
 	end)
 
