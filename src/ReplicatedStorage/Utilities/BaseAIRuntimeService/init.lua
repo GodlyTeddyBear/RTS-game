@@ -20,6 +20,8 @@ export type TBaseAIRuntimeConfig = {
 	ActorRegistryServiceName: string,
 	BaseHooks: { any },
 	Errors: TBaseAIRuntimeErrors,
+	UseDirectCombatHookPath: boolean?,
+	UseCachedActiveEntityProvider: boolean?,
 }
 
 export type TBaseAIRuntimeService = typeof(setmetatable({} :: {
@@ -31,6 +33,8 @@ export type TBaseAIRuntimeService = typeof(setmetatable({} :: {
 	_actorRegistryServiceName: string,
 	_baseHooks: { any },
 	_errors: TBaseAIRuntimeErrors,
+	_useDirectCombatHookPath: boolean,
+	_useCachedActiveEntityProvider: boolean,
 }, {} :: any))
 
 type Result<T> = Result.Result<T>
@@ -62,6 +66,8 @@ function BaseAIRuntimeService.new(config: TBaseAIRuntimeConfig): TBaseAIRuntimeS
 	self._actorRegistryServiceName = config.ActorRegistryServiceName
 	self._baseHooks = table.clone(config.BaseHooks)
 	self._errors = config.Errors
+	self._useDirectCombatHookPath = config.UseDirectCombatHookPath == true
+	self._useCachedActiveEntityProvider = config.UseCachedActiveEntityProvider == true
 
 	return self
 end
@@ -103,6 +109,8 @@ function BaseAIRuntimeService:StartRuntime(): Result<boolean>
 			Commands = mergedInputs.Commands,
 			Hooks = mergedInputs.Hooks,
 			ErrorSink = self:_BuildErrorSink(),
+			UseDirectCombatHookPath = self._useDirectCombatHookPath,
+			UseCachedActiveEntityProvider = self._useCachedActiveEntityProvider,
 		})
 
 		buildStage = "RegisterExecutors"
@@ -364,11 +372,17 @@ function BaseAIRuntimeService:_AppendHooks(target: { any }, hooks: { any }?)
 end
 
 function BaseAIRuntimeService:_CreateRegistryAdapter(actorType: string): any
+	local queryActiveEntities = if self._useCachedActiveEntityProvider
+		then function(_frameContext: any): { number }
+			return self._actorRegistryService:QueryCachedActiveRuntimeIds(actorType)
+		end
+		else function(_frameContext: any): { number }
+			return self._actorRegistryService:QueryActiveRuntimeIds(actorType)
+		end
+
 	return AI.CreateAdapter({
 		ActorLabel = actorType,
-		QueryActiveEntities = function(_frameContext: any): { number }
-			return self._actorRegistryService:QueryActiveRuntimeIds(actorType)
-		end,
+		QueryActiveEntities = queryActiveEntities,
 		GetCompiledBehaviorTree = function(runtimeId: number): any?
 			return self._actorRegistryService:GetCompiledBehaviorTree(runtimeId)
 		end,

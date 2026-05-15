@@ -222,6 +222,8 @@ export type TConfig = {
 	Commands: TCommandRegistry,
 	Hooks: { THook },
 	ErrorSink: ((payload: TErrorSinkPayload) -> ())?,
+	UseDirectCombatHookPath: boolean?,
+	UseCachedActiveEntityProvider: boolean?,
 }
 
 --[=[

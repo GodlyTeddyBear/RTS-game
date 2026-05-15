@@ -28,6 +28,8 @@ function CombatBehaviorRuntimeService.new()
 			ActorAdapterHook,
 		},
 		Errors = Errors,
+		UseDirectCombatHookPath = true,
+		UseCachedActiveEntityProvider = true,
 	})
 	return setmetatable(self, CombatBehaviorRuntimeService)
 end

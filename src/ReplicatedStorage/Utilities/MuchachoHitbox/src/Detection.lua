@@ -44,6 +44,22 @@ function Detection.TrackHumanoidHit(hitbox: THitbox, humanoid: Humanoid): boolea
 	return true
 end
 
+function Detection.ClearTouchState(hitbox: THitbox)
+	hitbox.TouchingParts = {}
+	hitbox.TouchingPartsSet = {}
+end
+
+function Detection.CastNoHits(hitbox: THitbox)
+	local previousTouchingPartsSet = hitbox.TouchingPartsSet
+	if previousTouchingPartsSet ~= nil and next(previousTouchingPartsSet) ~= nil then
+		for part in pairs(previousTouchingPartsSet) do
+			hitbox.TouchEnded:Fire(part)
+		end
+	end
+
+	Detection.ClearTouchState(hitbox)
+end
+
 function Detection.Cast(hitbox: THitbox, parts: { BasePart })
 	local currentParts = table.create(#parts)
 	local currentPartsSet = {}

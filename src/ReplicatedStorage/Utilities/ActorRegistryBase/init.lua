@@ -32,6 +32,8 @@ function ActorRegistryBase.new()
 	self._recordsByRuntimeId = {}
 	self._runtimeIdsByHandle = {}
 	self._runtimeIdsByActorType = {}
+	self._activeRuntimeIdsByActorType = {}
+	self._activeRuntimeIdMembershipByActorType = {}
 	self._pendingActorPayloadsByHandle = {}
 	self._nextRuntimeId = 0
 	self._runtimeStarted = false
@@ -73,6 +75,8 @@ function ActorRegistryBase:RegisterActorType(payload: any): any
 	-- Store the validated payload and initialize the runtime-id index for this type.
 	self._actorTypes[actorType] = self:_BuildStoredActorTypePayload(payload)
 	self._runtimeIdsByActorType[actorType] = {}
+	self._activeRuntimeIdsByActorType[actorType] = {}
+	self._activeRuntimeIdMembershipByActorType[actorType] = {}
 
 	return Ok(true)
 end
@@ -104,6 +108,7 @@ function ActorRegistryBase:RegisterActor(payload: any, buildContext: any?): any
 	self._recordsByRuntimeId[runtimeId] = record
 	self._runtimeIdsByHandle[payload.ActorHandle] = runtimeId
 	table.insert(self._runtimeIdsByActorType[payload.ActorType], runtimeId)
+	self:_TryAddActiveRuntimeId(record)
 
 	return Ok(payload.ActorHandle)
 end
@@ -332,6 +337,32 @@ function ActorRegistryBase:QueryActiveRuntimeIds(actorType: string): { number }
 end
 
 --[=[
+    Returns cached active runtime ids for one actor type, revalidating only the cached active set.
+    @within ActorRegistryBase
+    @param actorType string -- Actor type to query
+    @return { number } -- Active runtime ids in registration order
+]=]
+function ActorRegistryBase:QueryCachedActiveRuntimeIds(actorType: string): { number }
+	local activeRuntimeIds = self._activeRuntimeIdsByActorType[actorType]
+	if activeRuntimeIds == nil then
+		return {}
+	end
+
+	local index = 1
+	while index <= #activeRuntimeIds do
+		local runtimeId = activeRuntimeIds[index]
+		local record = self._recordsByRuntimeId[runtimeId]
+		if record ~= nil and self:_IsRecordActive(record) then
+			index += 1
+		else
+			self:_RemoveActiveRuntimeId(actorType, runtimeId)
+		end
+	end
+
+	return activeRuntimeIds
+end
+
+--[=[
     Clears all registry state and resets runtime counters.
     @within ActorRegistryBase
 ]=]
@@ -340,6 +371,8 @@ function ActorRegistryBase:ClearAll()
 	table.clear(self._recordsByRuntimeId)
 	table.clear(self._runtimeIdsByHandle)
 	table.clear(self._runtimeIdsByActorType)
+	table.clear(self._activeRuntimeIdsByActorType)
+	table.clear(self._activeRuntimeIdMembershipByActorType)
 	table.clear(self._pendingActorPayloadsByHandle)
 	self._nextRuntimeId = 0
 	self._runtimeStarted = false
@@ -355,6 +388,7 @@ function ActorRegistryBase:_RemoveRuntimeId(runtimeId: number)
 	self._recordsByRuntimeId[runtimeId] = nil
 	self._runtimeIdsByHandle[record.ActorHandle] = nil
 	self._pendingActorPayloadsByHandle[record.ActorHandle] = nil
+	self:_RemoveActiveRuntimeId(record.ActorType, runtimeId)
 
 	local runtimeIds = self._runtimeIdsByActorType[record.ActorType]
 	if runtimeIds == nil then
@@ -364,6 +398,46 @@ function ActorRegistryBase:_RemoveRuntimeId(runtimeId: number)
 	for index, storedRuntimeId in ipairs(runtimeIds) do
 		if storedRuntimeId == runtimeId then
 			table.remove(runtimeIds, index)
+			return
+		end
+	end
+end
+
+function ActorRegistryBase:_TryAddActiveRuntimeId(record: any)
+	local actorType = record.ActorType
+	local activeRuntimeIds = self._activeRuntimeIdsByActorType[actorType]
+	local membershipByRuntimeId = self._activeRuntimeIdMembershipByActorType[actorType]
+	if activeRuntimeIds == nil or membershipByRuntimeId == nil then
+		return
+	end
+
+	if membershipByRuntimeId[record.RuntimeId] == true then
+		return
+	end
+
+	if not self:_IsRecordActive(record) then
+		return
+	end
+
+	membershipByRuntimeId[record.RuntimeId] = true
+	table.insert(activeRuntimeIds, record.RuntimeId)
+end
+
+function ActorRegistryBase:_RemoveActiveRuntimeId(actorType: string, runtimeId: number)
+	local membershipByRuntimeId = self._activeRuntimeIdMembershipByActorType[actorType]
+	if membershipByRuntimeId == nil or membershipByRuntimeId[runtimeId] ~= true then
+		return
+	end
+
+	membershipByRuntimeId[runtimeId] = nil
+	local activeRuntimeIds = self._activeRuntimeIdsByActorType[actorType]
+	if activeRuntimeIds == nil then
+		return
+	end
+
+	for index, activeRuntimeId in ipairs(activeRuntimeIds) do
+		if activeRuntimeId == runtimeId then
+			table.remove(activeRuntimeIds, index)
 			return
 		end
 	end

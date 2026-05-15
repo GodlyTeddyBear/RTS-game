@@ -1,8 +1,8 @@
 --!strict
 
 local Detection = require(script.Parent:WaitForChild("Detection"))
+local FilterRegistry = require(script.Parent:WaitForChild("FilterRegistry"))
 local Query = require(script.Parent:WaitForChild("Query"))
-local Runner = require(script.Parent:WaitForChild("Runner"))
 local Source = require(script.Parent:WaitForChild("Source"))
 local Visualizer = require(script.Parent:WaitForChild("Visualizer"))
 local Types = require(script.Parent.Parent.Types)
@@ -18,23 +18,43 @@ function Lifecycle.FindHitbox(key: string): THitbox?
 	return activeHitboxes[key]
 end
 
-function Lifecycle.Step(hitbox: THitbox, deltaTime: number)
+function Lifecycle.IsStepDue(hitbox: THitbox, deltaTime: number): boolean
 	local updateInterval = hitbox.UpdateInterval
 	if type(updateInterval) == "number" and updateInterval > 0 then
 		local accumulator = hitbox._UpdateAccumulator or 0
 		accumulator += deltaTime
 		hitbox._UpdateAccumulator = accumulator
 		if accumulator < updateInterval then
-			return
+			return false
 		end
 
 		hitbox._UpdateAccumulator = 0
 	end
 
+	return true
+end
+
+function Lifecycle.ResolveStep(hitbox: THitbox): CFrame
 	local _, hitboxCFrame = Source.ResolveQueryState(hitbox)
 	Visualizer.Visualize(hitbox, hitboxCFrame)
+	return hitboxCFrame
+end
+
+function Lifecycle.RunSerialDetection(hitbox: THitbox, hitboxCFrame: CFrame)
 	local parts = Query.CastSpatialQuery(hitbox, hitboxCFrame)
 	Detection.Cast(hitbox, parts)
+end
+
+function Lifecycle.RunNoHitDetection(hitbox: THitbox)
+	Detection.CastNoHits(hitbox)
+end
+
+function Lifecycle.Step(hitbox: THitbox, deltaTime: number)
+	if not Lifecycle.IsStepDue(hitbox, deltaTime) then
+		return
+	end
+
+	Lifecycle.RunSerialDetection(hitbox, Lifecycle.ResolveStep(hitbox))
 end
 
 function Lifecycle.Start(hitbox: THitbox, runner: THitboxRunner?)
@@ -42,6 +62,7 @@ function Lifecycle.Start(hitbox: THitbox, runner: THitboxRunner?)
 		error("A hitbox with this Key has already been started. Change the key if you want to start this hitbox.")
 	end
 
+	local Runner = require(script.Parent:WaitForChild("Runner"))
 	local activeRunner = runner or Runner.GetInternal()
 	activeHitboxes[hitbox.Key] = hitbox
 	hitbox._Runner = activeRunner
@@ -67,6 +88,8 @@ function Lifecycle.Clear(hitbox: THitbox)
 	end
 
 	activeHitboxes[hitbox.Key] = nil
+
+	FilterRegistry.RemoveToken(hitbox.Key)
 
 	if hitbox._Box ~= nil then
 		hitbox._Box:Destroy()

@@ -7,7 +7,7 @@ local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local MuchachoHitbox = require(ReplicatedStorage.Utilities.MuchachoHitbox)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 
-local HITBOX_PROFILING_ENABLED = false
+local HITBOX_PROFILING_ENABLED = true
 local profileBegin = debug.profilebegin
 local profileEnd = debug.profileend
 local createProfileTag = "Combat:HitboxService:Create"
@@ -31,11 +31,6 @@ export type THitEntity = {
 	Entity: number,
 }
 
---[=[
-	@class HitboxService
-	Owns combat hitbox spawning, overlap capture, and hit tracking for melee attacks.
-	@server
-]=]
 local HitboxService = {}
 HitboxService.__index = HitboxService
 
@@ -60,17 +55,17 @@ local function EnsureHitboxFolder(): Folder
 	if existing and existing:IsA("Folder") then
 		return existing :: Folder
 	end
+
 	local folder = Instance.new("Folder")
 	folder.Name = "Hitboxes"
 	folder.Parent = Workspace
 	return folder
 end
 
---[=[
-	@within HitboxService
-	Creates a new hitbox service with empty tracking tables and a shared workspace folder.
-	@return HitboxService -- Service instance used to spawn and track combat hitboxes.
-]=]
+local function _buildHitKey(kind: TEntityKind, entity: number): string
+	return string.format("%s:%d", kind, entity)
+end
+
 function HitboxService.new()
 	local self = setmetatable({}, HitboxService)
 	self._janitors = {} :: { [THitboxHandle]: any }
@@ -82,20 +77,10 @@ function HitboxService.new()
 	return self
 end
 
---[=[
-	@within HitboxService
-	Resolves entity factories needed to map hit parts back to combat entities.
-	@param registry any -- Registry instance supplied by the context bootstrap.
-	@param _name string -- Registry key used to register the service.
-]=]
 function HitboxService:Init(registry: any, _name: string)
 	self._registry = registry
 end
 
---[=[
-	@within HitboxService
-	Stores the context dependencies used while translating touches into combat targets.
-]=]
 function HitboxService:Start()
 	if self._runner == nil then
 		self._runner = MuchachoHitbox.CreateRunner()
@@ -115,16 +100,10 @@ function HitboxService:Tick(dt: number)
 	runner:Step(dt)
 end
 
-local function _buildHitKey(kind: TEntityKind, entity: number): string
-	return string.format("%s:%d", kind, entity)
-end
-
--- Resolves the model that should own the spawned hitbox.
 function HitboxService:_ResolveAttackerModel(_entity: number, _kind: TEntityKind): Model?
 	return nil
 end
 
--- Maps a touched part back to a combat entity so hitbox callbacks stay domain-aware.
 function HitboxService:_ResolveTouchedEntity(hitPart: BasePart): THitEntity?
 	for _, resolver in ipairs(self._targetResolvers) do
 		local hitEntity = resolver(hitPart)
@@ -136,14 +115,6 @@ function HitboxService:_ResolveTouchedEntity(hitPart: BasePart): THitEntity?
 	return nil
 end
 
---[=[
-	@within HitboxService
-	Creates and starts a combat attack hitbox attached to the attacker model.
-	@param attackerEntity number -- Entity id that owns the hitbox.
-	@param attackerKind TEntityKind -- Entity kind used to resolve the model.
-	@param config THitboxConfig -- Shape and detection settings for the hitbox.
-	@return { success: boolean, handle: THitboxHandle?, reason: string? } -- Spawn result or failure reason.
-]=]
 function HitboxService:CreateAttackHitbox(
 	attackerEntity: number,
 	attackerKind: TEntityKind,
@@ -231,14 +202,6 @@ function HitboxService:CreateAttackHitboxForModel(
 	end)
 end
 
---[=[
-	@within HitboxService
-	Returns whether this hitbox already touched a specific target entity.
-	@param handle THitboxHandle -- Hitbox handle to inspect.
-	@param targetEntity number -- Target entity id to check.
-	@param targetKind TEntityKind -- Target kind to check.
-	@return boolean -- Whether the target was already captured.
-]=]
 function HitboxService:DidHitTarget(handle: THitboxHandle, targetEntity: number, targetKind: TEntityKind): boolean
 	local hitKeyMap = self._hitEntityKeys[handle]
 	if hitKeyMap == nil then
@@ -248,31 +211,14 @@ function HitboxService:DidHitTarget(handle: THitboxHandle, targetEntity: number,
 	return hitKeyMap[_buildHitKey(targetKind, targetEntity)] == true
 end
 
---[=[
-	@within HitboxService
-	Returns whether this hitbox has already touched the base.
-	@param handle THitboxHandle -- Hitbox handle to inspect.
-	@return boolean -- Whether the base was already captured.
-]=]
 function HitboxService:DidHitBase(handle: THitboxHandle): boolean
 	return self:DidHitTarget(handle, 0, "Base")
 end
 
---[=[
-	@within HitboxService
-	Returns the entities captured by one hitbox handle in touch order.
-	@param handle THitboxHandle -- Hitbox handle to inspect.
-	@return { THitEntity } -- Captured entities for the hitbox.
-]=]
 function HitboxService:GetHitEntities(handle: THitboxHandle): { THitEntity }
 	return self._hitEntities[handle] or {}
 end
 
---[=[
-	@within HitboxService
-	Destroys one hitbox and clears all tracking for its handle.
-	@param handle THitboxHandle -- Hitbox handle to destroy.
-]=]
 function HitboxService:DestroyHitbox(handle: THitboxHandle)
 	_runProfiled(destroyProfileTag, function()
 		local janitor = self._janitors[handle]
@@ -288,10 +234,6 @@ function HitboxService:DestroyHitbox(handle: THitboxHandle)
 	end)
 end
 
---[=[
-	@within HitboxService
-	Destroys every tracked hitbox so combat teardown leaves no active overlap handlers behind.
-]=]
 function HitboxService:CleanupAll()
 	local handles = {}
 	for handle in self._janitors do

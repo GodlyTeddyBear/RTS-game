@@ -118,6 +118,34 @@ local HasErrorSinkFunctionOrNil = Spec.new(
 	end
 )
 
+local HasDirectCombatHookFlagBooleanOrNil = Spec.new(
+	"InvalidRuntimeConfig",
+	"AiRuntime config.UseDirectCombatHookPath must be a boolean when present",
+	function(candidate: TConfigCandidate): boolean
+		local config = candidate.Config
+		if type(config) ~= "table" then
+			return true
+		end
+
+		local flag = config.UseDirectCombatHookPath
+		return flag == nil or type(flag) == "boolean"
+	end
+)
+
+local HasCachedActiveProviderFlagBooleanOrNil = Spec.new(
+	"InvalidRuntimeConfig",
+	"AiRuntime config.UseCachedActiveEntityProvider must be a boolean when present",
+	function(candidate: TConfigCandidate): boolean
+		local config = candidate.Config
+		if type(config) ~= "table" then
+			return true
+		end
+
+		local flag = config.UseCachedActiveEntityProvider
+		return flag == nil or type(flag) == "boolean"
+	end
+)
+
 local HasHookTable = Spec.new(
 	"InvalidRuntimeHook",
 	"AiRuntime hook must be a table",
@@ -355,6 +383,8 @@ return table.freeze({
 		HasCommandsTable,
 		HasHooksTable,
 		HasErrorSinkFunctionOrNil,
+		HasDirectCombatHookFlagBooleanOrNil,
+		HasCachedActiveProviderFlagBooleanOrNil,
 	}),
 	HasValidHookShape = HasHookTable:And(HasHookUseFunction),
 	HasValidActorType = HasActorTypeString,
