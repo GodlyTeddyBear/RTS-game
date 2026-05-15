@@ -14,12 +14,21 @@ type BoundsShape = {
 	Size: Vector3,
 	Center: Vector3,
 }
+type Footprint2D = {
+	AxisX: Vector2,
+	AxisZ: Vector2,
+	Center: Vector2,
+	HalfExtentX: number,
+	HalfExtentZ: number,
+}
 
 local MISSING_PART_CODE = "MissingPlacementGridPart"
 local INVALID_DIMENSIONS_CODE = "InvalidPlacementGridDimensions"
 local MISSING_GRID_ID_CODE = "MissingPlacementGridId"
 local DUPLICATE_GRID_ID_CODE = "DuplicatePlacementGridId"
 local OVERLAPPING_GRIDS_CODE = "OverlappingPlacementGrids"
+local OVERLAP_EPSILON = 1e-6
+local AXIS_EPSILON = 1e-6
 
 local WorldGridRuntimeService = {}
 WorldGridRuntimeService.__index = WorldGridRuntimeService
@@ -461,6 +470,112 @@ local function _GetCoveredTileRange(spec: GridSpec, shape: BoundsShape): (number
 	return rowStart, rowEnd, colStart, colEnd
 end
 
+local function _WorldPointToGridPlane2D(worldPoint: Vector3, spec: GridSpec): Vector2
+	local localPoint = spec.GridCFrame:PointToObjectSpace(worldPoint)
+	return Vector2.new(localPoint.X, localPoint.Z)
+end
+
+local function _WorldVectorToGridPlane2D(worldVector: Vector3, spec: GridSpec): Vector2
+	local localVector = spec.GridCFrame:VectorToObjectSpace(worldVector)
+	return Vector2.new(localVector.X, localVector.Z)
+end
+
+local function _NormalizeAxis2D(axis: Vector2): Vector2?
+	local magnitude = axis.Magnitude
+	if magnitude <= AXIS_EPSILON then
+		return nil
+	end
+	return axis / magnitude
+end
+
+local function _ResolvePartFootprint2D(part: BasePart, spec: GridSpec): Footprint2D?
+	local axisX = _NormalizeAxis2D(_WorldVectorToGridPlane2D(part.CFrame.RightVector, spec))
+	local axisZ = _NormalizeAxis2D(_WorldVectorToGridPlane2D(part.CFrame.LookVector, spec))
+	if axisX == nil or axisZ == nil then
+		return nil
+	end
+
+	local halfExtentX = part.Size.X * 0.5
+	local halfExtentZ = part.Size.Z * 0.5
+	if halfExtentX <= AXIS_EPSILON or halfExtentZ <= AXIS_EPSILON then
+		return nil
+	end
+
+	return {
+		AxisX = axisX,
+		AxisZ = axisZ,
+		Center = _WorldPointToGridPlane2D(part.Position, spec),
+		HalfExtentX = halfExtentX,
+		HalfExtentZ = halfExtentZ,
+	}
+end
+
+local function _GetTileCenter2D(coord: GridCoord, spec: GridSpec): Vector2
+	local gridMinX = -spec.GridSize.X * 0.5
+	local gridMinZ = -spec.GridSize.Z * 0.5
+	local centerX = gridMinX + spec.TileSize * 0.5 + (coord.Col - 1) * spec.TileSize
+	local centerZ = gridMinZ + spec.TileSize * 0.5 + (coord.Row - 1) * spec.TileSize
+	return Vector2.new(centerX, centerZ)
+end
+
+local function _GetTileCorners2D(tileCenter: Vector2, tileHalfSize: number): { Vector2 }
+	return {
+		tileCenter + Vector2.new(tileHalfSize, tileHalfSize),
+		tileCenter + Vector2.new(tileHalfSize, -tileHalfSize),
+		tileCenter + Vector2.new(-tileHalfSize, tileHalfSize),
+		tileCenter + Vector2.new(-tileHalfSize, -tileHalfSize),
+	}
+end
+
+local function _GetFootprintCorners2D(footprint: Footprint2D): { Vector2 }
+	local axisXOffset = footprint.AxisX * footprint.HalfExtentX
+	local axisZOffset = footprint.AxisZ * footprint.HalfExtentZ
+	return {
+		footprint.Center + axisXOffset + axisZOffset,
+		footprint.Center + axisXOffset - axisZOffset,
+		footprint.Center - axisXOffset + axisZOffset,
+		footprint.Center - axisXOffset - axisZOffset,
+	}
+end
+
+local function _ProjectPointsOntoAxis(points: { Vector2 }, axis: Vector2): (number, number)
+	local minProjection = math.huge
+	local maxProjection = -math.huge
+	for _, point in ipairs(points) do
+		local projection = point:Dot(axis)
+		minProjection = math.min(minProjection, projection)
+		maxProjection = math.max(maxProjection, projection)
+	end
+	return minProjection, maxProjection
+end
+
+local function _IntervalsOverlap(minA: number, maxA: number, minB: number, maxB: number): boolean
+	return maxA + OVERLAP_EPSILON >= minB and maxB + OVERLAP_EPSILON >= minA
+end
+
+local function _DoesTileOverlapPartFootprintSAT(coord: GridCoord, spec: GridSpec, footprint: Footprint2D): boolean
+	local tileHalfSize = spec.TileSize * 0.5
+	local tileCenter = _GetTileCenter2D(coord, spec)
+	local tileCorners = _GetTileCorners2D(tileCenter, tileHalfSize)
+	local footprintCorners = _GetFootprintCorners2D(footprint)
+	local axes = {
+		Vector2.new(1, 0),
+		Vector2.new(0, 1),
+		footprint.AxisX,
+		footprint.AxisZ,
+	}
+
+	for _, axis in ipairs(axes) do
+		local tileMin, tileMax = _ProjectPointsOntoAxis(tileCorners, axis)
+		local footprintMin, footprintMax = _ProjectPointsOntoAxis(footprintCorners, axis)
+		if not _IntervalsOverlap(tileMin, tileMax, footprintMin, footprintMax) then
+			return false
+		end
+	end
+
+	return true
+end
+
 function WorldGridRuntimeService:_ResolveNearestEligibleCoord(worldPos: Vector3, spec: GridSpec): GridCoord?
 	local bestCoord: GridCoord? = nil
 	local bestDistanceSquared = math.huge
@@ -562,38 +677,53 @@ function WorldGridRuntimeService:_GetResolvedPlacementProhibitedTiles(): { [stri
 	end
 
 	local coordKeySet = {} :: { [string]: boolean }
-	local shapes = {} :: { BoundsShape }
+	local parts = {} :: { BasePart }
 	local seenInstances = {} :: { [Instance]: boolean }
 
 	for _, part in ipairs(self:_GetPlacementProhibitedPartsCached()) do
 		if seenInstances[part] ~= true then
 			seenInstances[part] = true
-			local shape = _ResolveBoundsShape(part)
-			if shape ~= nil then
-				table.insert(shapes, shape)
-			end
+			table.insert(parts, part)
 		end
 	end
 
 	for _, part in ipairs(self:_GetBlacklistNamedParts()) do
 		if seenInstances[part] ~= true then
 			seenInstances[part] = true
-			local shape = _ResolveBoundsShape(part)
-			if shape ~= nil then
-				table.insert(shapes, shape)
-			end
+			table.insert(parts, part)
 		end
 	end
 
-	for _, shape in ipairs(shapes) do
+	for _, part in ipairs(parts) do
+		local shape = _ResolveBoundsShape(part)
+		if shape == nil then
+			continue
+		end
+
 		local matchedAnyTile = false
 		for _, spec in ipairs(self:GetGridSpecList()) do
 			local rowStart, rowEnd, colStart, colEnd = _GetCoveredTileRange(spec, shape)
 			if rowStart ~= nil and rowEnd ~= nil and colStart ~= nil and colEnd ~= nil then
 				matchedAnyTile = true
-				for row = rowStart, rowEnd do
-					for col = colStart, colEnd do
-						coordKeySet[("%s:%d:%d"):format(spec.GridId, row, col)] = true
+				local footprint = _ResolvePartFootprint2D(part, spec)
+				if footprint == nil then
+					for row = rowStart, rowEnd do
+						for col = colStart, colEnd do
+							coordKeySet[("%s:%d:%d"):format(spec.GridId, row, col)] = true
+						end
+					end
+				else
+					for row = rowStart, rowEnd do
+						for col = colStart, colEnd do
+							local coord = {
+								GridId = spec.GridId,
+								Row = row,
+								Col = col,
+							}
+							if _DoesTileOverlapPartFootprintSAT(coord, spec, footprint) then
+								coordKeySet[_GetCoordKey(coord)] = true
+							end
+						end
 					end
 				end
 			end
