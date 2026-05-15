@@ -122,6 +122,36 @@ export type TFlowVelocityAsyncState = {
 	LastDispatchClock: number,
 }
 
+export type TFlowSeparationPairSnapshotBuildInput = {
+	CandidateCellKeys: { number },
+	CellEntityStarts: { [number]: number },
+	CellEntityCounts: { [number]: number },
+	EligibleEntityIds: { [number]: number },
+	EntityPositionXById: { [number]: number },
+	EntityPositionYById: { [number]: number },
+	EntityRadiusById: { [number]: number },
+	KForce: number,
+	MinSeparationDistance: number,
+}
+
+export type TFlowSeparationPairSnapshotBuildAsyncResult = {
+	RequestId: number,
+	SessionUserId: number?,
+	Input: TFlowSeparationPairSnapshotBuildInput,
+	Rows: { { [string]: any } }?,
+	Err: any?,
+}
+
+export type TFlowSeparationPairSnapshotBuildAsyncState = {
+	PendingRequestId: number,
+	LatestAppliedRequestId: number,
+	LatestCompletedResult: TFlowSeparationPairSnapshotBuildAsyncResult?,
+	InFlight: boolean,
+	InFlightRequestId: number?,
+	InFlightSessionUserId: number?,
+	LastDispatchClock: number,
+}
+
 export type TFastFlowProfileCounters = {
 	SharedFieldCreations: number,
 	SharedFieldRefreshes: number,
@@ -150,6 +180,13 @@ export type TFastFlowProfileCounters = {
 	ParallelPairSnapshotEntities: number,
 	ParallelPairSnapshotPairs: number,
 	ParallelPairSnapshotBuildMilliseconds: number,
+	ParallelPairSnapshotAsyncDispatches: number,
+	ParallelPairSnapshotAsyncCompleted: number,
+	ParallelPairSnapshotAsyncApplied: number,
+	ParallelPairSnapshotAsyncStaleResults: number,
+	ParallelPairSnapshotAsyncDroppedResults: number,
+	ParallelPairSnapshotAsyncInFlightSkips: number,
+	ParallelPairSnapshotAsyncErrorFallbacks: number,
 	ParallelPairBelowThresholdSkips: number,
 	ParallelPairFailedFallbacks: number,
 	ParallelPairAsyncErrorFallbacks: number,

@@ -16,6 +16,7 @@ type TFlowActorRefs = MovementTypes.TFlowActorRefs
 type TFastFlowProfileCounters = MovementTypes.TFastFlowProfileCounters
 type TFlowVelocitySolveInput = MovementTypes.TFlowVelocitySolveInput
 type TFlowVelocityAsyncState = MovementTypes.TFlowVelocityAsyncState
+type TFlowSeparationPairSnapshotBuildAsyncState = MovementTypes.TFlowSeparationPairSnapshotBuildAsyncState
 
 --[=[
 	@class MovementService
@@ -51,6 +52,7 @@ function MovementService.new()
 	self._flowActorRefsByEntity = {} :: { [number]: TFlowActorRefs }
 	self._flowSeparationParallelRunner = nil
 	self._flowSeparationPairAsyncState = nil
+	self._flowSeparationPairSnapshotBuildAsyncState = nil :: TFlowSeparationPairSnapshotBuildAsyncState?
 	self._flowVelocityAsyncState = nil :: TFlowVelocityAsyncState?
 	self._fastFlowProfileCounters = nil :: TFastFlowProfileCounters?
 	self._lastFastFlowProfileLogAt = 0
@@ -92,6 +94,7 @@ function MovementService:ResetFastFlowRuntime()
 	table.clear(self._flowSettleAnchorGoalKeyByEntity)
 	self:_DestroyFlowSeparationParallelRunner()
 	self:_ClearFlowSeparationPairAsyncState()
+	self:_ClearFlowSeparationPairSnapshotBuildAsyncState()
 	self:_ClearFlowVelocityAsyncState()
 	self._flowSeparationRuntime = nil
 	self._lastFastFlowEndpointDiagnosticKey = nil
@@ -313,6 +316,7 @@ function MovementService:CleanupAll()
 	table.clear(self._advanceFrameResultByEntity)
 	self:_DestroyFlowSeparationParallelRunner()
 	self:_ClearFlowSeparationPairAsyncState()
+	self:_ClearFlowSeparationPairSnapshotBuildAsyncState()
 	self:_ClearFlowVelocityAsyncState()
 	self._flowSeparationRuntime = nil
 end

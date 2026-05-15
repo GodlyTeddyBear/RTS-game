@@ -32,7 +32,7 @@ function WorldGridRuntimeService.new()
 	self._resourceCoordKeySet = nil :: { [string]: boolean }?
 	self._resourceTypeByKey = nil :: { [string]: string }?
 	self._placementProhibitedParts = nil :: { BasePart }?
-	self._blacklistNamedInstances = nil :: { Instance }?
+	self._blacklistNamedParts = nil :: { BasePart }?
 	self._placementProhibitedCoordKeySet = nil :: { [string]: boolean }?
 	self._mapContext = nil :: any
 	return self
@@ -171,7 +171,7 @@ function WorldGridRuntimeService:ResetCache()
 	self._resourceCoordKeySet = nil
 	self._resourceTypeByKey = nil
 	self._placementProhibitedParts = nil
-	self._blacklistNamedInstances = nil
+	self._blacklistNamedParts = nil
 	self._placementProhibitedCoordKeySet = nil
 end
 
@@ -323,33 +323,51 @@ function WorldGridRuntimeService:_GetRuntimeMapRoot(): Model?
 	return mapResult.value
 end
 
-function WorldGridRuntimeService:_GetBlacklistNamedInstances(): { Instance }
-	if self._blacklistNamedInstances ~= nil then
-		return self._blacklistNamedInstances
+function WorldGridRuntimeService:_GetBlacklistNamedParts(): { BasePart }
+	if self._blacklistNamedParts ~= nil then
+		return self._blacklistNamedParts
 	end
 
 	local runtimeMap = self:_GetRuntimeMapRoot()
 	local nameSet = _GetBlacklistNameSet()
-	local matches = {} :: { Instance }
+	local blacklistRoots = {} :: { Instance }
+	local parts = {} :: { BasePart }
+	local seenParts = {} :: { [Instance]: boolean }
 	if runtimeMap ~= nil and next(nameSet) ~= nil then
 		local function maybeInsert(candidate: Instance)
 			local normalized = _NormalizeName(candidate.Name)
 			if nameSet[normalized] ~= true then
 				return
 			end
-			if candidate:IsA("BasePart") or candidate:IsA("Model") then
-				table.insert(matches, candidate)
+			table.insert(blacklistRoots, candidate)
+		end
+
+		local function maybeInsertPart(candidate: Instance)
+			if not candidate:IsA("BasePart") then
+				return
 			end
+			if seenParts[candidate] == true then
+				return
+			end
+			seenParts[candidate] = true
+			table.insert(parts, candidate)
 		end
 
 		maybeInsert(runtimeMap)
 		for _, instance in ipairs(runtimeMap:GetDescendants()) do
 			maybeInsert(instance)
 		end
+
+		for _, blacklistRoot in ipairs(blacklistRoots) do
+			maybeInsertPart(blacklistRoot)
+			for _, descendant in ipairs(blacklistRoot:GetDescendants()) do
+				maybeInsertPart(descendant)
+			end
+		end
 	end
 
-	self._blacklistNamedInstances = matches
-	return matches
+	self._blacklistNamedParts = parts
+	return parts
 end
 
 local function _ResolveBoundsShape(instance: Instance): BoundsShape?
@@ -557,10 +575,10 @@ function WorldGridRuntimeService:_GetResolvedPlacementProhibitedTiles(): { [stri
 		end
 	end
 
-	for _, instance in ipairs(self:_GetBlacklistNamedInstances()) do
-		if seenInstances[instance] ~= true then
-			seenInstances[instance] = true
-			local shape = _ResolveBoundsShape(instance)
+	for _, part in ipairs(self:_GetBlacklistNamedParts()) do
+		if seenInstances[part] ~= true then
+			seenInstances[part] = true
+			local shape = _ResolveBoundsShape(part)
 			if shape ~= nil then
 				table.insert(shapes, shape)
 			end

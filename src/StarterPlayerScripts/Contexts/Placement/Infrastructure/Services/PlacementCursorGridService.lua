@@ -31,6 +31,7 @@ type AnchorValidationCache = {
 }
 
 local PlacementCursorGridService = {}
+local GROUND_FLAT_DOT = 1
 
 local _cachedStaticVersion = -1
 local _groundWorldPosByCoordKey = {} :: { [string]: Vector3 | boolean }
@@ -288,6 +289,24 @@ function PlacementCursorGridService:_ResolveFirstNonGridHit(
 	end
 end
 
+function PlacementCursorGridService:_ResolveValidGroundHit(
+	origin: Vector3,
+	direction: Vector3,
+	baseExclude: { Instance }?
+): RaycastResult?
+	local hit = self:_ResolveFirstNonGridHit(origin, direction, baseExclude)
+	if hit == nil then
+		return nil
+	end
+
+	local raycastConfig = PlacementConfig.GROUND_RAYCAST
+	if raycastConfig.RequirePerfectlyFlat and hit.Normal:Dot(Vector3.yAxis) ~= GROUND_FLAT_DOT then
+		return nil
+	end
+
+	return hit
+end
+
 function PlacementCursorGridService:ResolveGroundWorldPositionForCoord(
 	coord: GridCoord,
 	placementCursorFolder: Instance?
@@ -306,7 +325,7 @@ function PlacementCursorGridService:ResolveGroundWorldPositionForCoord(
 	local rayDirection = Vector3.new(0, -raycastConfig.Length, 0)
 	local excludedInstances = self:GetCursorRaycastExcludeInstances(placementCursorFolder)
 
-	local hit = self:_ResolveFirstNonGridHit(rayOrigin, rayDirection, excludedInstances)
+	local hit = self:_ResolveValidGroundHit(rayOrigin, rayDirection, excludedInstances)
 	local resolved = if hit == nil then false else hit.Position
 	_groundWorldPosByCoordKey[coordKey] = resolved
 
@@ -367,7 +386,7 @@ function PlacementCursorGridService:ResolveGroundWorldPositionForFootprint(
 	local rayDirection = Vector3.new(0, -raycastConfig.Length, 0)
 	local excludedInstances = self:GetCursorRaycastExcludeInstances(placementCursorFolder)
 
-	local hit = self:_ResolveFirstNonGridHit(rayOrigin, rayDirection, excludedInstances)
+	local hit = self:_ResolveValidGroundHit(rayOrigin, rayDirection, excludedInstances)
 	local resolved = if hit == nil then false else hit.Position
 	_groundWorldPosByFootprintKey[cacheKey] = resolved
 
