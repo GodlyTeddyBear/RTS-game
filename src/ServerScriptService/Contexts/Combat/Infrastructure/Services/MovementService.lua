@@ -92,6 +92,14 @@ type TFlowMovementState = {
 
 type TMovementState = TPathMovementState | TFlowMovementState
 
+type TAdvanceStatus = "Running" | "Success" | "Fail"
+
+type TAdvanceFrameResult = {
+	Status: TAdvanceStatus,
+	Reason: string?,
+	FrameId: number,
+}
+
 type TSharedFlowfieldEntry = {
 	Flowfield: any,
 	GoalCell: Vector2,
@@ -177,6 +185,8 @@ MovementService.__index = MovementService
 function MovementService.new()
 	local self = setmetatable({}, MovementService)
 	self._movementByEntity = {} :: { [number]: TMovementState }
+	self._advanceFrameResultByEntity = {} :: { [number]: TAdvanceFrameResult }
+	self._movementFrameId = 0
 	self._fastFlowPathfinder = nil
 	self._fastFlowMapping = nil
 	self._lastFastFlowEndpointDiagnosticKey = nil :: string?
@@ -242,6 +252,41 @@ function MovementService:EndCombatFrame(_sessionUserId: number)
 	self._fastFlowProfileCounters = nil
 end
 
+function MovementService:TickMovementFrame(_dt: number)
+	self._movementFrameId += 1
+
+	if next(self._movementByEntity) == nil then
+		return
+	end
+
+	local activeEntities = {}
+	for entity in self._movementByEntity do
+		table.insert(activeEntities, entity)
+	end
+
+	for _, entity in ipairs(activeEntities) do
+		local status, reason = self:TickAdvance(entity)
+		self._advanceFrameResultByEntity[entity] = {
+			Status = status,
+			Reason = reason,
+			FrameId = self._movementFrameId,
+		}
+	end
+end
+
+function MovementService:GetAdvanceStatus(entity: number): (TAdvanceStatus, string?)
+	local frameResult = self._advanceFrameResultByEntity[entity]
+	if frameResult ~= nil and frameResult.FrameId == self._movementFrameId then
+		return frameResult.Status, frameResult.Reason
+	end
+
+	if self._movementByEntity[entity] ~= nil then
+		return "Running", nil
+	end
+
+	return "Fail", "MissingMovementState"
+end
+
 function MovementService:StartAdvance(entity: number, movementMode: EnemyMovementMode): (boolean, string?)
 	self:StopMovement(entity)
 
@@ -290,6 +335,7 @@ end
 function MovementService:StopMovement(entity: number)
 	local movementState = self._movementByEntity[entity]
 	if movementState == nil and self._flowSettleAnchorGoalKeyByEntity[entity] == nil then
+		self._advanceFrameResultByEntity[entity] = nil
 		return
 	end
 
@@ -304,6 +350,7 @@ function MovementService:StopMovement(entity: number)
 		end
 	end
 
+	self._advanceFrameResultByEntity[entity] = nil
 	self:_ClearMovementRuntimeState(entity)
 end
 
@@ -331,6 +378,7 @@ function MovementService:CleanupAll()
 	table.clear(self._flowSettledByEntity)
 	table.clear(self._flowSettleAnchorGoalKeyByEntity)
 	table.clear(self._flowActorRefsByEntity)
+	table.clear(self._advanceFrameResultByEntity)
 	self._flowSeparationRuntime = nil
 end
 

@@ -57,7 +57,7 @@ function AdvanceExecutor:CanContinue(entity: number, services: any): (boolean, s
 end
 
 function AdvanceExecutor:OnTick(entity: number, _dt: number, services: any): string
-	local status, reason = services.MovementService:TickAdvance(entity)
+	local status, reason = services.MovementService:GetAdvanceStatus(entity)
 	if status == "Running" then
 		return self:Running()
 	end

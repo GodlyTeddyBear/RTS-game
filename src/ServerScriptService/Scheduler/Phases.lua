@@ -28,6 +28,7 @@ return table.freeze({
 	phase("EnemyPositionPoll"),
 	phase("EnemySync"),
 	phase("UnitSync"),
+	phase("MovementTick"),
 	phase("CombatTick"),
 	phase("MiningTick"),
 	phase("StructureSync"),

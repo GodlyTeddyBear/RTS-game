@@ -37,7 +37,6 @@ function ProcessCombatTick:Init(registry: any, _name: string)
 		_loopService = "CombatLoopService",
 		_behaviorRuntimeService = "CombatBehaviorRuntimeService",
 		_actorRegistryService = "CombatActorRegistryService",
-		_movementService = "MovementService",
 		_statusService = "StatusService",
 	})
 end
@@ -56,7 +55,6 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 		end
 
 		local currentTime = os.clock()
-		self._movementService:BeginCombatFrame(userId, currentTime)
 		local ok, frameResult = pcall(function()
 			return self._behaviorRuntimeService:RunFrame({
 				CurrentTime = currentTime,
@@ -66,7 +64,6 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 				},
 			})
 		end)
-		self._movementService:EndCombatFrame(userId)
 		if not ok then
 			error(frameResult)
 		end

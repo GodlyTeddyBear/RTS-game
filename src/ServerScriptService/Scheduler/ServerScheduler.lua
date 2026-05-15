@@ -13,9 +13,10 @@
     1. `EnemyPositionPoll`
     2. `EnemySync`
     3. `UnitSync`
-    4. `CombatTick`
-    5. `MiningTick`
-    6. `StructureSync`
+    4. `MovementTick`
+    5. `CombatTick`
+    6. `MiningTick`
+    7. `StructureSync`
     @server
 ]=]
 

@@ -65,6 +65,8 @@ CombatContext starts combat on wave start
   -> CombatActorRegistryService stores runtime record
 
 Each combat tick
+  -> CombatContext scheduler runs MovementTick
+  -> CombatContext movement service advances active movers
   -> CombatContext scheduler runs CombatTick
   -> ProcessCombatTick for active session
   -> CombatBehaviorRuntimeService.RunFrame
@@ -117,6 +119,8 @@ Actors join combat as they spawn
       -> if runtime started, actor is compiled immediately
 
 Every combat tick
+  -> CombatContext scheduler runs MovementTick
+  -> CombatContext movement service advances active movers
   -> CombatContext scheduler runs CombatTick
   -> ProcessCombatTick executes for active, unpaused combat sessions
   -> CombatBehaviorRuntimeService.RunFrame

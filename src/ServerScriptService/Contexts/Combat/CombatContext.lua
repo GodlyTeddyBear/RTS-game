@@ -170,6 +170,26 @@ end
 function CombatContext:KnitStart()
 	CombatBaseContext:KnitStart()
 
+	CombatBaseContext:RegisterSchedulerSystem("MovementTick", function()
+		local runnableSessionUserId = nil :: number?
+		for userId in pairs(self._combatLoopService:GetSessions()) do
+			if self._combatLoopService:IsRunnable(userId) then
+				runnableSessionUserId = userId
+				break
+			end
+		end
+
+		if runnableSessionUserId == nil then
+			return
+		end
+
+		local dt = CombatBaseContext:GetSchedulerDeltaTime()
+		local currentTime = os.clock()
+		self._movementService:BeginCombatFrame(runnableSessionUserId, currentTime)
+		self._movementService:TickMovementFrame(dt)
+		self._movementService:EndCombatFrame(runnableSessionUserId)
+	end)
+
 	CombatBaseContext:RegisterSchedulerSystem("CombatTick", function()
 		local dt = CombatBaseContext:GetSchedulerDeltaTime()
 		self._hitboxService:Tick(dt)
