@@ -55,9 +55,8 @@
 
 		GitHub repository: https://github.com/Sleitnick/RbxCameraShaker
 	
-	
---]]
 
+--]]
 local CameraShaker = {}
 CameraShaker.__index = CameraShaker
 

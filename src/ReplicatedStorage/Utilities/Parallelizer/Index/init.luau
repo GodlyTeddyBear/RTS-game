@@ -31,7 +31,7 @@ function Index.ListenToTask(actor: Actor, taskName: string, callback: (taskId: n
 
 		local packetDefCursor = 0
 		local packetBytesCursor = 0
-		
+
 		debug.profilebegin('deserialize packet def buffer and packet bytes buffer')
 
 		for _ = 1, packetDefCount do
@@ -43,11 +43,12 @@ function Index.ListenToTask(actor: Actor, taskName: string, callback: (taskId: n
 	end)
 
 	actor:BindToMessageParallel(taskName, function(startingTaskId: number, threadCount: number, batchSize: number, bindable: BindableEvent, ...: Types.SharedTableValues)
-		debug.profilebegin('batch task callback fire')
-		
 		local memory = userMemory
 		local responses = table.create(batchSize)
 		local responseCount = 0
+
+		debug.profilebegin('batch task callback fire')
+
 		for taskId = startingTaskId, math.min(startingTaskId + (batchSize - 1), threadCount) do
 			local res = callback(taskId, memory, ...)
 			
@@ -84,7 +85,7 @@ function Index.ListenToTask(actor: Actor, taskName: string, callback: (taskId: n
 				batchBuf, cursor, size = Serializer.SerializeToBuffer(responseBatch[dataIndex], dataType, cursor, batchBuf, size, packetBytesData[dataIndex], true)
 			end
 		end
-		
+
 		debug.profileend()
 
 		bindable:Fire(startingTaskId, batchBuf)

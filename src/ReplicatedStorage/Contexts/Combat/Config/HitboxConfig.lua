@@ -16,7 +16,7 @@ HitboxConfig.AttackStructure = table.freeze({
 	Shape = Enum.PartType.Block,
 	Size = Vector3.new(6, 5, 6),
 	Offset = CFrame.new(0, 0, -3),
-	Visualize = true,
+	Visualize = false,
 	MaxDuration = 1,
 } :: THitboxConfig)
 
