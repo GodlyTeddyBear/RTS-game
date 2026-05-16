@@ -38,9 +38,9 @@ local internalRunnerConnection: RBXScriptConnection? = nil
 local internalRunner: THitboxRunner? = nil
 
 local OPERATION_NAME = "MuchachoHitboxPresence"
-local PARALLEL_ACTOR_COUNT = 4
-local PARALLEL_BATCH_SIZE = 16
-local PARALLEL_TIMEOUT_SECONDS = 0.02
+local PARALLEL_ACTOR_COUNT = 32
+local PARALLEL_BATCH_SIZE = 1
+local PARALLEL_TIMEOUT_SECONDS = 0.2
 
 local Runner = {}
 
@@ -173,43 +173,45 @@ local function _DispatchParallelSnapshot(runner: THitboxRunner, snapshot: TParal
 		return
 	end
 
-	promise:andThen(function(rows)
-		if state.InFlightRequestId ~= requestId then
-			return
-		end
+	promise
+		:andThen(function(rows)
+			if state.InFlightRequestId ~= requestId then
+				return
+			end
 
-		state.InFlight = false
-		state.InFlightRequestId = nil
-		if state.ShouldDropInFlightResult then
-			state.ShouldDropInFlightResult = false
-			return
-		end
+			state.InFlight = false
+			state.InFlightRequestId = nil
+			if state.ShouldDropInFlightResult then
+				state.ShouldDropInFlightResult = false
+				return
+			end
 
-		state.LatestCompletedResult = {
-			RequestId = requestId,
-			Snapshot = snapshot,
-			Rows = rows :: any,
-			Err = nil,
-		}
-	end):catch(function(err)
-		if state.InFlightRequestId ~= requestId then
-			return
-		end
+			state.LatestCompletedResult = {
+				RequestId = requestId,
+				Snapshot = snapshot,
+				Rows = rows :: any,
+				Err = nil,
+			}
+		end)
+		:catch(function(err)
+			if state.InFlightRequestId ~= requestId then
+				return
+			end
 
-		state.InFlight = false
-		state.InFlightRequestId = nil
-		if state.ShouldDropInFlightResult then
-			state.ShouldDropInFlightResult = false
-			return
-		end
+			state.InFlight = false
+			state.InFlightRequestId = nil
+			if state.ShouldDropInFlightResult then
+				state.ShouldDropInFlightResult = false
+				return
+			end
 
-		state.LatestCompletedResult = {
-			RequestId = requestId,
-			Snapshot = snapshot,
-			Rows = nil,
-			Err = err,
-		}
-	end)
+			state.LatestCompletedResult = {
+				RequestId = requestId,
+				Snapshot = snapshot,
+				Rows = nil,
+				Err = err,
+			}
+		end)
 end
 
 local function _CreateParallelRunner(): any

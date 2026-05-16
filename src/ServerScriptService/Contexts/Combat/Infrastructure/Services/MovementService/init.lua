@@ -3,6 +3,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
 local MovementTypes = require(script.Types)
 
@@ -17,6 +19,13 @@ type TFastFlowProfileCounters = MovementTypes.TFastFlowProfileCounters
 type TFlowVelocitySolveInput = MovementTypes.TFlowVelocitySolveInput
 type TFlowVelocityAsyncState = MovementTypes.TFlowVelocityAsyncState
 type TFlowSeparationPairSnapshotBuildAsyncState = MovementTypes.TFlowSeparationPairSnapshotBuildAsyncState
+
+local MOVEMENT_PROFILING_ENABLED = DebugConfig.COMBAT_MOVEMENT_PROFILING
+local applyCompletedVelocityProfileTag = "Combat.MovementService.TickMovementFrame.ApplyCompletedVelocity"
+local collectActiveEntitiesProfileTag = "Combat.MovementService.TickMovementFrame.CollectActiveEntities"
+local tickEntitiesProfileTag = "Combat.MovementService.TickMovementFrame.TickEntities"
+local dispatchVelocityProfileTag = "Combat.MovementService.TickMovementFrame.DispatchVelocity"
+local commitFrameResultsProfileTag = "Combat.MovementService.TickMovementFrame.CommitFrameResults"
 
 --[=[
 	@class MovementService
@@ -127,48 +136,59 @@ function MovementService:TickMovementFrame(_dt: number)
 
 	-- This method runs inside the scheduler, so it must never yield while staging async movement work.
 	local frameResultsByEntity: { [number]: { Status: TAdvanceStatus, Reason: string? } } =
-		self:_ApplyCompletedFlowVelocityAsyncResult(sepConfig) or {}
+		DebugPlus.profile(applyCompletedVelocityProfileTag, function()
+			return self:_ApplyCompletedFlowVelocityAsyncResult(sepConfig) or {}
+		end, MOVEMENT_PROFILING_ENABLED)
 
 	if next(self._movementByEntity) == nil then
 		return
 	end
 
-	local activeEntities = {}
-	for entity in self._movementByEntity do
-		table.insert(activeEntities, entity)
-	end
+	local activeEntities = DebugPlus.profile(collectActiveEntitiesProfileTag, function()
+		local entities = {}
+		for entity in self._movementByEntity do
+			table.insert(entities, entity)
+		end
+		return entities
+	end, MOVEMENT_PROFILING_ENABLED)
 
 	local pendingFlowVelocityInputs = {}
 
-	for _, entity in ipairs(activeEntities) do
-		local status, reason, pendingVelocityInput = self:_TickAdvanceInternal(entity)
-		if pendingVelocityInput ~= nil then
-			table.insert(pendingFlowVelocityInputs, pendingVelocityInput)
-			if frameResultsByEntity[entity] == nil then
+	DebugPlus.profile(tickEntitiesProfileTag, function()
+		for _, entity in ipairs(activeEntities) do
+			local status, reason, pendingVelocityInput = self:_TickAdvanceInternal(entity)
+			if pendingVelocityInput ~= nil then
+				table.insert(pendingFlowVelocityInputs, pendingVelocityInput)
+				if frameResultsByEntity[entity] == nil then
+					frameResultsByEntity[entity] = {
+						Status = "Running",
+						Reason = nil,
+					}
+				end
+			else
 				frameResultsByEntity[entity] = {
-					Status = "Running",
-					Reason = nil,
+					Status = status,
+					Reason = reason,
 				}
 			end
-		else
-			frameResultsByEntity[entity] = {
-				Status = status,
-				Reason = reason,
-			}
 		end
-	end
+	end, MOVEMENT_PROFILING_ENABLED)
 
 	if #pendingFlowVelocityInputs > 0 then
-		self:_ResolvePendingFlowVelocityMoves(pendingFlowVelocityInputs)
+		DebugPlus.profile(dispatchVelocityProfileTag, function()
+			self:_ResolvePendingFlowVelocityMoves(pendingFlowVelocityInputs)
+		end, MOVEMENT_PROFILING_ENABLED)
 	end
 
-	for entity, result in frameResultsByEntity do
-		self._advanceFrameResultByEntity[entity] = {
-			Status = result.Status,
-			Reason = result.Reason,
-			FrameId = self._movementFrameId,
-		}
-	end
+	DebugPlus.profile(commitFrameResultsProfileTag, function()
+		for entity, result in frameResultsByEntity do
+			self._advanceFrameResultByEntity[entity] = {
+				Status = result.Status,
+				Reason = result.Reason,
+				FrameId = self._movementFrameId,
+			}
+		end
+	end, MOVEMENT_PROFILING_ENABLED)
 end
 
 

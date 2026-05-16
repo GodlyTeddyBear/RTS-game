@@ -7,18 +7,60 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Parallelizer = require(ReplicatedStorage.Utilities.Parallelizer)
 local Promise = require(ReplicatedStorage.Packages.Promise)
 
+local Field = require(script.Field)
+local ManagedAsync = require(script.ManagedAsync)
+local ManagedJob = require(script.ManagedJob)
+local ManagedJobPolicies = require(script.ManagedJobPolicies)
+local Operation = require(script.Operation)
+local Profiling = require(script.Profiling)
+local ResultApplication = require(script.ResultApplication)
+local ResultReduction = require(script.ResultReduction)
+local RowDefaults = require(script.RowDefaults)
+local SharedMemory = require(script.SharedMemory)
+local SharedMemoryAuthoring = require(script.SharedMemoryAuthoring)
 local Types = require(script.Types)
 local Validation = require(script.Validation)
+local ValidationHelpers = require(script.ValidationHelpers)
 
 export type TFieldType = Types.TFieldType
 export type TResultField = Types.TResultField
 export type TOperationDefinition = Types.TOperationDefinition
+export type TStaticOperationDefinition = Types.TStaticOperationDefinition
 export type TParallelQueryConfig = Types.TParallelQueryConfig
 export type TParallelQueryError = Types.TParallelQueryError
 export type TRunRequest = Types.TRunRequest
 export type TParallelQueryRunner = Types.TParallelQueryRunner
+export type TSharedMemoryScalar = Types.TSharedMemoryScalar
+export type TSharedMemoryArray = Types.TSharedMemoryArray
+export type TSharedMemoryFieldValue = Types.TSharedMemoryFieldValue
+export type TSharedMemoryFieldMap = Types.TSharedMemoryFieldMap
+export type TSharedMemorySnapshotBuilder = Types.TSharedMemorySnapshotBuilder
+export type TManagedAsyncResult = Types.TManagedAsyncResult
+export type TManagedAsyncState = Types.TManagedAsyncState
+export type TManagedDispatchStatus = Types.TManagedDispatchStatus
+export type TManagedCompletionStatus = Types.TManagedCompletionStatus
+export type TManagedConsumeStatus = Types.TManagedConsumeStatus
+export type TManagedJobPolicyPreset = Types.TManagedJobPolicyPreset
+export type TManagedJobPolicyConfig = Types.TManagedJobPolicyConfig
+export type TManagedJobDispatchStatus = Types.TManagedJobDispatchStatus
+export type TManagedJobConfig = Types.TManagedJobConfig
+export type TManagedJobResult = Types.TManagedJobResult
+export type TManagedJob = Types.TManagedJob
+export type TRowFieldValidationResult = Types.TRowFieldValidationResult
+export type TSchemaRowValidationMode = Types.TSchemaRowValidationMode
+export type TSchemaRowValidationResult = Types.TSchemaRowValidationResult
+export type TSchemaRowsValidationResult = Types.TSchemaRowsValidationResult
+export type TMemoryFieldValidationResult = Types.TMemoryFieldValidationResult
+export type TRowApplicationResult = Types.TRowApplicationResult
+export type TReductionSummary = Types.TReductionSummary
+export type TParallelQueryProfileCounters = Types.TParallelQueryProfileCounters
+export type TParallelQueryOperationProfileSnapshot = Types.TParallelQueryOperationProfileSnapshot
+export type TParallelQueryProfileSnapshot = Types.TParallelQueryProfileSnapshot
+export type TManagedJobProfileSnapshot = Types.TManagedJobProfileSnapshot
 
 type TDispatchHandle = Types.TDispatchHandle
+type TManagedJobConfig = Types.TManagedJobConfig
+type TManagedJob = Types.TManagedJob
 type TRegisteredOperation = Types.TRegisteredOperation
 
 type TFailureReport = {
@@ -39,6 +81,132 @@ local OPERATION_CONFIG_JSON_ATTRIBUTE_NAME = "ParallelQueryOperationConfigJson"
 ]=]
 local ParallelQuery = {}
 ParallelQuery.__index = ParallelQuery
+
+--[=[
+	@prop Field table
+	@within ParallelQueryPackage
+	Schema field constructors for authoring operation result schemas.
+]=]
+ParallelQuery.Field = Field
+
+--[=[
+	@prop RowDefaults table
+	@within ParallelQueryPackage
+	Default-row builders for schema-backed operation rows.
+]=]
+ParallelQuery.RowDefaults = RowDefaults
+
+--[=[
+	@prop Operation table
+	@within ParallelQueryPackage
+	Light helpers for defining static-schema operations and cached-memory operation modules.
+	Use raw operation tables when the schema is dynamic.
+	Use operation local memory for shared cached payloads and request arguments for per-dispatch scalar inputs.
+]=]
+ParallelQuery.Operation = Operation
+
+--[=[
+	@prop ValidationHelpers table
+	@within ParallelQueryPackage
+	Structural row and shared-memory validation helpers for worker output and cached local memory.
+	These helpers only validate shape and required fields; domain correctness still belongs to the caller.
+]=]
+ParallelQuery.ValidationHelpers = ValidationHelpers
+
+--[=[
+	@prop ResultApplication table
+	@within ParallelQueryPackage
+	Helpers for safe row iteration, indexed row resolution, and result-application summaries.
+	Use this with `ValidationHelpers` when you want canonical "validate -> resolve -> apply" row handling.
+]=]
+ParallelQuery.ResultApplication = ResultApplication
+
+--[=[
+	@prop ResultReduction table
+	@within ParallelQueryPackage
+	Generic reducers for building lookup maps, grouped rows, pair aggregates, and vector accumulations from decoded rows.
+	Use this after validation when the caller wants derived data instead of immediate side effects.
+]=]
+ParallelQuery.ResultReduction = ResultReduction
+
+--[=[
+	@prop SharedMemoryAuthoring table
+	@within ParallelQueryPackage
+	Helpers for building named array-backed snapshot fields before passing them into `BuildSharedMemory`.
+	Use this for movement-style "fill arrays in a loop, then pack one root field map" workflows.
+]=]
+ParallelQuery.SharedMemoryAuthoring = SharedMemoryAuthoring
+
+--[=[
+	@prop ManagedJobPolicies table
+	@within ParallelQueryPackage
+	Named managed-job policy presets.
+	Use `StrictFreshOnly` for only fresh completions, `KeepLastGood` to reuse the latest successful rows on failure,
+	and `ApplyFreshOrMarkFallback` to surface fallback markers without replaying prior rows.
+]=]
+ParallelQuery.ManagedJobPolicies = ManagedJobPolicies
+
+--[=[
+	Builds a SharedTable from a root field map of scalars and array-like child tables.
+	@within ParallelQueryPackage
+	@param fields { [string]: TSharedMemoryFieldValue } -- Shared memory fields to copy into a new SharedTable.
+	@return SharedTable -- Newly constructed shared memory payload.
+]=]
+function ParallelQuery.BuildSharedMemory(fields: { [string]: Types.TSharedMemoryFieldValue }): SharedTable
+	return SharedMemory.Build(fields)
+end
+
+--[=[
+	Creates a reusable async state record for callers that want low-level request bookkeeping.
+	@within ParallelQueryPackage
+	@return TManagedAsyncState -- Fresh async state with no in-flight or completed result.
+]=]
+function ParallelQuery.CreateManagedAsyncState(): Types.TManagedAsyncState
+	return ManagedAsync.CreateState()
+end
+
+function ParallelQuery.ResetManagedAsyncState(state: Types.TManagedAsyncState)
+	ManagedAsync.ResetState(state)
+end
+
+function ParallelQuery.ExpireManagedInFlightRequest(
+	state: Types.TManagedAsyncState,
+	maxInFlightSeconds: number,
+	nowClock: number?
+): boolean
+	return ManagedAsync.ExpireInFlightRequest(state, maxInFlightSeconds, nowClock)
+end
+
+function ParallelQuery.HasManagedInFlightRequest(
+	state: Types.TManagedAsyncState,
+	maxInFlightSeconds: number?,
+	nowClock: number?
+): boolean
+	return ManagedAsync.HasInFlightRequest(state, maxInFlightSeconds, nowClock)
+end
+
+function ParallelQuery.BeginManagedRequest(
+	state: Types.TManagedAsyncState,
+	sessionToken: any?,
+	nowClock: number?,
+	maxInFlightSeconds: number?
+): (Types.TManagedDispatchStatus, number?)
+	return ManagedAsync.BeginRequest(state, sessionToken, nowClock, maxInFlightSeconds)
+end
+
+function ParallelQuery.CompleteManagedRequest(
+	state: Types.TManagedAsyncState,
+	result: Types.TManagedAsyncResult
+): Types.TManagedCompletionStatus
+	return ManagedAsync.CompleteRequest(state, result)
+end
+
+function ParallelQuery.ConsumeLatestManagedResult(
+	state: Types.TManagedAsyncState,
+	currentSessionToken: any?
+): (Types.TManagedAsyncResult?, Types.TManagedConsumeStatus)
+	return ManagedAsync.ConsumeLatestResult(state, currentSessionToken)
+end
 
 local function _CloneWorkerTemplate(
 	operationModules: { ModuleScript },
@@ -211,6 +379,8 @@ function ParallelQuery.new(config: TParallelQueryConfig): TParallelQueryRunner
 	self._coordinator = coordinator
 	self._operations = {}
 	self._activeRunCounts = {}
+	self._managedJobs = {}
+	self._profile = Profiling.CreateRunnerProfile(runtimeName)
 	self._destroyed = false
 
 	for _, operationModule in ipairs(config.Operations) do
@@ -230,6 +400,29 @@ function ParallelQuery.new(config: TParallelQueryConfig): TParallelQueryRunner
 	end
 
 	return self :: any
+end
+
+--[=[
+	Creates an operation-bound managed job on this runner for ergonomic dispatch and polling.
+	Use `RunAsync` directly when the caller already owns its async state or only needs one-shot dispatch.
+	Use managed jobs for repeated frame-based work where stale-result rejection, timeout expiry, and policy presets should stay inside the utility.
+	@within ParallelQueryPackage
+	@param config TManagedJobConfig -- Managed job configuration for one registered operation.
+	@return TManagedJob -- Operation-bound job object tied to this runner.
+]=]
+function ParallelQuery:CreateManagedJob(config: TManagedJobConfig): TManagedJob
+	self:_AssertAlive()
+	return ManagedJob.new(self :: any, config)
+end
+
+function ParallelQuery:GetProfileSnapshot(): Types.TParallelQueryProfileSnapshot?
+	self:_AssertAlive()
+	return Profiling.GetRunnerSnapshot(self._profile)
+end
+
+function ParallelQuery:EmitProfileSummary(force: boolean?)
+	self:_AssertAlive()
+	Profiling.EmitRunnerSummary(self._profile, force)
 end
 
 --[=[
@@ -273,9 +466,11 @@ function ParallelQuery:Run(
 	assert(operation ~= nil, `ParallelQuery operation "{operationName}" is not registered`)
 	assert(type(onComplete) == "function", `ParallelQuery:Run("{operationName}") requires an onComplete callback`)
 	Validation.AssertRunRequest(request, operationName)
+	local closeRunProfile = Profiling.BeginOperationScope(self._profile, operationName, "Run")
 
 	local workCount = request.WorkCount
 	if workCount == 0 then
+		closeRunProfile()
 		onComplete({}, nil)
 		return
 	end
@@ -323,6 +518,7 @@ function ParallelQuery:Run(
 		failureConnection:Disconnect()
 		failureBindable:Destroy()
 		self:_DecrementActiveRun(operationName)
+		closeRunProfile()
 	end
 
 	local function settle(rows: { [string]: any }?, err: TParallelQueryError?, cancelDispatch: boolean?)
@@ -381,6 +577,8 @@ end
     Dispatches one registered operation and resolves with decoded row tables.
     Rejects with the same structured error payload that `Run` passes to `onComplete`.
     This is the canonical caller-facing API for Promise users.
+    Use cached local memory for shared array payloads that should be reused by all worker tasks in the run.
+    Use request arguments only for per-dispatch scalar inputs that do not need SharedTable packing.
     @within ParallelQueryPackage
     @param operationName string -- Registered operation name.
     @param request TRunRequest -- Dispatch options for work count, batching, arguments, and timeout.
@@ -411,9 +609,18 @@ function ParallelQuery:Destroy()
 	end
 
 	self._destroyed = true
+	local managedJobs = {}
+	for job in self._managedJobs do
+		table.insert(managedJobs, job)
+	end
+	for _, job in ipairs(managedJobs) do
+		job:Destroy()
+	end
+
 	self._coordinator:Destroy()
 	self._actorStorage:Destroy()
 
+	table.clear(self._managedJobs)
 	table.clear(self._operations)
 	table.clear(self._activeRunCounts)
 end

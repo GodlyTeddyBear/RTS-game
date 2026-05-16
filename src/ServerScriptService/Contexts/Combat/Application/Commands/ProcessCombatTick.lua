@@ -7,10 +7,18 @@
 ]=]
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
+local schedulerProfilingEnabled = DebugConfig.COMBAT_SCHEDULER_PROFILING
+local processSessionsIsRunnableProfileTag = "Combat.Scheduler.CombatTick.ProcessSessions.IsRunnable"
+local processSessionsRunFrameProfileTag = "Combat.Scheduler.CombatTick.ProcessSessions.RunFrame"
+local processSessionsNotifyActorResultsProfileTag = "Combat.Scheduler.CombatTick.ProcessSessions.NotifyActorResults"
+local processSessionsNotifyActorResultsIterateProfileTag =
+	"Combat.Scheduler.CombatTick.ProcessSessions.NotifyActorResults.Iterate"
 
 local ProcessCombatTick = {}
 ProcessCombatTick.__index = ProcessCombatTick
@@ -49,33 +57,42 @@ end
 ]=]
 function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<boolean>
 	return Result.Catch(function()
-		if not self._loopService:IsRunnable(userId) then
+		local isRunnable = DebugPlus.profile(processSessionsIsRunnableProfileTag, function()
+			return self._loopService:IsRunnable(userId)
+		end, schedulerProfilingEnabled)
+		if not isRunnable then
 			return Ok(false)
 		end
 
 		local currentTime = os.clock()
 		local ok, frameResult = pcall(function()
-			return self._behaviorRuntimeService:RunFrame({
-				CurrentTime = currentTime,
-				DeltaTime = dt,
-				Services = {
-					CombatActorRegistryService = self._actorRegistryService,
-				},
-			})
+			return DebugPlus.profile(processSessionsRunFrameProfileTag, function()
+				return self._behaviorRuntimeService:RunFrame({
+					CurrentTime = currentTime,
+					DeltaTime = dt,
+					Services = {
+						CombatActorRegistryService = self._actorRegistryService,
+					},
+				})
+			end, schedulerProfilingEnabled)
 		end)
 		if not ok then
 			error(frameResult)
 		end
-		self:_NotifyActorResults(frameResult)
+		DebugPlus.profile(processSessionsNotifyActorResultsProfileTag, function()
+			self:_NotifyActorResults(frameResult)
+		end, schedulerProfilingEnabled)
 
 		return Ok(true)
 	end, self:_Label())
 end
 
 function ProcessCombatTick:_NotifyActorResults(frameResult: any)
-	for _, entityResult in ipairs(frameResult.EntityResults) do
-		self._actorRegistryService:NotifyActionResult(entityResult.Entity, entityResult)
-	end
+	DebugPlus.profile(processSessionsNotifyActorResultsIterateProfileTag, function()
+		for _, entityResult in ipairs(frameResult.EntityResults) do
+			self._actorRegistryService:NotifyActionResult(entityResult.Entity, entityResult)
+		end
+	end, schedulerProfilingEnabled)
 end
 
 return ProcessCombatTick

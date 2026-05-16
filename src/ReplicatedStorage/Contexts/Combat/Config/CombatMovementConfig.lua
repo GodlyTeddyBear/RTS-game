@@ -153,7 +153,7 @@ CombatMovementConfig.FLOW_SOFT_SEPARATION = table.freeze({
 	-- Chunk size used when dispatching separation work to workers.
 	ParallelBatchSize = 1,
 	-- Timeout for separation worker jobs.
-	ParallelTimeoutSeconds = 0.15,
+	ParallelTimeoutSeconds = 1,
 	-- Minimum pair count before pair solving is offloaded to workers.
 	ParallelMinPairCount = 1,
 	-- Master switch for worker-based pair snapshot building.
@@ -167,17 +167,17 @@ CombatMovementConfig.FLOW_SOFT_SEPARATION = table.freeze({
 	-- Chunk size used when building pair snapshots in parallel.
 	ParallelSnapshotBuildBatchSize = 1,
 	-- Timeout for snapshot-building worker jobs.
-	ParallelSnapshotBuildTimeoutSeconds = 0.15,
+	ParallelSnapshotBuildTimeoutSeconds = 1,
 	-- Minimum entity count before velocity solving is offloaded to workers.
 	ParallelMinVelocityEntityCount = 1,
 	-- Chunk size used when dispatching velocity solve work.
 	ParallelVelocityBatchSize = 1,
 	-- Timeout for velocity solve worker jobs.
-	ParallelVelocityTimeoutSeconds = 0.15,
+	ParallelVelocityTimeoutSeconds = 1,
 	-- Allow the movement system to keep using async worker results.
 	ParallelAsyncEnabled = true,
 	-- Maximum time a worker job may stay in flight before it is dropped.
-	ParallelAsyncMaxInFlightSeconds = 0.15,
+	ParallelAsyncMaxInFlightSeconds = 1,
 	-- Reuse the most recent completed result while a newer one is still running.
 	ParallelAsyncUsePreviousResult = true,
 	-- Deprecated: local calculation fallback is disabled in parallel-only mode.

@@ -32,6 +32,10 @@ export type TOperationDefinition = {
 	InitialLocalMemory: SharedTable?,
 }
 
+export type TStaticOperationDefinition = TOperationDefinition & {
+	BuildEmptyRow: (self: TStaticOperationDefinition, overrides: { [string]: any }?) -> { [string]: any },
+}
+
 export type TParallelQueryError = {
 	Kind: "WorkerError" | "Timeout",
 	OperationName: string,
@@ -54,6 +58,149 @@ export type TRunRequest = {
 	BatchSize: number?,
 	Arguments: { any }?,
 	TimeoutSeconds: number?,
+}
+
+export type TSharedMemoryScalar = Vector2 | Vector3 | CFrame | Color3 | UDim | UDim2 | number | boolean | string | buffer
+export type TSharedMemoryArray = { [number]: TSharedMemoryScalar }
+export type TSharedMemoryFieldValue = TSharedMemoryScalar | TSharedMemoryArray
+export type TSharedMemoryFieldMap = { [string]: TSharedMemoryFieldValue }
+export type TSharedMemorySnapshotBuilder = {
+	Fields: TSharedMemoryFieldMap,
+	ArrayLengths: { [string]: number },
+}
+
+export type TManagedAsyncResult = {
+	RequestId: number,
+	SessionToken: any?,
+	Payload: any?,
+	Rows: { [string]: any }?,
+	Err: any?,
+	CompletedClock: number?,
+}
+
+export type TManagedAsyncState = {
+	PendingRequestId: number,
+	LatestAppliedRequestId: number,
+	LatestCompletedResult: TManagedAsyncResult?,
+	InFlight: boolean,
+	InFlightRequestId: number?,
+	InFlightSessionToken: any?,
+	LastDispatchClock: number,
+}
+
+export type TManagedDispatchStatus = "Dispatched" | "InFlight"
+export type TManagedCompletionStatus = "Accepted" | "StaleRequest" | "ReplacedPrevious"
+export type TManagedConsumeStatus = "Accepted" | "NoResult" | "StaleRequest" | "SessionMismatch"
+
+export type TManagedJobPolicyPreset = "StrictFreshOnly" | "KeepLastGood" | "ApplyFreshOrMarkFallback"
+export type TManagedJobPolicyConfig = {
+	Preset: TManagedJobPolicyPreset,
+}
+
+export type TManagedJobDispatchStatus = TManagedDispatchStatus
+export type TManagedJobConfig = {
+	OperationName: string,
+	BuildLocalMemory: (payload: any) -> SharedTable,
+	BuildRunRequest: (payload: any) -> TRunRequest,
+	GetSessionToken: ((payload: any) -> any?)?,
+	MaxInFlightSeconds: number?,
+	Policy: (TManagedJobPolicyPreset | TManagedJobPolicyConfig)?,
+}
+export type TManagedJobResult = TManagedAsyncResult & {
+	PolicyStatus: "Fresh" | "Fallback",
+	FallbackReason: "PreviousGood" | "Error" | "Timeout"?,
+}
+
+export type TManagedJobStatus = {
+	InFlight: boolean,
+	LastDispatchClock: number,
+	HasCompletedResult: boolean,
+	HasLastGoodResult: boolean,
+	NeedsFallback: boolean,
+	FallbackReason: "PreviousGood" | "Error" | "Timeout"?,
+	PolicyPreset: TManagedJobPolicyPreset,
+	LastError: any?,
+}
+
+export type TRowFieldValidationResult = {
+	IsValid: boolean,
+	FieldName: string?,
+	Reason: string?,
+}
+
+export type TSchemaRowValidationMode = "RequiredOnly" | "Full"
+export type TSchemaRowValidationResult = TRowFieldValidationResult & {
+	RowIndex: number?,
+}
+
+export type TSchemaRowsValidationResult = {
+	IsValid: boolean,
+	InvalidRowCount: number,
+	FirstInvalidRowIndex: number?,
+	FirstInvalidFieldName: string?,
+	Reason: string?,
+}
+
+export type TMemoryFieldValidationResult = {
+	IsValid: boolean,
+	FieldName: string?,
+	Reason: string?,
+}
+
+export type TRowApplicationResult = {
+	RowCount: number,
+	AppliedCount: number,
+	InvalidRowCount: number,
+	UnresolvedCount: number,
+	SkippedCount: number,
+}
+
+export type TReductionSummary = {
+	RowCount: number,
+	ReducedCount: number,
+	SkippedCount: number,
+	GroupCount: number,
+}
+
+export type TParallelQueryProfileCounters = {
+	Dispatches: number,
+	Completions: number,
+	WorkerErrors: number,
+	Timeouts: number,
+	StaleDrops: number,
+	InFlightSkips: number,
+	Fallbacks: number,
+	DecodedRows: number,
+	WorkDispatched: number,
+	LastDurationMilliseconds: number,
+}
+
+export type TParallelQueryOperationProfileSnapshot = {
+	OperationName: string,
+	Counters: TParallelQueryProfileCounters,
+	LastRowCount: number,
+	LastWorkCount: number,
+}
+
+export type TParallelQueryProfileSnapshot = {
+	Name: string,
+	Counters: TParallelQueryProfileCounters,
+	Operations: { [string]: TParallelQueryOperationProfileSnapshot },
+}
+
+export type TManagedJobProfileSnapshot = {
+	OperationName: string,
+	Counters: TParallelQueryProfileCounters,
+}
+
+export type TManagedJob = {
+	Dispatch: (self: TManagedJob, payload: any) -> TManagedJobDispatchStatus,
+	PollCompleted: (self: TManagedJob, currentSessionToken: any?) -> TManagedJobResult?,
+	HasInFlight: (self: TManagedJob) -> boolean,
+	GetStatus: (self: TManagedJob) -> TManagedJobStatus,
+	GetProfileSnapshot: (self: TManagedJob) -> TManagedJobProfileSnapshot?,
+	Reset: (self: TManagedJob) -> (),
+	Destroy: (self: TManagedJob) -> (),
 }
 
 export type TDispatchHandle = {
@@ -95,6 +242,7 @@ export type TParallelQueryRunner = {
 	_coordinator: TTaskCoordinator,
 	_operations: { [string]: TRegisteredOperation },
 	_activeRunCounts: { [string]: number },
+	_managedJobs: { [TManagedJob]: boolean },
 	_destroyed: boolean,
 
 	Run: (
@@ -108,6 +256,9 @@ export type TParallelQueryRunner = {
 		operationName: string,
 		request: TRunRequest
 	) -> typeof(Promise.new(function() end)),
+	CreateManagedJob: (self: TParallelQueryRunner, config: TManagedJobConfig) -> TManagedJob,
+	GetProfileSnapshot: (self: TParallelQueryRunner) -> TParallelQueryProfileSnapshot?,
+	EmitProfileSummary: (self: TParallelQueryRunner, force: boolean?) -> (),
 	SetLocalMemory: (self: TParallelQueryRunner, operationName: string, sharedMemory: SharedTable) -> (),
 	Destroy: (self: TParallelQueryRunner) -> (),
 }
