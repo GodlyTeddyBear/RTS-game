@@ -3,8 +3,10 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local CombatTypes = require(ReplicatedStorage.Contexts.Combat.Types.CombatTypes)
 
@@ -157,6 +159,17 @@ local Catch = Result.Catch
 local Ok = Result.Ok
 local Try = Result.Try
 
+local schedulerProfilingEnabled = DebugConfig.COMBAT_SCHEDULER_PROFILING
+local movementTickProfileTag = "Combat.Scheduler.MovementTick"
+local movementResolveRunnableSessionProfileTag = "Combat.Scheduler.MovementTick.ResolveRunnableSession"
+local movementBeginCombatFrameProfileTag = "Combat.Scheduler.MovementTick.BeginCombatFrame"
+local movementTickMovementFrameProfileTag = "Combat.Scheduler.MovementTick.TickMovementFrame"
+local movementEndCombatFrameProfileTag = "Combat.Scheduler.MovementTick.EndCombatFrame"
+local combatTickProfileTag = "Combat.Scheduler.CombatTick"
+local combatHitboxTickProfileTag = "Combat.Scheduler.CombatTick.HitboxTick"
+local combatProcessSessionsProfileTag = "Combat.Scheduler.CombatTick.ProcessSessions"
+local combatEvaluateEnemyMoveSpeedEffectsProfileTag = "Combat.Scheduler.CombatTick.EvaluateEnemyMoveSpeedEffects"
+
 function CombatContext:KnitInit()
 	CombatBaseContext:KnitInit()
 
@@ -171,40 +184,62 @@ function CombatContext:KnitStart()
 	CombatBaseContext:KnitStart()
 
 	CombatBaseContext:RegisterSchedulerSystem("MovementTick", function()
-		local runnableSessionUserId = nil :: number?
-		self._combatLoopService:ForEachRunnableSession(function(userId: number)
-			runnableSessionUserId = userId
-			return false
-		end)
+		DebugPlus.profile(movementTickProfileTag, function()
+			local runnableSessionUserId = nil :: number?
+			DebugPlus.profile(movementResolveRunnableSessionProfileTag, function()
+				self._combatLoopService:ForEachRunnableSession(function(userId: number)
+					runnableSessionUserId = userId
+					return false
+				end)
+			end, schedulerProfilingEnabled)
 
-		if runnableSessionUserId == nil then
-			return
-		end
+			if runnableSessionUserId == nil then
+				return
+			end
 
-		local dt = CombatBaseContext:GetSchedulerDeltaTime()
-		local currentTime = os.clock()
-		self._movementService:BeginCombatFrame(runnableSessionUserId, currentTime)
-		self._movementService:TickMovementFrame(dt)
-		self._movementService:EndCombatFrame(runnableSessionUserId)
+			local dt = CombatBaseContext:GetSchedulerDeltaTime()
+			local currentTime = os.clock()
+
+			DebugPlus.profile(movementBeginCombatFrameProfileTag, function()
+				self._movementService:BeginCombatFrame(runnableSessionUserId :: number, currentTime)
+			end, schedulerProfilingEnabled)
+
+			DebugPlus.profile(movementTickMovementFrameProfileTag, function()
+				self._movementService:TickMovementFrame(dt)
+			end, schedulerProfilingEnabled)
+
+			DebugPlus.profile(movementEndCombatFrameProfileTag, function()
+				self._movementService:EndCombatFrame(runnableSessionUserId :: number)
+			end, schedulerProfilingEnabled)
+		end, schedulerProfilingEnabled)
 	end)
 
 	CombatBaseContext:RegisterSchedulerSystem("CombatTick", function()
-		local dt = CombatBaseContext:GetSchedulerDeltaTime()
-		self._hitboxService:Tick(dt)
+		DebugPlus.profile(combatTickProfileTag, function()
+			local dt = CombatBaseContext:GetSchedulerDeltaTime()
 
-		local didRunCombatFrame = false
-		self._combatLoopService:ForEachSession(function(userId: number)
-			local tickResult = self._processCombatTickCommand:Execute(userId, dt)
-			if tickResult.success and tickResult.value then
-				didRunCombatFrame = true
+			DebugPlus.profile(combatHitboxTickProfileTag, function()
+				self._hitboxService:Tick(dt)
+			end, schedulerProfilingEnabled)
+
+			local didRunCombatFrame = false
+			DebugPlus.profile(combatProcessSessionsProfileTag, function()
+				self._combatLoopService:ForEachSession(function(userId: number)
+					local tickResult = self._processCombatTickCommand:Execute(userId, dt)
+					if tickResult.success and tickResult.value then
+						didRunCombatFrame = true
+					end
+					return nil
+				end)
+			end, schedulerProfilingEnabled)
+
+			if didRunCombatFrame then
+				-- Enemy move speed is derived from shared live combat state, so refresh it once per frame.
+				DebugPlus.profile(combatEvaluateEnemyMoveSpeedEffectsProfileTag, function()
+					self._statusService:EvaluateEnemyMoveSpeedEffects()
+				end, schedulerProfilingEnabled)
 			end
-			return nil
-		end)
-
-		if didRunCombatFrame then
-			-- Enemy move speed is derived from shared live combat state, so refresh it once per frame.
-			self._statusService:EvaluateEnemyMoveSpeedEffects()
-		end
+		end, schedulerProfilingEnabled)
 	end)
 
 	CombatBaseContext:OnContextEvent("Run", "WaveStarted", function(waveNumber: number, isEndless: boolean)
@@ -223,15 +258,11 @@ function CombatContext:KnitStart()
 		self:_OnPlayerRemoving(player)
 	end, "_playerRemovingConnection")
 
-	self._animationCallbackConnection =
-		self.Client.AnimationCallback:Connect(function(
-			player: Player,
-			actorHandle: string,
-			callbackType: string,
-			actorKind: "Enemy" | "Structure"?
-		)
+	self._animationCallbackConnection = self.Client.AnimationCallback:Connect(
+		function(player: Player, actorHandle: string, callbackType: string, actorKind: "Enemy" | "Structure"?)
 			self._handleAnimationCallbackCommand:Execute(player, actorHandle, callbackType, actorKind)
-		end)
+		end
+	)
 end
 
 function CombatContext:_OnRunWaveStarted(waveNumber: number, isEndless: boolean)

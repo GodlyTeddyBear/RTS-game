@@ -3,13 +3,12 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local MuchachoHitbox = require(ReplicatedStorage.Utilities.MuchachoHitbox)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 
 local HITBOX_PROFILING_ENABLED = true
-local profileBegin = debug.profilebegin
-local profileEnd = debug.profileend
 local createProfileTag = "Combat:HitboxService:Create"
 local touchProfileTag = "Combat:HitboxService:Touch"
 local destroyProfileTag = "Combat:HitboxService:Destroy"
@@ -33,22 +32,6 @@ export type THitEntity = {
 
 local HitboxService = {}
 HitboxService.__index = HitboxService
-
-local function _runProfiled(tag: string, callback: () -> any?): any
-	if not HITBOX_PROFILING_ENABLED then
-		return callback()
-	end
-
-	profileBegin(tag)
-	local packed = table.pack(xpcall(callback, debug.traceback))
-	profileEnd()
-
-	if not packed[1] then
-		error(packed[2], 0)
-	end
-
-	return table.unpack(packed, 2, packed.n :: number)
-end
 
 local function EnsureHitboxFolder(): Folder
 	local existing = Workspace:FindFirstChild("Hitboxes")
@@ -130,76 +113,79 @@ function HitboxService:CreateAttackHitboxForModel(
 	model: Model?,
 	config: THitboxConfig
 ): { success: boolean, handle: THitboxHandle?, reason: string? }
-	return _runProfiled(createProfileTag, function()
-		if model == nil then
-			return {
-				success = false,
-				reason = "MissingModelRef",
-			}
-		end
+	local closeCreateProfile = DebugPlus.begin(createProfileTag, HITBOX_PROFILING_ENABLED)
 
-		local primaryPart = model.PrimaryPart
-		if primaryPart == nil then
-			return {
-				success = false,
-				reason = "MissingPrimaryPart",
-			}
-		end
-
-		local hitbox = MuchachoHitbox.CreateHitbox()
-		hitbox.DetectionMode = config.DetectionMode
-		hitbox.Shape = config.Shape
-		hitbox.Size = config.Size
-		hitbox.Offset = config.Offset
-		hitbox.CFrame = primaryPart
-		hitbox.Visualizer = config.Visualize
-		hitbox.VisualizerContainer = self._hitboxFolder
-		hitbox.AutoDestroy = false
-
-		hitbox.OverlapParams = SpatialQuery.BuildOverlapParams(SpatialQuery.Presets.ExcludeModel(model))
-
-		if self._runner == nil then
-			self._runner = MuchachoHitbox.CreateRunner()
-		end
-
-		local handle: THitboxHandle = hitbox.Key
-		local janitor = Janitor.new()
-		self._janitors[handle] = janitor
-		self._hitEntities[handle] = {}
-		self._hitEntityKeys[handle] = {}
-
-		janitor:Add(hitbox, "Destroy")
-		janitor:Add(
-			hitbox.Touched:Connect(function(hitPart: BasePart, _humanoid: Humanoid?)
-				_runProfiled(touchProfileTag, function()
-					local hitEntity = self:_ResolveTouchedEntity(hitPart)
-					if hitEntity == nil then
-						return
-					end
-
-					local hitKey = _buildHitKey(hitEntity.Kind, hitEntity.Entity)
-					local hitKeyMap = self._hitEntityKeys[handle]
-					if hitKeyMap == nil or hitKeyMap[hitKey] then
-						return
-					end
-
-					hitKeyMap[hitKey] = true
-					local hitList = self._hitEntities[handle]
-					if hitList ~= nil then
-						table.insert(hitList, hitEntity)
-					end
-				end)
-			end),
-			"Disconnect"
-		)
-
-		hitbox:Start(self._runner)
-
+	if model == nil then
+		closeCreateProfile()
 		return {
-			success = true,
-			handle = handle,
+			success = false,
+			reason = "MissingModelRef",
 		}
-	end)
+	end
+
+	local primaryPart = model.PrimaryPart
+	if primaryPart == nil then
+		closeCreateProfile()
+		return {
+			success = false,
+			reason = "MissingPrimaryPart",
+		}
+	end
+
+	local hitbox = MuchachoHitbox.CreateHitbox()
+	hitbox.DetectionMode = config.DetectionMode
+	hitbox.Shape = config.Shape
+	hitbox.Size = config.Size
+	hitbox.Offset = config.Offset
+	hitbox.CFrame = primaryPart
+	hitbox.Visualizer = config.Visualize
+	hitbox.VisualizerContainer = self._hitboxFolder
+	hitbox.AutoDestroy = false
+
+	hitbox.OverlapParams = SpatialQuery.BuildOverlapParams(SpatialQuery.Presets.ExcludeModel(model))
+
+	if self._runner == nil then
+		self._runner = MuchachoHitbox.CreateRunner()
+	end
+
+	local handle: THitboxHandle = hitbox.Key
+	local janitor = Janitor.new()
+	self._janitors[handle] = janitor
+	self._hitEntities[handle] = {}
+	self._hitEntityKeys[handle] = {}
+
+	local onTouched = DebugPlus.wrap(touchProfileTag, function(hitPart: BasePart, _humanoid: Humanoid?)
+		local hitEntity = self:_ResolveTouchedEntity(hitPart)
+		if hitEntity == nil then
+			return
+		end
+
+		local hitKey = _buildHitKey(hitEntity.Kind, hitEntity.Entity)
+		local hitKeyMap = self._hitEntityKeys[handle]
+		if hitKeyMap == nil or hitKeyMap[hitKey] then
+			return
+		end
+
+		hitKeyMap[hitKey] = true
+		local hitList = self._hitEntities[handle]
+		if hitList ~= nil then
+			table.insert(hitList, hitEntity)
+		end
+	end, HITBOX_PROFILING_ENABLED)
+
+	janitor:Add(hitbox, "Destroy")
+	janitor:Add(
+		hitbox.Touched:Connect(onTouched),
+		"Disconnect"
+	)
+
+	hitbox:Start(self._runner)
+	closeCreateProfile()
+
+	return {
+		success = true,
+		handle = handle,
+	}
 end
 
 function HitboxService:DidHitTarget(handle: THitboxHandle, targetEntity: number, targetKind: TEntityKind): boolean
@@ -220,7 +206,7 @@ function HitboxService:GetHitEntities(handle: THitboxHandle): { THitEntity }
 end
 
 function HitboxService:DestroyHitbox(handle: THitboxHandle)
-	_runProfiled(destroyProfileTag, function()
+	DebugPlus.profile(destroyProfileTag, function()
 		local janitor = self._janitors[handle]
 		if janitor ~= nil then
 			pcall(function()
@@ -231,7 +217,7 @@ function HitboxService:DestroyHitbox(handle: THitboxHandle)
 		self._janitors[handle] = nil
 		self._hitEntities[handle] = nil
 		self._hitEntityKeys[handle] = nil
-	end)
+	end, HITBOX_PROFILING_ENABLED)
 end
 
 function HitboxService:CleanupAll()

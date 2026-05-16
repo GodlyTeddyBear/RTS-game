@@ -13,7 +13,7 @@ local MuchachoHitbox = {}
 local HitboxMethods = {}
 HitboxMethods.__index = HitboxMethods
 
-local DEFAULT_UPDATE_INTERVAL = 12 / 60
+local DEFAULT_UPDATE_INTERVAL = 15 / 60
 
 function HitboxMethods:FindHitbox(key: string)
 	return Lifecycle.FindHitbox(key)
