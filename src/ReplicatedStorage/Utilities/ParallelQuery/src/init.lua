@@ -461,16 +461,16 @@ function ParallelQuery:Run(
 	onComplete: ({ [string]: any }?, TParallelQueryError?) -> ()
 )
 	self:_AssertAlive()
+	local closeRunSetupProfile = Profiling.BeginOperationScope(self._profile, operationName, "Run")
 
 	local operation = self._operations[operationName]
 	assert(operation ~= nil, `ParallelQuery operation "{operationName}" is not registered`)
 	assert(type(onComplete) == "function", `ParallelQuery:Run("{operationName}") requires an onComplete callback`)
 	Validation.AssertRunRequest(request, operationName)
-	local closeRunProfile = Profiling.BeginOperationScope(self._profile, operationName, "Run")
 
 	local workCount = request.WorkCount
 	if workCount == 0 then
-		closeRunProfile()
+		closeRunSetupProfile()
 		onComplete({}, nil)
 		return
 	end
@@ -518,7 +518,6 @@ function ParallelQuery:Run(
 		failureConnection:Disconnect()
 		failureBindable:Destroy()
 		self:_DecrementActiveRun(operationName)
-		closeRunProfile()
 	end
 
 	local function settle(rows: { [string]: any }?, err: TParallelQueryError?, cancelDispatch: boolean?)
@@ -538,12 +537,14 @@ function ParallelQuery:Run(
 
 	if request.TimeoutSeconds ~= nil then
 		timeoutThread = task.delay(request.TimeoutSeconds, function()
+			local closeTimeoutProfile = Profiling.BeginOperationScope(self._profile, operationName, "Timeout")
 			settle(nil, {
 				Kind = "Timeout",
 				OperationName = operationName,
 				Message = `ParallelQuery operation "{operationName}" timed out after {request.TimeoutSeconds} seconds`,
 				TimeoutSeconds = request.TimeoutSeconds,
 			}, true)
+			closeTimeoutProfile()
 		end)
 	end
 
@@ -553,17 +554,21 @@ function ParallelQuery:Run(
 		batchSize,
 		function(flattenedResults)
 			task.defer(function()
+				local closeCompleteProfile = Profiling.BeginOperationScope(self._profile, operationName, "Complete")
 				if settled then
+					closeCompleteProfile()
 					return
 				end
 
 				if #failureReports > 0 then
 					settle(nil, _BuildWorkerError(operationName, failureReports), false)
+					closeCompleteProfile()
 					return
 				end
 
 				local rows = _BuildDecodedRows(operation.Schema, flattenedResults, workCount)
 				settle(rows, nil, false)
+				closeCompleteProfile()
 			end)
 		end,
 		false,
@@ -571,6 +576,7 @@ function ParallelQuery:Run(
 		failureBindable,
 		table.unpack(argumentsList)
 	)
+	closeRunSetupProfile()
 end
 
 --[=[
