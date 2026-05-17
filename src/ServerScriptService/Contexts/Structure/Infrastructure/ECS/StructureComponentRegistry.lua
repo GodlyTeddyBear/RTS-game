@@ -49,6 +49,7 @@ function StructureComponentRegistry:_RegisterComponents(_registry: any, _name: s
 	-- [AUTHORITATIVE] stable identity metadata.
 	self:RegisterComponent("IdentityComponent", "Structure.Identity", "AUTHORITATIVE")
 	self:RegisterTag("ActiveTag", "Structure.ActiveTag")
+	self:RegisterTag("DirtyTag", "Structure.DirtyTag")
 end
 
 return StructureComponentRegistry

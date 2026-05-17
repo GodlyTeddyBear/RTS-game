@@ -102,6 +102,14 @@ function StructureGameObjectSyncService:_QueryAllEntities(): { number }
 	return self:GetEntityFactoryOrThrow():QueryActiveEntities()
 end
 
+function StructureGameObjectSyncService:_GetDirtyTag(): any?
+	return self:GetComponentsOrThrow().DirtyTag
+end
+
+function StructureGameObjectSyncService:_ClearDirty(entity: number)
+	self:GetWorldOrThrow():remove(entity, self:GetComponentsOrThrow().DirtyTag)
+end
+
 -- Sync should read each field from its true owner: structure identity and health come
 -- from StructureEntityFactory, while live running combat action comes from CombatContext.
 -- This mixed read is intentional and not a layering mistake.

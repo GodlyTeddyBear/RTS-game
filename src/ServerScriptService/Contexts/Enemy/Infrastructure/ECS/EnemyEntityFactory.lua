@@ -108,6 +108,7 @@ function EnemyEntityFactory:SetGoalPosition(entity: number, goalPosition: Vector
 		GoalPosition = goalPosition,
 		IsMoving = false,
 	})
+	self:_Add(entity, self._components.DirtyTag)
 end
 
 function EnemyEntityFactory:ClearGoalPosition(entity: number)
@@ -194,8 +195,14 @@ function EnemyEntityFactory:MarkDirty(entity: number)
 	self:_Add(entity, self._components.DirtyTag)
 end
 
+function EnemyEntityFactory:IsDirty(entity: number): boolean
+	self:RequireReady()
+	return self:_Has(entity, self._components.DirtyTag)
+end
+
 function EnemyEntityFactory:UpdatePosition(entity: number, cframe: CFrame)
 	self:SetTransformCFrame(entity, cframe)
+	self:_Add(entity, self._components.DirtyTag)
 end
 
 function EnemyEntityFactory:GetDeathCFrame(entity: number): CFrame?

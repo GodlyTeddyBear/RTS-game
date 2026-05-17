@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local AI = require(ReplicatedStorage.Utilities.AI)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local RuntimeFactCache = require(ReplicatedStorage.Utilities.RuntimeFactCache)
 local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.StructureConfig)
 local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.StructureTypes)
 local Nodes = require(script.Parent.Parent.BehaviorSystem.Nodes)
@@ -39,6 +40,11 @@ local StructureRuntimeBinding = table.freeze({
 	ServiceField = "_gameObjectSyncService",
 	SyncPhase = "StructureSync",
 })
+local POSITION_INVALIDATION_EPSILON = 1e-4
+local FACT_CACHE_REFRESH_INTERVAL_SECONDS = 0.2
+local FACT_GROUP_CACHE_REFRESH_INTERVAL_SECONDS = 1
+local CHEAP_FACT_GROUP_COMBAT_STATS = "CombatStats"
+local CHEAP_FACT_GROUP_SPATIAL = "Spatial"
 
 local function _CloneActionState(actionState: any): any
 	if type(actionState) ~= "table" then
@@ -64,6 +70,14 @@ local function _CloneActionState(actionState: any): any
 	}
 end
 
+local function _HasPositionChanged(previousPosition: Vector3?, currentPosition: Vector3?): boolean
+	if previousPosition == nil or currentPosition == nil then
+		return previousPosition ~= currentPosition
+	end
+
+	return (currentPosition - previousPosition).Magnitude > POSITION_INVALIDATION_EPSILON
+end
+
 -- ── Public ────────────────────────────────────────────────────────────────────
 
 -- Creates a new structure combat adapter service with deferred combat-service wiring.
@@ -76,6 +90,8 @@ function StructureCombatAdapterService.new()
 	local self = setmetatable({}, StructureCombatAdapterService)
 	self._configuredCombatServices = false
 	self._runtimeOwner = nil
+	self._cachedFactsByEntity = {}
+	self._cachedExecutorServicesByEntity = {}
 	return self
 end
 
@@ -194,13 +210,15 @@ function StructureCombatAdapterService:RegisterActor(entity: number): Result.Res
 			GetActorLabel = function(): string?
 				return self:_BuildActorHandle(entity)
 			end,
-			BuildFacts = function(_currentTime: number): { [string]: any }
-				return self:_BuildFacts(entity)
+			BuildFacts = function(currentTime: number): { [string]: any }
+				return self:_BuildFacts(entity, currentTime)
 			end,
 			BuildServices = function(currentTime: number, tickId: number?): { [string]: any }
 				return self:_BuildServices(entity, currentTime, tickId)
 			end,
 			OnRemoved = function()
+				self:_ClearCachedFacts(entity)
+				self:_ClearCachedExecutorServices(entity)
 				self._combatServices.StatusService:RemoveAuraSource(actorHandle)
 			end,
 			OnActionStateChanged = function(actionState: any)
@@ -222,6 +240,8 @@ function StructureCombatAdapterService:UnregisterActor(entity: number): Result.R
 		return Result.Ok(false)
 	end
 
+	self:_ClearCachedFacts(entity)
+	self:_ClearCachedExecutorServices(entity)
 	return self._combatContext:UnregisterCombatActor(self:_BuildActorHandle(entity))
 end
 
@@ -300,34 +320,109 @@ function StructureCombatAdapterService:_BuildActorHandle(entity: number): string
 end
 
 -- Builds the fact snapshot consumed by structure behavior nodes on each combat tick.
-function StructureCombatAdapterService:_BuildFacts(entity: number): { [string]: any }
-	return self._factsResolver.BuildFacts(entity)
+function StructureCombatAdapterService:_BuildFacts(entity: number, currentTime: number): { [string]: any }
+	self:_RefreshCheapFactGroupDirtiness(entity)
+	return RuntimeFactCache.Resolve(self._cachedFactsByEntity, entity, currentTime, {
+		DefaultCheapFactGroupRefreshIntervalSeconds = FACT_GROUP_CACHE_REFRESH_INTERVAL_SECONDS,
+		RefreshIntervalSeconds = FACT_CACHE_REFRESH_INTERVAL_SECONDS,
+		CheapFactGroups = self._factsResolver.BuildCheapFactGroups(entity),
+		ValidateCachedTarget = function(
+			cachedTargetState: {
+				TargetEntity: number?,
+				TargetKind: string?,
+				TargetPosition: Vector3?,
+			},
+			cheapFacts: { [string]: any }
+		): { TargetEntity: number?, TargetKind: string?, TargetPosition: Vector3? }?
+			return self._factsResolver.ValidateCachedTarget(cachedTargetState, cheapFacts)
+		end,
+		ReacquireTarget = function(
+			cheapFacts: { [string]: any }
+		): { TargetEntity: number?, TargetKind: string?, TargetPosition: Vector3? }?
+			return self._factsResolver.ReacquireTarget(cheapFacts)
+		end,
+		BuildFactSnapshot = function(
+			cheapFacts: { [string]: any },
+			targetState: {
+				TargetEntity: number?,
+				TargetKind: string?,
+				TargetPosition: Vector3?,
+			}
+		): { [string]: any }
+			return self._factsResolver.BuildFactSnapshot(cheapFacts, targetState)
+		end,
+		GetActorPosition = function(cheapFacts: { [string]: any }): Vector3?
+			return cheapFacts.ActorPosition
+		end,
+	})
 end
 
--- Builds the service map exposed to structure behavior executors for the current tick.
-function StructureCombatAdapterService:_BuildServices(entity: number, currentTime: number, tickId: number?): { [string]: any }
+function StructureCombatAdapterService:_RefreshCheapFactGroupDirtiness(entity: number)
+	local cacheRecord = RuntimeFactCache.GetRecord(self._cachedFactsByEntity, entity)
+	if cacheRecord == nil then
+		return
+	end
+
+	local currentPosition = self._entityFactory:GetPosition(entity)
+	local spatialGroup = cacheRecord.CheapFactGroups[CHEAP_FACT_GROUP_SPATIAL]
+	if spatialGroup ~= nil and _HasPositionChanged(spatialGroup.Facts.ActorPosition, currentPosition) then
+		RuntimeFactCache.MarkCheapFactGroupDirty(self._cachedFactsByEntity, entity, CHEAP_FACT_GROUP_SPATIAL)
+	end
+
+	if self._entityFactory:IsDirty(entity) then
+		local attackStats = self._entityFactory:GetAttackStats(entity)
+		local attackRange = if attackStats ~= nil then attackStats.AttackRange else nil
+		local combatStatsGroup = cacheRecord.CheapFactGroups[CHEAP_FACT_GROUP_COMBAT_STATS]
+		if combatStatsGroup ~= nil and combatStatsGroup.Facts.AttackRange ~= attackRange then
+			RuntimeFactCache.MarkCheapFactGroupDirty(
+				self._cachedFactsByEntity,
+				entity,
+				CHEAP_FACT_GROUP_COMBAT_STATS
+			)
+		end
+	end
+end
+
+function StructureCombatAdapterService:_ClearCachedFacts(entity: number)
+	RuntimeFactCache.Clear(self._cachedFactsByEntity, entity)
+end
+
+function StructureCombatAdapterService:_ClearCachedExecutorServices(entity: number)
+	self._cachedExecutorServicesByEntity[entity] = nil
+end
+
+function StructureCombatAdapterService:_GetOrCreateCachedExecutorServices(entity: number): { [string]: any }
+	local cachedServices = self._cachedExecutorServicesByEntity[entity]
+	if cachedServices ~= nil then
+		return cachedServices
+	end
+
 	local identity = self._entityFactory:GetIdentity(entity)
 	local stasisConfig = nil
 	if identity ~= nil then
 		stasisConfig = StructureConfig.STRUCTURES[identity.StructureType]
 	end
 
-	local services = {
+	cachedServices = {
 		StructureEntityFactory = self._structureFactoryProxyResolver.CreateProxy(entity),
 		EnemyEntityFactory = self._enemyEntityFactory,
 		CombatPerceptionService = self._perceptionResolver.CreateProxy(),
-		CurrentTime = currentTime,
+		CurrentTime = 0,
 		ProjectileService = self._projectileProxyResolver.CreateProxy(entity),
 		StatusService = self._combatServices.StatusService,
 		StatusSourceHandle = self:_BuildActorHandle(entity),
 		StasisConfig = stasisConfig,
 	}
+	self._cachedExecutorServicesByEntity[entity] = cachedServices
+	return cachedServices
+end
 
-	if type(tickId) == "number" then
-		services.TickId = tickId
-	end
-
-	return services
+-- Builds the service map exposed to structure behavior executors for the current tick.
+function StructureCombatAdapterService:_BuildServices(entity: number, currentTime: number, tickId: number?): { [string]: any }
+	local cachedServices = self:_GetOrCreateCachedExecutorServices(entity)
+	cachedServices.CurrentTime = currentTime
+	cachedServices.TickId = if type(tickId) == "number" then tickId else nil
+	return cachedServices
 end
 
 return StructureCombatAdapterService

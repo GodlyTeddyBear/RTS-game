@@ -17,14 +17,15 @@ function StructureTargetingResolverFactory.Create(dependencies: {
 				return false
 			end
 
+			local targetPosition = resolver.ResolveEnemyTargetPosition(enemyEntity)
 			local modelRef = dependencies.EnemyEntityFactory:GetModelRef(enemyEntity)
-			if modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
+			if targetPosition == nil or modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
 				return false
 			end
 
 			return SpatialQuery.IsWithinRaycastRange(
 				position,
-				ModelPlus.GetCenterPosition(modelRef.Model),
+				targetPosition,
 				attackRange,
 				SpatialQuery.MergeOptions(
 					SpatialQuery.Presets.CharactersOnly,
@@ -32,6 +33,19 @@ function StructureTargetingResolverFactory.Create(dependencies: {
 				),
 				0.05
 			)
+	end
+
+	function resolver.ResolveEnemyTargetPosition(enemyEntity: number): Vector3?
+			if not dependencies.EnemyEntityFactory:IsAlive(enemyEntity) then
+				return nil
+			end
+
+			local modelRef = dependencies.EnemyEntityFactory:GetModelRef(enemyEntity)
+			if modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
+				return nil
+			end
+
+			return ModelPlus.GetCenterPosition(modelRef.Model)
 	end
 
 	function resolver.FindNearestEnemyInRange(position: Vector3, attackRange: number): number?

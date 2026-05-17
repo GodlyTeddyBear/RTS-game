@@ -56,7 +56,8 @@ function StructureEntityFactory:_OnInit(_registry: any, _name: string, _componen
 			and self._components.ModelRefComponent ~= nil
 			and self._components.TransformComponent ~= nil
 			and self._components.IdentityComponent ~= nil
-			and self._components.ActiveTag ~= nil,
+			and self._components.ActiveTag ~= nil
+			and self._components.DirtyTag ~= nil,
 		"StructureEntityFactory: missing StructureComponentRegistry components"
 	)
 	self:_ConfigureSpatialComponents("ModelRefComponent", "TransformComponent")
@@ -143,6 +144,24 @@ function StructureEntityFactory:SetTarget(entity: number?, targetEntity: number?
 	self:_Set(entity, components.TargetComponent, {
 		Entity = targetEntity,
 	})
+end
+
+function StructureEntityFactory:MarkDirty(entity: number?)
+	if entity == nil then
+		return
+	end
+
+	local components = self:GetComponentsOrThrow()
+	self:_Add(entity, components.DirtyTag)
+end
+
+function StructureEntityFactory:IsDirty(entity: number?): boolean
+	if entity == nil then
+		return false
+	end
+
+	local components = self:GetComponentsOrThrow()
+	return self:_Has(entity, components.DirtyTag)
 end
 
 --[=[
@@ -236,6 +255,7 @@ function StructureEntityFactory:SetCooldownElapsed(entity: number?, elapsed: num
 	self:_Set(entity, components.AttackCooldownComponent, {
 		Elapsed = elapsed,
 	} :: TAttackCooldownComponent)
+	self:MarkDirty(entity)
 end
 
 function StructureEntityFactory:ApplyDamage(entity: number, amount: number): boolean
@@ -251,6 +271,7 @@ function StructureEntityFactory:ApplyDamage(entity: number, amount: number): boo
 		Current = nextHp,
 		Max = health.Max,
 	} :: THealthComponent)
+	self:MarkDirty(entity)
 
 	return nextHp <= 0
 end
@@ -294,6 +315,7 @@ function StructureEntityFactory:SetModelRef(entity: number?, model: Model)
 
 	CombatECSEntityFactory.SetModelRef(self, entity, model)
 	self:SetTransformCFrame(entity, model:GetPivot())
+	self:MarkDirty(entity)
 end
 
 function StructureEntityFactory:ClearModelRef(entity: number?)

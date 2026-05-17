@@ -13,6 +13,7 @@ local AI = require(ReplicatedStorage.Utilities.AI)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local FastFlow = require(ReplicatedStorage.Utilities.FastFlow)
 local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
+local RuntimeFactCache = require(ReplicatedStorage.Utilities.RuntimeFactCache)
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local EnemyTypes = require(ReplicatedStorage.Contexts.Enemy.Types.EnemyTypes)
@@ -47,6 +48,13 @@ local EnemyRuntimeBinding = table.freeze({
 })
 local FASTFLOW_ARROW_FOLDER_NAME = "FastFlowArrowParts"
 local FLOWFIELD_DIRECTION_EPSILON_SQUARED = 1e-6
+local POSITION_INVALIDATION_EPSILON = 1e-4
+local FACT_CACHE_REFRESH_INTERVAL_SECONDS = 0.2
+local FACT_GROUP_CACHE_REFRESH_INTERVAL_SECONDS = 1
+local CHEAP_FACT_GROUP_NAVIGATION = "Navigation"
+local CHEAP_FACT_GROUP_SPATIAL_COMBAT = "SpatialCombat"
+local CHEAP_FACT_GROUP_STATUS = "Status"
+local FLEE_THRESHOLD = 0.2
 
 local function _GetGridSubdivisions(): number
 	local gridConfig = CombatMovementConfig.FASTFLOW_GRID
@@ -64,6 +72,22 @@ local function _GetGridOriginWorld(spec: GridSpec): Vector3
 	local localX = -spec.GridSize.X * 0.5 + spec.TileSize * 0.5 + (midCol - 1) * spec.TileSize
 	local localZ = -spec.GridSize.Z * 0.5 + spec.TileSize * 0.5 + (midRow - 1) * spec.TileSize
 	return spec.GridCFrame:PointToWorldSpace(Vector3.new(localX, 0, localZ))
+end
+
+local function _HasPositionChanged(previousPosition: Vector3?, currentPosition: Vector3?): boolean
+	if previousPosition == nil or currentPosition == nil then
+		return previousPosition ~= currentPosition
+	end
+
+	return (currentPosition - previousPosition).Magnitude > POSITION_INVALIDATION_EPSILON
+end
+
+local function _ResolveHealthPct(health: { Current: number, Max: number }?): number
+	if health == nil or health.Max <= 0 then
+		return 1
+	end
+
+	return math.clamp(health.Current / health.Max, 0, 1)
 end
 
 local function _BuildFlowGridMapping(spec: GridSpec, subdivisions: number): FastFlowHelper.TFlowGridMapping
@@ -132,6 +156,7 @@ function EnemyCombatAdapterService.new()
 	self._configuredCombatServices = false
 	self._runtimeOwner = nil
 	self._isFastFlowConfigured = false
+	self._cachedFactsByEntity = {}
 	self._cachedExecutorServicesByEntity = {}
 	return self
 end
@@ -428,6 +453,7 @@ function EnemyCombatAdapterService:RegisterActor(entity: number): Result.Result<
 				self._combatServices.MovementService:StopMovement(entity)
 			end,
 			OnRemoved = function()
+				self:_ClearCachedFacts(entity)
 				self:_ClearCachedExecutorServices(entity)
 				self._combatServices.MovementService:StopMovement(entity)
 				self._combatServices.LockOnService:DetachConstraint(entity)
@@ -450,6 +476,7 @@ end
     @return Result.Result<boolean> -- Whether the actor was removed successfully.
 ]=]
 function EnemyCombatAdapterService:UnregisterActor(entity: number): Result.Result<boolean>
+	self:_ClearCachedFacts(entity)
 	self:_ClearCachedExecutorServices(entity)
 	return self._combatContext:UnregisterCombatActor(self:_BuildActorHandle(entity))
 end
@@ -530,8 +557,97 @@ function EnemyCombatAdapterService:_BuildActorHandle(entity: number): string
 end
 
 -- Builds the fact snapshot consumed by enemy behavior nodes on each combat tick.
-function EnemyCombatAdapterService:_BuildFacts(entity: number, _currentTime: number): { [string]: any }
-	return self._factsResolver.BuildFacts(entity, _currentTime)
+function EnemyCombatAdapterService:_BuildFacts(entity: number, currentTime: number): { [string]: any }
+	self:_RefreshCheapFactGroupDirtiness(entity)
+	return RuntimeFactCache.Resolve(self._cachedFactsByEntity, entity, currentTime, {
+		DefaultCheapFactGroupRefreshIntervalSeconds = FACT_GROUP_CACHE_REFRESH_INTERVAL_SECONDS,
+		RefreshIntervalSeconds = FACT_CACHE_REFRESH_INTERVAL_SECONDS,
+		CheapFactGroups = self._factsResolver.BuildCheapFactGroups(entity),
+		ValidateCachedTarget = function(
+			cachedTargetState: {
+				TargetEntity: number?,
+				TargetKind: string?,
+				TargetPosition: Vector3?,
+			},
+			cheapFacts: { [string]: any }
+		): { TargetEntity: number?, TargetKind: string?, TargetPosition: Vector3? }?
+			return self._factsResolver.ValidateCachedTarget(cachedTargetState, cheapFacts)
+		end,
+		ReacquireTarget = function(
+			cheapFacts: { [string]: any }
+		): { TargetEntity: number?, TargetKind: string?, TargetPosition: Vector3? }?
+			return self._factsResolver.ReacquireTarget(cheapFacts)
+		end,
+		BuildFactSnapshot = function(
+			cheapFacts: { [string]: any },
+			targetState: {
+				TargetEntity: number?,
+				TargetKind: string?,
+				TargetPosition: Vector3?,
+			}
+		): { [string]: any }
+			return self._factsResolver.BuildFactSnapshot(cheapFacts, targetState)
+		end,
+		GetActorPosition = function(cheapFacts: { [string]: any }): Vector3?
+			return cheapFacts.ActorPosition
+		end,
+	})
+end
+
+function EnemyCombatAdapterService:_RefreshCheapFactGroupDirtiness(entity: number)
+	local cacheRecord = RuntimeFactCache.GetRecord(self._cachedFactsByEntity, entity)
+	if cacheRecord == nil then
+		return
+	end
+
+	local currentPositionRecord = self._entityFactory:GetPosition(entity)
+	local currentPosition = if currentPositionRecord ~= nil then currentPositionRecord.CFrame.Position else nil
+	local currentRole = self._entityFactory:GetRole(entity)
+	local currentAttackRange = if currentRole ~= nil and type(currentRole.AttackRange) == "number"
+		then currentRole.AttackRange
+		else nil
+
+	local spatialCombatGroup = cacheRecord.CheapFactGroups[CHEAP_FACT_GROUP_SPATIAL_COMBAT]
+	if spatialCombatGroup ~= nil then
+		local cachedSpatialFacts = spatialCombatGroup.Facts
+		if _HasPositionChanged(cachedSpatialFacts.ActorPosition, currentPosition)
+			or cachedSpatialFacts.AttackRange ~= currentAttackRange
+		then
+			RuntimeFactCache.MarkCheapFactGroupDirty(
+				self._cachedFactsByEntity,
+				entity,
+				CHEAP_FACT_GROUP_SPATIAL_COMBAT
+			)
+		end
+	end
+
+	if self._entityFactory:IsDirty(entity) then
+		local pathState = self._entityFactory:GetPathState(entity)
+		local hasGoalTarget = pathState ~= nil and pathState.GoalPosition ~= nil
+		local navigationGroup = cacheRecord.CheapFactGroups[CHEAP_FACT_GROUP_NAVIGATION]
+		if navigationGroup ~= nil and navigationGroup.Facts.HasGoalTarget ~= hasGoalTarget then
+			RuntimeFactCache.MarkCheapFactGroupDirty(
+				self._cachedFactsByEntity,
+				entity,
+				CHEAP_FACT_GROUP_NAVIGATION
+			)
+		end
+
+		local health = self._entityFactory:GetHealth(entity)
+		local healthPct = _ResolveHealthPct(health)
+		local shouldFlee = healthPct < FLEE_THRESHOLD
+		local statusGroup = cacheRecord.CheapFactGroups[CHEAP_FACT_GROUP_STATUS]
+		if statusGroup ~= nil then
+			local cachedStatusFacts = statusGroup.Facts
+			if cachedStatusFacts.HealthPct ~= healthPct or cachedStatusFacts.ShouldFlee ~= shouldFlee then
+				RuntimeFactCache.MarkCheapFactGroupDirty(self._cachedFactsByEntity, entity, CHEAP_FACT_GROUP_STATUS)
+			end
+		end
+	end
+end
+
+function EnemyCombatAdapterService:_ClearCachedFacts(entity: number)
+	RuntimeFactCache.Clear(self._cachedFactsByEntity, entity)
 end
 
 function EnemyCombatAdapterService:_ClearCachedExecutorServices(entity: number)
