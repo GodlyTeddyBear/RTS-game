@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BehaviorSystem = require(ReplicatedStorage.Utilities.AI.Behavior)
 local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 
 local HookRunner = require(script.Parent.HookRunner)
 local RuntimeEnums = require(script.Parent.RuntimeEnums)
@@ -70,6 +71,32 @@ local _BuildCleanupResult
 local _CreateRuntimeFrameProfile
 local _CaptureMilliseconds
 local _BuildDirectCombatHookOutcome
+
+local runFrameActorTypesProfileTag = "AI.Runtime.RunFrame.ActorTypes"
+local runFrameResolveActorTypesProfileTag = "AI.Runtime.RunFrame.ResolveActorTypes"
+local runFrameActorTypesIterateProfileTag = "AI.Runtime.RunFrame.ActorTypes.Iterate"
+local runFrameActorTypesTreePhaseProfileTag = "AI.Runtime.RunFrame.ActorTypes.TreePhase"
+local runFrameActorTypesTransitionPhaseProfileTag = "AI.Runtime.RunFrame.ActorTypes.TransitionPhase"
+local runFrameActorTypesActionPhaseProfileTag = "AI.Runtime.RunFrame.ActorTypes.ActionPhase"
+local runFrameActionPhaseTickCurrentActionProfileTag = "ActionPhase.TickCurrentAction"
+local runFrameActionPhaseResolveFinishedActionProfileTag = "ActionPhase.ResolveFinishedAction"
+local runFrameBuildEntityStatesIterateProfileTag = "AI.Runtime.RunFrame.BuildEntityStates.IterateEntities"
+local runFrameBuildEntityStatesReadEntitySnapshotProfileTag =
+	"AI.Runtime.RunFrame.BuildEntityStates.IterateEntities.ReadEntitySnapshot"
+local runFrameBuildEntityStatesBuildHookOutcomeProfileTag =
+	"AI.Runtime.RunFrame.BuildEntityStates.IterateEntities.BuildHookOutcome"
+local runFrameBuildHookOutcomeDirectPathProfileTag = "AI.Runtime.BuildHookOutcome.DirectPath"
+local runFrameBuildHookOutcomeBuildContextProfileTag = "AI.Runtime.BuildHookOutcome.BuildContext"
+local runFrameBuildHookOutcomeRunHooksProfileTag = "AI.Runtime.BuildHookOutcome.RunHooks"
+local runFrameBuildHookOutcomeFinalizeProfileTag = "AI.Runtime.BuildHookOutcome.Finalize"
+local runFrameBuildDirectCombatHookOutcomeBuildServicesProfileTag =
+	"AI.Runtime.BuildHookOutcome.DirectPath.BuildServices"
+local runFrameBuildDirectCombatHookOutcomeBuildFactsProfileTag = "AI.Runtime.BuildHookOutcome.DirectPath.BuildFacts"
+local runFrameBuildDirectCombatHookOutcomeBuildFactsPrecheckProfileTag =
+	"AI.Runtime.BuildHookOutcome.DirectPath.BuildFacts.Precheck"
+local runFrameBuildDirectCombatHookOutcomeBuildFactsGateProfileTag =
+	"AI.Runtime.BuildHookOutcome.DirectPath.BuildFacts.Gate"
+local runFrameProfilingEnabled = DebugConfig.AI_RUNTIME_FRAME_PROFILING
 
 local EMPTY_HOOK_OUTCOME: THookOutcome = table.freeze({
 	Facts = table.freeze({}),
@@ -189,7 +216,11 @@ end
 	@param frameContext TFrameContext
 	@return TCleanupBatchResult
 ]=]
-function Runtime:CancelActorActions(actorType: string, entities: { number }, frameContext: TFrameContext): TCleanupBatchResult
+function Runtime:CancelActorActions(
+	actorType: string,
+	entities: { number },
+	frameContext: TFrameContext
+): TCleanupBatchResult
 	Validation.ValidateActorType(actorType)
 	assert(type(entities) == "table", "AiRuntime CancelActorActions entities must be an array")
 	Validation.ValidateFrameContext(frameContext)
@@ -210,7 +241,11 @@ end
 	@param frameContext TFrameContext
 	@return TCleanupBatchResult
 ]=]
-function Runtime:HandleActorDeaths(actorType: string, entities: { number }, frameContext: TFrameContext): TCleanupBatchResult
+function Runtime:HandleActorDeaths(
+	actorType: string,
+	entities: { number },
+	frameContext: TFrameContext
+): TCleanupBatchResult
 	Validation.ValidateActorType(actorType)
 	assert(type(entities) == "table", "AiRuntime HandleActorDeaths entities must be an array")
 	Validation.ValidateFrameContext(frameContext)
@@ -237,20 +272,33 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 	local defects = {}
 	local entityResults = {}
 	local frameProfile = _CreateRuntimeFrameProfile()
-	local actorTypes = _ResolveActorTypes(frameContext, self._actorAdapters, self._actorOrder)
+	local actorTypes = DebugPlus.profile(runFrameResolveActorTypesProfileTag, function()
+		return _ResolveActorTypes(frameContext, self._actorAdapters, self._actorOrder)
+	end, runFrameProfilingEnabled)
 
-	for _, actorType in ipairs(actorTypes) do
-		local adapter = self._actorAdapters[actorType]
-		-- Build a single snapshot list so the later phases work from the same entity set.
-		local entityStates = self:_BuildEntityStates(actorType, adapter, frameContext, defects, entityResults, frameProfile)
+	DebugPlus.profile(runFrameActorTypesProfileTag, function()
+		DebugPlus.profile(runFrameActorTypesIterateProfileTag, function()
+			for _, actorType in ipairs(actorTypes) do
+				local adapter = self._actorAdapters[actorType]
+				-- Build a single snapshot list so the later phases work from the same entity set.
+				local entityStates =
+					self:_BuildEntityStates(actorType, adapter, frameContext, defects, entityResults, frameProfile)
 
-		-- Tree evaluation decides whether the entity should issue a new pending action.
-		self:_RunTreePhase(entityStates, frameContext, defects, frameProfile)
-		-- Transition handling promotes pending actions into the active action slot.
-		self:_RunTransitionPhase(entityStates, frameContext, defects, frameProfile)
-		-- Tick handling advances the active action and resolves terminal results.
-		self:_RunActionPhase(entityStates, frameContext, defects, frameProfile)
-	end
+				-- Tree evaluation decides whether the entity should issue a new pending action.
+				DebugPlus.profile(runFrameActorTypesTreePhaseProfileTag, function()
+					self:_RunTreePhase(entityStates, frameContext, defects, frameProfile)
+				end, runFrameProfilingEnabled)
+				-- Transition handling promotes pending actions into the active action slot.
+				DebugPlus.profile(runFrameActorTypesTransitionPhaseProfileTag, function()
+					self:_RunTransitionPhase(entityStates, frameContext, defects, frameProfile)
+				end, runFrameProfilingEnabled)
+				-- Tick handling advances the active action and resolves terminal results.
+				DebugPlus.profile(runFrameActorTypesActionPhaseProfileTag, function()
+					self:_RunActionPhase(entityStates, frameContext, defects, frameProfile)
+				end, runFrameProfilingEnabled)
+			end
+		end, runFrameProfilingEnabled)
+	end, runFrameProfilingEnabled)
 
 	self._lastFrameTime = frameContext.CurrentTime
 	self:_EmitFrameProfile(frameProfile)
@@ -291,96 +339,107 @@ function Runtime:_BuildEntityStates(
 
 	local buildEntityStateStartedAt = if frameProfile ~= nil then os.clock() else nil
 
-	for _, entity in ipairs(entities) do
-		Validation.ValidateEntityId(actorType, entity, "QueryActiveEntities")
-		if frameProfile ~= nil then
-			frameProfile.ActorCount += 1
-		end
-
-		-- Seed a result record before the per-phase work fills in status fields.
-		local result = {
-			ActorType = actorType,
-			Entity = entity,
-			TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name,
-			StartStatus = nil,
-			CommitStatus = nil,
-			TickActionId = nil,
-			TickStatus = nil,
-			ResolveStatus = nil,
-		}
-		table.insert(entityResults, result)
-
-		local actionStateStartedAt = if frameProfile ~= nil then os.clock() else nil
-		local actionStateSnapshot = adapter:GetActionState(entity)
-		Validation.ValidateActionState(actionStateSnapshot, "AiRuntime BuildEntityStates GetActionState")
-		local workingActionState = _CloneActionState(actionStateSnapshot)
-		if frameProfile ~= nil then
-			frameProfile.InitialActionStateMilliseconds += _CaptureMilliseconds(actionStateStartedAt)
-		end
-		local behaviorTree = adapter:GetCompiledBehaviorTree(entity)
-		Validation.ValidateBehaviorTree(actorType, entity, behaviorTree)
-		local hasCurrentAction = type(workingActionState.CurrentActionId) == "string"
-		local hasPendingAction = type(workingActionState.PendingActionId) == "string"
-		local shouldEvaluateTree = false
-		if behaviorTree ~= nil then
-			shouldEvaluateTree = adapter:ShouldEvaluate(entity, frameContext.CurrentTime)
-			Validation.ValidateShouldEvaluateResult(actorType, entity, shouldEvaluateTree)
-		end
-
-		if behaviorTree == nil then
-			result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name
-		elseif not shouldEvaluateTree then
-			result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNotReady.Name
-		end
-
-		local skipAllPhases = not hasCurrentAction and not hasPendingAction and not shouldEvaluateTree
-		local needsTransitionPhase = hasPendingAction or shouldEvaluateTree
-		local needsActionPhase = hasCurrentAction or hasPendingAction or shouldEvaluateTree
-		local needsFacts = shouldEvaluateTree
-		local hookOutcome = EMPTY_HOOK_OUTCOME
-
-		if frameProfile ~= nil then
-			if skipAllPhases then
-				frameProfile.FullSkipCount += 1
-			elseif shouldEvaluateTree then
-				frameProfile.TreeEvaluatedCount += 1
-			else
-				frameProfile.ActionOnlyCount += 1
+	DebugPlus.profile(runFrameBuildEntityStatesIterateProfileTag, function()
+		for _, entity in ipairs(entities) do
+			Validation.ValidateEntityId(actorType, entity, "QueryActiveEntities")
+			if frameProfile ~= nil then
+				frameProfile.ActorCount += 1
 			end
-		end
 
-		if not skipAllPhases then
-			hookOutcome = self:_BuildHookOutcome(
-				actorType,
-				entity,
-				adapter,
-				workingActionState,
-				frameContext,
-				defects,
-				needsFacts,
-				shouldEvaluateTree,
-				hasCurrentAction or hasPendingAction or shouldEvaluateTree,
-				frameProfile
-			)
-		end
+			-- Seed a result record before the per-phase work fills in status fields.
+			local result = {
+				ActorType = actorType,
+				Entity = entity,
+				TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name,
+				StartStatus = nil,
+				CommitStatus = nil,
+				TickActionId = nil,
+				TickStatus = nil,
+				ResolveStatus = nil,
+			}
+			table.insert(entityResults, result)
 
-		table.insert(entityStates, {
-			Entity = entity,
-			ActorType = actorType,
-			Adapter = adapter,
-			WorkingActionState = workingActionState,
-			Result = result,
-			HookOutcome = hookOutcome,
-			BehaviorTree = behaviorTree,
-			ShouldEvaluateTree = shouldEvaluateTree,
-			NeedsTransitionPhase = needsTransitionPhase,
-			NeedsActionPhase = needsActionPhase,
-			NeedsFacts = needsFacts,
-			SkipAllPhases = skipAllPhases,
-			TreeTouchedActionState = false,
-			NeedsAdapterRefreshAfterTree = shouldEvaluateTree,
-		})
-	end
+			local actionStateStartedAt = if frameProfile ~= nil then os.clock() else nil
+			local workingActionState = nil :: TActionState?
+			local behaviorTree = nil :: TCompiledBehaviorTree?
+			local hasCurrentAction = false
+			local hasPendingAction = false
+			local shouldEvaluateTree = false
+			DebugPlus.profile(runFrameBuildEntityStatesReadEntitySnapshotProfileTag, function()
+				local actionStateSnapshot = adapter:GetActionState(entity)
+				Validation.ValidateActionState(actionStateSnapshot, "AiRuntime BuildEntityStates GetActionState")
+				workingActionState = _CloneActionState(actionStateSnapshot)
+				if frameProfile ~= nil then
+					frameProfile.InitialActionStateMilliseconds += _CaptureMilliseconds(actionStateStartedAt)
+				end
+				behaviorTree = adapter:GetCompiledBehaviorTree(entity)
+				Validation.ValidateBehaviorTree(actorType, entity, behaviorTree)
+				hasCurrentAction = type((workingActionState :: TActionState).CurrentActionId) == "string"
+				hasPendingAction = type((workingActionState :: TActionState).PendingActionId) == "string"
+				if behaviorTree ~= nil then
+					shouldEvaluateTree = adapter:ShouldEvaluate(entity, frameContext.CurrentTime)
+					Validation.ValidateShouldEvaluateResult(actorType, entity, shouldEvaluateTree)
+				end
+			end, runFrameProfilingEnabled)
+			local resolvedWorkingActionState = workingActionState :: TActionState
+
+			if behaviorTree == nil then
+				result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name
+			elseif not shouldEvaluateTree then
+				result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNotReady.Name
+			end
+
+			local skipAllPhases = not hasCurrentAction and not hasPendingAction and not shouldEvaluateTree
+			local needsTransitionPhase = hasPendingAction or shouldEvaluateTree
+			local needsActionPhase = hasCurrentAction or hasPendingAction or shouldEvaluateTree
+			local needsFacts = shouldEvaluateTree
+			local hookOutcome = EMPTY_HOOK_OUTCOME
+
+			if frameProfile ~= nil then
+				if skipAllPhases then
+					frameProfile.FullSkipCount += 1
+				elseif shouldEvaluateTree then
+					frameProfile.TreeEvaluatedCount += 1
+				else
+					frameProfile.ActionOnlyCount += 1
+				end
+			end
+
+			if not skipAllPhases then
+				hookOutcome = DebugPlus.profile(runFrameBuildEntityStatesBuildHookOutcomeProfileTag, function()
+					return self:_BuildHookOutcome(
+						actorType,
+						entity,
+						adapter,
+						resolvedWorkingActionState,
+						frameContext,
+						defects,
+						needsFacts,
+						shouldEvaluateTree,
+						hasCurrentAction or hasPendingAction or shouldEvaluateTree,
+						frameProfile
+					)
+				end, runFrameProfilingEnabled)
+			end
+
+			table.insert(entityStates, {
+				Entity = entity,
+				ActorType = actorType,
+				Adapter = adapter,
+				WorkingActionState = resolvedWorkingActionState,
+				Result = result,
+				HookOutcome = hookOutcome,
+				BehaviorTree = behaviorTree,
+				ShouldEvaluateTree = shouldEvaluateTree,
+				NeedsTransitionPhase = needsTransitionPhase,
+				NeedsActionPhase = needsActionPhase,
+				NeedsFacts = needsFacts,
+				SkipAllPhases = skipAllPhases,
+				TreeTouchedActionState = false,
+				NeedsAdapterRefreshAfterTree = shouldEvaluateTree,
+			})
+		end
+	end, runFrameProfilingEnabled)
 
 	if frameProfile ~= nil then
 		frameProfile.BuildEntityStateMilliseconds += _CaptureMilliseconds(buildEntityStateStartedAt)
@@ -411,7 +470,13 @@ function Runtime:_CleanupActorAction(
 	local adapter = self:_RequireActorAdapter(actorType)
 	if adapter == nil then
 		-- Return a structured invalid-type result instead of throwing so cleanup can stay caller-safe.
-		return _BuildCleanupResult(actorType, entity, cleanupKind, RuntimeEnums.CleanupStatus.InvalidActorType.Name, nil)
+		return _BuildCleanupResult(
+			actorType,
+			entity,
+			cleanupKind,
+			RuntimeEnums.CleanupStatus.InvalidActorType.Name,
+			nil
+		)
 	end
 
 	local defects = {}
@@ -444,7 +509,9 @@ function Runtime:_CleanupActorAction(
 	if not cleanupResult.success then
 		-- Cleanup failures still clear the adapter state so stale actions do not linger after the defect.
 		local defect = {
-			Stage = if cleanupKind == RuntimeEnums.CleanupKind.Cancel.Name then "CancelActorAction" else "HandleActorDeath",
+			Stage = if cleanupKind == RuntimeEnums.CleanupKind.Cancel.Name
+				then "CancelActorAction"
+				else "HandleActorDeath",
 			ActorType = actorType,
 			Entity = entity,
 			ActorLabel = _GetActorLabel(adapter),
@@ -466,7 +533,8 @@ function Runtime:_CleanupActorAction(
 
 	adapter:ClearActionState(entity)
 
-	if cleanupResult.value.Status == RuntimeEnums.CancelStatus.NoCurrentAction.Name
+	if
+		cleanupResult.value.Status == RuntimeEnums.CancelStatus.NoCurrentAction.Name
 		or cleanupResult.value.Status == RuntimeEnums.DeathStatus.NoCurrentAction.Name
 	then
 		-- A no-op cleanup still returns a distinct status for callers that care about the empty-path case.
@@ -513,12 +581,14 @@ function Runtime:_BuildHookOutcome(
 ): THookOutcome
 	local hookStartedAt = if frameProfile ~= nil then os.clock() else nil
 	if self._useDirectCombatHookPath then
-		local directCombatHookOutcome = _BuildDirectCombatHookOutcome(actionState, frameContext, {
-			Entity = entity,
-			NeedsFacts = needsFacts,
-			NeedsServices = needsServices,
-			RuntimeProfile = frameProfile,
-		})
+		local directCombatHookOutcome = DebugPlus.profile(runFrameBuildHookOutcomeDirectPathProfileTag, function()
+			return _BuildDirectCombatHookOutcome(actionState, frameContext, {
+				Entity = entity,
+				NeedsFacts = needsFacts,
+				NeedsServices = needsServices,
+				RuntimeProfile = frameProfile,
+			})
+		end, runFrameProfilingEnabled)
 		if directCombatHookOutcome ~= nil then
 			if frameProfile ~= nil then
 				frameProfile.HookMilliseconds += _CaptureMilliseconds(hookStartedAt)
@@ -527,21 +597,30 @@ function Runtime:_BuildHookOutcome(
 		end
 	end
 
-	local baseServices = if frameContext.Services ~= nil then frameContext.Services else {}
-	local hookContext = {
-		Entity = entity,
-		ActorType = actorType,
-		ActionState = actionState,
-		FrameContext = frameContext,
-		Services = baseServices,
-		Adapter = adapter,
-		NeedsFacts = needsFacts,
-		NeedsBehaviorContext = needsBehaviorContext,
-		NeedsServices = needsServices,
-		RuntimeProfile = frameProfile,
-	}
+	local hookContext = nil :: Types.THookContext?
+	DebugPlus.profile(runFrameBuildHookOutcomeBuildContextProfileTag, function()
+		local baseServices = if frameContext.Services ~= nil then frameContext.Services else {}
+		hookContext = {
+			Entity = entity,
+			ActorType = actorType,
+			ActionState = actionState,
+			FrameContext = frameContext,
+			Services = baseServices,
+			Adapter = adapter,
+			NeedsFacts = needsFacts,
+			NeedsBehaviorContext = needsBehaviorContext,
+			NeedsServices = needsServices,
+			RuntimeProfile = frameProfile,
+		}
+	end, runFrameProfilingEnabled)
 
-	local hookOutcome = self:_RunHooks(entity, actorType, adapter, hookContext, defects)
+	local resolvedHookContext = hookContext :: Types.THookContext
+	local hookOutcome = DebugPlus.profile(runFrameBuildHookOutcomeRunHooksProfileTag, function()
+		return self:_RunHooks(entity, actorType, adapter, resolvedHookContext, defects)
+	end, runFrameProfilingEnabled)
+	DebugPlus.profile(runFrameBuildHookOutcomeFinalizeProfileTag, function()
+		-- Keep a dedicated finalize span so post-hook bookkeeping stays visible in traces.
+	end, runFrameProfilingEnabled)
 	if frameProfile ~= nil then
 		frameProfile.HookMilliseconds += _CaptureMilliseconds(hookStartedAt)
 	end
@@ -574,7 +653,8 @@ function Runtime:_RunTreePhase(
 			continue
 		end
 
-		local treeContext = _BuildTreeContext(entityState.Entity, entityState.ActorType, entityState.Adapter, entityState.HookOutcome)
+		local treeContext =
+			_BuildTreeContext(entityState.Entity, entityState.ActorType, entityState.Adapter, entityState.HookOutcome)
 		local didRun, runError = pcall(function()
 			entityState.BehaviorTree:run(treeContext)
 		end)
@@ -665,7 +745,8 @@ function Runtime:_RunTransitionPhase(
 		local startStatus = startResult.value.Status
 		entityState.Result.StartStatus = startStatus
 
-		if startStatus == RuntimeEnums.StartStatus.NoAction.Name
+		if
+			startStatus == RuntimeEnums.StartStatus.NoAction.Name
 			or startStatus == RuntimeEnums.StartStatus.Blocked.Name
 		then
 			-- These statuses intentionally leave the action state unchanged.
@@ -684,7 +765,8 @@ function Runtime:_RunTransitionPhase(
 			continue
 		end
 
-		if startStatus == RuntimeEnums.StartStatus.MissingAction.Name
+		if
+			startStatus == RuntimeEnums.StartStatus.MissingAction.Name
 			or startStatus == RuntimeEnums.StartStatus.FailedToStart.Name
 		then
 			-- Missing or failed starts reset the adapter state so the entity does not retain a bad pending action.
@@ -694,11 +776,8 @@ function Runtime:_RunTransitionPhase(
 			continue
 		end
 
-		local commitResult = self._runtime:CommitStartedAction(
-			workingActionState,
-			startResult.value,
-			frameContext.CurrentTime
-		)
+		local commitResult =
+			self._runtime:CommitStartedAction(workingActionState, startResult.value, frameContext.CurrentTime)
 		entityState.Result.CommitStatus = commitResult.Status
 
 		if commitResult.Status == RuntimeEnums.CommitStatus.Committed.Name then
@@ -758,7 +837,12 @@ function Runtime:_RunActionPhase(
 			DeltaTime = frameContext.DeltaTime,
 			Services = entityState.HookOutcome.Services,
 		}
+		local closeTickCurrentActionProfile = DebugPlus.begin(
+			runFrameActionPhaseTickCurrentActionProfileTag,
+			runFrameProfilingEnabled
+		)
 		local tickResult = self._runtime:TickCurrentAction(entityState.Entity, workingActionState, runtimeContext)
+		closeTickCurrentActionProfile()
 
 		if not tickResult.success then
 			-- Tick failures clear the action state so the runtime can recover on the next frame.
@@ -779,11 +863,12 @@ function Runtime:_RunActionPhase(
 		entityState.Result.TickActionId = tickResult.value.ActionId
 		entityState.Result.TickStatus = tickStatus
 
-		local resolveResult = self._runtime:ResolveFinishedAction(
-			workingActionState,
-			tickResult.value,
-			frameContext.CurrentTime
+		local closeResolveFinishedActionProfile = DebugPlus.begin(
+			runFrameActionPhaseResolveFinishedActionProfileTag,
+			runFrameProfilingEnabled
 		)
+		local resolveResult = self._runtime:ResolveFinishedAction(workingActionState, tickResult.value, frameContext.CurrentTime)
+		closeResolveFinishedActionProfile()
 		entityState.Result.ResolveStatus = resolveResult.Status
 
 		if resolveResult.Status == RuntimeEnums.ResolveStatus.Resolved.Name then
@@ -901,26 +986,28 @@ function Runtime:_EmitFrameProfile(frameProfile: TRuntimeFrameProfile?)
 
 	self._lastProfileLogAt = now
 	local totalMilliseconds = _CaptureMilliseconds(frameProfile.FrameStartedAt)
-	warn(string.format(
-		"AiRuntime profile | totalMs=%.3f actors=%d fullSkip=%d actionOnly=%d treeActors=%d enumMs=%.3f buildMs=%.3f actionReadMs=%.3f actionRefreshMs=%.3f hookMs=%.3f factsMs=%.3f facts=%d servicesMs=%.3f services=%d treeMs=%.3f transitionMs=%.3f actionMs=%.3f",
-		totalMilliseconds,
-		frameProfile.ActorCount,
-		frameProfile.FullSkipCount,
-		frameProfile.ActionOnlyCount,
-		frameProfile.TreeEvaluatedCount,
-		frameProfile.ActorEnumerationMilliseconds,
-		frameProfile.BuildEntityStateMilliseconds,
-		frameProfile.InitialActionStateMilliseconds,
-		frameProfile.RefreshActionStateMilliseconds,
-		frameProfile.HookMilliseconds,
-		frameProfile.FactBuildMilliseconds,
-		frameProfile.FactBuildCount,
-		frameProfile.ServiceBuildMilliseconds,
-		frameProfile.ServiceBuildCount,
-		frameProfile.TreeMilliseconds,
-		frameProfile.TransitionMilliseconds,
-		frameProfile.ActionMilliseconds
-	))
+	warn(
+		string.format(
+			"AiRuntime profile | totalMs=%.3f actors=%d fullSkip=%d actionOnly=%d treeActors=%d enumMs=%.3f buildMs=%.3f actionReadMs=%.3f actionRefreshMs=%.3f hookMs=%.3f factsMs=%.3f facts=%d servicesMs=%.3f services=%d treeMs=%.3f transitionMs=%.3f actionMs=%.3f",
+			totalMilliseconds,
+			frameProfile.ActorCount,
+			frameProfile.FullSkipCount,
+			frameProfile.ActionOnlyCount,
+			frameProfile.TreeEvaluatedCount,
+			frameProfile.ActorEnumerationMilliseconds,
+			frameProfile.BuildEntityStateMilliseconds,
+			frameProfile.InitialActionStateMilliseconds,
+			frameProfile.RefreshActionStateMilliseconds,
+			frameProfile.HookMilliseconds,
+			frameProfile.FactBuildMilliseconds,
+			frameProfile.FactBuildCount,
+			frameProfile.ServiceBuildMilliseconds,
+			frameProfile.ServiceBuildCount,
+			frameProfile.TreeMilliseconds,
+			frameProfile.TransitionMilliseconds,
+			frameProfile.ActionMilliseconds
+		)
+	)
 end
 
 --[=[
@@ -994,13 +1081,26 @@ function _BuildDirectCombatHookOutcome(
 		RuntimeProfile: TRuntimeFrameProfile?,
 	}
 ): THookOutcome?
-	local baseServices = frameContext.Services
-	if type(baseServices) ~= "table" then
-		return nil
-	end
+	local baseServices = nil
+	local registryService = nil
+	local precheckPassed = DebugPlus.profile(
+		runFrameBuildDirectCombatHookOutcomeBuildFactsPrecheckProfileTag,
+		function()
+			baseServices = frameContext.Services
+			if type(baseServices) ~= "table" then
+				return false
+			end
 
-	local registryService = baseServices.CombatActorRegistryService
-	if registryService == nil then
+			registryService = baseServices.CombatActorRegistryService
+			if registryService == nil then
+				return false
+			end
+
+			return true
+		end,
+		runFrameProfilingEnabled
+	)
+	if not precheckPassed then
 		return nil
 	end
 
@@ -1008,26 +1108,33 @@ function _BuildDirectCombatHookOutcome(
 	local runtimeProfile = options.RuntimeProfile
 	local services = if options.NeedsServices then table.clone(baseServices) else nil
 	if services ~= nil then
-		local serviceBuildStartedAt = if runtimeProfile ~= nil then os.clock() else nil
-		local builtServices = registryService:BuildServices(options.Entity, currentTime, frameContext.TickId)
-		for key, value in pairs(builtServices) do
-			services[key] = value
-		end
-		services.ActionState = actionState
-		if runtimeProfile ~= nil then
-			runtimeProfile.ServiceBuildCount += 1
-			runtimeProfile.ServiceBuildMilliseconds += _CaptureMilliseconds(serviceBuildStartedAt)
-		end
+		DebugPlus.profile(runFrameBuildDirectCombatHookOutcomeBuildServicesProfileTag, function()
+			local serviceBuildStartedAt = if runtimeProfile ~= nil then os.clock() else nil
+			local builtServices = registryService:BuildServices(options.Entity, currentTime, frameContext.TickId)
+			for key, value in pairs(builtServices) do
+				services[key] = value
+			end
+			services.ActionState = actionState
+			if runtimeProfile ~= nil then
+				runtimeProfile.ServiceBuildCount += 1
+				runtimeProfile.ServiceBuildMilliseconds += _CaptureMilliseconds(serviceBuildStartedAt)
+			end
+		end, runFrameProfilingEnabled)
 	end
 
 	local facts = nil
-	if options.NeedsFacts then
-		local factBuildStartedAt = if runtimeProfile ~= nil then os.clock() else nil
-		facts = registryService:BuildFacts(options.Entity, currentTime)
-		if runtimeProfile ~= nil then
-			runtimeProfile.FactBuildCount += 1
-			runtimeProfile.FactBuildMilliseconds += _CaptureMilliseconds(factBuildStartedAt)
-		end
+	local shouldBuildFacts = DebugPlus.profile(runFrameBuildDirectCombatHookOutcomeBuildFactsGateProfileTag, function()
+		return options.NeedsFacts == true
+	end, runFrameProfilingEnabled)
+	if shouldBuildFacts then
+		DebugPlus.profile(runFrameBuildDirectCombatHookOutcomeBuildFactsProfileTag, function()
+			local factBuildStartedAt = if runtimeProfile ~= nil then os.clock() else nil
+			facts = registryService:BuildFacts(options.Entity, currentTime)
+			if runtimeProfile ~= nil then
+				runtimeProfile.FactBuildCount += 1
+				runtimeProfile.FactBuildMilliseconds += _CaptureMilliseconds(factBuildStartedAt)
+			end
+		end, runFrameProfilingEnabled)
 	end
 
 	return {

@@ -7,6 +7,9 @@ local HitboxConfig = require(ReplicatedStorage.Contexts.Combat.Config.HitboxConf
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local ACTIVATION_TIMEOUT_SECONDS = 0.35
+local FLOW_CURSOR_KEY = "AttackBaseFlow"
+local HITBOX_QUEUE_KEY = "AttackBaseHitboxActivation"
+local HITBOX_QUEUE_CAPACITY = 8
 
 type THitboxActivationResult = {
 	success: boolean,
@@ -124,6 +127,7 @@ local function _cleanupAttackBaseState(self: any, entity: number, services: any)
 	self:ClearEntityValue(entity, "AttackStartedAt")
 	self:ClearEntityValue(entity, "HitLanded")
 	self:ClearEntityValue(entity, "PendingHitboxActivation")
+	self:ClearEntityValue(entity, "PendingHitboxActivationSource")
 	self:ClearEntityValue(entity, "DebugCanStartReason")
 	services.EnemyEntityFactory:ClearTarget(entity)
 end
@@ -174,6 +178,15 @@ function AttackBaseExecutor:OnStart(entity: number, _data: any?, services: any)
 	self:SetEntityValue(entity, "ActiveHitboxHandle", nil)
 	self:SetEntityValue(entity, "HitboxStartedAt", nil)
 	self:SetEntityValue(entity, "PendingHitboxActivation", false)
+	self:SetEntityValue(entity, "PendingHitboxActivationSource", nil)
+	self:BeginCursor(entity, FLOW_CURSOR_KEY, {
+		Phase = "Cooldown",
+		Index = 1,
+		BatchSize = 1,
+		IsDone = false,
+		Data = {},
+		Meta = {},
+	})
 	self:ClearEntityValue(entity, "DebugCanStartReason")
 	_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack executor started", entity, services, nil)
 end
@@ -208,20 +221,46 @@ function AttackBaseExecutor:CanContinue(entity: number, services: any): (boolean
 end
 
 -- Creates the base hitbox after the animation or server timeout opens the activation window.
-local function _activateHitboxInternal(
+local function _markActivationReady(
 	self: any,
 	entity: number,
 	services: any,
 	source: string
 ): THitboxActivationResult
-	if self:GetEntityValue(entity, "AwaitingHitboxActivation") ~= true then
-		self:SetEntityValue(entity, "PendingHitboxActivation", true)
-		return _activationResult(true, "QueuedBeforeActivationWindow", source)
-	end
-
 	local activated = self:GetEntityValue(entity, "HitboxActivated")
 	if activated == true then
 		return _activationResult(false, "AlreadyActivated", source)
+	end
+
+	local pendingSource = self:GetEntityValue(entity, "PendingHitboxActivationSource")
+	if self:GetEntityValue(entity, "PendingHitboxActivation") == true then
+		return _activationResult(true, "AlreadyQueuedForActivation", if type(pendingSource) == "string" then pendingSource else source)
+	end
+
+	if self:GetEntityValue(entity, "AwaitingHitboxActivation") ~= true then
+		self:SetEntityValue(entity, "PendingHitboxActivation", true)
+		self:SetEntityValue(entity, "PendingHitboxActivationSource", source)
+		return _activationResult(true, "QueuedBeforeActivationWindow", source)
+	end
+
+	self:SetEntityValue(entity, "PendingHitboxActivation", true)
+	self:SetEntityValue(entity, "PendingHitboxActivationSource", source)
+	self:SetEntityValue(entity, "HitboxActivationTimedOut", source == "ServerTimeoutFallback")
+	if self:GetCursorPhase(entity, FLOW_CURSOR_KEY) == "WaitingForActivationWindow" then
+		self:SetCursorPhase(entity, FLOW_CURSOR_KEY, "WaitingForHitboxSlot")
+	end
+
+	return _activationResult(true, "ReadyForQueuedActivation", source)
+end
+
+local function _createGrantedHitbox(
+	self: any,
+	entity: number,
+	services: any
+): THitboxActivationResult
+	local source = self:GetEntityValue(entity, "PendingHitboxActivationSource")
+	if type(source) ~= "string" or source == "" then
+		source = "UnknownActivationSource"
 	end
 
 	local activatedHitbox = services.HitboxService:CreateAttackHitbox(entity, "Enemy", HitboxConfig.AttackStructure)
@@ -236,6 +275,7 @@ local function _activateHitboxInternal(
 	self:SetEntityValue(entity, "AwaitingHitboxActivation", false)
 	self:SetEntityValue(entity, "AttackStartedAt", nil)
 	self:SetEntityValue(entity, "PendingHitboxActivation", false)
+	self:SetEntityValue(entity, "PendingHitboxActivationSource", nil)
 	services.EnemyEntityFactory:SetLastAttackTime(entity, services.CurrentTime)
 	services.EnemyEntityFactory:PromoteToCommitted(entity)
 	_recordActivationSource(entity, services, source)
@@ -255,7 +295,7 @@ end
 	@return THitboxActivationResult -- Activation result for the timeout fallback.
 ]=]
 function AttackBaseExecutor:TryActivateHitboxFromTimeout(entity: number, services: any): THitboxActivationResult
-	return _activateHitboxInternal(self, entity, services, "ServerTimeoutFallback")
+	return _markActivationReady(self, entity, services, "ServerTimeoutFallback")
 end
 
 --[=[
@@ -266,7 +306,7 @@ end
 	@return THitboxActivationResult -- Activation result for the animation callback.
 ]=]
 function AttackBaseExecutor:ActivateHitbox(entity: number, services: any): THitboxActivationResult
-	return _activateHitboxInternal(self, entity, services, "AnimationCallback")
+	return _markActivationReady(self, entity, services, "AnimationCallback")
 end
 
 --[=[
@@ -289,87 +329,130 @@ function AttackBaseExecutor:OnTick(entity: number, _dt: number, services: any): 
 		return self:Fail(entity, "InvalidAttackDamage")
 	end
 
-	local activated = self:GetEntityValue(entity, "HitboxActivated") == true
-	if not activated then
-		if self:GetEntityValue(entity, "AwaitingHitboxActivation") ~= true then
-			if services.CurrentTime - cooldown.LastAttackTime < cooldown.Cooldown then
-				return self:Running()
-			end
-
-			self:SetEntityValue(entity, "AwaitingHitboxActivation", true)
-			self:SetEntityValue(entity, "HitboxActivationTimedOut", false)
-			self:SetEntityValue(entity, "AttackStartedAt", services.CurrentTime)
-
-			if self:GetEntityValue(entity, "PendingHitboxActivation") == true then
-				local activation = self:ActivateHitbox(entity, services)
-				if not activation.success then
-					return self:Fail(entity, activation.reason)
+	return self:TickPartial(entity, FLOW_CURSOR_KEY, _dt, services, {
+		Run = function(cursor, tickServices, _partialDt)
+			if cursor.Phase == "Cooldown" then
+				if tickServices.CurrentTime - cooldown.LastAttackTime < cooldown.Cooldown then
+					return "Running"
 				end
+
+				self:SetEntityValue(entity, "AwaitingHitboxActivation", true)
+				self:SetEntityValue(entity, "HitboxActivationTimedOut", false)
+				self:SetEntityValue(entity, "AttackStartedAt", tickServices.CurrentTime)
+
+				if self:GetEntityValue(entity, "PendingHitboxActivation") == true then
+					self:SetCursorPhase(entity, FLOW_CURSOR_KEY, "WaitingForHitboxSlot")
+				else
+					self:SetCursorPhase(entity, FLOW_CURSOR_KEY, "WaitingForActivationWindow")
+				end
+
+				return "Running"
 			end
 
-			return self:Running()
-		end
+			if cursor.Phase == "WaitingForActivationWindow" then
+				local activationWindowStartedAt = self:GetEntityValue(entity, "AttackStartedAt")
+				if type(activationWindowStartedAt) ~= "number" then
+					return "Fail", "MissingAttackStartTime"
+				end
 
-		local activationWindowStartedAt = self:GetEntityValue(entity, "AttackStartedAt")
-		if type(activationWindowStartedAt) ~= "number" then
-			return self:Fail(entity, "MissingAttackStartTime")
-		end
+				if self:GetEntityValue(entity, "PendingHitboxActivation") == true then
+					self:SetCursorPhase(entity, FLOW_CURSOR_KEY, "WaitingForHitboxSlot")
+					return "Running"
+				end
 
-		local timedOut = self:GetEntityValue(entity, "HitboxActivationTimedOut") == true
-		if not timedOut and services.CurrentTime - activationWindowStartedAt >= ACTIVATION_TIMEOUT_SECONDS then
-			self:SetEntityValue(entity, "HitboxActivationTimedOut", true)
-			local activation = self:TryActivateHitboxFromTimeout(entity, services)
-			if not activation.success then
-				return self:Fail(entity, activation.reason)
+				local timedOut = self:GetEntityValue(entity, "HitboxActivationTimedOut") == true
+				if not timedOut and tickServices.CurrentTime - activationWindowStartedAt >= ACTIVATION_TIMEOUT_SECONDS then
+					local activation = self:TryActivateHitboxFromTimeout(entity, tickServices)
+					if not activation.success then
+						return "Fail", activation.reason
+					end
+				end
+
+				return "Running"
 			end
-		end
 
-		return self:Running()
-	end
+			if cursor.Phase == "WaitingForHitboxSlot" then
+				if self:GetEntityValue(entity, "PendingHitboxActivation") ~= true then
+					return "Fail", "MissingPendingHitboxActivation"
+				end
 
-	local activeHitboxHandle = self:GetEntityValue(entity, "ActiveHitboxHandle")
-	if type(activeHitboxHandle) ~= "string" then
-		return self:Fail(entity, "MissingHitboxHandle")
-	end
+				return self:RunQueued(entity, HITBOX_QUEUE_KEY, tickServices, {
+					CapacityPerTick = HITBOX_QUEUE_CAPACITY,
+					Metadata = {
+						EnqueuedAt = tickServices.CurrentTime,
+					},
+					DroppedStatus = function(_queuedEntity: number, _queuedServices: any, reason: string?): string
+						return self:Fail(entity, reason or "HitboxQueueDropped")
+					end,
+					Run = function(grantedEntity: number, grantedServices: any, _metadata: any): string
+						local activation = _createGrantedHitbox(self, grantedEntity, grantedServices)
+						if not activation.success then
+							return self:Fail(grantedEntity, activation.reason)
+						end
 
-	local resolutionResult = services.CombatHitResolutionService:ResolveEnemyMeleeHits(activeHitboxHandle, entity, damage)
-	if not resolutionResult.success then
-		_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack damage resolution failed", entity, services, {
-			Reason = "ApplyDamageFailed",
-		})
-		return self:Fail(entity, "ApplyDamageFailed")
-	end
-	if resolutionResult.value.AppliedHits > 0 then
-		self:SetEntityValue(entity, "HitLanded", true)
-		_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack applied hit", entity, services, {
-			AppliedHits = resolutionResult.value.AppliedHits,
-			HitboxHandle = activeHitboxHandle,
-		})
-	end
+						self:SetCursorPhase(grantedEntity, FLOW_CURSOR_KEY, "ActiveHitbox")
+						return self:Running()
+					end,
+				})
+			end
 
-	local startedAt = self:GetEntityValue(entity, "HitboxStartedAt")
-	if type(startedAt) ~= "number" then
-		return self:Fail(entity, "MissingHitboxStartTime")
-	end
+			if cursor.Phase == "ActiveHitbox" then
+				local activeHitboxHandle = self:GetEntityValue(entity, "ActiveHitboxHandle")
+				if type(activeHitboxHandle) ~= "string" then
+					return "Fail", "MissingHitboxHandle"
+				end
 
-	if services.CurrentTime - startedAt >= HitboxConfig.AttackStructure.MaxDuration then
-		services.HitboxService:DestroyHitbox(activeHitboxHandle)
-		services.CombatHitResolutionService:ClearResolvedHits(activeHitboxHandle)
-		self:ClearEntityValue(entity, "ActiveHitboxHandle")
-		self:ClearEntityValue(entity, "HitboxStartedAt")
-		if self:GetEntityValue(entity, "HitLanded") == true then
-			_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack executor completed successfully", entity, services, {
-				HitboxHandle = activeHitboxHandle,
-			})
-			return self:Success()
-		end
-		_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack executor expired without a hit", entity, services, {
-			HitboxHandle = activeHitboxHandle,
-		})
-		return self:Fail(entity, "HitboxExpired")
-	end
+				local resolutionResult =
+					tickServices.CombatHitResolutionService:ResolveEnemyMeleeHits(activeHitboxHandle, entity, damage)
+				if not resolutionResult.success then
+					_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack damage resolution failed", entity, tickServices, {
+						Reason = "ApplyDamageFailed",
+					})
+					return "Fail", "ApplyDamageFailed"
+				end
+				if resolutionResult.value.AppliedHits > 0 then
+					self:SetEntityValue(entity, "HitLanded", true)
+					_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack applied hit", entity, tickServices, {
+						AppliedHits = resolutionResult.value.AppliedHits,
+						HitboxHandle = activeHitboxHandle,
+					})
+				end
 
-	return self:Running()
+				local startedAt = self:GetEntityValue(entity, "HitboxStartedAt")
+				if type(startedAt) ~= "number" then
+					return "Fail", "MissingHitboxStartTime"
+				end
+
+				if tickServices.CurrentTime - startedAt >= HitboxConfig.AttackStructure.MaxDuration then
+					tickServices.HitboxService:DestroyHitbox(activeHitboxHandle)
+					tickServices.CombatHitResolutionService:ClearResolvedHits(activeHitboxHandle)
+					self:ClearEntityValue(entity, "ActiveHitboxHandle")
+					self:ClearEntityValue(entity, "HitboxStartedAt")
+					if self:GetEntityValue(entity, "HitLanded") == true then
+						_mentionExecutorMilestone(
+							"Enemy:AttackBaseExecutor",
+							"Base attack executor completed successfully",
+							entity,
+							tickServices,
+							{
+								HitboxHandle = activeHitboxHandle,
+							}
+						)
+						self:MarkCursorDone(entity, FLOW_CURSOR_KEY)
+						return "Success"
+					end
+					_mentionExecutorMilestone("Enemy:AttackBaseExecutor", "Base attack executor expired without a hit", entity, tickServices, {
+						HitboxHandle = activeHitboxHandle,
+					})
+					return "Fail", "HitboxExpired"
+				end
+
+				return "Running"
+			end
+
+			return "Fail", "UnknownAttackBasePhase"
+		end,
+	})
 end
 
 --[=[

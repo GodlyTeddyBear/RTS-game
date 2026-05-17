@@ -12,9 +12,7 @@ local HITBOX_PROFILING_ENABLED = true
 local TOUCH_SUBPROFILE_SAMPLE_RATE = 1
 local createProfileTag = "Combat:HitboxService:Create"
 local touchProfileTag = "Combat:HitboxService:Touch"
-local touchResolveTargetProfileTag = "Combat:HitboxService:Touch:ResolveTarget"
 local touchBuildKeyAndLookupProfileTag = "Combat:HitboxService:Touch:BuildKeyAndLookup"
-local touchRecordUniqueHitProfileTag = "Combat:HitboxService:Touch:RecordUniqueHit"
 local tickProfileTag = "Combat:HitboxService:Tick"
 local tickRunnerStepProfileTag = "Combat:HitboxService:Tick:RunnerStep"
 local destroyProfileTag = "Combat:HitboxService:Destroy"
@@ -176,9 +174,7 @@ function HitboxService:CreateAttackHitboxForModel(
 
 		local hitEntity: THitEntity?
 		if shouldSampleSubprofiles then
-			hitEntity = DebugPlus.profile(touchResolveTargetProfileTag, function()
-				return self:_ResolveTouchedEntity(hitPart)
-			end, HITBOX_PROFILING_ENABLED)
+			hitEntity = self:_ResolveTouchedEntity(hitPart)
 		else
 			hitEntity = self:_ResolveTouchedEntity(hitPart)
 		end
@@ -198,18 +194,17 @@ function HitboxService:CreateAttackHitboxForModel(
 			hitKeyMap = self._hitEntityKeys[handle]
 		end
 
-		if hitKeyMap == nil or hitKeyMap[hitKey] then
+		local isDuplicateOrMissing = hitKeyMap == nil or hitKeyMap[hitKey] == true
+		if isDuplicateOrMissing then
 			return
 		end
 
 		if shouldSampleSubprofiles then
-			DebugPlus.profile(touchRecordUniqueHitProfileTag, function()
-				hitKeyMap[hitKey] = true
-				local hitList = self._hitEntities[handle]
-				if hitList ~= nil then
-					table.insert(hitList, hitEntity)
-				end
-			end, HITBOX_PROFILING_ENABLED)
+			hitKeyMap[hitKey] = true
+			local hitList = self._hitEntities[handle]
+			if hitList ~= nil then
+				table.insert(hitList, hitEntity)
+			end
 		else
 			hitKeyMap[hitKey] = true
 			local hitList = self._hitEntities[handle]

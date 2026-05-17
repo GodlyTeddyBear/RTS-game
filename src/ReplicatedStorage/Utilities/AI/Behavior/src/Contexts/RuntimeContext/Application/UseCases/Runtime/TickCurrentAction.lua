@@ -9,6 +9,8 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local RuntimeEnums = require(ReplicatedStorage.Utilities.AI.Runtime.src.RuntimeEnums)
 local ActionId = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.ActionId)
 local TickStatus = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.TickStatus)
@@ -18,6 +20,8 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 local Types = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Types)
 
 local Ok = Result.Ok
+local tickCurrentActionTryTickProfileTag = "AI.Behavior.TickCurrentAction.TryTick"
+local tickCurrentActionProfilingEnabled = DebugConfig.AI_RUNTIME_FRAME_PROFILING
 
 type TActionState = Types.TActionState
 type TActionRuntimeContext = Types.TActionRuntimeContext
@@ -68,7 +72,9 @@ function TickCurrentAction.TryExecute(
 	local deltaTime = RuntimeContextAdapter.GetDeltaTime(runtimeContext)
 
 	-- Tick defensively so executor failures collapse into a fail result
-	local tickResult = ExecutorBoundary.TryTick(executor, currentActionId, entity, deltaTime, executorServices)
+	local tickResult = DebugPlus.profile(tickCurrentActionTryTickProfileTag, function()
+		return ExecutorBoundary.TryTick(executor, currentActionId, entity, deltaTime, executorServices)
+	end, tickCurrentActionProfilingEnabled)
 	if not tickResult.success then
 		return tickResult
 	end
