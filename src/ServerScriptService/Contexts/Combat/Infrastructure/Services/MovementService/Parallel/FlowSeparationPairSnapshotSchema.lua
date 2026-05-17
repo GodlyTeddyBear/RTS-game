@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
 local ParallelQueryTypes = require(ReplicatedStorage.Utilities.ParallelQuery.src.Types)
 
 type TResultField = ParallelQueryTypes.TResultField
@@ -16,19 +17,13 @@ local function _BuildPairFieldName(prefix: string, pairIndex: number): string
 end
 
 local mutableResultSchema: { TResultField } = {
-	{ Name = "PairCount", Type = "u32" },
-	{ Name = "Overflow", Type = "boolean" },
+	ParallelQuery.Field.u32("PairCount"),
+	ParallelQuery.Field.boolean("Overflow"),
 }
 
 for pairIndex = 1, FlowSeparationPairSnapshotSchema.FIXED_MAX_PAIRS_PER_TASK do
-	table.insert(mutableResultSchema, {
-		Name = _BuildPairFieldName("EntityA", pairIndex),
-		Type = "u32",
-	})
-	table.insert(mutableResultSchema, {
-		Name = _BuildPairFieldName("EntityB", pairIndex),
-		Type = "u32",
-	})
+	table.insert(mutableResultSchema, ParallelQuery.Field.u32(_BuildPairFieldName("EntityA", pairIndex)))
+	table.insert(mutableResultSchema, ParallelQuery.Field.u32(_BuildPairFieldName("EntityB", pairIndex)))
 end
 
 local RESULT_SCHEMA: { TResultField } = table.freeze(mutableResultSchema)

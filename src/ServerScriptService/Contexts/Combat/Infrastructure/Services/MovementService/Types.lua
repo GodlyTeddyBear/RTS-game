@@ -3,8 +3,11 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local EnemyTypes = require(ReplicatedStorage.Contexts.Enemy.Types.EnemyTypes)
+local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
 
 local MovementServiceTypes = {}
+
+type TManagedAsyncState = ParallelQuery.TManagedAsyncState
 
 export type EnemyMovementMode = EnemyTypes.EnemyMovementMode
 
@@ -103,25 +106,6 @@ export type TFlowVelocitySolveRow = {
 	ShouldMove: boolean,
 }
 
-export type TFlowVelocityAsyncResult = {
-	RequestId: number,
-	SessionUserId: number?,
-	Snapshot: TFlowVelocitySolveSnapshot,
-	Rows: { TFlowVelocitySolveRow }?,
-	Err: any?,
-}
-
-export type TFlowVelocityAsyncState = {
-	PendingRequestId: number,
-	LatestAppliedRequestId: number,
-	LatestCompletedResult: TFlowVelocityAsyncResult?,
-	InFlight: boolean,
-	InFlightRequestId: number?,
-	InFlightSessionUserId: number?,
-	InFlightSnapshot: TFlowVelocitySolveSnapshot?,
-	LastDispatchClock: number,
-}
-
 export type TFlowSeparationPairSnapshotBuildInput = {
 	CandidateCellKeys: { number },
 	CellEntityStarts: { [number]: number },
@@ -139,23 +123,7 @@ export type TFlowSeparationPairSnapshotBuildInput = {
 	MinSeparationDistance: number,
 }
 
-export type TFlowSeparationPairSnapshotBuildAsyncResult = {
-	RequestId: number,
-	SessionUserId: number?,
-	Input: TFlowSeparationPairSnapshotBuildInput,
-	Rows: { { [string]: any } }?,
-	Err: any?,
-}
-
-export type TFlowSeparationPairSnapshotBuildAsyncState = {
-	PendingRequestId: number,
-	LatestAppliedRequestId: number,
-	LatestCompletedResult: TFlowSeparationPairSnapshotBuildAsyncResult?,
-	InFlight: boolean,
-	InFlightRequestId: number?,
-	InFlightSessionUserId: number?,
-	LastDispatchClock: number,
-}
+export type TFlowSeparationPairSnapshotBuildAsyncState = TManagedAsyncState
 
 export type TFastFlowProfileCounters = {
 	SharedFieldCreations: number,
