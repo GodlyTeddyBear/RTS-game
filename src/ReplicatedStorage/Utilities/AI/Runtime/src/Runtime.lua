@@ -1009,7 +1009,7 @@ function _BuildDirectCombatHookOutcome(
 	local services = if options.NeedsServices then table.clone(baseServices) else nil
 	if services ~= nil then
 		local serviceBuildStartedAt = if runtimeProfile ~= nil then os.clock() else nil
-		local builtServices = registryService:BuildServices(options.Entity, currentTime)
+		local builtServices = registryService:BuildServices(options.Entity, currentTime, frameContext.TickId)
 		for key, value in pairs(builtServices) do
 			services[key] = value
 		end

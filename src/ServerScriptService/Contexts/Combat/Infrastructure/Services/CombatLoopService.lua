@@ -50,7 +50,17 @@ function CombatLoopService.new()
 	self.ActiveCombats = {} :: { [number]: CombatSessionRecord }
 	self._actorRegistryService = nil
 	self._behaviorRuntimeService = nil
+	self._tickId = 0
 	return self
+end
+
+function CombatLoopService:AdvanceTickId(): number
+	self._tickId += 1
+	return self._tickId
+end
+
+function CombatLoopService:GetCurrentTickId(): number
+	return self._tickId
 end
 
 --[=[

@@ -139,12 +139,14 @@ export type TErrorSinkPayload = {
 	@within AiRuntimeTypes
 	@interface TFrameContext
 	.CurrentTime number -- Shared frame timestamp used for tree-evaluation gating and action timestamps
+	.TickId number -- Shared stable per-frame identifier used by tick-owned executor helpers
 	.DeltaTime number? -- Optional frame delta forwarded to executors
 	.Services { [string]: any }? -- Optional base service bag exposed to hooks and executors
 	.ActorTypes { string }? -- Optional actor-type filter for this frame
 ]=]
 export type TFrameContext = {
 	CurrentTime: number,
+	TickId: number,
 	DeltaTime: number?,
 	Services: { [string]: any }?,
 	ActorTypes: { string }?,

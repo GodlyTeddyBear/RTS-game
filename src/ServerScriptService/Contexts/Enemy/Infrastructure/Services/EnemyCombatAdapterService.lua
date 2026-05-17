@@ -421,8 +421,8 @@ function EnemyCombatAdapterService:RegisterActor(entity: number): Result.Result<
 			BuildFacts = function(currentTime: number): { [string]: any }
 				return self:_BuildFacts(entity, currentTime)
 			end,
-			BuildServices = function(currentTime: number): { [string]: any }
-				return self:_BuildServices(entity, currentTime)
+			BuildServices = function(currentTime: number, tickId: number?): { [string]: any }
+				return self:_BuildServices(entity, currentTime, tickId)
 			end,
 			OnCancel = function()
 				self._combatServices.MovementService:StopMovement(entity)
@@ -562,9 +562,10 @@ function EnemyCombatAdapterService:_GetOrCreateCachedExecutorServices(entity: nu
 end
 
 -- Builds the service map exposed to enemy behavior executors for the current tick.
-function EnemyCombatAdapterService:_BuildServices(entity: number, currentTime: number): { [string]: any }
+function EnemyCombatAdapterService:_BuildServices(entity: number, currentTime: number, tickId: number?): { [string]: any }
 	local cachedServices = self:_GetOrCreateCachedExecutorServices(entity)
 	cachedServices.CurrentTime = currentTime
+	cachedServices.TickId = if type(tickId) == "number" then tickId else nil
 	cachedServices.EnemyContext = self._runtimeOwner
 	return cachedServices
 end

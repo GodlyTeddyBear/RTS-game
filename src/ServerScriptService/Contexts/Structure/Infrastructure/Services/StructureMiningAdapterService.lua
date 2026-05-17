@@ -186,8 +186,8 @@ function StructureMiningAdapterService:ResolvePendingActor(instanceId: number): 
 				BuildFacts = function(_currentTime: number): { [string]: any }
 					return self._factsResolver.BuildFacts(structureEntity)
 				end,
-				BuildServices = function(currentTime: number): { [string]: any }
-					return self:_BuildServices(structureEntity, instanceId, currentTime)
+				BuildServices = function(currentTime: number, tickId: number?): { [string]: any }
+					return self:_BuildServices(structureEntity, instanceId, currentTime, tickId)
 				end,
 				OnActionStateChanged = function(actionState: any)
 					if self:_IsStructureEntityActive(structureEntity) then
@@ -249,12 +249,23 @@ function StructureMiningAdapterService:GetActorHandle(entity: number): string
 	return self:_BuildActorHandle(entity)
 end
 
-function StructureMiningAdapterService:_BuildServices(entity: number, instanceId: number, currentTime: number): { [string]: any }
-	return {
+function StructureMiningAdapterService:_BuildServices(
+	entity: number,
+	instanceId: number,
+	currentTime: number,
+	tickId: number?
+): { [string]: any }
+	local services = {
 		StructureEntityFactory = self._structureFactoryProxyResolver.CreateProxy(entity),
 		MiningExtractorProxy = self._miningProxyResolver.CreateProxy(instanceId),
 		CurrentTime = currentTime,
 	}
+
+	if type(tickId) == "number" then
+		services.TickId = tickId
+	end
+
+	return services
 end
 
 function StructureMiningAdapterService:_BuildActorHandle(entity: number): string

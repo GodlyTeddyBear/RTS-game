@@ -78,8 +78,10 @@ local function _ActivateRegisteredActor(self: any, actorHandle: string): Result.
 	end
 
 	local currentTime = os.clock()
-	local services = self._actorRegistryService:BuildServices(record.RuntimeId, currentTime)
+	local tickId = self._loopService:GetCurrentTickId()
+	local services = self._actorRegistryService:BuildServices(record.RuntimeId, currentTime, tickId)
 	services.CurrentTime = services.CurrentTime or currentTime
+	services.TickId = services.TickId or tickId
 	services.ActionState = action
 
 	local activation = executor:ActivateHitbox(record.RuntimeId, services)

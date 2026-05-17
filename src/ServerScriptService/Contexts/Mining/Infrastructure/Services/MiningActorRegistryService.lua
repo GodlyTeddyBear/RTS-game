@@ -125,13 +125,13 @@ function MiningActorRegistryService:BuildFacts(runtimeId: number, currentTime: n
 	return facts
 end
 
-function MiningActorRegistryService:BuildServices(runtimeId: number, currentTime: number): { [string]: any }
+function MiningActorRegistryService:BuildServices(runtimeId: number, currentTime: number, tickId: number?): { [string]: any }
 	local record = self._recordsByRuntimeId[runtimeId]
 	if record == nil then
 		return {}
 	end
 
-	local didBuild, services = pcall(record.Adapter.BuildServices, currentTime)
+	local didBuild, services = pcall(record.Adapter.BuildServices, currentTime, tickId)
 	if not didBuild or type(services) ~= "table" then
 		Result.MentionError("Mining:ActorRegistry", "Actor services adapter failed", {
 			ActorType = record.ActorType,

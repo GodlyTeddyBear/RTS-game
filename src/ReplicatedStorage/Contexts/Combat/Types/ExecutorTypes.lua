@@ -84,6 +84,7 @@ export type TBehaviorConfigComponent = {
 	.StructureContext any -- Structure context public damage API.
 	.BaseContext any -- Base context public damage API.
 	.CurrentTime number -- Timestamp shared across executor calls for one tick.
+	.TickId number -- Stable per-frame id shared across executor calls for one tick.
 	.HandleGoalReached any -- Command used to resolve goal-reaching enemies.
 	.HitboxService any -- Combat hitbox service for contact-confirmed attacks.
 	.MovementService any -- Combat movement service for pathfinding and boids movement.
@@ -99,6 +100,7 @@ export type TExecutorServices = {
 	StructureContext: any,
 	BaseContext: any,
 	CurrentTime: number,
+	TickId: number,
 	HandleGoalReached: any,
 	HitboxService: any,
 	MovementService: any,

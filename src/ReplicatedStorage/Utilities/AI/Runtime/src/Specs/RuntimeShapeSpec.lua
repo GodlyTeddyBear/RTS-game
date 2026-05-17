@@ -208,6 +208,21 @@ local HasCurrentTimeNumber = Spec.new(
 	end
 )
 
+local HasTickIdNumber = Spec.new(
+	"InvalidFrameContext",
+	"AiRuntime frameContext.TickId must be a non-negative integer",
+	function(candidate: TFrameContextCandidate): boolean
+		local frameContext = candidate.FrameContext
+		return type(frameContext) ~= "table"
+			or (
+				type(frameContext.TickId) == "number"
+				and _IsFiniteNumber(frameContext.TickId)
+				and frameContext.TickId >= 0
+				and math.floor(frameContext.TickId) == frameContext.TickId
+			)
+	end
+)
+
 local HasDeltaTimeNumberOrNil = Spec.new(
 	"InvalidFrameContext",
 	"AiRuntime frameContext.DeltaTime must be a finite non-negative number when present",
@@ -393,6 +408,7 @@ return table.freeze({
 	HasValidFrameContextShape = Spec.All({
 		HasFrameContextTable,
 		HasCurrentTimeNumber,
+		HasTickIdNumber,
 		HasDeltaTimeNumberOrNil,
 		HasServicesTableOrNil,
 		HasActorTypesArrayOrNil,

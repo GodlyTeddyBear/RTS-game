@@ -7,6 +7,7 @@ return function(BaseExecutor)
 		self:ClearAllPromises(entity, true)
 		self:ClearAllCursors(entity)
 		self:CancelTrackedTasks(entity)
+		self:RemoveEntityFromQueues(entity)
 		self._cursorAdvanceGate[entity] = nil
 	end
 
@@ -23,6 +24,7 @@ return function(BaseExecutor)
 		self._trackedAsyncResources = {}
 		self._promiseState = {}
 		self._cursorState = {}
+		self._queueState = {}
 		self._cursorAdvanceGate = {}
 		self._entityGeneration = {}
 		self._lastFailureReason = {}

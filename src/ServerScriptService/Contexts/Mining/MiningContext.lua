@@ -146,6 +146,7 @@ function MiningContext:KnitInit()
 	self._structurePlacedConnection = nil :: RBXScriptConnection?
 	self._runStateChangedConnection = nil :: RBXScriptConnection?
 	self._resourceNodeClickedConnection = nil :: RBXScriptConnection?
+	self._behaviorTickId = 0
 end
 
 --[=[
@@ -282,8 +283,10 @@ function MiningContext:_CleanupAll(): Result.Result<boolean>
 end
 
 function MiningContext:_RunBehaviorFrame(dt: number)
+	self._behaviorTickId += 1
 	local frameResult = self._behaviorRuntimeService:RunFrame({
 		CurrentTime = os.clock(),
+		TickId = self._behaviorTickId,
 		DeltaTime = dt,
 		Services = {
 			MiningActorRegistryService = self._actorRegistryService,
@@ -383,6 +386,7 @@ function MiningContext:UnregisterMiningActor(actorHandle: string): Result.Result
 		if record ~= nil then
 			self._behaviorRuntimeService:CancelActorAction(record.ActorType, record.RuntimeId, {
 				CurrentTime = os.clock(),
+				TickId = self._behaviorTickId,
 				DeltaTime = 0,
 				Services = {
 					MiningActorRegistryService = self._actorRegistryService,

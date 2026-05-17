@@ -106,6 +106,7 @@ return function(BaseExecutor)
 		@param entity number -- Entity id being processed.
 	]=]
 	function BaseExecutor:ClearEntityState(entity: number)
+		self:RemoveEntityFromQueues(entity)
 		self._entityState[entity] = nil
 		self._promiseState[entity] = nil
 		self._cursorState[entity] = nil

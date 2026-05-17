@@ -70,4 +70,41 @@ export type TCursorSlotMap = {
 	[string]: TCursorState,
 }
 
+export type TQueueTurnResult = "Granted" | "Queued" | "Dropped"
+export type TQueueRunResult = string
+
+export type TExecutorQueueItem = {
+	Entity: number,
+	Metadata: any?,
+	Generation: number,
+	EnqueuedAt: number?,
+}
+
+export type TExecutorQueueConfig = {
+	CapacityPerTick: number,
+}
+
+export type TExecutorQueueSnapshot = {
+	QueueKey: string,
+	CapacityPerTick: number,
+	QueuedCount: number,
+	FlushedPendingEntities: { number },
+	BufferedQueuedCount: number,
+	GrantedCountThisTick: number,
+	LastServicedTickId: number?,
+}
+
+export type TExecutorQueueState = {
+	Queue: any,
+	CapacityPerTick: number,
+	Membership: { [number]: boolean },
+	MetadataByEntity: { [number]: any },
+	PendingBatch: { TExecutorQueueItem },
+	GrantedItemsByEntity: { [number]: TExecutorQueueItem },
+	DroppedReasonsByEntity: { [number]: string },
+	LastServicedTickId: number?,
+	GrantedCountThisTick: number,
+	HasNewArrivalsSinceLastService: boolean,
+}
+
 return table.freeze({})

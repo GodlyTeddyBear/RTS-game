@@ -12,23 +12,24 @@ local Sandwich = require(UtilitiesFolder.Sandwich)
 
 local debounceTrailingEntries: { [any]: Types.TDebounceEntry } = {}
 local debounceLeadingWindows: {
-	[key: any]: {
+	[any]: {
 		Handle: Types.TExecutionHandle,
 	},
 } = {}
 local throttleTrailingWindows: {
-	[key: any]: {
+	[any]: {
 		Handle: Types.TExecutionHandle,
 		LatestArgs: { any },
 	},
 } = {}
 local throttleLeadingTrailingWindows: {
-	[key: any]: {
+	[any]: {
 		WindowOpen: boolean,
 		TrailingArgs: { any }?,
 		Handle: Types.TExecutionHandle,
 	},
-} = {}
+} =
+	{}
 
 local Timing = {}
 
@@ -49,7 +50,12 @@ local function _RunCallback<A...>(state: Shared.THandleState, callback: (A...) -
 	state.Completed = true
 end
 
-local function _CreateTrailingThrottleHandle<T, A...>(key: T, delay: number, callback: (T, A...) -> (), ...: A...): Types.TExecutionHandle
+local function _CreateTrailingThrottleHandle<T, A...>(
+	key: T,
+	delay: number,
+	callback: (T, A...) -> (),
+	...: A...
+): Types.TExecutionHandle
 	local thread: thread? = nil
 	local handle, state = Shared.CreateExecutionHandle({
 		OnCancel = function()

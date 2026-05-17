@@ -9,8 +9,14 @@ local MuchachoHitbox = require(ReplicatedStorage.Utilities.MuchachoHitbox)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 
 local HITBOX_PROFILING_ENABLED = true
+local TOUCH_SUBPROFILE_SAMPLE_RATE = 1
 local createProfileTag = "Combat:HitboxService:Create"
 local touchProfileTag = "Combat:HitboxService:Touch"
+local touchResolveTargetProfileTag = "Combat:HitboxService:Touch:ResolveTarget"
+local touchBuildKeyAndLookupProfileTag = "Combat:HitboxService:Touch:BuildKeyAndLookup"
+local touchRecordUniqueHitProfileTag = "Combat:HitboxService:Touch:RecordUniqueHit"
+local tickProfileTag = "Combat:HitboxService:Tick"
+local tickRunnerStepProfileTag = "Combat:HitboxService:Tick:RunnerStep"
 local destroyProfileTag = "Combat:HitboxService:Destroy"
 
 type THitboxConfig = {
@@ -57,6 +63,7 @@ function HitboxService.new()
 	self._hitboxFolder = EnsureHitboxFolder()
 	self._targetResolvers = {} :: { (BasePart) -> THitEntity? }
 	self._runner = nil :: any
+	self._touchSubprofileCounter = 0
 	return self
 end
 
@@ -75,12 +82,16 @@ function HitboxService:RegisterTargetResolver(resolver: (BasePart) -> THitEntity
 end
 
 function HitboxService:Tick(dt: number)
-	local runner = self._runner
-	if runner == nil then
-		return
-	end
+	DebugPlus.profile(tickProfileTag, function()
+		local runner = self._runner
+		if runner == nil then
+			return
+		end
 
-	runner:Step(dt)
+		DebugPlus.profile(tickRunnerStepProfileTag, function()
+			runner:Step(dt)
+		end, HITBOX_PROFILING_ENABLED)
+	end, HITBOX_PROFILING_ENABLED)
 end
 
 function HitboxService:_ResolveAttackerModel(_entity: number, _kind: TEntityKind): Model?
@@ -155,21 +166,56 @@ function HitboxService:CreateAttackHitboxForModel(
 	self._hitEntityKeys[handle] = {}
 
 	local onTouched = DebugPlus.wrap(touchProfileTag, function(hitPart: BasePart, _humanoid: Humanoid?)
-		local hitEntity = self:_ResolveTouchedEntity(hitPart)
+		local shouldSampleSubprofiles = false
+		if TOUCH_SUBPROFILE_SAMPLE_RATE <= 1 then
+			shouldSampleSubprofiles = true
+		else
+			self._touchSubprofileCounter += 1
+			shouldSampleSubprofiles = (self._touchSubprofileCounter % TOUCH_SUBPROFILE_SAMPLE_RATE) == 0
+		end
+
+		local hitEntity: THitEntity?
+		if shouldSampleSubprofiles then
+			hitEntity = DebugPlus.profile(touchResolveTargetProfileTag, function()
+				return self:_ResolveTouchedEntity(hitPart)
+			end, HITBOX_PROFILING_ENABLED)
+		else
+			hitEntity = self:_ResolveTouchedEntity(hitPart)
+		end
 		if hitEntity == nil then
 			return
 		end
 
-		local hitKey = _buildHitKey(hitEntity.Kind, hitEntity.Entity)
-		local hitKeyMap = self._hitEntityKeys[handle]
+		local hitKey = ""
+		local hitKeyMap = nil :: { [string]: boolean }?
+		if shouldSampleSubprofiles then
+			DebugPlus.profile(touchBuildKeyAndLookupProfileTag, function()
+				hitKey = _buildHitKey(hitEntity.Kind, hitEntity.Entity)
+				hitKeyMap = self._hitEntityKeys[handle]
+			end, HITBOX_PROFILING_ENABLED)
+		else
+			hitKey = _buildHitKey(hitEntity.Kind, hitEntity.Entity)
+			hitKeyMap = self._hitEntityKeys[handle]
+		end
+
 		if hitKeyMap == nil or hitKeyMap[hitKey] then
 			return
 		end
 
-		hitKeyMap[hitKey] = true
-		local hitList = self._hitEntities[handle]
-		if hitList ~= nil then
-			table.insert(hitList, hitEntity)
+		if shouldSampleSubprofiles then
+			DebugPlus.profile(touchRecordUniqueHitProfileTag, function()
+				hitKeyMap[hitKey] = true
+				local hitList = self._hitEntities[handle]
+				if hitList ~= nil then
+					table.insert(hitList, hitEntity)
+				end
+			end, HITBOX_PROFILING_ENABLED)
+		else
+			hitKeyMap[hitKey] = true
+			local hitList = self._hitEntities[handle]
+			if hitList ~= nil then
+				table.insert(hitList, hitEntity)
+			end
 		end
 	end, HITBOX_PROFILING_ENABLED)
 

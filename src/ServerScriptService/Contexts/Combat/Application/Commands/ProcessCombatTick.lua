@@ -65,10 +65,12 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 		end
 
 		local currentTime = os.clock()
+		local tickId = self._loopService:AdvanceTickId()
 		local ok, frameResult = pcall(function()
 			return DebugPlus.profile(processSessionsRunFrameProfileTag, function()
 				return self._behaviorRuntimeService:RunFrame({
 					CurrentTime = currentTime,
+					TickId = tickId,
 					DeltaTime = dt,
 					Services = {
 						CombatActorRegistryService = self._actorRegistryService,

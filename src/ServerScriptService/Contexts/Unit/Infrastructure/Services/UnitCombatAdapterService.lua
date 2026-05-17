@@ -116,9 +116,9 @@ function UnitCombatAdapterService:RegisterActor(entity: number): Result.Result<s
 			BuildFacts = function(_currentTime: number): { [string]: any }
 				return self._serviceProxyResolver.BuildFacts(entity)
 			end,
-			-- Expose the current time and factory so the idle behavior can read unit state on demand.
-			BuildServices = function(currentTime: number): { [string]: any }
-				return self._serviceProxyResolver.BuildServices(entity, currentTime)
+			-- Expose the current time, tick id, and factory so the idle behavior can read unit state on demand.
+			BuildServices = function(currentTime: number, tickId: number?): { [string]: any }
+				return self._serviceProxyResolver.BuildServices(entity, currentTime, tickId)
 			end,
 		},
 	})

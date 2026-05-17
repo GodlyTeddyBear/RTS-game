@@ -20,6 +20,7 @@ function UnregisterCombatActorCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_actorRegistryService = "CombatActorRegistryService",
 		_behaviorRuntimeService = "CombatBehaviorRuntimeService",
+		_loopService = "CombatLoopService",
 	})
 end
 
@@ -29,6 +30,7 @@ function UnregisterCombatActorCommand:Execute(actorHandle: string): Result.Resul
 		if record ~= nil then
 			self._behaviorRuntimeService:CancelActorAction(record.ActorType, record.RuntimeId, {
 				CurrentTime = os.clock(),
+				TickId = self._loopService:GetCurrentTickId(),
 				DeltaTime = 0,
 				Services = {
 					CombatActorRegistryService = self._actorRegistryService,

@@ -197,8 +197,8 @@ function StructureCombatAdapterService:RegisterActor(entity: number): Result.Res
 			BuildFacts = function(_currentTime: number): { [string]: any }
 				return self:_BuildFacts(entity)
 			end,
-			BuildServices = function(currentTime: number): { [string]: any }
-				return self:_BuildServices(entity, currentTime)
+			BuildServices = function(currentTime: number, tickId: number?): { [string]: any }
+				return self:_BuildServices(entity, currentTime, tickId)
 			end,
 			OnRemoved = function()
 				self._combatServices.StatusService:RemoveAuraSource(actorHandle)
@@ -305,14 +305,14 @@ function StructureCombatAdapterService:_BuildFacts(entity: number): { [string]: 
 end
 
 -- Builds the service map exposed to structure behavior executors for the current tick.
-function StructureCombatAdapterService:_BuildServices(entity: number, currentTime: number): { [string]: any }
+function StructureCombatAdapterService:_BuildServices(entity: number, currentTime: number, tickId: number?): { [string]: any }
 	local identity = self._entityFactory:GetIdentity(entity)
 	local stasisConfig = nil
 	if identity ~= nil then
 		stasisConfig = StructureConfig.STRUCTURES[identity.StructureType]
 	end
 
-	return {
+	local services = {
 		StructureEntityFactory = self._structureFactoryProxyResolver.CreateProxy(entity),
 		EnemyEntityFactory = self._enemyEntityFactory,
 		CombatPerceptionService = self._perceptionResolver.CreateProxy(),
@@ -322,6 +322,12 @@ function StructureCombatAdapterService:_BuildServices(entity: number, currentTim
 		StatusSourceHandle = self:_BuildActorHandle(entity),
 		StasisConfig = stasisConfig,
 	}
+
+	if type(tickId) == "number" then
+		services.TickId = tickId
+	end
+
+	return services
 end
 
 return StructureCombatAdapterService

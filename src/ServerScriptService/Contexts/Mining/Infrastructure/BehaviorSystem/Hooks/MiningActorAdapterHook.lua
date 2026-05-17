@@ -9,7 +9,8 @@ function MiningActorAdapterHook:Use(entity: number, hookContext: any): any?
 	end
 
 	local currentTime = hookContext.FrameContext.CurrentTime
-	local services = registryService:BuildServices(entity, currentTime)
+	local tickId = hookContext.FrameContext.TickId
+	local services = registryService:BuildServices(entity, currentTime, tickId)
 	services.ActionState = hookContext.ActionState
 
 	return {

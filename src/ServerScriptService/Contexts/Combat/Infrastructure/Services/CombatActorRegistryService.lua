@@ -239,14 +239,14 @@ end
 	@param currentTime number -- Current runtime time in seconds.
 	@return { [string]: any } -- Adapter services or an empty table when the adapter fails.
 ]=]
-function CombatActorRegistryService:BuildServices(runtimeId: number, currentTime: number): { [string]: any }
+function CombatActorRegistryService:BuildServices(runtimeId: number, currentTime: number, tickId: number?): { [string]: any }
 	local record = self._recordsByRuntimeId[runtimeId]
 	if record == nil then
 		return {}
 	end
 
 	-- Keep adapter failures isolated so one bad actor cannot break the service tick.
-	local didBuild, services = pcall(record.Adapter.BuildServices, currentTime)
+	local didBuild, services = pcall(record.Adapter.BuildServices, currentTime, tickId)
 	if not didBuild or type(services) ~= "table" then
 		-- Reject malformed adapter output and fall back to an empty service set.
 		Result.MentionError("Combat:ActorRegistry", "Actor services adapter failed", {

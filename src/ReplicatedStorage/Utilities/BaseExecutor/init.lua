@@ -19,6 +19,11 @@ export type TPromiseStatus = Types.TPromiseStatus
 export type TPromiseOptions = Types.TPromiseOptions
 export type TPromiseState = Types.TPromiseState
 export type TCursorState = Types.TCursorState
+export type TQueueTurnResult = Types.TQueueTurnResult
+export type TQueueRunResult = Types.TQueueRunResult
+export type TExecutorQueueItem = Types.TExecutorQueueItem
+export type TExecutorQueueConfig = Types.TExecutorQueueConfig
+export type TExecutorQueueSnapshot = Types.TExecutorQueueSnapshot
 export type TBaseExecutor = BaseExecutor.TBaseExecutor
 
 return BaseExecutor
