@@ -15,6 +15,10 @@ export type TEntityState = Types.TEntityState
 export type TGuard = Types.TGuard
 export type TAsyncCleanup = Types.TAsyncCleanup
 export type TTrackedAsyncResource = Types.TTrackedAsyncResource
+export type TPromiseStatus = Types.TPromiseStatus
+export type TPromiseOptions = Types.TPromiseOptions
+export type TPromiseState = Types.TPromiseState
+export type TCursorState = Types.TCursorState
 export type TBaseExecutor = BaseExecutor.TBaseExecutor
 
 return BaseExecutor

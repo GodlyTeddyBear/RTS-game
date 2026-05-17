@@ -6,6 +6,10 @@ export type TBaseExecutor = {
 	Config: Types.TExecutorConfig,
 	_entityState: { [number]: Types.TEntityState },
 	_trackedAsyncResources: { [number]: { [string]: Types.TTrackedAsyncResource } },
+	_promiseState: { [number]: Types.TPromiseSlotMap },
+	_cursorState: { [number]: Types.TCursorSlotMap },
+	_cursorAdvanceGate: Types.TCursorAdvanceGateMap,
+	_entityGeneration: Types.TEntityGenerationMap,
 	_lastFailureReason: { [number]: string },
 }
 
@@ -25,6 +29,9 @@ local StatusComposer: TComposer = require(script.Public.Status)
 local GuardsComposer: TComposer = require(script.Public.Guards)
 local EntityStateComposer: TComposer = require(script.Public.EntityState)
 local AsyncResourcesComposer: TComposer = require(script.Public.AsyncResources)
+local PromiseStateComposer: TComposer = require(script.Public.PromiseState)
+local CursorStateComposer: TComposer = require(script.Public.CursorState)
+local TickHelpersComposer: TComposer = require(script.Public.TickHelpers)
 local LifecycleComposer: TComposer = require(script.Public.Lifecycle)
 
 local BaseExecutor: TBaseExecutorStatic = {} :: TBaseExecutorStatic
@@ -34,6 +41,9 @@ StatusComposer(BaseExecutor)
 GuardsComposer(BaseExecutor)
 EntityStateComposer(BaseExecutor)
 AsyncResourcesComposer(BaseExecutor)
+PromiseStateComposer(BaseExecutor)
+CursorStateComposer(BaseExecutor)
+TickHelpersComposer(BaseExecutor)
 LifecycleComposer(BaseExecutor)
 
 return BaseExecutor

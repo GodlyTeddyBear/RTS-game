@@ -3,6 +3,13 @@
 local Types = require(script.Parent.Parent.Types)
 
 return function(BaseExecutor)
+	local function _ClearExecutorWorkState(self: any, entity: number)
+		self:ClearAllPromises(entity, true)
+		self:ClearAllCursors(entity)
+		self:CancelTrackedTasks(entity)
+		self._cursorAdvanceGate[entity] = nil
+	end
+
 	--[=[
 		@within BaseExecutor
 		Creates a new executor with the supplied action metadata.
@@ -14,8 +21,30 @@ return function(BaseExecutor)
 		self.Config = config
 		self._entityState = {}
 		self._trackedAsyncResources = {}
+		self._promiseState = {}
+		self._cursorState = {}
+		self._cursorAdvanceGate = {}
+		self._entityGeneration = {}
 		self._lastFailureReason = {}
 		return self
+	end
+
+	function BaseExecutor:BumpEntityGeneration(entity: number): number
+		local nextGeneration = (self._entityGeneration[entity] or 0) + 1
+		self._entityGeneration[entity] = nextGeneration
+		return nextGeneration
+	end
+
+	function BaseExecutor:GetEntityGeneration(entity: number): number
+		return self._entityGeneration[entity] or 0
+	end
+
+	function BaseExecutor:CaptureEntityGeneration(entity: number): number
+		return self:GetEntityGeneration(entity)
+	end
+
+	function BaseExecutor:IsGenerationCurrent(entity: number, generation: number): boolean
+		return self:GetEntityGeneration(entity) == generation
 	end
 
 	--[=[
@@ -110,6 +139,7 @@ return function(BaseExecutor)
 			return false, failureReason
 		end
 
+		self:BumpEntityGeneration(_entity)
 		self:OnStart(_entity, _data, _services)
 		return true, nil
 	end
@@ -139,7 +169,8 @@ return function(BaseExecutor)
 	]=]
 	function BaseExecutor:Cancel(_entity: number, _services: any)
 		self:OnCancel(_entity, _services)
-		self:CancelTrackedTasks(_entity)
+		self:BumpEntityGeneration(_entity)
+		_ClearExecutorWorkState(self, _entity)
 		self:ClearEntityState(_entity)
 	end
 
@@ -151,8 +182,9 @@ return function(BaseExecutor)
 	]=]
 	function BaseExecutor:Complete(_entity: number, _services: any)
 		self:OnComplete(_entity, _services)
+		self:BumpEntityGeneration(_entity)
+		_ClearExecutorWorkState(self, _entity)
 		if self.Config.AutoCleanupOnComplete then
-			self:CancelTrackedTasks(_entity)
 			self:ClearEntityState(_entity)
 		end
 	end
@@ -165,7 +197,8 @@ return function(BaseExecutor)
 	]=]
 	function BaseExecutor:Death(_entity: number, _services: any)
 		self:OnDeath(_entity, _services)
-		self:CancelTrackedTasks(_entity)
+		self:BumpEntityGeneration(_entity)
+		_ClearExecutorWorkState(self, _entity)
 		self:ClearEntityState(_entity)
 	end
 end

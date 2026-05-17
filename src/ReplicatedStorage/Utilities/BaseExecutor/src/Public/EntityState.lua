@@ -107,6 +107,10 @@ return function(BaseExecutor)
 	]=]
 	function BaseExecutor:ClearEntityState(entity: number)
 		self._entityState[entity] = nil
+		self._promiseState[entity] = nil
+		self._cursorState[entity] = nil
+		self._cursorAdvanceGate[entity] = nil
+		self._entityGeneration[entity] = nil
 		self._lastFailureReason[entity] = nil
 	end
 end
