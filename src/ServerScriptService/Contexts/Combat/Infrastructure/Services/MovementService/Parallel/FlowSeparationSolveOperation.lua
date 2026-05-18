@@ -25,11 +25,15 @@ FlowSeparationSolveOperation = ParallelQuery.Operation.DefineCached({
 		end
 
 		local entityCount = memory.EntityCount
-		local goalGroupStartIndex = memory.GoalGroupStartIndex
-		local goalGroupCount = memory.GoalGroupCount
+		local goalGroupCellRecordStartIndex = memory.GoalGroupCellRecordStartIndex
+		local goalGroupCellRecordCount = memory.GoalGroupCellRecordCount
 		local goalGroupCellWidthStuds = memory.GoalGroupCellWidthStuds
 		local groupCellX = memory.GroupCellX
 		local groupCellY = memory.GroupCellY
+		local cellPackedKey = memory.CellPackedKey
+		local cellMemberStartIndex = memory.CellMemberStartIndex
+		local cellMemberCount = memory.CellMemberCount
+		local cellMemberEntityIndex = memory.CellMemberEntityIndex
 		local flatPositionX = memory.FlatPositionX
 		local flatPositionY = memory.FlatPositionY
 		local radius = memory.Radius
@@ -41,10 +45,24 @@ FlowSeparationSolveOperation = ParallelQuery.Operation.DefineCached({
 		local velAlpha = memory.VelAlpha
 		local isSettled = memory.IsSettled
 		local wallPackedKeys = memory.WallPackedKeys
-		if goalGroupStartIndex == nil or goalGroupCount == nil or goalGroupCellWidthStuds == nil then
+		if
+			goalGroupCellRecordStartIndex == nil
+			or goalGroupCellRecordCount == nil
+			or goalGroupCellWidthStuds == nil
+		then
 			return emptyRow
 		end
-		if groupCellX == nil or groupCellY == nil or flatPositionX == nil or flatPositionY == nil or radius == nil then
+		if
+			groupCellX == nil
+			or groupCellY == nil
+			or cellPackedKey == nil
+			or cellMemberStartIndex == nil
+			or cellMemberCount == nil
+			or cellMemberEntityIndex == nil
+			or flatPositionX == nil
+			or flatPositionY == nil
+			or radius == nil
+		then
 			return emptyRow
 		end
 		if flowVelocityX == nil or flowVelocityY == nil or previousVelocityX == nil or previousVelocityY == nil then
@@ -62,11 +80,15 @@ FlowSeparationSolveOperation = ParallelQuery.Operation.DefineCached({
 
 		local velocity, touchedSettledNeighbor = FlowSeparationMath.ResolveVelocityWithWalls({
 			EntityIndex = taskId,
-			GoalGroupStartIndex = goalGroupStartIndex,
-			GoalGroupCount = goalGroupCount,
+			GoalGroupCellRecordStartIndex = goalGroupCellRecordStartIndex,
+			GoalGroupCellRecordCount = goalGroupCellRecordCount,
 			GoalGroupCellWidthStuds = goalGroupCellWidthStuds,
 			GroupCellX = groupCellX,
 			GroupCellY = groupCellY,
+			CellPackedKey = cellPackedKey,
+			CellMemberStartIndex = cellMemberStartIndex,
+			CellMemberCount = cellMemberCount,
+			CellMemberEntityIndex = cellMemberEntityIndex,
 			FlatPositionX = flatPositionX,
 			FlatPositionY = flatPositionY,
 			Radius = radius,

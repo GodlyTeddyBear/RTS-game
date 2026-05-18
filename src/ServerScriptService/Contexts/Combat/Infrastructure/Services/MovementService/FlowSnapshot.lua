@@ -101,8 +101,16 @@ return function(MovementService: any)
 	function MovementService:_CreateFlowSeparationSharedMemory(snapshot: TFlowSeparationSolveSnapshot): SharedTable
 		local builder = SharedMemoryAuthoring.CreateSnapshotBuilder()
 		SharedMemoryAuthoring.SetArrayValues(builder, "GoalGroupId", snapshot.GoalGroupId)
-		SharedMemoryAuthoring.SetArrayValues(builder, "GoalGroupStartIndex", snapshot.GoalGroupStartIndex)
-		SharedMemoryAuthoring.SetArrayValues(builder, "GoalGroupCount", snapshot.GoalGroupCount)
+		SharedMemoryAuthoring.SetArrayValues(
+			builder,
+			"GoalGroupCellRecordStartIndex",
+			snapshot.GoalGroupCellRecordStartIndex
+		)
+		SharedMemoryAuthoring.SetArrayValues(
+			builder,
+			"GoalGroupCellRecordCount",
+			snapshot.GoalGroupCellRecordCount
+		)
 		SharedMemoryAuthoring.SetArrayValues(
 			builder,
 			"GoalGroupCellWidthStuds",
@@ -110,6 +118,10 @@ return function(MovementService: any)
 		)
 		SharedMemoryAuthoring.SetArrayValues(builder, "GroupCellX", snapshot.GroupCellX)
 		SharedMemoryAuthoring.SetArrayValues(builder, "GroupCellY", snapshot.GroupCellY)
+		SharedMemoryAuthoring.SetArrayValues(builder, "CellPackedKey", snapshot.CellPackedKey)
+		SharedMemoryAuthoring.SetArrayValues(builder, "CellMemberStartIndex", snapshot.CellMemberStartIndex)
+		SharedMemoryAuthoring.SetArrayValues(builder, "CellMemberCount", snapshot.CellMemberCount)
+		SharedMemoryAuthoring.SetArrayValues(builder, "CellMemberEntityIndex", snapshot.CellMemberEntityIndex)
 		SharedMemoryAuthoring.SetArrayValues(builder, "FlatPositionX", snapshot.FlatPositionX)
 		SharedMemoryAuthoring.SetArrayValues(builder, "FlatPositionY", snapshot.FlatPositionY)
 		SharedMemoryAuthoring.SetArrayValues(builder, "Radius", snapshot.Radius)
