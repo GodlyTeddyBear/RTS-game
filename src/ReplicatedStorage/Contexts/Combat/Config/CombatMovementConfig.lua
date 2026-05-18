@@ -182,6 +182,13 @@ CombatMovementConfig.FLOW_SOFT_SEPARATION = table.freeze({
 	ParallelAsyncUsePreviousResult = true,
 	-- Deprecated: local calculation fallback is disabled in parallel-only mode.
 	ParallelFallbackOnError = false,
+	-- Example-faithful wall collision controls for the live flow movement solve.
+	WallCollisionEnabled = true,
+	WallCollisionAxisClampEnabled = true,
+	WallCollisionCornerClampEnabled = true,
+	WallCollisionUseUnitRadiusPadding = true,
+	WallCollisionCellProbePaddingStuds = 0,
+	WallCollisionVelocityEpsilon = 1e-4,
 })
 
 return table.freeze(CombatMovementConfig)

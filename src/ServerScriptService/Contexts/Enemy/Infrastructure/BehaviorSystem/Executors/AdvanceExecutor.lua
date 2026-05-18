@@ -66,7 +66,6 @@ function AdvanceExecutor:OnStart(entity: number, _data: any?, services: any)
 		services.MovementService:StopMovement(entity)
 		return
 	end
-
 	self:ClearEntityValue(entity, START_FAILURE_REASON_KEY)
 end
 
@@ -89,16 +88,15 @@ function AdvanceExecutor:OnTick(entity: number, _dt: number, services: any): str
 		return self:Fail(entity, startFailureReason)
 	end
 
-	local status, reason = services.MovementService:GetAdvanceStatus(entity)
-	if status == "Running" then
-		return self:Running()
+	services.DeltaTime = _dt
+	local isDone, reason = services.MovementService:StepAdvance(entity, services)
+	if reason ~= nil then
+		return self:Fail(entity, reason)
 	end
-
-	if status == "Success" then
-		return self:Success()
+	if isDone then
+		return "Success"
 	end
-
-	return self:Fail(entity, reason)
+	return "Running"
 end
 
 function AdvanceExecutor:OnCancel(entity: number, services: any)
@@ -123,6 +121,11 @@ function AdvanceExecutor:OnComplete(entity: number, services: any)
 			CauseMessage = goalReachedResult.message,
 		}, goalReachedResult.type)
 	end
+end
+
+function AdvanceExecutor:OnDeath(entity: number, services: any)
+	self:ClearEntityValue(entity, START_FAILURE_REASON_KEY)
+	services.MovementService:StopMovement(entity)
 end
 
 return AdvanceExecutor

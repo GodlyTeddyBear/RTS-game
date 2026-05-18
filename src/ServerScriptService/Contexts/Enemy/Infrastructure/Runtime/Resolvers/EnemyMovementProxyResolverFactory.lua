@@ -11,11 +11,8 @@ function EnemyMovementProxyResolverFactory.Create(dependencies: {
 				StartAdvance = function(_proxy: any, _runtimeId: number, movementMode: any): (boolean, string?)
 					return dependencies.MovementService:StartAdvance(entity, movementMode)
 				end,
-				TickAdvance = function(_proxy: any, _runtimeId: number): ("Running" | "Success" | "Fail", string?)
-					return dependencies.MovementService:TickAdvance(entity)
-				end,
-				GetAdvanceStatus = function(_proxy: any, _runtimeId: number): ("Running" | "Success" | "Fail", string?)
-					return dependencies.MovementService:GetAdvanceStatus(entity)
+				StepAdvance = function(_proxy: any, _runtimeId: number, services: any?): (boolean, string?)
+					return dependencies.MovementService:StepAdvance(entity, services)
 				end,
 				StopMovement = function(_proxy: any, _runtimeId: number)
 					dependencies.MovementService:StopMovement(entity)

@@ -2,210 +2,95 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
-local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
-local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
-local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
 local MovementTypes = require(script.Types)
 
 type EnemyMovementMode = MovementTypes.EnemyMovementMode
 type TMovementState = MovementTypes.TMovementState
-type TAdvanceStatus = MovementTypes.TAdvanceStatus
-type TAdvanceFrameResult = MovementTypes.TAdvanceFrameResult
 type TSharedFlowfieldEntry = MovementTypes.TSharedFlowfieldEntry
-type TFlowSeparationRuntime = MovementTypes.TFlowSeparationRuntime
 type TFlowActorRefs = MovementTypes.TFlowActorRefs
-type TFastFlowProfileCounters = MovementTypes.TFastFlowProfileCounters
-type TFlowVelocitySolveInput = MovementTypes.TFlowVelocitySolveInput
-type TFlowSeparationPairSnapshotBuildAsyncState = MovementTypes.TFlowSeparationPairSnapshotBuildAsyncState
-type TManagedJob = ParallelQuery.TManagedJob
 
-local MOVEMENT_PROFILING_ENABLED = DebugConfig.COMBAT_MOVEMENT_PROFILING
-local applyCompletedVelocityProfileTag = "Combat.MovementService.TickMovementFrame.ApplyCompletedVelocity"
-local collectActiveEntitiesProfileTag = "Combat.MovementService.TickMovementFrame.CollectActiveEntities"
-local tickEntitiesProfileTag = "Combat.MovementService.TickMovementFrame.TickEntities"
-local dispatchVelocityProfileTag = "Combat.MovementService.TickMovementFrame.DispatchVelocity"
-local commitFrameResultsProfileTag = "Combat.MovementService.TickMovementFrame.CommitFrameResults"
-
---[=[
-	@class MovementService
-	Owns Combat enemy movement runtime coordination for pathfinding- and flowfield-based advance.
-	@server
-]=]
 local MovementService = {}
 MovementService.__index = MovementService
 
 require(script.ActorRefs)(MovementService)
 require(script.PathMovement)(MovementService)
-require(script.FastFlowProfiling)(MovementService)
 require(script.SharedFlowfields)(MovementService)
-require(script.FlowSeparation)(MovementService)
 require(script.FlowMovement)(MovementService)
 
 function MovementService.new()
 	local self = setmetatable({}, MovementService)
 	self._movementByEntity = {} :: { [number]: TMovementState }
-	self._advanceFrameResultByEntity = {} :: { [number]: TAdvanceFrameResult }
-	self._movementFrameId = 0
 	self._fastFlowPathfinder = nil
 	self._fastFlowMapping = nil
-	self._lastFastFlowEndpointDiagnosticKey = nil :: string?
-	self._flowVelByEntity = {} :: { [number]: Vector2 }
-	self._flowSteeringRepairAtClockByEntity = {} :: { [number]: number }
-	self._flowSeparationRuntime = nil :: TFlowSeparationRuntime?
 	self._sharedFlowfieldsByGoalKey = {} :: { [string]: TSharedFlowfieldEntry }
 	self._flowGoalKeyByEntity = {} :: { [number]: string }
 	self._activeFlowEntitiesByGoalKey = {} :: { [string]: { [number]: boolean } }
 	self._flowSettledByEntity = {} :: { [number]: boolean }
-	self._flowSettleAnchorGoalKeyByEntity = {} :: { [number]: string }
 	self._flowActorRefsByEntity = {} :: { [number]: TFlowActorRefs }
+	self._flowVelocityByEntity = {} :: { [number]: Vector2 }
+	self._flowFrameSerial = 0
+	self._flowPreparedTickId = nil :: number?
+	self._flowFrameInputsByEntity = {}
+	self._flowFrameSolutionsByEntity = {}
+	self._flowInvalidReasonByEntity = {}
+	self._flowCurrentSessionUserId = nil :: number?
 	self._flowSeparationParallelRunner = nil
-	self._flowSeparationPairManagedJob = nil :: TManagedJob?
-	self._flowSeparationPairManagedJobLastObservedError = nil
-	self._flowSeparationPairSnapshotBuildAsyncState = nil :: TFlowSeparationPairSnapshotBuildAsyncState?
-	self._flowVelocityManagedJob = nil :: TManagedJob?
-	self._flowVelocityManagedJobLastObservedError = nil
-	self._fastFlowProfileCounters = nil :: TFastFlowProfileCounters?
-	self._lastFastFlowProfileLogAt = 0
+	self._flowSeparationManagedJob = nil
+	self._flowLatestParallelSolve = nil
+	self._flowWallKeyCachePathfinder = nil
+	self._flowWallPackedKeys = nil
+	self._flowWallGridHalfSize = nil
 	return self
 end
 
 function MovementService:Init(registry: any, _name: string)
 	self._registry = registry
+	self._combatLoopService = registry:Get("CombatLoopService")
 end
-
 
 function MovementService:Start()
 end
-
 
 function MovementService:ConfigureEnemyEntityFactory(enemyEntityFactory: any)
 	self._enemyEntityFactory = enemyEntityFactory
 end
 
-
 function MovementService:ConfigureLockOnService(lockOnService: any)
 	self._lockOnService = lockOnService
 end
 
-
 function MovementService:ConfigureFastFlow(pathfinder: any?, mapping: FastFlowHelper.TFlowGridMapping?)
 	self._fastFlowPathfinder = pathfinder
 	self._fastFlowMapping = mapping
+	self._flowWallKeyCachePathfinder = nil
+	self._flowWallPackedKeys = nil
+	self._flowWallGridHalfSize = nil
 end
-
-
-function MovementService:ResetFastFlowRuntime()
-	table.clear(self._flowVelByEntity)
-	table.clear(self._flowSteeringRepairAtClockByEntity)
-	table.clear(self._sharedFlowfieldsByGoalKey)
-	table.clear(self._flowGoalKeyByEntity)
-	table.clear(self._activeFlowEntitiesByGoalKey)
-	table.clear(self._flowSettledByEntity)
-	table.clear(self._flowSettleAnchorGoalKeyByEntity)
-	self:_DestroyFlowSeparationParallelRunner()
-	self:_ClearFlowSeparationPairSnapshotBuildAsyncState()
-	self._flowSeparationRuntime = nil
-	self._lastFastFlowEndpointDiagnosticKey = nil
-end
-
 
 function MovementService:ConfigureFlowfieldDebugRenderer(renderer: ((any, FastFlowHelper.TFlowGridMapping, Vector3) -> ())?)
 	self._flowfieldDebugRenderer = renderer
 end
 
-
-function MovementService:BeginCombatFrame(sessionUserId: number, currentTime: number)
-	local separationRuntime = self:_GetOrCreateFlowSeparationRuntime()
-	separationRuntime.SessionUserId = sessionUserId
-	separationRuntime.CurrentTime = currentTime
-	self:_ResetFastFlowProfileCounters()
+function MovementService:FinalizeAdvanceFrame()
 end
 
-
-function MovementService:EndCombatFrame(_sessionUserId: number)
-	self:_EmitFastFlowProfileCounters()
-	self._fastFlowProfileCounters = nil
+function MovementService:ResetFastFlowRuntime()
+	table.clear(self._sharedFlowfieldsByGoalKey)
+	table.clear(self._flowGoalKeyByEntity)
+	table.clear(self._activeFlowEntitiesByGoalKey)
+	table.clear(self._flowSettledByEntity)
+	table.clear(self._flowVelocityByEntity)
+	self._flowPreparedTickId = nil
+	self._flowFrameInputsByEntity = {}
+	self._flowFrameSolutionsByEntity = {}
+	self._flowInvalidReasonByEntity = {}
+	self._flowLatestParallelSolve = nil
+	self._flowWallKeyCachePathfinder = nil
+	self._flowWallPackedKeys = nil
+	self._flowWallGridHalfSize = nil
+	self:_DestroyFlowSeparationRunner()
 end
-
-
-function MovementService:TickMovementFrame(_dt: number)
-	self._movementFrameId += 1
-
-	local sepConfig = CombatMovementConfig.FLOW_SOFT_SEPARATION
-
-	-- This method runs inside the scheduler, so it must never yield while staging async movement work.
-	local frameResultsByEntity: { [number]: { Status: TAdvanceStatus, Reason: string? } } =
-		DebugPlus.profile(applyCompletedVelocityProfileTag, function()
-			return self:_ApplyCompletedFlowVelocityAsyncResult(sepConfig) or {}
-		end, MOVEMENT_PROFILING_ENABLED)
-
-	if next(self._movementByEntity) == nil then
-		return
-	end
-
-	local activeEntities = DebugPlus.profile(collectActiveEntitiesProfileTag, function()
-		local entities = {}
-		for entity in self._movementByEntity do
-			table.insert(entities, entity)
-		end
-		return entities
-	end, MOVEMENT_PROFILING_ENABLED)
-
-	local pendingFlowVelocityInputs = {}
-
-	DebugPlus.profile(tickEntitiesProfileTag, function()
-		for _, entity in ipairs(activeEntities) do
-			local status, reason, pendingVelocityInput = self:_TickAdvanceInternal(entity)
-			if pendingVelocityInput ~= nil then
-				table.insert(pendingFlowVelocityInputs, pendingVelocityInput)
-				if frameResultsByEntity[entity] == nil then
-					frameResultsByEntity[entity] = {
-						Status = "Running",
-						Reason = nil,
-					}
-				end
-			else
-				frameResultsByEntity[entity] = {
-					Status = status,
-					Reason = reason,
-				}
-			end
-		end
-	end, MOVEMENT_PROFILING_ENABLED)
-
-	if #pendingFlowVelocityInputs > 0 then
-		DebugPlus.profile(dispatchVelocityProfileTag, function()
-			self:_ResolvePendingFlowVelocityMoves(pendingFlowVelocityInputs)
-		end, MOVEMENT_PROFILING_ENABLED)
-	end
-
-	DebugPlus.profile(commitFrameResultsProfileTag, function()
-		for entity, result in frameResultsByEntity do
-			self._advanceFrameResultByEntity[entity] = {
-				Status = result.Status,
-				Reason = result.Reason,
-				FrameId = self._movementFrameId,
-			}
-		end
-	end, MOVEMENT_PROFILING_ENABLED)
-end
-
-
-function MovementService:GetAdvanceStatus(entity: number): (TAdvanceStatus, string?)
-	local frameResult = self._advanceFrameResultByEntity[entity]
-	if frameResult ~= nil and frameResult.FrameId == self._movementFrameId then
-		return frameResult.Status, frameResult.Reason
-	end
-
-	if self._movementByEntity[entity] ~= nil then
-		return "Running", nil
-	end
-
-	return "Fail", "MissingMovementState"
-end
-
 
 function MovementService:StartAdvance(entity: number, movementMode: EnemyMovementMode): (boolean, string?)
 	self:StopMovement(entity)
@@ -237,47 +122,31 @@ function MovementService:StartAdvance(entity: number, movementMode: EnemyMovemen
 	return false, "PathStartFailed"
 end
 
-
-function MovementService:_TickAdvanceInternal(entity: number): ("Running" | "Success" | "Fail", string?, TFlowVelocitySolveInput?)
+function MovementService:StepAdvance(entity: number, services: any?): (boolean, string?)
 	local movementState = self._movementByEntity[entity]
 	if movementState == nil then
-		return "Fail", "MissingMovementState", nil
+		return false, "MissingMovementState"
 	end
 
-	if movementState.Mode == "Flow" then
-		return self:_TickFlow(entity, movementState)
-	end
+	if movementState.Mode == "Path" then
+		self:_ApplyCurrentMoveSpeed(entity)
 
-	self:_ApplyCurrentMoveSpeed(entity)
-
-	local status, reason = self:_TickPath(entity, movementState)
-	return status, reason, nil
-end
-
-
-function MovementService:TickAdvance(entity: number): ("Running" | "Success" | "Fail", string?)
-	local sepConfig = CombatMovementConfig.FLOW_SOFT_SEPARATION
-	local completedVelocityResults = self:_ApplyCompletedFlowVelocityAsyncResult(sepConfig)
-	if completedVelocityResults ~= nil then
-		local completedVelocityResult = completedVelocityResults[entity]
-		if completedVelocityResult ~= nil then
-			return completedVelocityResult.Status, completedVelocityResult.Reason
+		local status, reason = self:_TickPath(entity, movementState)
+		if status == "Fail" then
+			return false, reason
 		end
+		if status == "Success" then
+			return true, nil
+		end
+		return false, nil
 	end
 
-	local status, reason, pendingVelocityInput = self:_TickAdvanceInternal(entity)
-	if pendingVelocityInput ~= nil then
-		self:_ResolvePendingFlowVelocityMoves({ pendingVelocityInput })
-	end
-
-	return status, reason
+	return self:_StepFlowAdvance(entity, movementState, services)
 end
-
 
 function MovementService:StopMovement(entity: number)
 	local movementState = self._movementByEntity[entity]
-	if movementState == nil and self._flowSettleAnchorGoalKeyByEntity[entity] == nil then
-		self._advanceFrameResultByEntity[entity] = nil
+	if movementState == nil and self._flowGoalKeyByEntity[entity] == nil then
 		return
 	end
 
@@ -292,10 +161,8 @@ function MovementService:StopMovement(entity: number)
 		end
 	end
 
-	self._advanceFrameResultByEntity[entity] = nil
 	self:_ClearMovementRuntimeState(entity)
 end
-
 
 function MovementService:CleanupAll()
 	local entities = {}
@@ -303,7 +170,7 @@ function MovementService:CleanupAll()
 		table.insert(entities, entityId)
 	end
 
-	for entityId in self._flowSettleAnchorGoalKeyByEntity do
+	for entityId in self._flowGoalKeyByEntity do
 		if self._movementByEntity[entityId] == nil then
 			table.insert(entities, entityId)
 		end
@@ -313,19 +180,38 @@ function MovementService:CleanupAll()
 		self:StopMovement(entityId)
 	end
 
-	table.clear(self._flowVelByEntity)
-	table.clear(self._flowSteeringRepairAtClockByEntity)
-	table.clear(self._sharedFlowfieldsByGoalKey)
-	table.clear(self._flowGoalKeyByEntity)
-	table.clear(self._activeFlowEntitiesByGoalKey)
-	table.clear(self._flowSettledByEntity)
-	table.clear(self._flowSettleAnchorGoalKeyByEntity)
 	table.clear(self._flowActorRefsByEntity)
-	table.clear(self._advanceFrameResultByEntity)
-	self:_DestroyFlowSeparationParallelRunner()
-	self:_ClearFlowSeparationPairSnapshotBuildAsyncState()
-	self._flowSeparationRuntime = nil
+	self:ResetFastFlowRuntime()
 end
 
+function MovementService:_ResolveActiveSessionUserId(): number?
+	local loopService = self._combatLoopService
+	if loopService == nil then
+		return nil
+	end
+
+	local activeSessionUserId = nil :: number?
+	loopService:ForEachRunnableSession(function(userId: number)
+		activeSessionUserId = userId
+		return false
+	end)
+
+	return activeSessionUserId
+end
+
+function MovementService:_ClearMovementRuntimeState(entity: number)
+	local currentGoalKey = self._flowGoalKeyByEntity[entity]
+	self:_RemoveEntityFromActiveFlowGoal(entity, currentGoalKey)
+	self._movementByEntity[entity] = nil
+	self._flowVelocityByEntity[entity] = nil
+	self._flowSettledByEntity[entity] = nil
+	self:_DetachSharedFlowfield(currentGoalKey)
+	self._flowGoalKeyByEntity[entity] = nil
+	self:_InvalidateFlowActorRefs(entity)
+	self._enemyEntityFactory:SetPathMoving(entity, false)
+	if self._lockOnService ~= nil and type(self._lockOnService.SetBoidsFacingFlatForward) == "function" then
+		self._lockOnService:SetBoidsFacingFlatForward(entity, nil)
+	end
+end
 
 return MovementService

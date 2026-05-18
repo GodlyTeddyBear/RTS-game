@@ -7,8 +7,6 @@ local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
 
 local MovementServiceTypes = {}
 
-type TManagedAsyncState = ParallelQuery.TManagedAsyncState
-
 export type EnemyMovementMode = EnemyTypes.EnemyMovementMode
 
 export type TPathMovementState = {
@@ -25,14 +23,6 @@ export type TFlowMovementState = {
 
 export type TMovementState = TPathMovementState | TFlowMovementState
 
-export type TAdvanceStatus = "Running" | "Success" | "Fail"
-
-export type TAdvanceFrameResult = {
-	Status: TAdvanceStatus,
-	Reason: string?,
-	FrameId: number,
-}
-
 export type TSharedFlowfieldEntry = {
 	Flowfield: any,
 	GoalCell: Vector2,
@@ -42,154 +32,71 @@ export type TSharedFlowfieldEntry = {
 	RefCount: number,
 }
 
-export type TFlowSeparationCoveredCell = {
-	Key: number,
-	Gx: number,
-	Gz: number,
-}
-
-export type TFlowSeparationEntityState = {
-	Position: Vector3?,
-	FlatPosition: Vector2?,
-	Radius: number,
-	GoalKey: string?,
-	Settled: boolean,
-	Active: boolean,
-	CoveredCells: { TFlowSeparationCoveredCell },
-	Separation: Vector2,
-	NearGoalScale: number,
-	LastSpatialRefreshFlatPosition: Vector2?,
-	IsInsideNearGoalBand: boolean,
-	LastGoalKey: string?,
-	LastDirtyMarkFlatPosition: Vector2?,
-}
-
-export type TFlowSeparationRuntime = {
-	SessionUserId: number?,
-	CurrentTime: number?,
-	CellWidthStuds: number,
-	EntityStateById: { [number]: TFlowSeparationEntityState },
-	BucketsByCell: { [number]: { [number]: boolean } },
-	DirtyEntities: { [number]: boolean },
-	DirtyCells: { [number]: boolean },
-	TrackedFlowEntities: { [number]: boolean },
-	ActiveFlowEntities: { [number]: boolean },
-	ActiveSolveEntities: { [number]: boolean },
-}
-
-export type TFlowVelocitySolveInput = {
-	Entity: number,
-	FlowXZ: Vector2,
-	SeparationXZ: Vector2,
-	PreviousVelocityXZ: Vector2,
-	WalkSpeed: number,
-	VelAlpha: number,
-}
-
-export type TFlowVelocitySolveSnapshot = {
-	EntityIds: { number },
-	EntityIndexById: { [number]: number },
-	FlowX: { [number]: number },
-	FlowY: { [number]: number },
-	SeparationX: { [number]: number },
-	SeparationY: { [number]: number },
-	PreviousVelocityX: { [number]: number },
-	PreviousVelocityY: { [number]: number },
-	WalkSpeed: { [number]: number },
-	VelAlpha: { [number]: number },
-}
-
-export type TFlowVelocitySolveRow = {
-	EntityIndex: number,
-	VelocityX: number,
-	VelocityY: number,
-	ShouldMove: boolean,
-}
-
-export type TFlowSeparationPairSnapshotBuildInput = {
-	CandidateCellKeys: { number },
-	CellEntityStarts: { [number]: number },
-	CellEntityCounts: { [number]: number },
-	EligibleEntityIds: { [number]: number },
-	TaskCellIndices: { [number]: number },
-	TaskOuterStartOffsets: { [number]: number },
-	TaskOuterEndOffsets: { [number]: number },
-	TaskEntityStartIndices: { [number]: number },
-	TaskEntityCounts: { [number]: number },
-	EntityPositionXById: { [number]: number },
-	EntityPositionYById: { [number]: number },
-	EntityRadiusById: { [number]: number },
-	KForce: number,
-	MinSeparationDistance: number,
-}
-
-export type TFlowSeparationPairSnapshotBuildAsyncState = TManagedAsyncState
-
-export type TFastFlowProfileCounters = {
-	SharedFieldCreations: number,
-	SharedFieldRefreshes: number,
-	MergeAttempts: number,
-	TrackedFlowEntities: number,
-	ActiveSeparationEntities: number,
-	DenseCellsEncountered: number,
-	DenseCellFallbackActivations: number,
-	DirtyEntitiesProcessed: number,
-	DirtyCellsProcessed: number,
-	LocalPairSolves: number,
-	BucketMembershipUpdates: number,
-	CachedRootPartHits: number,
-	CachedRootPartMisses: number,
-	CachedHumanoidHits: number,
-	CachedHumanoidMisses: number,
-	SpatialRefreshCalls: number,
-	CoveredCellRecomputes: number,
-	NearGoalBandRecomputes: number,
-	DirtyMarksTriggered: number,
-	DirtyMarksSkipped: number,
-	ParallelPairDispatches: number,
-	ParallelPairsDispatched: number,
-	ParallelPairRowsApplied: number,
-	ParallelPairSnapshotBuilds: number,
-	ParallelPairSnapshotEntities: number,
-	ParallelPairSnapshotPairs: number,
-	ParallelPairSnapshotBuildMilliseconds: number,
-	ParallelPairSnapshotAsyncDispatches: number,
-	ParallelPairSnapshotAsyncCompleted: number,
-	ParallelPairSnapshotAsyncApplied: number,
-	ParallelPairSnapshotAsyncStaleResults: number,
-	ParallelPairSnapshotAsyncDroppedResults: number,
-	ParallelPairSnapshotAsyncInFlightSkips: number,
-	ParallelPairSnapshotAsyncErrorFallbacks: number,
-	ParallelPairSnapshotChunkedCells: number,
-	ParallelPairSnapshotTasksGenerated: number,
-	ParallelPairSnapshotOverflowLocalFallbacks: number,
-	ParallelPairBelowThresholdSkips: number,
-	ParallelPairFailedFallbacks: number,
-	ParallelPairAsyncErrorFallbacks: number,
-	ParallelVelocityDispatches: number,
-	ParallelVelocityEntitiesDispatched: number,
-	ParallelVelocityRowsApplied: number,
-	ParallelVelocityAsyncDispatches: number,
-	ParallelVelocityAsyncCompleted: number,
-	ParallelVelocityAsyncApplied: number,
-	ParallelVelocityAsyncStaleResults: number,
-	ParallelVelocityAsyncDroppedResults: number,
-	ParallelVelocityAsyncInFlightSkips: number,
-	ParallelVelocityAsyncErrorFallbacks: number,
-	ParallelFallbacks: number,
-	ParallelAsyncDispatches: number,
-	ParallelAsyncCompleted: number,
-	ParallelAsyncApplied: number,
-	ParallelAsyncStaleResults: number,
-	ParallelAsyncDroppedResults: number,
-	ParallelAsyncInFlightSkips: number,
-}
-
 export type TFlowActorRefs = {
 	Model: Model?,
 	RootPart: BasePart?,
 	Humanoid: Humanoid?,
 	LastWalkSpeed: number?,
 }
+
+export type TFlowFrameInput = {
+	Entity: number,
+	GoalGroupId: number,
+	GoalKey: string,
+	GoalPosition: Vector3,
+	GoalWorldSample: Vector3,
+	Position: Vector3,
+	FlatPosition: Vector2,
+	FlowDirectionXZ: Vector2,
+	WalkSpeed: number,
+	Radius: number,
+	PreviousVelocityXZ: Vector2,
+	IsSettled: boolean,
+}
+
+export type TFlowFrameSolution = {
+	VelocityXZ: Vector2,
+	MoveTarget: Vector3?,
+	DidArrive: boolean,
+	ShouldSettle: boolean,
+	HasSteering: boolean,
+}
+
+export type TFlowSeparationSolveSnapshot = {
+	TickId: number,
+	EntityIds: { number },
+	GoalGroupId: { number },
+	FlatPositionX: { number },
+	FlatPositionY: { number },
+	Radius: { number },
+	FlowVelocityX: { number },
+	FlowVelocityY: { number },
+	PreviousVelocityX: { number },
+	PreviousVelocityY: { number },
+	WalkSpeed: { number },
+	VelAlpha: { number },
+	DeltaTime: number,
+	CellWidthStuds: number,
+	OriginX: number,
+	OriginY: number,
+	WallGridHalfSize: number,
+	WallPackedKeys: { number },
+	KForce: number,
+	MinSeparationDistance: number,
+	WallCollisionEnabled: boolean,
+	WallCollisionAxisClampEnabled: boolean,
+	WallCollisionCornerClampEnabled: boolean,
+	WallCollisionUseUnitRadiusPadding: boolean,
+	WallCollisionCellProbePaddingStuds: number,
+	WallCollisionVelocityEpsilon: number,
+}
+
+export type TFlowSeparationSolveRow = {
+	EntityIndex: number,
+	VelocityX: number,
+	VelocityY: number,
+}
+
+export type TManagedJob = ParallelQuery.TManagedJob
 
 return table.freeze(MovementServiceTypes)

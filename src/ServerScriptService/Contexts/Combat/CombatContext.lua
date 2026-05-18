@@ -160,11 +160,6 @@ local Ok = Result.Ok
 local Try = Result.Try
 
 local schedulerProfilingEnabled = DebugConfig.COMBAT_SCHEDULER_PROFILING
-local movementTickProfileTag = "Combat.Scheduler.MovementTick"
-local movementResolveRunnableSessionProfileTag = "Combat.Scheduler.MovementTick.ResolveRunnableSession"
-local movementBeginCombatFrameProfileTag = "Combat.Scheduler.MovementTick.BeginCombatFrame"
-local movementTickMovementFrameProfileTag = "Combat.Scheduler.MovementTick.TickMovementFrame"
-local movementEndCombatFrameProfileTag = "Combat.Scheduler.MovementTick.EndCombatFrame"
 local combatTickProfileTag = "Combat.Scheduler.CombatTick"
 local combatHitboxTickProfileTag = "Combat.Scheduler.CombatTick.HitboxTick"
 local combatProcessSessionsProfileTag = "Combat.Scheduler.CombatTick.ProcessSessions"
@@ -182,37 +177,6 @@ end
 
 function CombatContext:KnitStart()
 	CombatBaseContext:KnitStart()
-
-	CombatBaseContext:RegisterSchedulerSystem("MovementTick", function()
-		DebugPlus.profile(movementTickProfileTag, function()
-			local runnableSessionUserId = nil :: number?
-			DebugPlus.profile(movementResolveRunnableSessionProfileTag, function()
-				self._combatLoopService:ForEachRunnableSession(function(userId: number)
-					runnableSessionUserId = userId
-					return false
-				end)
-			end, schedulerProfilingEnabled)
-
-			if runnableSessionUserId == nil then
-				return
-			end
-
-			local dt = CombatBaseContext:GetSchedulerDeltaTime()
-			local currentTime = os.clock()
-
-			DebugPlus.profile(movementBeginCombatFrameProfileTag, function()
-				self._movementService:BeginCombatFrame(runnableSessionUserId :: number, currentTime)
-			end, schedulerProfilingEnabled)
-
-			DebugPlus.profile(movementTickMovementFrameProfileTag, function()
-				self._movementService:TickMovementFrame(dt)
-			end, schedulerProfilingEnabled)
-
-			DebugPlus.profile(movementEndCombatFrameProfileTag, function()
-				self._movementService:EndCombatFrame(runnableSessionUserId :: number)
-			end, schedulerProfilingEnabled)
-		end, schedulerProfilingEnabled)
-	end)
 
 	CombatBaseContext:RegisterSchedulerSystem("CombatTick", function()
 		DebugPlus.profile(combatTickProfileTag, function()
@@ -240,6 +204,8 @@ function CombatContext:KnitStart()
 					self._statusService:EvaluateEnemyMoveSpeedEffects()
 				end, schedulerProfilingEnabled)
 			end
+
+			self._movementService:FinalizeAdvanceFrame()
 		end, schedulerProfilingEnabled)
 	end)
 
