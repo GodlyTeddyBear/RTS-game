@@ -50,7 +50,8 @@ return function(MovementService: any)
 			return nil
 		end
 
-		local starts: { Vector3 } = {}
+		local starts = self._flowRepresentativeStarts :: { Vector3 }
+		table.clear(starts)
 		local maxStarts = math.max(1, math.floor(config.RepresentativeStartCap or 8))
 		local activeEntities = self._activeFlowEntitiesByGoalKey[goalKey]
 		if activeEntities == nil then

@@ -10,8 +10,8 @@ local MovementMath = require(script.Parent.Math.MovementMath)
 local MovementTypes = require(script.Parent.Types)
 
 type TFlowMovementState = MovementTypes.TFlowMovementState
-type TFlowFrameStateBuildSnapshotParams = MovementTypes.TFlowFrameStateBuildSnapshotParams
 type TFlowFrameStateHandle = MovementTypes.TFlowFrameStateHandle
+type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
 type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
 type TFlowSeparationSolveRow = MovementTypes.TFlowSeparationSolveRow
 
@@ -21,17 +21,27 @@ local ValidationHelpers = ParallelQuery.ValidationHelpers
 
 return function(MovementService: any)
 	function MovementService:_BuildPackedWallKeys(): { number }
-		local pathfinder, mapping = self:_ResolveFastFlowRuntime()
-		if pathfinder == nil or mapping == nil then
-			return {}
+		local packedKeys = self._flowWallPackedKeys
+		if packedKeys == nil then
+			packedKeys = {}
+			self._flowWallPackedKeys = packedKeys
 		end
 
-		if self._flowWallKeyCachePathfinder == pathfinder and self._flowWallPackedKeys ~= nil then
-			return self._flowWallPackedKeys
+		local pathfinder, mapping = self:_ResolveFastFlowRuntime()
+		if pathfinder == nil or mapping == nil then
+			table.clear(packedKeys)
+			self._flowWallKeyCachePathfinder = nil
+			self._flowWallGridHalfSize = 0
+			return packedKeys
+		end
+
+		if self._flowWallKeyCachePathfinder == pathfinder then
+			return packedKeys
 		end
 
 		local walls = pathfinder._Walls
-		local packedKeys = {}
+		table.clear(packedKeys)
+
 		if walls ~= nil and type(walls._Grid) == "table" and type(walls._GetCellPos) == "function" then
 			for index, value in walls._Grid do
 				if value == true then
@@ -43,7 +53,6 @@ return function(MovementService: any)
 
 		table.sort(packedKeys)
 		self._flowWallKeyCachePathfinder = pathfinder
-		self._flowWallPackedKeys = packedKeys
 		self._flowWallGridHalfSize = if type(walls) == "table" and type(walls._Size) == "number" then walls._Size else 0
 		return packedKeys
 	end
@@ -92,9 +101,15 @@ return function(MovementService: any)
 	function MovementService:_CreateFlowSeparationSharedMemory(snapshot: TFlowSeparationSolveSnapshot): SharedTable
 		local builder = SharedMemoryAuthoring.CreateSnapshotBuilder()
 		SharedMemoryAuthoring.SetArrayValues(builder, "GoalGroupId", snapshot.GoalGroupId)
-		SharedMemoryAuthoring.SetArrayValues(builder, "NeighborStartIndex", snapshot.NeighborStartIndex)
-		SharedMemoryAuthoring.SetArrayValues(builder, "NeighborCount", snapshot.NeighborCount)
-		SharedMemoryAuthoring.SetArrayValues(builder, "NeighborEntityIndex", snapshot.NeighborEntityIndex)
+		SharedMemoryAuthoring.SetArrayValues(builder, "GoalGroupStartIndex", snapshot.GoalGroupStartIndex)
+		SharedMemoryAuthoring.SetArrayValues(builder, "GoalGroupCount", snapshot.GoalGroupCount)
+		SharedMemoryAuthoring.SetArrayValues(
+			builder,
+			"GoalGroupCellWidthStuds",
+			snapshot.GoalGroupCellWidthStuds
+		)
+		SharedMemoryAuthoring.SetArrayValues(builder, "GroupCellX", snapshot.GroupCellX)
+		SharedMemoryAuthoring.SetArrayValues(builder, "GroupCellY", snapshot.GroupCellY)
 		SharedMemoryAuthoring.SetArrayValues(builder, "FlatPositionX", snapshot.FlatPositionX)
 		SharedMemoryAuthoring.SetArrayValues(builder, "FlatPositionY", snapshot.FlatPositionY)
 		SharedMemoryAuthoring.SetArrayValues(builder, "Radius", snapshot.Radius)
@@ -104,6 +119,7 @@ return function(MovementService: any)
 		SharedMemoryAuthoring.SetArrayValues(builder, "PreviousVelocityY", snapshot.PreviousVelocityY)
 		SharedMemoryAuthoring.SetArrayValues(builder, "WalkSpeed", snapshot.WalkSpeed)
 		SharedMemoryAuthoring.SetArrayValues(builder, "VelAlpha", snapshot.VelAlpha)
+		SharedMemoryAuthoring.SetArrayValues(builder, "IsSettled", snapshot.IsSettled)
 		SharedMemoryAuthoring.SetArrayValues(builder, "WallPackedKeys", snapshot.WallPackedKeys)
 		SharedMemoryAuthoring.SetScalar(builder, "EntityCount", snapshot.EntityCount)
 		SharedMemoryAuthoring.SetScalar(builder, "DeltaTime", snapshot.DeltaTime)
@@ -135,16 +151,22 @@ return function(MovementService: any)
 			snapshot.WallCollisionCellProbePaddingStuds
 		)
 		SharedMemoryAuthoring.SetScalar(builder, "WallCollisionVelocityEpsilon", snapshot.WallCollisionVelocityEpsilon)
+		SharedMemoryAuthoring.SetScalar(builder, "ClumpTouchPaddingStuds", snapshot.ClumpTouchPaddingStuds)
 		return SharedMemoryAuthoring.BuildSharedMemory(builder)
 	end
 
 	function MovementService:_ApplyFlowVelocityRows(
 		snapshot: TFlowSeparationSolveSnapshot,
 		rows: { TFlowSeparationSolveRow },
-		velocityByEntity: { [number]: Vector2 }?
-	): { [number]: Vector2 }
+		velocityByEntity: { [number]: Vector2 }?,
+		touchedSettledNeighborByEntity: { [number]: boolean }?
+	): ({ [number]: Vector2 }, { [number]: boolean })
 		local resolvedVelocityByEntity = if velocityByEntity ~= nil then velocityByEntity else {}
 		table.clear(resolvedVelocityByEntity)
+		local resolvedTouchedSettledNeighborByEntity = if touchedSettledNeighborByEntity ~= nil
+			then touchedSettledNeighborByEntity
+			else {}
+		table.clear(resolvedTouchedSettledNeighborByEntity)
 
 		ResultApplication.ApplyRows({
 			Rows = rows,
@@ -155,20 +177,34 @@ return function(MovementService: any)
 					return indexValidation
 				end
 
-				return ValidationHelpers.RequireNumberFields(row, { "VelocityX", "VelocityY" })
+				local numberValidation = ValidationHelpers.RequireNumberFields(row, { "VelocityX", "VelocityY" })
+				if not numberValidation.IsValid then
+					return numberValidation
+				end
+				if type(row.TouchedSettledNeighbor) ~= "boolean" then
+					return {
+						IsValid = false,
+						FieldName = "TouchedSettledNeighbor",
+						Reason = "ExpectedBoolean",
+					}
+				end
+				return numberValidation
 			end,
 			ResolveTarget = function(row)
 				return snapshot.EntityIds[row.EntityIndex]
 			end,
 			ApplyRow = function(entityId, row)
 				resolvedVelocityByEntity[entityId] = Vector2.new(row.VelocityX, row.VelocityY)
+				if row.TouchedSettledNeighbor then
+					resolvedTouchedSettledNeighborByEntity[entityId] = true
+				end
 			end,
 		})
 
-		return resolvedVelocityByEntity
+		return resolvedVelocityByEntity, resolvedTouchedSettledNeighborByEntity
 	end
 
-	function MovementService:_ResolveFlowFrameState(
+	function MovementService:_ResolveFlowBuildFrameState(
 		entity: number,
 		movementState: TFlowMovementState
 	): (string?, Vector3?, Vector3?, Vector3?, Vector2, number?, number?, Vector2, boolean)
@@ -212,46 +248,6 @@ return function(MovementService: any)
 			isSettled
 	end
 
-	function MovementService:_ResolveFlowSnapshotBuildParams(
-		tickId: number,
-		dt: number,
-		wallPackedKeys: { number }
-	): TFlowFrameStateBuildSnapshotParams?
-		local _pathfinder, mapping = self:_ResolveFastFlowRuntime()
-		if mapping == nil then
-			return nil
-		end
-
-		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
-		return {
-			TickId = tickId,
-			DeltaTime = dt,
-			CellWidthStuds = mapping.CellWidthStuds,
-			OriginX = mapping.OriginWorld.X,
-			OriginY = mapping.OriginWorld.Z,
-			GridHalfSize = mapping.GridHalfSize,
-			WallGridHalfSize = if type(self._flowWallGridHalfSize) == "number"
-				then self._flowWallGridHalfSize
-				else mapping.GridHalfSize,
-			WallPackedKeys = wallPackedKeys,
-			KForce = if type(config.KForce) == "number" then config.KForce else 80,
-			MinSeparationDistance = if type(config.MinSeparationDistance) == "number"
-				then config.MinSeparationDistance
-				else 1e-4,
-			WallCollisionEnabled = config.WallCollisionEnabled == true,
-			WallCollisionAxisClampEnabled = config.WallCollisionAxisClampEnabled ~= false,
-			WallCollisionCornerClampEnabled = config.WallCollisionCornerClampEnabled ~= false,
-			WallCollisionUseUnitRadiusPadding = config.WallCollisionUseUnitRadiusPadding == true,
-			WallCollisionCellProbePaddingStuds = if type(config.WallCollisionCellProbePaddingStuds) == "number"
-				then config.WallCollisionCellProbePaddingStuds
-				else 0,
-			WallCollisionVelocityEpsilon = if type(config.WallCollisionVelocityEpsilon) == "number"
-				then config.WallCollisionVelocityEpsilon
-				else 1e-4,
-			ClumpTouchPaddingStuds = self:_GetFlowClumpTouchPaddingStuds(),
-		}
-	end
-
 	function MovementService:_ResolveFlowTickId(services: any?): number
 		if type(services) == "table" and type(services.TickId) == "number" then
 			return services.TickId
@@ -272,7 +268,7 @@ return function(MovementService: any)
 	function MovementService:_BuildFlowDispatchSnapshot(
 		tickId: number,
 		dt: number
-	): (TFlowSeparationSolveSnapshot?, { [number]: boolean }?, { [number]: string }?)
+	): (TFlowSeparationSolveSnapshot?, { [number]: string }?, TFlowPublishedFrameState?)
 		table.clear(self._flowInvalidReasonByEntity)
 
 		local frameState = self:_GetOrCreateFlowFrameState()
@@ -280,13 +276,30 @@ return function(MovementService: any)
 
 		local goalKeyByEntity = self._flowReusableGoalKeyByEntity :: { [number]: string }
 		table.clear(goalKeyByEntity)
+		local goalPositionByEntity = self._flowReusableGoalPositionByEntity :: { [number]: Vector3 }
+		local goalWorldSampleByEntity = self._flowReusableGoalWorldSampleByEntity :: { [number]: Vector3 }
+		local positionByEntity = self._flowReusablePositionByEntity :: { [number]: Vector3 }
+		local walkSpeedByEntity = self._flowReusableWalkSpeedByEntity :: { [number]: number }
+		local isSettledByEntity = self._flowReusableIsSettledByEntity :: { [number]: boolean }
+		table.clear(goalPositionByEntity)
+		table.clear(goalWorldSampleByEntity)
+		table.clear(positionByEntity)
+		table.clear(walkSpeedByEntity)
+		table.clear(isSettledByEntity)
 
 		-- Resolve all valid flow entities into the frame-state SoA
 		for entity, movementState in self._movementByEntity do
 			if movementState.Mode == "Flow" then
 				local goalKey, _goalPosition, _goalWorldSample, position, flowDirectionXZ, walkSpeed, radius, previousVelocityXZ, isSettled =
-					self:_ResolveFlowFrameState(entity, movementState)
-				if goalKey == nil or position == nil or walkSpeed == nil or radius == nil then
+					self:_ResolveFlowBuildFrameState(entity, movementState)
+				if
+					goalKey == nil
+					or _goalPosition == nil
+					or _goalWorldSample == nil
+					or position == nil
+					or walkSpeed == nil
+					or radius == nil
+				then
 					continue
 				end
 
@@ -302,6 +315,13 @@ return function(MovementService: any)
 				)
 				frameState:SetVelAlpha(entityIndex, self:_GetFlowVelocityAlpha())
 				goalKeyByEntity[entity] = goalKey
+				goalPositionByEntity[entity] = _goalPosition
+				goalWorldSampleByEntity[entity] = _goalWorldSample
+				positionByEntity[entity] = position
+				walkSpeedByEntity[entity] = walkSpeed
+				if isSettled then
+					isSettledByEntity[entity] = true
+				end
 			end
 		end
 
@@ -310,13 +330,33 @@ return function(MovementService: any)
 		end
 
 		-- Build the final separation snapshot from the frame-state object
-		local wallPackedKeys = self:_BuildPackedWallKeys()
-		local snapshotParams = self:_ResolveFlowSnapshotBuildParams(tickId, dt, wallPackedKeys)
-		if snapshotParams == nil then
+		local _pathfinder, mapping = self:_ResolveFastFlowRuntime()
+		if mapping == nil then
 			return nil, nil, nil
 		end
 
-		local snapshot, touchedSettledNeighborByEntity = frameState:BuildSeparationSnapshot(snapshotParams)
-		return snapshot, touchedSettledNeighborByEntity, goalKeyByEntity
+		local wallPackedKeys = self:_BuildPackedWallKeys()
+		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
+		local snapshot = frameState:BuildSeparationSnapshot(
+			tickId,
+			dt,
+			mapping.CellWidthStuds,
+			mapping.OriginWorld.X,
+			mapping.OriginWorld.Z,
+			if type(self._flowWallGridHalfSize) == "number" then self._flowWallGridHalfSize else mapping.GridHalfSize,
+			wallPackedKeys,
+			if type(config.KForce) == "number" then config.KForce else 80,
+			if type(config.MinSeparationDistance) == "number" then config.MinSeparationDistance else 1e-4,
+			config.WallCollisionEnabled == true,
+			config.WallCollisionAxisClampEnabled ~= false,
+			config.WallCollisionCornerClampEnabled ~= false,
+			config.WallCollisionUseUnitRadiusPadding == true,
+			if type(config.WallCollisionCellProbePaddingStuds) == "number"
+				then config.WallCollisionCellProbePaddingStuds
+				else 0,
+			if type(config.WallCollisionVelocityEpsilon) == "number" then config.WallCollisionVelocityEpsilon else 1e-4,
+			self:_GetFlowClumpTouchPaddingStuds()
+		)
+		return snapshot, goalKeyByEntity, self._flowReusableFrameState :: TFlowPublishedFrameState
 	end
 end

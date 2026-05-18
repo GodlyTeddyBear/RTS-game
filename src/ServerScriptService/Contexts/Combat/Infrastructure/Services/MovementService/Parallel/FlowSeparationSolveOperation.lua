@@ -16,6 +16,7 @@ FlowSeparationSolveOperation = ParallelQuery.Operation.DefineCached({
 		ParallelQuery.Field.u32("EntityIndex"),
 		ParallelQuery.Field.f32("VelocityX"),
 		ParallelQuery.Field.f32("VelocityY"),
+		ParallelQuery.Field.boolean("TouchedSettledNeighbor"),
 	},
 	Execute = function(taskId: number, memory: SharedTable?)
 		local emptyRow = FlowSeparationSolveOperation:BuildEmptyRow()
@@ -24,10 +25,11 @@ FlowSeparationSolveOperation = ParallelQuery.Operation.DefineCached({
 		end
 
 		local entityCount = memory.EntityCount
-		local goalGroupId = memory.GoalGroupId
-		local neighborStartIndex = memory.NeighborStartIndex
-		local neighborCount = memory.NeighborCount
-		local neighborEntityIndex = memory.NeighborEntityIndex
+		local goalGroupStartIndex = memory.GoalGroupStartIndex
+		local goalGroupCount = memory.GoalGroupCount
+		local goalGroupCellWidthStuds = memory.GoalGroupCellWidthStuds
+		local groupCellX = memory.GroupCellX
+		local groupCellY = memory.GroupCellY
 		local flatPositionX = memory.FlatPositionX
 		local flatPositionY = memory.FlatPositionY
 		local radius = memory.Radius
@@ -37,17 +39,18 @@ FlowSeparationSolveOperation = ParallelQuery.Operation.DefineCached({
 		local previousVelocityY = memory.PreviousVelocityY
 		local walkSpeed = memory.WalkSpeed
 		local velAlpha = memory.VelAlpha
+		local isSettled = memory.IsSettled
 		local wallPackedKeys = memory.WallPackedKeys
-		if goalGroupId == nil or flatPositionX == nil or flatPositionY == nil or radius == nil then
+		if goalGroupStartIndex == nil or goalGroupCount == nil or goalGroupCellWidthStuds == nil then
 			return emptyRow
 		end
-		if neighborStartIndex == nil or neighborCount == nil or neighborEntityIndex == nil then
+		if groupCellX == nil or groupCellY == nil or flatPositionX == nil or flatPositionY == nil or radius == nil then
 			return emptyRow
 		end
 		if flowVelocityX == nil or flowVelocityY == nil or previousVelocityX == nil or previousVelocityY == nil then
 			return emptyRow
 		end
-		if walkSpeed == nil or velAlpha == nil or wallPackedKeys == nil then
+		if walkSpeed == nil or velAlpha == nil or isSettled == nil or wallPackedKeys == nil then
 			return emptyRow
 		end
 		if type(entityCount) ~= "number" then
@@ -57,11 +60,13 @@ FlowSeparationSolveOperation = ParallelQuery.Operation.DefineCached({
 			return emptyRow
 		end
 
-		local velocity = FlowSeparationMath.ResolveVelocityWithWalls({
+		local velocity, touchedSettledNeighbor = FlowSeparationMath.ResolveVelocityWithWalls({
 			EntityIndex = taskId,
-			NeighborStartIndex = neighborStartIndex,
-			NeighborCount = neighborCount,
-			NeighborEntityIndex = neighborEntityIndex,
+			GoalGroupStartIndex = goalGroupStartIndex,
+			GoalGroupCount = goalGroupCount,
+			GoalGroupCellWidthStuds = goalGroupCellWidthStuds,
+			GroupCellX = groupCellX,
+			GroupCellY = groupCellY,
 			FlatPositionX = flatPositionX,
 			FlatPositionY = flatPositionY,
 			Radius = radius,
@@ -71,6 +76,7 @@ FlowSeparationSolveOperation = ParallelQuery.Operation.DefineCached({
 			PreviousVelocityY = previousVelocityY,
 			WalkSpeed = walkSpeed,
 			VelAlpha = velAlpha,
+			IsSettled = isSettled,
 			WallPackedKeys = wallPackedKeys,
 			DeltaTime = if type(memory.DeltaTime) == "number" then memory.DeltaTime else 0,
 			CellWidthStuds = if type(memory.CellWidthStuds) == "number" then memory.CellWidthStuds else 1,
@@ -91,12 +97,16 @@ FlowSeparationSolveOperation = ParallelQuery.Operation.DefineCached({
 			WallCollisionVelocityEpsilon = if type(memory.WallCollisionVelocityEpsilon) == "number"
 				then memory.WallCollisionVelocityEpsilon
 				else 1e-4,
+			ClumpTouchPaddingStuds = if type(memory.ClumpTouchPaddingStuds) == "number"
+				then memory.ClumpTouchPaddingStuds
+				else 0,
 		})
 
 		return {
 			EntityIndex = taskId,
 			VelocityX = velocity.X,
 			VelocityY = velocity.Y,
+			TouchedSettledNeighbor = touchedSettledNeighbor,
 		}
 	end,
 })

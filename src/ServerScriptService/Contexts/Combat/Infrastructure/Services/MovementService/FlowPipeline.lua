@@ -7,6 +7,7 @@ local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
 local MovementTypes = require(script.Parent.Types)
 
 type TFlowPipelineState = MovementTypes.TFlowPipelineState
+type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
 type TFlowPublishedSolve = MovementTypes.TFlowPublishedSolve
 type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
 type TManagedJob = MovementTypes.TManagedJob
@@ -24,15 +25,21 @@ end
 return function(MovementService: any)
 	function MovementService:_ReleaseFlowLatestParallelSolve()
 		self._flowLatestParallelSolve = nil
+		self._flowPublishedSolve.TickId = 0
 		table.clear(self._flowPublishedVelocityByEntity)
 		table.clear(self._flowPublishedTouchedSettledNeighborByEntity)
 		table.clear(self._flowPublishedGoalKeyByEntity)
+		table.clear(self._flowPublishedGoalPositionByEntity)
+		table.clear(self._flowPublishedGoalWorldSampleByEntity)
+		table.clear(self._flowPublishedPositionByEntity)
+		table.clear(self._flowPublishedWalkSpeedByEntity)
+		table.clear(self._flowPublishedIsSettledByEntity)
 	end
 
 	function MovementService:_ReleaseFlowDispatchedSeparationSnapshot()
 		self._flowDispatchedSeparationSnapshot = nil
-		self._flowDispatchedTouchedSettledNeighborByEntity = nil
 		self._flowDispatchedGoalKeyByEntity = nil
+		self._flowDispatchedFrameState = nil
 	end
 
 	function MovementService:_GetFlowPipelineState(): TFlowPipelineState
@@ -114,11 +121,11 @@ return function(MovementService: any)
 				return self:_CreateFlowSeparationSharedMemory(snapshot)
 			end,
 			BuildRunRequest = function(snapshot: TFlowSeparationSolveSnapshot)
-				return {
-					WorkCount = #snapshot.EntityIds,
-					BatchSize = self:_GetFlowSeparationParallelBatchSize(),
-					TimeoutSeconds = self:_GetFlowSeparationParallelTimeoutSeconds(),
-				}
+				local runRequest = self._flowRunRequest
+				runRequest.WorkCount = #snapshot.EntityIds
+				runRequest.BatchSize = self:_GetFlowSeparationParallelBatchSize()
+				runRequest.TimeoutSeconds = self:_GetFlowSeparationParallelTimeoutSeconds()
+				return runRequest
 			end,
 			GetSessionToken = function(_snapshot: TFlowSeparationSolveSnapshot)
 				return self._flowCurrentSessionUserId
@@ -166,27 +173,23 @@ return function(MovementService: any)
 		end
 
 		local snapshot = managedResult.Payload :: TFlowSeparationSolveSnapshot
-		local touchedMap = self._flowDispatchedTouchedSettledNeighborByEntity
 		local goalKeyByEntity = self._flowDispatchedGoalKeyByEntity
-		if snapshot ~= self._flowDispatchedSeparationSnapshot or touchedMap == nil or goalKeyByEntity == nil then
+		local frameState = self._flowDispatchedFrameState :: TFlowPublishedFrameState?
+		if snapshot ~= self._flowDispatchedSeparationSnapshot or goalKeyByEntity == nil or frameState == nil then
 			return false
 		end
 
 		self:_ReleaseFlowLatestParallelSolve()
 
-		local velocityByEntity =
-			self:_ApplyFlowVelocityRows(snapshot, managedResult.Rows :: any, self._flowPublishedVelocityByEntity)
+		local velocityByEntity = self:_ApplyFlowVelocityRows(
+			snapshot,
+			managedResult.Rows :: any,
+			self._flowPublishedVelocityByEntity,
+			self._flowPublishedTouchedSettledNeighborByEntity
+		)
 		if next(velocityByEntity) == nil then
 			self:_ReleaseFlowDispatchedSeparationSnapshot()
 			return false
-		end
-
-		local publishedTouchedMap = self._flowPublishedTouchedSettledNeighborByEntity
-		table.clear(publishedTouchedMap)
-		for entityId, didTouch in touchedMap do
-			if didTouch then
-				publishedTouchedMap[entityId] = true
-			end
 		end
 
 		local publishedGoalKeyByEntity = self._flowPublishedGoalKeyByEntity
@@ -195,12 +198,41 @@ return function(MovementService: any)
 			publishedGoalKeyByEntity[entityId] = goalKey
 		end
 
-		self._flowLatestParallelSolve = {
-			TickId = snapshot.TickId,
-			VelocityByEntity = velocityByEntity,
-			TouchedSettledNeighborByEntity = publishedTouchedMap,
-			GoalKeyByEntity = publishedGoalKeyByEntity,
-		} :: TFlowPublishedSolve
+		local publishedGoalPositionByEntity = self._flowPublishedGoalPositionByEntity
+		table.clear(publishedGoalPositionByEntity)
+		for entityId, goalPosition in frameState.GoalPositionByEntity do
+			publishedGoalPositionByEntity[entityId] = goalPosition
+		end
+
+		local publishedGoalWorldSampleByEntity = self._flowPublishedGoalWorldSampleByEntity
+		table.clear(publishedGoalWorldSampleByEntity)
+		for entityId, goalWorldSample in frameState.GoalWorldSampleByEntity do
+			publishedGoalWorldSampleByEntity[entityId] = goalWorldSample
+		end
+
+		local publishedPositionByEntity = self._flowPublishedPositionByEntity
+		table.clear(publishedPositionByEntity)
+		for entityId, position in frameState.PositionByEntity do
+			publishedPositionByEntity[entityId] = position
+		end
+
+		local publishedWalkSpeedByEntity = self._flowPublishedWalkSpeedByEntity
+		table.clear(publishedWalkSpeedByEntity)
+		for entityId, walkSpeed in frameState.WalkSpeedByEntity do
+			publishedWalkSpeedByEntity[entityId] = walkSpeed
+		end
+
+		local publishedIsSettledByEntity = self._flowPublishedIsSettledByEntity
+		table.clear(publishedIsSettledByEntity)
+		for entityId, isSettled in frameState.IsSettledByEntity do
+			if isSettled then
+				publishedIsSettledByEntity[entityId] = true
+			end
+		end
+
+		local publishedSolve = self._flowPublishedSolve :: TFlowPublishedSolve
+		publishedSolve.TickId = snapshot.TickId
+		self._flowLatestParallelSolve = publishedSolve
 		self:_ReleaseFlowDispatchedSeparationSnapshot()
 		return true
 	end
@@ -249,16 +281,16 @@ return function(MovementService: any)
 
 		local state = self:_GetFlowPipelineState()
 		if state == "Idle" then
-			local snapshot, touchedMap, goalKeyByEntity =
+			local snapshot, goalKeyByEntity, frameState =
 				self:_BuildFlowDispatchSnapshot(tickId, self:_ResolveFlowDeltaTime(services))
-			if snapshot == nil or touchedMap == nil or goalKeyByEntity == nil then
+			if snapshot == nil or goalKeyByEntity == nil or frameState == nil then
 				return
 			end
 
 			self:_ReleaseFlowDispatchedSeparationSnapshot()
 			self._flowDispatchedSeparationSnapshot = snapshot
-			self._flowDispatchedTouchedSettledNeighborByEntity = touchedMap
 			self._flowDispatchedGoalKeyByEntity = goalKeyByEntity
+			self._flowDispatchedFrameState = frameState
 
 			_TransitionFlowPipeline(self, "Dispatching")
 			state = "Dispatching"

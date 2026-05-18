@@ -40,22 +40,16 @@ export type TFlowActorRefs = {
 	LastWalkSpeed: number?,
 }
 
-export type TFlowFrameSolution = {
-	VelocityXZ: Vector2,
-	MoveTarget: Vector3?,
-	DidArrive: boolean,
-	ShouldSettle: boolean,
-	HasSteering: boolean,
-}
-
 export type TFlowSeparationSolveSnapshot = {
 	TickId: number,
 	EntityCount: number,
 	EntityIds: { number },
 	GoalGroupId: { number },
-	NeighborStartIndex: { number },
-	NeighborCount: { number },
-	NeighborEntityIndex: { number },
+	GoalGroupStartIndex: { number },
+	GoalGroupCount: { number },
+	GoalGroupCellWidthStuds: { number },
+	GroupCellX: { number },
+	GroupCellY: { number },
 	FlatPositionX: { number },
 	FlatPositionY: { number },
 	Radius: { number },
@@ -65,29 +59,11 @@ export type TFlowSeparationSolveSnapshot = {
 	PreviousVelocityY: { number },
 	WalkSpeed: { number },
 	VelAlpha: { number },
+	IsSettled: { boolean },
 	DeltaTime: number,
 	CellWidthStuds: number,
 	OriginX: number,
 	OriginY: number,
-	WallGridHalfSize: number,
-	WallPackedKeys: { number },
-	KForce: number,
-	MinSeparationDistance: number,
-	WallCollisionEnabled: boolean,
-	WallCollisionAxisClampEnabled: boolean,
-	WallCollisionCornerClampEnabled: boolean,
-	WallCollisionUseUnitRadiusPadding: boolean,
-	WallCollisionCellProbePaddingStuds: number,
-	WallCollisionVelocityEpsilon: number,
-}
-
-export type TFlowFrameStateBuildSnapshotParams = {
-	TickId: number,
-	DeltaTime: number,
-	CellWidthStuds: number,
-	OriginX: number,
-	OriginY: number,
-	GridHalfSize: number,
 	WallGridHalfSize: number,
 	WallPackedKeys: { number },
 	KForce: number,
@@ -133,14 +109,30 @@ export type TFlowFrameStateHandle = {
 	Destroy: (self: TFlowFrameStateHandle) -> (boolean, string?),
 	BuildSeparationSnapshot: (
 		self: TFlowFrameStateHandle,
-		params: TFlowFrameStateBuildSnapshotParams
-	) -> (TFlowSeparationSolveSnapshot, { [number]: boolean }),
+		tickId: number,
+		deltaTime: number,
+		cellWidthStuds: number,
+		originX: number,
+		originY: number,
+		wallGridHalfSize: number,
+		wallPackedKeys: { number },
+		kForce: number,
+		minSeparationDistance: number,
+		wallCollisionEnabled: boolean,
+		wallCollisionAxisClampEnabled: boolean,
+		wallCollisionCornerClampEnabled: boolean,
+		wallCollisionUseUnitRadiusPadding: boolean,
+		wallCollisionCellProbePaddingStuds: number,
+		wallCollisionVelocityEpsilon: number,
+		clumpTouchPaddingStuds: number
+	) -> TFlowSeparationSolveSnapshot,
 }
 
 export type TFlowSeparationSolveRow = {
 	EntityIndex: number,
 	VelocityX: number,
 	VelocityY: number,
+	TouchedSettledNeighbor: boolean,
 }
 
 export type TFlowPublishedSolve = {
@@ -148,6 +140,15 @@ export type TFlowPublishedSolve = {
 	VelocityByEntity: { [number]: Vector2 },
 	TouchedSettledNeighborByEntity: { [number]: boolean },
 	GoalKeyByEntity: { [number]: string },
+}
+
+export type TFlowPublishedFrameState = {
+	GoalKeyByEntity: { [number]: string },
+	GoalPositionByEntity: { [number]: Vector3 },
+	GoalWorldSampleByEntity: { [number]: Vector3 },
+	PositionByEntity: { [number]: Vector3 },
+	WalkSpeedByEntity: { [number]: number },
+	IsSettledByEntity: { [number]: boolean },
 }
 
 export type TManagedJob = ParallelQuery.TManagedJob

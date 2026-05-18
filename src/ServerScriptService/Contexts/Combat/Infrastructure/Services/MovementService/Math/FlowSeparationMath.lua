@@ -93,76 +93,13 @@ function FlowSeparationMath.ComputePairDelta(
 	return dx * force, dy * force, true
 end
 
-function FlowSeparationMath.AccumulatePairDelta(
-	accumulator: { [number]: Vector2 },
-	entityA: number,
-	entityB: number,
-	deltaAX: number,
-	deltaAY: number,
-	deltaBX: number,
-	deltaBY: number
-)
-	accumulator[entityA] = (accumulator[entityA] or Vector2.zero) + Vector2.new(deltaAX, deltaAY)
-	accumulator[entityB] = (accumulator[entityB] or Vector2.zero) + Vector2.new(deltaBX, deltaBY)
-end
-
-function FlowSeparationMath.ComputeSeparationForEntity(
-	entityIndex: number,
-	neighborStartIndex: { number },
-	neighborCount: { number },
-	neighborEntityIndex: { number },
-	flatPositionX: { number },
-	flatPositionY: { number },
-	radius: { number },
-	kForce: number,
-	minSeparationDistance: number
-): Vector2
-	local startIndex = neighborStartIndex[entityIndex]
-	local count = neighborCount[entityIndex]
-	local ownX = flatPositionX[entityIndex]
-	local ownY = flatPositionY[entityIndex]
-	local ownRadius = radius[entityIndex]
-	if type(startIndex) ~= "number" or type(count) ~= "number" then
-		return Vector2.zero
-	end
-	if type(ownX) ~= "number" or type(ownY) ~= "number" or type(ownRadius) ~= "number" then
-		return Vector2.zero
-	end
-
-	local separation = Vector2.zero
-	local lastNeighborIndex = startIndex + count - 1
-	for sliceIndex = startIndex, lastNeighborIndex do
-		local otherIndex = neighborEntityIndex[sliceIndex]
-		if type(otherIndex) == "number" and otherIndex ~= entityIndex then
-			local otherX = flatPositionX[otherIndex]
-			local otherY = flatPositionY[otherIndex]
-			local otherRadius = radius[otherIndex]
-			if type(otherX) == "number" and type(otherY) == "number" and type(otherRadius) == "number" then
-				local deltaX, deltaY, shouldApply = FlowSeparationMath.ComputePairDelta(
-					ownX,
-					ownY,
-					otherX,
-					otherY,
-					ownRadius,
-					otherRadius,
-					kForce,
-					minSeparationDistance
-				)
-				if shouldApply then
-					separation += Vector2.new(deltaX, deltaY)
-				end
-			end
-		end
-	end
-
-	return separation
-end
-
 function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 	EntityIndex: number,
-	NeighborStartIndex: { number },
-	NeighborCount: { number },
-	NeighborEntityIndex: { number },
+	GoalGroupStartIndex: { number },
+	GoalGroupCount: { number },
+	GoalGroupCellWidthStuds: { number },
+	GroupCellX: { number },
+	GroupCellY: { number },
 	FlatPositionX: { number },
 	FlatPositionY: { number },
 	Radius: { number },
@@ -172,6 +109,7 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 	PreviousVelocityY: { number },
 	WalkSpeed: { number },
 	VelAlpha: { number },
+	IsSettled: { boolean },
 	WallPackedKeys: { number },
 	DeltaTime: number,
 	CellWidthStuds: number,
@@ -186,8 +124,13 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 	WallCollisionUseUnitRadiusPadding: boolean,
 	WallCollisionCellProbePaddingStuds: number,
 	WallCollisionVelocityEpsilon: number,
-}): Vector2
+	ClumpTouchPaddingStuds: number,
+}): (Vector2, boolean)
 	local entityIndex = config.EntityIndex
+	local goalGroupStartIndex = config.GoalGroupStartIndex[entityIndex]
+	local goalGroupCount = config.GoalGroupCount[entityIndex]
+	local groupCellX = config.GroupCellX[entityIndex]
+	local groupCellY = config.GroupCellY[entityIndex]
 	local walkSpeed = config.WalkSpeed[entityIndex]
 	local velAlpha = config.VelAlpha[entityIndex]
 	local flowVelocityX = config.FlowVelocityX[entityIndex]
@@ -197,33 +140,80 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 	local flatPositionX = config.FlatPositionX[entityIndex]
 	local flatPositionY = config.FlatPositionY[entityIndex]
 	local radius = config.Radius[entityIndex]
+	local isSettled = config.IsSettled[entityIndex] == true
 
+	if type(goalGroupStartIndex) ~= "number" or type(goalGroupCount) ~= "number" then
+		return Vector2.zero, false
+	end
+	if type(groupCellX) ~= "number" or type(groupCellY) ~= "number" then
+		return Vector2.zero, false
+	end
 	if type(walkSpeed) ~= "number" or type(velAlpha) ~= "number" then
-		return Vector2.zero
+		return Vector2.zero, false
 	end
 	if type(flowVelocityX) ~= "number" or type(flowVelocityY) ~= "number" then
-		return Vector2.zero
+		return Vector2.zero, false
 	end
 	if type(previousVelocityX) ~= "number" or type(previousVelocityY) ~= "number" then
-		return Vector2.zero
+		return Vector2.zero, false
 	end
 	if type(flatPositionX) ~= "number" or type(flatPositionY) ~= "number" or type(radius) ~= "number" then
-		return Vector2.zero
+		return Vector2.zero, false
 	end
 
-	local separation = FlowSeparationMath.ComputeSeparationForEntity(
-		entityIndex,
-		config.NeighborStartIndex,
-		config.NeighborCount,
-		config.NeighborEntityIndex,
-		config.FlatPositionX,
-		config.FlatPositionY,
-		config.Radius,
-		config.KForce,
-		config.MinSeparationDistance
-	)
-	local unclampedVelocityX = flowVelocityX + separation.X
-	local unclampedVelocityY = flowVelocityY + separation.Y
+	local separationX = 0
+	local separationY = 0
+	local touchedSettledNeighbor = false
+	local groupEndIndex = goalGroupStartIndex + goalGroupCount - 1
+
+	for otherEntityIndex = goalGroupStartIndex, groupEndIndex do
+		if otherEntityIndex ~= entityIndex then
+			local otherGroupCellX = config.GroupCellX[otherEntityIndex]
+			local otherGroupCellY = config.GroupCellY[otherEntityIndex]
+			if
+				type(otherGroupCellX) == "number"
+				and type(otherGroupCellY) == "number"
+				and math.abs(otherGroupCellX - groupCellX) <= 1
+				and math.abs(otherGroupCellY - groupCellY) <= 1
+			then
+				local otherFlatPositionX = config.FlatPositionX[otherEntityIndex]
+				local otherFlatPositionY = config.FlatPositionY[otherEntityIndex]
+				local otherRadius = config.Radius[otherEntityIndex]
+				if
+					type(otherFlatPositionX) == "number"
+					and type(otherFlatPositionY) == "number"
+					and type(otherRadius) == "number"
+				then
+					local deltaX, deltaY, shouldApply = FlowSeparationMath.ComputePairDelta(
+						flatPositionX,
+						flatPositionY,
+						otherFlatPositionX,
+						otherFlatPositionY,
+						radius,
+						otherRadius,
+						config.KForce,
+						config.MinSeparationDistance
+					)
+					if shouldApply then
+						separationX += deltaX
+						separationY += deltaY
+					end
+
+					if not isSettled and config.IsSettled[otherEntityIndex] == true then
+						local touchDistance = radius + otherRadius + config.ClumpTouchPaddingStuds
+						local flatDeltaX = flatPositionX - otherFlatPositionX
+						local flatDeltaY = flatPositionY - otherFlatPositionY
+						if math.sqrt(flatDeltaX * flatDeltaX + flatDeltaY * flatDeltaY) <= touchDistance then
+							touchedSettledNeighbor = true
+						end
+					end
+				end
+			end
+		end
+	end
+
+	local unclampedVelocityX = flowVelocityX + separationX
+	local unclampedVelocityY = flowVelocityY + separationY
 	local targetVelocityX = unclampedVelocityX
 	local targetVelocityY = unclampedVelocityY
 	local unclampedMagnitude =
@@ -241,12 +231,12 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 	local velocityY = previousVelocityY * (1 - velAlpha) + targetVelocityY * velAlpha
 
 	if not config.WallCollisionEnabled then
-		return Vector2.new(velocityX, velocityY)
+		return Vector2.new(velocityX, velocityY), touchedSettledNeighbor
 	end
 
 	local velocityMagnitude = math.sqrt(velocityX * velocityX + velocityY * velocityY)
 	if velocityMagnitude <= config.WallCollisionVelocityEpsilon then
-		return Vector2.new(velocityX, velocityY)
+		return Vector2.new(velocityX, velocityY), touchedSettledNeighbor
 	end
 
 	local padding = config.WallCollisionCellProbePaddingStuds
@@ -315,7 +305,7 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 		end
 	end
 
-	return Vector2.new(velocityX, velocityY)
+	return Vector2.new(velocityX, velocityY), touchedSettledNeighbor
 end
 
 return table.freeze(FlowSeparationMath)

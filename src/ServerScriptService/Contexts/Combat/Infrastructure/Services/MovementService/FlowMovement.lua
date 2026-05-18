@@ -9,7 +9,7 @@ local MovementMath = require(script.Parent.Math.MovementMath)
 local MovementTypes = require(script.Parent.Types)
 
 type TFlowMovementState = MovementTypes.TFlowMovementState
-type TFlowFrameSolution = MovementTypes.TFlowFrameSolution
+type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
 type TFlowPublishedSolve = MovementTypes.TFlowPublishedSolve
 
 local GOAL_POSITION_EPSILON = 0.01
@@ -122,16 +122,10 @@ return function(MovementService: any)
 		isSettled: boolean,
 		finalVelocityXZ: Vector2,
 		touchedSettledNeighbor: boolean
-	): TFlowFrameSolution
+	): (Vector2, Vector3?, boolean, boolean, boolean)
 		local arrivalRadius = FlowMath.ResolveArrivalRadius(goalPosition, goalWorldSample)
 		if MovementMath.XZDistance(position, goalPosition) <= arrivalRadius then
-			return {
-				VelocityXZ = Vector2.zero,
-				MoveTarget = nil,
-				DidArrive = true,
-				ShouldSettle = false,
-				HasSteering = false,
-			}
+			return Vector2.zero, nil, true, false, false
 		end
 
 		local mapping = self._fastFlowMapping
@@ -146,13 +140,12 @@ return function(MovementService: any)
 		local isInsideClumpRadius = MovementMath.XZDistance(position, goalPosition)
 			<= self:_GetFlowClumpRadiusStuds()
 
-		return {
-			VelocityXZ = finalVelocityXZ,
-			MoveTarget = moveTarget,
-			DidArrive = false,
-			ShouldSettle = not isSettled and isInsideClumpRadius and touchedSettledNeighbor,
-			HasSteering = finalVelocityXZ.Magnitude > 0,
-		}
+		return
+			finalVelocityXZ,
+			moveTarget,
+			false,
+			not isSettled and isInsideClumpRadius and touchedSettledNeighbor,
+			finalVelocityXZ.Magnitude > 0
 	end
 
 	function MovementService:_StepFlowAdvance(
@@ -169,23 +162,26 @@ return function(MovementService: any)
 		end
 
 		local latestParallelSolve = self._flowLatestParallelSolve :: TFlowPublishedSolve?
-		local goalKey, goalPosition, goalWorldSample, position, _flowDirectionXZ, walkSpeed, _radius, _previousVelocityXZ, isSettled =
-			self:_ResolveFlowFrameState(entity, movementState)
-		if goalKey == nil or goalPosition == nil or goalWorldSample == nil or position == nil or walkSpeed == nil then
-			local refreshedInvalidReason = self._flowInvalidReasonByEntity[entity]
-			if refreshedInvalidReason ~= nil then
-				self:StopMovement(entity)
-				return false, refreshedInvalidReason
-			end
-			return false, nil
-		end
-
 		if latestParallelSolve == nil then
 			return false, nil
 		end
 
+		local frameState = self._flowPublishedFrameState :: TFlowPublishedFrameState?
+		if frameState == nil then
+			return false, nil
+		end
+
+		local goalKey = frameState.GoalKeyByEntity[entity]
 		local publishedGoalKey = latestParallelSolve.GoalKeyByEntity[entity]
-		if publishedGoalKey == nil or publishedGoalKey ~= goalKey then
+		if goalKey == nil or publishedGoalKey == nil or publishedGoalKey ~= goalKey then
+			return false, nil
+		end
+
+		local goalPosition = frameState.GoalPositionByEntity[entity]
+		local goalWorldSample = frameState.GoalWorldSampleByEntity[entity]
+		local position = frameState.PositionByEntity[entity]
+		local walkSpeed = frameState.WalkSpeedByEntity[entity]
+		if goalPosition == nil or goalWorldSample == nil or position == nil or walkSpeed == nil then
 			return false, nil
 		end
 
@@ -194,17 +190,17 @@ return function(MovementService: any)
 			return false, nil
 		end
 
-		local solution = self:_BuildFlowSolutionForInput(
+		local solvedVelocityXZ, moveTarget, didArrive, shouldSettle, _hasSteering = self:_BuildFlowSolutionForInput(
 			goalPosition,
 			goalWorldSample,
 			position,
 			walkSpeed,
-			isSettled == true,
+			frameState.IsSettledByEntity[entity] == true,
 			velocityXZ,
 			latestParallelSolve.TouchedSettledNeighborByEntity[entity] == true
 		)
 
-		if solution.DidArrive then
+		if didArrive then
 			self._flowVelocityByEntity[entity] = Vector2.zero
 			self._flowSettledByEntity[entity] = nil
 			self:_StopHumanoid(entity)
@@ -212,14 +208,14 @@ return function(MovementService: any)
 			return true, nil
 		end
 
-		if solution.ShouldSettle then
+		if shouldSettle then
 			self._flowSettledByEntity[entity] = true
 			self:_RefreshActiveFlowGoalMembership(entity, movementState.GoalKey)
 		end
 
-		self._flowVelocityByEntity[entity] = solution.VelocityXZ
-		self:_IssueHumanoidMoveTo(entity, solution.MoveTarget, solution.VelocityXZ)
-		self._enemyEntityFactory:SetPathMoving(entity, solution.MoveTarget ~= nil)
+		self._flowVelocityByEntity[entity] = solvedVelocityXZ
+		self:_IssueHumanoidMoveTo(entity, moveTarget, solvedVelocityXZ)
+		self._enemyEntityFactory:SetPathMoving(entity, moveTarget ~= nil)
 		return false, nil
 	end
 end

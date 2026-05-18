@@ -8,7 +8,6 @@ local MovementMath = require(script.Parent.Math.MovementMath)
 local MovementTypes = require(script.Parent.Types)
 
 type TTableRecyclerHandle = TableRecycler.TTableRecyclerHandle
-type TFlowFrameStateBuildSnapshotParams = MovementTypes.TFlowFrameStateBuildSnapshotParams
 type TFlowFrameStateHandle = MovementTypes.TFlowFrameStateHandle
 type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
 
@@ -18,9 +17,6 @@ type TFlowFrameStateInternal = TFlowFrameStateHandle & {
 	_entityCount: number,
 	_entityIds: { number },
 	_goalGroupId: { number },
-	_neighborStartIndex: { number },
-	_neighborCount: { number },
-	_neighborEntityIndex: { number },
 	_flatPositionX: { number },
 	_flatPositionY: { number },
 	_radius: { number },
@@ -31,20 +27,29 @@ type TFlowFrameStateInternal = TFlowFrameStateHandle & {
 	_walkSpeed: { number },
 	_velAlpha: { number },
 	_isSettled: { boolean },
+	_snapshotEntityIds: { number },
+	_snapshotGoalGroupId: { number },
+	_snapshotGoalGroupStartIndex: { number },
+	_snapshotGoalGroupCount: { number },
+	_snapshotGoalGroupCellWidthStuds: { number },
+	_snapshotGroupCellX: { number },
+	_snapshotGroupCellY: { number },
+	_snapshotFlatPositionX: { number },
+	_snapshotFlatPositionY: { number },
+	_snapshotRadius: { number },
+	_snapshotFlowVelocityX: { number },
+	_snapshotFlowVelocityY: { number },
+	_snapshotPreviousVelocityX: { number },
+	_snapshotPreviousVelocityY: { number },
+	_snapshotWalkSpeed: { number },
+	_snapshotVelAlpha: { number },
+	_snapshotIsSettled: { boolean },
 	_snapshot: TFlowSeparationSolveSnapshot,
 	_defaultWallPackedKeys: { number },
-	_touchedSettledNeighborByEntity: { [number]: boolean },
 	_entityIndicesByGoalKey: { [string]: { number } },
 	_activeGoalKeys: { string },
 	_goalGroupIdByGoalKey: { [string]: number },
 	_nextGoalGroupId: number,
-	_scratchBucketsByCell: { [number]: { number } },
-	_scratchCellKeys: { number },
-	_scratchFreeCellBuckets: { { number } },
-	_scratchGxByEntityIndex: { number },
-	_scratchGzByEntityIndex: { number },
-	_scratchSeenStampByEntityIndex: { number },
-	_scratchNeighborStamp: number,
 }
 
 local FlowFrameState = {}
@@ -68,125 +73,41 @@ local function _ReleaseTrackedMap(self: TFlowFrameStateInternal, tbl: { [any]: a
 	assert(didRelease, releaseError)
 end
 
-local function _ResetScratchCellBuckets(self: TFlowFrameStateInternal)
-	local scratchBucketsByCell = self._scratchBucketsByCell
-	local scratchCellKeys = self._scratchCellKeys
-	local scratchFreeCellBuckets = self._scratchFreeCellBuckets
-
-	for _, cellKey in ipairs(scratchCellKeys) do
-		local bucket = scratchBucketsByCell[cellKey]
-		if bucket ~= nil then
-			table.clear(bucket)
-			scratchBucketsByCell[cellKey] = nil
-			scratchFreeCellBuckets[#scratchFreeCellBuckets + 1] = bucket
-		end
-	end
-
-	table.clear(scratchCellKeys)
-end
-
-local function _AcquireScratchCellBucket(self: TFlowFrameStateInternal): { number }
-	local scratchFreeCellBuckets = self._scratchFreeCellBuckets
-	local bucket = scratchFreeCellBuckets[#scratchFreeCellBuckets]
-	if bucket ~= nil then
-		scratchFreeCellBuckets[#scratchFreeCellBuckets] = nil
-		return bucket
-	end
-
-	return _AcquireArray(self._recycler) :: { number }
-end
-
-local function _AppendGoalNeighborhoodData(
+local function _CopyRawEntityToSnapshot(
 	self: TFlowFrameStateInternal,
-	entityIndices: { number },
-	clumpTouchPaddingStuds: number
+	snapshotEntityIndex: number,
+	rawEntityIndex: number,
+	groupStartIndex: number,
+	groupCount: number,
+	groupCellWidthStuds: number
 )
-	_ResetScratchCellBuckets(self)
+	local flatPositionX = self._flatPositionX[rawEntityIndex] or 0
+	local flatPositionY = self._flatPositionY[rawEntityIndex] or 0
+	local groupCellX, groupCellY =
+		MovementMath.FlatPositionToCell(Vector2.new(flatPositionX, flatPositionY), groupCellWidthStuds)
 
-	local cellWidthStuds = FlowNeighborhoodMath.ResolveCellWidthForEntityIndices(self, entityIndices)
-	local scratchBucketsByCell = self._scratchBucketsByCell
-	local scratchCellKeys = self._scratchCellKeys
-	local scratchGxByEntityIndex = self._scratchGxByEntityIndex
-	local scratchGzByEntityIndex = self._scratchGzByEntityIndex
-	local neighborEntityIndex = self._neighborEntityIndex
-	local neighborStartIndex = self._neighborStartIndex
-	local neighborCount = self._neighborCount
-	local touchedSettledNeighborByEntity = self._touchedSettledNeighborByEntity
-	local seenStampByEntityIndex = self._scratchSeenStampByEntityIndex
-
-	for _, entityIndex in ipairs(entityIndices) do
-		local flatX = self._flatPositionX[entityIndex]
-		local flatY = self._flatPositionY[entityIndex]
-		local gx, gz = MovementMath.FlatPositionToCell(Vector2.new(flatX, flatY), cellWidthStuds)
-		scratchGxByEntityIndex[entityIndex] = gx
-		scratchGzByEntityIndex[entityIndex] = gz
-
-		local cellKey = MovementMath.PackedSeparationCellKey(gx, gz)
-		local bucket = scratchBucketsByCell[cellKey]
-		if bucket == nil then
-			bucket = _AcquireScratchCellBucket(self)
-			scratchBucketsByCell[cellKey] = bucket
-			scratchCellKeys[#scratchCellKeys + 1] = cellKey
-		end
-
-		bucket[#bucket + 1] = entityIndex
-	end
-
-	for _, entityIndex in ipairs(entityIndices) do
-		local gx = scratchGxByEntityIndex[entityIndex]
-		local gz = scratchGzByEntityIndex[entityIndex]
-		local currentStamp = self._scratchNeighborStamp + 1
-		self._scratchNeighborStamp = currentStamp
-
-		local startIndex = #neighborEntityIndex + 1
-		local entityIsSettled = self._isSettled[entityIndex] == true
-		local entityRadius = self._radius[entityIndex] or 0
-		local entityFlatX = self._flatPositionX[entityIndex] or 0
-		local entityFlatY = self._flatPositionY[entityIndex] or 0
-
-		for dx = -1, 1 do
-			for dz = -1, 1 do
-				local bucket = scratchBucketsByCell[MovementMath.PackedSeparationCellKey(gx + dx, gz + dz)]
-				if bucket ~= nil then
-					for _, otherEntityIndex in ipairs(bucket) do
-						if
-							otherEntityIndex ~= entityIndex
-							and seenStampByEntityIndex[otherEntityIndex] ~= currentStamp
-						then
-							seenStampByEntityIndex[otherEntityIndex] = currentStamp
-							neighborEntityIndex[#neighborEntityIndex + 1] = otherEntityIndex
-
-							if entityIsSettled and self._isSettled[otherEntityIndex] ~= true then
-								local otherRadius = self._radius[otherEntityIndex] or 0
-								local touchDistance = entityRadius + otherRadius + clumpTouchPaddingStuds
-								local flatDeltaX = entityFlatX - (self._flatPositionX[otherEntityIndex] or 0)
-								local flatDeltaY = entityFlatY - (self._flatPositionY[otherEntityIndex] or 0)
-								if math.sqrt(flatDeltaX * flatDeltaX + flatDeltaY * flatDeltaY) <= touchDistance then
-									local otherEntity = self._entityIds[otherEntityIndex]
-									if otherEntity ~= nil then
-										touchedSettledNeighborByEntity[otherEntity] = true
-									end
-								end
-							end
-						end
-					end
-				end
-			end
-		end
-
-		neighborStartIndex[entityIndex] = startIndex
-		neighborCount[entityIndex] = #neighborEntityIndex - startIndex + 1
-	end
-
-	_ResetScratchCellBuckets(self)
+	self._snapshotEntityIds[snapshotEntityIndex] = self._entityIds[rawEntityIndex]
+	self._snapshotGoalGroupId[snapshotEntityIndex] = self._goalGroupId[rawEntityIndex]
+	self._snapshotGoalGroupStartIndex[snapshotEntityIndex] = groupStartIndex
+	self._snapshotGoalGroupCount[snapshotEntityIndex] = groupCount
+	self._snapshotGoalGroupCellWidthStuds[snapshotEntityIndex] = groupCellWidthStuds
+	self._snapshotGroupCellX[snapshotEntityIndex] = groupCellX
+	self._snapshotGroupCellY[snapshotEntityIndex] = groupCellY
+	self._snapshotFlatPositionX[snapshotEntityIndex] = flatPositionX
+	self._snapshotFlatPositionY[snapshotEntityIndex] = flatPositionY
+	self._snapshotRadius[snapshotEntityIndex] = self._radius[rawEntityIndex]
+	self._snapshotFlowVelocityX[snapshotEntityIndex] = self._flowVelocityX[rawEntityIndex]
+	self._snapshotFlowVelocityY[snapshotEntityIndex] = self._flowVelocityY[rawEntityIndex]
+	self._snapshotPreviousVelocityX[snapshotEntityIndex] = self._previousVelocityX[rawEntityIndex]
+	self._snapshotPreviousVelocityY[snapshotEntityIndex] = self._previousVelocityY[rawEntityIndex]
+	self._snapshotWalkSpeed[snapshotEntityIndex] = self._walkSpeed[rawEntityIndex]
+	self._snapshotVelAlpha[snapshotEntityIndex] = self._velAlpha[rawEntityIndex]
+	self._snapshotIsSettled[snapshotEntityIndex] = self._isSettled[rawEntityIndex]
 end
 
 function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHandle
 	local entityIds = _AcquireArray(recycler) :: { number }
 	local goalGroupId = _AcquireArray(recycler) :: { number }
-	local neighborStartIndex = _AcquireArray(recycler) :: { number }
-	local neighborCount = _AcquireArray(recycler) :: { number }
-	local neighborEntityIndex = _AcquireArray(recycler) :: { number }
 	local flatPositionX = _AcquireArray(recycler) :: { number }
 	local flatPositionY = _AcquireArray(recycler) :: { number }
 	local radius = _AcquireArray(recycler) :: { number }
@@ -197,35 +118,50 @@ function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHand
 	local walkSpeed = _AcquireArray(recycler) :: { number }
 	local velAlpha = _AcquireArray(recycler) :: { number }
 	local isSettled = _AcquireArray(recycler) :: { boolean }
+
+	local snapshotEntityIds = _AcquireArray(recycler) :: { number }
+	local snapshotGoalGroupId = _AcquireArray(recycler) :: { number }
+	local snapshotGoalGroupStartIndex = _AcquireArray(recycler) :: { number }
+	local snapshotGoalGroupCount = _AcquireArray(recycler) :: { number }
+	local snapshotGoalGroupCellWidthStuds = _AcquireArray(recycler) :: { number }
+	local snapshotGroupCellX = _AcquireArray(recycler) :: { number }
+	local snapshotGroupCellY = _AcquireArray(recycler) :: { number }
+	local snapshotFlatPositionX = _AcquireArray(recycler) :: { number }
+	local snapshotFlatPositionY = _AcquireArray(recycler) :: { number }
+	local snapshotRadius = _AcquireArray(recycler) :: { number }
+	local snapshotFlowVelocityX = _AcquireArray(recycler) :: { number }
+	local snapshotFlowVelocityY = _AcquireArray(recycler) :: { number }
+	local snapshotPreviousVelocityX = _AcquireArray(recycler) :: { number }
+	local snapshotPreviousVelocityY = _AcquireArray(recycler) :: { number }
+	local snapshotWalkSpeed = _AcquireArray(recycler) :: { number }
+	local snapshotVelAlpha = _AcquireArray(recycler) :: { number }
+	local snapshotIsSettled = _AcquireArray(recycler) :: { boolean }
+
 	local defaultWallPackedKeys = _AcquireArray(recycler) :: { number }
-	local touchedSettledNeighborByEntity = _AcquireMap(recycler) :: { [number]: boolean }
 	local entityIndicesByGoalKey = _AcquireMap(recycler) :: { [string]: { number } }
 	local activeGoalKeys = _AcquireArray(recycler) :: { string }
 	local goalGroupIdByGoalKey = _AcquireMap(recycler) :: { [string]: number }
-	local scratchBucketsByCell = _AcquireMap(recycler) :: { [number]: { number } }
-	local scratchCellKeys = _AcquireArray(recycler) :: { number }
-	local scratchFreeCellBuckets = _AcquireArray(recycler) :: { { number } }
-	local scratchGxByEntityIndex = _AcquireArray(recycler) :: { number }
-	local scratchGzByEntityIndex = _AcquireArray(recycler) :: { number }
-	local scratchSeenStampByEntityIndex = _AcquireArray(recycler) :: { number }
 	local snapshot = _AcquireMap(recycler) :: any
 
 	snapshot.TickId = 0
 	snapshot.EntityCount = 0
-	snapshot.EntityIds = entityIds
-	snapshot.GoalGroupId = goalGroupId
-	snapshot.NeighborStartIndex = neighborStartIndex
-	snapshot.NeighborCount = neighborCount
-	snapshot.NeighborEntityIndex = neighborEntityIndex
-	snapshot.FlatPositionX = flatPositionX
-	snapshot.FlatPositionY = flatPositionY
-	snapshot.Radius = radius
-	snapshot.FlowVelocityX = flowVelocityX
-	snapshot.FlowVelocityY = flowVelocityY
-	snapshot.PreviousVelocityX = previousVelocityX
-	snapshot.PreviousVelocityY = previousVelocityY
-	snapshot.WalkSpeed = walkSpeed
-	snapshot.VelAlpha = velAlpha
+	snapshot.EntityIds = snapshotEntityIds
+	snapshot.GoalGroupId = snapshotGoalGroupId
+	snapshot.GoalGroupStartIndex = snapshotGoalGroupStartIndex
+	snapshot.GoalGroupCount = snapshotGoalGroupCount
+	snapshot.GoalGroupCellWidthStuds = snapshotGoalGroupCellWidthStuds
+	snapshot.GroupCellX = snapshotGroupCellX
+	snapshot.GroupCellY = snapshotGroupCellY
+	snapshot.FlatPositionX = snapshotFlatPositionX
+	snapshot.FlatPositionY = snapshotFlatPositionY
+	snapshot.Radius = snapshotRadius
+	snapshot.FlowVelocityX = snapshotFlowVelocityX
+	snapshot.FlowVelocityY = snapshotFlowVelocityY
+	snapshot.PreviousVelocityX = snapshotPreviousVelocityX
+	snapshot.PreviousVelocityY = snapshotPreviousVelocityY
+	snapshot.WalkSpeed = snapshotWalkSpeed
+	snapshot.VelAlpha = snapshotVelAlpha
+	snapshot.IsSettled = snapshotIsSettled
 	snapshot.DeltaTime = 0
 	snapshot.CellWidthStuds = 0
 	snapshot.OriginX = 0
@@ -240,6 +176,7 @@ function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHand
 	snapshot.WallCollisionUseUnitRadiusPadding = false
 	snapshot.WallCollisionCellProbePaddingStuds = 0
 	snapshot.WallCollisionVelocityEpsilon = 0
+	snapshot.ClumpTouchPaddingStuds = 0
 
 	local self = setmetatable({
 		_destroyed = false,
@@ -247,9 +184,6 @@ function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHand
 		_entityCount = 0,
 		_entityIds = entityIds,
 		_goalGroupId = goalGroupId,
-		_neighborStartIndex = neighborStartIndex,
-		_neighborCount = neighborCount,
-		_neighborEntityIndex = neighborEntityIndex,
 		_flatPositionX = flatPositionX,
 		_flatPositionY = flatPositionY,
 		_radius = radius,
@@ -260,20 +194,29 @@ function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHand
 		_walkSpeed = walkSpeed,
 		_velAlpha = velAlpha,
 		_isSettled = isSettled,
+		_snapshotEntityIds = snapshotEntityIds,
+		_snapshotGoalGroupId = snapshotGoalGroupId,
+		_snapshotGoalGroupStartIndex = snapshotGoalGroupStartIndex,
+		_snapshotGoalGroupCount = snapshotGoalGroupCount,
+		_snapshotGoalGroupCellWidthStuds = snapshotGoalGroupCellWidthStuds,
+		_snapshotGroupCellX = snapshotGroupCellX,
+		_snapshotGroupCellY = snapshotGroupCellY,
+		_snapshotFlatPositionX = snapshotFlatPositionX,
+		_snapshotFlatPositionY = snapshotFlatPositionY,
+		_snapshotRadius = snapshotRadius,
+		_snapshotFlowVelocityX = snapshotFlowVelocityX,
+		_snapshotFlowVelocityY = snapshotFlowVelocityY,
+		_snapshotPreviousVelocityX = snapshotPreviousVelocityX,
+		_snapshotPreviousVelocityY = snapshotPreviousVelocityY,
+		_snapshotWalkSpeed = snapshotWalkSpeed,
+		_snapshotVelAlpha = snapshotVelAlpha,
+		_snapshotIsSettled = snapshotIsSettled,
 		_snapshot = snapshot :: TFlowSeparationSolveSnapshot,
 		_defaultWallPackedKeys = defaultWallPackedKeys,
-		_touchedSettledNeighborByEntity = touchedSettledNeighborByEntity,
 		_entityIndicesByGoalKey = entityIndicesByGoalKey,
 		_activeGoalKeys = activeGoalKeys,
 		_goalGroupIdByGoalKey = goalGroupIdByGoalKey,
 		_nextGoalGroupId = 0,
-		_scratchBucketsByCell = scratchBucketsByCell,
-		_scratchCellKeys = scratchCellKeys,
-		_scratchFreeCellBuckets = scratchFreeCellBuckets,
-		_scratchGxByEntityIndex = scratchGxByEntityIndex,
-		_scratchGzByEntityIndex = scratchGzByEntityIndex,
-		_scratchSeenStampByEntityIndex = scratchSeenStampByEntityIndex,
-		_scratchNeighborStamp = 0,
 	}, FlowFrameState)
 
 	return self :: TFlowFrameStateHandle
@@ -286,9 +229,6 @@ function FlowFrameState:Reset()
 
 	table.clear(selfInternal._entityIds)
 	table.clear(selfInternal._goalGroupId)
-	table.clear(selfInternal._neighborStartIndex)
-	table.clear(selfInternal._neighborCount)
-	table.clear(selfInternal._neighborEntityIndex)
 	table.clear(selfInternal._flatPositionX)
 	table.clear(selfInternal._flatPositionY)
 	table.clear(selfInternal._radius)
@@ -299,12 +239,25 @@ function FlowFrameState:Reset()
 	table.clear(selfInternal._walkSpeed)
 	table.clear(selfInternal._velAlpha)
 	table.clear(selfInternal._isSettled)
-	table.clear(selfInternal._touchedSettledNeighborByEntity)
+
+	table.clear(selfInternal._snapshotEntityIds)
+	table.clear(selfInternal._snapshotGoalGroupId)
+	table.clear(selfInternal._snapshotGoalGroupStartIndex)
+	table.clear(selfInternal._snapshotGoalGroupCount)
+	table.clear(selfInternal._snapshotGoalGroupCellWidthStuds)
+	table.clear(selfInternal._snapshotGroupCellX)
+	table.clear(selfInternal._snapshotGroupCellY)
+	table.clear(selfInternal._snapshotFlatPositionX)
+	table.clear(selfInternal._snapshotFlatPositionY)
+	table.clear(selfInternal._snapshotRadius)
+	table.clear(selfInternal._snapshotFlowVelocityX)
+	table.clear(selfInternal._snapshotFlowVelocityY)
+	table.clear(selfInternal._snapshotPreviousVelocityX)
+	table.clear(selfInternal._snapshotPreviousVelocityY)
+	table.clear(selfInternal._snapshotWalkSpeed)
+	table.clear(selfInternal._snapshotVelAlpha)
+	table.clear(selfInternal._snapshotIsSettled)
 	table.clear(selfInternal._goalGroupIdByGoalKey)
-	table.clear(selfInternal._scratchGxByEntityIndex)
-	table.clear(selfInternal._scratchGzByEntityIndex)
-	table.clear(selfInternal._scratchSeenStampByEntityIndex)
-	selfInternal._scratchNeighborStamp = 0
 
 	for _, goalKey in ipairs(selfInternal._activeGoalKeys) do
 		local entityIndices = selfInternal._entityIndicesByGoalKey[goalKey]
@@ -314,7 +267,6 @@ function FlowFrameState:Reset()
 	end
 
 	table.clear(selfInternal._activeGoalKeys)
-	_ResetScratchCellBuckets(selfInternal)
 	selfInternal._snapshot.WallPackedKeys = selfInternal._defaultWallPackedKeys
 end
 
@@ -436,36 +388,85 @@ function FlowFrameState:SetVelAlpha(entityIndex: number, velAlpha: number)
 end
 
 function FlowFrameState:BuildSeparationSnapshot(
-	params: TFlowFrameStateBuildSnapshotParams
-): (TFlowSeparationSolveSnapshot, { [number]: boolean })
+	tickId: number,
+	deltaTime: number,
+	cellWidthStuds: number,
+	originX: number,
+	originY: number,
+	wallGridHalfSize: number,
+	wallPackedKeys: { number },
+	kForce: number,
+	minSeparationDistance: number,
+	wallCollisionEnabled: boolean,
+	wallCollisionAxisClampEnabled: boolean,
+	wallCollisionCornerClampEnabled: boolean,
+	wallCollisionUseUnitRadiusPadding: boolean,
+	wallCollisionCellProbePaddingStuds: number,
+	wallCollisionVelocityEpsilon: number,
+	clumpTouchPaddingStuds: number
+): TFlowSeparationSolveSnapshot
 	local selfInternal = self :: TFlowFrameStateInternal
 	local snapshot = selfInternal._snapshot
+	local orderedEntityCount = 0
 
-	snapshot.TickId = params.TickId
-	snapshot.EntityCount = selfInternal._entityCount
-	snapshot.DeltaTime = params.DeltaTime
-	snapshot.CellWidthStuds = params.CellWidthStuds
-	snapshot.OriginX = params.OriginX
-	snapshot.OriginY = params.OriginY
-	snapshot.WallGridHalfSize = params.WallGridHalfSize
-	snapshot.WallPackedKeys = params.WallPackedKeys
-	snapshot.KForce = params.KForce
-	snapshot.MinSeparationDistance = params.MinSeparationDistance
-	snapshot.WallCollisionEnabled = params.WallCollisionEnabled
-	snapshot.WallCollisionAxisClampEnabled = params.WallCollisionAxisClampEnabled
-	snapshot.WallCollisionCornerClampEnabled = params.WallCollisionCornerClampEnabled
-	snapshot.WallCollisionUseUnitRadiusPadding = params.WallCollisionUseUnitRadiusPadding
-	snapshot.WallCollisionCellProbePaddingStuds = params.WallCollisionCellProbePaddingStuds
-	snapshot.WallCollisionVelocityEpsilon = params.WallCollisionVelocityEpsilon
+	table.clear(selfInternal._snapshotEntityIds)
+	table.clear(selfInternal._snapshotGoalGroupId)
+	table.clear(selfInternal._snapshotGoalGroupStartIndex)
+	table.clear(selfInternal._snapshotGoalGroupCount)
+	table.clear(selfInternal._snapshotGoalGroupCellWidthStuds)
+	table.clear(selfInternal._snapshotGroupCellX)
+	table.clear(selfInternal._snapshotGroupCellY)
+	table.clear(selfInternal._snapshotFlatPositionX)
+	table.clear(selfInternal._snapshotFlatPositionY)
+	table.clear(selfInternal._snapshotRadius)
+	table.clear(selfInternal._snapshotFlowVelocityX)
+	table.clear(selfInternal._snapshotFlowVelocityY)
+	table.clear(selfInternal._snapshotPreviousVelocityX)
+	table.clear(selfInternal._snapshotPreviousVelocityY)
+	table.clear(selfInternal._snapshotWalkSpeed)
+	table.clear(selfInternal._snapshotVelAlpha)
+	table.clear(selfInternal._snapshotIsSettled)
 
 	for _, goalKey in ipairs(selfInternal._activeGoalKeys) do
 		local entityIndices = selfInternal._entityIndicesByGoalKey[goalKey]
 		if entityIndices ~= nil and #entityIndices > 0 then
-			_AppendGoalNeighborhoodData(selfInternal, entityIndices, params.ClumpTouchPaddingStuds)
+			local groupStartIndex = orderedEntityCount + 1
+			local groupCount = #entityIndices
+			local groupCellWidthStuds = FlowNeighborhoodMath.ResolveCellWidthForEntityIndices(self, entityIndices)
+
+			for _, rawEntityIndex in ipairs(entityIndices) do
+				orderedEntityCount += 1
+				_CopyRawEntityToSnapshot(
+					selfInternal,
+					orderedEntityCount,
+					rawEntityIndex,
+					groupStartIndex,
+					groupCount,
+					groupCellWidthStuds
+				)
+			end
 		end
 	end
 
-	return snapshot, selfInternal._touchedSettledNeighborByEntity
+	snapshot.TickId = tickId
+	snapshot.EntityCount = orderedEntityCount
+	snapshot.DeltaTime = deltaTime
+	snapshot.CellWidthStuds = cellWidthStuds
+	snapshot.OriginX = originX
+	snapshot.OriginY = originY
+	snapshot.WallGridHalfSize = wallGridHalfSize
+	snapshot.WallPackedKeys = wallPackedKeys
+	snapshot.KForce = kForce
+	snapshot.MinSeparationDistance = minSeparationDistance
+	snapshot.WallCollisionEnabled = wallCollisionEnabled
+	snapshot.WallCollisionAxisClampEnabled = wallCollisionAxisClampEnabled
+	snapshot.WallCollisionCornerClampEnabled = wallCollisionCornerClampEnabled
+	snapshot.WallCollisionUseUnitRadiusPadding = wallCollisionUseUnitRadiusPadding
+	snapshot.WallCollisionCellProbePaddingStuds = wallCollisionCellProbePaddingStuds
+	snapshot.WallCollisionVelocityEpsilon = wallCollisionVelocityEpsilon
+	snapshot.ClumpTouchPaddingStuds = clumpTouchPaddingStuds
+
+	return snapshot
 end
 
 function FlowFrameState:Destroy(): (boolean, string?)
@@ -478,17 +479,21 @@ function FlowFrameState:Destroy(): (boolean, string?)
 	selfInternal._destroyed = true
 
 	_ReleaseTrackedMap(selfInternal, selfInternal._snapshot :: any)
+	_ReleaseTrackedArray(selfInternal, selfInternal._entityIds :: any)
+	_ReleaseTrackedArray(selfInternal, selfInternal._goalGroupId :: any)
+	_ReleaseTrackedArray(selfInternal, selfInternal._flatPositionX :: any)
+	_ReleaseTrackedArray(selfInternal, selfInternal._flatPositionY :: any)
+	_ReleaseTrackedArray(selfInternal, selfInternal._radius :: any)
+	_ReleaseTrackedArray(selfInternal, selfInternal._flowVelocityX :: any)
+	_ReleaseTrackedArray(selfInternal, selfInternal._flowVelocityY :: any)
+	_ReleaseTrackedArray(selfInternal, selfInternal._previousVelocityX :: any)
+	_ReleaseTrackedArray(selfInternal, selfInternal._previousVelocityY :: any)
+	_ReleaseTrackedArray(selfInternal, selfInternal._walkSpeed :: any)
+	_ReleaseTrackedArray(selfInternal, selfInternal._velAlpha :: any)
 	_ReleaseTrackedArray(selfInternal, selfInternal._isSettled :: any)
 	_ReleaseTrackedMap(selfInternal, selfInternal._entityIndicesByGoalKey :: any)
 	_ReleaseTrackedArray(selfInternal, selfInternal._activeGoalKeys :: any)
 	_ReleaseTrackedMap(selfInternal, selfInternal._goalGroupIdByGoalKey :: any)
-	_ReleaseTrackedMap(selfInternal, selfInternal._touchedSettledNeighborByEntity :: any)
-	_ReleaseTrackedMap(selfInternal, selfInternal._scratchBucketsByCell :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._scratchCellKeys :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._scratchFreeCellBuckets :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._scratchGxByEntityIndex :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._scratchGzByEntityIndex :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._scratchSeenStampByEntityIndex :: any)
 
 	return true, nil
 end
