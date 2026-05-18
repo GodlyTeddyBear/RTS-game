@@ -24,6 +24,9 @@ end
 return function(MovementService: any)
 	function MovementService:_ReleaseFlowLatestParallelSolve()
 		self._flowLatestParallelSolve = nil
+		table.clear(self._flowPublishedVelocityByEntity)
+		table.clear(self._flowPublishedTouchedSettledNeighborByEntity)
+		table.clear(self._flowPublishedGoalKeyByEntity)
 	end
 
 	function MovementService:_ReleaseFlowDispatchedSeparationSnapshot()
@@ -143,6 +146,7 @@ return function(MovementService: any)
 		self._flowSeparationManagedJob = nil
 		self:_ReleaseFlowLatestParallelSolve()
 		self:_ReleaseFlowDispatchedSeparationSnapshot()
+		self:_DestroyFlowFrameState()
 	end
 
 	function MovementService:_ConsumeCompletedFlowSeparationSolve(): boolean
@@ -168,18 +172,34 @@ return function(MovementService: any)
 			return false
 		end
 
-		local velocityByEntity = self:_ApplyFlowVelocityRows(snapshot, managedResult.Rows :: any)
+		self:_ReleaseFlowLatestParallelSolve()
+
+		local velocityByEntity =
+			self:_ApplyFlowVelocityRows(snapshot, managedResult.Rows :: any, self._flowPublishedVelocityByEntity)
 		if next(velocityByEntity) == nil then
 			self:_ReleaseFlowDispatchedSeparationSnapshot()
 			return false
 		end
 
-		self:_ReleaseFlowLatestParallelSolve()
+		local publishedTouchedMap = self._flowPublishedTouchedSettledNeighborByEntity
+		table.clear(publishedTouchedMap)
+		for entityId, didTouch in touchedMap do
+			if didTouch then
+				publishedTouchedMap[entityId] = true
+			end
+		end
+
+		local publishedGoalKeyByEntity = self._flowPublishedGoalKeyByEntity
+		table.clear(publishedGoalKeyByEntity)
+		for entityId, goalKey in goalKeyByEntity do
+			publishedGoalKeyByEntity[entityId] = goalKey
+		end
+
 		self._flowLatestParallelSolve = {
 			TickId = snapshot.TickId,
 			VelocityByEntity = velocityByEntity,
-			TouchedSettledNeighborByEntity = touchedMap,
-			GoalKeyByEntity = goalKeyByEntity,
+			TouchedSettledNeighborByEntity = publishedTouchedMap,
+			GoalKeyByEntity = publishedGoalKeyByEntity,
 		} :: TFlowPublishedSolve
 		self:_ReleaseFlowDispatchedSeparationSnapshot()
 		return true

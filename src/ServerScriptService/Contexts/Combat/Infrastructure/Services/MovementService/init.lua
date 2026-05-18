@@ -50,6 +50,7 @@ MovementService.__index = MovementService
 require(script.ActorRefs)(MovementService)
 require(script.PathMovement)(MovementService)
 require(script.SharedFlowfields)(MovementService)
+require(script.FlowFrameState)
 require(script.FlowSnapshot)(MovementService)
 require(script.FlowPipeline)(MovementService)
 require(script.FlowMovement)(MovementService)
@@ -72,7 +73,13 @@ function MovementService.new()
 	self._flowCurrentSessionUserId = nil :: number?
 	self._flowSeparationParallelRunner = nil
 	self._flowSeparationManagedJob = nil
+	self._flowFrameStateRecycler = nil
+	self._flowFrameState = nil
 	self._flowLatestParallelSolve = nil
+	self._flowReusableGoalKeyByEntity = {} :: { [number]: string }
+	self._flowPublishedVelocityByEntity = {} :: { [number]: Vector2 }
+	self._flowPublishedTouchedSettledNeighborByEntity = {} :: { [number]: boolean }
+	self._flowPublishedGoalKeyByEntity = {} :: { [number]: string }
 	self._flowDispatchedSeparationSnapshot = nil
 	self._flowDispatchedTouchedSettledNeighborByEntity = nil
 	self._flowDispatchedGoalKeyByEntity = nil
@@ -121,8 +128,12 @@ function MovementService:ResetFastFlowRuntime()
 	table.clear(self._activeFlowEntitiesByGoalKey)
 	table.clear(self._flowSettledByEntity)
 	table.clear(self._flowVelocityByEntity)
+	table.clear(self._flowReusableGoalKeyByEntity)
+	table.clear(self._flowPublishedVelocityByEntity)
+	table.clear(self._flowPublishedTouchedSettledNeighborByEntity)
+	table.clear(self._flowPublishedGoalKeyByEntity)
 	self._flowPipelineTickId = nil
-	self._flowInvalidReasonByEntity = {}
+	table.clear(self._flowInvalidReasonByEntity)
 	self._flowLatestParallelSolve = nil
 	self._flowDispatchedTouchedSettledNeighborByEntity = nil
 	self._flowDispatchedGoalKeyByEntity = nil

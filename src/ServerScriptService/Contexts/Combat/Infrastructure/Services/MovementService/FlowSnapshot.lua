@@ -4,12 +4,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
 local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
-local FlowNeighborhoodMath = require(script.Parent.Math.FlowNeighborhoodMath)
+local TableRecycler = require(ReplicatedStorage.Utilities.TableRecycler)
+local FlowFrameState = require(script.Parent.FlowFrameState)
 local MovementMath = require(script.Parent.Math.MovementMath)
 local MovementTypes = require(script.Parent.Types)
 
 type TFlowMovementState = MovementTypes.TFlowMovementState
-type TFlowFrameInput = MovementTypes.TFlowFrameInput
+type TFlowFrameStateBuildSnapshotParams = MovementTypes.TFlowFrameStateBuildSnapshotParams
+type TFlowFrameStateHandle = MovementTypes.TFlowFrameStateHandle
 type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
 type TFlowSeparationSolveRow = MovementTypes.TFlowSeparationSolveRow
 
@@ -44,6 +46,47 @@ return function(MovementService: any)
 		self._flowWallPackedKeys = packedKeys
 		self._flowWallGridHalfSize = if type(walls) == "table" and type(walls._Size) == "number" then walls._Size else 0
 		return packedKeys
+	end
+
+	function MovementService:_GetOrCreateFlowFrameStateRecycler(): any
+		local recycler = self._flowFrameStateRecycler
+		if recycler ~= nil then
+			return recycler
+		end
+
+		recycler = TableRecycler.new({
+			Strict = true,
+			DebugName = "CombatMovement.FlowFrameState",
+		})
+		self._flowFrameStateRecycler = recycler
+		return recycler
+	end
+
+	function MovementService:_GetOrCreateFlowFrameState(): TFlowFrameStateHandle
+		local frameState = self._flowFrameState
+		if frameState ~= nil then
+			return frameState
+		end
+
+		frameState = FlowFrameState.new(self:_GetOrCreateFlowFrameStateRecycler()) :: TFlowFrameStateHandle
+		self._flowFrameState = frameState
+		return frameState
+	end
+
+	function MovementService:_DestroyFlowFrameState()
+		local frameState = self._flowFrameState :: TFlowFrameStateHandle?
+		if frameState ~= nil then
+			local didDestroy, destroyError = frameState:Destroy()
+			assert(didDestroy, destroyError)
+		end
+		self._flowFrameState = nil
+
+		local recycler = self._flowFrameStateRecycler
+		if recycler ~= nil then
+			local didDestroyRecycler, destroyRecyclerError = recycler:Destroy()
+			assert(didDestroyRecycler, destroyRecyclerError)
+		end
+		self._flowFrameStateRecycler = nil
 	end
 
 	function MovementService:_CreateFlowSeparationSharedMemory(snapshot: TFlowSeparationSolveSnapshot): SharedTable
@@ -97,9 +140,11 @@ return function(MovementService: any)
 
 	function MovementService:_ApplyFlowVelocityRows(
 		snapshot: TFlowSeparationSolveSnapshot,
-		rows: { TFlowSeparationSolveRow }
+		rows: { TFlowSeparationSolveRow },
+		velocityByEntity: { [number]: Vector2 }?
 	): { [number]: Vector2 }
-		local velocityByEntity: { [number]: Vector2 } = {}
+		local resolvedVelocityByEntity = if velocityByEntity ~= nil then velocityByEntity else {}
+		table.clear(resolvedVelocityByEntity)
 
 		ResultApplication.ApplyRows({
 			Rows = rows,
@@ -116,99 +161,75 @@ return function(MovementService: any)
 				return snapshot.EntityIds[row.EntityIndex]
 			end,
 			ApplyRow = function(entityId, row)
-				velocityByEntity[entityId] = Vector2.new(row.VelocityX, row.VelocityY)
+				resolvedVelocityByEntity[entityId] = Vector2.new(row.VelocityX, row.VelocityY)
 			end,
 		})
 
-		return velocityByEntity
+		return resolvedVelocityByEntity
 	end
 
-	function MovementService:_BuildFlowFrameInput(entity: number, goalGroupId: number): TFlowFrameInput?
-		local movementState = self._movementByEntity[entity] :: TFlowMovementState?
-		if movementState == nil or movementState.Mode ~= "Flow" then
-			return nil
-		end
-
+	function MovementService:_ResolveFlowFrameState(
+		entity: number,
+		movementState: TFlowMovementState
+	): (string?, Vector3?, Vector3?, Vector3?, Vector2, number?, number?, Vector2, boolean)
 		local pathState = self._enemyEntityFactory:GetPathState(entity)
 		local goalPosition = if pathState ~= nil then pathState.GoalPosition else nil
 		if goalPosition == nil then
 			self._flowInvalidReasonByEntity[entity] = "MissingGoalPosition"
-			return nil
+			return nil, nil, nil, nil, Vector2.zero, nil, nil, Vector2.zero, false
 		end
 
 		local handledGoalChange, reason = self:_HandleFlowGoalChange(entity, movementState, goalPosition)
 		if not handledGoalChange then
 			self._flowInvalidReasonByEntity[entity] = reason or "FastFlowGenerateFailed"
-			return nil
+			return nil, nil, nil, nil, Vector2.zero, nil, nil, Vector2.zero, false
 		end
 
 		local position = self:_GetEntityPosition(entity)
 		if position == nil then
 			self._flowInvalidReasonByEntity[entity] = "MissingModelPosition"
-			return nil
+			return nil, nil, nil, nil, Vector2.zero, nil, nil, Vector2.zero, false
 		end
 
 		local flowDirectionXZ = Vector2.zero
-		if self._flowSettledByEntity[entity] ~= true then
+		local isSettled = self._flowSettledByEntity[entity] == true
+		if not isSettled then
 			local sampledDirection = self:_SampleFlowDirectionXZ(movementState, position)
 			if sampledDirection ~= nil then
 				flowDirectionXZ = sampledDirection
 			end
 		end
 
-		return {
-			Entity = entity,
-			GoalGroupId = goalGroupId,
-			GoalKey = movementState.GoalKey,
-			GoalPosition = goalPosition,
-			GoalWorldSample = movementState.GoalWorldSample,
-			Position = position,
-			FlatPosition = MovementMath.FlatXZ(position),
-			FlowDirectionXZ = flowDirectionXZ,
-			WalkSpeed = self:_ApplyCurrentMoveSpeed(entity),
-			Radius = self:_GetFlowAgentRadiusStuds(entity),
-			PreviousVelocityXZ = self._flowVelocityByEntity[entity] or Vector2.zero,
-			IsSettled = self._flowSettledByEntity[entity] == true,
-		}
+		return
+			movementState.GoalKey,
+			goalPosition,
+			movementState.GoalWorldSample,
+			position,
+			flowDirectionXZ,
+			self:_ApplyCurrentMoveSpeed(entity),
+			self:_GetFlowAgentRadiusStuds(entity),
+			self._flowVelocityByEntity[entity] or Vector2.zero,
+			isSettled
 	end
 
-	function MovementService:_BuildFlowSeparationSnapshot(
+	function MovementService:_ResolveFlowSnapshotBuildParams(
 		tickId: number,
 		dt: number,
-		inputs: { TFlowFrameInput },
-		inputsByGoalKey: { [string]: { TFlowFrameInput } }
-	): (TFlowSeparationSolveSnapshot?, { [number]: boolean }, { [number]: string })
+		wallPackedKeys: { number }
+	): TFlowFrameStateBuildSnapshotParams?
 		local _pathfinder, mapping = self:_ResolveFastFlowRuntime()
 		if mapping == nil then
-			return nil, {}, {}
+			return nil
 		end
 
 		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
-		local wallPackedKeys = self:_BuildPackedWallKeys()
-		local entityIndexByEntity: { [number]: number } = {}
-		local touchedSettledNeighborByEntity: { [number]: boolean } = {}
-		local goalKeyByEntity: { [number]: string } = {}
-		local snapshot: TFlowSeparationSolveSnapshot = {
+		return {
 			TickId = tickId,
-			EntityCount = #inputs,
-			EntityIds = {},
-			GoalGroupId = {},
-			NeighborStartIndex = {},
-			NeighborCount = {},
-			NeighborEntityIndex = {},
-			FlatPositionX = {},
-			FlatPositionY = {},
-			Radius = {},
-			FlowVelocityX = {},
-			FlowVelocityY = {},
-			PreviousVelocityX = {},
-			PreviousVelocityY = {},
-			WalkSpeed = {},
-			VelAlpha = {},
 			DeltaTime = dt,
 			CellWidthStuds = mapping.CellWidthStuds,
 			OriginX = mapping.OriginWorld.X,
 			OriginY = mapping.OriginWorld.Z,
+			GridHalfSize = mapping.GridHalfSize,
 			WallGridHalfSize = if type(self._flowWallGridHalfSize) == "number"
 				then self._flowWallGridHalfSize
 				else mapping.GridHalfSize,
@@ -227,53 +248,8 @@ return function(MovementService: any)
 			WallCollisionVelocityEpsilon = if type(config.WallCollisionVelocityEpsilon) == "number"
 				then config.WallCollisionVelocityEpsilon
 				else 1e-4,
+			ClumpTouchPaddingStuds = self:_GetFlowClumpTouchPaddingStuds(),
 		}
-
-		for index, input in ipairs(inputs) do
-			snapshot.EntityIds[index] = input.Entity
-			snapshot.GoalGroupId[index] = input.GoalGroupId
-			snapshot.FlatPositionX[index] = input.FlatPosition.X
-			snapshot.FlatPositionY[index] = input.FlatPosition.Y
-			snapshot.Radius[index] = input.Radius
-			snapshot.FlowVelocityX[index] = input.FlowDirectionXZ.X * input.WalkSpeed
-			snapshot.FlowVelocityY[index] = input.FlowDirectionXZ.Y * input.WalkSpeed
-			snapshot.PreviousVelocityX[index] = input.PreviousVelocityXZ.X
-			snapshot.PreviousVelocityY[index] = input.PreviousVelocityXZ.Y
-			snapshot.WalkSpeed[index] = input.WalkSpeed
-			snapshot.VelAlpha[index] = self:_GetFlowVelocityAlpha()
-			entityIndexByEntity[input.Entity] = index
-			goalKeyByEntity[input.Entity] = input.GoalKey
-		end
-
-		for _, goalInputs in inputsByGoalKey do
-			local neighborBaseOffset = #snapshot.NeighborEntityIndex
-			local touchedMap, neighborStartIndex, neighborCount, neighborEntityIndex =
-				FlowNeighborhoodMath.BuildGoalNeighborhoodData(
-					goalInputs,
-					entityIndexByEntity,
-					self:_GetFlowClumpTouchPaddingStuds()
-				)
-
-			for entityId, didTouch in touchedMap do
-				if didTouch then
-					touchedSettledNeighborByEntity[entityId] = true
-				end
-			end
-
-			for entityIndex, startIndex in neighborStartIndex do
-				snapshot.NeighborStartIndex[entityIndex] = neighborBaseOffset + startIndex
-			end
-
-			for entityIndex, count in neighborCount do
-				snapshot.NeighborCount[entityIndex] = count
-			end
-
-			for _, otherEntityIndex in ipairs(neighborEntityIndex) do
-				table.insert(snapshot.NeighborEntityIndex, otherEntityIndex)
-			end
-		end
-
-		return snapshot, touchedSettledNeighborByEntity, goalKeyByEntity
 	end
 
 	function MovementService:_ResolveFlowTickId(services: any?): number
@@ -297,35 +273,50 @@ return function(MovementService: any)
 		tickId: number,
 		dt: number
 	): (TFlowSeparationSolveSnapshot?, { [number]: boolean }?, { [number]: string }?)
-		self._flowInvalidReasonByEntity = {}
+		table.clear(self._flowInvalidReasonByEntity)
 
-		local allInputs = {}
-		local inputsByGoalKey: { [string]: { TFlowFrameInput } } = {}
-		local goalGroupIdByKey: { [string]: number } = {}
-		local nextGoalGroupId = 0
+		local frameState = self:_GetOrCreateFlowFrameState()
+		frameState:Reset()
 
+		local goalKeyByEntity = self._flowReusableGoalKeyByEntity :: { [number]: string }
+		table.clear(goalKeyByEntity)
+
+		-- Resolve all valid flow entities into the frame-state SoA
 		for entity, movementState in self._movementByEntity do
 			if movementState.Mode == "Flow" then
-				local goalGroupId = goalGroupIdByKey[movementState.GoalKey]
-				if goalGroupId == nil then
-					nextGoalGroupId += 1
-					goalGroupId = nextGoalGroupId
-					goalGroupIdByKey[movementState.GoalKey] = goalGroupId
-					inputsByGoalKey[movementState.GoalKey] = {}
+				local goalKey, _goalPosition, _goalWorldSample, position, flowDirectionXZ, walkSpeed, radius, previousVelocityXZ, isSettled =
+					self:_ResolveFlowFrameState(entity, movementState)
+				if goalKey == nil or position == nil or walkSpeed == nil or radius == nil then
+					continue
 				end
 
-				local input = self:_BuildFlowFrameInput(entity, goalGroupId)
-				if input ~= nil then
-					table.insert(inputsByGoalKey[input.GoalKey], input)
-					table.insert(allInputs, input)
-				end
+				local entityIndex = frameState:AddEntity(
+					goalKey,
+					entity,
+					position,
+					flowDirectionXZ,
+					walkSpeed,
+					radius,
+					previousVelocityXZ,
+					isSettled
+				)
+				frameState:SetVelAlpha(entityIndex, self:_GetFlowVelocityAlpha())
+				goalKeyByEntity[entity] = goalKey
 			end
 		end
 
-		if #allInputs == 0 then
+		if frameState:GetEntityCount() == 0 then
 			return nil, nil, nil
 		end
 
-		return self:_BuildFlowSeparationSnapshot(tickId, dt, allInputs, inputsByGoalKey)
+		-- Build the final separation snapshot from the frame-state object
+		local wallPackedKeys = self:_BuildPackedWallKeys()
+		local snapshotParams = self:_ResolveFlowSnapshotBuildParams(tickId, dt, wallPackedKeys)
+		if snapshotParams == nil then
+			return nil, nil, nil
+		end
+
+		local snapshot, touchedSettledNeighborByEntity = frameState:BuildSeparationSnapshot(snapshotParams)
+		return snapshot, touchedSettledNeighborByEntity, goalKeyByEntity
 	end
 end

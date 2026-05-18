@@ -40,21 +40,6 @@ export type TFlowActorRefs = {
 	LastWalkSpeed: number?,
 }
 
-export type TFlowFrameInput = {
-	Entity: number,
-	GoalGroupId: number,
-	GoalKey: string,
-	GoalPosition: Vector3,
-	GoalWorldSample: Vector3,
-	Position: Vector3,
-	FlatPosition: Vector2,
-	FlowDirectionXZ: Vector2,
-	WalkSpeed: number,
-	Radius: number,
-	PreviousVelocityXZ: Vector2,
-	IsSettled: boolean,
-}
-
 export type TFlowFrameSolution = {
 	VelocityXZ: Vector2,
 	MoveTarget: Vector3?,
@@ -94,6 +79,62 @@ export type TFlowSeparationSolveSnapshot = {
 	WallCollisionUseUnitRadiusPadding: boolean,
 	WallCollisionCellProbePaddingStuds: number,
 	WallCollisionVelocityEpsilon: number,
+}
+
+export type TFlowFrameStateBuildSnapshotParams = {
+	TickId: number,
+	DeltaTime: number,
+	CellWidthStuds: number,
+	OriginX: number,
+	OriginY: number,
+	GridHalfSize: number,
+	WallGridHalfSize: number,
+	WallPackedKeys: { number },
+	KForce: number,
+	MinSeparationDistance: number,
+	WallCollisionEnabled: boolean,
+	WallCollisionAxisClampEnabled: boolean,
+	WallCollisionCornerClampEnabled: boolean,
+	WallCollisionUseUnitRadiusPadding: boolean,
+	WallCollisionCellProbePaddingStuds: number,
+	WallCollisionVelocityEpsilon: number,
+	ClumpTouchPaddingStuds: number,
+}
+
+export type TFlowFrameStateHandle = {
+	Reset: (self: TFlowFrameStateHandle) -> (),
+	EnsureGoalGroup: (self: TFlowFrameStateHandle, goalKey: string) -> number,
+	AddEntity: (
+		self: TFlowFrameStateHandle,
+		goalKey: string,
+		entityId: number,
+		position: Vector3,
+		flowDirectionXZ: Vector2,
+		walkSpeed: number,
+		radius: number,
+		previousVelocityXZ: Vector2,
+		isSettled: boolean
+	) -> number,
+	GetEntityCount: (self: TFlowFrameStateHandle) -> number,
+	GetGoalBuckets: (self: TFlowFrameStateHandle) -> { [string]: { number } },
+	GetEntityId: (self: TFlowFrameStateHandle, entityIndex: number) -> number?,
+	GetGoalGroupId: (self: TFlowFrameStateHandle, entityIndex: number) -> number?,
+	GetFlatPositionX: (self: TFlowFrameStateHandle, entityIndex: number) -> number?,
+	GetFlatPositionY: (self: TFlowFrameStateHandle, entityIndex: number) -> number?,
+	GetRadius: (self: TFlowFrameStateHandle, entityIndex: number) -> number?,
+	GetFlowVelocityX: (self: TFlowFrameStateHandle, entityIndex: number) -> number?,
+	GetFlowVelocityY: (self: TFlowFrameStateHandle, entityIndex: number) -> number?,
+	GetPreviousVelocityX: (self: TFlowFrameStateHandle, entityIndex: number) -> number?,
+	GetPreviousVelocityY: (self: TFlowFrameStateHandle, entityIndex: number) -> number?,
+	GetWalkSpeed: (self: TFlowFrameStateHandle, entityIndex: number) -> number?,
+	GetVelAlpha: (self: TFlowFrameStateHandle, entityIndex: number) -> number?,
+	IsSettled: (self: TFlowFrameStateHandle, entityIndex: number) -> boolean,
+	SetVelAlpha: (self: TFlowFrameStateHandle, entityIndex: number, velAlpha: number) -> (),
+	Destroy: (self: TFlowFrameStateHandle) -> (boolean, string?),
+	BuildSeparationSnapshot: (
+		self: TFlowFrameStateHandle,
+		params: TFlowFrameStateBuildSnapshotParams
+	) -> (TFlowSeparationSolveSnapshot, { [number]: boolean }),
 }
 
 export type TFlowSeparationSolveRow = {

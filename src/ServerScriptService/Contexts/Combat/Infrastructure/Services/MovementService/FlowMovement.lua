@@ -9,7 +9,6 @@ local MovementMath = require(script.Parent.Math.MovementMath)
 local MovementTypes = require(script.Parent.Types)
 
 type TFlowMovementState = MovementTypes.TFlowMovementState
-type TFlowFrameInput = MovementTypes.TFlowFrameInput
 type TFlowFrameSolution = MovementTypes.TFlowFrameSolution
 type TFlowPublishedSolve = MovementTypes.TFlowPublishedSolve
 
@@ -116,12 +115,16 @@ return function(MovementService: any)
 	end
 
 	function MovementService:_BuildFlowSolutionForInput(
-		input: TFlowFrameInput,
+		goalPosition: Vector3,
+		goalWorldSample: Vector3,
+		position: Vector3,
+		walkSpeed: number,
+		isSettled: boolean,
 		finalVelocityXZ: Vector2,
 		touchedSettledNeighbor: boolean
 	): TFlowFrameSolution
-		local arrivalRadius = FlowMath.ResolveArrivalRadius(input.GoalPosition, input.GoalWorldSample)
-		if MovementMath.XZDistance(input.Position, input.GoalPosition) <= arrivalRadius then
+		local arrivalRadius = FlowMath.ResolveArrivalRadius(goalPosition, goalWorldSample)
+		if MovementMath.XZDistance(position, goalPosition) <= arrivalRadius then
 			return {
 				VelocityXZ = Vector2.zero,
 				MoveTarget = nil,
@@ -133,21 +136,21 @@ return function(MovementService: any)
 
 		local mapping = self._fastFlowMapping
 		local moveTarget = FlowMath.ComputeMoveTarget(
-			input.Position,
+			position,
 			finalVelocityXZ,
 			FlowMath.ResolveLookaheadDistanceStuds(
-				input.WalkSpeed,
+				walkSpeed,
 				if mapping ~= nil then mapping.CellWidthStuds else nil
 			)
 		)
-		local isInsideClumpRadius = MovementMath.XZDistance(input.Position, input.GoalPosition)
+		local isInsideClumpRadius = MovementMath.XZDistance(position, goalPosition)
 			<= self:_GetFlowClumpRadiusStuds()
 
 		return {
 			VelocityXZ = finalVelocityXZ,
 			MoveTarget = moveTarget,
 			DidArrive = false,
-			ShouldSettle = not input.IsSettled and isInsideClumpRadius and touchedSettledNeighbor,
+			ShouldSettle = not isSettled and isInsideClumpRadius and touchedSettledNeighbor,
 			HasSteering = finalVelocityXZ.Magnitude > 0,
 		}
 	end
@@ -165,9 +168,10 @@ return function(MovementService: any)
 			return false, invalidReason
 		end
 
-		local input = self:_BuildFlowFrameInput(entity, 0)
 		local latestParallelSolve = self._flowLatestParallelSolve :: TFlowPublishedSolve?
-		if input == nil then
+		local goalKey, goalPosition, goalWorldSample, position, _flowDirectionXZ, walkSpeed, _radius, _previousVelocityXZ, isSettled =
+			self:_ResolveFlowFrameState(entity, movementState)
+		if goalKey == nil or goalPosition == nil or goalWorldSample == nil or position == nil or walkSpeed == nil then
 			local refreshedInvalidReason = self._flowInvalidReasonByEntity[entity]
 			if refreshedInvalidReason ~= nil then
 				self:StopMovement(entity)
@@ -181,7 +185,7 @@ return function(MovementService: any)
 		end
 
 		local publishedGoalKey = latestParallelSolve.GoalKeyByEntity[entity]
-		if publishedGoalKey == nil or publishedGoalKey ~= input.GoalKey then
+		if publishedGoalKey == nil or publishedGoalKey ~= goalKey then
 			return false, nil
 		end
 
@@ -191,7 +195,11 @@ return function(MovementService: any)
 		end
 
 		local solution = self:_BuildFlowSolutionForInput(
-			input,
+			goalPosition,
+			goalWorldSample,
+			position,
+			walkSpeed,
+			isSettled == true,
 			velocityXZ,
 			latestParallelSolve.TouchedSettledNeighborByEntity[entity] == true
 		)
