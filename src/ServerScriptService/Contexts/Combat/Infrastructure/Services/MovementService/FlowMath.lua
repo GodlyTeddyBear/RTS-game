@@ -1,4 +1,6 @@
 --!strict
+--!optimize 2
+--!native
 
 local MovementMath = require(script.Parent.MovementMath)
 
@@ -35,11 +37,7 @@ function FlowMath.BlendVelocity(
 	return previousVelocityXZ * (1 - velAlpha) + targetVelocity * velAlpha
 end
 
-function FlowMath.ComputeMoveTarget(
-	currentPosition: Vector3,
-	velocityXZ: Vector2,
-	lookaheadDistance: number
-): Vector3?
+function FlowMath.ComputeMoveTarget(currentPosition: Vector3, velocityXZ: Vector2, lookaheadDistance: number): Vector3?
 	local magnitude = velocityXZ.Magnitude
 	if magnitude <= MOVE_DIRECTION_EPSILON then
 		return nil

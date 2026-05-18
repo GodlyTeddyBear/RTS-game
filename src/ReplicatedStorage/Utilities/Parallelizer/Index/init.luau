@@ -8,14 +8,26 @@ local Deserializer = require(script.Utils.Deserializer)
 
 local Index = {}
 
-function Index.ListenToTask(actor: Actor, taskName: string, callback: (taskId: number, memory: SharedTable?, ...Types.SharedTableValues) -> {Types.SerializableValues}, cacheLocalMemory: boolean)
-	assert(not taskName:match('%-parallelizer%-internal%-def$'), 'Task name cannot end with "-parallelizer-internal"')
-	assert(not taskName:match('%-parallelizer%-internal%-mem$'), 'Task name cannot end with "-parallelizer-internal-mem"')
+function Index.ListenToTask(
+	actor: Actor,
+	taskName: string,
+	callback: (
+		taskId: number,
+		memory: SharedTable?,
+		...Types.SharedTableValues
+	) -> { Types.SerializableValues },
+	cacheLocalMemory: boolean
+)
+	assert(not taskName:match("%-parallelizer%-internal%-def$"), 'Task name cannot end with "-parallelizer-internal"')
+	assert(
+		not taskName:match("%-parallelizer%-internal%-mem$"),
+		'Task name cannot end with "-parallelizer-internal-mem"'
+	)
 
 	-->> Internal Local Memory
 	local packetDefBytesNeeded: number
-	local packetDefData: {string} = {}
-	local packetBytesData: {number} = {}
+	local packetDefData: { string } = {}
+	local packetBytesData: { number } = {}
 
 	-->> User Local Memory
 	local userMemory: SharedTable
@@ -26,77 +38,99 @@ function Index.ListenToTask(actor: Actor, taskName: string, callback: (taskId: n
 		end)
 	end
 
-	actor:BindToMessageParallel(`{taskName}-parallelizer-internal-def`, function(packetDefBuf: buffer, packetBytesBuf: buffer, packetDefCount: number, bytesNeeded: number)
-		packetDefBytesNeeded = bytesNeeded
+	actor:BindToMessageParallel(
+		`{taskName}-parallelizer-internal-def`,
+		function(packetDefBuf: buffer, packetBytesBuf: buffer, packetDefCount: number, bytesNeeded: number)
+			packetDefBytesNeeded = bytesNeeded
 
-		local packetDefCursor = 0
-		local packetBytesCursor = 0
+			local packetDefCursor = 0
+			local packetBytesCursor = 0
 
-		debug.profilebegin('deserialize packet def buffer and packet bytes buffer')
+			debug.profilebegin("Parallelizer, bindtomessage, deserialize packet def buffer and packet bytes buffer")
 
-		for _ = 1, packetDefCount do
-			packetDefCursor = Deserializer.deserializeToTable(packetDefBuf, packetDefCursor, 'str', packetDefData)
-			packetBytesCursor = tonumber(Deserializer.deserializeToTable(packetBytesBuf, packetBytesCursor, 'u32', packetBytesData)) :: number
-		end
-
-		debug.profileend()
-	end)
-
-	actor:BindToMessageParallel(taskName, function(startingTaskId: number, threadCount: number, batchSize: number, bindable: BindableEvent, ...: Types.SharedTableValues)
-		local memory = userMemory
-		local responses = table.create(batchSize)
-		local responseCount = 0
-
-		debug.profilebegin('batch task callback fire')
-
-		for taskId = startingTaskId, math.min(startingTaskId + (batchSize - 1), threadCount) do
-			local res = callback(taskId, memory, ...)
-			
-			assert(type(res) == 'table', 'Expected a table for task callback return value')
-
-			responseCount += 1
-			responses[responseCount] = res
-		end
-		assert(
-			responseCount == batchSize,
-			`Parallelizer task "{taskName}" expected {batchSize} response rows but only collected {responseCount}`
-		)
-
-		task.desynchronize()
-		
-		debug.profileend()
-
-		-- TODO: optimize big batches of data
-		debug.profilebegin('packet batch buffer serialization')
-		
-		local cursor = 0
-		local size = packetDefBytesNeeded * batchSize
-		local batchBuf: buffer = buffer.create(size)
-
-		local packetDefLen = #packetDefData
-		
-		for batch = 1, batchSize do
-			local responseBatch = responses[batch]
-
-			for dataIndex = 1, packetDefLen do
-				local dataType: string = packetDefData[dataIndex]
-				
-				assert(dataType ~= nil, 'Task return callback value out of bounds')
-				batchBuf, cursor, size = Serializer.SerializeToBuffer(responseBatch[dataIndex], dataType, cursor, batchBuf, size, packetBytesData[dataIndex], true)
+			for _ = 1, packetDefCount do
+				packetDefCursor = Deserializer.deserializeToTable(packetDefBuf, packetDefCursor, "str", packetDefData)
+				packetBytesCursor = tonumber(
+					Deserializer.deserializeToTable(packetBytesBuf, packetBytesCursor, "u32", packetBytesData)
+				) :: number
 			end
+
+			debug.profileend()
 		end
+	)
 
-		debug.profileend()
+	actor:BindToMessageParallel(
+		taskName,
+		function(
+			startingTaskId: number,
+			threadCount: number,
+			batchSize: number,
+			bindable: BindableEvent,
+			...: Types.SharedTableValues
+		)
+			local memory = userMemory
+			local responses = table.create(batchSize)
+			local responseCount = 0
 
-		bindable:Fire(startingTaskId, batchBuf)
-	end)
+			debug.profilebegin("Parallelizer, batch task callback fire")
+
+			for taskId = startingTaskId, math.min(startingTaskId + (batchSize - 1), threadCount) do
+				local res = callback(taskId, memory, ...)
+
+				assert(type(res) == "table", "Expected a table for task callback return value")
+
+				responseCount += 1
+				responses[responseCount] = res
+			end
+			assert(
+				responseCount == batchSize,
+				`Parallelizer task "{taskName}" expected {batchSize} response rows but only collected {responseCount}`
+			)
+
+			task.desynchronize()
+
+			debug.profileend()
+
+			-- TODO: optimize big batches of data
+			debug.profilebegin("Parallelizer, packet batch buffer serialization")
+
+			local cursor = 0
+			local size = packetDefBytesNeeded * batchSize
+			local batchBuf: buffer = buffer.create(size)
+
+			local packetDefLen = #packetDefData
+
+			for batch = 1, batchSize do
+				local responseBatch = responses[batch]
+
+				for dataIndex = 1, packetDefLen do
+					local dataType: string = packetDefData[dataIndex]
+
+					assert(dataType ~= nil, "Task return callback value out of bounds")
+					batchBuf, cursor, size = Serializer.SerializeToBuffer(
+						responseBatch[dataIndex],
+						dataType,
+						cursor,
+						batchBuf,
+						size,
+						packetBytesData[dataIndex],
+						true
+					)
+				end
+			end
+
+			debug.profileend()
+
+			bindable:Fire(startingTaskId, batchBuf)
+		end
+	)
 end
 
 function Index.CreateTaskCoordinator(workerScript: Script & LocalScript, actorStorage: Instance, actorCount: number)
-	local actors: {Actor} = table.create(actorCount)
+	local actors: { Actor } = table.create(actorCount)
 
 	for _ = 1, actorCount do
-		local actor = Instance.new('Actor')
+		local actor = Instance.new("Actor")
 		local worker = workerScript:Clone()
 		worker.Parent = actor
 		worker.Enabled = true
@@ -106,11 +140,11 @@ function Index.CreateTaskCoordinator(workerScript: Script & LocalScript, actorSt
 	end
 
 	return table.freeze(setmetatable({
-		actorCount = actorCount;
-		actors = actors;
-		connections = {};
-		resultBindables = {};
-	}, {__index = TaskCoordinator}))
+		actorCount = actorCount,
+		actors = actors,
+		connections = {},
+		resultBindables = {},
+	}, { __index = TaskCoordinator }))
 end
 
 local DataTypeFolder = script.DataTypes

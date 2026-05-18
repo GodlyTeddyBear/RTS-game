@@ -24,6 +24,9 @@ FlowSeparationSolveOperation = ParallelQuery.Operation.DefineCached({
 		end
 
 		local goalGroupId = memory.GoalGroupId
+		local neighborStartIndex = memory.NeighborStartIndex
+		local neighborCount = memory.NeighborCount
+		local neighborEntityIndex = memory.NeighborEntityIndex
 		local flatPositionX = memory.FlatPositionX
 		local flatPositionY = memory.FlatPositionY
 		local radius = memory.Radius
@@ -35,6 +38,9 @@ FlowSeparationSolveOperation = ParallelQuery.Operation.DefineCached({
 		local velAlpha = memory.VelAlpha
 		local wallPackedKeys = memory.WallPackedKeys
 		if goalGroupId == nil or flatPositionX == nil or flatPositionY == nil or radius == nil then
+			return emptyRow
+		end
+		if neighborStartIndex == nil or neighborCount == nil or neighborEntityIndex == nil then
 			return emptyRow
 		end
 		if flowVelocityX == nil or flowVelocityY == nil or previousVelocityX == nil or previousVelocityY == nil then
@@ -49,7 +55,9 @@ FlowSeparationSolveOperation = ParallelQuery.Operation.DefineCached({
 
 		local velocity = FlowSeparationMath.ResolveVelocityWithWalls({
 			EntityIndex = taskId,
-			GoalGroupId = goalGroupId,
+			NeighborStartIndex = neighborStartIndex,
+			NeighborCount = neighborCount,
+			NeighborEntityIndex = neighborEntityIndex,
 			FlatPositionX = flatPositionX,
 			FlatPositionY = flatPositionY,
 			Radius = radius,

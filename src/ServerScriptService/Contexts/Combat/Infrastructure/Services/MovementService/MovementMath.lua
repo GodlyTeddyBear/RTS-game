@@ -15,6 +15,14 @@ function MovementMath.PackedSeparationCellKey(gx: number, gz: number): number
 	return sum * (sum + 1) / 2 + z
 end
 
+function MovementMath.PackWallKey(gx: number, gy: number): number
+	return (gx + 0x8000) * 0x10000 + (gy + 0x8000)
+end
+
+function MovementMath.FlatPositionToCell(flatPosition: Vector2, cellWidthStuds: number): (number, number)
+	return math.round(flatPosition.X / cellWidthStuds), math.round(flatPosition.Y / cellWidthStuds)
+end
+
 function MovementMath.FlowGoalKey(cell: Vector2): string
 	return string.format("%d,%d", cell.X, cell.Y)
 end

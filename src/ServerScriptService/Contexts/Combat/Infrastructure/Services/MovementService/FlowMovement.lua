@@ -6,6 +6,7 @@ local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.Co
 local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
 local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
 local FlowMath = require(script.Parent.FlowMath)
+local FlowNeighborhoodMath = require(script.Parent.FlowNeighborhoodMath)
 local FlowSeparationMath = require(script.Parent.FlowSeparationMath)
 local MovementMath = require(script.Parent.MovementMath)
 local MovementTypes = require(script.Parent.Types)
@@ -22,10 +23,6 @@ local ManagedJobPolicies = ParallelQuery.ManagedJobPolicies
 local ResultApplication = ParallelQuery.ResultApplication
 local SharedMemoryAuthoring = ParallelQuery.SharedMemoryAuthoring
 local ValidationHelpers = ParallelQuery.ValidationHelpers
-
-local function _PackWallKey(gx: number, gy: number): number
-	return (gx + 0x8000) * 0x10000 + (gy + 0x8000)
-end
 
 return function(MovementService: any)
 	function MovementService:_GetFlowConfig(): any
@@ -192,7 +189,7 @@ return function(MovementService: any)
 			for index, value in walls._Grid do
 				if value == true then
 					local cell = walls:_GetCellPos(index)
-					table.insert(packedKeys, _PackWallKey(cell.X, cell.Y))
+					table.insert(packedKeys, MovementMath.PackWallKey(cell.X, cell.Y))
 				end
 			end
 		end
@@ -207,6 +204,9 @@ return function(MovementService: any)
 	function MovementService:_CreateFlowSeparationSharedMemory(snapshot: TFlowSeparationSolveSnapshot): SharedTable
 		local builder = SharedMemoryAuthoring.CreateSnapshotBuilder()
 		SharedMemoryAuthoring.SetArrayValues(builder, "GoalGroupId", snapshot.GoalGroupId)
+		SharedMemoryAuthoring.SetArrayValues(builder, "NeighborStartIndex", snapshot.NeighborStartIndex)
+		SharedMemoryAuthoring.SetArrayValues(builder, "NeighborCount", snapshot.NeighborCount)
+		SharedMemoryAuthoring.SetArrayValues(builder, "NeighborEntityIndex", snapshot.NeighborEntityIndex)
 		SharedMemoryAuthoring.SetArrayValues(builder, "FlatPositionX", snapshot.FlatPositionX)
 		SharedMemoryAuthoring.SetArrayValues(builder, "FlatPositionY", snapshot.FlatPositionY)
 		SharedMemoryAuthoring.SetArrayValues(builder, "Radius", snapshot.Radius)
@@ -225,8 +225,16 @@ return function(MovementService: any)
 		SharedMemoryAuthoring.SetScalar(builder, "KForce", snapshot.KForce)
 		SharedMemoryAuthoring.SetScalar(builder, "MinSeparationDistance", snapshot.MinSeparationDistance)
 		SharedMemoryAuthoring.SetScalar(builder, "WallCollisionEnabled", snapshot.WallCollisionEnabled)
-		SharedMemoryAuthoring.SetScalar(builder, "WallCollisionAxisClampEnabled", snapshot.WallCollisionAxisClampEnabled)
-		SharedMemoryAuthoring.SetScalar(builder, "WallCollisionCornerClampEnabled", snapshot.WallCollisionCornerClampEnabled)
+		SharedMemoryAuthoring.SetScalar(
+			builder,
+			"WallCollisionAxisClampEnabled",
+			snapshot.WallCollisionAxisClampEnabled
+		)
+		SharedMemoryAuthoring.SetScalar(
+			builder,
+			"WallCollisionCornerClampEnabled",
+			snapshot.WallCollisionCornerClampEnabled
+		)
 		SharedMemoryAuthoring.SetScalar(
 			builder,
 			"WallCollisionUseUnitRadiusPadding",
@@ -250,7 +258,8 @@ return function(MovementService: any)
 		ResultApplication.ApplyRows({
 			Rows = rows,
 			ValidateRow = function(row)
-				local indexValidation = ValidationHelpers.RequireIndexFields(row, { "EntityIndex" }, #snapshot.EntityIds)
+				local indexValidation =
+					ValidationHelpers.RequireIndexFields(row, { "EntityIndex" }, #snapshot.EntityIds)
 				if not indexValidation.IsValid then
 					return indexValidation
 				end
@@ -351,10 +360,7 @@ return function(MovementService: any)
 		return true, nil
 	end
 
-	function MovementService:_SampleFlowDirectionXZ(
-		movementState: TFlowMovementState,
-		position: Vector3
-	): Vector2?
+	function MovementService:_SampleFlowDirectionXZ(movementState: TFlowMovementState, position: Vector3): Vector2?
 		local _pathfinder, mapping = self:_ResolveFastFlowRuntime()
 		if mapping == nil then
 			return nil
@@ -365,9 +371,7 @@ return function(MovementService: any)
 			return nil
 		end
 
-		local steering = sharedEntry.Flowfield:GetDirection(
-			FastFlowHelper.WorldXZToGridCell(position, mapping)
-		)
+		local steering = sharedEntry.Flowfield:GetDirection(FastFlowHelper.WorldXZToGridCell(position, mapping))
 		if steering == nil then
 			return nil
 		end
@@ -423,77 +427,28 @@ return function(MovementService: any)
 		}
 	end
 
-	function MovementService:_BuildTouchedSettledNeighborMap(inputs: { TFlowFrameInput }): { [number]: boolean }
-		local touched: { [number]: boolean } = {}
-		local cellWidthStuds = math.max(4, self:_ResolveCellWidthForGoalInputs(inputs))
-		local bucketsByCell: { [number]: { number } } = {}
-		local inputByEntity: { [number]: TFlowFrameInput } = {}
-
-		for _, input in ipairs(inputs) do
-			inputByEntity[input.Entity] = input
-			local gx = math.round(input.FlatPosition.X / cellWidthStuds)
-			local gz = math.round(input.FlatPosition.Y / cellWidthStuds)
-			local key = MovementMath.PackedSeparationCellKey(gx, gz)
-			local bucket = bucketsByCell[key]
-			if bucket == nil then
-				bucket = {}
-				bucketsByCell[key] = bucket
-			end
-			table.insert(bucket, input.Entity)
-		end
-
-		for _, input in ipairs(inputs) do
-			local gx = math.round(input.FlatPosition.X / cellWidthStuds)
-			local gz = math.round(input.FlatPosition.Y / cellWidthStuds)
-			for dx = -1, 1 do
-				for dz = -1, 1 do
-					local bucket = bucketsByCell[MovementMath.PackedSeparationCellKey(gx + dx, gz + dz)]
-					if bucket ~= nil then
-						for _, otherEntity in ipairs(bucket) do
-							if otherEntity ~= input.Entity then
-								local otherInput = inputByEntity[otherEntity]
-								if otherInput ~= nil then
-									local touchDistance = input.Radius + otherInput.Radius + self:_GetFlowClumpTouchPaddingStuds()
-									if (input.FlatPosition - otherInput.FlatPosition).Magnitude <= touchDistance then
-										if input.IsSettled and not otherInput.IsSettled then
-											touched[otherEntity] = true
-										end
-									end
-								end
-							end
-						end
-					end
-				end
-			end
-		end
-
-		return touched
-	end
-
-	function MovementService:_ResolveCellWidthForGoalInputs(inputs: { TFlowFrameInput }): number
-		local maxRadius = 0
-		for _, input in ipairs(inputs) do
-			maxRadius = math.max(maxRadius, input.Radius)
-		end
-		return math.max(4, maxRadius * 2)
-	end
-
 	function MovementService:_BuildFlowSeparationSnapshot(
 		tickId: number,
 		dt: number,
-		inputs: { TFlowFrameInput }
-	): TFlowSeparationSolveSnapshot?
+		inputs: { TFlowFrameInput },
+		inputsByGoalKey: { [string]: { TFlowFrameInput } }
+	): (TFlowSeparationSolveSnapshot?, { [number]: boolean })
 		local _pathfinder, mapping = self:_ResolveFastFlowRuntime()
 		if mapping == nil then
-			return nil
+			return nil, {}
 		end
 
 		local config = self:_GetFlowConfig()
 		local wallPackedKeys = self:_BuildPackedWallKeys()
+		local entityIndexByEntity: { [number]: number } = {}
+		local touchedSettledNeighborByEntity: { [number]: boolean } = {}
 		local snapshot: TFlowSeparationSolveSnapshot = {
 			TickId = tickId,
 			EntityIds = {},
 			GoalGroupId = {},
+			NeighborStartIndex = {},
+			NeighborCount = {},
+			NeighborEntityIndex = {},
 			FlatPositionX = {},
 			FlatPositionY = {},
 			Radius = {},
@@ -512,7 +467,9 @@ return function(MovementService: any)
 				else mapping.GridHalfSize,
 			WallPackedKeys = wallPackedKeys,
 			KForce = if type(config.KForce) == "number" then config.KForce else 80,
-			MinSeparationDistance = if type(config.MinSeparationDistance) == "number" then config.MinSeparationDistance else 1e-4,
+			MinSeparationDistance = if type(config.MinSeparationDistance) == "number"
+				then config.MinSeparationDistance
+				else 1e-4,
 			WallCollisionEnabled = config.WallCollisionEnabled == true,
 			WallCollisionAxisClampEnabled = config.WallCollisionAxisClampEnabled ~= false,
 			WallCollisionCornerClampEnabled = config.WallCollisionCornerClampEnabled ~= false,
@@ -537,9 +494,38 @@ return function(MovementService: any)
 			snapshot.PreviousVelocityY[index] = input.PreviousVelocityXZ.Y
 			snapshot.WalkSpeed[index] = input.WalkSpeed
 			snapshot.VelAlpha[index] = self:_GetFlowVelocityAlpha()
+			entityIndexByEntity[input.Entity] = index
 		end
 
-		return snapshot
+		for _, goalInputs in inputsByGoalKey do
+			local neighborBaseOffset = #snapshot.NeighborEntityIndex
+			local touchedMap, neighborStartIndex, neighborCount, neighborEntityIndex =
+				FlowNeighborhoodMath.BuildGoalNeighborhoodData(
+					goalInputs,
+					entityIndexByEntity,
+					self:_GetFlowClumpTouchPaddingStuds()
+				)
+
+			for entityId, didTouch in touchedMap do
+				if didTouch then
+					touchedSettledNeighborByEntity[entityId] = true
+				end
+			end
+
+			for entityIndex, startIndex in neighborStartIndex do
+				snapshot.NeighborStartIndex[entityIndex] = neighborBaseOffset + startIndex
+			end
+
+			for entityIndex, count in neighborCount do
+				snapshot.NeighborCount[entityIndex] = count
+			end
+
+			for _, otherEntityIndex in ipairs(neighborEntityIndex) do
+				table.insert(snapshot.NeighborEntityIndex, otherEntityIndex)
+			end
+		end
+
+		return snapshot, touchedSettledNeighborByEntity
 	end
 
 	function MovementService:_ResolveLocalVelocityMap(snapshot: TFlowSeparationSolveSnapshot): { [number]: Vector2 }
@@ -547,7 +533,9 @@ return function(MovementService: any)
 		for entityIndex, entityId in ipairs(snapshot.EntityIds) do
 			velocityByEntity[entityId] = FlowSeparationMath.ResolveVelocityWithWalls({
 				EntityIndex = entityIndex,
-				GoalGroupId = snapshot.GoalGroupId,
+				NeighborStartIndex = snapshot.NeighborStartIndex,
+				NeighborCount = snapshot.NeighborCount,
+				NeighborEntityIndex = snapshot.NeighborEntityIndex,
 				FlatPositionX = snapshot.FlatPositionX,
 				FlatPositionY = snapshot.FlatPositionY,
 				Radius = snapshot.Radius,
@@ -605,9 +593,13 @@ return function(MovementService: any)
 		local moveTarget = FlowMath.ComputeMoveTarget(
 			input.Position,
 			finalVelocityXZ,
-			FlowMath.ResolveLookaheadDistanceStuds(input.WalkSpeed, if mapping ~= nil then mapping.CellWidthStuds else nil)
+			FlowMath.ResolveLookaheadDistanceStuds(
+				input.WalkSpeed,
+				if mapping ~= nil then mapping.CellWidthStuds else nil
+			)
 		)
-		local isInsideClumpRadius = MovementMath.XZDistance(input.Position, input.GoalPosition) <= self:_GetFlowClumpRadiusStuds()
+		local isInsideClumpRadius = MovementMath.XZDistance(input.Position, input.GoalPosition)
+			<= self:_GetFlowClumpRadiusStuds()
 
 		return {
 			VelocityXZ = finalVelocityXZ,
@@ -663,21 +655,12 @@ return function(MovementService: any)
 			end
 		end
 
-		local touchedSettledNeighborByEntity: { [number]: boolean } = {}
-		for _, goalInputs in inputsByGoalKey do
-			local touchedMap = self:_BuildTouchedSettledNeighborMap(goalInputs)
-			for entityId, didTouch in touchedMap do
-				if didTouch then
-					touchedSettledNeighborByEntity[entityId] = true
-				end
-			end
-		end
-
 		if #allInputs == 0 then
 			return
 		end
 
-		local snapshot = self:_BuildFlowSeparationSnapshot(tickId, dt, allInputs)
+		local snapshot, touchedSettledNeighborByEntity =
+			self:_BuildFlowSeparationSnapshot(tickId, dt, allInputs, inputsByGoalKey)
 		if snapshot == nil then
 			return
 		end

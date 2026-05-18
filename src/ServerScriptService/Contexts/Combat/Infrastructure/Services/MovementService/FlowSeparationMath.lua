@@ -1,4 +1,6 @@
 --!strict
+--!optimize 2
+--!native
 
 local FlowSeparationMath = {}
 
@@ -106,24 +108,32 @@ end
 
 function FlowSeparationMath.ComputeSeparationForEntity(
 	entityIndex: number,
-	goalGroupIds: { number },
+	neighborStartIndex: { number },
+	neighborCount: { number },
+	neighborEntityIndex: { number },
 	flatPositionX: { number },
 	flatPositionY: { number },
 	radius: { number },
 	kForce: number,
 	minSeparationDistance: number
 ): Vector2
-	local ownGroupId = goalGroupIds[entityIndex]
+	local startIndex = neighborStartIndex[entityIndex]
+	local count = neighborCount[entityIndex]
 	local ownX = flatPositionX[entityIndex]
 	local ownY = flatPositionY[entityIndex]
 	local ownRadius = radius[entityIndex]
-	if type(ownGroupId) ~= "number" or type(ownX) ~= "number" or type(ownY) ~= "number" or type(ownRadius) ~= "number" then
+	if type(startIndex) ~= "number" or type(count) ~= "number" then
+		return Vector2.zero
+	end
+	if type(ownX) ~= "number" or type(ownY) ~= "number" or type(ownRadius) ~= "number" then
 		return Vector2.zero
 	end
 
 	local separation = Vector2.zero
-	for otherIndex = 1, #goalGroupIds do
-		if otherIndex ~= entityIndex and goalGroupIds[otherIndex] == ownGroupId then
+	local lastNeighborIndex = startIndex + count - 1
+	for sliceIndex = startIndex, lastNeighborIndex do
+		local otherIndex = neighborEntityIndex[sliceIndex]
+		if type(otherIndex) == "number" and otherIndex ~= entityIndex then
 			local otherX = flatPositionX[otherIndex]
 			local otherY = flatPositionY[otherIndex]
 			local otherRadius = radius[otherIndex]
@@ -150,7 +160,9 @@ end
 
 function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 	EntityIndex: number,
-	GoalGroupId: { number },
+	NeighborStartIndex: { number },
+	NeighborCount: { number },
+	NeighborEntityIndex: { number },
 	FlatPositionX: { number },
 	FlatPositionY: { number },
 	Radius: { number },
@@ -201,7 +213,9 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 
 	local separation = FlowSeparationMath.ComputeSeparationForEntity(
 		entityIndex,
-		config.GoalGroupId,
+		config.NeighborStartIndex,
+		config.NeighborCount,
+		config.NeighborEntityIndex,
 		config.FlatPositionX,
 		config.FlatPositionY,
 		config.Radius,
@@ -212,7 +226,8 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 	local unclampedVelocityY = flowVelocityY + separation.Y
 	local targetVelocityX = unclampedVelocityX
 	local targetVelocityY = unclampedVelocityY
-	local unclampedMagnitude = math.sqrt(unclampedVelocityX * unclampedVelocityX + unclampedVelocityY * unclampedVelocityY)
+	local unclampedMagnitude =
+		math.sqrt(unclampedVelocityX * unclampedVelocityX + unclampedVelocityY * unclampedVelocityY)
 	if walkSpeed <= 0 then
 		targetVelocityX = 0
 		targetVelocityY = 0
@@ -286,13 +301,8 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 			padding
 		)
 		if blockedCombined then
-			local cornerX, cornerY = _GridToWorldFlat(
-				blockedGx,
-				blockedGy,
-				config.OriginX,
-				config.OriginY,
-				config.CellWidthStuds
-			)
+			local cornerX, cornerY =
+				_GridToWorldFlat(blockedGx, blockedGy, config.OriginX, config.OriginY, config.CellWidthStuds)
 			local cornerDisplacementX = cornerX - flatPositionX
 			local cornerDisplacementY = cornerY - flatPositionY
 			local leftRatio = math.abs(cornerDisplacementY / math.max(math.abs(cornerDisplacementX), 1e-6))

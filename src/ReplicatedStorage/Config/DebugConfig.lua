@@ -10,7 +10,7 @@
 return table.freeze({
 	ENABLED = true, -- Master switch for ALL debug logging
 	RESET_DATA_ON_JOIN = false, -- Wipe player data to template defaults on every join (testing only)
-	SCHEDULER_INTERVAL = 1 / 60, -- Seconds between server scheduler ticks (testing only)
+	SCHEDULER_INTERVAL = 0.1, -- Seconds between server scheduler ticks (testing only)
 	COMBAT_SCHEDULER_PROFILING = true, -- Enables CombatContext scheduler profiling scopes (testing only)
 	AI_RUNTIME_FRAME_PROFILING = true, -- Enables AI.Runtime.RunFrame DebugPlus scopes (testing only)
 	COMBAT_MOVEMENT_PROFILING = true, -- Enables MovementService profiling scopes (testing only)
