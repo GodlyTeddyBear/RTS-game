@@ -8,6 +8,7 @@ local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
 local MovementServiceTypes = {}
 
 export type EnemyMovementMode = EnemyTypes.EnemyMovementMode
+export type TFlowPipelineState = "Idle" | "Dispatching" | "Waiting" | "Publishing"
 
 export type TPathMovementState = {
 	Mode: "Path",
@@ -64,6 +65,7 @@ export type TFlowFrameSolution = {
 
 export type TFlowSeparationSolveSnapshot = {
 	TickId: number,
+	EntityCount: number,
 	EntityIds: { number },
 	GoalGroupId: { number },
 	NeighborStartIndex: { number },
@@ -98,6 +100,13 @@ export type TFlowSeparationSolveRow = {
 	EntityIndex: number,
 	VelocityX: number,
 	VelocityY: number,
+}
+
+export type TFlowPublishedSolve = {
+	TickId: number,
+	VelocityByEntity: { [number]: Vector2 },
+	TouchedSettledNeighborByEntity: { [number]: boolean },
+	GoalKeyByEntity: { [number]: string },
 }
 
 export type TManagedJob = ParallelQuery.TManagedJob

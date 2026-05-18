@@ -5,7 +5,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
 local FlowSeparationMath =
-	require(ServerScriptService.Contexts.Combat.Infrastructure.Services.MovementService.FlowSeparationMath)
+	require(ServerScriptService.Contexts.Combat.Infrastructure.Services.MovementService.Math.FlowSeparationMath)
 
 local OPERATION_NAME = "FlowSeparationSolve"
 
@@ -23,6 +23,7 @@ FlowSeparationSolveOperation = ParallelQuery.Operation.DefineCached({
 			return emptyRow
 		end
 
+		local entityCount = memory.EntityCount
 		local goalGroupId = memory.GoalGroupId
 		local neighborStartIndex = memory.NeighborStartIndex
 		local neighborCount = memory.NeighborCount
@@ -49,7 +50,10 @@ FlowSeparationSolveOperation = ParallelQuery.Operation.DefineCached({
 		if walkSpeed == nil or velAlpha == nil or wallPackedKeys == nil then
 			return emptyRow
 		end
-		if taskId < 1 or taskId > #goalGroupId then
+		if type(entityCount) ~= "number" then
+			return emptyRow
+		end
+		if taskId < 1 or taskId > entityCount then
 			return emptyRow
 		end
 

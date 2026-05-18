@@ -26,32 +26,35 @@ export type TGroupedRecord<T> = TRecord<T> & {
 
 local Records = {}
 
-function Records.CreateRecord<T>(): TRecord<T>
-	return {
-		Value = nil,
-		HasValue = false,
-		IsDirty = true,
-		LastResolvedTime = nil,
-	}
+function Records.CreateRecord<T>(recordTable: { [any]: any }?): TRecord<T>
+	local record = if recordTable ~= nil then recordTable else {}
+	record.Value = nil
+	record.HasValue = false
+	record.IsDirty = true
+	record.LastResolvedTime = nil
+	return record :: any
 end
 
-function Records.CreateGroupRecord(): TGroupRecord
-	return {
-		Facts = {},
-		HasValue = false,
-		IsDirty = true,
-		LastResolvedTime = nil,
-	}
+function Records.CreateGroupRecord(recordTable: { [any]: any }?): TGroupRecord
+	local record = if recordTable ~= nil then recordTable else {}
+	record.Facts = {}
+	record.HasValue = false
+	record.IsDirty = true
+	record.LastResolvedTime = nil
+	return record :: any
 end
 
-function Records.CreateGroupedRecord<T>(): TGroupedRecord<T>
-	return {
-		Value = nil,
-		HasValue = false,
-		IsDirty = true,
-		LastResolvedTime = nil,
-		Groups = {},
-	}
+function Records.CreateGroupedRecord<T>(
+	recordTable: { [any]: any }?,
+	groupsTable: { [any]: any }?
+): TGroupedRecord<T>
+	local record = if recordTable ~= nil then recordTable else {}
+	record.Value = nil
+	record.HasValue = false
+	record.IsDirty = true
+	record.LastResolvedTime = nil
+	record.Groups = if groupsTable ~= nil then groupsTable else {}
+	return record :: any
 end
 
 function Records.TouchRecord<T>(record: TRecord<T>, value: T, currentTime: number)
@@ -69,6 +72,24 @@ function Records.TouchGroupRecord(record: TGroupRecord, facts: { [string]: any }
 end
 
 function Records.ClearRecord<T>(record: TRecord<T>)
+	record.Value = nil
+	record.HasValue = false
+	record.IsDirty = true
+	record.LastResolvedTime = nil
+end
+
+function Records.ResetRecordForRecycle<T>(record: TRecord<T>)
+	Records.ClearRecord(record)
+end
+
+function Records.ResetGroupRecordForRecycle(record: TGroupRecord)
+	record.Facts = nil :: any
+	record.HasValue = false
+	record.IsDirty = true
+	record.LastResolvedTime = nil
+end
+
+function Records.ResetGroupedRecordForRecycle<T>(record: TGroupedRecord<T>)
 	record.Value = nil
 	record.HasValue = false
 	record.IsDirty = true

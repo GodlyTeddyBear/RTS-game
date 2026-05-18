@@ -26,7 +26,7 @@ end
 
 local function _BinarySearchContains(sortedValues: { number }, value: number): boolean
 	local low = 1
-	local high = #sortedValues
+	local high = SharedTable.size(sortedValues)
 	while low <= high do
 		local mid = math.floor((low + high) * 0.5)
 		local midValue = sortedValues[mid]

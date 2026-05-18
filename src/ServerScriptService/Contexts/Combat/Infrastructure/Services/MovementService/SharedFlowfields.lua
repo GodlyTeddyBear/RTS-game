@@ -5,7 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
 local MovementTypes = require(script.Parent.Types)
-local MovementMath = require(script.Parent.MovementMath)
+local MovementMath = require(script.Parent.Math.MovementMath)
 
 type TSharedFlowfieldEntry = MovementTypes.TSharedFlowfieldEntry
 

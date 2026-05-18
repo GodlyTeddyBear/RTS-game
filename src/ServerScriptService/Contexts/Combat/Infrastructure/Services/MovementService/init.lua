@@ -3,12 +3,46 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
+local StateMachine = require(ReplicatedStorage.Utilities.StateMachine)
 local MovementTypes = require(script.Types)
 
 type EnemyMovementMode = MovementTypes.EnemyMovementMode
 type TMovementState = MovementTypes.TMovementState
 type TSharedFlowfieldEntry = MovementTypes.TSharedFlowfieldEntry
 type TFlowActorRefs = MovementTypes.TFlowActorRefs
+type TFlowPipelineState = MovementTypes.TFlowPipelineState
+
+local FLOW_PIPELINE_TRANSITIONS: { [TFlowPipelineState]: { [TFlowPipelineState]: boolean } } = {
+	Idle = {
+		Dispatching = true,
+	},
+	Dispatching = {
+		Idle = true,
+		Waiting = true,
+	},
+	Waiting = {
+		Idle = true,
+		Publishing = true,
+	},
+	Publishing = {
+		Idle = true,
+	},
+}
+
+local function _CreateFlowPipelineStateMachine()
+	return StateMachine.new({
+		InitialState = "Idle" :: TFlowPipelineState,
+		Transitions = FLOW_PIPELINE_TRANSITIONS,
+		ErrorType = "IllegalFlowPipelineTransition",
+		ErrorMessage = "Flow pipeline transition is not allowed",
+		ErrorDataBuilder = function(fromState: TFlowPipelineState, toState: TFlowPipelineState)
+			return {
+				From = fromState,
+				To = toState,
+			}
+		end,
+	})
+end
 
 local MovementService = {}
 MovementService.__index = MovementService
@@ -16,6 +50,8 @@ MovementService.__index = MovementService
 require(script.ActorRefs)(MovementService)
 require(script.PathMovement)(MovementService)
 require(script.SharedFlowfields)(MovementService)
+require(script.FlowSnapshot)(MovementService)
+require(script.FlowPipeline)(MovementService)
 require(script.FlowMovement)(MovementService)
 
 function MovementService.new()
@@ -30,14 +66,16 @@ function MovementService.new()
 	self._flowActorRefsByEntity = {} :: { [number]: TFlowActorRefs }
 	self._flowVelocityByEntity = {} :: { [number]: Vector2 }
 	self._flowFrameSerial = 0
-	self._flowPreparedTickId = nil :: number?
-	self._flowFrameInputsByEntity = {}
-	self._flowFrameSolutionsByEntity = {}
+	self._flowPipelineStateMachine = _CreateFlowPipelineStateMachine()
+	self._flowPipelineTickId = nil :: number?
 	self._flowInvalidReasonByEntity = {}
 	self._flowCurrentSessionUserId = nil :: number?
 	self._flowSeparationParallelRunner = nil
 	self._flowSeparationManagedJob = nil
 	self._flowLatestParallelSolve = nil
+	self._flowDispatchedSeparationSnapshot = nil
+	self._flowDispatchedTouchedSettledNeighborByEntity = nil
+	self._flowDispatchedGoalKeyByEntity = nil
 	self._flowWallKeyCachePathfinder = nil
 	self._flowWallPackedKeys = nil
 	self._flowWallGridHalfSize = nil
@@ -76,20 +114,24 @@ function MovementService:FinalizeAdvanceFrame()
 end
 
 function MovementService:ResetFastFlowRuntime()
+	self:_ReleaseFlowLatestParallelSolve()
+	self:_ReleaseFlowDispatchedSeparationSnapshot()
 	table.clear(self._sharedFlowfieldsByGoalKey)
 	table.clear(self._flowGoalKeyByEntity)
 	table.clear(self._activeFlowEntitiesByGoalKey)
 	table.clear(self._flowSettledByEntity)
 	table.clear(self._flowVelocityByEntity)
-	self._flowPreparedTickId = nil
-	self._flowFrameInputsByEntity = {}
-	self._flowFrameSolutionsByEntity = {}
+	self._flowPipelineTickId = nil
 	self._flowInvalidReasonByEntity = {}
 	self._flowLatestParallelSolve = nil
+	self._flowDispatchedTouchedSettledNeighborByEntity = nil
+	self._flowDispatchedGoalKeyByEntity = nil
 	self._flowWallKeyCachePathfinder = nil
 	self._flowWallPackedKeys = nil
 	self._flowWallGridHalfSize = nil
 	self:_DestroyFlowSeparationRunner()
+	self._flowPipelineStateMachine:Destroy()
+	self._flowPipelineStateMachine = _CreateFlowPipelineStateMachine()
 end
 
 function MovementService:StartAdvance(entity: number, movementMode: EnemyMovementMode): (boolean, string?)

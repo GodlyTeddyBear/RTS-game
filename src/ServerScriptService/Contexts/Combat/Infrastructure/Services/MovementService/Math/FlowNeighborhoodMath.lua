@@ -3,7 +3,7 @@
 --!native
 
 local MovementMath = require(script.Parent.MovementMath)
-local MovementTypes = require(script.Parent.Types)
+local MovementTypes = require(script.Parent.Parent.Types)
 
 type TFlowFrameInput = MovementTypes.TFlowFrameInput
 
