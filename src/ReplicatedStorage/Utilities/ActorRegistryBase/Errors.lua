@@ -131,6 +131,54 @@ Errors.INVALID_SETUP_MISSING_RUNTIME_IDS_BY_ACTOR_TYPE = "ActorRegistryBase setu
 Errors.INVALID_SETUP_MISSING_PENDING_ACTOR_PAYLOADS = "ActorRegistryBase setup is missing _pendingActorPayloadsByHandle"
 
 --[=[
+    @prop INVALID_SETUP_MISSING_RUNTIME_QUEUE string
+    @within Errors
+    @readonly
+    Returned when shared setup validation cannot find the runtime FIFO queue table.
+]=]
+Errors.INVALID_SETUP_MISSING_RUNTIME_QUEUE = "ActorRegistryBase setup is missing _runtimeQueue"
+
+--[=[
+    @prop INVALID_SETUP_MISSING_RUNTIME_QUEUE_MEMBERSHIP string
+    @within Errors
+    @readonly
+    Returned when shared setup validation cannot find the runtime FIFO membership table.
+]=]
+Errors.INVALID_SETUP_MISSING_RUNTIME_QUEUE_MEMBERSHIP = "ActorRegistryBase setup is missing _runtimeQueueMembership"
+
+--[=[
+    @prop INVALID_SETUP_NON_NUMERIC_RUNTIME_QUEUE_CURSOR string
+    @within Errors
+    @readonly
+    Returned when the runtime FIFO cursor is not numeric during setup validation.
+]=]
+Errors.INVALID_SETUP_NON_NUMERIC_RUNTIME_QUEUE_CURSOR = "ActorRegistryBase setup has a non-numeric _runtimeQueueCursor"
+
+--[=[
+    @prop INVALID_SETUP_NON_NUMERIC_SELECTED_TICK_ID string
+    @within Errors
+    @readonly
+    Returned when the cached selected tick id is neither nil nor numeric during setup validation.
+]=]
+Errors.INVALID_SETUP_NON_NUMERIC_SELECTED_TICK_ID = "ActorRegistryBase setup has a non-numeric _selectedTickId"
+
+--[=[
+    @prop INVALID_SETUP_MISSING_SELECTED_GLOBAL_BATCH string
+    @within Errors
+    @readonly
+    Returned when shared setup validation cannot find the cached selected global batch table.
+]=]
+Errors.INVALID_SETUP_MISSING_SELECTED_GLOBAL_BATCH = "ActorRegistryBase setup is missing _selectedGlobalBatch"
+
+--[=[
+    @prop INVALID_SETUP_MISSING_SELECTED_BY_ACTOR_TYPE string
+    @within Errors
+    @readonly
+    Returned when shared setup validation cannot find the cached selected-by-actor-type table.
+]=]
+Errors.INVALID_SETUP_MISSING_SELECTED_BY_ACTOR_TYPE = "ActorRegistryBase setup is missing _selectedByActorType"
+
+--[=[
     @prop INVALID_SETUP_NON_NUMERIC_NEXT_RUNTIME_ID string
     @within Errors
     @readonly

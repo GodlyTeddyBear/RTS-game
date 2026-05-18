@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BaseAIRuntimeService = require(ReplicatedStorage.Utilities.BaseAIRuntimeService)
+local BehaviorConfig = require(ReplicatedStorage.Contexts.Combat.Config.BehaviorConfig)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 local ActorAdapterHook = require(script.Parent.Parent.BehaviorSystem.Hooks.ActorAdapterHook)
 
@@ -30,6 +31,8 @@ function CombatBehaviorRuntimeService.new()
 		Errors = Errors,
 		UseDirectCombatHookPath = true,
 		UseCachedActiveEntityProvider = true,
+		UseRuntimeQueue = true,
+		MaxActorsPerTick = BehaviorConfig.RUNTIME_QUEUE.MaxActorsPerTick,
 	})
 	return setmetatable(self, CombatBehaviorRuntimeService)
 end

@@ -53,9 +53,10 @@ end
 	@within ProcessCombatTick
 	@param userId number -- Combat session owner to tick.
 	@param dt number -- Delta time in seconds for the frame.
+	@param schedulerTickId number -- Outer combat scheduler frame id shared by all session ticks this frame.
 	@return Result.Result<boolean> -- Whether the tick ran successfully.
 ]=]
-function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<boolean>
+function ProcessCombatTick:Execute(userId: number, dt: number, schedulerTickId: number): Result.Result<boolean>
 	return Result.Catch(function()
 		local isRunnable = DebugPlus.profile(processSessionsIsRunnableProfileTag, function()
 			return self._loopService:IsRunnable(userId)
@@ -65,12 +66,11 @@ function ProcessCombatTick:Execute(userId: number, dt: number): Result.Result<bo
 		end
 
 		local currentTime = os.clock()
-		local tickId = self._loopService:AdvanceTickId()
 		local ok, frameResult = pcall(function()
 			return DebugPlus.profile(processSessionsRunFrameProfileTag, function()
 				return self._behaviorRuntimeService:RunFrame({
 					CurrentTime = currentTime,
-					TickId = tickId,
+					TickId = schedulerTickId,
 					DeltaTime = dt,
 					Services = {
 						CombatActorRegistryService = self._actorRegistryService,

@@ -23,6 +23,8 @@ local REQUIRED_RUNTIME_METHODS = table.freeze({
 	"UpdateLastTickTime",
 	"ShouldEvaluate",
 	"CancelActor",
+	"ResolveSelectedBatchForTick",
+	"GetSelectedRuntimeIdsForActorType",
 })
 
 local SetupValidationPolicy = {}

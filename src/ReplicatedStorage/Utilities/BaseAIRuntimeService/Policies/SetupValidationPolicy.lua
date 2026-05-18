@@ -24,6 +24,8 @@ local REQUIRED_ACTOR_REGISTRY_METHODS = table.freeze({
 	"UpdateLastTickTime",
 	"ShouldEvaluate",
 	"CancelActor",
+	"ResolveSelectedBatchForTick",
+	"GetSelectedRuntimeIdsForActorType",
 })
 
 local SetupValidationPolicy = {}

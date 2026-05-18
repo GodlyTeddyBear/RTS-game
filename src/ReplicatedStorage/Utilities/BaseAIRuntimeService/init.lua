@@ -22,6 +22,8 @@ export type TBaseAIRuntimeConfig = {
 	Errors: TBaseAIRuntimeErrors,
 	UseDirectCombatHookPath: boolean?,
 	UseCachedActiveEntityProvider: boolean?,
+	UseRuntimeQueue: boolean?,
+	MaxActorsPerTick: number?,
 }
 
 export type TBaseAIRuntimeService = typeof(setmetatable({} :: {
@@ -35,6 +37,8 @@ export type TBaseAIRuntimeService = typeof(setmetatable({} :: {
 	_errors: TBaseAIRuntimeErrors,
 	_useDirectCombatHookPath: boolean,
 	_useCachedActiveEntityProvider: boolean,
+	_useRuntimeQueue: boolean,
+	_maxActorsPerTick: number?,
 }, {} :: any))
 
 type Result<T> = Result.Result<T>
@@ -58,6 +62,15 @@ function BaseAIRuntimeService.new(config: TBaseAIRuntimeConfig): TBaseAIRuntimeS
 	local contextLabel = config.RuntimeLabel:match("^(.-):") or config.RuntimeLabel
 	local self = setmetatable({}, BaseAIRuntimeService)
 
+	if config.UseRuntimeQueue == true then
+		assert(
+			type(config.MaxActorsPerTick) == "number"
+				and config.MaxActorsPerTick > 0
+				and math.floor(config.MaxActorsPerTick) == config.MaxActorsPerTick,
+			"BaseAIRuntimeService MaxActorsPerTick must be a positive integer when UseRuntimeQueue is enabled"
+		)
+	end
+
 	self._runtime = nil
 	self._actorRegistryService = nil
 	self._runtimeLabel = config.RuntimeLabel
@@ -68,6 +81,8 @@ function BaseAIRuntimeService.new(config: TBaseAIRuntimeConfig): TBaseAIRuntimeS
 	self._errors = config.Errors
 	self._useDirectCombatHookPath = config.UseDirectCombatHookPath == true
 	self._useCachedActiveEntityProvider = config.UseCachedActiveEntityProvider == true
+	self._useRuntimeQueue = config.UseRuntimeQueue == true
+	self._maxActorsPerTick = config.MaxActorsPerTick
 
 	return self
 end
@@ -372,7 +387,15 @@ function BaseAIRuntimeService:_AppendHooks(target: { any }, hooks: { any }?)
 end
 
 function BaseAIRuntimeService:_CreateRegistryAdapter(actorType: string): any
-	local queryActiveEntities = if self._useCachedActiveEntityProvider
+	local queryActiveEntities = if self._useRuntimeQueue
+		then function(frameContext: any): { number }
+			return self._actorRegistryService:GetSelectedRuntimeIdsForActorType(
+				actorType,
+				self._maxActorsPerTick or 0,
+				frameContext.TickId
+			)
+		end
+		elseif self._useCachedActiveEntityProvider
 		then function(_frameContext: any): { number }
 			return self._actorRegistryService:QueryCachedActiveRuntimeIds(actorType)
 		end

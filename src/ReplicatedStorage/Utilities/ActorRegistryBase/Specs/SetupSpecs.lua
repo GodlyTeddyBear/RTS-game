@@ -60,6 +60,22 @@ local HasPendingActorPayloadsTable = Spec.new(
 	end
 )
 
+local HasRuntimeQueueTable = Spec.new(
+	"InvalidActorRegistrySetup",
+	Errors.INVALID_SETUP_MISSING_RUNTIME_QUEUE,
+	function(candidate: TRegistrySetupCandidate): boolean
+		return type(candidate.Registry._runtimeQueue) == "table"
+	end
+)
+
+local HasRuntimeQueueMembershipTable = Spec.new(
+	"InvalidActorRegistrySetup",
+	Errors.INVALID_SETUP_MISSING_RUNTIME_QUEUE_MEMBERSHIP,
+	function(candidate: TRegistrySetupCandidate): boolean
+		return type(candidate.Registry._runtimeQueueMembership) == "table"
+	end
+)
+
 local HasNumericNextRuntimeId = Spec.new(
 	"InvalidActorRegistrySetup",
 	Errors.INVALID_SETUP_NON_NUMERIC_NEXT_RUNTIME_ID,
@@ -73,6 +89,39 @@ local HasBooleanRuntimeStartedFlag = Spec.new(
 	Errors.INVALID_SETUP_NON_BOOLEAN_RUNTIME_STARTED_FLAG,
 	function(candidate: TRegistrySetupCandidate): boolean
 		return type(candidate.Registry._runtimeStarted) == "boolean"
+	end
+)
+
+local HasNumericRuntimeQueueCursor = Spec.new(
+	"InvalidActorRegistrySetup",
+	Errors.INVALID_SETUP_NON_NUMERIC_RUNTIME_QUEUE_CURSOR,
+	function(candidate: TRegistrySetupCandidate): boolean
+		return type(candidate.Registry._runtimeQueueCursor) == "number"
+	end
+)
+
+local HasNumericOrNilSelectedTickId = Spec.new(
+	"InvalidActorRegistrySetup",
+	Errors.INVALID_SETUP_NON_NUMERIC_SELECTED_TICK_ID,
+	function(candidate: TRegistrySetupCandidate): boolean
+		local selectedTickId = candidate.Registry._selectedTickId
+		return selectedTickId == nil or type(selectedTickId) == "number"
+	end
+)
+
+local HasSelectedGlobalBatchTable = Spec.new(
+	"InvalidActorRegistrySetup",
+	Errors.INVALID_SETUP_MISSING_SELECTED_GLOBAL_BATCH,
+	function(candidate: TRegistrySetupCandidate): boolean
+		return type(candidate.Registry._selectedGlobalBatch) == "table"
+	end
+)
+
+local HasSelectedByActorTypeTable = Spec.new(
+	"InvalidActorRegistrySetup",
+	Errors.INVALID_SETUP_MISSING_SELECTED_BY_ACTOR_TYPE,
+	function(candidate: TRegistrySetupCandidate): boolean
+		return type(candidate.Registry._selectedByActorType) == "table"
 	end
 )
 
@@ -107,8 +156,14 @@ return table.freeze({
 		HasRuntimeIdsByHandleTable,
 		HasRuntimeIdsByActorTypeTable,
 		HasPendingActorPayloadsTable,
+		HasRuntimeQueueTable,
+		HasRuntimeQueueMembershipTable,
 		HasNumericNextRuntimeId,
 		HasBooleanRuntimeStartedFlag,
+		HasNumericRuntimeQueueCursor,
+		HasNumericOrNilSelectedTickId,
+		HasSelectedGlobalBatchTable,
+		HasSelectedByActorTypeTable,
 	}),
 	HasHookFunction = HasHookFunction,
 	HasOverriddenHook = HasOverriddenHook,

@@ -35,6 +35,12 @@ function ActorRegistryBase.new()
 	self._activeRuntimeIdsByActorType = {}
 	self._activeRuntimeIdMembershipByActorType = {}
 	self._pendingActorPayloadsByHandle = {}
+	self._runtimeQueue = {}
+	self._runtimeQueueMembership = {}
+	self._runtimeQueueCursor = 1
+	self._selectedTickId = nil
+	self._selectedGlobalBatch = {}
+	self._selectedByActorType = {}
 	self._nextRuntimeId = 0
 	self._runtimeStarted = false
 	return self
@@ -108,6 +114,7 @@ function ActorRegistryBase:RegisterActor(payload: any, buildContext: any?): any
 	self._recordsByRuntimeId[runtimeId] = record
 	self._runtimeIdsByHandle[payload.ActorHandle] = runtimeId
 	table.insert(self._runtimeIdsByActorType[payload.ActorType], runtimeId)
+	self:_AppendRuntimeQueueId(runtimeId)
 	self:_TryAddActiveRuntimeId(record)
 
 	return Ok(payload.ActorHandle)
@@ -363,6 +370,115 @@ function ActorRegistryBase:QueryCachedActiveRuntimeIds(actorType: string): { num
 end
 
 --[=[
+    Returns the cached or newly resolved global FIFO selection for one scheduler tick.
+    @within ActorRegistryBase
+    @param batchSize number -- Maximum active runtime ids to select for the tick
+    @param tickId number -- Outer scheduler frame id used to cache the selection
+    @return { number } -- Selected runtime ids in FIFO order
+]=]
+function ActorRegistryBase:ResolveSelectedBatchForTick(batchSize: number, tickId: number): { number }
+	if self._selectedTickId == tickId then
+		return self._selectedGlobalBatch
+	end
+
+	if batchSize <= 0 then
+		self._selectedTickId = tickId
+		self._selectedGlobalBatch = {}
+		self._selectedByActorType = {}
+		return self._selectedGlobalBatch
+	end
+
+	local queueLength = #self._runtimeQueue
+	if queueLength == 0 then
+		self._runtimeQueueCursor = 1
+		self._selectedTickId = tickId
+		self._selectedGlobalBatch = {}
+		self._selectedByActorType = {}
+		return self._selectedGlobalBatch
+	end
+
+	local cursor = self._runtimeQueueCursor
+	if cursor < 1 or cursor > queueLength then
+		cursor = 1
+	end
+
+	local selectedGlobalBatch = {}
+	local selectedByActorType = {}
+	local selectedMembership = {}
+	local inspectedSlots = 0
+	local currentIndex = cursor
+	local lastVisitedIndex = nil
+
+	while inspectedSlots < queueLength and #selectedGlobalBatch < batchSize do
+		local runtimeId = self._runtimeQueue[currentIndex]
+		inspectedSlots += 1
+		lastVisitedIndex = currentIndex
+
+		if runtimeId ~= nil and self._runtimeQueueMembership[runtimeId] == true then
+			local record = self._recordsByRuntimeId[runtimeId]
+			if record == nil then
+				self._runtimeQueueMembership[runtimeId] = nil
+			elseif selectedMembership[runtimeId] ~= true and self:_IsRecordActive(record) then
+				selectedMembership[runtimeId] = true
+				table.insert(selectedGlobalBatch, runtimeId)
+
+				local actorType = record.ActorType
+				local actorTypeBatch = selectedByActorType[actorType]
+				if actorTypeBatch == nil then
+					actorTypeBatch = {}
+					selectedByActorType[actorType] = actorTypeBatch
+				end
+
+				table.insert(actorTypeBatch, runtimeId)
+			end
+		end
+
+		currentIndex += 1
+		if currentIndex > queueLength then
+			currentIndex = 1
+		end
+	end
+
+	if lastVisitedIndex ~= nil then
+		self._runtimeQueueCursor = lastVisitedIndex + 1
+		if self._runtimeQueueCursor > queueLength then
+			self._runtimeQueueCursor = 1
+		end
+	else
+		self._runtimeQueueCursor = cursor
+	end
+
+	self._selectedTickId = tickId
+	self._selectedGlobalBatch = selectedGlobalBatch
+	self._selectedByActorType = selectedByActorType
+
+	return selectedGlobalBatch
+end
+
+--[=[
+    Returns the actor-type-specific subset of the cached global FIFO selection for one scheduler tick.
+    @within ActorRegistryBase
+    @param actorType string -- Actor type to project from the cached global selection
+    @param batchSize number -- Maximum active runtime ids to select for the tick
+    @param tickId number -- Outer scheduler frame id used to cache the selection
+    @return { number } -- Selected runtime ids for the requested actor type
+]=]
+function ActorRegistryBase:GetSelectedRuntimeIdsForActorType(
+	actorType: string,
+	batchSize: number,
+	tickId: number
+): { number }
+	self:ResolveSelectedBatchForTick(batchSize, tickId)
+
+	local selectedRuntimeIds = self._selectedByActorType[actorType]
+	if selectedRuntimeIds == nil then
+		return {}
+	end
+
+	return selectedRuntimeIds
+end
+
+--[=[
     Clears all registry state and resets runtime counters.
     @within ActorRegistryBase
 ]=]
@@ -374,6 +490,12 @@ function ActorRegistryBase:ClearAll()
 	table.clear(self._activeRuntimeIdsByActorType)
 	table.clear(self._activeRuntimeIdMembershipByActorType)
 	table.clear(self._pendingActorPayloadsByHandle)
+	table.clear(self._runtimeQueue)
+	table.clear(self._runtimeQueueMembership)
+	table.clear(self._selectedGlobalBatch)
+	table.clear(self._selectedByActorType)
+	self._runtimeQueueCursor = 1
+	self._selectedTickId = nil
 	self._nextRuntimeId = 0
 	self._runtimeStarted = false
 end
@@ -401,6 +523,15 @@ function ActorRegistryBase:_RemoveRuntimeId(runtimeId: number)
 			return
 		end
 	end
+end
+
+function ActorRegistryBase:_AppendRuntimeQueueId(runtimeId: number)
+	if self._runtimeQueueMembership[runtimeId] == true then
+		return
+	end
+
+	self._runtimeQueueMembership[runtimeId] = true
+	table.insert(self._runtimeQueue, runtimeId)
 end
 
 function ActorRegistryBase:_TryAddActiveRuntimeId(record: any)

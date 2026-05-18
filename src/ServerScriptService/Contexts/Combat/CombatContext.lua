@@ -223,9 +223,10 @@ function CombatContext:KnitStart()
 			end, schedulerProfilingEnabled)
 
 			local didRunCombatFrame = false
+			local schedulerTickId = self._combatLoopService:AdvanceTickId()
 			DebugPlus.profile(combatProcessSessionsProfileTag, function()
 				self._combatLoopService:ForEachSession(function(userId: number)
-					local tickResult = self._processCombatTickCommand:Execute(userId, dt)
+					local tickResult = self._processCombatTickCommand:Execute(userId, dt, schedulerTickId)
 					if tickResult.success and tickResult.value then
 						didRunCombatFrame = true
 					end

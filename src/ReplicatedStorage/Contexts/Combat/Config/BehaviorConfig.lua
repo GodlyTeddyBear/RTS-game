@@ -31,4 +31,8 @@ BehaviorConfig.DEFAULT = table.freeze({
 	TickInterval = 0.15,
 })
 
+BehaviorConfig.RUNTIME_QUEUE = table.freeze({
+	MaxActorsPerTick = 10,
+})
+
 return table.freeze(BehaviorConfig)
