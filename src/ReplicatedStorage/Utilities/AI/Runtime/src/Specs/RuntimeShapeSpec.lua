@@ -237,6 +237,53 @@ local HasDeltaTimeNumberOrNil = Spec.new(
 	end
 )
 
+local HasTickStartedAtNumberOrNil = Spec.new(
+	"InvalidFrameContext",
+	"AiRuntime frameContext.TickStartedAt must be a finite number when present",
+	function(candidate: TFrameContextCandidate): boolean
+		local frameContext = candidate.FrameContext
+		if type(frameContext) ~= "table" then
+			return true
+		end
+
+		local tickStartedAt = frameContext.TickStartedAt
+		return tickStartedAt == nil or (type(tickStartedAt) == "number" and _IsFiniteNumber(tickStartedAt))
+	end
+)
+
+local HasTickDeadlineNumberOrNil = Spec.new(
+	"InvalidFrameContext",
+	"AiRuntime frameContext.TickDeadline must be a finite number when present",
+	function(candidate: TFrameContextCandidate): boolean
+		local frameContext = candidate.FrameContext
+		if type(frameContext) ~= "table" then
+			return true
+		end
+
+		local tickDeadline = frameContext.TickDeadline
+		return tickDeadline == nil or (type(tickDeadline) == "number" and _IsFiniteNumber(tickDeadline))
+	end
+)
+
+local HasValidTickBudgetWindow = Spec.new(
+	"InvalidFrameContext",
+	"AiRuntime frameContext.TickDeadline must not be earlier than TickStartedAt",
+	function(candidate: TFrameContextCandidate): boolean
+		local frameContext = candidate.FrameContext
+		if type(frameContext) ~= "table" then
+			return true
+		end
+
+		local tickStartedAt = frameContext.TickStartedAt
+		local tickDeadline = frameContext.TickDeadline
+		if tickStartedAt == nil or tickDeadline == nil then
+			return true
+		end
+
+		return tickDeadline >= tickStartedAt
+	end
+)
+
 local HasServicesTableOrNil = Spec.new(
 	"InvalidFrameContext",
 	"AiRuntime frameContext.Services must be a table when present",
@@ -409,6 +456,9 @@ return table.freeze({
 		HasFrameContextTable,
 		HasCurrentTimeNumber,
 		HasTickIdNumber,
+		HasTickStartedAtNumberOrNil,
+		HasTickDeadlineNumberOrNil,
+		HasValidTickBudgetWindow,
 		HasDeltaTimeNumberOrNil,
 		HasServicesTableOrNil,
 		HasActorTypesArrayOrNil,

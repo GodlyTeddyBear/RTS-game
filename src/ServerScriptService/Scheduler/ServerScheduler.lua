@@ -36,6 +36,17 @@ local Phases = require(script.Parent.Phases)
     .JabbyName string -- The display name used in the Jabby scheduler UI
 ]=]
 type TQueuedSystem = { SystemFn: (...any) -> any, PhaseName: string, JabbyName: string }
+type TCombatRuntimeEstimate = {
+	SchedulerIntervalSeconds: number,
+	TicksPerSecond: number,
+	TickBudgetSeconds: number,
+	TickBudgetMilliseconds: number,
+	EstimatedRuntimePerSecondSeconds: number,
+	EstimatedRuntimePerSecondMilliseconds: number,
+	ExceedsTickBudgetMillisecondsWarning: boolean,
+	ExceedsRuntimeMillisecondsWarning: boolean,
+	ExceedsTickRateWarning: boolean,
+}
 
 local ServerScheduler = {}
 
@@ -118,7 +129,123 @@ function ServerScheduler:GetDeltaTime(): number
 	return _currentDeltaTime
 end
 
+function ServerScheduler:CalculateCombatRuntimeEstimate(): TCombatRuntimeEstimate
+	local schedulerInterval = DebugConfig.SCHEDULER_INTERVAL
+	local tickBudgetSeconds = DebugConfig.COMBAT_TICK_TIME_BUDGET_SECONDS
+	local tickBudgetMillisecondsWarningThreshold = DebugConfig.COMBAT_RUNTIME_ESTIMATE_WARN_MILLISECONDS_PER_TICK
+	local runtimeMillisecondsWarningThreshold = DebugConfig.COMBAT_RUNTIME_ESTIMATE_WARN_MILLISECONDS_PER_SECOND
+	local ticksPerSecondWarningThreshold = DebugConfig.COMBAT_RUNTIME_ESTIMATE_WARN_TICKS_PER_SECOND
+
+	if schedulerInterval <= 0 or tickBudgetSeconds <= 0 then
+		return {
+			SchedulerIntervalSeconds = schedulerInterval,
+			TicksPerSecond = 0,
+			TickBudgetSeconds = tickBudgetSeconds,
+			TickBudgetMilliseconds = 0,
+			EstimatedRuntimePerSecondSeconds = 0,
+			EstimatedRuntimePerSecondMilliseconds = 0,
+			ExceedsTickBudgetMillisecondsWarning = false,
+			ExceedsRuntimeMillisecondsWarning = false,
+			ExceedsTickRateWarning = false,
+		}
+	end
+
+	local ticksPerSecond = 1 / schedulerInterval
+	local tickBudgetMilliseconds = tickBudgetSeconds / DebugConfig.MILLISECOND
+	local estimatedRuntimePerSecondSeconds = ticksPerSecond * tickBudgetSeconds
+	local estimatedRuntimePerSecondMilliseconds = estimatedRuntimePerSecondSeconds / DebugConfig.MILLISECOND
+
+	return {
+		SchedulerIntervalSeconds = schedulerInterval,
+		TicksPerSecond = ticksPerSecond,
+		TickBudgetSeconds = tickBudgetSeconds,
+		TickBudgetMilliseconds = tickBudgetMilliseconds,
+		EstimatedRuntimePerSecondSeconds = estimatedRuntimePerSecondSeconds,
+		EstimatedRuntimePerSecondMilliseconds = estimatedRuntimePerSecondMilliseconds,
+		ExceedsTickBudgetMillisecondsWarning = tickBudgetMillisecondsWarningThreshold > 0
+			and tickBudgetSeconds >= tickBudgetMillisecondsWarningThreshold,
+		ExceedsRuntimeMillisecondsWarning = runtimeMillisecondsWarningThreshold > 0
+			and estimatedRuntimePerSecondSeconds >= runtimeMillisecondsWarningThreshold,
+		ExceedsTickRateWarning = ticksPerSecondWarningThreshold > 0
+			and ticksPerSecond >= ticksPerSecondWarningThreshold,
+	}
+end
+
+function ServerScheduler:LogCombatRuntimeEstimate()
+	local runtimeEstimate = self:CalculateCombatRuntimeEstimate()
+
+	warn(
+		string.format(
+			"[ServerScheduler] Combat runtime estimate: %.2f ticks/sec * %.3f ms budget = %.2f ms/sec",
+			runtimeEstimate.TicksPerSecond,
+			runtimeEstimate.TickBudgetMilliseconds,
+			runtimeEstimate.EstimatedRuntimePerSecondMilliseconds
+		)
+	)
+
+	self:_WarnIfCombatRuntimeEstimateExceedsRecommendedBounds(runtimeEstimate)
+end
+
 -- ── Private ──────────────────────────────────────────────────────────────────
+
+function ServerScheduler:_WarnIfCombatRuntimeEstimateExceedsRecommendedBounds(runtimeEstimate: TCombatRuntimeEstimate)
+	if runtimeEstimate.TicksPerSecond <= 0 or runtimeEstimate.TickBudgetSeconds <= 0 then
+		return
+	end
+
+	if
+		not runtimeEstimate.ExceedsTickBudgetMillisecondsWarning
+		and not runtimeEstimate.ExceedsRuntimeMillisecondsWarning
+		and not runtimeEstimate.ExceedsTickRateWarning
+	then
+		return
+	end
+
+	local exceededBounds = {}
+
+	if runtimeEstimate.ExceedsTickBudgetMillisecondsWarning then
+		table.insert(
+			exceededBounds,
+			string.format(
+				"tick budget %.3f ms/tick exceeds recommended combat-script warn bound %.3f ms/tick",
+				runtimeEstimate.TickBudgetMilliseconds,
+				DebugConfig.COMBAT_RUNTIME_ESTIMATE_WARN_MILLISECONDS_PER_TICK / DebugConfig.MILLISECOND
+			)
+		)
+	end
+
+	if runtimeEstimate.ExceedsRuntimeMillisecondsWarning then
+		table.insert(
+			exceededBounds,
+			string.format(
+				"runtime %.2f ms/sec exceeds recommended combat-script warn bound %.2f ms/sec",
+				runtimeEstimate.EstimatedRuntimePerSecondMilliseconds,
+				DebugConfig.COMBAT_RUNTIME_ESTIMATE_WARN_MILLISECONDS_PER_SECOND / DebugConfig.MILLISECOND
+			)
+		)
+	end
+
+	if runtimeEstimate.ExceedsTickRateWarning then
+		table.insert(
+			exceededBounds,
+			string.format(
+				"tick rate %.2f ticks/sec exceeds warn bound %.2f ticks/sec",
+				runtimeEstimate.TicksPerSecond,
+				DebugConfig.COMBAT_RUNTIME_ESTIMATE_WARN_TICKS_PER_SECOND
+			)
+		)
+	end
+
+	warn(
+		string.format(
+			"[ServerScheduler] Estimated combat runtime exceeds recommended combat-script bounds (does not include Roblox engine/internal frame cost): %.2f ticks/sec, %.3f ms/tick, %.2f ms/sec | %s",
+			runtimeEstimate.TicksPerSecond,
+			runtimeEstimate.TickBudgetMilliseconds,
+			runtimeEstimate.EstimatedRuntimePerSecondMilliseconds,
+			table.concat(exceededBounds, "; ")
+		)
+	)
+end
 
 function ServerScheduler:_AddSystemImmediately(systemFn: (...any) -> any, phaseName: string)
 	local systemId = _jabbyScheduler:register_system({

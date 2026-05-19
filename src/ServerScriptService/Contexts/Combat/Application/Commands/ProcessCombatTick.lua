@@ -19,6 +19,7 @@ local processSessionsRunFrameProfileTag = "Combat.Scheduler.CombatTick.ProcessSe
 local processSessionsNotifyActorResultsProfileTag = "Combat.Scheduler.CombatTick.ProcessSessions.NotifyActorResults"
 local processSessionsNotifyActorResultsIterateProfileTag =
 	"Combat.Scheduler.CombatTick.ProcessSessions.NotifyActorResults.Iterate"
+local processSessionsLogBudgetExceededProfileTag = "Combat.Scheduler.CombatTick.ProcessSessions.LogBudgetExceeded"
 
 local ProcessCombatTick = {}
 ProcessCombatTick.__index = ProcessCombatTick
@@ -66,14 +67,23 @@ function ProcessCombatTick:Execute(userId: number, dt: number, schedulerTickId: 
 		end
 
 		local currentTime = os.clock()
+		local tickStartedAt = currentTime
+		local tickBudgetSeconds = DebugConfig.COMBAT_TICK_TIME_BUDGET_SECONDS
+		local tickDeadline = if type(tickBudgetSeconds) == "number" and tickBudgetSeconds > 0
+			then tickStartedAt + tickBudgetSeconds
+			else nil
 		local ok, frameResult = pcall(function()
 			return DebugPlus.profile(processSessionsRunFrameProfileTag, function()
 				return self._behaviorRuntimeService:RunFrame({
 					CurrentTime = currentTime,
 					TickId = schedulerTickId,
+					TickStartedAt = tickStartedAt,
+					TickDeadline = tickDeadline,
 					DeltaTime = dt,
 					Services = {
 						CombatActorRegistryService = self._actorRegistryService,
+						TickStartedAt = tickStartedAt,
+						TickDeadline = tickDeadline,
 					},
 				})
 			end, schedulerProfilingEnabled)
@@ -81,12 +91,29 @@ function ProcessCombatTick:Execute(userId: number, dt: number, schedulerTickId: 
 		if not ok then
 			error(frameResult)
 		end
+		DebugPlus.profile(processSessionsLogBudgetExceededProfileTag, function()
+			self:_LogBudgetExceeded(userId, frameResult)
+		end, schedulerProfilingEnabled)
 		DebugPlus.profile(processSessionsNotifyActorResultsProfileTag, function()
 			self:_NotifyActorResults(frameResult)
 		end, schedulerProfilingEnabled)
 
 		return Ok(true)
 	end, self:_Label())
+end
+
+function ProcessCombatTick:_LogBudgetExceeded(userId: number, frameResult: any)
+	if frameResult.StopReason ~= "TimeBudgetExceeded" then
+		return
+	end
+
+	Result.MentionEvent(self:_Label(), "Combat time budget exceeded", {
+		UserId = userId,
+		StopReason = frameResult.StopReason,
+		SelectedActorCount = frameResult.SelectedActorCount,
+		ServicedActorCount = frameResult.ServicedActorCount,
+		RemainingSelectedActorCount = frameResult.RemainingSelectedActorCount,
+	})
 end
 
 function ProcessCombatTick:_NotifyActorResults(frameResult: any)

@@ -7,6 +7,7 @@ NevermoreLoader.bootstrapGame(NevermoreFolder)
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Jabby = require(ReplicatedStorage.Packages.Jabby)
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 
 local ServerScheduler = require(script.Parent.Scheduler.ServerScheduler)
 local EntityCollisionService = require(script.Parent.Infrastructure.EntityCollisionService)
@@ -30,8 +31,16 @@ Knit.Start()
 				return player.UserId == DEVELOPER_USER_ID
 			end)
 		end)
-
+	end)
+	:andThen(function()
 		ServerScheduler:Initialize()
+	end)
+	:andThen(function()
 		EntityCollisionService:Initialize()
+	end)
+	:finally(function()
+		if DebugConfig.ENABLED == true then
+			ServerScheduler:LogCombatRuntimeEstimate()
+		end
 	end)
 	:catch(warn)

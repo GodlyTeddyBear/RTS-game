@@ -41,6 +41,8 @@ function ActorRegistryBase.new()
 	self._selectedTickId = nil
 	self._selectedGlobalBatch = {}
 	self._selectedByActorType = {}
+	self._selectedServicedMembership = {}
+	self._selectedServicedCount = 0
 	self._nextRuntimeId = 0
 	self._runtimeStarted = false
 	return self
@@ -381,6 +383,9 @@ function ActorRegistryBase:ResolveSelectedBatchForTick(batchSize: number, tickId
 		return self._selectedGlobalBatch
 	end
 
+	self._selectedServicedMembership = {}
+	self._selectedServicedCount = 0
+
 	if batchSize <= 0 then
 		self._selectedTickId = tickId
 		self._selectedGlobalBatch = {}
@@ -439,15 +444,6 @@ function ActorRegistryBase:ResolveSelectedBatchForTick(batchSize: number, tickId
 		end
 	end
 
-	if lastVisitedIndex ~= nil then
-		self._runtimeQueueCursor = lastVisitedIndex + 1
-		if self._runtimeQueueCursor > queueLength then
-			self._runtimeQueueCursor = 1
-		end
-	else
-		self._runtimeQueueCursor = cursor
-	end
-
 	self._selectedTickId = tickId
 	self._selectedGlobalBatch = selectedGlobalBatch
 	self._selectedByActorType = selectedByActorType
@@ -479,6 +475,36 @@ function ActorRegistryBase:GetSelectedRuntimeIdsForActorType(
 end
 
 --[=[
+    Marks one runtime id as fully serviced for the selected scheduler tick and rotates it to the queue tail.
+    @within ActorRegistryBase
+    @param runtimeId number -- Runtime id that finished its frame work.
+    @param tickId number -- Scheduler tick id that owns the cached selected batch.
+    @return boolean -- Whether the runtime id was part of the selected batch and was marked serviced.
+]=]
+function ActorRegistryBase:MarkRuntimeIdServiced(runtimeId: number, tickId: number): boolean
+	if self._selectedTickId ~= tickId then
+		return false
+	end
+
+	if self._selectedServicedMembership[runtimeId] == true then
+		return false
+	end
+
+	if table.find(self._selectedGlobalBatch, runtimeId) == nil then
+		return false
+	end
+
+	self._selectedServicedMembership[runtimeId] = true
+	self._selectedServicedCount += 1
+
+	if self._runtimeQueueMembership[runtimeId] == true and self._recordsByRuntimeId[runtimeId] ~= nil then
+		self:_MoveRuntimeIdToQueueTail(runtimeId)
+	end
+
+	return true
+end
+
+--[=[
     Clears all registry state and resets runtime counters.
     @within ActorRegistryBase
 ]=]
@@ -494,8 +520,10 @@ function ActorRegistryBase:ClearAll()
 	table.clear(self._runtimeQueueMembership)
 	table.clear(self._selectedGlobalBatch)
 	table.clear(self._selectedByActorType)
+	table.clear(self._selectedServicedMembership)
 	self._runtimeQueueCursor = 1
 	self._selectedTickId = nil
+	self._selectedServicedCount = 0
 	self._nextRuntimeId = 0
 	self._runtimeStarted = false
 end
@@ -532,6 +560,22 @@ function ActorRegistryBase:_AppendRuntimeQueueId(runtimeId: number)
 
 	self._runtimeQueueMembership[runtimeId] = true
 	table.insert(self._runtimeQueue, runtimeId)
+end
+
+function ActorRegistryBase:_MoveRuntimeIdToQueueTail(runtimeId: number)
+	local queueLength = #self._runtimeQueue
+	if queueLength <= 1 then
+		return
+	end
+
+	for index, queuedRuntimeId in ipairs(self._runtimeQueue) do
+		if queuedRuntimeId == runtimeId then
+			table.remove(self._runtimeQueue, index)
+			table.insert(self._runtimeQueue, runtimeId)
+			self._runtimeQueueCursor = 1
+			return
+		end
+	end
 end
 
 function ActorRegistryBase:_TryAddActiveRuntimeId(record: any)

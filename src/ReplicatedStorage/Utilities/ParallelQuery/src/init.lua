@@ -499,7 +499,7 @@ function ParallelQuery:Run(
 	local settled = false
 	local cleanedUp = false
 	local dispatchHandle: TDispatchHandle? = nil
-	local timeoutThread: thread? = nil
+	local timeoutPromise: typeof(Promise.delay(0))? = nil
 
 	self:_IncrementActiveRun(operationName)
 
@@ -510,9 +510,9 @@ function ParallelQuery:Run(
 
 		cleanedUp = true
 
-		if timeoutThread ~= nil then
-			task.cancel(timeoutThread)
-			timeoutThread = nil
+		if timeoutPromise ~= nil then
+			timeoutPromise:cancel()
+			timeoutPromise = nil
 		end
 
 		failureConnection:Disconnect()
@@ -536,7 +536,7 @@ function ParallelQuery:Run(
 	end
 
 	if request.TimeoutSeconds ~= nil then
-		timeoutThread = task.delay(request.TimeoutSeconds, function()
+		timeoutPromise = Promise.delay(request.TimeoutSeconds):andThen(function()
 			local closeTimeoutProfile = Profiling.BeginOperationScope(self._profile, operationName, "Timeout")
 			settle(nil, {
 				Kind = "Timeout",
@@ -553,22 +553,25 @@ function ParallelQuery:Run(
 		paddedWorkCount,
 		batchSize,
 		function(flattenedResults)
-			task.defer(function()
+			Promise.defer(function(resolve)
 				local closeCompleteProfile = Profiling.BeginOperationScope(self._profile, operationName, "Complete")
 				if settled then
 					closeCompleteProfile()
+					resolve()
 					return
 				end
 
 				if #failureReports > 0 then
 					settle(nil, _BuildWorkerError(operationName, failureReports), false)
 					closeCompleteProfile()
+					resolve()
 					return
 				end
 
 				local rows = _BuildDecodedRows(operation.Schema, flattenedResults, workCount)
 				settle(rows, nil, false)
 				closeCompleteProfile()
+				resolve()
 			end)
 		end,
 		false,

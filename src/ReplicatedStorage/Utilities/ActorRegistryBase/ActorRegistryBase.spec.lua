@@ -87,7 +87,7 @@ local function registerActor(registry: any, actorType: string, actorHandle: stri
 end
 
 describe("ActorRegistryBase FIFO selection", function()
-	it("selects 100 actors in four 25-sized FIFO ticks before wraparound", function()
+	it("only advances FIFO order after selected actors are explicitly marked serviced", function()
 		local registry = TestRegistry.new()
 		registerActorType(registry, "Enemy")
 
@@ -96,9 +96,21 @@ describe("ActorRegistryBase FIFO selection", function()
 		end
 
 		local first = registry:ResolveSelectedBatchForTick(25, 1)
+		for _, runtimeId in ipairs(first) do
+			registry:MarkRuntimeIdServiced(runtimeId, 1)
+		end
 		local second = registry:ResolveSelectedBatchForTick(25, 2)
+		for _, runtimeId in ipairs(second) do
+			registry:MarkRuntimeIdServiced(runtimeId, 2)
+		end
 		local third = registry:ResolveSelectedBatchForTick(25, 3)
+		for _, runtimeId in ipairs(third) do
+			registry:MarkRuntimeIdServiced(runtimeId, 3)
+		end
 		local fourth = registry:ResolveSelectedBatchForTick(25, 4)
+		for _, runtimeId in ipairs(fourth) do
+			registry:MarkRuntimeIdServiced(runtimeId, 4)
+		end
 		local fifth = registry:ResolveSelectedBatchForTick(25, 5)
 
 		expect(#first).toBe(25)
@@ -129,9 +141,21 @@ describe("ActorRegistryBase FIFO selection", function()
 		expect(firstTickBatchAgain).toBe(firstTickBatch)
 		expect(table.find(firstTickBatchAgain, newRuntimeId)).toBeNil()
 
-		registry:ResolveSelectedBatchForTick(25, 2)
-		registry:ResolveSelectedBatchForTick(25, 3)
-		registry:ResolveSelectedBatchForTick(25, 4)
+		for _, runtimeId in ipairs(firstTickBatch) do
+			registry:MarkRuntimeIdServiced(runtimeId, 1)
+		end
+		local secondTickBatch = registry:ResolveSelectedBatchForTick(25, 2)
+		for _, runtimeId in ipairs(secondTickBatch) do
+			registry:MarkRuntimeIdServiced(runtimeId, 2)
+		end
+		local thirdTickBatch = registry:ResolveSelectedBatchForTick(25, 3)
+		for _, runtimeId in ipairs(thirdTickBatch) do
+			registry:MarkRuntimeIdServiced(runtimeId, 3)
+		end
+		local fourthTickBatch = registry:ResolveSelectedBatchForTick(25, 4)
+		for _, runtimeId in ipairs(fourthTickBatch) do
+			registry:MarkRuntimeIdServiced(runtimeId, 4)
+		end
 		local fifthTickBatch = registry:ResolveSelectedBatchForTick(25, 5)
 
 		expect(fifthTickBatch[1]).toBe(newRuntimeId)
@@ -168,6 +192,9 @@ describe("ActorRegistryBase FIFO selection", function()
 
 		local firstBatch = registry:ResolveSelectedBatchForTick(2, 1)
 		expect(firstBatch).toEqual({ 1, 3 })
+		for _, runtimeId in ipairs(firstBatch) do
+			registry:MarkRuntimeIdServiced(runtimeId, 1)
+		end
 
 		local inactiveRecord = registry:GetRecord(inactiveRuntimeId)
 		expect(inactiveRecord).never.toBeNil()
@@ -209,5 +236,23 @@ describe("ActorRegistryBase FIFO selection", function()
 		expect(registry._selectedTickId).toBeNil()
 		expect(#registry._selectedGlobalBatch).toBe(0)
 		expect(next(registry._selectedByActorType)).toBeNil()
+	end)
+
+	it("keeps unserviced selected actors at the front for spillback on the next tick", function()
+		local registry = TestRegistry.new()
+		registerActorType(registry, "Enemy")
+
+		for index = 1, 5 do
+			registerActor(registry, "Enemy", ("Enemy-%d"):format(index))
+		end
+
+		local firstTickBatch = registry:ResolveSelectedBatchForTick(5, 1)
+		expect(firstTickBatch).toEqual({ 1, 2, 3, 4, 5 })
+
+		expect(registry:MarkRuntimeIdServiced(1, 1)).toBe(true)
+		expect(registry:MarkRuntimeIdServiced(2, 1)).toBe(true)
+
+		local secondTickBatch = registry:ResolveSelectedBatchForTick(5, 2)
+		expect(secondTickBatch).toEqual({ 3, 4, 5, 1, 2 })
 	end)
 end)

@@ -147,9 +147,12 @@ export type TErrorSinkPayload = {
 export type TFrameContext = {
 	CurrentTime: number,
 	TickId: number,
+	TickStartedAt: number?,
+	TickDeadline: number?,
 	DeltaTime: number?,
 	Services: { [string]: any }?,
 	ActorTypes: { string }?,
+	OnActorServiced: ((entity: number, actorType: string) -> ())?,
 }
 
 --[=[
@@ -186,6 +189,10 @@ export type TRunFrameEntityResult = {
 export type TRunFrameResult = {
 	EntityResults: { TRunFrameEntityResult },
 	Defects: { TErrorSinkPayload },
+	SelectedActorCount: number,
+	ServicedActorCount: number,
+	RemainingSelectedActorCount: number,
+	StopReason: string?,
 }
 
 --[=[

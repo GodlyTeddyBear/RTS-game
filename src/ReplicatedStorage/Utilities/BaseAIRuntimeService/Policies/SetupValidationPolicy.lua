@@ -26,6 +26,7 @@ local REQUIRED_ACTOR_REGISTRY_METHODS = table.freeze({
 	"CancelActor",
 	"ResolveSelectedBatchForTick",
 	"GetSelectedRuntimeIdsForActorType",
+	"MarkRuntimeIdServiced",
 })
 
 local SetupValidationPolicy = {}

@@ -203,10 +203,26 @@ function BaseAIRuntimeService:RunFrame(frameContext: any): any
 		return {
 			EntityResults = {},
 			Defects = {},
+			SelectedActorCount = 0,
+			ServicedActorCount = 0,
+			RemainingSelectedActorCount = 0,
+			StopReason = nil,
 		}
 	end
 
-	return self._runtime:RunFrame(frameContext)
+	local runtimeFrameContext = table.clone(frameContext)
+	local baseServices = if type(frameContext.Services) == "table" then table.clone(frameContext.Services) else {}
+	runtimeFrameContext.Services = baseServices
+
+	if self._useRuntimeQueue then
+		local tickId = frameContext.TickId
+		self._actorRegistryService:ResolveSelectedBatchForTick(self._maxActorsPerTick or 0, tickId)
+		runtimeFrameContext.OnActorServiced = function(entity: number, _actorType: string)
+			self._actorRegistryService:MarkRuntimeIdServiced(entity, tickId)
+		end
+	end
+
+	return self._runtime:RunFrame(runtimeFrameContext)
 end
 
 function BaseAIRuntimeService:CancelActorAction(actorType: string, runtimeId: number, frameContext: any): any

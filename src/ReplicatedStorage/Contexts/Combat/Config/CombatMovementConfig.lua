@@ -61,7 +61,7 @@ CombatMovementConfig.FASTFLOW_VISUALIZATION = table.freeze({
 	YLevelOffset = 0.2,
 	ShowWalls = true,
 	ShowCellGrid = false,
-	ShowChunkGrid = true,
+	ShowChunkGrid = false,
 	ShowHPA = false,
 })
 
@@ -131,15 +131,15 @@ CombatMovementConfig.FLOW_SOFT_SEPARATION = table.freeze({
 	-- Master switch for worker-based separation and velocity solves.
 	ParallelEnabled = true,
 	-- Number of worker actors available for separation jobs.
-	ParallelActorCount = 128,
+	ParallelActorCount = 64,
 	-- Minimum entity count before velocity solving is offloaded to workers.
-	ParallelMinVelocityEntityCount = 1,
+	ParallelMinVelocityEntityCount = 2,
 	-- Chunk size used when dispatching velocity solve work.
-	ParallelVelocityBatchSize = 4,
+	ParallelVelocityBatchSize = 16,
 	-- Timeout for velocity solve worker jobs.
-	ParallelVelocityTimeoutSeconds = 1,
+	ParallelVelocityTimeoutSeconds = 2,
 	-- Maximum time a worker job may stay in flight before it is dropped.
-	ParallelAsyncMaxInFlightSeconds = 1,
+	ParallelAsyncMaxInFlightSeconds = 2,
 	-- Example-faithful wall collision controls for the live flow movement solve.
 	WallCollisionEnabled = true,
 	WallCollisionAxisClampEnabled = true,

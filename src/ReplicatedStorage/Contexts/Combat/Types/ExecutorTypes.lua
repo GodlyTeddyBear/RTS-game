@@ -85,6 +85,8 @@ export type TBehaviorConfigComponent = {
 	.BaseContext any -- Base context public damage API.
 	.CurrentTime number -- Timestamp shared across executor calls for one tick.
 	.TickId number -- Stable per-frame id shared across executor calls for one tick.
+	.TickStartedAt number? -- Optional wall-clock timestamp captured when the combat frame started.
+	.TickDeadline number? -- Optional wall-clock deadline for the current combat frame.
 	.HandleGoalReached any -- Command used to resolve goal-reaching enemies.
 	.HitboxService any -- Combat hitbox service for contact-confirmed attacks.
 	.MovementService any -- Combat movement service for pathfinding and boids movement.
@@ -101,6 +103,8 @@ export type TExecutorServices = {
 	BaseContext: any,
 	CurrentTime: number,
 	TickId: number,
+	TickStartedAt: number?,
+	TickDeadline: number?,
 	HandleGoalReached: any,
 	HitboxService: any,
 	MovementService: any,

@@ -71,6 +71,7 @@ local _BuildCleanupResult
 local _CreateRuntimeFrameProfile
 local _CaptureMilliseconds
 local _BuildDirectCombatHookOutcome
+local _ShouldStopForTimeBudget
 
 local runFrameActorTypesProfileTag = "AI.Runtime.RunFrame.ActorTypes"
 local runFrameResolveActorTypesProfileTag = "AI.Runtime.RunFrame.ResolveActorTypes"
@@ -272,6 +273,10 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 	local defects = {}
 	local entityResults = {}
 	local frameProfile = _CreateRuntimeFrameProfile()
+	local selectedEntitiesByActorType = {}
+	local selectedActorCount = 0
+	local servicedActorCount = 0
+	local stopReason = nil
 	local actorTypes = DebugPlus.profile(runFrameResolveActorTypesProfileTag, function()
 		return _ResolveActorTypes(frameContext, self._actorAdapters, self._actorOrder)
 	end, runFrameProfilingEnabled)
@@ -280,22 +285,51 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 		DebugPlus.profile(runFrameActorTypesIterateProfileTag, function()
 			for _, actorType in ipairs(actorTypes) do
 				local adapter = self._actorAdapters[actorType]
-				-- Build a single snapshot list so the later phases work from the same entity set.
-				local entityStates =
-					self:_BuildEntityStates(actorType, adapter, frameContext, defects, entityResults, frameProfile)
+				local enumerationStartedAt = if frameProfile ~= nil then os.clock() else nil
+				local entities = adapter:QueryActiveEntities(frameContext)
+				Validation.ValidateQueryActiveEntitiesResult(actorType, entities)
+				if frameProfile ~= nil then
+					frameProfile.ActorEnumerationMilliseconds += _CaptureMilliseconds(enumerationStartedAt)
+				end
 
-				-- Tree evaluation decides whether the entity should issue a new pending action.
-				DebugPlus.profile(runFrameActorTypesTreePhaseProfileTag, function()
-					self:_RunTreePhase(entityStates, frameContext, defects, frameProfile)
-				end, runFrameProfilingEnabled)
-				-- Transition handling promotes pending actions into the active action slot.
-				DebugPlus.profile(runFrameActorTypesTransitionPhaseProfileTag, function()
-					self:_RunTransitionPhase(entityStates, frameContext, defects, frameProfile)
-				end, runFrameProfilingEnabled)
-				-- Tick handling advances the active action and resolves terminal results.
-				DebugPlus.profile(runFrameActorTypesActionPhaseProfileTag, function()
-					self:_RunActionPhase(entityStates, frameContext, defects, frameProfile)
-				end, runFrameProfilingEnabled)
+				selectedEntitiesByActorType[actorType] = entities
+				selectedActorCount += #entities
+			end
+
+			for _, actorType in ipairs(actorTypes) do
+				local adapter = self._actorAdapters[actorType]
+				local entities = selectedEntitiesByActorType[actorType]
+				if entities == nil then
+					continue
+				end
+
+				for _, entity in ipairs(entities) do
+					if servicedActorCount > 0 and _ShouldStopForTimeBudget(frameContext) then
+						stopReason = "TimeBudgetExceeded"
+						return
+					end
+
+					local entityState =
+						self:_BuildEntityState(actorType, adapter, entity, frameContext, defects, entityResults, frameProfile)
+					local singleEntityStates = { entityState }
+
+					DebugPlus.profile(runFrameActorTypesTreePhaseProfileTag, function()
+						self:_RunTreePhase(singleEntityStates, frameContext, defects, frameProfile)
+					end, runFrameProfilingEnabled)
+					DebugPlus.profile(runFrameActorTypesTransitionPhaseProfileTag, function()
+						self:_RunTransitionPhase(singleEntityStates, frameContext, defects, frameProfile)
+					end, runFrameProfilingEnabled)
+					DebugPlus.profile(runFrameActorTypesActionPhaseProfileTag, function()
+						self:_RunActionPhase(singleEntityStates, frameContext, defects, frameProfile)
+					end, runFrameProfilingEnabled)
+
+					servicedActorCount += 1
+
+					local onActorServiced = frameContext.OnActorServiced
+					if type(onActorServiced) == "function" then
+						onActorServiced(entityState.Entity, actorType)
+					end
+				end
 			end
 		end, runFrameProfilingEnabled)
 	end, runFrameProfilingEnabled)
@@ -306,6 +340,10 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 	return table.freeze({
 		EntityResults = entityResults,
 		Defects = defects,
+		SelectedActorCount = selectedActorCount,
+		ServicedActorCount = servicedActorCount,
+		RemainingSelectedActorCount = math.max(selectedActorCount - servicedActorCount, 0),
+		StopReason = stopReason,
 	})
 end
 
@@ -341,103 +379,10 @@ function Runtime:_BuildEntityStates(
 
 	DebugPlus.profile(runFrameBuildEntityStatesIterateProfileTag, function()
 		for _, entity in ipairs(entities) do
-			Validation.ValidateEntityId(actorType, entity, "QueryActiveEntities")
-			if frameProfile ~= nil then
-				frameProfile.ActorCount += 1
-			end
-
-			-- Seed a result record before the per-phase work fills in status fields.
-			local result = {
-				ActorType = actorType,
-				Entity = entity,
-				TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name,
-				StartStatus = nil,
-				CommitStatus = nil,
-				TickActionId = nil,
-				TickStatus = nil,
-				ResolveStatus = nil,
-			}
-			table.insert(entityResults, result)
-
-			local actionStateStartedAt = if frameProfile ~= nil then os.clock() else nil
-			local workingActionState = nil :: TActionState?
-			local behaviorTree = nil :: TCompiledBehaviorTree?
-			local hasCurrentAction = false
-			local hasPendingAction = false
-			local shouldEvaluateTree = false
-			DebugPlus.profile(runFrameBuildEntityStatesReadEntitySnapshotProfileTag, function()
-				local actionStateSnapshot = adapter:GetActionState(entity)
-				Validation.ValidateActionState(actionStateSnapshot, "AiRuntime BuildEntityStates GetActionState")
-				workingActionState = _CloneActionState(actionStateSnapshot)
-				if frameProfile ~= nil then
-					frameProfile.InitialActionStateMilliseconds += _CaptureMilliseconds(actionStateStartedAt)
-				end
-				behaviorTree = adapter:GetCompiledBehaviorTree(entity)
-				Validation.ValidateBehaviorTree(actorType, entity, behaviorTree)
-				hasCurrentAction = type((workingActionState :: TActionState).CurrentActionId) == "string"
-				hasPendingAction = type((workingActionState :: TActionState).PendingActionId) == "string"
-				if behaviorTree ~= nil then
-					shouldEvaluateTree = adapter:ShouldEvaluate(entity, frameContext.CurrentTime)
-					Validation.ValidateShouldEvaluateResult(actorType, entity, shouldEvaluateTree)
-				end
-			end, runFrameProfilingEnabled)
-			local resolvedWorkingActionState = workingActionState :: TActionState
-
-			if behaviorTree == nil then
-				result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name
-			elseif not shouldEvaluateTree then
-				result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNotReady.Name
-			end
-
-			local skipAllPhases = not hasCurrentAction and not hasPendingAction and not shouldEvaluateTree
-			local needsTransitionPhase = hasPendingAction or shouldEvaluateTree
-			local needsActionPhase = hasCurrentAction or hasPendingAction or shouldEvaluateTree
-			local needsFacts = shouldEvaluateTree
-			local hookOutcome = EMPTY_HOOK_OUTCOME
-
-			if frameProfile ~= nil then
-				if skipAllPhases then
-					frameProfile.FullSkipCount += 1
-				elseif shouldEvaluateTree then
-					frameProfile.TreeEvaluatedCount += 1
-				else
-					frameProfile.ActionOnlyCount += 1
-				end
-			end
-
-			if not skipAllPhases then
-				hookOutcome = DebugPlus.profile(runFrameBuildEntityStatesBuildHookOutcomeProfileTag, function()
-					return self:_BuildHookOutcome(
-						actorType,
-						entity,
-						adapter,
-						resolvedWorkingActionState,
-						frameContext,
-						defects,
-						needsFacts,
-						shouldEvaluateTree,
-						hasCurrentAction or hasPendingAction or shouldEvaluateTree,
-						frameProfile
-					)
-				end, runFrameProfilingEnabled)
-			end
-
-			table.insert(entityStates, {
-				Entity = entity,
-				ActorType = actorType,
-				Adapter = adapter,
-				WorkingActionState = resolvedWorkingActionState,
-				Result = result,
-				HookOutcome = hookOutcome,
-				BehaviorTree = behaviorTree,
-				ShouldEvaluateTree = shouldEvaluateTree,
-				NeedsTransitionPhase = needsTransitionPhase,
-				NeedsActionPhase = needsActionPhase,
-				NeedsFacts = needsFacts,
-				SkipAllPhases = skipAllPhases,
-				TreeTouchedActionState = false,
-				NeedsAdapterRefreshAfterTree = shouldEvaluateTree,
-			})
+			table.insert(
+				entityStates,
+				self:_BuildEntityState(actorType, adapter, entity, frameContext, defects, entityResults, frameProfile)
+			)
 		end
 	end, runFrameProfilingEnabled)
 
@@ -446,6 +391,118 @@ function Runtime:_BuildEntityStates(
 	end
 
 	return entityStates
+end
+
+function Runtime:_BuildEntityState(
+	actorType: string,
+	adapter: TActorAdapter,
+	entity: number,
+	frameContext: TFrameContext,
+	defects: { TErrorSinkPayload },
+	entityResults: { TRunFrameEntityResult },
+	frameProfile: TRuntimeFrameProfile?
+): TEntityFrameState
+	local buildEntityStateStartedAt = if frameProfile ~= nil then os.clock() else nil
+	Validation.ValidateEntityId(actorType, entity, "QueryActiveEntities")
+	if frameProfile ~= nil then
+		frameProfile.ActorCount += 1
+	end
+
+	local result = {
+		ActorType = actorType,
+		Entity = entity,
+		TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name,
+		StartStatus = nil,
+		CommitStatus = nil,
+		TickActionId = nil,
+		TickStatus = nil,
+		ResolveStatus = nil,
+	}
+	table.insert(entityResults, result)
+
+	local actionStateStartedAt = if frameProfile ~= nil then os.clock() else nil
+	local workingActionState = nil :: TActionState?
+	local behaviorTree = nil :: TCompiledBehaviorTree?
+	local hasCurrentAction = false
+	local hasPendingAction = false
+	local shouldEvaluateTree = false
+	DebugPlus.profile(runFrameBuildEntityStatesReadEntitySnapshotProfileTag, function()
+		local actionStateSnapshot = adapter:GetActionState(entity)
+		Validation.ValidateActionState(actionStateSnapshot, "AiRuntime BuildEntityStates GetActionState")
+		workingActionState = _CloneActionState(actionStateSnapshot)
+		if frameProfile ~= nil then
+			frameProfile.InitialActionStateMilliseconds += _CaptureMilliseconds(actionStateStartedAt)
+		end
+		behaviorTree = adapter:GetCompiledBehaviorTree(entity)
+		Validation.ValidateBehaviorTree(actorType, entity, behaviorTree)
+		hasCurrentAction = type((workingActionState :: TActionState).CurrentActionId) == "string"
+		hasPendingAction = type((workingActionState :: TActionState).PendingActionId) == "string"
+		if behaviorTree ~= nil then
+			shouldEvaluateTree = adapter:ShouldEvaluate(entity, frameContext.CurrentTime)
+			Validation.ValidateShouldEvaluateResult(actorType, entity, shouldEvaluateTree)
+		end
+	end, runFrameProfilingEnabled)
+	local resolvedWorkingActionState = workingActionState :: TActionState
+
+	if behaviorTree == nil then
+		result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name
+	elseif not shouldEvaluateTree then
+		result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNotReady.Name
+	end
+
+	local skipAllPhases = not hasCurrentAction and not hasPendingAction and not shouldEvaluateTree
+	local needsTransitionPhase = hasPendingAction or shouldEvaluateTree
+	local needsActionPhase = hasCurrentAction or hasPendingAction or shouldEvaluateTree
+	local needsFacts = shouldEvaluateTree
+	local hookOutcome = EMPTY_HOOK_OUTCOME
+
+	if frameProfile ~= nil then
+		if skipAllPhases then
+			frameProfile.FullSkipCount += 1
+		elseif shouldEvaluateTree then
+			frameProfile.TreeEvaluatedCount += 1
+		else
+			frameProfile.ActionOnlyCount += 1
+		end
+	end
+
+	if not skipAllPhases then
+		hookOutcome = DebugPlus.profile(runFrameBuildEntityStatesBuildHookOutcomeProfileTag, function()
+			return self:_BuildHookOutcome(
+				actorType,
+				entity,
+				adapter,
+				resolvedWorkingActionState,
+				frameContext,
+				defects,
+				needsFacts,
+				shouldEvaluateTree,
+				hasCurrentAction or hasPendingAction or shouldEvaluateTree,
+				frameProfile
+			)
+		end, runFrameProfilingEnabled)
+	end
+
+	if frameProfile ~= nil then
+		frameProfile.BuildEntityStateMilliseconds += _CaptureMilliseconds(buildEntityStateStartedAt)
+	end
+
+	return {
+		Entity = entity,
+		ActorType = actorType,
+		Adapter = adapter,
+		WorkingActionState = resolvedWorkingActionState,
+		Result = result,
+		HookOutcome = hookOutcome,
+		BehaviorTree = behaviorTree,
+		ShouldEvaluateTree = shouldEvaluateTree,
+		NeedsTransitionPhase = needsTransitionPhase,
+		NeedsActionPhase = needsActionPhase,
+		NeedsFacts = needsFacts,
+		SkipAllPhases = skipAllPhases,
+		TreeTouchedActionState = false,
+		NeedsAdapterRefreshAfterTree = shouldEvaluateTree,
+	}
 end
 
 --[=[
@@ -1069,6 +1126,11 @@ function _CaptureMilliseconds(startedAt: number?): number
 	end
 
 	return (os.clock() - startedAt) * 1000
+end
+
+function _ShouldStopForTimeBudget(frameContext: TFrameContext): boolean
+	local tickDeadline = frameContext.TickDeadline
+	return type(tickDeadline) == "number" and os.clock() >= tickDeadline
 end
 
 function _BuildDirectCombatHookOutcome(
