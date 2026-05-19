@@ -22,6 +22,7 @@ local PIPELINE_DISPATCHING_DISPATCH_PROFILE_TAG = "Combat:MovementService:Flow:A
 local CONSUME_COMPLETED_SOLVE_PROFILE_TAG = "Combat:MovementService:Flow:ConsumeCompletedSolve"
 local TRY_DISPATCH_PROFILE_TAG = "Combat:MovementService:Flow:TryDispatch"
 
+-- Applies the next legal flow-pipeline state transition and asserts on invalid edges.
 local function _TransitionFlowPipeline(self: any, nextState: TFlowPipelineState)
 	local transitionResult = self._flowPipelineStateMachine:Transition(nextState)
 	assert(
@@ -31,6 +32,7 @@ local function _TransitionFlowPipeline(self: any, nextState: TFlowPipelineState)
 end
 
 return function(MovementService: any)
+	-- Clears the published solve cache after the main thread finishes consuming it.
 	function MovementService:_ReleaseFlowLatestParallelSolve()
 		self._flowLatestParallelSolve = nil
 		self._flowPublishedSolve.TickId = 0
@@ -44,16 +46,19 @@ return function(MovementService: any)
 		table.clear(self._flowPublishedIsSettledByEntity)
 	end
 
+	-- Clears the dispatched flow snapshot and its per-entity goal caches.
 	function MovementService:_ReleaseFlowDispatchedSeparationSnapshot()
 		self._flowDispatchedSeparationSnapshot = nil
 		self._flowDispatchedGoalKeyByEntity = nil
 		self._flowDispatchedFrameState = nil
 	end
 
+	-- Returns the current flow pipeline state.
 	function MovementService:_GetFlowPipelineState(): TFlowPipelineState
 		return self._flowPipelineStateMachine:GetState()
 	end
 
+	-- Returns the minimum entity count required before parallel velocity solving is worthwhile.
 	function MovementService:_GetFlowVelocityParallelMinEntityCount(): number
 		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
 		local configured = if config ~= nil then config.ParallelMinVelocityEntityCount else nil
@@ -63,6 +68,7 @@ return function(MovementService: any)
 		return 1
 	end
 
+	-- Returns how many parallel actors the flow separation runner should spawn.
 	function MovementService:_GetFlowSeparationParallelActorCount(): number
 		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
 		local configured = if config ~= nil then config.ParallelActorCount else nil
@@ -72,6 +78,7 @@ return function(MovementService: any)
 		return 32
 	end
 
+	-- Returns the batch size used to partition flow separation work across actors.
 	function MovementService:_GetFlowSeparationParallelBatchSize(): number
 		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
 		local configured = if config ~= nil then config.ParallelVelocityBatchSize else nil
@@ -81,6 +88,7 @@ return function(MovementService: any)
 		return 8
 	end
 
+	-- Returns the timeout used while waiting for a separation result.
 	function MovementService:_GetFlowSeparationParallelTimeoutSeconds(): number
 		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
 		local configured = if config ~= nil then config.ParallelVelocityTimeoutSeconds else nil
@@ -90,6 +98,7 @@ return function(MovementService: any)
 		return 1
 	end
 
+	-- Returns the maximum in-flight time allowed for the managed parallel job.
 	function MovementService:_GetFlowSeparationParallelMaxInFlightSeconds(): number
 		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
 		local configured = if config ~= nil then config.ParallelAsyncMaxInFlightSeconds else nil
@@ -99,11 +108,13 @@ return function(MovementService: any)
 		return 1
 	end
 
+	-- Returns whether the parallel flow separation runner is enabled.
 	function MovementService:_IsFlowSeparationParallelEnabled(): boolean
 		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
 		return config ~= nil and config.Enabled == true and config.ParallelEnabled == true
 	end
 
+	-- Lazily creates the parallel runner that evaluates flow separation jobs.
 	function MovementService:_GetOrCreateFlowSeparationRunner(): any
 		local runner = self._flowSeparationParallelRunner
 		if runner ~= nil then
@@ -121,6 +132,7 @@ return function(MovementService: any)
 		return runner
 	end
 
+	-- Builds the managed parallel job wrapper used for flow separation dispatch.
 	function MovementService:_CreateFlowSeparationManagedJob(): TManagedJob
 		local runner = self:_GetOrCreateFlowSeparationRunner()
 		return runner:CreateManagedJob({
@@ -143,6 +155,7 @@ return function(MovementService: any)
 		})
 	end
 
+	-- Lazily creates the managed job wrapper for the flow separation runner.
 	function MovementService:_GetOrCreateFlowSeparationManagedJob(): TManagedJob
 		local job = self._flowSeparationManagedJob
 		if job == nil then
@@ -152,18 +165,41 @@ return function(MovementService: any)
 		return job
 	end
 
-	function MovementService:_DestroyFlowSeparationRunner()
+	-- Resets the flow-infrastructure runtime without destroying shared objects.
+	function MovementService:_ResetFlowInfrastructureRuntime()
+		local job = self._flowSeparationManagedJob
+		if job ~= nil then
+			job:Reset()
+		end
+
+		self:_ReleaseFlowLatestParallelSolve()
+		self:_ReleaseFlowDispatchedSeparationSnapshot()
+		local frameState = self._flowFrameState
+		if frameState ~= nil then
+			frameState:Reset()
+		end
+	end
+
+	-- Destroys the parallel flow infrastructure and its cached frame-state objects.
+	function MovementService:_DestroyFlowInfrastructure()
+		local job = self._flowSeparationManagedJob
+		if job ~= nil then
+			job:Destroy()
+		end
+		self._flowSeparationManagedJob = nil
+
 		local runner = self._flowSeparationParallelRunner
 		if runner ~= nil then
 			runner:Destroy()
 		end
 		self._flowSeparationParallelRunner = nil
-		self._flowSeparationManagedJob = nil
+
 		self:_ReleaseFlowLatestParallelSolve()
 		self:_ReleaseFlowDispatchedSeparationSnapshot()
 		self:_DestroyFlowFrameState()
 	end
 
+	-- Polls the managed job and publishes the completed flow solve when available.
 	function MovementService:_ConsumeCompletedFlowSeparationSolve(): boolean
 		local closeConsumeProfile = DebugPlus.begin(CONSUME_COMPLETED_SOLVE_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 		local job = self._flowSeparationManagedJob
@@ -172,6 +208,7 @@ return function(MovementService: any)
 			return false
 		end
 
+		-- Reject jobs that have not actually produced a completed result yet.
 		local status = job:GetStatus()
 		if status.HasCompletedResult ~= true then
 			closeConsumeProfile()
@@ -184,6 +221,7 @@ return function(MovementService: any)
 			return false
 		end
 
+		-- Validate that the completed result matches the snapshot we dispatched earlier.
 		local snapshot = managedResult.Payload :: TFlowSeparationSolveSnapshot
 		local goalKeyByEntity = self._flowDispatchedGoalKeyByEntity
 		local frameState = self._flowDispatchedFrameState :: TFlowPublishedFrameState?
@@ -192,6 +230,7 @@ return function(MovementService: any)
 			return false
 		end
 
+		-- Publish the solve outputs into the reusable frame caches.
 		self:_ReleaseFlowLatestParallelSolve()
 
 		local velocityByEntity = self:_ApplyFlowVelocityRows(
@@ -206,6 +245,7 @@ return function(MovementService: any)
 			return false
 		end
 
+		-- Copy the per-entity goal, position, and settle state into published tables.
 		local publishedGoalKeyByEntity = self._flowPublishedGoalKeyByEntity
 		table.clear(publishedGoalKeyByEntity)
 		for entityId, goalKey in goalKeyByEntity do
@@ -252,6 +292,7 @@ return function(MovementService: any)
 		return true
 	end
 
+	-- Dispatches the flow separation solve when the runtime and workload are ready.
 	function MovementService:_TryDispatchFlowSeparationSolve(snapshot: TFlowSeparationSolveSnapshot): boolean
 		local closeTryDispatchProfile = DebugPlus.begin(TRY_DISPATCH_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 		if not self:_IsFlowSeparationParallelEnabled() then
@@ -279,6 +320,7 @@ return function(MovementService: any)
 		return didDispatch
 	end
 
+	-- Consumes the completed solve and returns the pipeline to idle.
 	function MovementService:_PublishCompletedFlowSolve()
 		if not self:_ConsumeCompletedFlowSeparationSolve() then
 			self:_ReleaseFlowDispatchedSeparationSnapshot()
@@ -289,6 +331,7 @@ return function(MovementService: any)
 		_TransitionFlowPipeline(self, "Idle")
 	end
 
+	-- Advances the flow pipeline once per scheduler tick.
 	function MovementService:_AdvanceFlowPipeline(services: any?)
 		DebugPlus.profile(ADVANCE_PIPELINE_PROFILE_TAG, function()
 			local tickId = self:_ResolveFlowTickId(services)
@@ -302,10 +345,9 @@ return function(MovementService: any)
 
 			local state = self:_GetFlowPipelineState()
 			if state == "Idle" then
-				local closeBuildSnapshotProfile = DebugPlus.begin(
-					PIPELINE_IDLE_BUILD_SNAPSHOT_PROFILE_TAG,
-					MOVEMENT_PROFILING_ENABLED
-				)
+				-- Build a new dispatch snapshot before handing work to the parallel runner.
+				local closeBuildSnapshotProfile =
+					DebugPlus.begin(PIPELINE_IDLE_BUILD_SNAPSHOT_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 				local snapshot, goalKeyByEntity, frameState =
 					self:_BuildFlowDispatchSnapshot(tickId, self:_ResolveFlowDeltaTime(services))
 				closeBuildSnapshotProfile()
@@ -323,13 +365,12 @@ return function(MovementService: any)
 			end
 
 			if state == "Dispatching" then
+				-- Submit the dispatch snapshot once the pipeline has a valid payload.
 				local snapshot = self._flowDispatchedSeparationSnapshot
 				local didDispatch = false
 				if snapshot ~= nil then
-					local closeDispatchProfile = DebugPlus.begin(
-						PIPELINE_DISPATCHING_DISPATCH_PROFILE_TAG,
-						MOVEMENT_PROFILING_ENABLED
-					)
+					local closeDispatchProfile =
+						DebugPlus.begin(PIPELINE_DISPATCHING_DISPATCH_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 					didDispatch = self:_TryDispatchFlowSeparationSolve(snapshot)
 					closeDispatchProfile()
 				end
@@ -344,6 +385,7 @@ return function(MovementService: any)
 			end
 
 			if state == "Waiting" then
+				-- Wait for the parallel runner to finish before publishing the solve.
 				local job = self._flowSeparationManagedJob
 				if job == nil then
 					self:_ReleaseFlowDispatchedSeparationSnapshot()

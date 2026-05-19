@@ -148,6 +148,7 @@ local CombatContext = Knit.CreateService({
 			{ Field = "_runEndedConnection", Method = "Disconnect" },
 			{ Field = "_playerRemovingConnection", Method = "Disconnect" },
 			{ Field = "_animationCallbackConnection", Method = "Disconnect" },
+			{ Field = "_movementService", Method = "Destroy" },
 			{ Field = "_projectileService", Method = "Destroy" },
 		},
 	},

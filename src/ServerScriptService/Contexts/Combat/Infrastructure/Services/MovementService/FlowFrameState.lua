@@ -59,27 +59,40 @@ type TFlowFrameStateInternal = TFlowFrameStateHandle & {
 	_scratchFreeCellBuckets: { { number } },
 }
 
+--[=[
+    @class FlowFrameState
+    Owns the packed per-frame movement buffers used to build flow separation snapshots.
+
+    The frame is reset, filled with flow entities, and then converted into a
+    structure-of-arrays snapshot for the parallel separation solve.
+    @server
+]=]
 local FlowFrameState = {}
 FlowFrameState.__index = FlowFrameState
 
+-- Acquire a fresh array from the recycler so frame-state buffers stay pooled.
 local function _AcquireArray(recycler: TTableRecyclerHandle): { any }
 	return recycler:AcquireArray()
 end
 
+-- Acquire a fresh map from the recycler so frame-state lookup tables stay pooled.
 local function _AcquireMap(recycler: TTableRecyclerHandle): { [any]: any }
 	return recycler:AcquireMap()
 end
 
+-- Release a pooled array after the frame-state has finished with it.
 local function _ReleaseTrackedArray(self: TFlowFrameStateInternal, tbl: { any })
 	local didRelease, releaseError = self._recycler:ReleaseArray(tbl)
 	assert(didRelease, releaseError)
 end
 
+-- Release a pooled map after the frame-state has finished with it.
 local function _ReleaseTrackedMap(self: TFlowFrameStateInternal, tbl: { [any]: any })
 	local didRelease, releaseError = self._recycler:ReleaseMap(tbl)
 	assert(didRelease, releaseError)
 end
 
+-- Reuse a scratch bucket when grouping entities by cell during snapshot builds.
 local function _AcquireScratchCellBucket(self: TFlowFrameStateInternal): { number }
 	local freeBuckets = self._scratchFreeCellBuckets
 	local bucket = freeBuckets[#freeBuckets]
@@ -91,6 +104,7 @@ local function _AcquireScratchCellBucket(self: TFlowFrameStateInternal): { numbe
 	return _AcquireArray(self._recycler) :: { number }
 end
 
+-- Clear scratch buckets between goal groups so each group builds its own cell grouping.
 local function _ResetScratchCellBuckets(self: TFlowFrameStateInternal)
 	local scratchBucketsByCellPackedKey = self._scratchBucketsByCellPackedKey
 	local scratchCellPackedKeys = self._scratchCellPackedKeys
@@ -108,6 +122,82 @@ local function _ResetScratchCellBuckets(self: TFlowFrameStateInternal)
 	table.clear(scratchCellPackedKeys)
 end
 
+-- Release the goal-group arrays that track packed entity membership for each goal key.
+local function _ReleaseGoalBucketArrays(self: TFlowFrameStateInternal)
+	for goalKey, entityIndices in self._entityIndicesByGoalKey do
+		if entityIndices ~= nil then
+			table.clear(entityIndices)
+			_ReleaseTrackedArray(self, entityIndices)
+			self._entityIndicesByGoalKey[goalKey] = nil
+		end
+	end
+end
+
+-- Release the scratch arrays used while building the separation snapshot.
+local function _ReleaseScratchBucketArrays(self: TFlowFrameStateInternal)
+	for cellPackedKey, bucket in self._scratchBucketsByCellPackedKey do
+		if bucket ~= nil then
+			table.clear(bucket)
+			_ReleaseTrackedArray(self, bucket)
+			self._scratchBucketsByCellPackedKey[cellPackedKey] = nil
+		end
+	end
+
+	local scratchFreeCellBuckets = self._scratchFreeCellBuckets
+	for index = #scratchFreeCellBuckets, 1, -1 do
+		local bucket = scratchFreeCellBuckets[index]
+		if bucket ~= nil then
+			table.clear(bucket)
+			_ReleaseTrackedArray(self, bucket)
+			scratchFreeCellBuckets[index] = nil
+		end
+	end
+end
+
+-- Strip the cached snapshot table so destruction leaves no live references behind.
+local function _ClearSnapshotForDestroy(self: TFlowFrameStateInternal)
+	local snapshot = self._snapshot :: any
+	snapshot.TickId = nil
+	snapshot.EntityCount = nil
+	snapshot.EntityIds = nil
+	snapshot.GoalGroupId = nil
+	snapshot.GoalGroupCellRecordStartIndex = nil
+	snapshot.GoalGroupCellRecordCount = nil
+	snapshot.GoalGroupCellWidthStuds = nil
+	snapshot.GroupCellX = nil
+	snapshot.GroupCellY = nil
+	snapshot.CellPackedKey = nil
+	snapshot.CellMemberStartIndex = nil
+	snapshot.CellMemberCount = nil
+	snapshot.CellMemberEntityIndex = nil
+	snapshot.FlatPositionX = nil
+	snapshot.FlatPositionY = nil
+	snapshot.Radius = nil
+	snapshot.FlowVelocityX = nil
+	snapshot.FlowVelocityY = nil
+	snapshot.PreviousVelocityX = nil
+	snapshot.PreviousVelocityY = nil
+	snapshot.WalkSpeed = nil
+	snapshot.VelAlpha = nil
+	snapshot.IsSettled = nil
+	snapshot.DeltaTime = nil
+	snapshot.CellWidthStuds = nil
+	snapshot.OriginX = nil
+	snapshot.OriginY = nil
+	snapshot.WallGridHalfSize = nil
+	snapshot.WallPackedKeys = nil
+	snapshot.KForce = nil
+	snapshot.MinSeparationDistance = nil
+	snapshot.WallCollisionEnabled = nil
+	snapshot.WallCollisionAxisClampEnabled = nil
+	snapshot.WallCollisionCornerClampEnabled = nil
+	snapshot.WallCollisionUseUnitRadiusPadding = nil
+	snapshot.WallCollisionCellProbePaddingStuds = nil
+	snapshot.WallCollisionVelocityEpsilon = nil
+	snapshot.ClumpTouchPaddingStuds = nil
+end
+
+-- Copy one packed entity into the snapshot buffers and return its cell key.
 local function _CopyRawEntityToSnapshot(
 	self: TFlowFrameStateInternal,
 	snapshotEntityIndex: number,
@@ -138,6 +228,12 @@ local function _CopyRawEntityToSnapshot(
 	return MovementMath.PackedSeparationCellKey(groupCellX, groupCellY)
 end
 
+--[=[
+    Creates a new flow frame-state handle backed by recycler-managed buffers.
+    @within FlowFrameState
+    @param recycler TTableRecyclerHandle -- Recycler used to source the frame buffers.
+    @return TFlowFrameStateHandle -- Frame-state handle used by the movement service.
+]=]
 function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHandle
 	local entityIds = _AcquireArray(recycler) :: { number }
 	local goalGroupId = _AcquireArray(recycler) :: { number }
@@ -273,6 +369,10 @@ function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHand
 	return self :: TFlowFrameStateHandle
 end
 
+--[=[
+    Clears the accumulated frame-state buffers so the handle can be reused.
+    @within FlowFrameState
+]=]
 function FlowFrameState:Reset()
 	local selfInternal = self :: TFlowFrameStateInternal
 	selfInternal._entityCount = 0
@@ -326,6 +426,12 @@ function FlowFrameState:Reset()
 	selfInternal._snapshot.WallPackedKeys = selfInternal._defaultWallPackedKeys
 end
 
+--[=[
+    Returns the stable goal-group id for a goal key, allocating one when needed.
+    @within FlowFrameState
+    @param goalKey string -- Shared flowfield goal key.
+    @return number -- Packed goal-group id for the key.
+]=]
 function FlowFrameState:EnsureGoalGroup(goalKey: string): number
 	local selfInternal = self :: TFlowFrameStateInternal
 	local existingGoalGroupId = selfInternal._goalGroupIdByGoalKey[goalKey]
@@ -347,6 +453,19 @@ function FlowFrameState:EnsureGoalGroup(goalKey: string): number
 	return nextGoalGroupId
 end
 
+--[=[
+    Adds one entity to the current frame-state buffers.
+    @within FlowFrameState
+    @param goalKey string -- Shared flowfield goal key for the entity.
+    @param entityId number -- Entity id to append.
+    @param position Vector3 -- Current world position for the entity.
+    @param flowDirectionXZ Vector2 -- Resolved flow direction in XZ space.
+    @param walkSpeed number -- Current walk speed used to derive velocity.
+    @param radius number -- Agent radius used by the separation solve.
+    @param previousVelocityXZ Vector2 -- Previous frame velocity in XZ space.
+    @param isSettled boolean -- Whether the entity is currently settled at its goal.
+    @return number -- Packed snapshot entity index.
+]=]
 function FlowFrameState:AddEntity(
 	goalKey: string,
 	entityId: number,
@@ -383,66 +502,175 @@ function FlowFrameState:AddEntity(
 	return entityIndex
 end
 
+--[=[
+    Returns how many entities are currently packed into the frame-state.
+    @within FlowFrameState
+    @return number -- Entity count.
+]=]
 function FlowFrameState:GetEntityCount(): number
 	return (self :: TFlowFrameStateInternal)._entityCount
 end
 
+--[=[
+    Returns the goal-bucket map used while grouping entities for the solve.
+    @within FlowFrameState
+    @return { [string]: { number } } -- Goal-key to packed entity index buckets.
+]=]
 function FlowFrameState:GetGoalBuckets(): { [string]: { number } }
 	return (self :: TFlowFrameStateInternal)._entityIndicesByGoalKey
 end
 
+--[=[
+    Returns the packed entity id at one snapshot index.
+    @within FlowFrameState
+    @param entityIndex number -- Packed snapshot entity index.
+    @return number? -- Entity id or `nil` when the index is out of range.
+]=]
 function FlowFrameState:GetEntityId(entityIndex: number): number?
 	return (self :: TFlowFrameStateInternal)._entityIds[entityIndex]
 end
 
+--[=[
+    Returns the packed goal-group id at one snapshot index.
+    @within FlowFrameState
+    @param entityIndex number -- Packed snapshot entity index.
+    @return number? -- Goal-group id or `nil` when the index is out of range.
+]=]
 function FlowFrameState:GetGoalGroupId(entityIndex: number): number?
 	return (self :: TFlowFrameStateInternal)._goalGroupId[entityIndex]
 end
 
+--[=[
+    Returns the packed flat-position X value at one snapshot index.
+    @within FlowFrameState
+    @param entityIndex number -- Packed snapshot entity index.
+    @return number? -- Flat-position X component or `nil` when the index is out of range.
+]=]
 function FlowFrameState:GetFlatPositionX(entityIndex: number): number?
 	return (self :: TFlowFrameStateInternal)._flatPositionX[entityIndex]
 end
 
+--[=[
+    Returns the packed flat-position Y value at one snapshot index.
+    @within FlowFrameState
+    @param entityIndex number -- Packed snapshot entity index.
+    @return number? -- Flat-position Y component or `nil` when the index is out of range.
+]=]
 function FlowFrameState:GetFlatPositionY(entityIndex: number): number?
 	return (self :: TFlowFrameStateInternal)._flatPositionY[entityIndex]
 end
 
+--[=[
+    Returns the packed radius value at one snapshot index.
+    @within FlowFrameState
+    @param entityIndex number -- Packed snapshot entity index.
+    @return number? -- Radius or `nil` when the index is out of range.
+]=]
 function FlowFrameState:GetRadius(entityIndex: number): number?
 	return (self :: TFlowFrameStateInternal)._radius[entityIndex]
 end
 
+--[=[
+    Returns the packed flow-velocity X value at one snapshot index.
+    @within FlowFrameState
+    @param entityIndex number -- Packed snapshot entity index.
+    @return number? -- Flow velocity X component or `nil` when the index is out of range.
+]=]
 function FlowFrameState:GetFlowVelocityX(entityIndex: number): number?
 	return (self :: TFlowFrameStateInternal)._flowVelocityX[entityIndex]
 end
 
+--[=[
+    Returns the packed flow-velocity Y value at one snapshot index.
+    @within FlowFrameState
+    @param entityIndex number -- Packed snapshot entity index.
+    @return number? -- Flow velocity Y component or `nil` when the index is out of range.
+]=]
 function FlowFrameState:GetFlowVelocityY(entityIndex: number): number?
 	return (self :: TFlowFrameStateInternal)._flowVelocityY[entityIndex]
 end
 
+--[=[
+    Returns the packed previous-velocity X value at one snapshot index.
+    @within FlowFrameState
+    @param entityIndex number -- Packed snapshot entity index.
+    @return number? -- Previous velocity X component or `nil` when the index is out of range.
+]=]
 function FlowFrameState:GetPreviousVelocityX(entityIndex: number): number?
 	return (self :: TFlowFrameStateInternal)._previousVelocityX[entityIndex]
 end
 
+--[=[
+    Returns the packed previous-velocity Y value at one snapshot index.
+    @within FlowFrameState
+    @param entityIndex number -- Packed snapshot entity index.
+    @return number? -- Previous velocity Y component or `nil` when the index is out of range.
+]=]
 function FlowFrameState:GetPreviousVelocityY(entityIndex: number): number?
 	return (self :: TFlowFrameStateInternal)._previousVelocityY[entityIndex]
 end
 
+--[=[
+    Returns the packed walk speed value at one snapshot index.
+    @within FlowFrameState
+    @param entityIndex number -- Packed snapshot entity index.
+    @return number? -- Walk speed or `nil` when the index is out of range.
+]=]
 function FlowFrameState:GetWalkSpeed(entityIndex: number): number?
 	return (self :: TFlowFrameStateInternal)._walkSpeed[entityIndex]
 end
 
+--[=[
+    Returns the packed velocity-alpha value at one snapshot index.
+    @within FlowFrameState
+    @param entityIndex number -- Packed snapshot entity index.
+    @return number? -- Velocity alpha or `nil` when the index is out of range.
+]=]
 function FlowFrameState:GetVelAlpha(entityIndex: number): number?
 	return (self :: TFlowFrameStateInternal)._velAlpha[entityIndex]
 end
 
+--[=[
+    Returns whether one packed entity index is marked settled.
+    @within FlowFrameState
+    @param entityIndex number -- Packed snapshot entity index.
+    @return boolean -- Whether the entity is settled.
+]=]
 function FlowFrameState:IsSettled(entityIndex: number): boolean
 	return (self :: TFlowFrameStateInternal)._isSettled[entityIndex] == true
 end
 
+--[=[
+    Writes the velocity-alpha value for one packed entity index.
+    @within FlowFrameState
+    @param entityIndex number -- Packed snapshot entity index.
+    @param velAlpha number -- Velocity blend factor to store.
+]=]
 function FlowFrameState:SetVelAlpha(entityIndex: number, velAlpha: number)
 	(self :: TFlowFrameStateInternal)._velAlpha[entityIndex] = velAlpha
 end
 
+--[=[
+    Builds the structure-of-arrays separation snapshot for the current frame.
+    @within FlowFrameState
+    @param tickId number -- Solver tick identifier to embed in the snapshot.
+    @param deltaTime number -- Delta time used by the solver.
+    @param cellWidthStuds number -- Cell width in studs.
+    @param originX number -- World origin X coordinate.
+    @param originY number -- World origin Z coordinate projected into Y.
+    @param wallGridHalfSize number -- Half-size of the wall grid.
+    @param wallPackedKeys { number } -- Packed wall cell keys.
+    @param kForce number -- Separation force constant.
+    @param minSeparationDistance number -- Minimum agent separation distance.
+    @param wallCollisionEnabled boolean -- Whether wall collision is enabled.
+    @param wallCollisionAxisClampEnabled boolean -- Whether axis clamp logic is enabled.
+    @param wallCollisionCornerClampEnabled boolean -- Whether corner clamp logic is enabled.
+    @param wallCollisionUseUnitRadiusPadding boolean -- Whether unit-radius padding is applied.
+    @param wallCollisionCellProbePaddingStuds number -- Additional wall probe padding in studs.
+    @param wallCollisionVelocityEpsilon number -- Velocity epsilon used by wall collision tests.
+    @param clumpTouchPaddingStuds number -- Padding used for clump-touch checks.
+    @return TFlowSeparationSolveSnapshot -- Packed separation solve snapshot.
+]=]
 function FlowFrameState:BuildSeparationSnapshot(
 	tickId: number,
 	deltaTime: number,
@@ -465,6 +693,7 @@ function FlowFrameState:BuildSeparationSnapshot(
 	local snapshot = selfInternal._snapshot
 	local orderedEntityCount = 0
 
+	-- Clear all packed output buffers before rebuilding the snapshot for this tick.
 	table.clear(selfInternal._snapshotEntityIds)
 	table.clear(selfInternal._snapshotGoalGroupId)
 	table.clear(selfInternal._snapshotGoalGroupCellRecordStartIndex)
@@ -487,6 +716,7 @@ function FlowFrameState:BuildSeparationSnapshot(
 	table.clear(selfInternal._snapshotVelAlpha)
 	table.clear(selfInternal._snapshotIsSettled)
 
+	-- Pack each goal group and bucket entities by separation cell within that group.
 	for _, goalKey in ipairs(selfInternal._activeGoalKeys) do
 		local entityIndices = selfInternal._entityIndicesByGoalKey[goalKey]
 		if entityIndices ~= nil and #entityIndices > 0 then
@@ -543,6 +773,7 @@ function FlowFrameState:BuildSeparationSnapshot(
 		end
 	end
 
+	-- Write the frame-level metadata and solver constants onto the cached snapshot table.
 	snapshot.TickId = tickId
 	snapshot.EntityCount = orderedEntityCount
 	snapshot.DeltaTime = deltaTime
@@ -564,16 +795,28 @@ function FlowFrameState:BuildSeparationSnapshot(
 	return snapshot
 end
 
+--[=[
+    Releases all pooled buffers and marks the frame-state handle destroyed.
+    @within FlowFrameState
+    @return boolean -- Whether destroy completed successfully.
+    @return string? -- Failure reason when destruction fails.
+]=]
 function FlowFrameState:Destroy(): (boolean, string?)
 	local selfInternal = self :: TFlowFrameStateInternal
 	if selfInternal._destroyed then
 		return true, nil
 	end
 
+	-- Reset first so any pooled arrays are drained before release.
 	selfInternal:Reset()
 	selfInternal._destroyed = true
 
-	_ReleaseTrackedMap(selfInternal, selfInternal._snapshot :: any)
+	-- Release the goal-group and scratch buckets before dropping the backing tables.
+	_ReleaseGoalBucketArrays(selfInternal)
+	_ReleaseScratchBucketArrays(selfInternal)
+	_ClearSnapshotForDestroy(selfInternal)
+
+	-- Return every recycler-backed buffer to the pool.
 	_ReleaseTrackedArray(selfInternal, selfInternal._entityIds :: any)
 	_ReleaseTrackedArray(selfInternal, selfInternal._goalGroupId :: any)
 	_ReleaseTrackedArray(selfInternal, selfInternal._flatPositionX :: any)
@@ -614,6 +857,7 @@ function FlowFrameState:Destroy(): (boolean, string?)
 	_ReleaseTrackedMap(selfInternal, selfInternal._scratchBucketsByCellPackedKey :: any)
 	_ReleaseTrackedArray(selfInternal, selfInternal._scratchCellPackedKeys :: any)
 	_ReleaseTrackedArray(selfInternal, selfInternal._scratchFreeCellBuckets :: any)
+	_ReleaseTrackedMap(selfInternal, selfInternal._snapshot :: any)
 
 	return true, nil
 end

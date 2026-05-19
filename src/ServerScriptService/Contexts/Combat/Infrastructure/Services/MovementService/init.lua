@@ -9,6 +9,18 @@ local StateMachine = require(ReplicatedStorage.Utilities.StateMachine)
 local TableRecycler = require(ReplicatedStorage.Utilities.TableRecycler)
 local MovementTypes = require(script.Types)
 
+--[=[
+    @class MovementService
+    Owns combat movement orchestration for path and shared-flow movement modes.
+
+    The service wires runtime dependencies, starts and stops entity movement,
+    and manages the flow pipeline that publishes separation solves to the frame step.
+    @server
+]=]
+local MovementService = {}
+MovementService.__index = MovementService
+
+-- â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type EnemyMovementMode = MovementTypes.EnemyMovementMode
 type TMovementState = MovementTypes.TMovementState
 type TSharedFlowfieldEntry = MovementTypes.TSharedFlowfieldEntry
@@ -16,6 +28,7 @@ type TFlowActorRefs = MovementTypes.TFlowActorRefs
 type TFlowPipelineState = MovementTypes.TFlowPipelineState
 type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
 
+-- â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 local MOVEMENT_PROFILING_ENABLED = DebugConfig.COMBAT_MOVEMENT_PROFILING
 local STEP_ADVANCE_PROFILE_TAG = "Combat:MovementService:StepAdvance"
 local FLOW_STEP_ADVANCE_PROFILE_TAG = "Combat:MovementService:Flow:StepAdvance"
@@ -37,6 +50,8 @@ local FLOW_PIPELINE_TRANSITIONS: { [TFlowPipelineState]: { [TFlowPipelineState]:
 	},
 }
 
+-- â”€â”€ Private â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- Build the flow pipeline state machine so runtime transitions stay validated in one place.
 local function _CreateFlowPipelineStateMachine()
 	return StateMachine.new({
 		InitialState = "Idle" :: TFlowPipelineState,
@@ -52,9 +67,6 @@ local function _CreateFlowPipelineStateMachine()
 	})
 end
 
-local MovementService = {}
-MovementService.__index = MovementService
-
 require(script.ActorRefs)(MovementService)
 require(script.PathMovement)(MovementService)
 require(script.SharedFlowfields)(MovementService)
@@ -63,6 +75,12 @@ require(script.FlowSnapshot)(MovementService)
 require(script.FlowPipeline)(MovementService)
 require(script.FlowMovement)(MovementService)
 
+-- Ã¢â€â‚¬Ã¢â€â‚¬ Public Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+--[=[
+    Creates a new movement service with empty runtime caches and state tables.
+    @within MovementService
+    @return MovementService -- Service instance ready for dependency wiring.
+]=]
 function MovementService.new()
 	local self = setmetatable({}, MovementService)
 	self._movementByEntity = {} :: { [number]: TMovementState }
@@ -79,6 +97,7 @@ function MovementService.new()
 	self._flowPipelineStateMachine = _CreateFlowPipelineStateMachine()
 	self._flowPipelineTickId = nil :: number?
 	self._flowInvalidReasonByEntity = {}
+	self._flowRecoveredOpenCellByEntity = {} :: { [number]: Vector2 }
 	self._flowCurrentSessionUserId = nil :: number?
 	self._flowSeparationParallelRunner = nil
 	self._flowSeparationManagedJob = nil
@@ -136,21 +155,47 @@ function MovementService.new()
 	return self
 end
 
+--[=[
+    Resolves context dependencies for the movement service.
+    @within MovementService
+    @param registry any -- Registry instance supplied by the context bootstrap.
+    @param _name string -- Registry key used to register the service.
+]=]
 function MovementService:Init(registry: any, _name: string)
 	self._registry = registry
 	self._combatLoopService = registry:Get("CombatLoopService")
 end
 
+--[=[
+    Starts the movement service after dependency registration completes.
+    @within MovementService
+]=]
 function MovementService:Start() end
 
+--[=[
+    Wires the enemy entity factory used to read and update movement state.
+    @within MovementService
+    @param enemyEntityFactory any -- Enemy entity factory used by movement resolution.
+]=]
 function MovementService:ConfigureEnemyEntityFactory(enemyEntityFactory: any)
 	self._enemyEntityFactory = enemyEntityFactory
 end
 
+--[=[
+    Wires the lock-on service used to keep boids and humanoids facing correctly.
+    @within MovementService
+    @param lockOnService any -- Lock-on service used during movement updates.
+]=]
 function MovementService:ConfigureLockOnService(lockOnService: any)
 	self._lockOnService = lockOnService
 end
 
+--[=[
+    Stores the fast-flow runtime used by shared flowfield movement.
+    @within MovementService
+    @param pathfinder any? -- Fast-flow pathfinder instance or `nil` to clear it.
+    @param mapping FastFlowHelper.TFlowGridMapping? -- Flow-grid mapping or `nil` to clear it.
+]=]
 function MovementService:ConfigureFastFlow(pathfinder: any?, mapping: FastFlowHelper.TFlowGridMapping?)
 	self._fastFlowPathfinder = pathfinder
 	self._fastFlowMapping = mapping
@@ -159,17 +204,32 @@ function MovementService:ConfigureFastFlow(pathfinder: any?, mapping: FastFlowHe
 	self._flowWallGridHalfSize = nil
 end
 
+--[=[
+    Registers the optional flowfield debug renderer used by combat diagnostics.
+    @within MovementService
+    @param renderer ((any, FastFlowHelper.TFlowGridMapping, Vector3) -> ())? -- Debug renderer callback or `nil`.
+]=]
 function MovementService:ConfigureFlowfieldDebugRenderer(
 	renderer: ((any, FastFlowHelper.TFlowGridMapping, Vector3) -> ())?
 )
 	self._flowfieldDebugRenderer = renderer
 end
 
+--[=[
+    Finalizes the current advance frame after all entity movement has stepped.
+    @within MovementService
+]=]
 function MovementService:FinalizeAdvanceFrame() end
 
+--[=[
+    Clears the fast-flow runtime caches and rebuilds the pipeline state machine.
+    @within MovementService
+]=]
 function MovementService:ResetFastFlowRuntime()
-	self:_ReleaseFlowLatestParallelSolve()
-	self:_ReleaseFlowDispatchedSeparationSnapshot()
+	-- Clear all shared-flow state so the next session starts from a clean runtime.
+	self:_ResetFlowInfrastructureRuntime()
+
+	-- Drop every cached flow goal and published frame buffer.
 	table.clear(self._sharedFlowfieldsByGoalKey)
 	table.clear(self._flowGoalKeyByEntity)
 	table.clear(self._activeFlowEntitiesByGoalKey)
@@ -189,23 +249,37 @@ function MovementService:ResetFastFlowRuntime()
 	table.clear(self._flowPublishedPositionByEntity)
 	table.clear(self._flowPublishedWalkSpeedByEntity)
 	table.clear(self._flowPublishedIsSettledByEntity)
+
+	-- Reset the pipeline bookkeeping and invalidate any stuck recovery state.
 	table.clear(self._flowRepresentativeStarts)
 	self._flowPipelineTickId = nil
 	table.clear(self._flowInvalidReasonByEntity)
+	table.clear(self._flowRecoveredOpenCellByEntity)
 	self._flowLatestParallelSolve = nil
 	self._flowDispatchedGoalKeyByEntity = nil
 	self._flowDispatchedFrameState = nil
 	self._flowWallKeyCachePathfinder = nil
 	self._flowWallPackedKeys = nil
 	self._flowWallGridHalfSize = nil
-	self:_DestroyFlowSeparationRunner()
+
+	-- Rebuild the state machine so the next flow session starts from Idle.
 	self._flowPipelineStateMachine:Destroy()
 	self._flowPipelineStateMachine = _CreateFlowPipelineStateMachine()
 end
 
+--[=[
+    Starts movement for one entity and chooses path or shared-flow mode.
+    @within MovementService
+    @param entity number -- Entity id to start moving.
+    @param movementMode EnemyMovementMode -- Requested movement mode from the caller.
+    @return boolean -- Whether movement started successfully.
+    @return string? -- Failure reason when movement could not start.
+]=]
 function MovementService:StartAdvance(entity: number, movementMode: EnemyMovementMode): (boolean, string?)
+	-- Clear any previous movement before selecting the next runtime mode.
 	self:StopMovement(entity)
 
+	-- Resolve the target goal and confirm the requested movement mode is valid.
 	local pathState = self._enemyEntityFactory:GetPathState(entity)
 	if pathState == nil or pathState.GoalPosition == nil then
 		return false, "MissingGoalPosition"
@@ -216,6 +290,7 @@ function MovementService:StartAdvance(entity: number, movementMode: EnemyMovemen
 		return false, "InvalidMovementMode"
 	end
 
+	-- Prefer shared-flow movement when the mode and configuration allow it.
 	if resolvedMode == "Flow" then
 		local startedFlow, flowReason = self:_StartFlow(entity, pathState.GoalPosition)
 		if startedFlow then
@@ -226,6 +301,7 @@ function MovementService:StartAdvance(entity: number, movementMode: EnemyMovemen
 		end
 	end
 
+	-- Fall back to path movement when shared flow is unavailable.
 	if self:_StartPath(entity, pathState.GoalPosition) then
 		return true, nil
 	end
@@ -233,6 +309,14 @@ function MovementService:StartAdvance(entity: number, movementMode: EnemyMovemen
 	return false, "PathStartFailed"
 end
 
+--[=[
+    Advances movement for one entity using either the path or flow runtime.
+    @within MovementService
+    @param entity number -- Entity id to step.
+    @param services any? -- Per-frame service payload supplied by the combat loop.
+    @return boolean -- Whether movement completed for the entity on this step.
+    @return string? -- Failure reason when stepping fails.
+]=]
 function MovementService:StepAdvance(entity: number, services: any?): (boolean, string?)
 	return DebugPlus.profile(STEP_ADVANCE_PROFILE_TAG, function()
 		local movementState = self._movementByEntity[entity]
@@ -241,6 +325,7 @@ function MovementService:StepAdvance(entity: number, services: any?): (boolean, 
 		end
 
 		if movementState.Mode == "Path" then
+			-- Path movement only needs speed refresh and promise polling.
 			self:_ApplyCurrentMoveSpeed(entity)
 
 			local status, reason = self:_TickPath(entity, movementState)
@@ -253,12 +338,18 @@ function MovementService:StepAdvance(entity: number, services: any?): (boolean, 
 			return false, nil
 		end
 
+		-- Flow movement runs through the separation pipeline before the per-entity solve.
 		return DebugPlus.profile(FLOW_STEP_ADVANCE_PROFILE_TAG, function()
 			return self:_StepFlowAdvance(entity, movementState, services)
 		end, MOVEMENT_PROFILING_ENABLED)
 	end, MOVEMENT_PROFILING_ENABLED)
 end
 
+--[=[
+    Stops active movement for one entity and clears its runtime bookkeeping.
+    @within MovementService
+    @param entity number -- Entity id to stop.
+]=]
 function MovementService:StopMovement(entity: number)
 	local movementState = self._movementByEntity[entity]
 	if movementState == nil and self._flowGoalKeyByEntity[entity] == nil then
@@ -279,19 +370,26 @@ function MovementService:StopMovement(entity: number)
 	self:_ClearMovementRuntimeState(entity)
 end
 
+--[=[
+    Stops movement for every tracked entity and resets shared-flow runtime state.
+    @within MovementService
+]=]
 function MovementService:CleanupAll()
 	local entities = self:_AcquireMovementTempArray()
 	local success, err = xpcall(function()
+		-- Capture movement entities first so cleanup can mutate the live maps safely.
 		for entityId in self._movementByEntity do
 			table.insert(entities, entityId)
 		end
 
+		-- Include entities that only exist in the flow goal map and no longer have movement state.
 		for entityId in self._flowGoalKeyByEntity do
 			if self._movementByEntity[entityId] == nil then
 				table.insert(entities, entityId)
 			end
 		end
 
+		-- Stop each entity through the public API so both path and flow branches unwind correctly.
 		for _, entityId in ipairs(entities) do
 			self:StopMovement(entityId)
 		end
@@ -307,6 +405,28 @@ function MovementService:CleanupAll()
 	self:ResetFastFlowRuntime()
 end
 
+--[=[
+    Destroys the movement service and releases its cached infrastructure.
+    @within MovementService
+]=]
+function MovementService:Destroy()
+	-- Reuse the cleanup path so all live movement stops before infrastructure teardown.
+	self:CleanupAll()
+	-- Release flow infrastructure after movement is clear so no solve can outlive the service.
+	self:_DestroyFlowInfrastructure()
+
+	self._flowPipelineStateMachine:Destroy()
+
+	-- Destroy the pooled temporary-table recycler last so all callers have already released tables.
+	local tempRecycler = self._movementTempTableRecycler
+	if tempRecycler ~= nil then
+		local didDestroyRecycler, destroyRecyclerError = tempRecycler:Destroy()
+		assert(didDestroyRecycler, destroyRecyclerError)
+	end
+	self._movementTempTableRecycler = nil
+end
+
+-- Lazily creates the recycler that pools movement temp tables across frames.
 function MovementService:_GetOrCreateMovementTempTableRecycler(): any
 	local recycler = self._movementTempTableRecycler
 	if recycler ~= nil then
@@ -321,24 +441,29 @@ function MovementService:_GetOrCreateMovementTempTableRecycler(): any
 	return recycler
 end
 
+-- Acquires a pooled array for temporary movement bookkeeping.
 function MovementService:_AcquireMovementTempArray(capacityHint: number?): { any }
 	return self:_GetOrCreateMovementTempTableRecycler():AcquireArray(capacityHint)
 end
 
+-- Acquires a pooled map for temporary movement bookkeeping.
 function MovementService:_AcquireMovementTempMap(): { [any]: any }
 	return self:_GetOrCreateMovementTempTableRecycler():AcquireMap()
 end
 
+-- Releases a pooled array after the movement service has finished with it.
 function MovementService:_ReleaseMovementTempArray(tbl: { any })
 	local didRelease, releaseError = self:_GetOrCreateMovementTempTableRecycler():ReleaseArray(tbl)
 	assert(didRelease, releaseError)
 end
 
+-- Releases a pooled map after the movement service has finished with it.
 function MovementService:_ReleaseMovementTempMap(tbl: { [any]: any })
 	local didRelease, releaseError = self:_GetOrCreateMovementTempTableRecycler():ReleaseMap(tbl)
 	assert(didRelease, releaseError)
 end
 
+-- Resolves one active runnable combat session so parallel flow jobs can tag the session owner.
 function MovementService:_ResolveActiveSessionUserId(): number?
 	local loopService = self._combatLoopService
 	if loopService == nil then
@@ -354,6 +479,7 @@ function MovementService:_ResolveActiveSessionUserId(): number?
 	return activeSessionUserId
 end
 
+-- Clears the runtime movement state for one entity and unwires any live movement-side effects.
 function MovementService:_ClearMovementRuntimeState(entity: number)
 	local currentGoalKey = self._flowGoalKeyByEntity[entity]
 	self:_RemoveEntityFromActiveFlowGoal(entity, currentGoalKey)
@@ -362,6 +488,8 @@ function MovementService:_ClearMovementRuntimeState(entity: number)
 	self._flowSettledByEntity[entity] = nil
 	self:_DetachSharedFlowfield(currentGoalKey)
 	self._flowGoalKeyByEntity[entity] = nil
+	self._flowInvalidReasonByEntity[entity] = nil
+	self._flowRecoveredOpenCellByEntity[entity] = nil
 	self:_InvalidateFlowActorRefs(entity)
 	self._enemyEntityFactory:SetPathMoving(entity, false)
 	if self._lockOnService ~= nil and type(self._lockOnService.SetBoidsFacingFlatForward) == "function" then

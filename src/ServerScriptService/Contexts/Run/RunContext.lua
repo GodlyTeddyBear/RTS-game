@@ -590,6 +590,45 @@ function RunContext:_BuildRunSnapshot(): RunSnapshot
 	}
 end
 
+function RunContext:_PrepareWaveNavigation(isEndless: boolean)
+	if self._worldContext ~= nil then
+		local refreshResult = self._worldContext:RefreshRuntimeGeometry()
+		if not refreshResult.success then
+			Result.MentionError("Run:PrepareWaveNavigation", "World geometry refresh failed before wave start", {
+				WaveNumber = self._machine:GetWaveNumber(),
+				IsEndless = isEndless,
+				CauseType = refreshResult.type,
+				CauseMessage = refreshResult.message,
+				Details = refreshResult.data,
+			}, refreshResult.type)
+		else
+			Result.MentionEvent("Run:PrepareWaveNavigation", "Refreshed runtime world geometry before wave start", {
+				WaveNumber = self._machine:GetWaveNumber(),
+				IsEndless = isEndless,
+			})
+		end
+	end
+
+	if self._enemyContext ~= nil then
+		local warmFastFlowResult = self._enemyContext:WarmFastFlowForRun()
+		if not warmFastFlowResult.success then
+			Result.MentionError("Run:PrepareWaveNavigation", "Enemy FastFlow warm-up failed before wave start", {
+				WaveNumber = self._machine:GetWaveNumber(),
+				IsEndless = isEndless,
+				CauseType = warmFastFlowResult.type,
+				CauseMessage = warmFastFlowResult.message,
+				Details = warmFastFlowResult.data,
+			}, warmFastFlowResult.type)
+		else
+			Result.MentionEvent("Run:PrepareWaveNavigation", "Warmed FastFlow before wave start", {
+				WaveNumber = self._machine:GetWaveNumber(),
+				IsEndless = isEndless,
+				WasConfigured = warmFastFlowResult.value,
+			})
+		end
+	end
+end
+
 -- Pushes the new run snapshot to sync, then emits milestone logs for lifecycle transitions.
 function RunContext:_OnStateChanged(newState: RunState, previousState: RunState)
 	-- Replicate the latest authoritative snapshot before observers react to the transition.
@@ -632,8 +671,10 @@ function RunContext:_OnStateChanged(newState: RunState, previousState: RunState)
 	if newState == "Resolution" and (previousState == "Wave" or previousState == "Endless") then
 		GameEvents.Bus:Emit(GameEvents.Events.Run.WaveEnded, self._machine:GetWaveNumber())
 	elseif newState == "Wave" then
+		self:_PrepareWaveNavigation(false)
 		GameEvents.Bus:Emit(GameEvents.Events.Run.WaveStarted, self._machine:GetWaveNumber(), false)
 	elseif newState == "Endless" then
+		self:_PrepareWaveNavigation(true)
 		GameEvents.Bus:Emit(GameEvents.Events.Run.WaveStarted, self._machine:GetWaveNumber(), true)
 	elseif newState == "RunEnd" then
 		GameEvents.Bus:Emit(GameEvents.Events.Run.RunEnded)

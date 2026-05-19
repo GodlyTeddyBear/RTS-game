@@ -11,11 +11,18 @@ export type TFlowGridMapping = {
 	CellWidthStuds: number,
 	GridHalfSize: number,
 }
+export type TFlowCellState = "Open" | "Blocked" | "OutOfBounds"
 
 type TFastFlowPathfinder = any
 type TFastFlowFlowfield = any
 
 local FastFlowHelper = {}
+local RING_DIRECTIONS = {
+	Vector2.new(1, 0),
+	Vector2.new(-1, 0),
+	Vector2.new(0, 1),
+	Vector2.new(0, -1),
+}
 
 local function _IsCellInBounds(cell: Vector2, mapping: TFlowGridMapping): boolean
 	local halfSize = mapping.GridHalfSize
@@ -46,6 +53,27 @@ function FastFlowHelper.CreatePathfinderFromWalls(
 	omitPreprocessing: boolean?
 ): TFastFlowPathfinder
 	return FastFlow.NewPathfinder(walls, chunkSize, omitPreprocessing)
+end
+
+function FastFlowHelper.ClassifyWorldXZCell(
+	pathfinder: TFastFlowPathfinder,
+	worldPosition: Vector3,
+	mapping: TFlowGridMapping
+): (TFlowCellState, Vector2)
+	local cell = FastFlowHelper.WorldXZToGridCell(worldPosition, mapping)
+	if not _IsCellInBounds(cell, mapping) then
+		return "OutOfBounds", cell
+	end
+
+	local walls = pathfinder._Walls
+	if walls ~= nil and type(walls.IsCellInBounds) == "function" and not walls:IsCellInBounds(cell) then
+		return "OutOfBounds", cell
+	end
+	if walls ~= nil and type(walls.GetCell) == "function" and walls:GetCell(cell) == true then
+		return "Blocked", cell
+	end
+
+	return "Open", cell
 end
 
 function FastFlowHelper.GenerateFlowfieldWorld(
@@ -84,12 +112,7 @@ function FastFlowHelper.MergeFlowfieldWorld(
 	mapping: TFlowGridMapping
 ): TFastFlowFlowfield?
 	local startCell = FastFlowHelper.WorldXZToGridCell(startWorld, mapping)
-	local openStartCell = pathfinder:FindOpenCell(startCell)
-	if openStartCell == nil then
-		return nil
-	end
-
-	return pathfinder:MergeFlowfield(flowfield, openStartCell)
+	return pathfinder:MergeFlowfield(flowfield, startCell)
 end
 
 function FastFlowHelper.FindOpenCellWorld(
@@ -104,6 +127,44 @@ function FastFlowHelper.FindOpenCellWorld(
 	end
 
 	return FastFlowHelper.GridCellToWorldXZ(openCell, mapping, yLevel)
+end
+
+function FastFlowHelper.FindNearestOpenCellDeep(
+	pathfinder: TFastFlowPathfinder,
+	startCell: Vector2,
+	mapping: TFlowGridMapping
+): Vector2?
+	local walls = pathfinder._Walls
+	if walls == nil or type(walls.IsCellInBounds) ~= "function" or type(walls.GetCell) ~= "function" then
+		return nil
+	end
+
+	local roundedStartCell = Vector2.new(math.round(startCell.X), math.round(startCell.Y))
+	local visited = { [tostring(roundedStartCell.X) .. "," .. tostring(roundedStartCell.Y)] = true }
+	local queue = { roundedStartCell }
+	local head = 1
+
+	while head <= #queue do
+		local cell = queue[head]
+		head += 1
+
+		if walls:IsCellInBounds(cell) and walls:GetCell(cell) ~= true then
+			return cell
+		end
+
+		for _, direction in ipairs(RING_DIRECTIONS) do
+			local neighbor = cell + direction
+			if _IsCellInBounds(neighbor, mapping) then
+				local key = tostring(neighbor.X) .. "," .. tostring(neighbor.Y)
+				if visited[key] ~= true then
+					visited[key] = true
+					table.insert(queue, neighbor)
+				end
+			end
+		end
+	end
+
+	return nil
 end
 
 function FastFlowHelper.GetSteeringWorldXZ(

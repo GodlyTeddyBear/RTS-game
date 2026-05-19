@@ -26,6 +26,7 @@ local CREATE_SHARED_MEMORY_PROFILE_TAG = "Combat:MovementService:Flow:CreateShar
 local APPLY_VELOCITY_ROWS_PROFILE_TAG = "Combat:MovementService:Flow:ApplyVelocityRows"
 
 return function(MovementService: any)
+	-- Builds the packed wall-key array used by the flow separation snapshot.
 	function MovementService:_BuildPackedWallKeys(): { number }
 		local packedKeys = self._flowWallPackedKeys
 		if packedKeys == nil then
@@ -63,6 +64,7 @@ return function(MovementService: any)
 		return packedKeys
 	end
 
+	-- Lazily creates the recycler used by flow frame-state snapshots.
 	function MovementService:_GetOrCreateFlowFrameStateRecycler(): any
 		local recycler = self._flowFrameStateRecycler
 		if recycler ~= nil then
@@ -77,6 +79,7 @@ return function(MovementService: any)
 		return recycler
 	end
 
+	-- Lazily creates the reusable flow frame-state handle.
 	function MovementService:_GetOrCreateFlowFrameState(): TFlowFrameStateHandle
 		local frameState = self._flowFrameState
 		if frameState ~= nil then
@@ -88,6 +91,7 @@ return function(MovementService: any)
 		return frameState
 	end
 
+	-- Destroys the reusable flow frame-state handle and its recycler.
 	function MovementService:_DestroyFlowFrameState()
 		local frameState = self._flowFrameState :: TFlowFrameStateHandle?
 		if frameState ~= nil then
@@ -104,6 +108,7 @@ return function(MovementService: any)
 		self._flowFrameStateRecycler = nil
 	end
 
+	-- Authoring converts the flow separation snapshot into shared memory for the parallel job.
 	function MovementService:_CreateFlowSeparationSharedMemory(snapshot: TFlowSeparationSolveSnapshot): SharedTable
 		local closeCreateSharedMemoryProfile =
 			DebugPlus.begin(CREATE_SHARED_MEMORY_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
@@ -177,6 +182,7 @@ return function(MovementService: any)
 		return sharedMemory
 	end
 
+	-- Converts solver rows back into entity-indexed velocity and settled-neighbor maps.
 	function MovementService:_ApplyFlowVelocityRows(
 		snapshot: TFlowSeparationSolveSnapshot,
 		rows: { TFlowSeparationSolveRow },
@@ -228,6 +234,7 @@ return function(MovementService: any)
 		return resolvedVelocityByEntity, resolvedTouchedSettledNeighborByEntity
 	end
 
+	-- Resolves the frame inputs needed to build the dispatch snapshot for one flow entity.
 	function MovementService:_ResolveFlowBuildFrameState(
 		entity: number,
 		movementState: TFlowMovementState
@@ -254,9 +261,25 @@ return function(MovementService: any)
 		local flowDirectionXZ = Vector2.zero
 		local isSettled = self._flowSettledByEntity[entity] == true
 		if not isSettled then
+			self:_TryClearLatchedInvalidCellEscape(entity, movementState, position)
 			local sampledDirection = self:_SampleFlowDirectionXZ(movementState, position)
 			if sampledDirection ~= nil then
 				flowDirectionXZ = sampledDirection
+			else
+				local repairedDirection, recoveryStatus, recoveryReason =
+					self:_RepairFlowDirectionXZ(entity, movementState, goalPosition, position)
+				if recoveryStatus == "Fatal" then
+					self._flowInvalidReasonByEntity[entity] = recoveryReason or "FastFlowGenerateFailed"
+					return nil, nil, nil, nil, Vector2.zero, nil, nil, Vector2.zero, false
+				end
+				if recoveryStatus == "RetryLater" then
+					if movementState.RecoveryMode ~= "EscapingInvalidCell" then
+						return nil, nil, nil, nil, Vector2.zero, nil, nil, Vector2.zero, false
+					end
+				end
+				if repairedDirection ~= nil then
+					flowDirectionXZ = repairedDirection
+				end
 			end
 		end
 
@@ -272,6 +295,7 @@ return function(MovementService: any)
 			isSettled
 	end
 
+	-- Resolves the solve tick id from the scheduler payload or advances the local serial.
 	function MovementService:_ResolveFlowTickId(services: any?): number
 		if type(services) == "table" and type(services.TickId) == "number" then
 			return services.TickId
@@ -279,6 +303,7 @@ return function(MovementService: any)
 		return self._flowFrameSerial + 1
 	end
 
+	-- Resolves the delta time from the scheduler payload, falling back to one frame.
 	function MovementService:_ResolveFlowDeltaTime(services: any?): number
 		local dt = if type(services) == "table" and type(services.DeltaTime) == "number"
 			then services.DeltaTime
@@ -289,6 +314,7 @@ return function(MovementService: any)
 		return dt
 	end
 
+	-- Builds the separation snapshot and reusable published frame state for the current tick.
 	function MovementService:_BuildFlowDispatchSnapshot(
 		tickId: number,
 		dt: number
