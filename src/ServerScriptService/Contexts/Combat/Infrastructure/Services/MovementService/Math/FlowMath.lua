@@ -6,8 +6,8 @@ local MovementMath = require(script.Parent.MovementMath)
 
 local FlowMath = {}
 
-local LOOKAHEAD_SECONDS = 0.25
-local MIN_LOOKAHEAD_STUDS = 2
+local LOOKAHEAD_SECONDS = 1
+local MIN_LOOKAHEAD_STUDS = 12
 local MOVE_DIRECTION_EPSILON = 0.05
 local DEFAULT_ARRIVAL_RADIUS = 1.5
 

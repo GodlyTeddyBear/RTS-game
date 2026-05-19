@@ -2,6 +2,8 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
 local StateMachine = require(ReplicatedStorage.Utilities.StateMachine)
 local TableRecycler = require(ReplicatedStorage.Utilities.TableRecycler)
@@ -13,6 +15,10 @@ type TSharedFlowfieldEntry = MovementTypes.TSharedFlowfieldEntry
 type TFlowActorRefs = MovementTypes.TFlowActorRefs
 type TFlowPipelineState = MovementTypes.TFlowPipelineState
 type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
+
+local MOVEMENT_PROFILING_ENABLED = DebugConfig.COMBAT_MOVEMENT_PROFILING
+local STEP_ADVANCE_PROFILE_TAG = "Combat:MovementService:StepAdvance"
+local FLOW_STEP_ADVANCE_PROFILE_TAG = "Combat:MovementService:Flow:StepAdvance"
 
 local FLOW_PIPELINE_TRANSITIONS: { [TFlowPipelineState]: { [TFlowPipelineState]: boolean } } = {
 	Idle = {
@@ -135,8 +141,7 @@ function MovementService:Init(registry: any, _name: string)
 	self._combatLoopService = registry:Get("CombatLoopService")
 end
 
-function MovementService:Start()
-end
+function MovementService:Start() end
 
 function MovementService:ConfigureEnemyEntityFactory(enemyEntityFactory: any)
 	self._enemyEntityFactory = enemyEntityFactory
@@ -154,12 +159,13 @@ function MovementService:ConfigureFastFlow(pathfinder: any?, mapping: FastFlowHe
 	self._flowWallGridHalfSize = nil
 end
 
-function MovementService:ConfigureFlowfieldDebugRenderer(renderer: ((any, FastFlowHelper.TFlowGridMapping, Vector3) -> ())?)
+function MovementService:ConfigureFlowfieldDebugRenderer(
+	renderer: ((any, FastFlowHelper.TFlowGridMapping, Vector3) -> ())?
+)
 	self._flowfieldDebugRenderer = renderer
 end
 
-function MovementService:FinalizeAdvanceFrame()
-end
+function MovementService:FinalizeAdvanceFrame() end
 
 function MovementService:ResetFastFlowRuntime()
 	self:_ReleaseFlowLatestParallelSolve()
@@ -228,25 +234,29 @@ function MovementService:StartAdvance(entity: number, movementMode: EnemyMovemen
 end
 
 function MovementService:StepAdvance(entity: number, services: any?): (boolean, string?)
-	local movementState = self._movementByEntity[entity]
-	if movementState == nil then
-		return false, "MissingMovementState"
-	end
-
-	if movementState.Mode == "Path" then
-		self:_ApplyCurrentMoveSpeed(entity)
-
-		local status, reason = self:_TickPath(entity, movementState)
-		if status == "Fail" then
-			return false, reason
+	return DebugPlus.profile(STEP_ADVANCE_PROFILE_TAG, function()
+		local movementState = self._movementByEntity[entity]
+		if movementState == nil then
+			return false, "MissingMovementState"
 		end
-		if status == "Success" then
-			return true, nil
-		end
-		return false, nil
-	end
 
-	return self:_StepFlowAdvance(entity, movementState, services)
+		if movementState.Mode == "Path" then
+			self:_ApplyCurrentMoveSpeed(entity)
+
+			local status, reason = self:_TickPath(entity, movementState)
+			if status == "Fail" then
+				return false, reason
+			end
+			if status == "Success" then
+				return true, nil
+			end
+			return false, nil
+		end
+
+		return DebugPlus.profile(FLOW_STEP_ADVANCE_PROFILE_TAG, function()
+			return self:_StepFlowAdvance(entity, movementState, services)
+		end, MOVEMENT_PROFILING_ENABLED)
+	end, MOVEMENT_PROFILING_ENABLED)
 end
 
 function MovementService:StopMovement(entity: number)

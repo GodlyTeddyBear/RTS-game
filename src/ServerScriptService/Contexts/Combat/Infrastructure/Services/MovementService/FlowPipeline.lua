@@ -3,6 +3,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
 local MovementTypes = require(script.Parent.Types)
 
@@ -13,6 +15,12 @@ type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
 type TManagedJob = MovementTypes.TManagedJob
 
 local ManagedJobPolicies = ParallelQuery.ManagedJobPolicies
+local MOVEMENT_PROFILING_ENABLED = DebugConfig.COMBAT_MOVEMENT_PROFILING
+local ADVANCE_PIPELINE_PROFILE_TAG = "Combat:MovementService:Flow:AdvancePipeline"
+local PIPELINE_IDLE_BUILD_SNAPSHOT_PROFILE_TAG = "Combat:MovementService:Flow:AdvancePipeline:Idle:BuildSnapshot"
+local PIPELINE_DISPATCHING_DISPATCH_PROFILE_TAG = "Combat:MovementService:Flow:AdvancePipeline:Dispatching:Dispatch"
+local CONSUME_COMPLETED_SOLVE_PROFILE_TAG = "Combat:MovementService:Flow:ConsumeCompletedSolve"
+local TRY_DISPATCH_PROFILE_TAG = "Combat:MovementService:Flow:TryDispatch"
 
 local function _TransitionFlowPipeline(self: any, nextState: TFlowPipelineState)
 	local transitionResult = self._flowPipelineStateMachine:Transition(nextState)
@@ -157,18 +165,22 @@ return function(MovementService: any)
 	end
 
 	function MovementService:_ConsumeCompletedFlowSeparationSolve(): boolean
+		local closeConsumeProfile = DebugPlus.begin(CONSUME_COMPLETED_SOLVE_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 		local job = self._flowSeparationManagedJob
 		if job == nil then
+			closeConsumeProfile()
 			return false
 		end
 
 		local status = job:GetStatus()
 		if status.HasCompletedResult ~= true then
+			closeConsumeProfile()
 			return false
 		end
 
 		local managedResult = job:PollCompleted(self._flowCurrentSessionUserId)
 		if managedResult == nil or managedResult.Err ~= nil or managedResult.Rows == nil then
+			closeConsumeProfile()
 			return false
 		end
 
@@ -176,6 +188,7 @@ return function(MovementService: any)
 		local goalKeyByEntity = self._flowDispatchedGoalKeyByEntity
 		local frameState = self._flowDispatchedFrameState :: TFlowPublishedFrameState?
 		if snapshot ~= self._flowDispatchedSeparationSnapshot or goalKeyByEntity == nil or frameState == nil then
+			closeConsumeProfile()
 			return false
 		end
 
@@ -189,6 +202,7 @@ return function(MovementService: any)
 		)
 		if next(velocityByEntity) == nil then
 			self:_ReleaseFlowDispatchedSeparationSnapshot()
+			closeConsumeProfile()
 			return false
 		end
 
@@ -234,20 +248,25 @@ return function(MovementService: any)
 		publishedSolve.TickId = snapshot.TickId
 		self._flowLatestParallelSolve = publishedSolve
 		self:_ReleaseFlowDispatchedSeparationSnapshot()
+		closeConsumeProfile()
 		return true
 	end
 
 	function MovementService:_TryDispatchFlowSeparationSolve(snapshot: TFlowSeparationSolveSnapshot): boolean
+		local closeTryDispatchProfile = DebugPlus.begin(TRY_DISPATCH_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 		if not self:_IsFlowSeparationParallelEnabled() then
+			closeTryDispatchProfile()
 			return false
 		end
 		if #snapshot.EntityIds < self:_GetFlowVelocityParallelMinEntityCount() then
+			closeTryDispatchProfile()
 			return false
 		end
 
 		local job = self:_GetOrCreateFlowSeparationManagedJob()
 		local status = job:GetStatus()
 		if status.InFlight then
+			closeTryDispatchProfile()
 			return false
 		end
 
@@ -256,6 +275,7 @@ return function(MovementService: any)
 			job:Dispatch(snapshot)
 			didDispatch = true
 		end)
+		closeTryDispatchProfile()
 		return didDispatch
 	end
 
@@ -270,59 +290,75 @@ return function(MovementService: any)
 	end
 
 	function MovementService:_AdvanceFlowPipeline(services: any?)
-		local tickId = self:_ResolveFlowTickId(services)
-		if self._flowPipelineTickId == tickId then
-			return
-		end
-
-		self._flowPipelineTickId = tickId
-		self._flowFrameSerial = tickId
-		self._flowCurrentSessionUserId = self:_ResolveActiveSessionUserId()
-
-		local state = self:_GetFlowPipelineState()
-		if state == "Idle" then
-			local snapshot, goalKeyByEntity, frameState =
-				self:_BuildFlowDispatchSnapshot(tickId, self:_ResolveFlowDeltaTime(services))
-			if snapshot == nil or goalKeyByEntity == nil or frameState == nil then
+		DebugPlus.profile(ADVANCE_PIPELINE_PROFILE_TAG, function()
+			local tickId = self:_ResolveFlowTickId(services)
+			if self._flowPipelineTickId == tickId then
 				return
 			end
 
-			self:_ReleaseFlowDispatchedSeparationSnapshot()
-			self._flowDispatchedSeparationSnapshot = snapshot
-			self._flowDispatchedGoalKeyByEntity = goalKeyByEntity
-			self._flowDispatchedFrameState = frameState
+			self._flowPipelineTickId = tickId
+			self._flowFrameSerial = tickId
+			self._flowCurrentSessionUserId = self:_ResolveActiveSessionUserId()
 
-			_TransitionFlowPipeline(self, "Dispatching")
-			state = "Dispatching"
-		end
+			local state = self:_GetFlowPipelineState()
+			if state == "Idle" then
+				local closeBuildSnapshotProfile = DebugPlus.begin(
+					PIPELINE_IDLE_BUILD_SNAPSHOT_PROFILE_TAG,
+					MOVEMENT_PROFILING_ENABLED
+				)
+				local snapshot, goalKeyByEntity, frameState =
+					self:_BuildFlowDispatchSnapshot(tickId, self:_ResolveFlowDeltaTime(services))
+				closeBuildSnapshotProfile()
+				if snapshot == nil or goalKeyByEntity == nil or frameState == nil then
+					return
+				end
 
-		if state == "Dispatching" then
-			local snapshot = self._flowDispatchedSeparationSnapshot
-			if snapshot == nil or not self:_TryDispatchFlowSeparationSolve(snapshot) then
 				self:_ReleaseFlowDispatchedSeparationSnapshot()
-				_TransitionFlowPipeline(self, "Idle")
+				self._flowDispatchedSeparationSnapshot = snapshot
+				self._flowDispatchedGoalKeyByEntity = goalKeyByEntity
+				self._flowDispatchedFrameState = frameState
+
+				_TransitionFlowPipeline(self, "Dispatching")
+				state = "Dispatching"
+			end
+
+			if state == "Dispatching" then
+				local snapshot = self._flowDispatchedSeparationSnapshot
+				local didDispatch = false
+				if snapshot ~= nil then
+					local closeDispatchProfile = DebugPlus.begin(
+						PIPELINE_DISPATCHING_DISPATCH_PROFILE_TAG,
+						MOVEMENT_PROFILING_ENABLED
+					)
+					didDispatch = self:_TryDispatchFlowSeparationSolve(snapshot)
+					closeDispatchProfile()
+				end
+				if snapshot == nil or not didDispatch then
+					self:_ReleaseFlowDispatchedSeparationSnapshot()
+					_TransitionFlowPipeline(self, "Idle")
+					return
+				end
+
+				_TransitionFlowPipeline(self, "Waiting")
 				return
 			end
 
-			_TransitionFlowPipeline(self, "Waiting")
-			return
-		end
+			if state == "Waiting" then
+				local job = self._flowSeparationManagedJob
+				if job == nil then
+					self:_ReleaseFlowDispatchedSeparationSnapshot()
+					_TransitionFlowPipeline(self, "Idle")
+					return
+				end
 
-		if state == "Waiting" then
-			local job = self._flowSeparationManagedJob
-			if job == nil then
-				self:_ReleaseFlowDispatchedSeparationSnapshot()
-				_TransitionFlowPipeline(self, "Idle")
-				return
+				local status = job:GetStatus()
+				if status.HasCompletedResult ~= true then
+					return
+				end
+
+				_TransitionFlowPipeline(self, "Publishing")
+				self:_PublishCompletedFlowSolve()
 			end
-
-			local status = job:GetStatus()
-			if status.HasCompletedResult ~= true then
-				return
-			end
-
-			_TransitionFlowPipeline(self, "Publishing")
-			self:_PublishCompletedFlowSolve()
-		end
+		end, MOVEMENT_PROFILING_ENABLED)
 	end
 end

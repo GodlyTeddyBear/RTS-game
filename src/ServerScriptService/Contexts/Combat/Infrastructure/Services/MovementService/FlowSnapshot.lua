@@ -3,6 +3,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
 local TableRecycler = require(ReplicatedStorage.Utilities.TableRecycler)
 local FlowFrameState = require(script.Parent.FlowFrameState)
@@ -18,6 +20,10 @@ type TFlowSeparationSolveRow = MovementTypes.TFlowSeparationSolveRow
 local SharedMemoryAuthoring = ParallelQuery.SharedMemoryAuthoring
 local ResultApplication = ParallelQuery.ResultApplication
 local ValidationHelpers = ParallelQuery.ValidationHelpers
+local MOVEMENT_PROFILING_ENABLED = DebugConfig.COMBAT_MOVEMENT_PROFILING
+local BUILD_DISPATCH_SNAPSHOT_PROFILE_TAG = "Combat:MovementService:Flow:BuildDispatchSnapshot"
+local CREATE_SHARED_MEMORY_PROFILE_TAG = "Combat:MovementService:Flow:CreateSharedMemory"
+local APPLY_VELOCITY_ROWS_PROFILE_TAG = "Combat:MovementService:Flow:ApplyVelocityRows"
 
 return function(MovementService: any)
 	function MovementService:_BuildPackedWallKeys(): { number }
@@ -99,6 +105,8 @@ return function(MovementService: any)
 	end
 
 	function MovementService:_CreateFlowSeparationSharedMemory(snapshot: TFlowSeparationSolveSnapshot): SharedTable
+		local closeCreateSharedMemoryProfile =
+			DebugPlus.begin(CREATE_SHARED_MEMORY_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 		local builder = SharedMemoryAuthoring.CreateSnapshotBuilder()
 		SharedMemoryAuthoring.SetArrayValues(builder, "GoalGroupId", snapshot.GoalGroupId)
 		SharedMemoryAuthoring.SetArrayValues(
@@ -164,7 +172,9 @@ return function(MovementService: any)
 		)
 		SharedMemoryAuthoring.SetScalar(builder, "WallCollisionVelocityEpsilon", snapshot.WallCollisionVelocityEpsilon)
 		SharedMemoryAuthoring.SetScalar(builder, "ClumpTouchPaddingStuds", snapshot.ClumpTouchPaddingStuds)
-		return SharedMemoryAuthoring.BuildSharedMemory(builder)
+		local sharedMemory = SharedMemoryAuthoring.BuildSharedMemory(builder)
+		closeCreateSharedMemoryProfile()
+		return sharedMemory
 	end
 
 	function MovementService:_ApplyFlowVelocityRows(
@@ -173,6 +183,7 @@ return function(MovementService: any)
 		velocityByEntity: { [number]: Vector2 }?,
 		touchedSettledNeighborByEntity: { [number]: boolean }?
 	): ({ [number]: Vector2 }, { [number]: boolean })
+		local closeApplyVelocityRowsProfile = DebugPlus.begin(APPLY_VELOCITY_ROWS_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 		local resolvedVelocityByEntity = if velocityByEntity ~= nil then velocityByEntity else {}
 		table.clear(resolvedVelocityByEntity)
 		local resolvedTouchedSettledNeighborByEntity = if touchedSettledNeighborByEntity ~= nil
@@ -213,6 +224,7 @@ return function(MovementService: any)
 			end,
 		})
 
+		closeApplyVelocityRowsProfile()
 		return resolvedVelocityByEntity, resolvedTouchedSettledNeighborByEntity
 	end
 
@@ -281,6 +293,8 @@ return function(MovementService: any)
 		tickId: number,
 		dt: number
 	): (TFlowSeparationSolveSnapshot?, { [number]: string }?, TFlowPublishedFrameState?)
+		local closeBuildDispatchSnapshotProfile =
+			DebugPlus.begin(BUILD_DISPATCH_SNAPSHOT_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 		table.clear(self._flowInvalidReasonByEntity)
 
 		local frameState = self:_GetOrCreateFlowFrameState()
@@ -338,12 +352,14 @@ return function(MovementService: any)
 		end
 
 		if frameState:GetEntityCount() == 0 then
+			closeBuildDispatchSnapshotProfile()
 			return nil, nil, nil
 		end
 
 		-- Build the final separation snapshot from the frame-state object
 		local _pathfinder, mapping = self:_ResolveFastFlowRuntime()
 		if mapping == nil then
+			closeBuildDispatchSnapshotProfile()
 			return nil, nil, nil
 		end
 
@@ -369,6 +385,7 @@ return function(MovementService: any)
 			if type(config.WallCollisionVelocityEpsilon) == "number" then config.WallCollisionVelocityEpsilon else 1e-4,
 			self:_GetFlowClumpTouchPaddingStuds()
 		)
+		closeBuildDispatchSnapshotProfile()
 		return snapshot, goalKeyByEntity, self._flowReusableFrameState :: TFlowPublishedFrameState
 	end
 end
