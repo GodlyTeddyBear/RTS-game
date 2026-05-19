@@ -251,36 +251,18 @@ local HasTickStartedAtNumberOrNil = Spec.new(
 	end
 )
 
-local HasTickDeadlineNumberOrNil = Spec.new(
+local HasTickBudgetSecondsNumberOrNil = Spec.new(
 	"InvalidFrameContext",
-	"AiRuntime frameContext.TickDeadline must be a finite number when present",
+	"AiRuntime frameContext.TickBudgetSeconds must be a finite non-negative number when present",
 	function(candidate: TFrameContextCandidate): boolean
 		local frameContext = candidate.FrameContext
 		if type(frameContext) ~= "table" then
 			return true
 		end
 
-		local tickDeadline = frameContext.TickDeadline
-		return tickDeadline == nil or (type(tickDeadline) == "number" and _IsFiniteNumber(tickDeadline))
-	end
-)
-
-local HasValidTickBudgetWindow = Spec.new(
-	"InvalidFrameContext",
-	"AiRuntime frameContext.TickDeadline must not be earlier than TickStartedAt",
-	function(candidate: TFrameContextCandidate): boolean
-		local frameContext = candidate.FrameContext
-		if type(frameContext) ~= "table" then
-			return true
-		end
-
-		local tickStartedAt = frameContext.TickStartedAt
-		local tickDeadline = frameContext.TickDeadline
-		if tickStartedAt == nil or tickDeadline == nil then
-			return true
-		end
-
-		return tickDeadline >= tickStartedAt
+		local tickBudgetSeconds = frameContext.TickBudgetSeconds
+		return tickBudgetSeconds == nil
+			or (type(tickBudgetSeconds) == "number" and _IsFiniteNumber(tickBudgetSeconds) and tickBudgetSeconds >= 0)
 	end
 )
 
@@ -457,8 +439,7 @@ return table.freeze({
 		HasCurrentTimeNumber,
 		HasTickIdNumber,
 		HasTickStartedAtNumberOrNil,
-		HasTickDeadlineNumberOrNil,
-		HasValidTickBudgetWindow,
+		HasTickBudgetSecondsNumberOrNil,
 		HasDeltaTimeNumberOrNil,
 		HasServicesTableOrNil,
 		HasActorTypesArrayOrNil,

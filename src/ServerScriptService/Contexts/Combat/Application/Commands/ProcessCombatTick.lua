@@ -69,21 +69,18 @@ function ProcessCombatTick:Execute(userId: number, dt: number, schedulerTickId: 
 		local currentTime = os.clock()
 		local tickStartedAt = currentTime
 		local tickBudgetSeconds = DebugConfig.COMBAT_TICK_TIME_BUDGET_SECONDS
-		local tickDeadline = if type(tickBudgetSeconds) == "number" and tickBudgetSeconds > 0
-			then tickStartedAt + tickBudgetSeconds
-			else nil
 		local ok, frameResult = pcall(function()
 			return DebugPlus.profile(processSessionsRunFrameProfileTag, function()
 				return self._behaviorRuntimeService:RunFrame({
 					CurrentTime = currentTime,
 					TickId = schedulerTickId,
 					TickStartedAt = tickStartedAt,
-					TickDeadline = tickDeadline,
+					TickBudgetSeconds = tickBudgetSeconds,
 					DeltaTime = dt,
 					Services = {
 						CombatActorRegistryService = self._actorRegistryService,
 						TickStartedAt = tickStartedAt,
-						TickDeadline = tickDeadline,
+						TickBudgetSeconds = tickBudgetSeconds,
 					},
 				})
 			end, schedulerProfilingEnabled)

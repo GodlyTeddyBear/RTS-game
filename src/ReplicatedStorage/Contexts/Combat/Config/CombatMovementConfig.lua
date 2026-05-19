@@ -131,7 +131,7 @@ CombatMovementConfig.FLOW_SOFT_SEPARATION = table.freeze({
 	-- Master switch for worker-based separation and velocity solves.
 	ParallelEnabled = true,
 	-- Number of worker actors available for separation jobs.
-	ParallelActorCount = 64,
+	ParallelActorCount = 16,
 	-- Minimum entity count before velocity solving is offloaded to workers.
 	ParallelMinVelocityEntityCount = 2,
 	-- Chunk size used when dispatching velocity solve work.

@@ -72,6 +72,7 @@ local _CreateRuntimeFrameProfile
 local _CaptureMilliseconds
 local _BuildDirectCombatHookOutcome
 local _ShouldStopForTimeBudget
+local _BuildServiceTickDeadline
 
 local runFrameActorTypesProfileTag = "AI.Runtime.RunFrame.ActorTypes"
 local runFrameResolveActorTypesProfileTag = "AI.Runtime.RunFrame.ResolveActorTypes"
@@ -276,6 +277,7 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 	local selectedEntitiesByActorType = {}
 	local selectedActorCount = 0
 	local servicedActorCount = 0
+	local serviceTickDeadline = nil
 	local stopReason = nil
 	local actorTypes = DebugPlus.profile(runFrameResolveActorTypesProfileTag, function()
 		return _ResolveActorTypes(frameContext, self._actorAdapters, self._actorOrder)
@@ -296,6 +298,8 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 				selectedActorCount += #entities
 			end
 
+			serviceTickDeadline = _BuildServiceTickDeadline(frameContext)
+			local s = os.clock()
 			for _, actorType in ipairs(actorTypes) do
 				local adapter = self._actorAdapters[actorType]
 				local entities = selectedEntitiesByActorType[actorType]
@@ -304,13 +308,21 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 				end
 
 				for _, entity in ipairs(entities) do
-					if servicedActorCount > 0 and _ShouldStopForTimeBudget(frameContext) then
+					if servicedActorCount > 0 and _ShouldStopForTimeBudget(serviceTickDeadline) then
 						stopReason = "TimeBudgetExceeded"
+						print(((os.clock() - s) * 10 ^ 3) .. " MS for actors:", servicedActorCount)
 						return
 					end
 
-					local entityState =
-						self:_BuildEntityState(actorType, adapter, entity, frameContext, defects, entityResults, frameProfile)
+					local entityState = self:_BuildEntityState(
+						actorType,
+						adapter,
+						entity,
+						frameContext,
+						defects,
+						entityResults,
+						frameProfile
+					)
 					local singleEntityStates = { entityState }
 
 					DebugPlus.profile(runFrameActorTypesTreePhaseProfileTag, function()
@@ -894,10 +906,8 @@ function Runtime:_RunActionPhase(
 			DeltaTime = frameContext.DeltaTime,
 			Services = entityState.HookOutcome.Services,
 		}
-		local closeTickCurrentActionProfile = DebugPlus.begin(
-			runFrameActionPhaseTickCurrentActionProfileTag,
-			runFrameProfilingEnabled
-		)
+		local closeTickCurrentActionProfile =
+			DebugPlus.begin(runFrameActionPhaseTickCurrentActionProfileTag, runFrameProfilingEnabled)
 		local tickResult = self._runtime:TickCurrentAction(entityState.Entity, workingActionState, runtimeContext)
 		closeTickCurrentActionProfile()
 
@@ -920,11 +930,10 @@ function Runtime:_RunActionPhase(
 		entityState.Result.TickActionId = tickResult.value.ActionId
 		entityState.Result.TickStatus = tickStatus
 
-		local closeResolveFinishedActionProfile = DebugPlus.begin(
-			runFrameActionPhaseResolveFinishedActionProfileTag,
-			runFrameProfilingEnabled
-		)
-		local resolveResult = self._runtime:ResolveFinishedAction(workingActionState, tickResult.value, frameContext.CurrentTime)
+		local closeResolveFinishedActionProfile =
+			DebugPlus.begin(runFrameActionPhaseResolveFinishedActionProfileTag, runFrameProfilingEnabled)
+		local resolveResult =
+			self._runtime:ResolveFinishedAction(workingActionState, tickResult.value, frameContext.CurrentTime)
 		closeResolveFinishedActionProfile()
 		entityState.Result.ResolveStatus = resolveResult.Status
 
@@ -1128,8 +1137,16 @@ function _CaptureMilliseconds(startedAt: number?): number
 	return (os.clock() - startedAt) * 1000
 end
 
-function _ShouldStopForTimeBudget(frameContext: TFrameContext): boolean
-	local tickDeadline = frameContext.TickDeadline
+function _BuildServiceTickDeadline(frameContext: TFrameContext): number?
+	local tickBudgetSeconds = frameContext.TickBudgetSeconds
+	if type(tickBudgetSeconds) ~= "number" or tickBudgetSeconds <= 0 then
+		return nil
+	end
+
+	return os.clock() + tickBudgetSeconds
+end
+
+function _ShouldStopForTimeBudget(tickDeadline: number?): boolean
 	return type(tickDeadline) == "number" and os.clock() >= tickDeadline
 end
 

@@ -148,7 +148,7 @@ export type TFrameContext = {
 	CurrentTime: number,
 	TickId: number,
 	TickStartedAt: number?,
-	TickDeadline: number?,
+	TickBudgetSeconds: number?,
 	DeltaTime: number?,
 	Services: { [string]: any }?,
 	ActorTypes: { string }?,
