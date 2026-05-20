@@ -8,11 +8,15 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 local Compiler = require(script.Compiler)
 local ManagedJob = require(script.ManagedJob)
 local ManagedJobPolicies = require(script.ManagedJobPolicies)
+local ResultApplication = require(script.ResultApplication)
 local RunHandle = require(script.RunHandle)
 local Types = require(script.Types)
 local Validation = require(script.Validation)
+local ValidationHelpers = require(script.ValidationHelpers)
 
 export type TResult<T> = Types.TResult<T>
+export type TFieldType = Types.TFieldType
+export type TResultField = Types.TResultField
 export type TCompiledJob = Types.TCompiledJob
 export type TDefineJobConfig = Types.TDefineJobConfig
 export type TRunnerConfig = Types.TRunnerConfig
@@ -28,6 +32,11 @@ export type TManagedJobResult = Types.TManagedJobResult
 export type TManagedJob = Types.TManagedJob
 export type TSharedPacket = Types.TSharedPacket
 export type TSharedCompiledHandle = Types.TSharedCompiledHandle
+export type TRowFieldValidationResult = Types.TRowFieldValidationResult
+export type TSchemaRowValidationMode = Types.TSchemaRowValidationMode
+export type TSchemaRowValidationResult = Types.TSchemaRowValidationResult
+export type TSchemaRowsValidationResult = Types.TSchemaRowsValidationResult
+export type TRowApplicationResult = Types.TRowApplicationResult
 export type TRunnerRunHandle = Types.TRunnerRunHandle
 export type TRunner = Types.TRunner
 
@@ -44,6 +53,8 @@ ParallelRunner.Compiler = Compiler
 ParallelRunner.Arg = Compiler.Arg
 ParallelRunner.Result = Compiler.Result
 ParallelRunner.ManagedJobPolicies = ManagedJobPolicies
+ParallelRunner.ValidationHelpers = ValidationHelpers
+ParallelRunner.ResultApplication = ResultApplication
 
 local WORKER_ERROR_PATTERN = "^%[([^%]]+)%]%s+([^:]+):%s+(.*)$"
 

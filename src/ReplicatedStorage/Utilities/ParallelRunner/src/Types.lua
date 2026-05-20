@@ -13,6 +13,21 @@ export type TRunPromise = typeof(Promise.new(function() end))
 type TSignalConnection = {
 	Disconnect: (self: TSignalConnection) -> (),
 }
+export type TFieldType =
+	"u8" | "u16" | "u32"
+	| "i8" | "i16" | "i32"
+	| "f32" | "f64"
+	| "boolean"
+	| "string"
+	| "vector2" | "vector2i16"
+	| "vector3" | "vector3i16"
+	| "cframe" | "cframef32" | "cframe18"
+	| "color3" | "color3b16"
+export type TResultField = {
+	Name: string,
+	Type: TFieldType,
+	Length: number?,
+}
 export type TCompiledJob = ParallelLogistics.TCompiledJob
 export type TSharedPacket = SharedPlus.TPacket
 export type TSharedCompiledHandle = SharedPlus.TCompiledHandle
@@ -141,6 +156,33 @@ export type TManagedJobStatus = {
 	HasCompletedResult: boolean,
 	PolicyPreset: TManagedJobPolicyPreset,
 	LastError: TResult<TRunOutput>?,
+}
+
+export type TRowFieldValidationResult = {
+	IsValid: boolean,
+	FieldName: string?,
+	Reason: string?,
+}
+
+export type TSchemaRowValidationMode = "RequiredOnly" | "Full"
+export type TSchemaRowValidationResult = TRowFieldValidationResult & {
+	RowIndex: number?,
+}
+
+export type TSchemaRowsValidationResult = {
+	IsValid: boolean,
+	InvalidRowCount: number,
+	FirstInvalidRowIndex: number?,
+	FirstInvalidFieldName: string?,
+	Reason: string?,
+}
+
+export type TRowApplicationResult = {
+	RowCount: number,
+	AppliedCount: number,
+	InvalidRowCount: number,
+	UnresolvedCount: number,
+	SkippedCount: number,
 }
 
 export type TCompletedSignal = {
