@@ -105,7 +105,7 @@ return function(MovementService: TMovementService)
 
 		frameState = FlowFrameState.new(self:_GetOrCreateFlowFrameStateRecycler()) :: TFlowFrameStateHandle
 		self._flowFrameState = frameState
-		return frameState
+		return frameState :: TFlowFrameStateHandle
 	end
 
 	-- Destroys the reusable flow frame-state handle and its recycler.
@@ -234,7 +234,8 @@ return function(MovementService: TMovementService)
 			end
 
 			local rebuiltSharedMemory = self:_BuildFlowSeparationStaticSharedMemory(snapshot)
-			local applySharedMemoryResult = runnerResult.value:SetSharedMemory("FlowSeparationSolve", rebuiltSharedMemory)
+			local applySharedMemoryResult =
+				runnerResult.value:SetSharedMemory("FlowSeparationSolve", rebuiltSharedMemory)
 			if not applySharedMemoryResult.success then
 				Result.MentionError("Combat:MovementService", "Failed to apply static flow separation shared memory", {
 					CauseType = applySharedMemoryResult.type,
@@ -249,7 +250,9 @@ return function(MovementService: TMovementService)
 	end
 
 	-- Builds the staged worker payload after the snapshot has already been packed.
-	function MovementService:_PrepareFlowSeparationWorkerPayload(snapshot: TFlowSeparationSolveSnapshot): TFlowSeparationWorkerPayload
+	function MovementService:_PrepareFlowSeparationWorkerPayload(
+		snapshot: TFlowSeparationSolveSnapshot
+	): TFlowSeparationWorkerPayload
 		local workerPayload
 		DebugPlus.profile(PREPARE_WORKER_PAYLOAD_PROFILE_TAG, function()
 			workerPayload = self:_CreateFlowSeparationWorkerPayload(snapshot)

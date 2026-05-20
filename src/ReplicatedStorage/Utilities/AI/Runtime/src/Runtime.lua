@@ -310,7 +310,7 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 				for _, entity in ipairs(entities) do
 					if servicedActorCount > 0 and _ShouldStopForTimeBudget(serviceTickDeadline) then
 						stopReason = "TimeBudgetExceeded"
-						print(((os.clock() - s) * 10 ^ 3) .. " MS for actors:", servicedActorCount)
+						print(((os.clock() - s) * 10 ^ 3) .. " MS", servicedActorCount)
 						return
 					end
 

@@ -4,8 +4,8 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Lifecycle = require(script.Parent.Lifecycle)
+local ParallelRunner = if RunService:IsServer() then require(ReplicatedStorage.Utilities.ParallelRunner) else nil
 local Query = require(script.Parent.Query)
-local ParallelQuery = if RunService:IsServer() then require(ReplicatedStorage.Utilities.ParallelQuery) else nil
 local Types = require(script.Parent.Parent.Types)
 
 type THitbox = Types.Hitbox
@@ -25,10 +25,11 @@ type TParallelSnapshot = {
 	Sizes: { Vector3 },
 	ShapeIds: { number },
 	FilterTokens: { string },
+	DispatchSerial: number,
 }
 
 type TParallelResult = {
-	RequestId: number,
+	DispatchSerial: number,
 	Snapshot: TParallelSnapshot,
 	Rows: { [string]: any }?,
 	Err: any?,
@@ -40,49 +41,32 @@ local internalRunner: THitboxRunner? = nil
 local OPERATION_NAME = "MuchachoHitboxPresence"
 local PARALLEL_ACTOR_COUNT = 32
 local PARALLEL_BATCH_SIZE = 1
-local PARALLEL_TIMEOUT_SECONDS = 0.2
 
 local Runner = {}
 
 local function _CreateAsyncState()
 	return {
-		PendingRequestId = 0,
-		LatestAppliedRequestId = 0,
+		NextDispatchSerial = 0,
+		LatestAppliedDispatchSerial = 0,
 		LatestCompletedResult = nil,
 		InFlight = false,
-		InFlightRequestId = nil,
+		InFlightDispatchSerial = nil,
+		InFlightHandle = nil,
 		ShouldDropInFlightResult = false,
 	}
 end
 
-local function _CreateParallelMemory(snapshot: TParallelSnapshot): SharedTable
-	local memory = SharedTable.new()
-	local queryCFrames = SharedTable.new()
-	local sizes = SharedTable.new()
-	local shapeIds = SharedTable.new()
-	local filterTokens = SharedTable.new()
-
-	for index, queryCFrame in ipairs(snapshot.QueryCFrames) do
-		queryCFrames[index] = queryCFrame
-		sizes[index] = snapshot.Sizes[index]
-		shapeIds[index] = snapshot.ShapeIds[index]
-		filterTokens[index] = snapshot.FilterTokens[index]
-	end
-
-	memory.QueryCFrames = queryCFrames
-	memory.Sizes = sizes
-	memory.ShapeIds = shapeIds
-	memory.FilterTokens = filterTokens
-	return memory
-end
-
-local function _CreateParallelSnapshot(pendingHitboxes: { TPendingParallelHitbox }): TParallelSnapshot
+local function _CreateParallelSnapshot(
+	pendingHitboxes: { TPendingParallelHitbox },
+	dispatchSerial: number
+): TParallelSnapshot
 	local snapshot: TParallelSnapshot = {
 		Hitboxes = table.create(#pendingHitboxes),
 		QueryCFrames = table.create(#pendingHitboxes),
 		Sizes = table.create(#pendingHitboxes),
 		ShapeIds = table.create(#pendingHitboxes),
 		FilterTokens = table.create(#pendingHitboxes),
+		DispatchSerial = dispatchSerial,
 	}
 
 	for index, pendingHitbox in ipairs(pendingHitboxes) do
@@ -112,11 +96,11 @@ local function _ApplyCompletedResult(runner: THitboxRunner)
 	end
 
 	state.LatestCompletedResult = nil
-	if result.RequestId <= state.LatestAppliedRequestId then
+	if result.DispatchSerial <= state.LatestAppliedDispatchSerial then
 		return
 	end
 
-	state.LatestAppliedRequestId = result.RequestId
+	state.LatestAppliedDispatchSerial = result.DispatchSerial
 	if result.Err ~= nil or result.Rows == nil then
 		_ApplySerialForSnapshot(runner, result.Snapshot)
 		return
@@ -150,63 +134,84 @@ local function _DispatchParallelSnapshot(runner: THitboxRunner, snapshot: TParal
 		return
 	end
 
-	local requestId = state.PendingRequestId + 1
-	state.PendingRequestId = requestId
+	local dispatchSerial = snapshot.DispatchSerial
 	state.InFlight = true
-	state.InFlightRequestId = requestId
+	state.InFlightDispatchSerial = dispatchSerial
+	state.InFlightHandle = nil
 	state.ShouldDropInFlightResult = false
 
-	local promise = nil
-	local ok = pcall(function()
-		parallelRunner:SetLocalMemory(OPERATION_NAME, _CreateParallelMemory(snapshot))
-		promise = parallelRunner:RunAsync(OPERATION_NAME, {
-			WorkCount = #snapshot.Hitboxes,
-			BatchSize = PARALLEL_BATCH_SIZE,
-			TimeoutSeconds = PARALLEL_TIMEOUT_SECONDS,
-		})
-	end)
-
-	if not ok or promise == nil then
+	local runResult = parallelRunner:Run({
+		JobName = OPERATION_NAME,
+		Args = {
+			DispatchSerial = dispatchSerial,
+		},
+		LogicalWorkCount = #snapshot.Hitboxes,
+		BatchSize = PARALLEL_BATCH_SIZE,
+		WorkerPayload = {
+			QueryCFrames = snapshot.QueryCFrames,
+			Sizes = snapshot.Sizes,
+			ShapeIds = snapshot.ShapeIds,
+			FilterTokens = snapshot.FilterTokens,
+		},
+	})
+	if not runResult.success then
 		state.InFlight = false
-		state.InFlightRequestId = nil
+		state.InFlightDispatchSerial = nil
+		state.InFlightHandle = nil
 		_ApplySerialForSnapshot(runner, snapshot)
 		return
 	end
 
-	promise
-		:andThen(function(rows)
-			if state.InFlightRequestId ~= requestId then
+	local handle = runResult.value
+	state.InFlightHandle = handle
+
+	handle
+		:GetPromise()
+		:andThen(function(result)
+			if state.InFlightDispatchSerial ~= dispatchSerial then
 				return
 			end
 
 			state.InFlight = false
-			state.InFlightRequestId = nil
+			state.InFlightDispatchSerial = nil
+			state.InFlightHandle = nil
 			if state.ShouldDropInFlightResult then
 				state.ShouldDropInFlightResult = false
 				return
 			end
 
+			if result.success then
+				state.LatestCompletedResult = {
+					DispatchSerial = dispatchSerial,
+					Snapshot = snapshot,
+					Rows = result.value.Rows :: any,
+					Err = nil,
+				}
+				return
+			end
+
 			state.LatestCompletedResult = {
-				RequestId = requestId,
+				DispatchSerial = dispatchSerial,
 				Snapshot = snapshot,
-				Rows = rows :: any,
-				Err = nil,
+				Rows = nil,
+				Err = result,
 			}
 		end)
 		:catch(function(err)
-			if state.InFlightRequestId ~= requestId then
+			if state.InFlightDispatchSerial ~= dispatchSerial then
 				return
 			end
 
 			state.InFlight = false
-			state.InFlightRequestId = nil
+			state.InFlightDispatchSerial = nil
+			state.InFlightHandle = nil
 			if state.ShouldDropInFlightResult then
 				state.ShouldDropInFlightResult = false
 				return
 			end
 
 			state.LatestCompletedResult = {
-				RequestId = requestId,
+				DispatchSerial = dispatchSerial,
 				Snapshot = snapshot,
 				Rows = nil,
 				Err = err,
@@ -214,18 +219,31 @@ local function _DispatchParallelSnapshot(runner: THitboxRunner, snapshot: TParal
 		end)
 end
 
-local function _CreateParallelRunner(): any
-	if ParallelQuery == nil then
+local function _CreateParallelRunner()
+	if ParallelRunner == nil then
 		return nil
 	end
 
-	return ParallelQuery.new({
+	local runner = ParallelRunner.new({
 		Name = "MuchachoHitboxPresenceRunner",
 		ActorCount = PARALLEL_ACTOR_COUNT,
-		Operations = {
-			script.Parent:WaitForChild("ParallelPresenceOperation") :: ModuleScript,
-		},
+		DefaultBatchSize = PARALLEL_BATCH_SIZE,
 	})
+
+	local registerResult = runner:RegisterJob({
+		Job = require(script.Parent:WaitForChild("ParallelPresenceOperation") :: ModuleScript),
+		WorkerModule = script.Parent:WaitForChild("ParallelPresenceWorker") :: ModuleScript,
+	})
+	if registerResult.success then
+		return runner
+	end
+
+	local destroyResult = runner:Destroy()
+	if not destroyResult.success then
+		return nil
+	end
+
+	return nil
 end
 
 function Runner.Create(): THitboxRunner
@@ -294,13 +312,16 @@ function Runner.Create(): THitboxRunner
 			return
 		end
 
+		local nextDispatchSerial = self._queryAsyncState.NextDispatchSerial + 1
+		self._queryAsyncState.NextDispatchSerial = nextDispatchSerial
+		local snapshot = _CreateParallelSnapshot(parallelHitboxes, nextDispatchSerial)
 		if self._queryAsyncState.InFlight then
 			self._queryAsyncState.ShouldDropInFlightResult = true
-			_ApplySerialForSnapshot(self, _CreateParallelSnapshot(parallelHitboxes))
+			_ApplySerialForSnapshot(self, snapshot)
 			return
 		end
 
-		_DispatchParallelSnapshot(self, _CreateParallelSnapshot(parallelHitboxes))
+		_DispatchParallelSnapshot(self, snapshot)
 	end
 
 	function runner:Destroy()
@@ -309,6 +330,17 @@ function Runner.Create(): THitboxRunner
 		end
 
 		self._destroyed = true
+		local asyncState = self._queryAsyncState
+		local inFlightHandle = asyncState.InFlightHandle
+		if inFlightHandle ~= nil then
+			inFlightHandle:Cancel()
+		end
+		asyncState.InFlight = false
+		asyncState.InFlightDispatchSerial = nil
+		asyncState.InFlightHandle = nil
+		asyncState.ShouldDropInFlightResult = false
+		asyncState.LatestCompletedResult = nil
+
 		local parallelRunner = self._parallelRunner
 		if parallelRunner ~= nil then
 			parallelRunner:Destroy()

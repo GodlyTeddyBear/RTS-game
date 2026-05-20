@@ -2,6 +2,8 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local ParallelActors = require(ReplicatedStorage.Utilities.ParallelActors)
 local Result = require(ReplicatedStorage.Utilities.Result)
 
@@ -58,6 +60,9 @@ ParallelRunner.ValidationHelpers = ValidationHelpers
 ParallelRunner.ResultApplication = ResultApplication
 
 local WORKER_ERROR_PATTERN = "^%[([^%]]+)%]%s+([^:]+):%s+(.*)$"
+local RUN_PROFILE_RESOLVE_WORKER_PAYLOAD_BUFFER_TAG = "ParallelRunner:Run:ResolveWorkerPayloadBuffer"
+local RUN_PROFILE_WORKPLACE_RUN_TAG = "ParallelRunner:Run:WorkplaceRun"
+local RUN_PROFILE_ENABLED = DebugConfig.PARALLEL_RUNNER_PROFILING
 
 local function _BuildSetupError(errType: string, message: string, data: { [string]: any }?): TResult<any>
 	return Err(errType, message, data)
@@ -67,30 +72,34 @@ local function _BuildDestroyedError(): TResult<any>
 	return Err("ParallelRunnerDestroyed", "ParallelRunner has already been destroyed")
 end
 
-local function _ResolveLogicalWorkCount(registeredJob: TRegisteredJob, request: Types.TRunRequest): (number?, TResult<any>?)
-	if request.LogicalWorkCount ~= nil then
+local function _ResolveLogicalWorkCount(
+	registeredJob: TRegisteredJob,
+	request: Types.TRunRequest
+): (number?, TResult<any>?)
+	if request.LogicalWorkCount then
 		return request.LogicalWorkCount, nil
 	end
 
-	if registeredJob.DefaultLogicalWorkCount ~= nil then
+	if registeredJob.DefaultLogicalWorkCount then
 		return registeredJob.DefaultLogicalWorkCount, nil
 	end
 
-	return nil, _BuildSetupError(
-		"ParallelRunnerRunRequestError",
-		`ParallelRunner:Run("{request.JobName}") requires LogicalWorkCount when no job default exists`,
-		{
-			JobName = request.JobName,
-		}
-	)
+	return nil,
+		_BuildSetupError(
+			"ParallelRunnerRunRequestError",
+			`ParallelRunner:Run("{request.JobName}") requires LogicalWorkCount when no job default exists`,
+			{
+				JobName = request.JobName,
+			}
+		)
 end
 
 local function _ResolveBatchSize(self: any, registeredJob: TRegisteredJob, request: Types.TRunRequest): number?
-	if request.BatchSize ~= nil then
+	if request.BatchSize then
 		return request.BatchSize
 	end
 
-	if registeredJob.DefaultBatchSize ~= nil then
+	if registeredJob.DefaultBatchSize then
 		return registeredJob.DefaultBatchSize
 	end
 
@@ -101,17 +110,18 @@ local function _ResolveSharedMemory(
 	registeredJob: TRegisteredJob,
 	request: Types.TRunRequest
 ): (SharedTable?, TResult<any>?)
-	if registeredJob.SharedMemory ~= nil and request.SharedMemory ~= nil then
-		return nil, _BuildSetupError(
-			"ParallelRunnerSharedMemoryConflict",
-			`ParallelRunner:Run("{request.JobName}") cannot combine registered SharedMemory with request SharedMemory`,
-			{
-				JobName = request.JobName,
-			}
-		)
+	if registeredJob.SharedMemory and request.SharedMemory then
+		return nil,
+			_BuildSetupError(
+				"ParallelRunnerSharedMemoryConflict",
+				`ParallelRunner:Run("{request.JobName}") cannot combine registered SharedMemory with request SharedMemory`,
+				{
+					JobName = request.JobName,
+				}
+			)
 	end
 
-	if request.SharedMemory ~= nil then
+	if request.SharedMemory then
 		return request.SharedMemory, nil
 	end
 
@@ -122,41 +132,43 @@ local function _ResolveWorkerPayloadBuffer(
 	registeredJob: TRegisteredJob,
 	request: Types.TRunRequest
 ): (buffer?, TResult<any>?)
-	if request.WorkerPayload == nil then
+	if not request.WorkerPayload then
 		return registeredJob.WorkerPayloadBuffer, nil
 	end
 
 	local payloadCodec = registeredJob.PayloadCodec
-	if payloadCodec == nil then
-		return nil, _BuildSetupError(
-			"ParallelRunnerWorkerPayloadSchemaMissing",
-			`ParallelRunner:Run("{request.JobName}") cannot accept WorkerPayload because the job does not define PayloadSchema`,
-			{
-				JobName = request.JobName,
-			}
-		)
+	if not payloadCodec then
+		return nil,
+			_BuildSetupError(
+				"ParallelRunnerWorkerPayloadSchemaMissing",
+				`ParallelRunner:Run("{request.JobName}") cannot accept WorkerPayload because the job does not define PayloadSchema`,
+				{
+					JobName = request.JobName,
+				}
+			)
 	end
 
 	local workerPayloadBuffer, payloadEncodeError = payloadCodec:Encode(request.WorkerPayload)
-	if workerPayloadBuffer == nil then
-		return nil, _BuildSetupError(
-			"ParallelRunnerWorkerPayloadEncodeError",
-			`ParallelRunner:Run("{request.JobName}") failed to encode WorkerPayload`,
-			{
-				JobName = request.JobName,
-				Cause = payloadEncodeError,
-			}
-		)
+	if not workerPayloadBuffer then
+		return nil,
+			_BuildSetupError(
+				"ParallelRunnerWorkerPayloadEncodeError",
+				`ParallelRunner:Run("{request.JobName}") failed to encode WorkerPayload`,
+				{
+					JobName = request.JobName,
+					Cause = payloadEncodeError,
+				}
+			)
 	end
 
 	return workerPayloadBuffer, nil
 end
 
 local function _BuildRunFailureResult(workplaceRunResult: TWorkplaceRunResult): TResult<Types.TRunOutput>
-	local causeMessage = if workplaceRunResult.FirstError ~= nil then workplaceRunResult.FirstError.Message else nil
+	local causeMessage = workplaceRunResult.FirstError and workplaceRunResult.FirstError.Message or nil
 	local workerErrorType = nil :: string?
 	local workerErrorMessage = nil :: string?
-	if causeMessage ~= nil then
+	if causeMessage then
 		local parsedErrorType, _, parsedErrorMessage = string.match(causeMessage, WORKER_ERROR_PATTERN)
 		workerErrorType = parsedErrorType
 		workerErrorMessage = parsedErrorMessage
@@ -180,16 +192,12 @@ local function _BuildRunFailureResult(workplaceRunResult: TWorkplaceRunResult): 
 	if workerErrorType ~= nil then
 		return Err(
 			workerErrorType,
-			workerErrorMessage or (`ParallelRunner run "{workplaceRunResult.JobName}" failed in worker execution`),
+			workerErrorMessage or `ParallelRunner run "{workplaceRunResult.JobName}" failed in worker execution`,
 			errorData
 		)
 	end
 
-	return Err(
-		"ParallelRunnerRunFailed",
-		`ParallelRunner run "{workplaceRunResult.JobName}" failed`,
-		errorData
-	)
+	return Err("ParallelRunnerRunFailed", `ParallelRunner run "{workplaceRunResult.JobName}" failed`, errorData)
 end
 
 local function _BuildDecodeError(
@@ -225,16 +233,12 @@ local function _BuildMalformedShardError(jobName: string, runId: number, shardIn
 end
 
 local function _BuildPromiseRejectedResult(jobName: string, runId: number, promiseError: any): TResult<Types.TRunOutput>
-	return Err(
-		"ParallelRunnerPromiseRejected",
-		`ParallelRunner run "{jobName}" promise rejected unexpectedly`,
-		{
-			JobName = jobName,
-			RunId = runId,
-			Cause = promiseError,
-			PartialRows = nil,
-		}
-	)
+	return Err("ParallelRunnerPromiseRejected", `ParallelRunner run "{jobName}" promise rejected unexpectedly`, {
+		JobName = jobName,
+		RunId = runId,
+		Cause = promiseError,
+		PartialRows = nil,
+	})
 end
 
 local function _MaterializeResult<T>(result: TResult<T>): { [string]: any }
@@ -416,7 +420,7 @@ function ParallelRunner:SetWorkerPayload(jobName: string, workerPayload: { [stri
 		Validation.AssertSetWorkerPayload(jobName, workerPayload)
 
 		local registeredJob = self._registeredJobs[jobName]
-		if registeredJob == nil then
+		if not registeredJob then
 			return _BuildSetupError(
 				"ParallelRunnerRegistrationError",
 				`ParallelRunner:SetWorkerPayload("{jobName}") requires a registered job`,
@@ -426,7 +430,7 @@ function ParallelRunner:SetWorkerPayload(jobName: string, workerPayload: { [stri
 			)
 		end
 
-		if workerPayload ~= nil and registeredJob.PayloadCodec == nil then
+		if workerPayload and not registeredJob.PayloadCodec then
 			return _BuildSetupError(
 				"ParallelRunnerWorkerPayloadSchemaMissing",
 				`ParallelRunner:SetWorkerPayload("{jobName}") requires the job to define PayloadSchema`,
@@ -437,9 +441,9 @@ function ParallelRunner:SetWorkerPayload(jobName: string, workerPayload: { [stri
 		end
 
 		local workerPayloadBuffer = nil
-		if workerPayload ~= nil then
+		if workerPayload then
 			local encodedBuffer, encodeError = registeredJob.PayloadCodec:Encode(workerPayload)
-			if encodedBuffer == nil then
+			if not encodedBuffer then
 				return _BuildSetupError(
 					"ParallelRunnerWorkerPayloadEncodeError",
 					`ParallelRunner:SetWorkerPayload("{jobName}") failed to encode WorkerPayload`,
@@ -476,7 +480,7 @@ function ParallelRunner:Run(request: TRunRequest): TResult<TRunnerRunHandle>
 
 		-- Resolve the registered job and this run's concrete dispatch settings.
 		local registeredJob = self._registeredJobs[request.JobName]
-		if registeredJob == nil then
+		if not registeredJob then
 			return _BuildSetupError(
 				"ParallelRunnerRunRequestError",
 				`ParallelRunner:Run("{request.JobName}") requires a registered job`,
@@ -487,23 +491,26 @@ function ParallelRunner:Run(request: TRunRequest): TResult<TRunnerRunHandle>
 		end
 
 		local logicalWorkCount, logicalWorkCountError = _ResolveLogicalWorkCount(registeredJob, request)
-		if logicalWorkCountError ~= nil then
+		if logicalWorkCountError then
 			return logicalWorkCountError
 		end
 
 		local resolvedBatchSize = _ResolveBatchSize(self, registeredJob, request)
 		local resolvedSharedMemory, sharedMemoryError = _ResolveSharedMemory(registeredJob, request)
-		if sharedMemoryError ~= nil then
+		if sharedMemoryError then
 			return sharedMemoryError
 		end
-		local resolvedWorkerPayloadBuffer, workerPayloadError = _ResolveWorkerPayloadBuffer(registeredJob, request)
-		if workerPayloadError ~= nil then
+		local resolvedWorkerPayloadBuffer, workerPayloadError
+		DebugPlus.profile(RUN_PROFILE_RESOLVE_WORKER_PAYLOAD_BUFFER_TAG, function()
+			resolvedWorkerPayloadBuffer, workerPayloadError = _ResolveWorkerPayloadBuffer(registeredJob, request)
+		end, RUN_PROFILE_ENABLED)
+		if workerPayloadError then
 			return workerPayloadError
 		end
 
 		-- Encode args with the compiled transport contract before crossing into the workplace.
 		local argsBuffer, encodeError = registeredJob.Job:EncodeArgs(request.Args)
-		if argsBuffer == nil then
+		if not argsBuffer then
 			return _BuildSetupError(
 				"ParallelRunnerArgsEncodeError",
 				`ParallelRunner:Run("{request.JobName}") failed to encode args`,
@@ -514,16 +521,19 @@ function ParallelRunner:Run(request: TRunRequest): TResult<TRunnerRunHandle>
 			)
 		end
 
-		local workplaceRunHandle = self._workplace:Run({
-			JobName = request.JobName,
-			LogicalWorkCount = logicalWorkCount :: number,
-			BatchSize = resolvedBatchSize,
-			ArgsBuffer = argsBuffer,
-			SharedMemory = resolvedSharedMemory,
-			WorkerPayloadBuffer = resolvedWorkerPayloadBuffer,
-		})
+		local workplaceRunHandle = DebugPlus.profile(RUN_PROFILE_WORKPLACE_RUN_TAG, function()
+			return self._workplace:Run({
+				JobName = request.JobName,
+				LogicalWorkCount = logicalWorkCount :: number,
+				BatchSize = resolvedBatchSize,
+				ArgsBuffer = argsBuffer,
+				SharedMemory = resolvedSharedMemory,
+				WorkerPayloadBuffer = resolvedWorkerPayloadBuffer,
+			})
+		end, RUN_PROFILE_ENABLED)
 
-		local completionPromise = workplaceRunHandle:GetPromise()
+		local completionPromise = workplaceRunHandle
+			:GetPromise()
 			:andThen(function(workplaceRunResult: TWorkplaceRunResult)
 				return _MaterializeResult(self:_DecodeRunResult(registeredJob, workplaceRunResult))
 			end)
@@ -580,7 +590,10 @@ function ParallelRunner:Destroy(): TResult<boolean>
 	return Ok(true)
 end
 
-function ParallelRunner:_DecodeRunResult(registeredJob: TRegisteredJob, workplaceRunResult: TWorkplaceRunResult): TResult<TRunOutput>
+function ParallelRunner:_DecodeRunResult(
+	registeredJob: TRegisteredJob,
+	workplaceRunResult: TWorkplaceRunResult
+): TResult<TRunOutput>
 	if workplaceRunResult.Status ~= "Completed" then
 		return _BuildRunFailureResult(workplaceRunResult)
 	end
@@ -589,7 +602,7 @@ function ParallelRunner:_DecodeRunResult(registeredJob: TRegisteredJob, workplac
 	local rows = {}
 	for _, shardCompletion in ipairs(workplaceRunResult.ShardCompletions) do
 		local decodedRows, _, decodeError = registeredJob.Job:DecodeResultBatch(shardCompletion.ResultBuffer)
-		if decodedRows == nil then
+		if not decodedRows then
 			return _BuildDecodeError(
 				workplaceRunResult.JobName,
 				workplaceRunResult.RunId,

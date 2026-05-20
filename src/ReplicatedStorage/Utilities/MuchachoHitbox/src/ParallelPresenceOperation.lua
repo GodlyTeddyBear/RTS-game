@@ -2,54 +2,26 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Query = require(ReplicatedStorage.Utilities.MuchachoHitbox.src.Query)
+local ParallelRunner = require(ReplicatedStorage.Utilities.ParallelRunner)
 
 local OPERATION_NAME = "MuchachoHitboxPresence"
 
-local ParallelPresenceOperation = {
+local ParallelPresenceOperation = ParallelRunner.DefineJob({
 	Name = OPERATION_NAME,
-	CacheLocalMemory = true,
-	ResultSchema = {
-		{ Name = "HitboxIndex", Type = "u32" },
-		{ Name = "HasAny", Type = "boolean" },
+	Version = 1,
+	Args = {
+		DispatchSerial = ParallelRunner.Arg.u32(),
 	},
-}
-
-local function _EmptyRow(hitboxIndex: number)
-	return {
-		HitboxIndex = hitboxIndex,
+	Results = {
+		HitboxIndex = ParallelRunner.Result.u32(),
 		HasAny = false,
-	}
-end
-
-function ParallelPresenceOperation.Execute(taskId: number, memory: SharedTable?)
-	if memory == nil then
-		return _EmptyRow(taskId)
-	end
-
-	local queryCFrames = memory.QueryCFrames
-	local sizes = memory.Sizes
-	local shapeIds = memory.ShapeIds
-	local filterTokens = memory.FilterTokens
-	if queryCFrames == nil or sizes == nil or shapeIds == nil or filterTokens == nil then
-		return _EmptyRow(taskId)
-	end
-
-	local queryCFrame = queryCFrames[taskId]
-	local size = sizes[taskId]
-	local shapeId = shapeIds[taskId]
-	local filterToken = filterTokens[taskId]
-	if typeof(queryCFrame) ~= "CFrame" or typeof(size) ~= "Vector3" then
-		return _EmptyRow(taskId)
-	end
-	if type(shapeId) ~= "number" or type(filterToken) ~= "string" then
-		return _EmptyRow(taskId)
-	end
-
-	return {
-		HitboxIndex = taskId,
-		HasAny = Query.CastParallelPresenceQuery(queryCFrame, size, shapeId, filterToken),
-	}
-end
+	},
+	PayloadSchema = {
+		QueryCFrames = { ParallelRunner.Arg.lossyCFrame() },
+		Sizes = { ParallelRunner.Arg.vector3() },
+		ShapeIds = { ParallelRunner.Arg.u32() },
+		FilterTokens = { ParallelRunner.Arg.string16() },
+	},
+})
 
 return table.freeze(ParallelPresenceOperation)

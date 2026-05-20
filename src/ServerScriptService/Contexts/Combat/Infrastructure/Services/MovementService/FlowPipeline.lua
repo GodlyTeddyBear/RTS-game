@@ -30,6 +30,7 @@ local PIPELINE_PREPARING_RUN_REQUEST_PROFILE_TAG = "Combat:MovementService:Flow:
 local PIPELINE_DISPATCHING_DISPATCH_PROFILE_TAG = "Combat:MovementService:Flow:AdvancePipeline:Dispatching:Dispatch"
 local CONSUME_COMPLETED_SOLVE_PROFILE_TAG = "Combat:MovementService:Flow:ConsumeCompletedSolve"
 local TRY_DISPATCH_PROFILE_TAG = "Combat:MovementService:Flow:TryDispatch"
+local TRY_DISPATCH_MANAGED_DISPATCH_PROFILE_TAG = "Combat:MovementService:Flow:TryDispatch:ManagedDispatch"
 local Ok = Result.Ok
 local Err = Result.Err
 local fromPcall = Result.fromPcall
@@ -485,7 +486,9 @@ return function(MovementService: TMovementService)
 		end
 
 		local dispatchResult = fromPcall("MovementParallelDispatchFailed", function()
-			return job:Dispatch(payload)
+			return DebugPlus.profile(TRY_DISPATCH_MANAGED_DISPATCH_PROFILE_TAG, function()
+				return job:Dispatch(payload)
+			end, MOVEMENT_PROFILING_ENABLED)
 		end)
 		closeTryDispatchProfile()
 		if not dispatchResult.success then

@@ -10,6 +10,7 @@ local MovementTypes = require(script.Parent.Types)
 type TTableRecyclerHandle = TableRecycler.TTableRecyclerHandle
 type TFlowFrameStateHandle = MovementTypes.TFlowFrameStateHandle
 type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
+type TNamedArrayMap = { [string]: { any } }
 
 type TFlowFrameStateInternal = TFlowFrameStateHandle & {
 	_destroyed: boolean,
@@ -90,6 +91,162 @@ end
 local function _ReleaseTrackedMap(self: TFlowFrameStateInternal, tbl: { [any]: any })
 	local didRelease, releaseError = self._recycler:ReleaseMap(tbl)
 	assert(didRelease, releaseError)
+end
+
+local _ENTITY_ARRAY_FIELD_NAMES = {
+	"_entityIds",
+	"_goalGroupId",
+	"_flatPositionX",
+	"_flatPositionY",
+	"_radius",
+	"_flowVelocityX",
+	"_flowVelocityY",
+	"_previousVelocityX",
+	"_previousVelocityY",
+	"_walkSpeed",
+	"_velAlpha",
+	"_isSettled",
+}
+
+local _SNAPSHOT_ARRAY_FIELD_NAMES = {
+	"_snapshotEntityIds",
+	"_snapshotGoalGroupId",
+	"_snapshotGoalGroupCellRecordStartIndex",
+	"_snapshotGoalGroupCellRecordCount",
+	"_snapshotGoalGroupCellWidthStuds",
+	"_snapshotGroupCellX",
+	"_snapshotGroupCellY",
+	"_snapshotCellPackedKey",
+	"_snapshotCellMemberStartIndex",
+	"_snapshotCellMemberCount",
+	"_snapshotCellMemberEntityIndex",
+	"_snapshotFlatPositionX",
+	"_snapshotFlatPositionY",
+	"_snapshotRadius",
+	"_snapshotFlowVelocityX",
+	"_snapshotFlowVelocityY",
+	"_snapshotPreviousVelocityX",
+	"_snapshotPreviousVelocityY",
+	"_snapshotWalkSpeed",
+	"_snapshotVelAlpha",
+	"_snapshotIsSettled",
+}
+
+local _SNAPSHOT_FIELD_TO_STORAGE = {
+	EntityIds = "_snapshotEntityIds",
+	GoalGroupId = "_snapshotGoalGroupId",
+	GoalGroupCellRecordStartIndex = "_snapshotGoalGroupCellRecordStartIndex",
+	GoalGroupCellRecordCount = "_snapshotGoalGroupCellRecordCount",
+	GoalGroupCellWidthStuds = "_snapshotGoalGroupCellWidthStuds",
+	GroupCellX = "_snapshotGroupCellX",
+	GroupCellY = "_snapshotGroupCellY",
+	CellPackedKey = "_snapshotCellPackedKey",
+	CellMemberStartIndex = "_snapshotCellMemberStartIndex",
+	CellMemberCount = "_snapshotCellMemberCount",
+	CellMemberEntityIndex = "_snapshotCellMemberEntityIndex",
+	FlatPositionX = "_snapshotFlatPositionX",
+	FlatPositionY = "_snapshotFlatPositionY",
+	Radius = "_snapshotRadius",
+	FlowVelocityX = "_snapshotFlowVelocityX",
+	FlowVelocityY = "_snapshotFlowVelocityY",
+	PreviousVelocityX = "_snapshotPreviousVelocityX",
+	PreviousVelocityY = "_snapshotPreviousVelocityY",
+	WalkSpeed = "_snapshotWalkSpeed",
+	VelAlpha = "_snapshotVelAlpha",
+	IsSettled = "_snapshotIsSettled",
+}
+
+local function _AcquireNamedArrays(recycler: TTableRecyclerHandle, fieldNames: { string }): TNamedArrayMap
+	local namedArrays: TNamedArrayMap = {}
+	for _, fieldName in ipairs(fieldNames) do
+		namedArrays[fieldName] = _AcquireArray(recycler)
+	end
+	return namedArrays
+end
+
+local _DESTROY_EXTRA_ARRAY_RELEASE_FIELD_NAMES = {
+	"_defaultWallPackedKeys",
+	"_activeGoalKeys",
+	"_scratchCellPackedKeys",
+	"_scratchFreeCellBuckets",
+}
+
+local function _BuildDestroyArrayReleaseFieldNames(): { string }
+	local fieldNames = {}
+	for _, fieldName in ipairs(_ENTITY_ARRAY_FIELD_NAMES) do
+		fieldNames[#fieldNames + 1] = fieldName
+	end
+	for _, fieldName in ipairs(_SNAPSHOT_ARRAY_FIELD_NAMES) do
+		fieldNames[#fieldNames + 1] = fieldName
+	end
+	for _, fieldName in ipairs(_DESTROY_EXTRA_ARRAY_RELEASE_FIELD_NAMES) do
+		fieldNames[#fieldNames + 1] = fieldName
+	end
+	return fieldNames
+end
+
+local _DESTROY_ARRAY_RELEASE_FIELD_NAMES = _BuildDestroyArrayReleaseFieldNames()
+
+local _DESTROY_MAP_RELEASE_FIELD_NAMES = {
+	"_entityIndicesByGoalKey",
+	"_goalGroupIdByGoalKey",
+	"_scratchBucketsByCellPackedKey",
+	"_snapshot",
+}
+
+local function _ReleaseArrayFieldsByName(self: TFlowFrameStateInternal, fieldNames: { string })
+	local rawSelf = self :: any
+	for _, fieldName in ipairs(fieldNames) do
+		_ReleaseTrackedArray(self, rawSelf[fieldName] :: { any })
+	end
+end
+
+local function _ReleaseMapFieldsByName(self: TFlowFrameStateInternal, fieldNames: { string })
+	local rawSelf = self :: any
+	for _, fieldName in ipairs(fieldNames) do
+		_ReleaseTrackedMap(self, rawSelf[fieldName] :: { [any]: any })
+	end
+end
+
+-- Clear per-entity packed arrays that are rebuilt every frame.
+local function _ClearEntityBuffers(self: TFlowFrameStateInternal)
+	table.clear(self._entityIds)
+	table.clear(self._goalGroupId)
+	table.clear(self._flatPositionX)
+	table.clear(self._flatPositionY)
+	table.clear(self._radius)
+	table.clear(self._flowVelocityX)
+	table.clear(self._flowVelocityY)
+	table.clear(self._previousVelocityX)
+	table.clear(self._previousVelocityY)
+	table.clear(self._walkSpeed)
+	table.clear(self._velAlpha)
+	table.clear(self._isSettled)
+end
+
+-- Clear snapshot structure-of-arrays buffers before repacking them.
+local function _ClearSnapshotBuffers(self: TFlowFrameStateInternal)
+	table.clear(self._snapshotEntityIds)
+	table.clear(self._snapshotGoalGroupId)
+	table.clear(self._snapshotGoalGroupCellRecordStartIndex)
+	table.clear(self._snapshotGoalGroupCellRecordCount)
+	table.clear(self._snapshotGoalGroupCellWidthStuds)
+	table.clear(self._snapshotGroupCellX)
+	table.clear(self._snapshotGroupCellY)
+	table.clear(self._snapshotCellPackedKey)
+	table.clear(self._snapshotCellMemberStartIndex)
+	table.clear(self._snapshotCellMemberCount)
+	table.clear(self._snapshotCellMemberEntityIndex)
+	table.clear(self._snapshotFlatPositionX)
+	table.clear(self._snapshotFlatPositionY)
+	table.clear(self._snapshotRadius)
+	table.clear(self._snapshotFlowVelocityX)
+	table.clear(self._snapshotFlowVelocityY)
+	table.clear(self._snapshotPreviousVelocityX)
+	table.clear(self._snapshotPreviousVelocityY)
+	table.clear(self._snapshotWalkSpeed)
+	table.clear(self._snapshotVelAlpha)
+	table.clear(self._snapshotIsSettled)
 end
 
 -- Reuse a scratch bucket when grouping entities by cell during snapshot builds.
@@ -235,40 +392,11 @@ end
     @return TFlowFrameStateHandle -- Frame-state handle used by the movement service.
 ]=]
 function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHandle
-	local entityIds = _AcquireArray(recycler) :: { number }
-	local goalGroupId = _AcquireArray(recycler) :: { number }
-	local flatPositionX = _AcquireArray(recycler) :: { number }
-	local flatPositionY = _AcquireArray(recycler) :: { number }
-	local radius = _AcquireArray(recycler) :: { number }
-	local flowVelocityX = _AcquireArray(recycler) :: { number }
-	local flowVelocityY = _AcquireArray(recycler) :: { number }
-	local previousVelocityX = _AcquireArray(recycler) :: { number }
-	local previousVelocityY = _AcquireArray(recycler) :: { number }
-	local walkSpeed = _AcquireArray(recycler) :: { number }
-	local velAlpha = _AcquireArray(recycler) :: { number }
-	local isSettled = _AcquireArray(recycler) :: { boolean }
-
-	local snapshotEntityIds = _AcquireArray(recycler) :: { number }
-	local snapshotGoalGroupId = _AcquireArray(recycler) :: { number }
-	local snapshotGoalGroupCellRecordStartIndex = _AcquireArray(recycler) :: { number }
-	local snapshotGoalGroupCellRecordCount = _AcquireArray(recycler) :: { number }
-	local snapshotGoalGroupCellWidthStuds = _AcquireArray(recycler) :: { number }
-	local snapshotGroupCellX = _AcquireArray(recycler) :: { number }
-	local snapshotGroupCellY = _AcquireArray(recycler) :: { number }
-	local snapshotCellPackedKey = _AcquireArray(recycler) :: { number }
-	local snapshotCellMemberStartIndex = _AcquireArray(recycler) :: { number }
-	local snapshotCellMemberCount = _AcquireArray(recycler) :: { number }
-	local snapshotCellMemberEntityIndex = _AcquireArray(recycler) :: { number }
-	local snapshotFlatPositionX = _AcquireArray(recycler) :: { number }
-	local snapshotFlatPositionY = _AcquireArray(recycler) :: { number }
-	local snapshotRadius = _AcquireArray(recycler) :: { number }
-	local snapshotFlowVelocityX = _AcquireArray(recycler) :: { number }
-	local snapshotFlowVelocityY = _AcquireArray(recycler) :: { number }
-	local snapshotPreviousVelocityX = _AcquireArray(recycler) :: { number }
-	local snapshotPreviousVelocityY = _AcquireArray(recycler) :: { number }
-	local snapshotWalkSpeed = _AcquireArray(recycler) :: { number }
-	local snapshotVelAlpha = _AcquireArray(recycler) :: { number }
-	local snapshotIsSettled = _AcquireArray(recycler) :: { boolean }
+	local namedArrays = _AcquireNamedArrays(recycler, _ENTITY_ARRAY_FIELD_NAMES)
+	local snapshotArrays = _AcquireNamedArrays(recycler, _SNAPSHOT_ARRAY_FIELD_NAMES)
+	for fieldName, fieldArray in snapshotArrays do
+		namedArrays[fieldName] = fieldArray
+	end
 
 	local defaultWallPackedKeys = _AcquireArray(recycler) :: { number }
 	local entityIndicesByGoalKey = _AcquireMap(recycler) :: { [string]: { number } }
@@ -281,27 +409,9 @@ function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHand
 
 	snapshot.TickId = 0
 	snapshot.EntityCount = 0
-	snapshot.EntityIds = snapshotEntityIds
-	snapshot.GoalGroupId = snapshotGoalGroupId
-	snapshot.GoalGroupCellRecordStartIndex = snapshotGoalGroupCellRecordStartIndex
-	snapshot.GoalGroupCellRecordCount = snapshotGoalGroupCellRecordCount
-	snapshot.GoalGroupCellWidthStuds = snapshotGoalGroupCellWidthStuds
-	snapshot.GroupCellX = snapshotGroupCellX
-	snapshot.GroupCellY = snapshotGroupCellY
-	snapshot.CellPackedKey = snapshotCellPackedKey
-	snapshot.CellMemberStartIndex = snapshotCellMemberStartIndex
-	snapshot.CellMemberCount = snapshotCellMemberCount
-	snapshot.CellMemberEntityIndex = snapshotCellMemberEntityIndex
-	snapshot.FlatPositionX = snapshotFlatPositionX
-	snapshot.FlatPositionY = snapshotFlatPositionY
-	snapshot.Radius = snapshotRadius
-	snapshot.FlowVelocityX = snapshotFlowVelocityX
-	snapshot.FlowVelocityY = snapshotFlowVelocityY
-	snapshot.PreviousVelocityX = snapshotPreviousVelocityX
-	snapshot.PreviousVelocityY = snapshotPreviousVelocityY
-	snapshot.WalkSpeed = snapshotWalkSpeed
-	snapshot.VelAlpha = snapshotVelAlpha
-	snapshot.IsSettled = snapshotIsSettled
+	for snapshotFieldName, storageFieldName in _SNAPSHOT_FIELD_TO_STORAGE do
+		snapshot[snapshotFieldName] = namedArrays[storageFieldName :: string]
+	end
 	snapshot.DeltaTime = 0
 	snapshot.CellWidthStuds = 0
 	snapshot.OriginX = 0
@@ -322,39 +432,39 @@ function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHand
 		_destroyed = false,
 		_recycler = recycler,
 		_entityCount = 0,
-		_entityIds = entityIds,
-		_goalGroupId = goalGroupId,
-		_flatPositionX = flatPositionX,
-		_flatPositionY = flatPositionY,
-		_radius = radius,
-		_flowVelocityX = flowVelocityX,
-		_flowVelocityY = flowVelocityY,
-		_previousVelocityX = previousVelocityX,
-		_previousVelocityY = previousVelocityY,
-		_walkSpeed = walkSpeed,
-		_velAlpha = velAlpha,
-		_isSettled = isSettled,
-		_snapshotEntityIds = snapshotEntityIds,
-		_snapshotGoalGroupId = snapshotGoalGroupId,
-		_snapshotGoalGroupCellRecordStartIndex = snapshotGoalGroupCellRecordStartIndex,
-		_snapshotGoalGroupCellRecordCount = snapshotGoalGroupCellRecordCount,
-		_snapshotGoalGroupCellWidthStuds = snapshotGoalGroupCellWidthStuds,
-		_snapshotGroupCellX = snapshotGroupCellX,
-		_snapshotGroupCellY = snapshotGroupCellY,
-		_snapshotCellPackedKey = snapshotCellPackedKey,
-		_snapshotCellMemberStartIndex = snapshotCellMemberStartIndex,
-		_snapshotCellMemberCount = snapshotCellMemberCount,
-		_snapshotCellMemberEntityIndex = snapshotCellMemberEntityIndex,
-		_snapshotFlatPositionX = snapshotFlatPositionX,
-		_snapshotFlatPositionY = snapshotFlatPositionY,
-		_snapshotRadius = snapshotRadius,
-		_snapshotFlowVelocityX = snapshotFlowVelocityX,
-		_snapshotFlowVelocityY = snapshotFlowVelocityY,
-		_snapshotPreviousVelocityX = snapshotPreviousVelocityX,
-		_snapshotPreviousVelocityY = snapshotPreviousVelocityY,
-		_snapshotWalkSpeed = snapshotWalkSpeed,
-		_snapshotVelAlpha = snapshotVelAlpha,
-		_snapshotIsSettled = snapshotIsSettled,
+		_entityIds = namedArrays._entityIds :: { number },
+		_goalGroupId = namedArrays._goalGroupId :: { number },
+		_flatPositionX = namedArrays._flatPositionX :: { number },
+		_flatPositionY = namedArrays._flatPositionY :: { number },
+		_radius = namedArrays._radius :: { number },
+		_flowVelocityX = namedArrays._flowVelocityX :: { number },
+		_flowVelocityY = namedArrays._flowVelocityY :: { number },
+		_previousVelocityX = namedArrays._previousVelocityX :: { number },
+		_previousVelocityY = namedArrays._previousVelocityY :: { number },
+		_walkSpeed = namedArrays._walkSpeed :: { number },
+		_velAlpha = namedArrays._velAlpha :: { number },
+		_isSettled = namedArrays._isSettled :: { boolean },
+		_snapshotEntityIds = namedArrays._snapshotEntityIds :: { number },
+		_snapshotGoalGroupId = namedArrays._snapshotGoalGroupId :: { number },
+		_snapshotGoalGroupCellRecordStartIndex = namedArrays._snapshotGoalGroupCellRecordStartIndex :: { number },
+		_snapshotGoalGroupCellRecordCount = namedArrays._snapshotGoalGroupCellRecordCount :: { number },
+		_snapshotGoalGroupCellWidthStuds = namedArrays._snapshotGoalGroupCellWidthStuds :: { number },
+		_snapshotGroupCellX = namedArrays._snapshotGroupCellX :: { number },
+		_snapshotGroupCellY = namedArrays._snapshotGroupCellY :: { number },
+		_snapshotCellPackedKey = namedArrays._snapshotCellPackedKey :: { number },
+		_snapshotCellMemberStartIndex = namedArrays._snapshotCellMemberStartIndex :: { number },
+		_snapshotCellMemberCount = namedArrays._snapshotCellMemberCount :: { number },
+		_snapshotCellMemberEntityIndex = namedArrays._snapshotCellMemberEntityIndex :: { number },
+		_snapshotFlatPositionX = namedArrays._snapshotFlatPositionX :: { number },
+		_snapshotFlatPositionY = namedArrays._snapshotFlatPositionY :: { number },
+		_snapshotRadius = namedArrays._snapshotRadius :: { number },
+		_snapshotFlowVelocityX = namedArrays._snapshotFlowVelocityX :: { number },
+		_snapshotFlowVelocityY = namedArrays._snapshotFlowVelocityY :: { number },
+		_snapshotPreviousVelocityX = namedArrays._snapshotPreviousVelocityX :: { number },
+		_snapshotPreviousVelocityY = namedArrays._snapshotPreviousVelocityY :: { number },
+		_snapshotWalkSpeed = namedArrays._snapshotWalkSpeed :: { number },
+		_snapshotVelAlpha = namedArrays._snapshotVelAlpha :: { number },
+		_snapshotIsSettled = namedArrays._snapshotIsSettled :: { boolean },
 		_snapshot = snapshot :: TFlowSeparationSolveSnapshot,
 		_defaultWallPackedKeys = defaultWallPackedKeys,
 		_entityIndicesByGoalKey = entityIndicesByGoalKey,
@@ -378,40 +488,8 @@ function FlowFrameState:Reset()
 	selfInternal._entityCount = 0
 	selfInternal._nextGoalGroupId = 0
 
-	table.clear(selfInternal._entityIds)
-	table.clear(selfInternal._goalGroupId)
-	table.clear(selfInternal._flatPositionX)
-	table.clear(selfInternal._flatPositionY)
-	table.clear(selfInternal._radius)
-	table.clear(selfInternal._flowVelocityX)
-	table.clear(selfInternal._flowVelocityY)
-	table.clear(selfInternal._previousVelocityX)
-	table.clear(selfInternal._previousVelocityY)
-	table.clear(selfInternal._walkSpeed)
-	table.clear(selfInternal._velAlpha)
-	table.clear(selfInternal._isSettled)
-
-	table.clear(selfInternal._snapshotEntityIds)
-	table.clear(selfInternal._snapshotGoalGroupId)
-	table.clear(selfInternal._snapshotGoalGroupCellRecordStartIndex)
-	table.clear(selfInternal._snapshotGoalGroupCellRecordCount)
-	table.clear(selfInternal._snapshotGoalGroupCellWidthStuds)
-	table.clear(selfInternal._snapshotGroupCellX)
-	table.clear(selfInternal._snapshotGroupCellY)
-	table.clear(selfInternal._snapshotCellPackedKey)
-	table.clear(selfInternal._snapshotCellMemberStartIndex)
-	table.clear(selfInternal._snapshotCellMemberCount)
-	table.clear(selfInternal._snapshotCellMemberEntityIndex)
-	table.clear(selfInternal._snapshotFlatPositionX)
-	table.clear(selfInternal._snapshotFlatPositionY)
-	table.clear(selfInternal._snapshotRadius)
-	table.clear(selfInternal._snapshotFlowVelocityX)
-	table.clear(selfInternal._snapshotFlowVelocityY)
-	table.clear(selfInternal._snapshotPreviousVelocityX)
-	table.clear(selfInternal._snapshotPreviousVelocityY)
-	table.clear(selfInternal._snapshotWalkSpeed)
-	table.clear(selfInternal._snapshotVelAlpha)
-	table.clear(selfInternal._snapshotIsSettled)
+	_ClearEntityBuffers(selfInternal)
+	_ClearSnapshotBuffers(selfInternal)
 	table.clear(selfInternal._goalGroupIdByGoalKey)
 
 	for _, goalKey in ipairs(selfInternal._activeGoalKeys) do
@@ -694,27 +772,7 @@ function FlowFrameState:BuildSeparationSnapshot(
 	local orderedEntityCount = 0
 
 	-- Clear all packed output buffers before rebuilding the snapshot for this tick.
-	table.clear(selfInternal._snapshotEntityIds)
-	table.clear(selfInternal._snapshotGoalGroupId)
-	table.clear(selfInternal._snapshotGoalGroupCellRecordStartIndex)
-	table.clear(selfInternal._snapshotGoalGroupCellRecordCount)
-	table.clear(selfInternal._snapshotGoalGroupCellWidthStuds)
-	table.clear(selfInternal._snapshotGroupCellX)
-	table.clear(selfInternal._snapshotGroupCellY)
-	table.clear(selfInternal._snapshotCellPackedKey)
-	table.clear(selfInternal._snapshotCellMemberStartIndex)
-	table.clear(selfInternal._snapshotCellMemberCount)
-	table.clear(selfInternal._snapshotCellMemberEntityIndex)
-	table.clear(selfInternal._snapshotFlatPositionX)
-	table.clear(selfInternal._snapshotFlatPositionY)
-	table.clear(selfInternal._snapshotRadius)
-	table.clear(selfInternal._snapshotFlowVelocityX)
-	table.clear(selfInternal._snapshotFlowVelocityY)
-	table.clear(selfInternal._snapshotPreviousVelocityX)
-	table.clear(selfInternal._snapshotPreviousVelocityY)
-	table.clear(selfInternal._snapshotWalkSpeed)
-	table.clear(selfInternal._snapshotVelAlpha)
-	table.clear(selfInternal._snapshotIsSettled)
+	_ClearSnapshotBuffers(selfInternal)
 
 	-- Pack each goal group and bucket entities by separation cell within that group.
 	for _, goalKey in ipairs(selfInternal._activeGoalKeys) do
@@ -727,12 +785,8 @@ function FlowFrameState:BuildSeparationSnapshot(
 
 			for _, rawEntityIndex in ipairs(entityIndices) do
 				orderedEntityCount += 1
-				local cellPackedKey = _CopyRawEntityToSnapshot(
-					selfInternal,
-					orderedEntityCount,
-					rawEntityIndex,
-					groupCellWidthStuds
-				)
+				local cellPackedKey =
+					_CopyRawEntityToSnapshot(selfInternal, orderedEntityCount, rawEntityIndex, groupCellWidthStuds)
 
 				local cellBucket = selfInternal._scratchBucketsByCellPackedKey[cellPackedKey]
 				if not cellBucket then
@@ -817,47 +871,8 @@ function FlowFrameState:Destroy(): (boolean, string?)
 	_ClearSnapshotForDestroy(selfInternal)
 
 	-- Return every recycler-backed buffer to the pool.
-	_ReleaseTrackedArray(selfInternal, selfInternal._entityIds :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._goalGroupId :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._flatPositionX :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._flatPositionY :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._radius :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._flowVelocityX :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._flowVelocityY :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._previousVelocityX :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._previousVelocityY :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._walkSpeed :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._velAlpha :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._isSettled :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotEntityIds :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotGoalGroupId :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotGoalGroupCellRecordStartIndex :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotGoalGroupCellRecordCount :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotGoalGroupCellWidthStuds :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotGroupCellX :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotGroupCellY :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotCellPackedKey :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotCellMemberStartIndex :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotCellMemberCount :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotCellMemberEntityIndex :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotFlatPositionX :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotFlatPositionY :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotRadius :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotFlowVelocityX :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotFlowVelocityY :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotPreviousVelocityX :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotPreviousVelocityY :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotWalkSpeed :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotVelAlpha :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._snapshotIsSettled :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._defaultWallPackedKeys :: any)
-	_ReleaseTrackedMap(selfInternal, selfInternal._entityIndicesByGoalKey :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._activeGoalKeys :: any)
-	_ReleaseTrackedMap(selfInternal, selfInternal._goalGroupIdByGoalKey :: any)
-	_ReleaseTrackedMap(selfInternal, selfInternal._scratchBucketsByCellPackedKey :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._scratchCellPackedKeys :: any)
-	_ReleaseTrackedArray(selfInternal, selfInternal._scratchFreeCellBuckets :: any)
-	_ReleaseTrackedMap(selfInternal, selfInternal._snapshot :: any)
+	_ReleaseArrayFieldsByName(selfInternal, _DESTROY_ARRAY_RELEASE_FIELD_NAMES)
+	_ReleaseMapFieldsByName(selfInternal, _DESTROY_MAP_RELEASE_FIELD_NAMES)
 
 	return true, nil
 end
