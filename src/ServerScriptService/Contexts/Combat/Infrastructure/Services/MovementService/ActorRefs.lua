@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
+local Option = require(ReplicatedStorage.Utilities.Option)
 local MovementTypes = require(script.Parent.Types)
 
 type TFlowActorRefs = MovementTypes.TFlowActorRefs
@@ -32,7 +33,7 @@ return function(MovementService: any)
 	function MovementService:_GetEntityModel(entity: number): Model?
 		local refs = self:_GetOrCreateFlowActorRefs(entity)
 		local modelRef = self._enemyEntityFactory:GetModelRef(entity)
-		local resolvedModel = if modelRef ~= nil then modelRef.Model else nil
+		local resolvedModel = Option.Wrap(if modelRef ~= nil then modelRef.Model else nil):UnwrapOr(nil)
 		if refs.Model ~= resolvedModel then
 			refs.Model = resolvedModel
 			refs.RootPart = nil
@@ -48,14 +49,14 @@ return function(MovementService: any)
 	-- Resolves the cached primary part for the entity model and refreshes it when the model changes.
 	function MovementService:_GetEntityRootPart(entity: number): BasePart?
 		local refs = self:_GetOrCreateFlowActorRefs(entity)
-		local rootPart = refs.RootPart
+		local rootPart = Option.Wrap(refs.RootPart):UnwrapOr(nil)
 		local model = refs.Model
 		if rootPart ~= nil and rootPart.Parent ~= nil and model ~= nil and rootPart:IsDescendantOf(model) then
 			return rootPart
 		end
 
 		model = self:_GetEntityModel(entity)
-		rootPart = if model ~= nil then model.PrimaryPart else nil
+		rootPart = Option.Wrap(if model ~= nil then model.PrimaryPart else nil):UnwrapOr(nil)
 		refs.RootPart = rootPart
 		return rootPart
 	end
@@ -69,14 +70,14 @@ return function(MovementService: any)
 	-- Resolves the humanoid used to apply walk speed and movement commands.
 	function MovementService:_GetHumanoid(entity: number): Humanoid?
 		local refs = self:_GetOrCreateFlowActorRefs(entity)
-		local humanoid = refs.Humanoid
+		local humanoid = Option.Wrap(refs.Humanoid):UnwrapOr(nil)
 		local model = refs.Model
 		if humanoid ~= nil and humanoid.Parent ~= nil and model ~= nil and humanoid:IsDescendantOf(model) then
 			return humanoid
 		end
 
 		model = self:_GetEntityModel(entity)
-		humanoid = if model ~= nil then model:FindFirstChildWhichIsA("Humanoid") else nil
+		humanoid = Option.Wrap(if model ~= nil then model:FindFirstChildWhichIsA("Humanoid") else nil):UnwrapOr(nil)
 		refs.Humanoid = humanoid
 		return humanoid
 	end

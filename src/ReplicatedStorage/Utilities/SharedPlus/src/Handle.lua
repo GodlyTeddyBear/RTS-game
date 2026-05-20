@@ -10,6 +10,7 @@ local Types = require(script.Parent.Types)
 
 type THandle = Types.THandle
 type THandleConfig = Types.THandleConfig
+type TPacket = Types.TPacket
 type TParsedArrayField = Types.TParsedArrayField
 type TParsedSchema = Types.TParsedSchema
 type TRawSchema = Types.TRawSchema
@@ -17,10 +18,20 @@ type TRawSchema = Types.TRawSchema
 local Handle = {}
 Handle.__index = Handle
 
-local function _ApplyScalar(root: SharedTable, fieldName: string, value: any)
-	SharedTable.update(root, fieldName, function()
-		return SharedOps.NormalizeValue(value)
-	end)
+type TArrayState = {
+	Values: { [number]: any },
+	Count: number,
+}
+
+local function _BuildNormalizedArray(values: { any }): ({ any }, number)
+	local normalizedArray = table.create(#values)
+	local count = 0
+	for index, value in ipairs(values) do
+		count = index
+		normalizedArray[index] = SharedOps.NormalizeValue(value)
+	end
+
+	return normalizedArray, count
 end
 
 local function _CreateRecycler(config: THandleConfig?): any
@@ -32,38 +43,127 @@ local function _CreateRecycler(config: THandleConfig?): any
 	})
 end
 
+local function _BuildRootSharedTable(
+	parsedSchema: TParsedSchema,
+	scalarValues: { [string]: any },
+	arrayStates: { [string]: TArrayState }
+): SharedTable
+	local rootFields = {}
+
+	for _, fieldName in ipairs(parsedSchema.ScalarFieldNames) do
+		rootFields[fieldName] = SharedOps.NormalizeValue(scalarValues[fieldName])
+	end
+
+	for _, fieldName in ipairs(parsedSchema.ArrayFieldNames) do
+		local fieldConfig = parsedSchema.ArrayFields[fieldName]
+		local arrayState = arrayStates[fieldName]
+		local values = if arrayState ~= nil then arrayState.Values else {}
+		local count = if arrayState ~= nil then arrayState.Count else 0
+		rootFields[fieldName] = SharedTable.new(values)
+		rootFields[fieldConfig.CountFieldName] = count
+	end
+
+	return SharedTable.new(rootFields)
+end
+
+local function _ApplyPacketScalars(rootFields: { [string]: any }, scalarPacket: { [string]: any }?)
+	if scalarPacket == nil then
+		return
+	end
+
+	assert(type(scalarPacket) == "table", "SharedPlus.Handle:Finalize base packet Scalars must be a table")
+	for fieldName, value in scalarPacket do
+		rootFields[fieldName] = SharedOps.NormalizeValue(value)
+	end
+end
+
+local function _ApplyPacketArrays(
+	parsedSchema: TParsedSchema,
+	rootFields: { [string]: any },
+	arrayPacket: { [string]: { any } }?
+)
+	if arrayPacket == nil then
+		return
+	end
+
+	assert(type(arrayPacket) == "table", "SharedPlus.Handle:Finalize base packet Arrays must be a table")
+	for fieldName, values in arrayPacket do
+		local fieldConfig = parsedSchema.ArrayFields[fieldName]
+		assert(fieldConfig ~= nil, `SharedPlus.Handle:Finalize base packet array field "{fieldName}" is not declared`)
+		assert(type(values) == "table", `SharedPlus.Handle:Finalize base packet array field "{fieldName}" must be a table`)
+		Staging.AssertFlatArray(values, `SharedPlus.Handle:Finalize("{fieldName}")`)
+		local normalizedArray, count = _BuildNormalizedArray(values)
+		rootFields[fieldName] = SharedTable.new(normalizedArray)
+		rootFields[fieldConfig.CountFieldName] = count
+	end
+end
+
+local function _CreateEmptyArrayState(): TArrayState
+	return {
+		Values = {},
+		Count = 0,
+	}
+end
+
+local function _BuildRootSharedTableWithBasePacket(
+	parsedSchema: TParsedSchema,
+	basePacket: TPacket,
+	pendingScalarValues: { [string]: any },
+	pendingArrayStates: { [string]: TArrayState },
+	touchedArrayFieldNames: { string }
+): SharedTable
+	local rootFields = {}
+	_ApplyPacketScalars(rootFields, basePacket.Scalars)
+	_ApplyPacketArrays(parsedSchema, rootFields, basePacket.Arrays)
+	_ApplyPacketScalars(rootFields, pendingScalarValues)
+
+	for _, fieldName in ipairs(touchedArrayFieldNames) do
+		local fieldConfig = parsedSchema.ArrayFields[fieldName]
+		local arrayState = pendingArrayStates[fieldName]
+		local resolvedArrayState = if arrayState ~= nil then arrayState else _CreateEmptyArrayState()
+		rootFields[fieldName] = SharedTable.new(resolvedArrayState.Values)
+		rootFields[fieldConfig.CountFieldName] = resolvedArrayState.Count
+	end
+
+	return SharedTable.new(rootFields)
+end
+
+local function _CloneArrayState(arrayState: TArrayState?): TArrayState
+	if arrayState == nil then
+		return _CreateEmptyArrayState()
+	end
+
+	return {
+		Values = table.clone(arrayState.Values),
+		Count = arrayState.Count,
+	}
+end
+
 function Handle.new(schema: TRawSchema | TParsedSchema, config: THandleConfig?): THandle
 	local parsedSchema = Schema.Parse(schema)
-	local root = SharedTable.new()
 
 	local self = setmetatable({}, Handle) :: any
 	self._destroyed = false
 	self._writeActive = false
 	self._schema = parsedSchema
-	self._root = root
 	self._recycler = _CreateRecycler(config)
-	self._children = {}
 	self._scalarValues = {}
-	self._arrayCounts = {}
+	self._arrayStates = {}
 	self._pendingScalarValues = nil
 	self._touchedArrayFieldNames = nil
 	self._touchedArrayLookup = nil
-	self._pendingArrayCounts = nil
+	self._pendingArrayStates = nil
 
 	for _, fieldName in ipairs(parsedSchema.ScalarFieldNames) do
 		local fieldConfig = parsedSchema.ScalarFields[fieldName]
 		self._scalarValues[fieldName] = fieldConfig.Default
-		_ApplyScalar(root, fieldName, fieldConfig.Default)
 	end
 
 	for _, fieldName in ipairs(parsedSchema.ArrayFieldNames) do
-		local fieldConfig = parsedSchema.ArrayFields[fieldName]
-		local child = SharedTable.new()
-		self._children[fieldName] = child
-		self._arrayCounts[fieldName] = 0
-		_ApplyScalar(root, fieldName, child)
-		_ApplyScalar(root, fieldConfig.CountFieldName, 0)
+		self._arrayStates[fieldName] = _CreateEmptyArrayState()
 	end
+
+	self._root = _BuildRootSharedTable(parsedSchema, self._scalarValues, self._arrayStates)
 
 	return self
 end
@@ -76,7 +176,7 @@ function Handle:BeginWrite()
 	self._pendingScalarValues = self._recycler:AcquireMap()
 	self._touchedArrayFieldNames = self._recycler:AcquireArray()
 	self._touchedArrayLookup = self._recycler:AcquireMap()
-	self._pendingArrayCounts = self._recycler:AcquireMap()
+	self._pendingArrayStates = {}
 	self._writeActive = true
 end
 
@@ -113,7 +213,7 @@ end
 function Handle:WriteArray(fieldName: string, sourceArray: { any }): number
 	self:_AssertWriteActive("WriteArray")
 
-	local fieldConfig = self:_BeginArrayFieldRewrite(fieldName)
+	local fieldConfig = self:_MarkArrayFieldRewrite(fieldName)
 	local resolvedArray = sourceArray
 	if fieldConfig.FlattenInput then
 		resolvedArray = Staging.FlattenNestedArray(
@@ -125,49 +225,34 @@ function Handle:WriteArray(fieldName: string, sourceArray: { any }): number
 		Staging.AssertFlatArray(sourceArray, `SharedPlus.Handle:WriteArray("{fieldName}")`)
 	end
 
-	local child = self._children[fieldName]
-	assert(child ~= nil, `SharedPlus.Handle:WriteArray("{fieldName}") child SharedTable is missing`)
-	assert(self._pendingArrayCounts ~= nil, "SharedPlus handle is missing pending array state")
-
-	local count = 0
-	for index, value in ipairs(resolvedArray) do
-		count = index
-		child[index] = SharedOps.NormalizeValue(value)
-	end
-
-	self._pendingArrayCounts[fieldName] = count
+	assert(self._pendingArrayStates ~= nil, "SharedPlus handle is missing pending array state")
+	local normalizedArray, count = _BuildNormalizedArray(resolvedArray)
+	self._pendingArrayStates[fieldName] = {
+		Values = normalizedArray,
+		Count = count,
+	}
 	return count
 end
 
 function Handle:Append(fieldName: string, value: any): number
 	self:_AssertWriteActive("Append")
-	self:_EnsureArrayFieldRewrite(fieldName)
-
-	local child = self._children[fieldName]
-	assert(child ~= nil, `SharedPlus.Handle:Append("{fieldName}") child SharedTable is missing`)
-	assert(self._pendingArrayCounts ~= nil, "SharedPlus handle is missing pending array state")
-
-	local nextIndex = (self._pendingArrayCounts[fieldName] or 0) + 1
-	child[nextIndex] = SharedOps.NormalizeValue(value)
-	self._pendingArrayCounts[fieldName] = nextIndex
+	local arrayState = self:_EnsureArrayFieldRewrite(fieldName)
+	local nextIndex = arrayState.Count + 1
+	arrayState.Values[nextIndex] = SharedOps.NormalizeValue(value)
+	arrayState.Count = nextIndex
 	return nextIndex
 end
 
 function Handle:SetIndex(fieldName: string, index: number, value: any): number
 	self:_AssertWriteActive("SetIndex")
 	assert(type(index) == "number" and index % 1 == 0 and index >= 1, "SharedPlus.Handle:SetIndex requires a positive integer index")
-	self:_EnsureArrayFieldRewrite(fieldName)
+	local arrayState = self:_EnsureArrayFieldRewrite(fieldName)
 
-	local child = self._children[fieldName]
-	assert(child ~= nil, `SharedPlus.Handle:SetIndex("{fieldName}") child SharedTable is missing`)
-	assert(self._pendingArrayCounts ~= nil, "SharedPlus handle is missing pending array state")
-
-	child[index] = SharedOps.NormalizeValue(value)
-	local currentCount = self._pendingArrayCounts[fieldName] or 0
-	if index > currentCount then
-		self._pendingArrayCounts[fieldName] = index
+	arrayState.Values[index] = SharedOps.NormalizeValue(value)
+	if index > arrayState.Count then
+		arrayState.Count = index
 	end
-	return self._pendingArrayCounts[fieldName]
+	return arrayState.Count
 end
 
 function Handle:ResetField(fieldName: string)
@@ -182,29 +267,43 @@ function Handle:ResetField(fieldName: string)
 
 	local arrayFieldConfig = self._schema.ArrayFields[fieldName]
 	assert(arrayFieldConfig ~= nil, `SharedPlus.Handle:ResetField("{fieldName}") requires a declared field`)
-	self:_BeginArrayFieldRewrite(fieldName)
+	self:_MarkArrayFieldRewrite(fieldName)
+	assert(self._pendingArrayStates ~= nil, "SharedPlus handle is missing pending array state")
+	self._pendingArrayStates[fieldName] = _CreateEmptyArrayState()
 end
 
-function Handle:Finalize(): SharedTable
+function Handle:Finalize(basePacket: TPacket?): SharedTable
 	self:_AssertWriteActive("Finalize")
 
 	local pendingScalarValues = self._pendingScalarValues
 	assert(pendingScalarValues ~= nil, "SharedPlus handle is missing pending scalar state")
 	for fieldName, value in pendingScalarValues do
 		self._scalarValues[fieldName] = value
-		_ApplyScalar(self._root, fieldName, value)
 	end
 
 	local touchedArrayFieldNames = self._touchedArrayFieldNames
-	local pendingArrayCounts = self._pendingArrayCounts
-	assert(touchedArrayFieldNames ~= nil and pendingArrayCounts ~= nil, "SharedPlus handle is missing pending array state")
+	local pendingArrayStates = self._pendingArrayStates
+	assert(touchedArrayFieldNames ~= nil and pendingArrayStates ~= nil, "SharedPlus handle is missing pending array state")
 	for _, fieldName in ipairs(touchedArrayFieldNames) do
-		local fieldConfig = self._schema.ArrayFields[fieldName]
-		local count = pendingArrayCounts[fieldName] or 0
-		self._arrayCounts[fieldName] = count
-		_ApplyScalar(self._root, fieldConfig.CountFieldName, count)
+		local arrayState = pendingArrayStates[fieldName]
+		if arrayState == nil then
+			arrayState = _CreateEmptyArrayState()
+		end
+		self._arrayStates[fieldName] = arrayState
 	end
 
+	if basePacket ~= nil then
+		assert(type(basePacket) == "table", "SharedPlus.Handle:Finalize base packet must be a table")
+		self._root = _BuildRootSharedTableWithBasePacket(
+			self._schema,
+			basePacket,
+			pendingScalarValues,
+			pendingArrayStates,
+			touchedArrayFieldNames
+		)
+	else
+		self._root = _BuildRootSharedTable(self._schema, self._scalarValues, self._arrayStates)
+	end
 	self._writeActive = false
 	self:_ReleaseCycleScratch()
 	return self._root
@@ -223,17 +322,13 @@ function Handle:ClearAll(): SharedTable
 	for _, fieldName in ipairs(self._schema.ScalarFieldNames) do
 		local defaultValue = self._schema.ScalarFields[fieldName].Default
 		self._scalarValues[fieldName] = defaultValue
-		_ApplyScalar(self._root, fieldName, defaultValue)
 	end
 
 	for _, fieldName in ipairs(self._schema.ArrayFieldNames) do
-		local child = self._children[fieldName]
-		local fieldConfig = self._schema.ArrayFields[fieldName]
-		SharedTable.clear(child)
-		self._arrayCounts[fieldName] = 0
-		_ApplyScalar(self._root, fieldConfig.CountFieldName, 0)
+		self._arrayStates[fieldName] = _CreateEmptyArrayState()
 	end
 
+	self._root = _BuildRootSharedTable(self._schema, self._scalarValues, self._arrayStates)
 	return self._root
 end
 
@@ -259,40 +354,31 @@ function Handle:_AssertWriteActive(methodName: string)
 	assert(self._writeActive, `SharedPlus.Handle:{methodName} requires BeginWrite() before mutation`)
 end
 
-function Handle:_BeginArrayFieldRewrite(fieldName: string): TParsedArrayField
+function Handle:_MarkArrayFieldRewrite(fieldName: string): TParsedArrayField
 	local fieldConfig = self._schema.ArrayFields[fieldName]
 	assert(fieldConfig ~= nil, `SharedPlus.Handle array field "{fieldName}" is not declared`)
-	assert(
-		self._touchedArrayFieldNames ~= nil and self._touchedArrayLookup ~= nil and self._pendingArrayCounts ~= nil,
-		"SharedPlus handle is missing pending array state"
-	)
+	assert(self._touchedArrayFieldNames ~= nil and self._touchedArrayLookup ~= nil, "SharedPlus handle is missing pending array state")
 
 	if not self._touchedArrayLookup[fieldName] then
 		self._touchedArrayLookup[fieldName] = true
 		self._touchedArrayFieldNames[#self._touchedArrayFieldNames + 1] = fieldName
 	end
 
-	local child = self._children[fieldName]
-	assert(child ~= nil, `SharedPlus.Handle array field "{fieldName}" child SharedTable is missing`)
-	SharedTable.clear(child)
-	self._pendingArrayCounts[fieldName] = 0
-
 	return fieldConfig
 end
 
-function Handle:_EnsureArrayFieldRewrite(fieldName: string): TParsedArrayField
-	local fieldConfig = self._schema.ArrayFields[fieldName]
-	assert(fieldConfig ~= nil, `SharedPlus.Handle array field "{fieldName}" is not declared`)
-	assert(
-		self._touchedArrayFieldNames ~= nil and self._touchedArrayLookup ~= nil and self._pendingArrayCounts ~= nil,
-		"SharedPlus handle is missing pending array state"
-	)
+function Handle:_EnsureArrayFieldRewrite(fieldName: string): TArrayState
+	self:_MarkArrayFieldRewrite(fieldName)
+	assert(self._pendingArrayStates ~= nil, "SharedPlus handle is missing pending array state")
 
-	if self._touchedArrayLookup[fieldName] then
-		return fieldConfig
+	local existingPendingState = self._pendingArrayStates[fieldName]
+	if existingPendingState ~= nil then
+		return existingPendingState
 	end
 
-	return self:_BeginArrayFieldRewrite(fieldName)
+	local pendingState = _CloneArrayState(self._arrayStates[fieldName])
+	self._pendingArrayStates[fieldName] = pendingState
+	return pendingState
 end
 
 function Handle:_ReleaseCycleScratch()
@@ -314,10 +400,9 @@ function Handle:_ReleaseCycleScratch()
 		self._touchedArrayLookup = nil
 	end
 
-	if self._pendingArrayCounts ~= nil then
-		local didRelease, releaseError = self._recycler:ReleaseMap(self._pendingArrayCounts)
-		assert(didRelease, releaseError)
-		self._pendingArrayCounts = nil
+	if self._pendingArrayStates ~= nil then
+		table.clear(self._pendingArrayStates)
+		self._pendingArrayStates = nil
 	end
 end
 

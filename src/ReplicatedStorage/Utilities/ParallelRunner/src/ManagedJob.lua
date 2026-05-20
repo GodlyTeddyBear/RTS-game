@@ -2,6 +2,8 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local SharedPlus = require(ReplicatedStorage.Utilities.SharedPlus)
 
@@ -22,6 +24,12 @@ type TRunOutput = Types.TRunOutput
 type TRunnerRunHandle = Types.TRunnerRunHandle
 type TSharedCompiledHandle = Types.TSharedCompiledHandle
 type TSharedPacket = Types.TSharedPacket
+
+local MANAGED_JOB_DISPATCH_APPLY_SHARED_MEMORY_PROFILE_ENABLED = DebugConfig.PARALLEL_RUNNER_PROFILING
+local MANAGED_JOB_DISPATCH_APPLY_SHARED_MEMORY_PROFILE_TAG = "ParallelRunner:ManagedJob:Dispatch:ApplySharedMemory"
+local MANAGED_JOB_DISPATCH_BEGIN_WRITE_PROFILE_TAG = "ParallelRunner:ManagedJob:Dispatch:ApplySharedMemory:BeginWrite"
+local MANAGED_JOB_DISPATCH_WRITE_PACKET_PROFILE_TAG = "ParallelRunner:ManagedJob:Dispatch:ApplySharedMemory:WritePacket"
+local MANAGED_JOB_DISPATCH_FINALIZE_PROFILE_TAG = "ParallelRunner:ManagedJob:Dispatch:ApplySharedMemory:Finalize"
 
 local ManagedJob = {}
 ManagedJob.__index = ManagedJob
@@ -49,14 +57,17 @@ local function _CompleteManagedRequest(
 	rows: { { [string]: any } }?,
 	err: TResult<TRunOutput>?
 )
-	local completionStatus = ManagedAsync.CompleteRequest(self._state, {
-		RequestId = requestId,
-		SessionToken = sessionToken,
-		Payload = payload,
-		Rows = rows,
-		Err = err,
-		CompletedClock = os.clock(),
-	} :: TManagedAsyncResult)
+	local completionStatus = ManagedAsync.CompleteRequest(
+		self._state,
+		{
+			RequestId = requestId,
+			SessionToken = sessionToken,
+			Payload = payload,
+			Rows = rows,
+			Err = err,
+			CompletedClock = os.clock(),
+		} :: TManagedAsyncResult
+	)
 
 	if completionStatus == "StaleRequest" then
 		return
@@ -78,7 +89,11 @@ local function _WrapBuilderFailure(jobName: string, stage: string, payload: any,
 	)
 end
 
-local function _WrapRunSetupFailure(jobName: string, payload: any, runError: TResult<TRunnerRunHandle>): TResult<TRunOutput>
+local function _WrapRunSetupFailure(
+	jobName: string,
+	payload: any,
+	runError: TResult<TRunnerRunHandle>
+): TResult<TRunOutput>
 	return _BuildManagedError(
 		"ParallelRunnerManagedJobDispatchError",
 		`ParallelRunner managed job "{jobName}" failed to dispatch`,
@@ -103,7 +118,7 @@ local function _WrapPromiseRejected(jobName: string, payload: any, promiseError:
 end
 
 function ManagedJob.new(runner: TRunner, config: TManagedJobConfig): TManagedJob
-	Validation.AssertManagedJobConfig((runner :: any), config :: any)
+	Validation.AssertManagedJobConfig(runner :: any, config :: any)
 	local registeredJob = (runner :: any)._registeredJobs[config.JobName]
 	local sharedSchema = registeredJob.Job:GetSchemas().Shared
 	assert(sharedSchema ~= nil, `ParallelRunner:CreateManagedJob("{config.JobName}") requires SharedSchema`)
@@ -146,12 +161,8 @@ function ManagedJob:Dispatch(payload: any): TManagedJobDispatchStatus
 	if self._config.GetSessionToken ~= nil then
 		local ok, sessionOrError = pcall(self._config.GetSessionToken, payload)
 		if not ok then
-			local dispatchStatus, requestId = ManagedAsync.BeginRequest(
-				self._state,
-				nil,
-				nil,
-				self._config.MaxInFlightSeconds
-			)
+			local dispatchStatus, requestId =
+				ManagedAsync.BeginRequest(self._state, nil, nil, self._config.MaxInFlightSeconds)
 			if dispatchStatus == "InFlight" then
 				return dispatchStatus
 			end
@@ -170,12 +181,8 @@ function ManagedJob:Dispatch(payload: any): TManagedJobDispatchStatus
 		sessionToken = sessionOrError
 	end
 
-	local dispatchStatus, requestId = ManagedAsync.BeginRequest(
-		self._state,
-		sessionToken,
-		nil,
-		self._config.MaxInFlightSeconds
-	)
+	local dispatchStatus, requestId =
+		ManagedAsync.BeginRequest(self._state, sessionToken, nil, self._config.MaxInFlightSeconds)
 	if dispatchStatus == "InFlight" then
 		return dispatchStatus
 	end
@@ -198,6 +205,24 @@ function ManagedJob:Dispatch(payload: any): TManagedJobDispatchStatus
 		sharedPacket = sharedPacketOrError
 	end
 
+	local baseSharedPacket = nil :: TSharedPacket?
+	if self._config.BuildBaseSharedMemory ~= nil then
+		local ok, baseSharedPacketOrError = pcall(self._config.BuildBaseSharedMemory, payload)
+		if not ok then
+			_CompleteManagedRequest(
+				self,
+				requestId :: number,
+				sessionToken,
+				payload,
+				nil,
+				_WrapBuilderFailure(self._config.JobName, "base shared memory", payload, baseSharedPacketOrError)
+			)
+			return "Dispatched"
+		end
+
+		baseSharedPacket = baseSharedPacketOrError
+	end
+
 	local okSharedPacket, sharedPacketValidationError = pcall(function()
 		Validation.AssertManagedSharedPacket(self._config.JobName, sharedPacket)
 	end)
@@ -213,14 +238,62 @@ function ManagedJob:Dispatch(payload: any): TManagedJobDispatchStatus
 		return "Dispatched"
 	end
 
+	if baseSharedPacket ~= nil then
+		local okBaseSharedPacket, baseSharedPacketValidationError = pcall(function()
+			Validation.AssertManagedBaseSharedPacket(self._config.JobName, baseSharedPacket)
+		end)
+		if not okBaseSharedPacket then
+			_CompleteManagedRequest(
+				self,
+				requestId :: number,
+				sessionToken,
+				payload,
+				nil,
+				_WrapBuilderFailure(
+					self._config.JobName,
+					"base shared memory packet",
+					payload,
+					baseSharedPacketValidationError
+				)
+			)
+			return "Dispatched"
+		end
+	end
+
 	local sharedMemory = nil
 	do
+		local closeApplySharedMemoryProfile = DebugPlus.begin(
+			MANAGED_JOB_DISPATCH_APPLY_SHARED_MEMORY_PROFILE_TAG,
+			MANAGED_JOB_DISPATCH_APPLY_SHARED_MEMORY_PROFILE_ENABLED
+		)
 		local ok, sharedMemoryOrError = pcall(function()
 			local sharedMemoryHandle = self._sharedMemoryHandle :: TSharedCompiledHandle
+			local closeBeginWriteProfile = DebugPlus.begin(
+				MANAGED_JOB_DISPATCH_BEGIN_WRITE_PROFILE_TAG,
+				--false
+				MANAGED_JOB_DISPATCH_APPLY_SHARED_MEMORY_PROFILE_ENABLED
+			)
 			sharedMemoryHandle:BeginWrite()
+			closeBeginWriteProfile()
+			-- Most expensive
+			local closeWritePacketProfile = DebugPlus.begin(
+				MANAGED_JOB_DISPATCH_WRITE_PACKET_PROFILE_TAG,
+				--false
+				MANAGED_JOB_DISPATCH_APPLY_SHARED_MEMORY_PROFILE_ENABLED
+			)
 			sharedMemoryHandle:WritePacket(sharedPacket :: TSharedPacket)
-			return sharedMemoryHandle:Finalize()
+			closeWritePacketProfile()
+
+			local closeFinalizeProfile = DebugPlus.begin(
+				MANAGED_JOB_DISPATCH_FINALIZE_PROFILE_TAG,
+				--false
+				MANAGED_JOB_DISPATCH_APPLY_SHARED_MEMORY_PROFILE_ENABLED
+			)
+			local finalizedSharedMemory = sharedMemoryHandle:Finalize(baseSharedPacket)
+			closeFinalizeProfile()
+			return finalizedSharedMemory
 		end)
+		closeApplySharedMemoryProfile()
 		if not ok then
 			_CompleteManagedRequest(
 				self,
@@ -297,7 +370,8 @@ function ManagedJob:Dispatch(payload: any): TManagedJobDispatchStatus
 	end
 
 	local handle = runResult.value
-	handle:GetPromise()
+	handle
+		:GetPromise()
 		:andThen(function(result: TResult<TRunOutput>)
 			if self._destroyed then
 				return

@@ -107,6 +107,12 @@ function Validation.AssertManagedJobConfig(runner: { [string]: any }, config: { 
 		type(config.BuildSharedMemory) == "function",
 		`ParallelRunner:CreateManagedJob("{tostring(config.JobName)}") requires BuildSharedMemory`
 	)
+	if config.BuildBaseSharedMemory ~= nil then
+		assert(
+			type(config.BuildBaseSharedMemory) == "function",
+			`ParallelRunner:CreateManagedJob("{config.JobName}") BuildBaseSharedMemory must be a function when provided`
+		)
+	end
 	assert(
 		type(config.BuildRunRequest) == "function",
 		`ParallelRunner:CreateManagedJob("{tostring(config.JobName)}") requires BuildRunRequest`
@@ -138,6 +144,13 @@ function Validation.AssertManagedSharedPacket(jobName: string, packet: any)
 	assert(
 		type(packet) == "table",
 		`ParallelRunner managed job "{jobName}" BuildSharedMemory must return a SharedPlus packet table`
+	)
+end
+
+function Validation.AssertManagedBaseSharedPacket(jobName: string, packet: any)
+	assert(
+		type(packet) == "table",
+		`ParallelRunner managed job "{jobName}" BuildBaseSharedMemory must return a SharedPlus packet table`
 	)
 end
 

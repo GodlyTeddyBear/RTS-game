@@ -5,7 +5,7 @@ Shared utility for flat `SharedTable` authoring and reuse in parallel Luau workf
 `SharedPlus` has three layers:
 
 - v1 direct helpers for one-off `SharedTable` creation and mutation
-- v2 reusable handles that keep one root and one child `SharedTable` per declared array field alive across write cycles
+- v2 reusable handles that stage writes in Lua and emit a new root `SharedTable` on each finalize
 - v3 compiled packet writers that batch scalar, array, increment, and clear operations into one write pass
 
 The package is flat-only. It does not support nested shared-table storage, nested dictionary flattening, or context-specific orchestration.
@@ -16,7 +16,7 @@ The package is flat-only. It does not support nested shared-table storage, neste
 - replaces root scalar fields through a small shared helper API
 - increments numeric fields
 - replaces and clears flat array fields
-- reuses the same root and child shared tables across repeated writes
+- rebuilds handle-backed root snapshots on finalize
 - mirrors array logical counts onto root scalar fields such as `PositionsCount`
 - flattens nested array authoring input on declared fields through `TableUtil.Flat`
 - uses a private `TableRecycler` handle internally for temporary Lua scratch state
@@ -160,7 +160,10 @@ Important handle rules:
 - call `BeginWrite()` before any mutation
 - call `Finalize()` to publish scalar changes and count fields
 - do not call `BeginWrite()` again while a write is still active
-- `GetRoot()` returns the persistent root `SharedTable`
+- `Finalize()` returns a new root snapshot for that write cycle
+- `GetRoot()` returns the latest finalized root snapshot
+- root identity may change across finalize cycles
+- `Append()` and `SetIndex()` mutate staged Lua array state until finalize
 
 ## Flattened Array Usage
 
@@ -282,7 +285,7 @@ Packet behavior:
 Prefer `SharedPlus` when:
 
 - a parallel worker or actor flow reuses the same shared-memory shape every frame or tick
-- the caller wants root and child `SharedTable` reuse without open-coding it each time
+- the caller wants a reusable snapshot builder without open-coding shared-memory packing each time
 - nested arrays are a convenient authoring shape but the runtime storage should stay flat
 - the caller wants one bulk packet write instead of many per-field calls
 

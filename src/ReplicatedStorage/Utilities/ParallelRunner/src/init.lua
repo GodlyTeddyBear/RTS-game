@@ -96,6 +96,27 @@ local function _ResolveBatchSize(self: any, registeredJob: TRegisteredJob, reque
 	return self._defaultBatchSize
 end
 
+local function _ResolveSharedMemory(
+	registeredJob: TRegisteredJob,
+	request: Types.TRunRequest
+): (SharedTable?, TResult<any>?)
+	if registeredJob.SharedMemory ~= nil and request.SharedMemory ~= nil then
+		return nil, _BuildSetupError(
+			"ParallelRunnerSharedMemoryConflict",
+			`ParallelRunner:Run("{request.JobName}") cannot combine registered SharedMemory with request SharedMemory`,
+			{
+				JobName = request.JobName,
+			}
+		)
+	end
+
+	if request.SharedMemory ~= nil then
+		return request.SharedMemory, nil
+	end
+
+	return registeredJob.SharedMemory, nil
+end
+
 local function _BuildRunFailureResult(workplaceRunResult: TWorkplaceRunResult): TResult<Types.TRunOutput>
 	local causeMessage = if workplaceRunResult.FirstError ~= nil then workplaceRunResult.FirstError.Message else nil
 	local workerErrorType = nil :: string?
@@ -366,6 +387,10 @@ function ParallelRunner:Run(request: TRunRequest): TResult<TRunnerRunHandle>
 		end
 
 		local resolvedBatchSize = _ResolveBatchSize(self, registeredJob, request)
+		local resolvedSharedMemory, sharedMemoryError = _ResolveSharedMemory(registeredJob, request)
+		if sharedMemoryError ~= nil then
+			return sharedMemoryError
+		end
 
 		-- Encode args with the compiled transport contract before crossing into the workplace.
 		local argsBuffer, encodeError = registeredJob.Job:EncodeArgs(request.Args)
@@ -385,7 +410,7 @@ function ParallelRunner:Run(request: TRunRequest): TResult<TRunnerRunHandle>
 			LogicalWorkCount = logicalWorkCount :: number,
 			BatchSize = resolvedBatchSize,
 			ArgsBuffer = argsBuffer,
-			SharedMemory = request.SharedMemory,
+			SharedMemory = resolvedSharedMemory,
 		})
 
 		local completionPromise = workplaceRunHandle:GetPromise()

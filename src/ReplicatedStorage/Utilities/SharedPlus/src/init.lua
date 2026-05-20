@@ -40,6 +40,10 @@ function SharedPlus.ReplaceFields(sharedTable: SharedTable, fields: { [string]: 
 	SharedOps.ReplaceFields(sharedTable, fields)
 end
 
+function SharedPlus.ShallowMerge(baseSharedTable: SharedTable?, overlaySharedTable: SharedTable?): SharedTable?
+	return SharedOps.ShallowMerge(baseSharedTable, overlaySharedTable)
+end
+
 function SharedPlus.IncrementField(sharedTable: SharedTable, fieldName: string, delta: number?): number
 	return SharedOps.IncrementField(sharedTable, fieldName, delta)
 end

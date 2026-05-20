@@ -446,8 +446,8 @@ function EnemyCombatAdapterService:RegisterActor(entity: number): Result.Result<
 			BuildFacts = function(currentTime: number): { [string]: any }
 				return self:_BuildFacts(entity, currentTime)
 			end,
-			BuildServices = function(currentTime: number, tickId: number?): { [string]: any }
-				return self:_BuildServices(entity, currentTime, tickId)
+			BuildServices = function(currentTime: number, tickId: number?, frameContext: any?): { [string]: any }
+				return self:_BuildServices(entity, currentTime, tickId, frameContext)
 			end,
 			OnCancel = function()
 				self._combatServices.MovementService:StopMovement(entity)
@@ -669,6 +669,8 @@ function EnemyCombatAdapterService:_GetOrCreateCachedExecutorServices(entity: nu
 		StructureContext = self._structureContext,
 		BaseContext = self._baseContext,
 		CurrentTime = 0,
+		TickStartedAt = nil,
+		TickBudgetSeconds = nil,
 		HitboxService = self._hitboxProxyResolver.CreateProxy(entity),
 		MovementService = self._movementProxyResolver.CreateProxy(entity),
 		CombatHitResolutionService = self._combatServices.CombatHitResolutionService,
@@ -678,10 +680,22 @@ function EnemyCombatAdapterService:_GetOrCreateCachedExecutorServices(entity: nu
 end
 
 -- Builds the service map exposed to enemy behavior executors for the current tick.
-function EnemyCombatAdapterService:_BuildServices(entity: number, currentTime: number, tickId: number?): { [string]: any }
+function EnemyCombatAdapterService:_BuildServices(
+	entity: number,
+	currentTime: number,
+	tickId: number?,
+	frameContext: any?
+): { [string]: any }
 	local cachedServices = self:_GetOrCreateCachedExecutorServices(entity)
 	cachedServices.CurrentTime = currentTime
 	cachedServices.TickId = if type(tickId) == "number" then tickId else nil
+	cachedServices.TickStartedAt = if type(frameContext) == "table" and type(frameContext.TickStartedAt) == "number"
+		then frameContext.TickStartedAt
+		else nil
+	cachedServices.TickBudgetSeconds =
+		if type(frameContext) == "table" and type(frameContext.TickBudgetSeconds) == "number"
+			then frameContext.TickBudgetSeconds
+			else nil
 	cachedServices.EnemyContext = self._runtimeOwner
 	return cachedServices
 end

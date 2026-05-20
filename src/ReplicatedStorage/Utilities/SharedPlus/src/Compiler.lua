@@ -90,8 +90,8 @@ function CompiledHandle:WritePacket(packet: TPacket)
 	end
 end
 
-function CompiledHandle:Finalize(): SharedTable
-	return self._handle:Finalize()
+function CompiledHandle:Finalize(basePacket: TPacket?): SharedTable
+	return self._handle:Finalize(basePacket)
 end
 
 function CompiledHandle:GetRoot(): SharedTable

@@ -213,8 +213,8 @@ function StructureCombatAdapterService:RegisterActor(entity: number): Result.Res
 			BuildFacts = function(currentTime: number): { [string]: any }
 				return self:_BuildFacts(entity, currentTime)
 			end,
-			BuildServices = function(currentTime: number, tickId: number?): { [string]: any }
-				return self:_BuildServices(entity, currentTime, tickId)
+			BuildServices = function(currentTime: number, tickId: number?, frameContext: any?): { [string]: any }
+				return self:_BuildServices(entity, currentTime, tickId, frameContext)
 			end,
 			OnRemoved = function()
 				self:_ClearCachedFacts(entity)
@@ -418,7 +418,12 @@ function StructureCombatAdapterService:_GetOrCreateCachedExecutorServices(entity
 end
 
 -- Builds the service map exposed to structure behavior executors for the current tick.
-function StructureCombatAdapterService:_BuildServices(entity: number, currentTime: number, tickId: number?): { [string]: any }
+function StructureCombatAdapterService:_BuildServices(
+	entity: number,
+	currentTime: number,
+	tickId: number?,
+	_frameContext: any?
+): { [string]: any }
 	local cachedServices = self:_GetOrCreateCachedExecutorServices(entity)
 	cachedServices.CurrentTime = currentTime
 	cachedServices.TickId = if type(tickId) == "number" then tickId else nil

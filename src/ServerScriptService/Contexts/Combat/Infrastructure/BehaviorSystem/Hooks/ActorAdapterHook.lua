@@ -14,7 +14,7 @@ function ActorAdapterHook:Use(entity: number, hookContext: any): any?
 	local services = nil
 	if hookContext.NeedsServices then
 		local serviceBuildStartedAt = if runtimeProfile ~= nil then os.clock() else nil
-		services = registryService:BuildServices(entity, currentTime, tickId)
+		services = registryService:BuildServices(entity, currentTime, tickId, hookContext.FrameContext)
 		services.ActionState = hookContext.ActionState
 		if runtimeProfile ~= nil then
 			runtimeProfile.ServiceBuildCount += 1

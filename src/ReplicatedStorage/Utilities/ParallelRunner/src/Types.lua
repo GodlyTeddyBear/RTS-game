@@ -140,6 +140,7 @@ export type TManagedJobDispatchStatus = TManagedDispatchStatus
 export type TManagedJobConfig = {
 	JobName: string,
 	BuildSharedMemory: (payload: any) -> TSharedPacket,
+	BuildBaseSharedMemory: ((payload: any) -> TSharedPacket?)?,
 	BuildRunRequest: (payload: any) -> TManagedJobBuildRunRequest,
 	GetSessionToken: ((payload: any) -> any?)?,
 	MaxInFlightSeconds: number?,

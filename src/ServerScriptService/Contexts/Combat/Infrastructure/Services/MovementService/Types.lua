@@ -24,7 +24,14 @@ export type EnemyMovementMode = EnemyTypes.EnemyMovementMode
     @within Types
     Flow pipeline state label used to drive the separation solve lifecycle.
 ]=]
-export type TFlowPipelineState = "Idle" | "Dispatching" | "Waiting" | "Publishing"
+export type TFlowPipelineState =
+	"Idle"
+	| "BuildingSnapshot"
+	| "PreparingSharedPacket"
+	| "PreparingRunRequest"
+	| "Dispatching"
+	| "Waiting"
+	| "Publishing"
 
 --[=[
     @interface TPathMovementState
@@ -297,6 +304,28 @@ export type TFlowPublishedFrameState = {
 	PositionByEntity: { [number]: Vector3 },
 	WalkSpeedByEntity: { [number]: number },
 	IsSettledByEntity: { [number]: boolean },
+}
+
+export type TFlowSeparationRunRequest = {
+	Args: {
+		TickId: number,
+	},
+	LogicalWorkCount: number,
+	BatchSize: number,
+}
+
+--[=[
+    @interface TFlowSeparationDispatchPayload
+    @within Types
+    MovementService-owned payload prepared before handing the solve to the managed job.
+    .Snapshot TFlowSeparationSolveSnapshot -- Packed snapshot used by the worker solve.
+    .SharedPacket ParallelRunner.TSharedPacket -- Prebuilt SharedPlus packet consumed by the managed job.
+    .RunRequest table -- Per-dispatch run request forwarded to ParallelRunner.
+]=]
+export type TFlowSeparationDispatchPayload = {
+	Snapshot: TFlowSeparationSolveSnapshot,
+	SharedPacket: ParallelRunner.TSharedPacket,
+	RunRequest: TFlowSeparationRunRequest,
 }
 
 --[=[

@@ -36,6 +36,17 @@ local function _AssertContiguousArray(values: { any }, context: string)
 	end
 end
 
+local function _BuildNormalizedArray(values: { any }): ({ any }, number)
+	local normalizedArray = table.create(#values)
+	local count = 0
+	for index, value in ipairs(values) do
+		count = index
+		normalizedArray[index] = _NormalizeSharedValue(value)
+	end
+
+	return normalizedArray, count
+end
+
 function SharedOps.NormalizeValue(value: any): any
 	return _NormalizeSharedValue(value)
 end
@@ -77,6 +88,33 @@ function SharedOps.ReplaceFields(sharedTable: SharedTable, fields: { [string]: a
 	end
 end
 
+function SharedOps.ShallowMerge(baseSharedTable: SharedTable?, overlaySharedTable: SharedTable?): SharedTable?
+	if baseSharedTable == nil then
+		if overlaySharedTable == nil then
+			return nil
+		end
+
+		_AssertSharedTable(overlaySharedTable, "SharedPlus.ShallowMerge")
+		return SharedTable.clone(overlaySharedTable, false)
+	end
+
+	_AssertSharedTable(baseSharedTable, "SharedPlus.ShallowMerge")
+	if overlaySharedTable == nil then
+		return SharedTable.clone(baseSharedTable, false)
+	end
+
+	_AssertSharedTable(overlaySharedTable, "SharedPlus.ShallowMerge")
+	local mergedSharedTable = SharedTable.clone(baseSharedTable, false)
+	for fieldName, value in overlaySharedTable do
+		assert(type(fieldName) == "string" and fieldName ~= "", "SharedPlus.ShallowMerge field names must be non-empty strings")
+		SharedTable.update(mergedSharedTable, fieldName, function()
+			return value
+		end)
+	end
+
+	return mergedSharedTable
+end
+
 function SharedOps.IncrementField(sharedTable: SharedTable, fieldName: string, delta: number?): number
 	_AssertSharedTable(sharedTable, "SharedPlus.IncrementField")
 	assert(type(fieldName) == "string" and fieldName ~= "", "SharedPlus.IncrementField requires a field name")
@@ -105,15 +143,10 @@ function SharedOps.ClearArray(sharedTable: SharedTable, fieldName: string, count
 	_AssertSharedTable(sharedTable, "SharedPlus.ClearArray")
 	assert(type(fieldName) == "string" and fieldName ~= "", "SharedPlus.ClearArray requires a field name")
 
-	local child = sharedTable[fieldName]
-	if typeof(child) ~= "SharedTable" then
-		child = SharedTable.new()
-		SharedTable.update(sharedTable, fieldName, function()
-			return child
-		end)
-	end
-
-	SharedTable.clear(child)
+	local child = SharedTable.new()
+	SharedTable.update(sharedTable, fieldName, function()
+		return child
+	end)
 
 	if countFieldName ~= nil then
 		SharedTable.update(sharedTable, countFieldName, function()
@@ -133,13 +166,11 @@ function SharedOps.ReplaceArray(
 	local context = `SharedPlus.ReplaceArray("{fieldName}")`
 	_AssertContiguousArray(values, context)
 
-	local child = SharedOps.ClearArray(sharedTable, fieldName, countFieldName)
-	local count = 0
-
-	for index, value in ipairs(values) do
-		count = index
-		child[index] = _NormalizeSharedValue(value)
-	end
+	local normalizedArray, count = _BuildNormalizedArray(values)
+	local child = SharedTable.new(normalizedArray)
+	SharedTable.update(sharedTable, fieldName, function()
+		return child
+	end)
 
 	if countFieldName ~= nil then
 		SharedTable.update(sharedTable, countFieldName, function()

@@ -26,15 +26,27 @@ type TMovementState = MovementTypes.TMovementState
 type TSharedFlowfieldEntry = MovementTypes.TSharedFlowfieldEntry
 type TFlowActorRefs = MovementTypes.TFlowActorRefs
 type TFlowPipelineState = MovementTypes.TFlowPipelineState
+type TFlowSeparationDispatchPayload = MovementTypes.TFlowSeparationDispatchPayload
 type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
 
--- â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 local MOVEMENT_PROFILING_ENABLED = DebugConfig.COMBAT_MOVEMENT_PROFILING
 local STEP_ADVANCE_PROFILE_TAG = "Combat:MovementService:StepAdvance"
 local FLOW_STEP_ADVANCE_PROFILE_TAG = "Combat:MovementService:Flow:StepAdvance"
 
 local FLOW_PIPELINE_TRANSITIONS: { [TFlowPipelineState]: { [TFlowPipelineState]: boolean } } = {
 	Idle = {
+		BuildingSnapshot = true,
+	},
+	BuildingSnapshot = {
+		Idle = true,
+		PreparingSharedPacket = true,
+	},
+	PreparingSharedPacket = {
+		Idle = true,
+		PreparingRunRequest = true,
+	},
+	PreparingRunRequest = {
+		Idle = true,
 		Dispatching = true,
 	},
 	Dispatching = {
@@ -50,7 +62,6 @@ local FLOW_PIPELINE_TRANSITIONS: { [TFlowPipelineState]: { [TFlowPipelineState]:
 	},
 }
 
--- â”€â”€ Private â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Build the flow pipeline state machine so runtime transitions stay validated in one place.
 local function _CreateFlowPipelineStateMachine()
 	return StateMachine.new({
@@ -75,7 +86,6 @@ require(script.FlowSnapshot)(MovementService)
 require(script.FlowPipeline)(MovementService)
 require(script.FlowMovement)(MovementService)
 
--- Ã¢â€â‚¬Ã¢â€â‚¬ Public Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 --[=[
     Creates a new movement service with empty runtime caches and state tables.
     @within MovementService
@@ -119,13 +129,6 @@ function MovementService.new()
 	self._flowPublishedWalkSpeedByEntity = {} :: { [number]: number }
 	self._flowPublishedIsSettledByEntity = {} :: { [number]: boolean }
 	self._flowRepresentativeStarts = {} :: { Vector3 }
-	self._flowRunRequest = {
-		Args = {
-			TickId = 0,
-		},
-		LogicalWorkCount = 0,
-		BatchSize = 0,
-	}
 	self._flowPublishedSolve = {
 		TickId = 0,
 		VelocityByEntity = self._flowPublishedVelocityByEntity,
@@ -151,6 +154,10 @@ function MovementService.new()
 	self._flowDispatchedSeparationSnapshot = nil
 	self._flowDispatchedGoalKeyByEntity = nil
 	self._flowDispatchedFrameState = nil :: TFlowPublishedFrameState?
+	self._flowStaticSharedMemory = nil :: ParallelRunner.TSharedPacket?
+	self._flowStaticSharedMemoryPathfinder = nil
+	self._flowPreparedSharedPacket = nil :: ParallelRunner.TSharedPacket?
+	self._flowDispatchPayload = nil :: TFlowSeparationDispatchPayload?
 	self._flowWallKeyCachePathfinder = nil
 	self._flowWallPackedKeys = nil
 	self._flowWallGridHalfSize = nil
@@ -262,6 +269,10 @@ function MovementService:ResetFastFlowRuntime()
 	self._flowLatestParallelSolve = nil
 	self._flowDispatchedGoalKeyByEntity = nil
 	self._flowDispatchedFrameState = nil
+	self._flowPreparedSharedPacket = nil
+	self._flowDispatchPayload = nil
+	self._flowStaticSharedMemory = nil
+	self._flowStaticSharedMemoryPathfinder = nil
 	self._flowWallKeyCachePathfinder = nil
 	self._flowWallPackedKeys = nil
 	self._flowWallGridHalfSize = nil
@@ -296,12 +307,12 @@ function MovementService:StartAdvance(entity: number, movementMode: EnemyMovemen
 
 	-- Prefer shared-flow movement when the mode and configuration allow it.
 	if resolvedMode == "Flow" then
-		local startedFlow, flowReason = self:_StartFlow(entity, pathState.GoalPosition)
-		if startedFlow then
+		local flowResult = self:_StartFlow(entity, pathState.GoalPosition)
+		if flowResult.success then
 			return true, nil
 		end
-		if movementMode ~= "Any" or flowReason ~= "FastFlowNotConfigured" then
-			return false, if flowReason ~= nil then flowReason else "FlowStartFailed"
+		if movementMode ~= "Any" or flowResult.type ~= "FastFlowNotConfigured" then
+			return false, flowResult.type
 		end
 	end
 
@@ -344,7 +355,18 @@ function MovementService:StepAdvance(entity: number, services: any?): (boolean, 
 
 		-- Flow movement runs through the separation pipeline before the per-entity solve.
 		return DebugPlus.profile(FLOW_STEP_ADVANCE_PROFILE_TAG, function()
-			return self:_StepFlowAdvance(entity, movementState, services)
+			local stepResult = self:_StepFlowAdvance(entity, movementState, services)
+			if stepResult.success then
+				local outcome = stepResult.value
+				if type(outcome) == "table" then
+					return outcome.IsDone == true, nil
+				end
+				return false, nil
+			end
+			if stepResult.type == "FlowAdvancePending" then
+				return false, nil
+			end
+			return false, stepResult.type
 		end, MOVEMENT_PROFILING_ENABLED)
 	end, MOVEMENT_PROFILING_ENABLED)
 end

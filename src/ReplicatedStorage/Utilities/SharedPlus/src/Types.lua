@@ -55,7 +55,7 @@ export type THandle = {
 	Append: (self: THandle, fieldName: string, value: any) -> number,
 	SetIndex: (self: THandle, fieldName: string, index: number, value: any) -> number,
 	ResetField: (self: THandle, fieldName: string) -> (),
-	Finalize: (self: THandle) -> SharedTable,
+	Finalize: (self: THandle, basePacket: TPacket?) -> SharedTable,
 	GetRoot: (self: THandle) -> SharedTable,
 	ClearAll: (self: THandle) -> SharedTable,
 	Destroy: (self: THandle) -> (),
@@ -64,7 +64,7 @@ export type THandle = {
 export type TCompiledHandle = {
 	BeginWrite: (self: TCompiledHandle) -> (),
 	WritePacket: (self: TCompiledHandle, packet: TPacket) -> (),
-	Finalize: (self: TCompiledHandle) -> SharedTable,
+	Finalize: (self: TCompiledHandle, basePacket: TPacket?) -> SharedTable,
 	GetRoot: (self: TCompiledHandle) -> SharedTable,
 	Destroy: (self: TCompiledHandle) -> (),
 }
