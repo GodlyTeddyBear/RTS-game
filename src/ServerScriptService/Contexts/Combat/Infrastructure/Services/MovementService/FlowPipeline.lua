@@ -5,7 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
 local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
-local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
+local ParallelRunner = require(ReplicatedStorage.Utilities.ParallelRunner)
 local MovementTypes = require(script.Parent.Types)
 
 type TFlowPipelineState = MovementTypes.TFlowPipelineState
@@ -14,7 +14,7 @@ type TFlowPublishedSolve = MovementTypes.TFlowPublishedSolve
 type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
 type TManagedJob = MovementTypes.TManagedJob
 
-local ManagedJobPolicies = ParallelQuery.ManagedJobPolicies
+local ManagedJobPolicies = ParallelRunner.ManagedJobPolicies
 local MOVEMENT_PROFILING_ENABLED = DebugConfig.COMBAT_MOVEMENT_PROFILING
 local ADVANCE_PIPELINE_PROFILE_TAG = "Combat:MovementService:Flow:AdvancePipeline"
 local PIPELINE_IDLE_BUILD_SNAPSHOT_PROFILE_TAG = "Combat:MovementService:Flow:AdvancePipeline:Idle:BuildSnapshot"
@@ -88,16 +88,6 @@ return function(MovementService: any)
 		return 8
 	end
 
-	-- Returns the timeout used while waiting for a separation result.
-	function MovementService:_GetFlowSeparationParallelTimeoutSeconds(): number
-		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
-		local configured = if config ~= nil then config.ParallelVelocityTimeoutSeconds else nil
-		if type(configured) == "number" and configured > 0 then
-			return configured
-		end
-		return 1
-	end
-
 	-- Returns the maximum in-flight time allowed for the managed parallel job.
 	function MovementService:_GetFlowSeparationParallelMaxInFlightSeconds(): number
 		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
@@ -121,13 +111,21 @@ return function(MovementService: any)
 			return runner
 		end
 
-		runner = ParallelQuery.new({
+		runner = ParallelRunner.new({
 			Name = "CombatFlowMovement",
 			ActorCount = self:_GetFlowSeparationParallelActorCount(),
-			Operations = {
-				script.Parent.Parallel.FlowSeparationSolveOperation,
-			},
+			DefaultBatchSize = self:_GetFlowSeparationParallelBatchSize(),
 		})
+
+		local registerResult = runner:RegisterJob({
+			Job = require(script.Parent.Parallel.FlowSeparationSolveOperation),
+			WorkerModule = script.Parent.Parallel.FlowSeparationSolveWorker,
+		})
+		assert(
+			registerResult.success,
+			registerResult.message or registerResult.type or "Failed to register FlowSeparationSolve with ParallelRunner"
+		)
+
 		self._flowSeparationParallelRunner = runner
 		return runner
 	end
@@ -136,15 +134,15 @@ return function(MovementService: any)
 	function MovementService:_CreateFlowSeparationManagedJob(): TManagedJob
 		local runner = self:_GetOrCreateFlowSeparationRunner()
 		return runner:CreateManagedJob({
-			OperationName = "FlowSeparationSolve",
-			BuildLocalMemory = function(snapshot: TFlowSeparationSolveSnapshot)
+			JobName = "FlowSeparationSolve",
+			BuildSharedMemory = function(snapshot: TFlowSeparationSolveSnapshot)
 				return self:_CreateFlowSeparationSharedMemory(snapshot)
 			end,
 			BuildRunRequest = function(snapshot: TFlowSeparationSolveSnapshot)
 				local runRequest = self._flowRunRequest
-				runRequest.WorkCount = #snapshot.EntityIds
+				runRequest.Args.TickId = snapshot.TickId
+				runRequest.LogicalWorkCount = #snapshot.EntityIds
 				runRequest.BatchSize = self:_GetFlowSeparationParallelBatchSize()
-				runRequest.TimeoutSeconds = self:_GetFlowSeparationParallelTimeoutSeconds()
 				return runRequest
 			end,
 			GetSessionToken = function(_snapshot: TFlowSeparationSolveSnapshot)
@@ -163,6 +161,15 @@ return function(MovementService: any)
 			self._flowSeparationManagedJob = job
 		end
 		return job
+	end
+
+	-- Prewarms the parallel runner outside the combat tick so actor hiring never yields during a frame.
+	function MovementService:_PrimeFlowSeparationParallelRuntime()
+		if not self:_IsFlowSeparationParallelEnabled() then
+			return
+		end
+
+		self:_GetOrCreateFlowSeparationRunner()
 	end
 
 	-- Resets the flow-infrastructure runtime without destroying shared objects.
@@ -395,6 +402,12 @@ return function(MovementService: any)
 
 				local status = job:GetStatus()
 				if status.HasCompletedResult ~= true then
+					if status.InFlight then
+						return
+					end
+
+					self:_ReleaseFlowDispatchedSeparationSnapshot()
+					_TransitionFlowPipeline(self, "Idle")
 					return
 				end
 

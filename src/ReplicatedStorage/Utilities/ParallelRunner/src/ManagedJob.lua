@@ -381,11 +381,12 @@ function ManagedJob:Destroy()
 		return
 	end
 
+	local runner = self._runner :: any
 	self._destroyed = true
 	ManagedAsync.ResetState(self._state)
 	self._lastError = nil
 	self._sharedMemoryHandle:Destroy()
-	(self._runner :: any)._managedJobs[self] = nil
+	runner._managedJobs[self] = nil
 	self._runner = nil
 end
 

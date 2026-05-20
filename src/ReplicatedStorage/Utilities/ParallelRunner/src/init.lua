@@ -181,6 +181,27 @@ local function _BuildPromiseRejectedResult(jobName: string, runId: number, promi
 	)
 end
 
+local function _MaterializeResult<T>(result: TResult<T>): { [string]: any }
+	if result.success then
+		return {
+			_isResult = true,
+			success = true,
+			value = result.value,
+		}
+	end
+
+	local resolvedError = result :: any
+	return {
+		_isResult = true,
+		success = false,
+		type = resolvedError.type,
+		message = resolvedError.message,
+		data = resolvedError.data,
+		traceback = resolvedError.traceback,
+		isDefect = resolvedError.isDefect,
+	}
+end
+
 function ParallelRunner.DefineJob(config: TDefineJobConfig): TCompiledJob
 	return Compiler.DefineJob(config)
 end
@@ -369,10 +390,12 @@ function ParallelRunner:Run(request: TRunRequest): TResult<TRunnerRunHandle>
 
 		local completionPromise = workplaceRunHandle:GetPromise()
 			:andThen(function(workplaceRunResult: TWorkplaceRunResult)
-				return self:_DecodeRunResult(registeredJob, workplaceRunResult)
+				return _MaterializeResult(self:_DecodeRunResult(registeredJob, workplaceRunResult))
 			end)
 			:catch(function(promiseError)
-				return _BuildPromiseRejectedResult(request.JobName, workplaceRunHandle:GetRunId(), promiseError)
+				return _MaterializeResult(
+					_BuildPromiseRejectedResult(request.JobName, workplaceRunHandle:GetRunId(), promiseError)
+				)
 			end)
 
 		return Ok(RunHandle.new(workplaceRunHandle, completionPromise))

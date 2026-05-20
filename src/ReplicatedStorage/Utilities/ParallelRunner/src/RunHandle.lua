@@ -16,6 +16,14 @@ type TWorkplaceRunHandle = Types.TWorkplaceRunHandle
 local RunHandle = {}
 RunHandle.__index = RunHandle
 
+local function _ReifyResult<T>(resultLike: any): TResult<T>
+	if resultLike.success then
+		return Result.Ok(resultLike.value)
+	end
+
+	return Result.Err(resultLike.type, resultLike.message, resultLike.data)
+end
+
 local function _BuildPromiseRejectedResult(jobName: string, runId: number, promiseError: any): TResult<TRunOutput>
 	return Result.Err("ParallelRunnerPromiseRejected", `ParallelRunner run "{jobName}" promise rejected unexpectedly`, {
 		JobName = jobName,
@@ -30,7 +38,7 @@ local function _ResolveCompletionResult(self): TResult<TRunOutput>
 		return _BuildPromiseRejectedResult(self:GetJobName(), self:GetRunId(), result)
 	end
 
-	return result
+	return _ReifyResult(result)
 end
 
 local function _FireCompletedOnce(self)

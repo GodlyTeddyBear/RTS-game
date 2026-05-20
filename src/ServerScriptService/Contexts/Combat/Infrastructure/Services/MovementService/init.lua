@@ -120,9 +120,11 @@ function MovementService.new()
 	self._flowPublishedIsSettledByEntity = {} :: { [number]: boolean }
 	self._flowRepresentativeStarts = {} :: { Vector3 }
 	self._flowRunRequest = {
-		WorkCount = 0,
+		Args = {
+			TickId = 0,
+		},
+		LogicalWorkCount = 0,
 		BatchSize = 0,
-		TimeoutSeconds = 0,
 	}
 	self._flowPublishedSolve = {
 		TickId = 0,
@@ -170,7 +172,9 @@ end
     Starts the movement service after dependency registration completes.
     @within MovementService
 ]=]
-function MovementService:Start() end
+function MovementService:Start()
+	self:_PrimeFlowSeparationParallelRuntime()
+end
 
 --[=[
     Wires the enemy entity factory used to read and update movement state.

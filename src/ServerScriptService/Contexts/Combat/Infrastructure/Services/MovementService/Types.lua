@@ -3,7 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local EnemyTypes = require(ReplicatedStorage.Contexts.Enemy.Types.EnemyTypes)
-local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
+local ParallelRunner = require(ReplicatedStorage.Utilities.ParallelRunner)
 
 --[=[
     @class Types
@@ -302,8 +302,8 @@ export type TFlowPublishedFrameState = {
 --[=[
     @type TManagedJob
     @within Types
-    ParallelQuery managed job handle used by the flow separation pipeline.
+    ParallelRunner managed job handle used by the flow separation pipeline.
 ]=]
-export type TManagedJob = ParallelQuery.TManagedJob
+export type TManagedJob = ParallelRunner.TManagedJob
 
 return table.freeze(MovementServiceTypes)

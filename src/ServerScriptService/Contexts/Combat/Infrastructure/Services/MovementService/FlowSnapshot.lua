@@ -6,7 +6,6 @@ local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.Co
 local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local ParallelRunner = require(ReplicatedStorage.Utilities.ParallelRunner)
-local ParallelQuery = require(ReplicatedStorage.Utilities.ParallelQuery)
 local TableRecycler = require(ReplicatedStorage.Utilities.TableRecycler)
 local FlowFrameState = require(script.Parent.FlowFrameState)
 local MovementMath = require(script.Parent.Math.MovementMath)
@@ -17,8 +16,8 @@ type TFlowFrameStateHandle = MovementTypes.TFlowFrameStateHandle
 type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
 type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
 type TFlowSeparationSolveRow = MovementTypes.TFlowSeparationSolveRow
+type TSharedPacket = ParallelRunner.TSharedPacket
 
-local SharedMemoryAuthoring = ParallelQuery.SharedMemoryAuthoring
 local ResultApplication = ParallelRunner.ResultApplication
 local ValidationHelpers = ParallelRunner.ValidationHelpers
 local MOVEMENT_PROFILING_ENABLED = DebugConfig.COMBAT_MOVEMENT_PROFILING
@@ -109,76 +108,52 @@ return function(MovementService: any)
 		self._flowFrameStateRecycler = nil
 	end
 
-	-- Authoring converts the flow separation snapshot into shared memory for the parallel job.
-	function MovementService:_CreateFlowSeparationSharedMemory(snapshot: TFlowSeparationSolveSnapshot): SharedTable
+	-- Converts the flow separation snapshot into a SharedPlus packet for the parallel job.
+	function MovementService:_CreateFlowSeparationSharedMemory(snapshot: TFlowSeparationSolveSnapshot): TSharedPacket
 		local closeCreateSharedMemoryProfile =
 			DebugPlus.begin(CREATE_SHARED_MEMORY_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
-		local builder = SharedMemoryAuthoring.CreateSnapshotBuilder()
-		SharedMemoryAuthoring.SetArrayValues(builder, "GoalGroupId", snapshot.GoalGroupId)
-		SharedMemoryAuthoring.SetArrayValues(
-			builder,
-			"GoalGroupCellRecordStartIndex",
-			snapshot.GoalGroupCellRecordStartIndex
-		)
-		SharedMemoryAuthoring.SetArrayValues(
-			builder,
-			"GoalGroupCellRecordCount",
-			snapshot.GoalGroupCellRecordCount
-		)
-		SharedMemoryAuthoring.SetArrayValues(
-			builder,
-			"GoalGroupCellWidthStuds",
-			snapshot.GoalGroupCellWidthStuds
-		)
-		SharedMemoryAuthoring.SetArrayValues(builder, "GroupCellX", snapshot.GroupCellX)
-		SharedMemoryAuthoring.SetArrayValues(builder, "GroupCellY", snapshot.GroupCellY)
-		SharedMemoryAuthoring.SetArrayValues(builder, "CellPackedKey", snapshot.CellPackedKey)
-		SharedMemoryAuthoring.SetArrayValues(builder, "CellMemberStartIndex", snapshot.CellMemberStartIndex)
-		SharedMemoryAuthoring.SetArrayValues(builder, "CellMemberCount", snapshot.CellMemberCount)
-		SharedMemoryAuthoring.SetArrayValues(builder, "CellMemberEntityIndex", snapshot.CellMemberEntityIndex)
-		SharedMemoryAuthoring.SetArrayValues(builder, "FlatPositionX", snapshot.FlatPositionX)
-		SharedMemoryAuthoring.SetArrayValues(builder, "FlatPositionY", snapshot.FlatPositionY)
-		SharedMemoryAuthoring.SetArrayValues(builder, "Radius", snapshot.Radius)
-		SharedMemoryAuthoring.SetArrayValues(builder, "FlowVelocityX", snapshot.FlowVelocityX)
-		SharedMemoryAuthoring.SetArrayValues(builder, "FlowVelocityY", snapshot.FlowVelocityY)
-		SharedMemoryAuthoring.SetArrayValues(builder, "PreviousVelocityX", snapshot.PreviousVelocityX)
-		SharedMemoryAuthoring.SetArrayValues(builder, "PreviousVelocityY", snapshot.PreviousVelocityY)
-		SharedMemoryAuthoring.SetArrayValues(builder, "WalkSpeed", snapshot.WalkSpeed)
-		SharedMemoryAuthoring.SetArrayValues(builder, "VelAlpha", snapshot.VelAlpha)
-		SharedMemoryAuthoring.SetArrayValues(builder, "IsSettled", snapshot.IsSettled)
-		SharedMemoryAuthoring.SetArrayValues(builder, "WallPackedKeys", snapshot.WallPackedKeys)
-		SharedMemoryAuthoring.SetScalar(builder, "EntityCount", snapshot.EntityCount)
-		SharedMemoryAuthoring.SetScalar(builder, "DeltaTime", snapshot.DeltaTime)
-		SharedMemoryAuthoring.SetScalar(builder, "CellWidthStuds", snapshot.CellWidthStuds)
-		SharedMemoryAuthoring.SetScalar(builder, "OriginX", snapshot.OriginX)
-		SharedMemoryAuthoring.SetScalar(builder, "OriginY", snapshot.OriginY)
-		SharedMemoryAuthoring.SetScalar(builder, "WallGridHalfSize", snapshot.WallGridHalfSize)
-		SharedMemoryAuthoring.SetScalar(builder, "KForce", snapshot.KForce)
-		SharedMemoryAuthoring.SetScalar(builder, "MinSeparationDistance", snapshot.MinSeparationDistance)
-		SharedMemoryAuthoring.SetScalar(builder, "WallCollisionEnabled", snapshot.WallCollisionEnabled)
-		SharedMemoryAuthoring.SetScalar(
-			builder,
-			"WallCollisionAxisClampEnabled",
-			snapshot.WallCollisionAxisClampEnabled
-		)
-		SharedMemoryAuthoring.SetScalar(
-			builder,
-			"WallCollisionCornerClampEnabled",
-			snapshot.WallCollisionCornerClampEnabled
-		)
-		SharedMemoryAuthoring.SetScalar(
-			builder,
-			"WallCollisionUseUnitRadiusPadding",
-			snapshot.WallCollisionUseUnitRadiusPadding
-		)
-		SharedMemoryAuthoring.SetScalar(
-			builder,
-			"WallCollisionCellProbePaddingStuds",
-			snapshot.WallCollisionCellProbePaddingStuds
-		)
-		SharedMemoryAuthoring.SetScalar(builder, "WallCollisionVelocityEpsilon", snapshot.WallCollisionVelocityEpsilon)
-		SharedMemoryAuthoring.SetScalar(builder, "ClumpTouchPaddingStuds", snapshot.ClumpTouchPaddingStuds)
-		local sharedMemory = SharedMemoryAuthoring.BuildSharedMemory(builder)
+		local sharedMemory = {
+			Arrays = {
+				GoalGroupId = snapshot.GoalGroupId,
+				GoalGroupCellRecordStartIndex = snapshot.GoalGroupCellRecordStartIndex,
+				GoalGroupCellRecordCount = snapshot.GoalGroupCellRecordCount,
+				GoalGroupCellWidthStuds = snapshot.GoalGroupCellWidthStuds,
+				GroupCellX = snapshot.GroupCellX,
+				GroupCellY = snapshot.GroupCellY,
+				CellPackedKey = snapshot.CellPackedKey,
+				CellMemberStartIndex = snapshot.CellMemberStartIndex,
+				CellMemberCount = snapshot.CellMemberCount,
+				CellMemberEntityIndex = snapshot.CellMemberEntityIndex,
+				FlatPositionX = snapshot.FlatPositionX,
+				FlatPositionY = snapshot.FlatPositionY,
+				Radius = snapshot.Radius,
+				FlowVelocityX = snapshot.FlowVelocityX,
+				FlowVelocityY = snapshot.FlowVelocityY,
+				PreviousVelocityX = snapshot.PreviousVelocityX,
+				PreviousVelocityY = snapshot.PreviousVelocityY,
+				WalkSpeed = snapshot.WalkSpeed,
+				VelAlpha = snapshot.VelAlpha,
+				IsSettled = snapshot.IsSettled,
+				WallPackedKeys = snapshot.WallPackedKeys,
+			},
+			Scalars = {
+				EntityCount = snapshot.EntityCount,
+				DeltaTime = snapshot.DeltaTime,
+				CellWidthStuds = snapshot.CellWidthStuds,
+				OriginX = snapshot.OriginX,
+				OriginY = snapshot.OriginY,
+				WallGridHalfSize = snapshot.WallGridHalfSize,
+				KForce = snapshot.KForce,
+				MinSeparationDistance = snapshot.MinSeparationDistance,
+				WallCollisionEnabled = snapshot.WallCollisionEnabled,
+				WallCollisionAxisClampEnabled = snapshot.WallCollisionAxisClampEnabled,
+				WallCollisionCornerClampEnabled = snapshot.WallCollisionCornerClampEnabled,
+				WallCollisionUseUnitRadiusPadding = snapshot.WallCollisionUseUnitRadiusPadding,
+				WallCollisionCellProbePaddingStuds = snapshot.WallCollisionCellProbePaddingStuds,
+				WallCollisionVelocityEpsilon = snapshot.WallCollisionVelocityEpsilon,
+				ClumpTouchPaddingStuds = snapshot.ClumpTouchPaddingStuds,
+			},
+		} :: TSharedPacket
 		closeCreateSharedMemoryProfile()
 		return sharedMemory
 	end
