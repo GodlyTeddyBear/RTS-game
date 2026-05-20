@@ -38,14 +38,9 @@ local function _beginScope(label: string): () -> ()
 	end
 end
 
-type TPackedResult = {
-	[number]: any,
-	n: number,
-}
-
 export type TScope = {
 	close: (self: TScope) -> (),
-	step: (self: TScope, stepLabel: string, callback: () -> any) -> any,
+	step: (self: TScope, stepLabel: string, callback: any) -> any,
 }
 
 type TScopeInternal = TScope & {
@@ -72,11 +67,7 @@ function DebugPlus.begin(label: string, enabled: boolean?): () -> ()
 	return _beginScope(label)
 end
 
-function DebugPlus.wrap<TArgs..., TReturn...>(
-	label: string,
-	callback: (TArgs...) -> TReturn...,
-	enabled: boolean?
-): (TArgs...) -> TReturn...
+function DebugPlus.wrap(label: string, callback: any, enabled: boolean?): any
 	_assertLabel(label)
 	_assertCallback(callback)
 
@@ -84,29 +75,25 @@ function DebugPlus.wrap<TArgs..., TReturn...>(
 		return callback
 	end
 
-	return function(...: TArgs...): TReturn...
-		local args = table.pack(...)
+	return function(...)
 		local close = _beginScope(label)
-		local packed: TPackedResult = table.pack(xpcall(function()
-			return callback(table.unpack(args, 1, args.n))
-		end, debug.traceback))
+		local packed = table.pack(xpcall(callback, debug.traceback, ...))
 		close()
 
 		if not packed[1] then
 			error(packed[2], 0)
 		end
 
-		local unpacked: any = table.unpack(packed, 2, packed.n)
-		return unpacked
+		return table.unpack(packed, 2, packed.n)
 	end
 end
 
-function DebugPlus.profile<T...>(label: string, callback: () -> T..., enabled: boolean?): T...
+function DebugPlus.profile(label: string, callback: any, enabled: boolean?): any
 	local profiledCallback = DebugPlus.wrap(label, callback, enabled)
 	return profiledCallback()
 end
 
-function DebugPlus.step<T...>(label: string, enabled: boolean?, callback: () -> T...): T...
+function DebugPlus.step(label: string, enabled: boolean?, callback: any): any
 	return DebugPlus.profile(label, callback, enabled)
 end
 
@@ -123,28 +110,18 @@ function DebugPlus.scope(label: string, enabled: boolean?): TScope
 		self._closeFn()
 	end
 
-	function scope:step(stepLabel: string, callback: () -> any)
+	function scope:step(stepLabel: string, callback: any)
 		return DebugPlus.step(_composeLabel(self._label, stepLabel), self._enabled, callback)
 	end
 
 	return scope
 end
 
-function DebugPlus.spawn<TArgs..., TReturn...>(
-	label: string,
-	callback: (TArgs...) -> TReturn...,
-	enabled: boolean?,
-	...: TArgs...
-): thread
+function DebugPlus.spawn(label: string, callback: any, enabled: boolean?, ...: any): thread
 	return task.spawn(DebugPlus.wrap(label, callback, enabled), ...)
 end
 
-function DebugPlus.defer<TArgs..., TReturn...>(
-	label: string,
-	callback: (TArgs...) -> TReturn...,
-	enabled: boolean?,
-	...: TArgs...
-): thread
+function DebugPlus.defer(label: string, callback: any, enabled: boolean?, ...: any): thread
 	return task.defer(DebugPlus.wrap(label, callback, enabled), ...)
 end
 

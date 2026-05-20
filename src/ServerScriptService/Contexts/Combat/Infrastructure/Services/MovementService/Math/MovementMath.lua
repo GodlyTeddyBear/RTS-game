@@ -5,7 +5,7 @@
 local MovementMath = {}
 
 local function _ZigZagEncodeInt(value: number): number
-	return if value >= 0 then value * 2 else -value * 2 - 1
+	return (value >= 0) and (value * 2) or (-value * 2 - 1)
 end
 
 function MovementMath.PackedSeparationCellKey(gx: number, gz: number): number
@@ -49,3 +49,4 @@ function MovementMath.XZDistance(a: Vector3, b: Vector3): number
 end
 
 return table.freeze(MovementMath)
+

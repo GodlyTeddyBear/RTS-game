@@ -43,6 +43,14 @@ local function _TransitionFlowPipeline(self: any, nextState: TFlowPipelineState)
 	end
 end
 
+local function _CountEntries(map: { [any]: any }): number
+	local count = 0
+	for _ in map do
+		count += 1
+	end
+	return count
+end
+
 return function(MovementService: any)
 	-- Clears the staged payload that is handed to the managed job.
 	function MovementService:_ReleaseFlowDispatchPayload()
@@ -102,7 +110,7 @@ return function(MovementService: any)
 	-- Returns the minimum entity count required before parallel velocity solving is worthwhile.
 	function MovementService:_GetFlowVelocityParallelMinEntityCount(): number
 		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
-		local configured = if config ~= nil then config.ParallelMinVelocityEntityCount else nil
+		local configured = config and config.ParallelMinVelocityEntityCount or nil
 		if type(configured) == "number" and configured >= 0 then
 			return math.floor(configured)
 		end
@@ -112,7 +120,7 @@ return function(MovementService: any)
 	-- Returns how many parallel actors the flow separation runner should spawn.
 	function MovementService:_GetFlowSeparationParallelActorCount(): number
 		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
-		local configured = if config ~= nil then config.ParallelActorCount else nil
+		local configured = config and config.ParallelActorCount or nil
 		if type(configured) == "number" and configured > 0 then
 			return math.floor(configured)
 		end
@@ -122,7 +130,7 @@ return function(MovementService: any)
 	-- Returns the batch size used to partition flow separation work across actors.
 	function MovementService:_GetFlowSeparationParallelBatchSize(): number
 		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
-		local configured = if config ~= nil then config.ParallelVelocityBatchSize else nil
+		local configured = config and config.ParallelVelocityBatchSize or nil
 		if type(configured) == "number" and configured > 0 then
 			return math.floor(configured)
 		end
@@ -132,7 +140,7 @@ return function(MovementService: any)
 	-- Returns the maximum in-flight time allowed for the managed parallel job.
 	function MovementService:_GetFlowSeparationParallelMaxInFlightSeconds(): number
 		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
-		local configured = if config ~= nil then config.ParallelAsyncMaxInFlightSeconds else nil
+		local configured = config and config.ParallelAsyncMaxInFlightSeconds or nil
 		if type(configured) == "number" and configured > 0 then
 			return configured
 		end
@@ -148,7 +156,7 @@ return function(MovementService: any)
 	-- Lazily creates the parallel runner that evaluates flow separation jobs.
 	function MovementService:_GetOrCreateFlowSeparationRunner(): Result.Result<any>
 		local runner = self._flowSeparationParallelRunner
-		if runner ~= nil then
+		if runner then
 			local clearSharedMemoryResult = runner:SetSharedMemory("FlowSeparationSolve", nil)
 			if not clearSharedMemoryResult.success then
 				return Err("MovementParallelSharedMemoryFailed", Errors.MOVEMENT_PARALLEL_SHARED_MEMORY_FAILED, {
@@ -218,7 +226,7 @@ return function(MovementService: any)
 	-- Lazily creates the managed job wrapper for the flow separation runner.
 	function MovementService:_GetOrCreateFlowSeparationManagedJob(): Result.Result<TManagedJob>
 		local job = self._flowSeparationManagedJob
-		if job == nil then
+		if not job then
 			local jobResult = self:_CreateFlowSeparationManagedJob()
 			if not jobResult.success then
 				return jobResult
@@ -247,11 +255,11 @@ return function(MovementService: any)
 	-- Resets the flow-infrastructure runtime without destroying shared objects.
 	function MovementService:_ResetFlowInfrastructureRuntime()
 		local job = self._flowSeparationManagedJob
-		if job ~= nil then
+		if job then
 			job:Reset()
 		end
 		local runner = self._flowSeparationParallelRunner
-		if runner ~= nil then
+		if runner then
 			local clearSharedMemoryResult = runner:SetSharedMemory("FlowSeparationSolve", nil)
 			if not clearSharedMemoryResult.success then
 				Result.MentionError("Combat:MovementService", "Failed to clear flow separation shared memory", {
@@ -266,7 +274,7 @@ return function(MovementService: any)
 		self:_ReleaseFlowLatestParallelSolve()
 		self:_ReleaseFlowDispatchedSeparationSnapshot()
 		local frameState = self._flowFrameState
-		if frameState ~= nil then
+		if frameState then
 			frameState:Reset()
 		end
 	end
@@ -274,13 +282,13 @@ return function(MovementService: any)
 	-- Destroys the parallel flow infrastructure and its cached frame-state objects.
 	function MovementService:_DestroyFlowInfrastructure()
 		local job = self._flowSeparationManagedJob
-		if job ~= nil then
+		if job then
 			job:Destroy()
 		end
 		self._flowSeparationManagedJob = nil
 
 		local runner = self._flowSeparationParallelRunner
-		if runner ~= nil then
+		if runner then
 			runner:Destroy()
 		end
 		self._flowSeparationParallelRunner = nil
@@ -296,47 +304,92 @@ return function(MovementService: any)
 	function MovementService:_ConsumeCompletedFlowSeparationSolve(): Result.Result<boolean>
 		local closeConsumeProfile = DebugPlus.begin(CONSUME_COMPLETED_SOLVE_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 		local job = self._flowSeparationManagedJob
-		if job == nil then
+		if not job then
 			closeConsumeProfile()
 			return Ok(false)
 		end
 
 		-- Reject jobs that have not actually produced a completed result yet.
 		local status = job:GetStatus()
-		if status.HasCompletedResult ~= true then
+		if not status.HasCompletedResult then
 			closeConsumeProfile()
 			return Ok(false)
 		end
 
 		local managedResult = job:PollCompleted(self._flowCurrentSessionUserId)
-		if managedResult == nil then
+		if not managedResult then
 			closeConsumeProfile()
 			return Ok(false)
 		end
-		if managedResult.Err ~= nil then
+
+		local function _BuildConsumeErrorData(branch: string, extraData: { [string]: any }?): { [string]: any }
+			local errorData = {
+				Branch = branch,
+				RequestId = managedResult.RequestId,
+				SessionToken = managedResult.SessionToken,
+				HasPayload = managedResult.Payload ~= nil,
+				HasRows = managedResult.Rows ~= nil,
+				HasErr = managedResult.Err ~= nil,
+				PipelineState = self:_GetFlowPipelineState(),
+			}
+			if extraData then
+				for key, value in extraData do
+					errorData[key] = value
+				end
+			end
+			return errorData
+		end
+
+		if managedResult.Err then
 			closeConsumeProfile()
-			return Err("MovementParallelResultFailed", Errors.MOVEMENT_PARALLEL_RESULT_FAILED, {
-				CauseMessage = tostring(managedResult.Err),
+			return Err("MovementParallelResultFailed:Result", Errors.MOVEMENT_PARALLEL_RESULT_FAILED, {
+				Branch = "Result",
+				RequestId = managedResult.RequestId,
+				SessionToken = managedResult.SessionToken,
+				HasPayload = managedResult.Payload ~= nil,
+				HasRows = managedResult.Rows ~= nil,
+				HasErr = managedResult.Err ~= nil,
+				PipelineState = self:_GetFlowPipelineState(),
+				CauseType = managedResult.Err.type,
+				CauseMessage = managedResult.Err.message or tostring(managedResult.Err),
+				CauseData = managedResult.Err.data,
 			})
 		end
-		if managedResult.Rows == nil then
+		if not managedResult.Rows then
 			closeConsumeProfile()
-			return Err("MovementParallelResultFailed", Errors.MOVEMENT_PARALLEL_RESULT_FAILED)
+			return Err(
+				"MovementParallelResultFailed:Rows",
+				Errors.MOVEMENT_PARALLEL_RESULT_FAILED,
+				_BuildConsumeErrorData("Rows")
+			)
 		end
 
 		-- Validate that the completed result matches the snapshot we dispatched earlier.
 		local payload = managedResult.Payload :: TFlowSeparationDispatchPayload?
-		local snapshot = if payload ~= nil then payload.Snapshot else nil
+		local snapshot = payload and payload.Snapshot
 		local goalKeyByEntity = self._flowDispatchedGoalKeyByEntity
 		local frameState = self._flowDispatchedFrameState :: TFlowPublishedFrameState?
+		local hasSnapshot = snapshot ~= nil
+		local snapshotMatchesDispatched = hasSnapshot and snapshot == self._flowDispatchedSeparationSnapshot or false
+		local hasGoalKeyByEntity = goalKeyByEntity ~= nil
+		local hasFrameState = frameState ~= nil
 		if
-			snapshot == nil
-			or snapshot ~= self._flowDispatchedSeparationSnapshot
-			or goalKeyByEntity == nil
-			or frameState == nil
+			not hasSnapshot
+			or not snapshotMatchesDispatched
+			or not hasGoalKeyByEntity
+			or not hasFrameState
 		then
 			closeConsumeProfile()
-			return Err("MovementParallelResultFailed", Errors.MOVEMENT_PARALLEL_RESULT_FAILED)
+			return Err(
+				"MovementParallelResultFailed:Snapshot",
+				Errors.MOVEMENT_PARALLEL_RESULT_FAILED,
+				_BuildConsumeErrorData("Snapshot", {
+					HasSnapshot = hasSnapshot,
+					SnapshotMatchesDispatched = snapshotMatchesDispatched,
+					HasGoalKeyByEntity = hasGoalKeyByEntity,
+					HasFrameState = hasFrameState,
+				})
+			)
 		end
 
 		-- Publish the solve outputs into the reusable frame caches.
@@ -348,10 +401,19 @@ return function(MovementService: any)
 			self._flowPublishedVelocityByEntity,
 			self._flowPublishedTouchedSettledNeighborByEntity
 		)
-		if next(velocityByEntity) == nil then
+		local publishedVelocityCount = _CountEntries(velocityByEntity)
+		if publishedVelocityCount == 0 then
 			self:_ReleaseFlowDispatchedSeparationSnapshot()
 			closeConsumeProfile()
-			return Err("MovementParallelResultFailed", Errors.MOVEMENT_PARALLEL_RESULT_FAILED)
+			return Err(
+				"MovementParallelResultFailed:Next",
+				Errors.MOVEMENT_PARALLEL_RESULT_FAILED,
+				_BuildConsumeErrorData("Next", {
+					PublishedVelocityCount = publishedVelocityCount,
+					AppliedRowCount = publishedVelocityCount,
+					RowCount = #managedResult.Rows,
+				})
+			)
 		end
 
 		-- Copy the per-entity goal, position, and settle state into published tables.
@@ -447,6 +509,7 @@ return function(MovementService: any)
 			Result.MentionError("Combat:MovementService", "Failed to consume flow separation solve", {
 				CauseType = consumeResult.type,
 				CauseMessage = consumeResult.message,
+				CauseData = consumeResult.data,
 			}, consumeResult.type)
 			self:_ReleaseFlowDispatchedSeparationSnapshot()
 			_TransitionFlowPipeline(self, "Idle")
@@ -490,7 +553,7 @@ return function(MovementService: any)
 				local snapshot, goalKeyByEntity, frameState =
 					self:_BuildFlowDispatchSnapshot(tickId, self:_ResolveFlowDeltaTime(services))
 				closeBuildSnapshotProfile()
-				if snapshot == nil or goalKeyByEntity == nil or frameState == nil then
+				if not snapshot or not goalKeyByEntity or not frameState then
 					_TransitionFlowPipeline(self, "Idle")
 					return
 				end
@@ -510,7 +573,7 @@ return function(MovementService: any)
 				end
 
 				local snapshot = self._flowDispatchedSeparationSnapshot
-				if snapshot == nil then
+				if not snapshot then
 					_TransitionFlowPipeline(self, "Idle")
 					return
 				end
@@ -521,7 +584,7 @@ return function(MovementService: any)
 					DebugPlus.begin(PIPELINE_PREPARING_SHARED_PACKET_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 				self._flowPreparedSharedPacket = self:_CreateFlowSeparationSharedPacket(snapshot)
 				closePrepareSharedPacketProfile()
-				if self._flowPreparedSharedPacket == nil then
+				if not self._flowPreparedSharedPacket then
 					self:_ReleaseFlowDispatchedSeparationSnapshot()
 					_TransitionFlowPipeline(self, "Idle")
 					return
@@ -538,7 +601,7 @@ return function(MovementService: any)
 
 				local snapshot = self._flowDispatchedSeparationSnapshot
 				local sharedPacket = self._flowPreparedSharedPacket
-				if snapshot == nil or sharedPacket == nil then
+				if not snapshot or not sharedPacket then
 					self:_ReleaseFlowDispatchedSeparationSnapshot()
 					_TransitionFlowPipeline(self, "Idle")
 					return
@@ -550,7 +613,7 @@ return function(MovementService: any)
 				self._flowDispatchPayload =
 					self:_AssembleFlowSeparationDispatchPayload(snapshot, sharedPacket, runRequest)
 				closePrepareRunRequestProfile()
-				if self._flowDispatchPayload == nil then
+				if not self._flowDispatchPayload then
 					self:_ReleaseFlowDispatchedSeparationSnapshot()
 					_TransitionFlowPipeline(self, "Idle")
 					return
@@ -568,7 +631,7 @@ return function(MovementService: any)
 				-- Submit the prepared payload once the pipeline has a valid snapshot.
 				local payload = self._flowDispatchPayload
 				local didDispatch = false
-				if payload ~= nil then
+				if payload then
 					local closeDispatchProfile =
 						DebugPlus.begin(PIPELINE_DISPATCHING_DISPATCH_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 					local dispatchResult = self:_TryDispatchFlowSeparationSolve(payload)
@@ -582,7 +645,7 @@ return function(MovementService: any)
 					end
 					closeDispatchProfile()
 				end
-				if payload == nil or not didDispatch then
+				if not payload or not didDispatch then
 					self:_ReleaseFlowDispatchedSeparationSnapshot()
 					_TransitionFlowPipeline(self, "Idle")
 					return
@@ -595,14 +658,14 @@ return function(MovementService: any)
 			if state == "Waiting" then
 				-- Wait for the parallel runner to finish before publishing the solve.
 				local job = self._flowSeparationManagedJob
-				if job == nil then
+				if not job then
 					self:_ReleaseFlowDispatchedSeparationSnapshot()
 					_TransitionFlowPipeline(self, "Idle")
 					return
 				end
 
 				local status = job:GetStatus()
-				if status.HasCompletedResult ~= true then
+				if not status.HasCompletedResult then
 					if status.InFlight then
 						return
 					end

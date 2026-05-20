@@ -96,7 +96,7 @@ end
 local function _AcquireScratchCellBucket(self: TFlowFrameStateInternal): { number }
 	local freeBuckets = self._scratchFreeCellBuckets
 	local bucket = freeBuckets[#freeBuckets]
-	if bucket ~= nil then
+	if bucket then
 		freeBuckets[#freeBuckets] = nil
 		return bucket
 	end
@@ -112,7 +112,7 @@ local function _ResetScratchCellBuckets(self: TFlowFrameStateInternal)
 
 	for _, cellPackedKey in ipairs(scratchCellPackedKeys) do
 		local bucket = scratchBucketsByCellPackedKey[cellPackedKey]
-		if bucket ~= nil then
+		if bucket then
 			table.clear(bucket)
 			scratchBucketsByCellPackedKey[cellPackedKey] = nil
 			scratchFreeCellBuckets[#scratchFreeCellBuckets + 1] = bucket
@@ -125,7 +125,7 @@ end
 -- Release the goal-group arrays that track packed entity membership for each goal key.
 local function _ReleaseGoalBucketArrays(self: TFlowFrameStateInternal)
 	for goalKey, entityIndices in self._entityIndicesByGoalKey do
-		if entityIndices ~= nil then
+		if entityIndices then
 			table.clear(entityIndices)
 			_ReleaseTrackedArray(self, entityIndices)
 			self._entityIndicesByGoalKey[goalKey] = nil
@@ -136,7 +136,7 @@ end
 -- Release the scratch arrays used while building the separation snapshot.
 local function _ReleaseScratchBucketArrays(self: TFlowFrameStateInternal)
 	for cellPackedKey, bucket in self._scratchBucketsByCellPackedKey do
-		if bucket ~= nil then
+		if bucket then
 			table.clear(bucket)
 			_ReleaseTrackedArray(self, bucket)
 			self._scratchBucketsByCellPackedKey[cellPackedKey] = nil
@@ -146,7 +146,7 @@ local function _ReleaseScratchBucketArrays(self: TFlowFrameStateInternal)
 	local scratchFreeCellBuckets = self._scratchFreeCellBuckets
 	for index = #scratchFreeCellBuckets, 1, -1 do
 		local bucket = scratchFreeCellBuckets[index]
-		if bucket ~= nil then
+		if bucket then
 			table.clear(bucket)
 			_ReleaseTrackedArray(self, bucket)
 			scratchFreeCellBuckets[index] = nil
@@ -416,7 +416,7 @@ function FlowFrameState:Reset()
 
 	for _, goalKey in ipairs(selfInternal._activeGoalKeys) do
 		local entityIndices = selfInternal._entityIndicesByGoalKey[goalKey]
-		if entityIndices ~= nil then
+		if entityIndices then
 			table.clear(entityIndices)
 		end
 	end
@@ -435,7 +435,7 @@ end
 function FlowFrameState:EnsureGoalGroup(goalKey: string): number
 	local selfInternal = self :: TFlowFrameStateInternal
 	local existingGoalGroupId = selfInternal._goalGroupIdByGoalKey[goalKey]
-	if existingGoalGroupId ~= nil then
+	if existingGoalGroupId then
 		return existingGoalGroupId
 	end
 
@@ -444,7 +444,7 @@ function FlowFrameState:EnsureGoalGroup(goalKey: string): number
 	selfInternal._goalGroupIdByGoalKey[goalKey] = nextGoalGroupId
 
 	local entityIndices = selfInternal._entityIndicesByGoalKey[goalKey]
-	if entityIndices == nil then
+	if not entityIndices then
 		entityIndices = _AcquireArray(selfInternal._recycler) :: { number }
 		selfInternal._entityIndicesByGoalKey[goalKey] = entityIndices
 	end
@@ -495,7 +495,7 @@ function FlowFrameState:AddEntity(
 	selfInternal._walkSpeed[entityIndex] = walkSpeed
 	selfInternal._isSettled[entityIndex] = isSettled
 
-	if entityIndices ~= nil then
+	if entityIndices then
 		entityIndices[#entityIndices + 1] = entityIndex
 	end
 
@@ -719,7 +719,7 @@ function FlowFrameState:BuildSeparationSnapshot(
 	-- Pack each goal group and bucket entities by separation cell within that group.
 	for _, goalKey in ipairs(selfInternal._activeGoalKeys) do
 		local entityIndices = selfInternal._entityIndicesByGoalKey[goalKey]
-		if entityIndices ~= nil and #entityIndices > 0 then
+		if entityIndices and #entityIndices > 0 then
 			local groupCellWidthStuds = FlowNeighborhoodMath.ResolveCellWidthForEntityIndices(self, entityIndices)
 			local groupStartSnapshotEntityIndex = orderedEntityCount + 1
 
@@ -735,7 +735,7 @@ function FlowFrameState:BuildSeparationSnapshot(
 				)
 
 				local cellBucket = selfInternal._scratchBucketsByCellPackedKey[cellPackedKey]
-				if cellBucket == nil then
+				if not cellBucket then
 					cellBucket = _AcquireScratchCellBucket(selfInternal)
 					selfInternal._scratchBucketsByCellPackedKey[cellPackedKey] = cellBucket
 					selfInternal._scratchCellPackedKeys[#selfInternal._scratchCellPackedKeys + 1] = cellPackedKey
@@ -750,7 +750,7 @@ function FlowFrameState:BuildSeparationSnapshot(
 			local groupCellRecordCount = #selfInternal._scratchCellPackedKeys
 			for _, cellPackedKey in ipairs(selfInternal._scratchCellPackedKeys) do
 				local cellBucket = selfInternal._scratchBucketsByCellPackedKey[cellPackedKey]
-				if cellBucket ~= nil then
+				if cellBucket then
 					local cellRecordIndex = #selfInternal._snapshotCellPackedKey + 1
 					local memberStartIndex = #selfInternal._snapshotCellMemberEntityIndex + 1
 					selfInternal._snapshotCellPackedKey[cellRecordIndex] = cellPackedKey

@@ -22,14 +22,14 @@ local Err = Result.Err
 
 return function(MovementService: any)
 	-- Returns the shared flow configuration table used by all flow movement helpers.
-	function MovementService:_GetFlowConfig(): any
+function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConfig
 		return CombatMovementConfig.FLOW_SOFT_SEPARATION
 	end
 
 	-- Returns the flow velocity alpha used to blend current and previous separation results.
 	function MovementService:_GetFlowVelocityAlpha(): number
 		local config = self:_GetFlowConfig()
-		local configured = if config ~= nil then config.VelAlpha else nil
+		local configured = config and config.VelAlpha or nil
 		if type(configured) == "number" then
 			return math.clamp(configured, 0, 1)
 		end
@@ -39,7 +39,7 @@ return function(MovementService: any)
 	-- Returns the idle clump radius used to detect when flow agents should settle together.
 	function MovementService:_GetFlowClumpRadiusStuds(): number
 		local config = self:_GetFlowConfig()
-		local configured = if config ~= nil then config.ClumpIdleRadiusStuds else nil
+		local configured = config and config.ClumpIdleRadiusStuds or nil
 		if type(configured) == "number" and configured > 0 then
 			return configured
 		end
@@ -49,7 +49,7 @@ return function(MovementService: any)
 	-- Returns the padding used when deciding whether a settled neighbor was touched.
 	function MovementService:_GetFlowClumpTouchPaddingStuds(): number
 		local config = self:_GetFlowConfig()
-		local configured = if config ~= nil then config.ClumpTouchDistancePaddingStuds else nil
+		local configured = config and config.ClumpTouchDistancePaddingStuds or nil
 		if type(configured) == "number" and configured >= 0 then
 			return configured
 		end
@@ -94,15 +94,15 @@ return function(MovementService: any)
 		-- Prime actor references and capture an escape target if the entity spawned in a bad cell.
 		local rootPart = self:_GetEntityRootPart(entity)
 		self:_GetHumanoid(entity)
-		if rootPart ~= nil then
+		if rootPart then
 			local cellState, _, pathfinder, mapping = self:_ClassifyFlowCellState(rootPart.Position)
-			if self:_IsFlowCellStateInvalid(cellState) and pathfinder ~= nil and mapping ~= nil then
+			if self:_IsFlowCellStateInvalid(cellState) and pathfinder and mapping then
 				local openCell = FastFlowHelper.FindNearestOpenCellDeep(
 					pathfinder,
 					FastFlowHelper.WorldXZToGridCell(rootPart.Position, mapping),
 					mapping
 				)
-				if openCell ~= nil then
+				if openCell then
 					self:_SetLatchedInvalidCellEscape(entity, movementState, openCell, mapping, rootPart.Position.Y)
 				end
 			end
@@ -142,17 +142,17 @@ return function(MovementService: any)
 	-- Samples the current flowfield direction for one entity.
 	function MovementService:_SampleFlowDirectionXZ(movementState: TFlowMovementState, position: Vector3): Vector2?
 		local _pathfinder, mapping = self:_ResolveFastFlowRuntime()
-		if mapping == nil then
+		if not mapping then
 			return nil
 		end
 
 		local sharedEntry = self:_GetSharedFlowfieldEntry(movementState.GoalKey)
-		if sharedEntry == nil then
+		if not sharedEntry then
 			return nil
 		end
 
 		local steering = sharedEntry.Flowfield:GetDirection(FastFlowHelper.WorldXZToGridCell(position, mapping))
-		if steering == nil then
+		if not steering then
 			return nil
 		end
 		return Vector2.new(steering.X, steering.Y)
@@ -177,7 +177,7 @@ return function(MovementService: any)
 		local moveTarget = FlowMath.ComputeMoveTarget(
 			position,
 			finalVelocityXZ,
-			FlowMath.ResolveLookaheadDistanceStuds(walkSpeed, if mapping ~= nil then mapping.CellWidthStuds else nil)
+			FlowMath.ResolveLookaheadDistanceStuds(walkSpeed, mapping and mapping.CellWidthStuds)
 		)
 		local isInsideClumpRadius = MovementMath.XZDistance(position, goalPosition) <= self:_GetFlowClumpRadiusStuds()
 
@@ -201,7 +201,7 @@ return function(MovementService: any)
 			return false
 		end
 
-		if moveTarget ~= nil then
+		if moveTarget then
 			return false
 		end
 
@@ -243,13 +243,13 @@ return function(MovementService: any)
 		local recoveryPayload = repairedDirectionResult.value
 		local recoveryStatus = recoveryPayload.Status
 		local repairedDirection = recoveryPayload.Direction
-		if recoveryStatus ~= "Recovered" or repairedDirection == nil then
+		if recoveryStatus ~= "Recovered" or not repairedDirection then
 			return nil, nil, recoveryStatus, nil
 		end
 
 		local recoveredVelocityXZ = repairedDirection * walkSpeed
 		local recoveryMoveTarget = movementState.RecoveryMoveTarget
-		if recoveryMoveTarget ~= nil then
+		if recoveryMoveTarget then
 			return recoveredVelocityXZ, recoveryMoveTarget, "Recovered", nil
 		end
 
@@ -257,7 +257,7 @@ return function(MovementService: any)
 		local moveTarget = FlowMath.ComputeMoveTarget(
 			position,
 			recoveredVelocityXZ,
-			FlowMath.ResolveLookaheadDistanceStuds(walkSpeed, if mapping ~= nil then mapping.CellWidthStuds else nil)
+			FlowMath.ResolveLookaheadDistanceStuds(walkSpeed, mapping and mapping.CellWidthStuds)
 		)
 		return recoveredVelocityXZ, moveTarget, "Recovered", nil
 	end
@@ -273,7 +273,7 @@ return function(MovementService: any)
 		end
 
 		local position = self:_GetEntityPosition(entity)
-		if position == nil then
+		if not position then
 			return false
 		end
 
@@ -282,13 +282,13 @@ return function(MovementService: any)
 		end
 
 		local recoveryMoveTarget = movementState.RecoveryMoveTarget
-		if recoveryMoveTarget == nil then
+		if not recoveryMoveTarget then
 			return false
 		end
 
 		local walkSpeed = self:_ApplyCurrentMoveSpeed(entity)
 		local flatDelta = Vector2.new(recoveryMoveTarget.X - position.X, recoveryMoveTarget.Z - position.Z)
-		local velocityXZ = if flatDelta.Magnitude > 0 then flatDelta.Unit * walkSpeed else Vector2.zero
+		local velocityXZ = flatDelta.Magnitude > 0 and flatDelta.Unit * walkSpeed or Vector2.zero
 		local sanitizedTarget = self:_SanitizeFlowMoveTarget(recoveryMoveTarget)
 		self._flowVelocityByEntity[entity] = velocityXZ
 		self:_IssueHumanoidMoveTo(entity, sanitizedTarget, velocityXZ)
@@ -319,20 +319,20 @@ return function(MovementService: any)
 		entity: number,
 		movementState: TFlowMovementState,
 		services: any?
-	): Result.Result<any>
+	): Result.Result<MovementTypes.TFlowAdvanceStepResult>
 		-- Update or dispatch the shared flow pipeline before reading any published outputs.
 		self:_AdvanceFlowPipeline(services)
 
 		-- Stop immediately when the pipeline has already marked the entity invalid.
 		local invalidReason = self._flowInvalidReasonByEntity[entity]
-		if invalidReason ~= nil then
+		if invalidReason then
 			self:StopMovement(entity)
 			return Err(invalidReason, Errors.MOVEMENT_FLOW_RECOVER_FAILED)
 		end
 
 		-- If no solve is available yet, keep any latched escape moving and retry next tick.
 		local latestParallelSolve = Option.Wrap(self._flowLatestParallelSolve :: TFlowPublishedSolve?):UnwrapOr(nil)
-		if latestParallelSolve == nil then
+		if not latestParallelSolve then
 			if self:_TryContinueLatchedEscapeWithoutSolve(entity, movementState, "MissingLatestParallelSolve") then
 				return Ok({
 					IsDone = false,
@@ -343,7 +343,7 @@ return function(MovementService: any)
 
 		-- Read the published frame-state inputs for the current entity.
 		local frameState = Option.Wrap(self._flowPublishedFrameState :: TFlowPublishedFrameState?):UnwrapOr(nil)
-		if frameState == nil then
+		if not frameState then
 			if self:_TryContinueLatchedEscapeWithoutSolve(entity, movementState, "MissingPublishedFrameState") then
 				return Ok({
 					IsDone = false,
@@ -355,7 +355,7 @@ return function(MovementService: any)
 		-- Reject stale solve data when the published goal no longer matches the cached flow goal.
 		local goalKey = frameState.GoalKeyByEntity[entity]
 		local publishedGoalKey = latestParallelSolve.GoalKeyByEntity[entity]
-		if goalKey == nil or publishedGoalKey == nil or publishedGoalKey ~= goalKey then
+		if not goalKey or not publishedGoalKey or publishedGoalKey ~= goalKey then
 			if self:_TryContinueLatchedEscapeWithoutSolve(entity, movementState, "GoalKeyMismatch") then
 				return Ok({
 					IsDone = false,
@@ -368,7 +368,7 @@ return function(MovementService: any)
 				})
 			end
 			return Err(
-				if repairedReason ~= nil then repairedReason else "PublishedGoalKeyMismatch",
+				if repairedReason then repairedReason else "PublishedGoalKeyMismatch",
 				Errors.MOVEMENT_GOAL_KEY_MISMATCH
 			)
 		end
@@ -378,7 +378,7 @@ return function(MovementService: any)
 		local goalWorldSample = frameState.GoalWorldSampleByEntity[entity]
 		local position = frameState.PositionByEntity[entity]
 		local walkSpeed = frameState.WalkSpeedByEntity[entity]
-		if goalPosition == nil or goalWorldSample == nil or position == nil or walkSpeed == nil then
+		if not goalPosition or not goalWorldSample or not position or not walkSpeed then
 			if self:_TryContinueLatchedEscapeWithoutSolve(entity, movementState, "MissingPublishedFlowInputs") then
 				return Ok({
 					IsDone = false,
@@ -391,7 +391,7 @@ return function(MovementService: any)
 
 		-- Read the solved flow velocity for the current entity from the latest parallel result.
 		local velocityXZ = latestParallelSolve.VelocityByEntity[entity]
-		if velocityXZ == nil then
+		if not velocityXZ then
 			if self:_TryContinueLatchedEscapeWithoutSolve(entity, movementState, "MissingPublishedVelocity") then
 				return Ok({
 					IsDone = false,
@@ -416,7 +416,7 @@ return function(MovementService: any)
 		end
 
 		-- Preserve the recovery target when one is already latched for the entity.
-		if movementState.RecoveryMoveTarget ~= nil then
+		if movementState.RecoveryMoveTarget then
 			moveTarget = movementState.RecoveryMoveTarget
 		end
 		moveTarget = self:_SanitizeFlowMoveTarget(moveTarget)
@@ -438,7 +438,7 @@ return function(MovementService: any)
 		local isStalled =
 			self:_IsFlowAdvanceStalled(goalPosition, goalWorldSample, position, solvedVelocityXZ, moveTarget)
 		if mustRecoverInvalidCell or isStalled then
-			if frameState.IsSettledByEntity[entity] == true then
+			if frameState.IsSettledByEntity[entity] then
 				self._flowSettledByEntity[entity] = nil
 				self:_RefreshActiveFlowGoalMembership(entity, nil)
 			end
@@ -448,7 +448,7 @@ return function(MovementService: any)
 			if recoveryStatus == "Fatal" then
 				self:StopMovement(entity)
 				return Err(
-					if recoveryReason ~= nil then recoveryReason else "FastFlowRecoverFailed",
+					if recoveryReason then recoveryReason else "FastFlowRecoverFailed",
 					Errors.MOVEMENT_FLOW_RECOVER_FAILED
 				)
 			end
@@ -460,7 +460,7 @@ return function(MovementService: any)
 					IsDone = false,
 				})
 			end
-			if recoveredVelocityXZ ~= nil then
+			if recoveredVelocityXZ then
 				solvedVelocityXZ = recoveredVelocityXZ
 			end
 			moveTarget = self:_SanitizeFlowMoveTarget(recoveredMoveTarget)

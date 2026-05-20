@@ -39,13 +39,13 @@ return function(MovementService: any)
 	-- Builds the packed wall-key array used by the flow separation snapshot.
 	function MovementService:_BuildPackedWallKeys(): { number }
 		local packedKeys = self._flowWallPackedKeys
-		if packedKeys == nil then
+		if not packedKeys then
 			packedKeys = {}
 			self._flowWallPackedKeys = packedKeys
 		end
 
 		local pathfinder, mapping = self:_ResolveFastFlowRuntime()
-		if pathfinder == nil or mapping == nil then
+		if not pathfinder or not mapping then
 			table.clear(packedKeys)
 			self._flowWallKeyCachePathfinder = nil
 			self._flowWallGridHalfSize = 0
@@ -59,9 +59,9 @@ return function(MovementService: any)
 		local walls = pathfinder._Walls
 		table.clear(packedKeys)
 
-		if walls ~= nil and type(walls._Grid) == "table" and type(walls._GetCellPos) == "function" then
+		if walls and type(walls._Grid) == "table" and type(walls._GetCellPos) == "function" then
 			for index, value in walls._Grid do
-				if value == true then
+				if value then
 					local cell = walls:_GetCellPos(index)
 					table.insert(packedKeys, MovementMath.PackWallKey(cell.X, cell.Y))
 				end
@@ -77,7 +77,7 @@ return function(MovementService: any)
 	-- Lazily creates the recycler used by flow frame-state snapshots.
 	function MovementService:_GetOrCreateFlowFrameStateRecycler(): any
 		local recycler = self._flowFrameStateRecycler
-		if recycler ~= nil then
+		if recycler then
 			return recycler
 		end
 
@@ -92,7 +92,7 @@ return function(MovementService: any)
 	-- Lazily creates the reusable flow frame-state handle.
 	function MovementService:_GetOrCreateFlowFrameState(): TFlowFrameStateHandle
 		local frameState = self._flowFrameState
-		if frameState ~= nil then
+		if frameState then
 			return frameState
 		end
 
@@ -104,14 +104,14 @@ return function(MovementService: any)
 	-- Destroys the reusable flow frame-state handle and its recycler.
 	function MovementService:_DestroyFlowFrameState()
 		local frameState = self._flowFrameState :: TFlowFrameStateHandle?
-		if frameState ~= nil then
+		if frameState then
 			local didDestroy, destroyError = frameState:Destroy()
 			assert(didDestroy, destroyError)
 		end
 		self._flowFrameState = nil
 
 		local recycler = self._flowFrameStateRecycler
-		if recycler ~= nil then
+		if recycler then
 			local didDestroyRecycler, destroyRecyclerError = recycler:Destroy()
 			assert(didDestroyRecycler, destroyRecyclerError)
 		end
@@ -188,27 +188,23 @@ return function(MovementService: any)
 
 	function MovementService:_EnsureFlowSeparationStaticSharedMemory(snapshot: TFlowSeparationSolveSnapshot)
 		local pathfinder = self._flowWallKeyCachePathfinder
-		if
-			pathfinder ~= nil
-			and self._flowStaticSharedMemoryPathfinder == pathfinder
-			and self._flowStaticSharedMemory ~= nil
-		then
+		if pathfinder and self._flowStaticSharedMemoryPathfinder == pathfinder and self._flowStaticSharedMemory then
 			return
 		end
 
-		local closeApplyStaticSharedMemoryProfile =
-			DebugPlus.begin(APPLY_STATIC_SHARED_MEMORY_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
-		self._flowStaticSharedMemory = self:_CreateFlowSeparationStaticSharedMemory(snapshot)
-		self._flowStaticSharedMemoryPathfinder = pathfinder
-		closeApplyStaticSharedMemoryProfile()
+		DebugPlus.profile(APPLY_STATIC_SHARED_MEMORY_PROFILE_TAG, function()
+			self._flowStaticSharedMemory = self:_CreateFlowSeparationStaticSharedMemory(snapshot)
+			self._flowStaticSharedMemoryPathfinder = pathfinder
+		end, MOVEMENT_PROFILING_ENABLED)
 	end
 
 	-- Builds the managed-job shared packet after the snapshot has already been packed.
 	function MovementService:_CreateFlowSeparationSharedPacket(snapshot: TFlowSeparationSolveSnapshot): TSharedPacket
-		local closePrepareSharedPacketProfile =
-			DebugPlus.begin(PREPARE_SHARED_PACKET_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
-		local sharedPacket = self:_CreateFlowSeparationDynamicSharedMemory(snapshot)
-		closePrepareSharedPacketProfile()
+		local sharedPacket
+		DebugPlus.profile(PREPARE_SHARED_PACKET_PROFILE_TAG, function()
+			sharedPacket = self:_CreateFlowSeparationDynamicSharedMemory(snapshot)
+		end, MOVEMENT_PROFILING_ENABLED)
+
 		return sharedPacket
 	end
 
@@ -216,16 +212,17 @@ return function(MovementService: any)
 	function MovementService:_CreateFlowSeparationRunRequest(
 		snapshot: TFlowSeparationSolveSnapshot
 	): TFlowSeparationRunRequest
-		local closePrepareRunRequestProfile =
-			DebugPlus.begin(PREPARE_RUN_REQUEST_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
-		local runRequest = {
-			Args = {
-				TickId = snapshot.TickId,
-			},
-			LogicalWorkCount = #snapshot.EntityIds,
-			BatchSize = self:_GetFlowSeparationParallelBatchSize(),
-		} :: TFlowSeparationRunRequest
-		closePrepareRunRequestProfile()
+		local runRequest
+		DebugPlus.profile(PREPARE_RUN_REQUEST_PROFILE_TAG, function()
+			runRequest = {
+				Args = {
+					TickId = snapshot.TickId,
+				},
+				LogicalWorkCount = #snapshot.EntityIds,
+				BatchSize = self:_GetFlowSeparationParallelBatchSize(),
+			} :: TFlowSeparationRunRequest
+		end, MOVEMENT_PROFILING_ENABLED)
+
 		return runRequest
 	end
 
@@ -251,11 +248,10 @@ return function(MovementService: any)
 	): ({ [number]: Vector2 }, { [number]: boolean })
 		local closeApplyVelocityRowsProfile =
 			DebugPlus.begin(APPLY_VELOCITY_ROWS_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
-		local resolvedVelocityByEntity = if velocityByEntity ~= nil then velocityByEntity else {}
+
+		local resolvedVelocityByEntity = velocityByEntity or {}
 		table.clear(resolvedVelocityByEntity)
-		local resolvedTouchedSettledNeighborByEntity = if touchedSettledNeighborByEntity ~= nil
-			then touchedSettledNeighborByEntity
-			else {}
+		local resolvedTouchedSettledNeighborByEntity = touchedSettledNeighborByEntity or {}
 		table.clear(resolvedTouchedSettledNeighborByEntity)
 
 		ResultApplication.ApplyRows({
@@ -299,10 +295,10 @@ return function(MovementService: any)
 	function MovementService:_ResolveFlowBuildFrameState(
 		entity: number,
 		movementState: TFlowMovementState
-	): Result.Result<any>
+	): Result.Result<MovementTypes.TFlowBuildFrameStatePayload>
 		local pathState = self._enemyEntityFactory:GetPathState(entity)
-		local goalPosition = if pathState ~= nil then pathState.GoalPosition else nil
-		if goalPosition == nil then
+		local goalPosition = pathState and pathState.GoalPosition or nil
+		if not goalPosition then
 			return Err("MissingGoalPosition", Errors.MOVEMENT_MISSING_GOAL_POSITION)
 		end
 
@@ -312,7 +308,7 @@ return function(MovementService: any)
 		end
 
 		local position = self:_GetEntityPosition(entity)
-		if position == nil then
+		if not position then
 			return Err("MissingModelPosition", Errors.MOVEMENT_MISSING_MODEL_POSITION)
 		end
 
@@ -321,7 +317,7 @@ return function(MovementService: any)
 		if not isSettled then
 			self:_TryClearLatchedInvalidCellEscape(entity, movementState, position)
 			local sampledDirection = self:_SampleFlowDirectionXZ(movementState, position)
-			if sampledDirection ~= nil then
+			if sampledDirection then
 				flowDirectionXZ = sampledDirection
 			else
 				local repairResult = self:_RepairFlowDirectionXZ(entity, movementState, goalPosition, position)
@@ -338,7 +334,7 @@ return function(MovementService: any)
 						})
 					end
 				end
-				if repairedDirection ~= nil then
+				if repairedDirection then
 					flowDirectionXZ = repairedDirection
 				end
 			end
@@ -367,9 +363,9 @@ return function(MovementService: any)
 
 	-- Resolves the delta time from the scheduler payload, falling back to one frame.
 	function MovementService:_ResolveFlowDeltaTime(services: any?): number
-		local dt = if type(services) == "table" and type(services.DeltaTime) == "number"
-			then services.DeltaTime
-			else if type(services) == "table" and type(services.Dt) == "number" then services.Dt else 1 / 60
+		local dt = (type(services) == "table" and type(services.DeltaTime) == "number" and services.DeltaTime)
+			or (type(services) == "table" and type(services.Dt) == "number" and services.Dt)
+			or (1 / 60)
 		if dt <= 0 then
 			return 1 / 60
 		end
@@ -416,7 +412,7 @@ return function(MovementService: any)
 					continue
 				end
 				local framePayload = frameStateResult.value
-				if framePayload.Skip == true then
+				if framePayload.Skip then
 					continue
 				end
 				goalKey = framePayload.GoalKey
@@ -458,7 +454,7 @@ return function(MovementService: any)
 
 		-- Build the final separation snapshot from the frame-state object
 		local _pathfinder, mapping = self:_ResolveFastFlowRuntime()
-		if mapping == nil then
+		if not mapping then
 			closeBuildDispatchSnapshotProfile()
 			return nil, nil, nil
 		end

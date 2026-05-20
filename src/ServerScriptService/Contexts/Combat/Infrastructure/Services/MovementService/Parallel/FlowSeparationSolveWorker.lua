@@ -6,33 +6,35 @@ local FlowSeparationMath =
 	require(ServerScriptService.Contexts.Combat.Infrastructure.Services.MovementService.Math.FlowSeparationMath)
 
 local function _HasCoreSharedMemoryFields(memory: SharedTable): boolean
-	return memory.GoalGroupCellRecordStartIndex ~= nil
-		and memory.GoalGroupCellRecordCount ~= nil
-		and memory.GoalGroupCellWidthStuds ~= nil
-		and memory.GroupCellX ~= nil
-		and memory.GroupCellY ~= nil
-		and memory.CellPackedKey ~= nil
-		and memory.CellMemberStartIndex ~= nil
-		and memory.CellMemberCount ~= nil
-		and memory.CellMemberEntityIndex ~= nil
-		and memory.FlatPositionX ~= nil
-		and memory.FlatPositionY ~= nil
-		and memory.Radius ~= nil
-		and memory.FlowVelocityX ~= nil
-		and memory.FlowVelocityY ~= nil
-		and memory.PreviousVelocityX ~= nil
-		and memory.PreviousVelocityY ~= nil
-		and memory.WalkSpeed ~= nil
-		and memory.VelAlpha ~= nil
-		and memory.IsSettled ~= nil
-		and memory.WallPackedKeys ~= nil
+	return not not (
+		memory.GoalGroupCellRecordStartIndex
+		and memory.GoalGroupCellRecordCount
+		and memory.GoalGroupCellWidthStuds
+		and memory.GroupCellX
+		and memory.GroupCellY
+		and memory.CellPackedKey
+		and memory.CellMemberStartIndex
+		and memory.CellMemberCount
+		and memory.CellMemberEntityIndex
+		and memory.FlatPositionX
+		and memory.FlatPositionY
+		and memory.Radius
+		and memory.FlowVelocityX
+		and memory.FlowVelocityY
+		and memory.PreviousVelocityX
+		and memory.PreviousVelocityY
+		and memory.WalkSpeed
+		and memory.VelAlpha
+		and memory.IsSettled
+		and memory.WallPackedKeys
+	)
 end
 
 local Worker = {}
 
 function Worker.Execute(request)
 	local memory = request.SharedMemory
-	if memory == nil then
+	if not memory then
 		return {}
 	end
 
@@ -72,28 +74,26 @@ function Worker.Execute(request)
 			VelAlpha = memory.VelAlpha,
 			IsSettled = memory.IsSettled,
 			WallPackedKeys = memory.WallPackedKeys,
-			DeltaTime = if type(memory.DeltaTime) == "number" then memory.DeltaTime else 0,
-			CellWidthStuds = if type(memory.CellWidthStuds) == "number" then memory.CellWidthStuds else 1,
-			OriginX = if type(memory.OriginX) == "number" then memory.OriginX else 0,
-			OriginY = if type(memory.OriginY) == "number" then memory.OriginY else 0,
-			WallGridHalfSize = if type(memory.WallGridHalfSize) == "number" then memory.WallGridHalfSize else nil,
-			KForce = if type(memory.KForce) == "number" then memory.KForce else 80,
-			MinSeparationDistance = if type(memory.MinSeparationDistance) == "number"
-				then memory.MinSeparationDistance
-				else 1e-4,
+			DeltaTime = (type(memory.DeltaTime) == "number") and memory.DeltaTime or 0,
+			CellWidthStuds = (type(memory.CellWidthStuds) == "number") and memory.CellWidthStuds or 1,
+			OriginX = (type(memory.OriginX) == "number") and memory.OriginX or 0,
+			OriginY = (type(memory.OriginY) == "number") and memory.OriginY or 0,
+			WallGridHalfSize = (type(memory.WallGridHalfSize) == "number") and memory.WallGridHalfSize or nil,
+			KForce = (type(memory.KForce) == "number") and memory.KForce or 80,
+			MinSeparationDistance = (type(memory.MinSeparationDistance) == "number") and memory.MinSeparationDistance
+				or 1e-4,
 			WallCollisionEnabled = memory.WallCollisionEnabled == true,
 			WallCollisionAxisClampEnabled = memory.WallCollisionAxisClampEnabled == true,
 			WallCollisionCornerClampEnabled = memory.WallCollisionCornerClampEnabled == true,
 			WallCollisionUseUnitRadiusPadding = memory.WallCollisionUseUnitRadiusPadding == true,
-			WallCollisionCellProbePaddingStuds = if type(memory.WallCollisionCellProbePaddingStuds) == "number"
-				then memory.WallCollisionCellProbePaddingStuds
-				else 0,
-			WallCollisionVelocityEpsilon = if type(memory.WallCollisionVelocityEpsilon) == "number"
-				then memory.WallCollisionVelocityEpsilon
-				else 1e-4,
-			ClumpTouchPaddingStuds = if type(memory.ClumpTouchPaddingStuds) == "number"
-				then memory.ClumpTouchPaddingStuds
-				else 0,
+			WallCollisionCellProbePaddingStuds = (type(memory.WallCollisionCellProbePaddingStuds) == "number")
+					and memory.WallCollisionCellProbePaddingStuds
+				or 0,
+			WallCollisionVelocityEpsilon = (type(memory.WallCollisionVelocityEpsilon) == "number")
+					and memory.WallCollisionVelocityEpsilon
+				or 1e-4,
+			ClumpTouchPaddingStuds = (type(memory.ClumpTouchPaddingStuds) == "number") and memory.ClumpTouchPaddingStuds
+				or 0,
 		})
 
 		rows[#rows + 1] = {

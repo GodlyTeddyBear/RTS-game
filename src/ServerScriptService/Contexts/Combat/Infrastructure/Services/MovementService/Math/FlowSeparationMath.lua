@@ -28,7 +28,7 @@ end
 
 local function _BinarySearchContains(sortedValues: { number }, value: number): boolean
 	local low = 1
-	local high = SharedTable.size(sortedValues)
+	local high = if typeof(sortedValues) == "SharedTable" then SharedTable.size(sortedValues) else #sortedValues
 	while low <= high do
 		local mid = math.floor((low + high) * 0.5)
 		local midValue = sortedValues[mid]
@@ -97,7 +97,7 @@ local function _AccumulateNeighborCell(
 		goalGroupCellRecordCount,
 		neighborCellPackedKey
 	)
-	if cellRecordIndex == nil then
+	if not cellRecordIndex then
 		return separationX, separationY, touchedSettledNeighbor
 	end
 
@@ -134,7 +134,7 @@ local function _AccumulateNeighborCell(
 					separationY += deltaY
 				end
 
-				if not touchedSettledNeighbor and not isSettled and isSettledArray[otherEntityIndex] == true then
+				if not touchedSettledNeighbor and not isSettled and isSettledArray[otherEntityIndex] then
 					local touchDistance = radius + otherRadius + clumpTouchPaddingStuds
 					local touchDistanceSq = touchDistance * touchDistance
 					local flatDeltaX = flatPositionX - otherFlatPositionX

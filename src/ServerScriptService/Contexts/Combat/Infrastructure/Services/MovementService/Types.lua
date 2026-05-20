@@ -306,6 +306,51 @@ export type TFlowPublishedFrameState = {
 	IsSettledByEntity: { [number]: boolean },
 }
 
+export type TFastFlowPathfinder = {
+	FindOpenCell: (self: TFastFlowPathfinder, cell: Vector2) -> Vector2?,
+	GenerateFlowfieldWorld: (self: TFastFlowPathfinder, goal: Vector3, starts: { Vector3 }?) -> any?,
+}
+
+export type TResolvedFlowGoal = {
+	Pathfinder: TFastFlowPathfinder,
+	Mapping: any,
+	GoalCell: Vector2,
+	GoalWorldSample: Vector3,
+}
+
+export type TResolvedSharedFlowfield = {
+	GoalKey: string,
+	GoalWorldSample: Vector3,
+}
+
+export type TFlowRepairResult = {
+	Direction: Vector2?,
+	Status: "Recovered" | "RetryLater",
+}
+
+export type TFlowBuildFrameStatePayload = {
+	Skip: boolean?,
+	GoalKey: string,
+	GoalPosition: Vector3,
+	GoalWorldSample: Vector3,
+	Position: Vector3,
+	FlowDirectionXZ: Vector2,
+	WalkSpeed: number,
+	Radius: number,
+	PreviousVelocityXZ: Vector2,
+	IsSettled: boolean,
+}
+
+export type TFlowSoftSeparationConfig = {
+	VelAlpha: number?,
+	ClumpIdleRadiusStuds: number?,
+	ClumpTouchDistancePaddingStuds: number?,
+}
+
+export type TFlowAdvanceStepResult = {
+	IsDone: boolean,
+}
+
 export type TFlowSeparationRunRequest = {
 	Args: {
 		TickId: number,

@@ -17,7 +17,7 @@ function FlowMath.ResolveArrivalRadius(goalPosition: Vector3, goalWorldSample: V
 end
 
 function FlowMath.ResolveLookaheadDistanceStuds(walkSpeed: number, cellWidthStuds: number?): number
-	local cellWidth = if type(cellWidthStuds) == "number" then cellWidthStuds else 0
+	local cellWidth = (type(cellWidthStuds) == "number") and cellWidthStuds or 0
 	return math.max(MIN_LOOKAHEAD_STUDS, walkSpeed * LOOKAHEAD_SECONDS, cellWidth * 0.5)
 end
 

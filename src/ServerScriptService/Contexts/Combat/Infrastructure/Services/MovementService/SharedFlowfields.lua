@@ -22,7 +22,7 @@ return function(MovementService: any)
 	-- Clears the latched recovery state when flow movement no longer needs an escape target.
 	function MovementService:_ClearFlowRecoveryState(entity: number, movementState: TFlowMovementState?)
 		self._flowRecoveredOpenCellByEntity[entity] = nil
-		if movementState ~= nil then
+		if movementState then
 			movementState.RecoveryMoveTarget = nil
 			movementState.RecoveryOpenCell = nil
 			movementState.RecoveryMode = "None"
@@ -36,10 +36,10 @@ return function(MovementService: any)
 	end
 
 	-- Resolves the fast-flow runtime pair and rejects unusable cache state.
-	function MovementService:_ResolveFastFlowRuntime(): (any?, FastFlowHelper.TFlowGridMapping?)
+	function MovementService:_ResolveFastFlowRuntime(): (MovementTypes.TFastFlowPathfinder?, FastFlowHelper.TFlowGridMapping?)
 		local mapping = self._fastFlowMapping
 		local pathfinder = self._fastFlowPathfinder
-		if pathfinder == nil or mapping == nil then
+		if not pathfinder or not mapping then
 			return nil, nil
 		end
 		if mapping.CellWidthStuds <= 0 then
@@ -51,9 +51,9 @@ return function(MovementService: any)
 	-- Classifies the world position into fast-flow cell state and returns the runtime pair used for recovery.
 	function MovementService:_ClassifyFlowCellState(
 		position: Vector3
-	): (TFlowCellState?, Vector2?, any?, FastFlowHelper.TFlowGridMapping?)
+	): (TFlowCellState?, Vector2?, MovementTypes.TFastFlowPathfinder?, FastFlowHelper.TFlowGridMapping?)
 		local pathfinder, mapping = self:_ResolveFastFlowRuntime()
-		if pathfinder == nil or mapping == nil then
+		if not pathfinder or not mapping then
 			return nil, nil, nil, nil
 		end
 
@@ -75,12 +75,12 @@ return function(MovementService: any)
 
 	-- Sanitizes a move target so flow movement never asks the humanoid to step into a blocked cell.
 	function MovementService:_SanitizeFlowMoveTarget(targetPosition: Vector3?): Vector3?
-		if targetPosition == nil then
+		if not targetPosition then
 			return nil
 		end
 
 		local cellState, cell, pathfinder, mapping = self:_ClassifyFlowCellState(targetPosition)
-		if cellState == nil or cell == nil or pathfinder == nil or mapping == nil then
+		if not cellState or not cell or not pathfinder or not mapping then
 			return targetPosition
 		end
 		if not self:_IsFlowCellStateInvalid(cellState) then
@@ -88,7 +88,7 @@ return function(MovementService: any)
 		end
 
 		local openCell = FastFlowHelper.FindNearestOpenCellDeep(pathfinder, cell, mapping)
-		if openCell == nil then
+		if not openCell then
 			return nil
 		end
 
@@ -123,7 +123,7 @@ return function(MovementService: any)
 
 		local cellState = self:_ClassifyFlowCellState(position)
 		local recoveryMoveTarget = movementState.RecoveryMoveTarget
-		local reachedRecoveryTarget = recoveryMoveTarget ~= nil
+		local reachedRecoveryTarget = recoveryMoveTarget
 			and MovementMath.XZDistance(position, recoveryMoveTarget) <= ESCAPE_TARGET_REACHED_EPSILON_STUDS
 		if cellState == "Open" or reachedRecoveryTarget then
 			self:_ClearFlowRecoveryState(entity, movementState)
@@ -136,12 +136,12 @@ return function(MovementService: any)
 	-- Samples the flowfield direction for one cell without falling back to recovery heuristics.
 	function MovementService:_SampleFlowDirectionFromCell(movementState: TFlowMovementState, cell: Vector2): Vector2?
 		local sharedEntry = self:_GetSharedFlowfieldEntry(movementState.GoalKey)
-		if sharedEntry == nil then
+		if not sharedEntry then
 			return nil
 		end
 
 		local steering = sharedEntry.Flowfield:GetDirection(cell)
-		if steering == nil then
+		if not steering then
 			return nil
 		end
 
@@ -153,7 +153,7 @@ return function(MovementService: any)
 		entity: number,
 		movementState: TFlowMovementState,
 		position: Vector3,
-		pathfinder: any,
+		pathfinder: MovementTypes.TFastFlowPathfinder,
 		mapping: FastFlowHelper.TFlowGridMapping
 	): Vector2?
 		local openCell = FastFlowHelper.FindNearestOpenCellDeep(
@@ -161,12 +161,12 @@ return function(MovementService: any)
 			FastFlowHelper.WorldXZToGridCell(position, mapping),
 			mapping
 		)
-		if openCell == nil then
+		if not openCell then
 			return nil
 		end
 
 		local openCellDirection = self:_SampleFlowDirectionFromCell(movementState, openCell)
-		if openCellDirection == nil then
+		if not openCellDirection then
 			return nil
 		end
 
@@ -175,9 +175,9 @@ return function(MovementService: any)
 	end
 
 	-- Resolves the goal cell and world sample used to attach an entity to a shared flowfield.
-	function MovementService:_ResolveFlowGoal(goalPosition: Vector3): Result.Result<any>
+	function MovementService:_ResolveFlowGoal(goalPosition: Vector3): Result.Result<MovementTypes.TResolvedFlowGoal>
 		local pathfinder, mapping = self:_ResolveFastFlowRuntime()
-		if pathfinder == nil or mapping == nil then
+		if not pathfinder or not mapping then
 			return Err("FastFlowNotConfigured", Errors.MOVEMENT_FLOW_NOT_CONFIGURED)
 		end
 
@@ -200,7 +200,7 @@ return function(MovementService: any)
 	-- Collects representative starts so flowfield generation can prune work when allowed.
 	function MovementService:_GetSharedRepresentativeStarts(goalKey: string): { Vector3 }?
 		local config = CombatMovementConfig.FASTFLOW_SHARED_FIELDS
-		if config.UsePrunedGeneration ~= true then
+		if not config.UsePrunedGeneration then
 			return nil
 		end
 
@@ -208,7 +208,7 @@ return function(MovementService: any)
 		table.clear(starts)
 		local maxStarts = math.max(1, math.floor(config.RepresentativeStartCap or 8))
 		local activeEntities = self._activeFlowEntitiesByGoalKey[goalKey]
-		if activeEntities == nil then
+		if not activeEntities then
 			return nil
 		end
 
@@ -219,12 +219,12 @@ return function(MovementService: any)
 
 			local movementState = self._movementByEntity[entityId]
 			if
-				movementState ~= nil
+				movementState
 				and movementState.Mode == "Flow"
-				and self._flowSettledByEntity[entityId] ~= true
+				and not self._flowSettledByEntity[entityId]
 			then
 				local entityPosition = self:_GetEntityPosition(entityId)
-				if entityPosition ~= nil then
+				if entityPosition then
 					table.insert(starts, entityPosition)
 				end
 			end
@@ -245,14 +245,14 @@ return function(MovementService: any)
 		forceUnpruned: boolean?
 	): Result.Result<TSharedFlowfieldEntry>
 		local pathfinder, mapping = self:_ResolveFastFlowRuntime()
-		if pathfinder == nil or mapping == nil then
+		if not pathfinder or not mapping then
 			return Err("FastFlowNotConfigured", Errors.MOVEMENT_FLOW_NOT_CONFIGURED)
 		end
 
-		local representativeStarts = if forceUnpruned == true then nil else self:_GetSharedRepresentativeStarts(goalKey)
+		local representativeStarts = (not forceUnpruned) and self:_GetSharedRepresentativeStarts(goalKey) or nil
 		local flowfield =
 			FastFlowHelper.GenerateFlowfieldWorld(pathfinder, goalWorldSample, mapping, representativeStarts)
-		if flowfield == nil and representativeStarts ~= nil then
+		if not flowfield and representativeStarts then
 			flowfield = FastFlowHelper.GenerateFlowfieldWorld(pathfinder, goalWorldSample, mapping, nil)
 		end
 		local flowfieldResult = fromNilable(flowfield, "FastFlowGenerateFailed", Errors.MOVEMENT_FLOW_GENERATE_FAILED)
@@ -278,7 +278,7 @@ return function(MovementService: any)
 		goalPosition: Vector3,
 		forceRefresh: boolean?,
 		forceUnpruned: boolean?
-	): Result.Result<any>
+	): Result.Result<MovementTypes.TResolvedSharedFlowfield>
 		local goalResult = self:_ResolveFlowGoal(goalPosition)
 		if not goalResult.success then
 			return goalResult
@@ -289,7 +289,7 @@ return function(MovementService: any)
 
 		local goalKey = MovementMath.FlowGoalKey(goalCell)
 		local existingEntry = self._sharedFlowfieldsByGoalKey[goalKey]
-		if existingEntry ~= nil and forceRefresh ~= true then
+		if existingEntry and not forceRefresh then
 			return Ok({
 				GoalKey = goalKey,
 				GoalWorldSample = existingEntry.GoalWorldSample,
@@ -302,7 +302,7 @@ return function(MovementService: any)
 		end
 		local newEntry = newEntryResult.value
 
-		if existingEntry ~= nil then
+		if existingEntry then
 			newEntry.RefCount = existingEntry.RefCount
 		end
 		self._sharedFlowfieldsByGoalKey[goalKey] = newEntry
@@ -314,7 +314,7 @@ return function(MovementService: any)
 
 	-- Returns the cached shared flowfield entry for one goal key.
 	function MovementService:_GetSharedFlowfieldEntry(goalKey: string?): TSharedFlowfieldEntry?
-		if goalKey == nil then
+		if not goalKey then
 			return nil
 		end
 		return self._sharedFlowfieldsByGoalKey[goalKey]
@@ -322,12 +322,12 @@ return function(MovementService: any)
 
 	-- Decrements the shared flowfield reference count and evicts the entry when unused.
 	function MovementService:_DetachSharedFlowfield(goalKey: string?)
-		if goalKey == nil then
+		if not goalKey then
 			return
 		end
 
 		local entry = self._sharedFlowfieldsByGoalKey[goalKey]
-		if entry == nil then
+		if not entry then
 			return
 		end
 
@@ -339,29 +339,29 @@ return function(MovementService: any)
 
 	-- Removes one entity from the active-member set for a shared flow goal.
 	function MovementService:_RemoveEntityFromActiveFlowGoal(entity: number, goalKey: string?)
-		if goalKey == nil then
+		if not goalKey then
 			return
 		end
 
 		local activeEntities = self._activeFlowEntitiesByGoalKey[goalKey]
-		if activeEntities == nil then
+		if not activeEntities then
 			return
 		end
 
 		activeEntities[entity] = nil
-		if next(activeEntities) == nil then
+		if not next(activeEntities) then
 			self._activeFlowEntitiesByGoalKey[goalKey] = nil
 		end
 	end
 
 	-- Adds one entity to the active-member set for a shared flow goal.
 	function MovementService:_AddEntityToActiveFlowGoal(entity: number, goalKey: string?)
-		if goalKey == nil then
+		if not goalKey then
 			return
 		end
 
 		local activeEntities = self._activeFlowEntitiesByGoalKey[goalKey]
-		if activeEntities == nil then
+		if not activeEntities then
 			activeEntities = {}
 			self._activeFlowEntitiesByGoalKey[goalKey] = activeEntities
 		end
@@ -379,8 +379,8 @@ return function(MovementService: any)
 		local movementState = self._movementByEntity[entity]
 		local isActiveFlowMember = movementState ~= nil
 			and movementState.Mode == "Flow"
-			and currentGoalKey ~= nil
-			and self._flowSettledByEntity[entity] ~= true
+			and currentGoalKey
+			and not self._flowSettledByEntity[entity]
 
 		if isActiveFlowMember then
 			self:_AddEntityToActiveFlowGoal(entity, currentGoalKey)
@@ -399,7 +399,7 @@ return function(MovementService: any)
 		self:_DetachSharedFlowfield(currentGoalKey)
 
 		local entry = self._sharedFlowfieldsByGoalKey[goalKey]
-		if entry ~= nil then
+		if entry then
 			entry.RefCount += 1
 		end
 		self._flowGoalKeyByEntity[entity] = goalKey
@@ -412,7 +412,7 @@ return function(MovementService: any)
 		goalPosition: Vector3,
 		forceRefresh: boolean?,
 		forceUnpruned: boolean?
-	): Result.Result<any>
+	): Result.Result<MovementTypes.TResolvedSharedFlowfield>
 		local flowGoalResult = self:_ResolveSharedFlowfield(goalPosition, forceRefresh, forceUnpruned)
 		if not flowGoalResult.success then
 			return flowGoalResult
@@ -433,7 +433,7 @@ return function(MovementService: any)
 	function MovementService:_EmitFlowfieldDebug(flowfield: any, goalPosition: Vector3)
 		local renderer = self._flowfieldDebugRenderer
 		local _pathfinder, mapping = self:_ResolveFastFlowRuntime()
-		if renderer == nil or mapping == nil or not self:_IsFastFlowDebugEnabled() then
+		if not renderer or not mapping or not self:_IsFastFlowDebugEnabled() then
 			return
 		end
 
@@ -446,11 +446,11 @@ return function(MovementService: any)
 		movementState: TFlowMovementState,
 		goalPosition: Vector3,
 		position: Vector3
-	): Result.Result<any>
+	): Result.Result<MovementTypes.TFlowRepairResult>
 		-- First try to reuse the live field when the current cell is already open.
 		local pathfinder, mapping = self:_ResolveFastFlowRuntime()
 		local sharedEntry = self:_GetSharedFlowfieldEntry(movementState.GoalKey)
-		if pathfinder ~= nil and mapping ~= nil and sharedEntry ~= nil then
+		if pathfinder and mapping and sharedEntry then
 			local cellState = FastFlowHelper.ClassifyWorldXZCell(pathfinder, position, mapping)
 			if cellState == "Open" then
 				if movementState.RecoveryMode == "EscapingInvalidCell" then
@@ -458,14 +458,14 @@ return function(MovementService: any)
 				end
 				local mergedFlowfield =
 					FastFlowHelper.MergeFlowfieldWorld(pathfinder, sharedEntry.Flowfield, position, mapping)
-				if mergedFlowfield ~= nil then
+				if mergedFlowfield then
 					sharedEntry.Flowfield = mergedFlowfield
 					sharedEntry.LastRefreshClock = os.clock()
 					sharedEntry.RefreshInProgress = false
 					self:_EmitFlowfieldDebug(mergedFlowfield, sharedEntry.GoalWorldSample)
 
 					local mergedDirection = self:_SampleFlowDirectionXZ(movementState, position)
-					if mergedDirection ~= nil then
+					if mergedDirection then
 						return Ok({
 							Direction = mergedDirection,
 							Status = "Recovered",
@@ -477,7 +477,7 @@ return function(MovementService: any)
 			-- Fall back to the nearest open cell when the live field cannot recover directly.
 			local openCellDirection =
 				self:_TryRecoverFlowDirectionFromOpenCell(entity, movementState, position, pathfinder, mapping)
-			if openCellDirection ~= nil then
+			if openCellDirection then
 				return Ok({
 					Direction = openCellDirection,
 					Status = "Recovered",
@@ -504,17 +504,17 @@ return function(MovementService: any)
 
 		-- Try the regenerated field first, then fall back to an open-cell escape if needed.
 		local regeneratedDirection = self:_SampleFlowDirectionXZ(movementState, position)
-		if regeneratedDirection ~= nil then
+		if regeneratedDirection then
 			return Ok({
 				Direction = regeneratedDirection,
 				Status = "Recovered",
 			})
 		end
 
-		if pathfinder ~= nil and mapping ~= nil then
+		if pathfinder and mapping then
 			local openCellDirection =
 				self:_TryRecoverFlowDirectionFromOpenCell(entity, movementState, position, pathfinder, mapping)
-			if openCellDirection ~= nil then
+			if openCellDirection then
 				return Ok({
 					Direction = openCellDirection,
 					Status = "Recovered",

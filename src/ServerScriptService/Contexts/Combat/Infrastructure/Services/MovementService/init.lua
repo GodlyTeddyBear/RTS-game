@@ -296,12 +296,12 @@ function MovementService:StartAdvance(entity: number, movementMode: EnemyMovemen
 
 	-- Resolve the target goal and confirm the requested movement mode is valid.
 	local pathState = self._enemyEntityFactory:GetPathState(entity)
-	if pathState == nil or pathState.GoalPosition == nil then
+	if not pathState or not pathState.GoalPosition then
 		return false, "MissingGoalPosition"
 	end
 
 	local resolvedMode = self:_ResolveAdvanceMode(movementMode, pathState.GoalPosition)
-	if resolvedMode == nil then
+	if not resolvedMode then
 		return false, "InvalidMovementMode"
 	end
 
@@ -335,7 +335,7 @@ end
 function MovementService:StepAdvance(entity: number, services: any?): (boolean, string?)
 	return DebugPlus.profile(STEP_ADVANCE_PROFILE_TAG, function()
 		local movementState = self._movementByEntity[entity]
-		if movementState == nil then
+		if not movementState then
 			return false, "MissingMovementState"
 		end
 
@@ -378,14 +378,14 @@ end
 ]=]
 function MovementService:StopMovement(entity: number)
 	local movementState = self._movementByEntity[entity]
-	if movementState == nil and self._flowGoalKeyByEntity[entity] == nil then
+	if not movementState and not self._flowGoalKeyByEntity[entity] then
 		return
 	end
 
-	if movementState ~= nil then
+	if movementState then
 		if movementState.Mode == "Path" then
 			local promise = movementState.Promise
-			if promise ~= nil and type(promise.cancel) == "function" then
+			if promise and type(promise.cancel) == "function" then
 				promise:cancel()
 			end
 		else
@@ -410,7 +410,7 @@ function MovementService:CleanupAll()
 
 		-- Include entities that only exist in the flow goal map and no longer have movement state.
 		for entityId in self._flowGoalKeyByEntity do
-			if self._movementByEntity[entityId] == nil then
+			if not self._movementByEntity[entityId] then
 				table.insert(entities, entityId)
 			end
 		end
@@ -445,7 +445,7 @@ function MovementService:Destroy()
 
 	-- Destroy the pooled temporary-table recycler last so all callers have already released tables.
 	local tempRecycler = self._movementTempTableRecycler
-	if tempRecycler ~= nil then
+	if tempRecycler then
 		local didDestroyRecycler, destroyRecyclerError = tempRecycler:Destroy()
 		assert(didDestroyRecycler, destroyRecyclerError)
 	end
@@ -455,7 +455,7 @@ end
 -- Lazily creates the recycler that pools movement temp tables across frames.
 function MovementService:_GetOrCreateMovementTempTableRecycler(): any
 	local recycler = self._movementTempTableRecycler
-	if recycler ~= nil then
+	if recycler then
 		return recycler
 	end
 
@@ -492,7 +492,7 @@ end
 -- Resolves one active runnable combat session so parallel flow jobs can tag the session owner.
 function MovementService:_ResolveActiveSessionUserId(): number?
 	local loopService = self._combatLoopService
-	if loopService == nil then
+	if not loopService then
 		return nil
 	end
 
@@ -518,7 +518,7 @@ function MovementService:_ClearMovementRuntimeState(entity: number)
 	self._flowRecoveredOpenCellByEntity[entity] = nil
 	self:_InvalidateFlowActorRefs(entity)
 	self._enemyEntityFactory:SetPathMoving(entity, false)
-	if self._lockOnService ~= nil and type(self._lockOnService.SetBoidsFacingFlatForward) == "function" then
+	if self._lockOnService and type(self._lockOnService.SetBoidsFacingFlatForward) == "function" then
 		self._lockOnService:SetBoidsFacingFlatForward(entity, nil)
 	end
 end

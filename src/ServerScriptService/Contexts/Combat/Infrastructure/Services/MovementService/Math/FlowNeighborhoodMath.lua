@@ -15,7 +15,7 @@ function FlowNeighborhoodMath.ResolveCellWidthForEntityIndices(
 	local maxRadius = 0
 	for _, entityIndex in ipairs(entityIndices) do
 		local radius = frameState:GetRadius(entityIndex)
-		if radius ~= nil then
+		if radius then
 			maxRadius = math.max(maxRadius, radius)
 		end
 	end

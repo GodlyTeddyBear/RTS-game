@@ -18,15 +18,15 @@ return function(MovementService: any)
 	-- Resolves the enemy role name so movement can look up role-specific pathing params.
 	function MovementService:_GetRoleName(entity: number): string?
 		local role = self._enemyEntityFactory:GetRole(entity)
-		return if role ~= nil then role.Role else nil
+		return role and role.Role or nil
 	end
 
 	-- Returns the agent params for one entity, falling back to the default movement config.
 	function MovementService:_GetAgentParams(entity: number): { [string]: any }
 		local roleName = self:_GetRoleName(entity)
-		if roleName ~= nil then
+		if roleName then
 			local config = CombatMovementConfig.AGENT_PARAMS_BY_ROLE[roleName]
-			if config ~= nil then
+			if config then
 				return config
 			end
 		end
@@ -47,7 +47,7 @@ return function(MovementService: any)
 	-- Checks whether one entity can use flow movement at the provided goal position.
 	function MovementService:_CanEntityUseFlowAtGoal(entity: number, goalPosition: Vector3): boolean
 		local pathState = self._enemyEntityFactory:GetPathState(entity)
-		if pathState == nil or pathState.GoalPosition == nil then
+		if not pathState or not pathState.GoalPosition then
 			return false
 		end
 
@@ -56,8 +56,8 @@ return function(MovementService: any)
 		end
 
 		local roleName = self:_GetRoleName(entity)
-		local roleConfig = if roleName ~= nil then EnemyConfig.Roles[roleName] else nil
-		if roleConfig == nil then
+		local roleConfig = roleName and EnemyConfig.Roles[roleName] or nil
+		if not roleConfig then
 			return false
 		end
 
@@ -86,7 +86,7 @@ return function(MovementService: any)
 		end
 
 		if movementMode == "Any" then
-			return if self:_CountFlowEligibleAtGoal(goalPosition) >= self:_GetMinGroupSize() then "Flow" else "Path"
+			return (self:_CountFlowEligibleAtGoal(goalPosition) >= self:_GetMinGroupSize()) and "Flow" or "Path"
 		end
 
 		return nil
@@ -97,7 +97,7 @@ return function(MovementService: any)
 		local path = PathfindingHelper.CreatePath(entity, {
 			EnemyEntityFactory = self._enemyEntityFactory,
 		}, self:_GetAgentParams(entity), CombatMovementConfig.PATHFINDING)
-		if path == nil then
+		if not path then
 			return false
 		end
 
@@ -112,7 +112,7 @@ return function(MovementService: any)
 	-- Polls one path promise and converts the result into a movement lifecycle outcome.
 	function MovementService:_TickPath(entity: number, movementState: TPathMovementState): ("Running" | "Success" | "Fail", string?)
 		local promise = movementState.Promise
-		if promise == nil then
+		if not promise then
 			self:StopMovement(entity)
 			return "Fail", "MissingPathPromise"
 		end
