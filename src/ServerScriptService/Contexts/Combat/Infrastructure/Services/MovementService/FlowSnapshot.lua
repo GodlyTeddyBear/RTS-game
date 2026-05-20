@@ -13,6 +13,7 @@ local MovementTypes = require(script.Parent.Types)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local Errors = require(script.Parent.Parent.Parent.Parent.Errors)
 
+type TFlowSchedulerServices = MovementTypes.TFlowSchedulerServices
 type TFlowMovementState = MovementTypes.TFlowMovementState
 type TFlowFrameStateHandle = MovementTypes.TFlowFrameStateHandle
 type TFlowSeparationDispatchPayload = MovementTypes.TFlowSeparationDispatchPayload
@@ -20,6 +21,8 @@ type TFlowSeparationRunRequest = MovementTypes.TFlowSeparationRunRequest
 type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
 type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
 type TFlowSeparationSolveRow = MovementTypes.TFlowSeparationSolveRow
+type TMovementService = MovementTypes.TMovementService
+type TTableRecyclerLike = MovementTypes.TTableRecyclerLike
 type TSharedPacket = ParallelRunner.TSharedPacket
 
 local ResultApplication = ParallelRunner.ResultApplication
@@ -35,7 +38,7 @@ local APPLY_VELOCITY_ROWS_PROFILE_TAG = "Combat:MovementService:Flow:ApplyVeloci
 local Ok = Result.Ok
 local Err = Result.Err
 
-return function(MovementService: any)
+return function(MovementService: TMovementService)
 	-- Builds the packed wall-key array used by the flow separation snapshot.
 	function MovementService:_BuildPackedWallKeys(): { number }
 		local packedKeys = self._flowWallPackedKeys
@@ -75,7 +78,7 @@ return function(MovementService: any)
 	end
 
 	-- Lazily creates the recycler used by flow frame-state snapshots.
-	function MovementService:_GetOrCreateFlowFrameStateRecycler(): any
+	function MovementService:_GetOrCreateFlowFrameStateRecycler(): TTableRecyclerLike
 		local recycler = self._flowFrameStateRecycler
 		if recycler then
 			return recycler
@@ -354,7 +357,7 @@ return function(MovementService: any)
 	end
 
 	-- Resolves the solve tick id from the scheduler payload or advances the local serial.
-	function MovementService:_ResolveFlowTickId(services: any?): number
+	function MovementService:_ResolveFlowTickId(services: TFlowSchedulerServices?): number
 		if type(services) == "table" and type(services.TickId) == "number" then
 			return services.TickId
 		end
@@ -362,7 +365,7 @@ return function(MovementService: any)
 	end
 
 	-- Resolves the delta time from the scheduler payload, falling back to one frame.
-	function MovementService:_ResolveFlowDeltaTime(services: any?): number
+	function MovementService:_ResolveFlowDeltaTime(services: TFlowSchedulerServices?): number
 		local dt = (type(services) == "table" and type(services.DeltaTime) == "number" and services.DeltaTime)
 			or (type(services) == "table" and type(services.Dt) == "number" and services.Dt)
 			or (1 / 60)

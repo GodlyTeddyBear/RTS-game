@@ -4,8 +4,12 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local FlowSeparationMath =
 	require(ServerScriptService.Contexts.Combat.Infrastructure.Services.MovementService.Math.FlowSeparationMath)
+local MovementTypes = require(ServerScriptService.Contexts.Combat.Infrastructure.Services.MovementService.Types)
 
-local function _HasCoreSharedMemoryFields(memory: SharedTable): boolean
+type TFlowSeparationWorkerRequest = MovementTypes.TFlowSeparationWorkerRequest
+type TFlowSeparationWorkerSharedMemory = MovementTypes.TFlowSeparationWorkerSharedMemory
+
+local function _HasCoreSharedMemoryFields(memory: TFlowSeparationWorkerSharedMemory): boolean
 	return not not (
 		memory.GoalGroupCellRecordStartIndex
 		and memory.GoalGroupCellRecordCount
@@ -32,7 +36,7 @@ end
 
 local Worker = {}
 
-function Worker.Execute(request)
+function Worker.Execute(request: TFlowSeparationWorkerRequest)
 	local memory = request.SharedMemory
 	if not memory then
 		return {}

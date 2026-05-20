@@ -22,8 +22,22 @@ MovementService.__index = MovementService
 
 -- â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type EnemyMovementMode = MovementTypes.EnemyMovementMode
+type TFlowPipelineStateMachineConfig = StateMachine.TStateMachineConfig<TFlowPipelineState>
+type TCombatLoopServiceLike = MovementTypes.TCombatLoopServiceLike
+type TEnemyEntityFactoryLike = MovementTypes.TEnemyEntityFactoryLike
+type TFastFlowGridMapping = MovementTypes.TFastFlowGridMapping
+type TFastFlowPathfinder = MovementTypes.TFastFlowPathfinder
+type TFlowMovementState = MovementTypes.TFlowMovementState
+type TFlowPipelineStateMachineLike = MovementTypes.TFlowPipelineStateMachineLike
+type TMovementTempEntityArray = MovementTypes.TMovementTempEntityArray
+type TMovementTempMap = MovementTypes.TMovementTempMap
+type TFlowSchedulerServices = MovementTypes.TFlowSchedulerServices
+type TFlowfieldDebugRenderer = MovementTypes.TFlowfieldDebugRenderer
+type TLockOnServiceLike = MovementTypes.TLockOnServiceLike
 type TMovementState = MovementTypes.TMovementState
 type TSharedFlowfieldEntry = MovementTypes.TSharedFlowfieldEntry
+type TSharedPacket = MovementTypes.TSharedPacket
+type TTableRecyclerLike = MovementTypes.TTableRecyclerLike
 type TFlowActorRefs = MovementTypes.TFlowActorRefs
 type TFlowPipelineState = MovementTypes.TFlowPipelineState
 type TFlowSeparationDispatchPayload = MovementTypes.TFlowSeparationDispatchPayload
@@ -63,9 +77,9 @@ local FLOW_PIPELINE_TRANSITIONS: { [TFlowPipelineState]: { [TFlowPipelineState]:
 }
 
 -- Build the flow pipeline state machine so runtime transitions stay validated in one place.
-local function _CreateFlowPipelineStateMachine()
-	return StateMachine.new({
-		InitialState = "Idle" :: TFlowPipelineState,
+local function _CreateFlowPipelineStateMachine(): TFlowPipelineStateMachineLike
+	local config: TFlowPipelineStateMachineConfig = {
+		InitialState = "Idle",
 		Transitions = FLOW_PIPELINE_TRANSITIONS,
 		ErrorType = "IllegalFlowPipelineTransition",
 		ErrorMessage = "Flow pipeline transition is not allowed",
@@ -75,7 +89,9 @@ local function _CreateFlowPipelineStateMachine()
 				To = toState,
 			}
 		end,
-	})
+	}
+
+	return StateMachine.new(config) :: TFlowPipelineStateMachineLike
 end
 
 require(script.ActorRefs)(MovementService)
@@ -154,9 +170,9 @@ function MovementService.new()
 	self._flowDispatchedSeparationSnapshot = nil
 	self._flowDispatchedGoalKeyByEntity = nil
 	self._flowDispatchedFrameState = nil :: TFlowPublishedFrameState?
-	self._flowStaticSharedMemory = nil :: ParallelRunner.TSharedPacket?
+	self._flowStaticSharedMemory = nil :: TSharedPacket?
 	self._flowStaticSharedMemoryPathfinder = nil
-	self._flowPreparedSharedPacket = nil :: ParallelRunner.TSharedPacket?
+	self._flowPreparedSharedPacket = nil :: TSharedPacket?
 	self._flowDispatchPayload = nil :: TFlowSeparationDispatchPayload?
 	self._flowWallKeyCachePathfinder = nil
 	self._flowWallPackedKeys = nil
@@ -170,9 +186,9 @@ end
     @param registry any -- Registry instance supplied by the context bootstrap.
     @param _name string -- Registry key used to register the service.
 ]=]
-function MovementService:Init(registry: any, _name: string)
+function MovementService:Init(registry: MovementTypes.TRegistryLike, _name: string)
 	self._registry = registry
-	self._combatLoopService = registry:Get("CombatLoopService")
+	self._combatLoopService = registry:Get("CombatLoopService") :: TCombatLoopServiceLike?
 end
 
 --[=[
@@ -188,7 +204,7 @@ end
     @within MovementService
     @param enemyEntityFactory any -- Enemy entity factory used by movement resolution.
 ]=]
-function MovementService:ConfigureEnemyEntityFactory(enemyEntityFactory: any)
+function MovementService:ConfigureEnemyEntityFactory(enemyEntityFactory: TEnemyEntityFactoryLike)
 	self._enemyEntityFactory = enemyEntityFactory
 end
 
@@ -197,7 +213,7 @@ end
     @within MovementService
     @param lockOnService any -- Lock-on service used during movement updates.
 ]=]
-function MovementService:ConfigureLockOnService(lockOnService: any)
+function MovementService:ConfigureLockOnService(lockOnService: TLockOnServiceLike)
 	self._lockOnService = lockOnService
 end
 
@@ -207,7 +223,7 @@ end
     @param pathfinder any? -- Fast-flow pathfinder instance or `nil` to clear it.
     @param mapping FastFlowHelper.TFlowGridMapping? -- Flow-grid mapping or `nil` to clear it.
 ]=]
-function MovementService:ConfigureFastFlow(pathfinder: any?, mapping: FastFlowHelper.TFlowGridMapping?)
+function MovementService:ConfigureFastFlow(pathfinder: TFastFlowPathfinder?, mapping: TFastFlowGridMapping?)
 	self._fastFlowPathfinder = pathfinder
 	self._fastFlowMapping = mapping
 	self._flowWallKeyCachePathfinder = nil
@@ -220,9 +236,7 @@ end
     @within MovementService
     @param renderer ((any, FastFlowHelper.TFlowGridMapping, Vector3) -> ())? -- Debug renderer callback or `nil`.
 ]=]
-function MovementService:ConfigureFlowfieldDebugRenderer(
-	renderer: ((any, FastFlowHelper.TFlowGridMapping, Vector3) -> ())?
-)
+function MovementService:ConfigureFlowfieldDebugRenderer(renderer: TFlowfieldDebugRenderer?)
 	self._flowfieldDebugRenderer = renderer
 end
 
@@ -332,8 +346,8 @@ end
     @return boolean -- Whether movement completed for the entity on this step.
     @return string? -- Failure reason when stepping fails.
 ]=]
-function MovementService:StepAdvance(entity: number, services: any?): (boolean, string?)
-	return DebugPlus.profile(STEP_ADVANCE_PROFILE_TAG, function()
+function MovementService:StepAdvance(entity: number, services: TFlowSchedulerServices?): (boolean, string?)
+	return DebugPlus.profile(STEP_ADVANCE_PROFILE_TAG, function(): (boolean, string?)
 		local movementState = self._movementByEntity[entity]
 		if not movementState then
 			return false, "MissingMovementState"
@@ -354,8 +368,9 @@ function MovementService:StepAdvance(entity: number, services: any?): (boolean, 
 		end
 
 		-- Flow movement runs through the separation pipeline before the per-entity solve.
-		return DebugPlus.profile(FLOW_STEP_ADVANCE_PROFILE_TAG, function()
-			local stepResult = self:_StepFlowAdvance(entity, movementState, services)
+		local flowMovementState = movementState :: TFlowMovementState
+		return DebugPlus.profile(FLOW_STEP_ADVANCE_PROFILE_TAG, function(): (boolean, string?)
+			local stepResult = self:_StepFlowAdvance(entity, flowMovementState, services)
 			if stepResult.success then
 				local outcome = stepResult.value
 				if type(outcome) == "table" then
@@ -453,7 +468,7 @@ function MovementService:Destroy()
 end
 
 -- Lazily creates the recycler that pools movement temp tables across frames.
-function MovementService:_GetOrCreateMovementTempTableRecycler(): any
+function MovementService:_GetOrCreateMovementTempTableRecycler(): TTableRecyclerLike
 	local recycler = self._movementTempTableRecycler
 	if recycler then
 		return recycler
@@ -468,23 +483,23 @@ function MovementService:_GetOrCreateMovementTempTableRecycler(): any
 end
 
 -- Acquires a pooled array for temporary movement bookkeeping.
-function MovementService:_AcquireMovementTempArray(capacityHint: number?): { any }
-	return self:_GetOrCreateMovementTempTableRecycler():AcquireArray(capacityHint)
+function MovementService:_AcquireMovementTempArray(capacityHint: number?): TMovementTempEntityArray
+	return self:_GetOrCreateMovementTempTableRecycler():AcquireArray(capacityHint) :: TMovementTempEntityArray
 end
 
 -- Acquires a pooled map for temporary movement bookkeeping.
-function MovementService:_AcquireMovementTempMap(): { [any]: any }
-	return self:_GetOrCreateMovementTempTableRecycler():AcquireMap()
+function MovementService:_AcquireMovementTempMap(): TMovementTempMap
+	return self:_GetOrCreateMovementTempTableRecycler():AcquireMap() :: TMovementTempMap
 end
 
 -- Releases a pooled array after the movement service has finished with it.
-function MovementService:_ReleaseMovementTempArray(tbl: { any })
+function MovementService:_ReleaseMovementTempArray(tbl: TMovementTempEntityArray)
 	local didRelease, releaseError = self:_GetOrCreateMovementTempTableRecycler():ReleaseArray(tbl)
 	assert(didRelease, releaseError)
 end
 
 -- Releases a pooled map after the movement service has finished with it.
-function MovementService:_ReleaseMovementTempMap(tbl: { [any]: any })
+function MovementService:_ReleaseMovementTempMap(tbl: TMovementTempMap)
 	local didRelease, releaseError = self:_GetOrCreateMovementTempTableRecycler():ReleaseMap(tbl)
 	assert(didRelease, releaseError)
 end

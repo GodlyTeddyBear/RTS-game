@@ -7,8 +7,9 @@ local Option = require(ReplicatedStorage.Utilities.Option)
 local MovementTypes = require(script.Parent.Types)
 
 type TFlowActorRefs = MovementTypes.TFlowActorRefs
+type TMovementService = MovementTypes.TMovementService
 
-return function(MovementService: any)
+return function(MovementService: TMovementService)
 	-- Returns the cached actor-reference table for one entity, creating it on first use.
 	function MovementService:_GetOrCreateFlowActorRefs(entity: number): TFlowActorRefs
 		local refs = self._flowActorRefsByEntity[entity]

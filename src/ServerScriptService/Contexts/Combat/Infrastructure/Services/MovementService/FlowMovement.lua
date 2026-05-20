@@ -11,6 +11,8 @@ local MovementMath = require(script.Parent.Math.MovementMath)
 local MovementTypes = require(script.Parent.Types)
 local Errors = require(script.Parent.Parent.Parent.Parent.Errors)
 
+type TFlowSchedulerServices = MovementTypes.TFlowSchedulerServices
+type TMovementService = MovementTypes.TMovementService
 type TFlowMovementState = MovementTypes.TFlowMovementState
 type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
 type TFlowPublishedSolve = MovementTypes.TFlowPublishedSolve
@@ -20,7 +22,7 @@ local STALL_VELOCITY_EPSILON = 0.05
 local Ok = Result.Ok
 local Err = Result.Err
 
-return function(MovementService: any)
+return function(MovementService: TMovementService)
 	-- Returns the shared flow configuration table used by all flow movement helpers.
 function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConfig
 		return CombatMovementConfig.FLOW_SOFT_SEPARATION
@@ -318,7 +320,7 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 	function MovementService:_StepFlowAdvance(
 		entity: number,
 		movementState: TFlowMovementState,
-		services: any?
+		services: TFlowSchedulerServices?
 	): Result.Result<MovementTypes.TFlowAdvanceStepResult>
 		-- Update or dispatch the shared flow pipeline before reading any published outputs.
 		self:_AdvanceFlowPipeline(services)

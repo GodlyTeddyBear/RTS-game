@@ -10,11 +10,13 @@ local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local MovementTypes = require(script.Parent.Types)
 
 type EnemyMovementMode = MovementTypes.EnemyMovementMode
+type TAgentParams = MovementTypes.TAgentParams
+type TMovementService = MovementTypes.TMovementService
 type TPathMovementState = MovementTypes.TPathMovementState
 
 local GOAL_POSITION_EPSILON = 0.01
 
-return function(MovementService: any)
+return function(MovementService: TMovementService)
 	-- Resolves the enemy role name so movement can look up role-specific pathing params.
 	function MovementService:_GetRoleName(entity: number): string?
 		local role = self._enemyEntityFactory:GetRole(entity)
@@ -22,7 +24,7 @@ return function(MovementService: any)
 	end
 
 	-- Returns the agent params for one entity, falling back to the default movement config.
-	function MovementService:_GetAgentParams(entity: number): { [string]: any }
+	function MovementService:_GetAgentParams(entity: number): TAgentParams
 		local roleName = self:_GetRoleName(entity)
 		if roleName then
 			local config = CombatMovementConfig.AGENT_PARAMS_BY_ROLE[roleName]

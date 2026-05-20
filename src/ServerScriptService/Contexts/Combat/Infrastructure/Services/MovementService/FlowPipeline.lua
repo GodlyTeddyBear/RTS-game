@@ -10,12 +10,16 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 local MovementTypes = require(script.Parent.Types)
 local Errors = require(script.Parent.Parent.Parent.Parent.Errors)
 
+type TFlowSchedulerServices = MovementTypes.TFlowSchedulerServices
 type TFlowPipelineState = MovementTypes.TFlowPipelineState
 type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
 type TFlowPublishedSolve = MovementTypes.TFlowPublishedSolve
 type TFlowSeparationDispatchPayload = MovementTypes.TFlowSeparationDispatchPayload
+type TFlowSeparationSolveRow = MovementTypes.TFlowSeparationSolveRow
 type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
 type TManagedJob = MovementTypes.TManagedJob
+type TMovementService = MovementTypes.TMovementService
+type TParallelRunnerLike = MovementTypes.TParallelRunnerLike
 
 local ManagedJobPolicies = ParallelRunner.ManagedJobPolicies
 local MOVEMENT_PROFILING_ENABLED = DebugConfig.COMBAT_MOVEMENT_PROFILING
@@ -31,7 +35,7 @@ local Err = Result.Err
 local fromPcall = Result.fromPcall
 
 -- Applies the next legal flow-pipeline state transition and asserts on invalid edges.
-local function _TransitionFlowPipeline(self: any, nextState: TFlowPipelineState)
+local function _TransitionFlowPipeline(self: TMovementService, nextState: TFlowPipelineState)
 	local transitionResult = self._flowPipelineStateMachine:Transition(nextState)
 	if not transitionResult.success then
 		Result.MentionError("Combat:MovementService", "Illegal flow pipeline transition", {
@@ -43,7 +47,7 @@ local function _TransitionFlowPipeline(self: any, nextState: TFlowPipelineState)
 	end
 end
 
-local function _CountEntries(map: { [any]: any }): number
+local function _CountEntries<K, V>(map: { [K]: V }): number
 	local count = 0
 	for _ in map do
 		count += 1
@@ -51,7 +55,7 @@ local function _CountEntries(map: { [any]: any }): number
 	return count
 end
 
-return function(MovementService: any)
+return function(MovementService: TMovementService)
 	-- Clears the staged payload that is handed to the managed job.
 	function MovementService:_ReleaseFlowDispatchPayload()
 		self._flowPreparedSharedPacket = nil
@@ -86,7 +90,10 @@ return function(MovementService: any)
 	end
 
 	-- Returns whether the current combat frame still has enough budget to run another pipeline stage.
-	function MovementService:_CanAdvanceFlowPipelineStage(services: any?, _stageName: TFlowPipelineState): boolean
+	function MovementService:_CanAdvanceFlowPipelineStage(
+		services: TFlowSchedulerServices?,
+		_stageName: TFlowPipelineState
+	): boolean
 		if type(services) ~= "table" then
 			return true
 		end
@@ -154,7 +161,7 @@ return function(MovementService: any)
 	end
 
 	-- Lazily creates the parallel runner that evaluates flow separation jobs.
-	function MovementService:_GetOrCreateFlowSeparationRunner(): Result.Result<any>
+	function MovementService:_GetOrCreateFlowSeparationRunner(): Result.Result<TParallelRunnerLike>
 		local runner = self._flowSeparationParallelRunner
 		if runner then
 			local clearSharedMemoryResult = runner:SetSharedMemory("FlowSeparationSolve", nil)
@@ -397,7 +404,7 @@ return function(MovementService: any)
 
 		local velocityByEntity = self:_ApplyFlowVelocityRows(
 			snapshot,
-			managedResult.Rows :: any,
+			managedResult.Rows :: { TFlowSeparationSolveRow },
 			self._flowPublishedVelocityByEntity,
 			self._flowPublishedTouchedSettledNeighborByEntity
 		)
@@ -525,7 +532,7 @@ return function(MovementService: any)
 	end
 
 	-- Advances the flow pipeline once per scheduler tick.
-	function MovementService:_AdvanceFlowPipeline(services: any?)
+	function MovementService:_AdvanceFlowPipeline(services: TFlowSchedulerServices?)
 		DebugPlus.profile(ADVANCE_PIPELINE_PROFILE_TAG, function()
 			local tickId = self:_ResolveFlowTickId(services)
 			if self._flowPipelineTickId == tickId then

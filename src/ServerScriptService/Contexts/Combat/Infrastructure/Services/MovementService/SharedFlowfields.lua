@@ -4,11 +4,16 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
+local vector2 = require(ReplicatedStorage.Utilities.Parallelizer.Index.DataTypes.vector2)
 local MovementTypes = require(script.Parent.Types)
 local MovementMath = require(script.Parent.Math.MovementMath)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local Errors = require(script.Parent.Parent.Parent.Parent.Errors)
 
+type TFastFlowGridMapping = MovementTypes.TFastFlowGridMapping
+type TFlowfieldLike = MovementTypes.TFlowfieldLike
+type TMovementService = MovementTypes.TMovementService
+type TFlowRepairResult = MovementTypes.TFlowRepairResult
 type TSharedFlowfieldEntry = MovementTypes.TSharedFlowfieldEntry
 type TFlowMovementState = MovementTypes.TFlowMovementState
 type TFlowCellState = FastFlowHelper.TFlowCellState
@@ -18,7 +23,7 @@ local Ok = Result.Ok
 local Err = Result.Err
 local fromNilable = Result.fromNilable
 
-return function(MovementService: any)
+return function(MovementService: TMovementService)
 	-- Clears the latched recovery state when flow movement no longer needs an escape target.
 	function MovementService:_ClearFlowRecoveryState(entity: number, movementState: TFlowMovementState?)
 		self._flowRecoveredOpenCellByEntity[entity] = nil
@@ -36,7 +41,7 @@ return function(MovementService: any)
 	end
 
 	-- Resolves the fast-flow runtime pair and rejects unusable cache state.
-	function MovementService:_ResolveFastFlowRuntime(): (MovementTypes.TFastFlowPathfinder?, FastFlowHelper.TFlowGridMapping?)
+	function MovementService:_ResolveFastFlowRuntime(): (MovementTypes.TFastFlowPathfinder?, TFastFlowGridMapping?)
 		local mapping = self._fastFlowMapping
 		local pathfinder = self._fastFlowPathfinder
 		if not pathfinder or not mapping then
@@ -49,16 +54,19 @@ return function(MovementService: any)
 	end
 
 	-- Classifies the world position into fast-flow cell state and returns the runtime pair used for recovery.
-	function MovementService:_ClassifyFlowCellState(
-		position: Vector3
-	): (TFlowCellState?, Vector2?, MovementTypes.TFastFlowPathfinder?, FastFlowHelper.TFlowGridMapping?)
+	function MovementService:_ClassifyFlowCellState(position: Vector3): (
+		TFlowCellState?,
+		Vector2?,
+		MovementTypes.TFastFlowPathfinder?,
+		TFastFlowGridMapping?
+	)
 		local pathfinder, mapping = self:_ResolveFastFlowRuntime()
 		if not pathfinder or not mapping then
 			return nil, nil, nil, nil
 		end
 
 		local cellState, cell = FastFlowHelper.ClassifyWorldXZCell(pathfinder, position, mapping)
-		return cellState, cell, pathfinder, mapping
+		return cellState :: TFlowCellState, cell, pathfinder, mapping
 	end
 
 	-- Returns whether a flow cell is blocked or outside the grid.
@@ -83,7 +91,7 @@ return function(MovementService: any)
 		if not cellState or not cell or not pathfinder or not mapping then
 			return targetPosition
 		end
-		if not self:_IsFlowCellStateInvalid(cellState) then
+		if not self:_IsFlowCellStateInvalid(cellState :: TFlowCellState) then
 			return targetPosition
 		end
 
@@ -100,7 +108,7 @@ return function(MovementService: any)
 		entity: number,
 		movementState: TFlowMovementState,
 		openCell: Vector2,
-		mapping: FastFlowHelper.TFlowGridMapping,
+		mapping: TFastFlowGridMapping,
 		yLevel: number
 	): Vector3
 		local recoveryMoveTarget = FastFlowHelper.GridCellToWorldXZ(openCell, mapping, yLevel)
@@ -154,7 +162,7 @@ return function(MovementService: any)
 		movementState: TFlowMovementState,
 		position: Vector3,
 		pathfinder: MovementTypes.TFastFlowPathfinder,
-		mapping: FastFlowHelper.TFlowGridMapping
+		mapping: TFastFlowGridMapping
 	): Vector2?
 		local openCell = FastFlowHelper.FindNearestOpenCellDeep(
 			pathfinder,
@@ -188,11 +196,11 @@ return function(MovementService: any)
 		end
 		goalCell = goalCellResult.value
 
-		local goalWorldSample = FastFlowHelper.GridCellToWorldXZ(goalCell, mapping, goalPosition.Y)
+		local goalWorldSample = FastFlowHelper.GridCellToWorldXZ(goalCell :: Vector2, mapping, goalPosition.Y)
 		return Ok({
 			Pathfinder = pathfinder,
 			Mapping = mapping,
-			GoalCell = goalCell,
+			GoalCell = goalCell :: Vector2,
 			GoalWorldSample = goalWorldSample,
 		})
 	end
@@ -218,11 +226,7 @@ return function(MovementService: any)
 			end
 
 			local movementState = self._movementByEntity[entityId]
-			if
-				movementState
-				and movementState.Mode == "Flow"
-				and not self._flowSettledByEntity[entityId]
-			then
+			if movementState and movementState.Mode == "Flow" and not self._flowSettledByEntity[entityId] then
 				local entityPosition = self:_GetEntityPosition(entityId)
 				if entityPosition then
 					table.insert(starts, entityPosition)
@@ -262,14 +266,14 @@ return function(MovementService: any)
 		flowfield = flowfieldResult.value
 
 		local entry: TSharedFlowfieldEntry = {
-			Flowfield = flowfield,
+			Flowfield = flowfield :: TFlowfieldLike,
 			GoalCell = goalCell,
 			GoalWorldSample = goalWorldSample,
 			LastRefreshClock = os.clock(),
 			RefreshInProgress = false,
 			RefCount = 0,
 		}
-		self:_EmitFlowfieldDebug(flowfield, goalWorldSample)
+		self:_EmitFlowfieldDebug(flowfield :: TFlowfieldLike, goalWorldSample)
 		return Ok(entry)
 	end
 
@@ -430,7 +434,7 @@ return function(MovementService: any)
 	end
 
 	-- Emits a debug visualization when flowfield debugging is enabled.
-	function MovementService:_EmitFlowfieldDebug(flowfield: any, goalPosition: Vector3)
+	function MovementService:_EmitFlowfieldDebug(flowfield: TFlowfieldLike, goalPosition: Vector3)
 		local renderer = self._flowfieldDebugRenderer
 		local _pathfinder, mapping = self:_ResolveFastFlowRuntime()
 		if not renderer or not mapping or not self:_IsFastFlowDebugEnabled() then
@@ -459,17 +463,17 @@ return function(MovementService: any)
 				local mergedFlowfield =
 					FastFlowHelper.MergeFlowfieldWorld(pathfinder, sharedEntry.Flowfield, position, mapping)
 				if mergedFlowfield then
-					sharedEntry.Flowfield = mergedFlowfield
+					sharedEntry.Flowfield = mergedFlowfield :: TFlowfieldLike
 					sharedEntry.LastRefreshClock = os.clock()
 					sharedEntry.RefreshInProgress = false
-					self:_EmitFlowfieldDebug(mergedFlowfield, sharedEntry.GoalWorldSample)
+					self:_EmitFlowfieldDebug(mergedFlowfield :: TFlowfieldLike, sharedEntry.GoalWorldSample)
 
 					local mergedDirection = self:_SampleFlowDirectionXZ(movementState, position)
 					if mergedDirection then
-						return Ok({
+						return Ok(({
 							Direction = mergedDirection,
 							Status = "Recovered",
-						})
+						} :: TFlowRepairResult))
 					end
 				end
 			end
@@ -478,10 +482,10 @@ return function(MovementService: any)
 			local openCellDirection =
 				self:_TryRecoverFlowDirectionFromOpenCell(entity, movementState, position, pathfinder, mapping)
 			if openCellDirection then
-				return Ok({
+				return Ok(({
 					Direction = openCellDirection,
 					Status = "Recovered",
-				})
+				} :: TFlowRepairResult))
 			end
 		end
 
@@ -505,26 +509,26 @@ return function(MovementService: any)
 		-- Try the regenerated field first, then fall back to an open-cell escape if needed.
 		local regeneratedDirection = self:_SampleFlowDirectionXZ(movementState, position)
 		if regeneratedDirection then
-			return Ok({
+			return Ok(({
 				Direction = regeneratedDirection,
 				Status = "Recovered",
-			})
+			} :: TFlowRepairResult))
 		end
 
 		if pathfinder and mapping then
 			local openCellDirection =
 				self:_TryRecoverFlowDirectionFromOpenCell(entity, movementState, position, pathfinder, mapping)
 			if openCellDirection then
-				return Ok({
+				return Ok(({
 					Direction = openCellDirection,
 					Status = "Recovered",
-				})
+				} :: TFlowRepairResult))
 			end
 		end
 
-		return Ok({
+		return Ok(({
 			Direction = nil,
 			Status = "RetryLater",
-		})
+		} :: TFlowRepairResult))
 	end
 end

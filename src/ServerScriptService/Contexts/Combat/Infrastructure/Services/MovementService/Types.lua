@@ -3,7 +3,10 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local EnemyTypes = require(ReplicatedStorage.Contexts.Enemy.Types.EnemyTypes)
+local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
 local ParallelRunner = require(ReplicatedStorage.Utilities.ParallelRunner)
+local Result = require(ReplicatedStorage.Utilities.Result)
+local TableRecycler = require(ReplicatedStorage.Utilities.TableRecycler)
 
 --[=[
     @class Types
@@ -18,6 +21,83 @@ local MovementServiceTypes = {}
     Enemy movement mode alias consumed by movement service entry points.
 ]=]
 export type EnemyMovementMode = EnemyTypes.EnemyMovementMode
+export type TFastFlowGridMapping = FastFlowHelper.TFlowGridMapping
+export type TTableRecyclerLike = TableRecycler.TTableRecyclerHandle
+
+export type TPathPromiseLike = {
+	cancel: (self: TPathPromiseLike) -> (),
+	getStatus: (self: TPathPromiseLike) -> any,
+}
+
+export type TAgentParams = {
+	AgentRadius: number?,
+	AgentHeight: number?,
+	AgentCanJump: boolean?,
+}
+
+export type TEnemyPathStateLike = {
+	GoalPosition: Vector3?,
+}
+
+export type TEnemyModelRefLike = {
+	Model: Model?,
+}
+
+export type TEnemyRoleLike = {
+	Role: string,
+}
+
+export type TEnemyEntityFactoryLike = {
+	GetPathState: (self: TEnemyEntityFactoryLike, entity: number) -> TEnemyPathStateLike?,
+	SetPathMoving: (self: TEnemyEntityFactoryLike, entity: number, isMoving: boolean) -> (),
+	GetModelRef: (self: TEnemyEntityFactoryLike, entity: number) -> TEnemyModelRefLike?,
+	GetCurrentMoveSpeed: (self: TEnemyEntityFactoryLike, entity: number) -> number?,
+	GetRole: (self: TEnemyEntityFactoryLike, entity: number) -> TEnemyRoleLike?,
+	QueryAliveEntities: (self: TEnemyEntityFactoryLike) -> { number },
+}
+
+export type TLockOnServiceLike = {
+	SetBoidsFacingFlatForward: (self: TLockOnServiceLike, entity: number, flatForward: Vector3?) -> (),
+}
+
+export type TCombatLoopServiceLike = {
+	ForEachRunnableSession: (self: TCombatLoopServiceLike, callback: (userId: number) -> (boolean?)) -> (),
+}
+
+export type TRegistryLike = {
+	Get: (self: TRegistryLike, name: string) -> any,
+}
+
+export type TFlowSchedulerServices = {
+	TickId: number?,
+	DeltaTime: number?,
+	Dt: number?,
+	TickStartedAt: number?,
+	TickBudgetSeconds: number?,
+}
+
+export type TMovementTempEntityArray = { number }
+export type TMovementTempMap = { [number]: boolean }
+
+export type TFlowfieldLike = {
+	GetDirection: (self: TFlowfieldLike, cell: Vector2) -> Vector2?,
+}
+
+export type TFastFlowWallsLike = {
+	_Grid: { [number]: boolean }?,
+	_GetCellPos: ((self: TFastFlowWallsLike, index: number) -> Vector2)?,
+	_Size: number?,
+	IsCellInBounds: ((self: TFastFlowWallsLike, cell: Vector2) -> boolean)?,
+	GetCell: ((self: TFastFlowWallsLike, cell: Vector2) -> boolean?)?,
+}
+
+export type TFlowfieldDebugRenderer = (flowfield: TFlowfieldLike, mapping: TFastFlowGridMapping, goalPosition: Vector3) -> ()
+
+export type TFlowPipelineStateMachineLike = {
+	Transition: (self: TFlowPipelineStateMachineLike, nextState: TFlowPipelineState) -> Result.Result<TFlowPipelineState>,
+	GetState: (self: TFlowPipelineStateMachineLike) -> TFlowPipelineState,
+	Destroy: (self: TFlowPipelineStateMachineLike) -> (),
+}
 
 --[=[
     @type TFlowPipelineState
@@ -42,7 +122,7 @@ export type TFlowPipelineState =
 ]=]
 export type TPathMovementState = {
 	Mode: "Path",
-	Promise: any,
+	Promise: TPathPromiseLike,
 }
 
 --[=[
@@ -86,7 +166,7 @@ export type TMovementState = TPathMovementState | TFlowMovementState
     .RefCount number -- Active entity references using this shared entry.
 ]=]
 export type TSharedFlowfieldEntry = {
-	Flowfield: any,
+	Flowfield: TFlowfieldLike,
 	GoalCell: Vector2,
 	GoalWorldSample: Vector3,
 	LastRefreshClock: number,
@@ -307,13 +387,14 @@ export type TFlowPublishedFrameState = {
 }
 
 export type TFastFlowPathfinder = {
+	_Walls: TFastFlowWallsLike?,
 	FindOpenCell: (self: TFastFlowPathfinder, cell: Vector2) -> Vector2?,
-	GenerateFlowfieldWorld: (self: TFastFlowPathfinder, goal: Vector3, starts: { Vector3 }?) -> any?,
+	GenerateFlowfieldWorld: (self: TFastFlowPathfinder, goal: Vector3, starts: { Vector3 }?) -> TFlowfieldLike?,
 }
 
 export type TResolvedFlowGoal = {
 	Pathfinder: TFastFlowPathfinder,
-	Mapping: any,
+	Mapping: TFastFlowGridMapping,
 	GoalCell: Vector2,
 	GoalWorldSample: Vector3,
 }
@@ -379,5 +460,225 @@ export type TFlowSeparationDispatchPayload = {
     ParallelRunner managed job handle used by the flow separation pipeline.
 ]=]
 export type TManagedJob = ParallelRunner.TManagedJob
+export type TParallelRunnerLike = ParallelRunner.TRunner
+export type TSharedPacket = ParallelRunner.TSharedPacket
+
+export type TFlowSeparationWorkerSharedMemory = {
+	EntityCount: number,
+	GoalGroupCellRecordStartIndex: { number },
+	GoalGroupCellRecordCount: { number },
+	GoalGroupCellWidthStuds: { number },
+	GroupCellX: { number },
+	GroupCellY: { number },
+	CellPackedKey: { number },
+	CellMemberStartIndex: { number },
+	CellMemberCount: { number },
+	CellMemberEntityIndex: { number },
+	FlatPositionX: { number },
+	FlatPositionY: { number },
+	Radius: { number },
+	FlowVelocityX: { number },
+	FlowVelocityY: { number },
+	PreviousVelocityX: { number },
+	PreviousVelocityY: { number },
+	WalkSpeed: { number },
+	VelAlpha: { number },
+	IsSettled: { boolean },
+	WallPackedKeys: { number },
+	DeltaTime: number?,
+	CellWidthStuds: number?,
+	OriginX: number?,
+	OriginY: number?,
+	WallGridHalfSize: number?,
+	KForce: number?,
+	MinSeparationDistance: number?,
+	WallCollisionEnabled: boolean?,
+	WallCollisionAxisClampEnabled: boolean?,
+	WallCollisionCornerClampEnabled: boolean?,
+	WallCollisionUseUnitRadiusPadding: boolean?,
+	WallCollisionCellProbePaddingStuds: number?,
+	WallCollisionVelocityEpsilon: number?,
+	ClumpTouchPaddingStuds: number?,
+}
+
+export type TFlowSeparationWorkerRequest = {
+	JobName: string?,
+	RunId: number?,
+	ShardIndex: number?,
+	StartTaskId: number,
+	BatchSize: number,
+	LogicalWorkCount: number,
+	Args: { [string]: any }?,
+	SharedMemory: TFlowSeparationWorkerSharedMemory?,
+}
+
+export type TMovementService = {
+	_registry: TRegistryLike?,
+	_combatLoopService: TCombatLoopServiceLike?,
+	_enemyEntityFactory: TEnemyEntityFactoryLike,
+	_lockOnService: TLockOnServiceLike?,
+	_fastFlowPathfinder: TFastFlowPathfinder?,
+	_fastFlowMapping: TFastFlowGridMapping?,
+	_flowfieldDebugRenderer: TFlowfieldDebugRenderer?,
+	_movementByEntity: { [number]: TMovementState },
+	_movementTempTableRecycler: TTableRecyclerLike?,
+	_sharedFlowfieldsByGoalKey: { [string]: TSharedFlowfieldEntry },
+	_flowGoalKeyByEntity: { [number]: string },
+	_activeFlowEntitiesByGoalKey: { [string]: { [number]: boolean } },
+	_flowSettledByEntity: { [number]: boolean },
+	_flowActorRefsByEntity: { [number]: TFlowActorRefs },
+	_flowVelocityByEntity: { [number]: Vector2 },
+	_flowFrameSerial: number,
+	_flowPipelineStateMachine: TFlowPipelineStateMachineLike,
+	_flowPipelineTickId: number?,
+	_flowInvalidReasonByEntity: { [number]: string? },
+	_flowRecoveredOpenCellByEntity: { [number]: Vector2 },
+	_flowCurrentSessionUserId: number?,
+	_flowSeparationParallelRunner: TParallelRunnerLike?,
+	_flowSeparationManagedJob: TManagedJob?,
+	_flowFrameStateRecycler: TTableRecyclerLike?,
+	_flowFrameState: TFlowFrameStateHandle?,
+	_flowLatestParallelSolve: TFlowPublishedSolve?,
+	_flowReusableGoalKeyByEntity: { [number]: string },
+	_flowReusableGoalPositionByEntity: { [number]: Vector3 },
+	_flowReusableGoalWorldSampleByEntity: { [number]: Vector3 },
+	_flowReusablePositionByEntity: { [number]: Vector3 },
+	_flowReusableWalkSpeedByEntity: { [number]: number },
+	_flowReusableIsSettledByEntity: { [number]: boolean },
+	_flowPublishedVelocityByEntity: { [number]: Vector2 },
+	_flowPublishedTouchedSettledNeighborByEntity: { [number]: boolean },
+	_flowPublishedGoalKeyByEntity: { [number]: string },
+	_flowPublishedGoalPositionByEntity: { [number]: Vector3 },
+	_flowPublishedGoalWorldSampleByEntity: { [number]: Vector3 },
+	_flowPublishedPositionByEntity: { [number]: Vector3 },
+	_flowPublishedWalkSpeedByEntity: { [number]: number },
+	_flowPublishedIsSettledByEntity: { [number]: boolean },
+	_flowPublishedSolve: TFlowPublishedSolve,
+	_flowReusableFrameState: TFlowPublishedFrameState,
+	_flowPublishedFrameState: TFlowPublishedFrameState,
+	_flowRepresentativeStarts: { Vector3 },
+	_flowDispatchedSeparationSnapshot: TFlowSeparationSolveSnapshot?,
+	_flowDispatchedGoalKeyByEntity: { [number]: string }?,
+	_flowDispatchedFrameState: TFlowPublishedFrameState?,
+	_flowStaticSharedMemory: TSharedPacket?,
+	_flowStaticSharedMemoryPathfinder: TFastFlowPathfinder?,
+	_flowPreparedSharedPacket: TSharedPacket?,
+	_flowDispatchPayload: TFlowSeparationDispatchPayload?,
+	_flowWallKeyCachePathfinder: TFastFlowPathfinder?,
+	_flowWallPackedKeys: { number }?,
+	_flowWallGridHalfSize: number?,
+	Init: (self: TMovementService, registry: TRegistryLike, name: string) -> (),
+	Start: (self: TMovementService) -> (),
+	ConfigureEnemyEntityFactory: (self: TMovementService, enemyEntityFactory: TEnemyEntityFactoryLike) -> (),
+	ConfigureLockOnService: (self: TMovementService, lockOnService: TLockOnServiceLike) -> (),
+	ConfigureFastFlow: (self: TMovementService, pathfinder: TFastFlowPathfinder?, mapping: TFastFlowGridMapping?) -> (),
+	ConfigureFlowfieldDebugRenderer: (self: TMovementService, renderer: TFlowfieldDebugRenderer?) -> (),
+	FinalizeAdvanceFrame: (self: TMovementService) -> (),
+	ResetFastFlowRuntime: (self: TMovementService) -> (),
+	StartAdvance: (self: TMovementService, entity: number, movementMode: EnemyMovementMode) -> (boolean, string?),
+	StepAdvance: (self: TMovementService, entity: number, services: TFlowSchedulerServices?) -> (boolean, string?),
+	StopMovement: (self: TMovementService, entity: number) -> (),
+	CleanupAll: (self: TMovementService) -> (),
+	Destroy: (self: TMovementService) -> (),
+	_GetOrCreateMovementTempTableRecycler: (self: TMovementService) -> TTableRecyclerLike,
+	_AcquireMovementTempArray: (self: TMovementService, capacityHint: number?) -> TMovementTempEntityArray,
+	_AcquireMovementTempMap: (self: TMovementService) -> TMovementTempMap,
+	_ReleaseMovementTempArray: (self: TMovementService, tbl: TMovementTempEntityArray) -> (),
+	_ReleaseMovementTempMap: (self: TMovementService, tbl: TMovementTempMap) -> (),
+	_ResolveActiveSessionUserId: (self: TMovementService) -> number?,
+	_ClearMovementRuntimeState: (self: TMovementService, entity: number) -> (),
+	_GetOrCreateFlowActorRefs: (self: TMovementService, entity: number) -> TFlowActorRefs,
+	_InvalidateFlowActorRefs: (self: TMovementService, entity: number) -> (),
+	_GetEntityModel: (self: TMovementService, entity: number) -> Model?,
+	_GetEntityRootPart: (self: TMovementService, entity: number) -> BasePart?,
+	_GetEntityPosition: (self: TMovementService, entity: number) -> Vector3?,
+	_GetHumanoid: (self: TMovementService, entity: number) -> Humanoid?,
+	_GetWalkSpeedWriteEpsilon: (self: TMovementService) -> number,
+	_ApplyCurrentMoveSpeed: (self: TMovementService, entity: number) -> number,
+	_IssueHumanoidMoveTo: (self: TMovementService, entity: number, targetPosition: Vector3?, velocityXZ: Vector2) -> boolean,
+	_StopHumanoid: (self: TMovementService, entity: number) -> (),
+	_GetRoleName: (self: TMovementService, entity: number) -> string?,
+	_GetAgentParams: (self: TMovementService, entity: number) -> TAgentParams,
+	_GetMinGroupSize: (self: TMovementService) -> number,
+	_CanEntityUseFlowAtGoal: (self: TMovementService, entity: number, goalPosition: Vector3) -> boolean,
+	_CountFlowEligibleAtGoal: (self: TMovementService, goalPosition: Vector3) -> number,
+	_ResolveAdvanceMode: (self: TMovementService, movementMode: EnemyMovementMode, goalPosition: Vector3) -> ("Path" | "Flow")?,
+	_StartPath: (self: TMovementService, entity: number, goalPosition: Vector3) -> boolean,
+	_TickPath: (self: TMovementService, entity: number, movementState: TPathMovementState) -> ("Running" | "Success" | "Fail", string?),
+	_ClearFlowRecoveryState: (self: TMovementService, entity: number, movementState: TFlowMovementState?) -> (),
+	_IsFastFlowDebugEnabled: (self: TMovementService) -> boolean,
+	_ResolveFastFlowRuntime: (self: TMovementService) -> (TFastFlowPathfinder?, TFastFlowGridMapping?),
+	_ClassifyFlowCellState: (self: TMovementService, position: Vector3) -> (FastFlowHelper.TFlowCellState?, Vector2?, TFastFlowPathfinder?, TFastFlowGridMapping?),
+	_IsFlowCellStateInvalid: (self: TMovementService, cellState: FastFlowHelper.TFlowCellState?) -> boolean,
+	_HasLatchedInvalidCellEscape: (self: TMovementService, movementState: TFlowMovementState) -> boolean,
+	_SanitizeFlowMoveTarget: (self: TMovementService, targetPosition: Vector3?) -> Vector3?,
+	_SetLatchedInvalidCellEscape: (self: TMovementService, entity: number, movementState: TFlowMovementState, openCell: Vector2, mapping: TFastFlowGridMapping, yLevel: number) -> Vector3,
+	_TryClearLatchedInvalidCellEscape: (self: TMovementService, entity: number, movementState: TFlowMovementState, position: Vector3) -> boolean,
+	_SampleFlowDirectionFromCell: (self: TMovementService, movementState: TFlowMovementState, cell: Vector2) -> Vector2?,
+	_TryRecoverFlowDirectionFromOpenCell: (self: TMovementService, entity: number, movementState: TFlowMovementState, position: Vector3, pathfinder: TFastFlowPathfinder, mapping: TFastFlowGridMapping) -> Vector2?,
+	_ResolveFlowGoal: (self: TMovementService, goalPosition: Vector3) -> Result.Result<TResolvedFlowGoal>,
+	_GetSharedRepresentativeStarts: (self: TMovementService, goalKey: string) -> { Vector3 }?,
+	_CreateSharedFlowfield: (self: TMovementService, goalKey: string, goalCell: Vector2, goalWorldSample: Vector3, forceUnpruned: boolean?) -> Result.Result<TSharedFlowfieldEntry>,
+	_ResolveSharedFlowfield: (self: TMovementService, goalPosition: Vector3, forceRefresh: boolean?, forceUnpruned: boolean?) -> Result.Result<TResolvedSharedFlowfield>,
+	_GetSharedFlowfieldEntry: (self: TMovementService, goalKey: string?) -> TSharedFlowfieldEntry?,
+	_DetachSharedFlowfield: (self: TMovementService, goalKey: string?) -> (),
+	_RemoveEntityFromActiveFlowGoal: (self: TMovementService, entity: number, goalKey: string?) -> (),
+	_AddEntityToActiveFlowGoal: (self: TMovementService, entity: number, goalKey: string?) -> (),
+	_RefreshActiveFlowGoalMembership: (self: TMovementService, entity: number, previousGoalKey: string?) -> (),
+	_AttachEntityToSharedFlowfield: (self: TMovementService, entity: number, goalKey: string) -> (),
+	_AttachEntityToFlowGoal: (self: TMovementService, entity: number, goalPosition: Vector3, forceRefresh: boolean?, forceUnpruned: boolean?) -> Result.Result<TResolvedSharedFlowfield>,
+	_EmitFlowfieldDebug: (self: TMovementService, flowfield: TFlowfieldLike, goalPosition: Vector3) -> (),
+	_RepairFlowDirectionXZ: (self: TMovementService, entity: number, movementState: TFlowMovementState, goalPosition: Vector3, position: Vector3) -> Result.Result<TFlowRepairResult>,
+	_BuildPackedWallKeys: (self: TMovementService) -> { number },
+	_GetOrCreateFlowFrameStateRecycler: (self: TMovementService) -> TTableRecyclerLike,
+	_GetOrCreateFlowFrameState: (self: TMovementService) -> TFlowFrameStateHandle,
+	_DestroyFlowFrameState: (self: TMovementService) -> (),
+	_CreateFlowSeparationStaticSharedMemory: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TSharedPacket,
+	_CreateFlowSeparationDynamicSharedMemory: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TSharedPacket,
+	_EnsureFlowSeparationStaticSharedMemory: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> (),
+	_CreateFlowSeparationSharedPacket: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TSharedPacket,
+	_CreateFlowSeparationRunRequest: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TFlowSeparationRunRequest,
+	_AssembleFlowSeparationDispatchPayload: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot, sharedPacket: TSharedPacket, runRequest: TFlowSeparationRunRequest) -> TFlowSeparationDispatchPayload,
+	_ApplyFlowVelocityRows: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot, rows: { TFlowSeparationSolveRow }, velocityByEntity: { [number]: Vector2 }?, touchedSettledNeighborByEntity: { [number]: boolean }?) -> ({ [number]: Vector2 }, { [number]: boolean }),
+	_ResolveFlowBuildFrameState: (self: TMovementService, entity: number, movementState: TFlowMovementState) -> Result.Result<TFlowBuildFrameStatePayload>,
+	_ResolveFlowTickId: (self: TMovementService, services: TFlowSchedulerServices?) -> number,
+	_ResolveFlowDeltaTime: (self: TMovementService, services: TFlowSchedulerServices?) -> number,
+	_BuildFlowDispatchSnapshot: (self: TMovementService, tickId: number, dt: number) -> (TFlowSeparationSolveSnapshot?, { [number]: string }?, TFlowPublishedFrameState?),
+	_ReleaseFlowDispatchPayload: (self: TMovementService) -> (),
+	_ReleaseFlowLatestParallelSolve: (self: TMovementService) -> (),
+	_ReleaseFlowDispatchedSeparationSnapshot: (self: TMovementService) -> (),
+	_GetFlowPipelineState: (self: TMovementService) -> TFlowPipelineState,
+	_CanAdvanceFlowPipelineStage: (self: TMovementService, services: TFlowSchedulerServices?, stageName: TFlowPipelineState) -> boolean,
+	_GetFlowVelocityParallelMinEntityCount: (self: TMovementService) -> number,
+	_GetFlowSeparationParallelActorCount: (self: TMovementService) -> number,
+	_GetFlowSeparationParallelBatchSize: (self: TMovementService) -> number,
+	_GetFlowSeparationParallelMaxInFlightSeconds: (self: TMovementService) -> number,
+	_IsFlowSeparationParallelEnabled: (self: TMovementService) -> boolean,
+	_GetOrCreateFlowSeparationRunner: (self: TMovementService) -> Result.Result<TParallelRunnerLike>,
+	_CreateFlowSeparationManagedJob: (self: TMovementService) -> Result.Result<TManagedJob>,
+	_GetOrCreateFlowSeparationManagedJob: (self: TMovementService) -> Result.Result<TManagedJob>,
+	_PrimeFlowSeparationParallelRuntime: (self: TMovementService) -> (),
+	_ResetFlowInfrastructureRuntime: (self: TMovementService) -> (),
+	_DestroyFlowInfrastructure: (self: TMovementService) -> (),
+	_ConsumeCompletedFlowSeparationSolve: (self: TMovementService) -> Result.Result<boolean>,
+	_TryDispatchFlowSeparationSolve: (self: TMovementService, payload: TFlowSeparationDispatchPayload) -> Result.Result<boolean>,
+	_PublishCompletedFlowSolve: (self: TMovementService) -> (),
+	_AdvanceFlowPipeline: (self: TMovementService, services: TFlowSchedulerServices?) -> (),
+	_GetFlowConfig: (self: TMovementService) -> TFlowSoftSeparationConfig,
+	_GetFlowVelocityAlpha: (self: TMovementService) -> number,
+	_GetFlowClumpRadiusStuds: (self: TMovementService) -> number,
+	_GetFlowClumpTouchPaddingStuds: (self: TMovementService) -> number,
+	_GetFlowAgentRadiusStuds: (self: TMovementService, entity: number) -> number,
+	_StartFlow: (self: TMovementService, entity: number, goalPosition: Vector3) -> Result.Result<boolean>,
+	_HandleFlowGoalChange: (self: TMovementService, entity: number, movementState: TFlowMovementState, goalPosition: Vector3) -> Result.Result<nil>,
+	_SampleFlowDirectionXZ: (self: TMovementService, movementState: TFlowMovementState, position: Vector3) -> Vector2?,
+	_BuildFlowSolutionForInput: (self: TMovementService, goalPosition: Vector3, goalWorldSample: Vector3, position: Vector3, walkSpeed: number, isSettled: boolean, finalVelocityXZ: Vector2, touchedSettledNeighbor: boolean) -> (Vector2, Vector3?, boolean, boolean, boolean),
+	_IsFlowAdvanceStalled: (self: TMovementService, goalPosition: Vector3, goalWorldSample: Vector3, position: Vector3, velocityXZ: Vector2, moveTarget: Vector3?) -> boolean,
+	_ShouldForceFlowCellRecovery: (self: TMovementService, goalPosition: Vector3, goalWorldSample: Vector3, position: Vector3) -> boolean,
+	_BuildRecoveredFlowAdvanceInput: (self: TMovementService, entity: number, movementState: TFlowMovementState, goalPosition: Vector3, position: Vector3, walkSpeed: number) -> (Vector2?, Vector3?, "Recovered" | "RetryLater" | "Fatal", string?),
+	_TryContinueLatchedEscapeWithoutSolve: (self: TMovementService, entity: number, movementState: TFlowMovementState, reason: string) -> boolean,
+	_TryRepairFlowGoalMembership: (self: TMovementService, entity: number, movementState: TFlowMovementState) -> (boolean, string?),
+	_StepFlowAdvance: (self: TMovementService, entity: number, movementState: TFlowMovementState, services: TFlowSchedulerServices?) -> Result.Result<TFlowAdvanceStepResult>,
+}
 
 return table.freeze(MovementServiceTypes)
