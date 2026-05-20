@@ -96,14 +96,24 @@ export type TWorkplaceConfig = {
 	DefaultBatchSize: number?,
 }
 
+export type TSchemaDescriptor = {
+	[string]: string,
+}
+
 export type TRegisteredJob = {
 	Name: string,
-	Execute: TJobExecutor,
+	Version: number,
+	WorkerModule: ModuleScript,
+	ArgsSchemaDescriptor: TSchemaDescriptor,
+	ResultSchemaDescriptor: TSchemaDescriptor,
 }
 
 export type TActorSlot = {
 	ActorId: number,
-	State: "HiredIdle" | "Busy",
+	Actor: Actor,
+	WorkerScript: Script?,
+	State: "Available" | "HiredIdle" | "Busy",
+	ReleaseOnIdle: boolean?,
 }
 
 export type TShardRecord = TShardRequest & {
@@ -127,11 +137,15 @@ export type TRunRecord = {
 	Resolve: (result: TRunResult) -> (),
 	Reject: (err: any) -> (),
 	Settled: boolean,
+	ResultBindable: BindableEvent?,
+	ResultConnection: RBXScriptConnection?,
 }
 
 export type TWorkplace = {
 	RegisterJob: (self: TWorkplace, jobName: string, executor: TJobExecutor) -> (),
+	RegisterCompiledJob: (self: TWorkplace, job: any, workerModule: ModuleScript) -> (),
 	HasJob: (self: TWorkplace, jobName: string) -> boolean,
+	SetSharedMemory: (self: TWorkplace, jobName: string, sharedMemory: SharedTable?) -> (),
 	Run: (self: TWorkplace, request: TRunRequest) -> TRunHandle,
 	Destroy: (self: TWorkplace) -> (),
 }

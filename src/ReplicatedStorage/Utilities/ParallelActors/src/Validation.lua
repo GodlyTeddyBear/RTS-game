@@ -24,6 +24,25 @@ function Validation.AssertJobRegistration(jobName: any, executor: any)
 	assert(type(executor) == "function", `ParallelActors:RegisterJob("{tostring(jobName)}") requires an executor function`)
 end
 
+function Validation.AssertCompiledJobRegistration(job: any, workerModule: any)
+	assert(type(job) == "table", "ParallelActors:RegisterCompiledJob requires a compiled job")
+	assert(type(job.GetName) == "function", "ParallelActors:RegisterCompiledJob requires a compiled ParallelLogistics job")
+	assert(
+		typeof(workerModule) == "Instance" and workerModule:IsA("ModuleScript"),
+		`ParallelActors:RegisterCompiledJob("{tostring(job:GetName())}") requires WorkerModule to be a ModuleScript`
+	)
+end
+
+function Validation.AssertSharedMemory(jobName: any, sharedMemory: any)
+	assert(type(jobName) == "string" and jobName ~= "", "ParallelActors:SetSharedMemory requires a non-empty jobName")
+	if sharedMemory ~= nil then
+		assert(
+			typeof(sharedMemory) == "SharedTable",
+			`ParallelActors:SetSharedMemory("{tostring(jobName)}") SharedMemory must be a SharedTable when provided`
+		)
+	end
+end
+
 function Validation.AssertRunRequest(request: { [string]: any }, jobExists: boolean)
 	assert(type(request) == "table", "ParallelActors:Run requires a request table")
 	assert(type(request.JobName) == "string" and request.JobName ~= "", "ParallelActors:Run requires JobName")
