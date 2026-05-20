@@ -36,12 +36,13 @@ type TFlowfieldDebugRenderer = MovementTypes.TFlowfieldDebugRenderer
 type TLockOnServiceLike = MovementTypes.TLockOnServiceLike
 type TMovementState = MovementTypes.TMovementState
 type TSharedFlowfieldEntry = MovementTypes.TSharedFlowfieldEntry
-type TSharedPacket = MovementTypes.TSharedPacket
+type TSharedCompiledHandle = MovementTypes.TSharedCompiledHandle
 type TTableRecyclerLike = MovementTypes.TTableRecyclerLike
 type TFlowActorRefs = MovementTypes.TFlowActorRefs
 type TFlowPipelineState = MovementTypes.TFlowPipelineState
 type TFlowSeparationDispatchPayload = MovementTypes.TFlowSeparationDispatchPayload
 type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
+type TFlowSeparationWorkerPayload = MovementTypes.TFlowSeparationWorkerPayload
 
 local MOVEMENT_PROFILING_ENABLED = DebugConfig.COMBAT_MOVEMENT_PROFILING
 local STEP_ADVANCE_PROFILE_TAG = "Combat:MovementService:StepAdvance"
@@ -170,9 +171,10 @@ function MovementService.new()
 	self._flowDispatchedSeparationSnapshot = nil
 	self._flowDispatchedGoalKeyByEntity = nil
 	self._flowDispatchedFrameState = nil :: TFlowPublishedFrameState?
-	self._flowStaticSharedMemory = nil :: TSharedPacket?
+	self._flowStaticSharedMemory = nil :: SharedTable?
+	self._flowStaticSharedMemoryHandle = nil :: TSharedCompiledHandle?
 	self._flowStaticSharedMemoryPathfinder = nil
-	self._flowPreparedSharedPacket = nil :: TSharedPacket?
+	self._flowPreparedWorkerPayload = nil :: TFlowSeparationWorkerPayload?
 	self._flowDispatchPayload = nil :: TFlowSeparationDispatchPayload?
 	self._flowWallKeyCachePathfinder = nil
 	self._flowWallPackedKeys = nil
@@ -283,7 +285,7 @@ function MovementService:ResetFastFlowRuntime()
 	self._flowLatestParallelSolve = nil
 	self._flowDispatchedGoalKeyByEntity = nil
 	self._flowDispatchedFrameState = nil
-	self._flowPreparedSharedPacket = nil
+	self._flowPreparedWorkerPayload = nil
 	self._flowDispatchPayload = nil
 	self._flowStaticSharedMemory = nil
 	self._flowStaticSharedMemoryPathfinder = nil

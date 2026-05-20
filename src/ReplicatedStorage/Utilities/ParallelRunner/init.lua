@@ -20,6 +20,7 @@ export type TManagedJobResult = ParallelRunner.TManagedJobResult
 export type TManagedJob = ParallelRunner.TManagedJob
 export type TSharedPacket = ParallelRunner.TSharedPacket
 export type TSharedCompiledHandle = ParallelRunner.TSharedCompiledHandle
+export type TPayloadSchemaDescriptor = ParallelRunner.TPayloadSchemaDescriptor
 export type TRowFieldValidationResult = ParallelRunner.TRowFieldValidationResult
 export type TSchemaRowValidationMode = ParallelRunner.TSchemaRowValidationMode
 export type TSchemaRowValidationResult = ParallelRunner.TSchemaRowValidationResult

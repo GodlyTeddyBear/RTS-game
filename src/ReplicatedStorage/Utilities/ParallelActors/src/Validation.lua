@@ -43,6 +43,16 @@ function Validation.AssertSharedMemory(jobName: any, sharedMemory: any)
 	end
 end
 
+function Validation.AssertWorkerPayload(jobName: any, workerPayloadBuffer: any)
+	assert(type(jobName) == "string" and jobName ~= "", "ParallelActors:SetWorkerPayload requires a non-empty jobName")
+	if workerPayloadBuffer ~= nil then
+		assert(
+			typeof(workerPayloadBuffer) == "buffer",
+			`ParallelActors:SetWorkerPayload("{tostring(jobName)}") WorkerPayloadBuffer must be a buffer when provided`
+		)
+	end
+end
+
 function Validation.AssertRunRequest(request: { [string]: any }, jobExists: boolean)
 	assert(type(request) == "table", "ParallelActors:Run requires a request table")
 	assert(type(request.JobName) == "string" and request.JobName ~= "", "ParallelActors:Run requires JobName")
@@ -65,6 +75,12 @@ function Validation.AssertRunRequest(request: { [string]: any }, jobExists: bool
 		assert(
 			typeof(request.SharedMemory) == "SharedTable",
 			`ParallelActors:Run("{request.JobName}") SharedMemory must be a SharedTable when provided`
+		)
+	end
+	if request.WorkerPayloadBuffer ~= nil then
+		assert(
+			typeof(request.WorkerPayloadBuffer) == "buffer",
+			`ParallelActors:Run("{request.JobName}") WorkerPayloadBuffer must be a buffer when provided`
 		)
 	end
 end

@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ParallelLogistics = require(ReplicatedStorage.Utilities.ParallelLogistics)
+local PayloadCodec = require(ReplicatedStorage.Utilities.ParallelRunner.src.PayloadCodec)
 local Sera = require(ReplicatedStorage.Utilities.Sera)
 
 local Protocol = require(script.Parent.Protocol)
@@ -11,9 +12,11 @@ type TCompiledJob = ParallelLogistics.TCompiledJob
 
 type TActorJobState = {
 	CompiledJob: TCompiledJob,
+	PayloadCodec: any?,
 	WorkerModule: ModuleScript,
 	WorkerExport: { Execute: (request: { [string]: any }) -> any },
 	SharedMemory: SharedTable?,
+	WorkerPayload: { [string]: any }?,
 }
 
 local TYPE_MAP = table.freeze({
@@ -91,6 +94,7 @@ function WorkerBootstrap.Start(workerScript: Script)
 		version: number,
 		argsSchemaDescriptor: { [string]: string },
 		resultSchemaDescriptor: { [string]: string },
+		payloadSchemaDescriptor: { [string]: any }?,
 		workerModule: ModuleScript
 	)
 		local workerExport = require(workerModule)
@@ -99,9 +103,13 @@ function WorkerBootstrap.Start(workerScript: Script)
 
 		jobsByName[jobName] = {
 			CompiledJob = _BuildCompiledJob(jobName, version, argsSchemaDescriptor, resultSchemaDescriptor),
+			PayloadCodec = if payloadSchemaDescriptor ~= nil
+				then PayloadCodec.CompileDescriptor(jobName, version, payloadSchemaDescriptor :: any)
+				else nil,
 			WorkerModule = workerModule,
 			WorkerExport = workerExport,
 			SharedMemory = nil,
+			WorkerPayload = nil,
 		}
 	end)
 
@@ -114,6 +122,25 @@ function WorkerBootstrap.Start(workerScript: Script)
 		jobState.SharedMemory = sharedMemory
 	end)
 
+	actor:BindToMessage(Protocol.SetWorkerPayload, function(jobName: string, workerPayloadBuffer: buffer?)
+		local jobState = jobsByName[jobName]
+		if jobState == nil then
+			return
+		end
+
+		if workerPayloadBuffer == nil then
+			jobState.WorkerPayload = nil
+			return
+		end
+
+		local payloadCodec = jobState.PayloadCodec
+		assert(payloadCodec ~= nil, `ParallelActors worker "{jobName}" received worker payload without a payload schema`)
+
+		local decodedPayload, _, decodeError = payloadCodec:Decode(workerPayloadBuffer)
+		assert(decodedPayload ~= nil, decodeError)
+		jobState.WorkerPayload = decodedPayload
+	end)
+
 	actor:BindToMessageParallel(Protocol.RunShard, function(
 		runId: number,
 		jobName: string,
@@ -123,7 +150,8 @@ function WorkerBootstrap.Start(workerScript: Script)
 		logicalWorkCount: number,
 		argsBuffer: buffer,
 		bindable: BindableEvent,
-		sharedMemory: SharedTable?
+		sharedMemory: SharedTable?,
+		workerPayloadBuffer: buffer?
 	)
 		task.desynchronize()
 
@@ -151,6 +179,37 @@ function WorkerBootstrap.Start(workerScript: Script)
 			return
 		end
 
+		local resolvedWorkerPayload = jobState.WorkerPayload
+		if workerPayloadBuffer ~= nil then
+			local payloadCodec = jobState.PayloadCodec
+			if payloadCodec == nil then
+				finish(
+					nil,
+					_BuildWrappedWorkerError(
+						"ParallelRunnerWorkerPayloadDecodeError",
+						jobName,
+						"worker payload buffer was provided without a payload schema"
+					)
+				)
+				return
+			end
+
+			local decodedPayload, _, workerPayloadDecodeError = payloadCodec:Decode(workerPayloadBuffer)
+			if decodedPayload == nil then
+				finish(
+					nil,
+					_BuildWrappedWorkerError(
+						"ParallelRunnerWorkerPayloadDecodeError",
+						jobName,
+						workerPayloadDecodeError :: string
+					)
+				)
+				return
+			end
+
+			resolvedWorkerPayload = decodedPayload
+		end
+
 		local ok, rowsResult = pcall(jobState.WorkerExport.Execute, {
 			JobName = jobName,
 			RunId = runId,
@@ -160,6 +219,7 @@ function WorkerBootstrap.Start(workerScript: Script)
 			LogicalWorkCount = logicalWorkCount,
 			Args = decodedArgs,
 			SharedMemory = if sharedMemory ~= nil then sharedMemory else jobState.SharedMemory,
+			WorkerPayload = resolvedWorkerPayload,
 		})
 
 		if not ok then

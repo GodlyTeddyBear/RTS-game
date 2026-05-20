@@ -34,6 +34,12 @@ function Validation.AssertDefineJobConfig(config: { [string]: any })
 			`ParallelRunner.DefineJob("{config.Name}") SharedSchema must be a table when provided`
 		)
 	end
+	if config.PayloadSchema ~= nil then
+		assert(
+			type(config.PayloadSchema) == "table",
+			`ParallelRunner.DefineJob("{config.Name}") PayloadSchema must be a table when provided`
+		)
+	end
 end
 
 function Validation.AssertJobRegistration(config: { [string]: any })
@@ -88,6 +94,12 @@ function Validation.AssertRunRequest(request: { [string]: any })
 			`ParallelRunner:Run("{request.JobName}") SharedMemory must be a SharedTable when provided`
 		)
 	end
+	if request.WorkerPayload ~= nil then
+		assert(
+			type(request.WorkerPayload) == "table",
+			`ParallelRunner:Run("{request.JobName}") WorkerPayload must be a table when provided`
+		)
+	end
 end
 
 function Validation.AssertSetSharedMemory(jobName: any, sharedMemory: any)
@@ -100,17 +112,48 @@ function Validation.AssertSetSharedMemory(jobName: any, sharedMemory: any)
 	end
 end
 
+function Validation.AssertSetWorkerPayload(jobName: any, workerPayload: any)
+	assert(type(jobName) == "string" and jobName ~= "", "ParallelRunner:SetWorkerPayload requires a non-empty jobName")
+	if workerPayload ~= nil then
+		assert(
+			type(workerPayload) == "table",
+			`ParallelRunner:SetWorkerPayload("{tostring(jobName)}") WorkerPayload must be a table when provided`
+		)
+	end
+end
+
 function Validation.AssertManagedJobConfig(runner: { [string]: any }, config: { [string]: any })
 	assert(type(config) == "table", "ParallelRunner:CreateManagedJob requires a config table")
 	assert(type(config.JobName) == "string" and config.JobName ~= "", "Managed job requires JobName")
 	assert(
-		type(config.BuildSharedMemory) == "function",
-		`ParallelRunner:CreateManagedJob("{tostring(config.JobName)}") requires BuildSharedMemory`
+		type(config.BuildSharedMemory) == "function"
+			or type(config.BuildBaseSharedMemory) == "function"
+			or type(config.BuildWorkerPayload) == "function"
+			or type(config.BuildBaseWorkerPayload) == "function",
+		`ParallelRunner:CreateManagedJob("{tostring(config.JobName)}") requires a shared memory or worker payload builder`
 	)
+	if config.BuildSharedMemory ~= nil then
+		assert(
+			type(config.BuildSharedMemory) == "function",
+			`ParallelRunner:CreateManagedJob("{config.JobName}") BuildSharedMemory must be a function when provided`
+		)
+	end
 	if config.BuildBaseSharedMemory ~= nil then
 		assert(
 			type(config.BuildBaseSharedMemory) == "function",
 			`ParallelRunner:CreateManagedJob("{config.JobName}") BuildBaseSharedMemory must be a function when provided`
+		)
+	end
+	if config.BuildWorkerPayload ~= nil then
+		assert(
+			type(config.BuildWorkerPayload) == "function",
+			`ParallelRunner:CreateManagedJob("{config.JobName}") BuildWorkerPayload must be a function when provided`
+		)
+	end
+	if config.BuildBaseWorkerPayload ~= nil then
+		assert(
+			type(config.BuildBaseWorkerPayload) == "function",
+			`ParallelRunner:CreateManagedJob("{config.JobName}") BuildBaseWorkerPayload must be a function when provided`
 		)
 	end
 	assert(
@@ -134,10 +177,18 @@ function Validation.AssertManagedJobConfig(runner: { [string]: any }, config: { 
 		`ParallelRunner:CreateManagedJob("{config.JobName}") requires a registered job`
 	)
 	local registeredJob = runner._registeredJobs[config.JobName]
-	assert(
-		registeredJob.Job:GetSchemas().Shared ~= nil,
-		`ParallelRunner:CreateManagedJob("{config.JobName}") requires the registered job to define SharedSchema`
-	)
+	if type(config.BuildSharedMemory) == "function" or type(config.BuildBaseSharedMemory) == "function" then
+		assert(
+			registeredJob.Job:GetSchemas().Shared ~= nil,
+			`ParallelRunner:CreateManagedJob("{config.JobName}") requires the registered job to define SharedSchema`
+		)
+	end
+	if type(config.BuildWorkerPayload) == "function" or type(config.BuildBaseWorkerPayload) == "function" then
+		assert(
+			registeredJob.PayloadCodec ~= nil,
+			`ParallelRunner:CreateManagedJob("{config.JobName}") requires the registered job to define PayloadSchema`
+		)
+	end
 end
 
 function Validation.AssertManagedSharedPacket(jobName: string, packet: any)
@@ -151,6 +202,20 @@ function Validation.AssertManagedBaseSharedPacket(jobName: string, packet: any)
 	assert(
 		type(packet) == "table",
 		`ParallelRunner managed job "{jobName}" BuildBaseSharedMemory must return a SharedPlus packet table`
+	)
+end
+
+function Validation.AssertManagedWorkerPayload(jobName: string, workerPayload: any)
+	assert(
+		type(workerPayload) == "table",
+		`ParallelRunner managed job "{jobName}" BuildWorkerPayload must return a payload table`
+	)
+end
+
+function Validation.AssertManagedBaseWorkerPayload(jobName: string, workerPayload: any)
+	assert(
+		type(workerPayload) == "table",
+		`ParallelRunner managed job "{jobName}" BuildBaseWorkerPayload must return a payload table`
 	)
 end
 

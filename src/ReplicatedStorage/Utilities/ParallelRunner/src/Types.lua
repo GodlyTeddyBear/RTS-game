@@ -28,9 +28,25 @@ export type TResultField = {
 	Type: TFieldType,
 	Length: number?,
 }
-export type TCompiledJob = ParallelLogistics.TCompiledJob
 export type TSharedPacket = SharedPlus.TPacket
 export type TSharedCompiledHandle = SharedPlus.TCompiledHandle
+export type TPayloadScalarType =
+	"u8"
+	| "u16"
+	| "u32"
+	| "i8"
+	| "i16"
+	| "i32"
+	| "f32"
+	| "f64"
+	| "boolean"
+	| "string8"
+	| "string16"
+	| "string32"
+	| "vector3"
+	| "cframe"
+	| "lossyCFrame"
+	| "color3"
 export type TWorkplace = ParallelActors.TWorkplace
 export type TWorkplaceRunHandle = ParallelActors.TRunHandle
 export type TRunStatus = ParallelActors.TRunStatus
@@ -55,12 +71,32 @@ export type TAutoSchemaRecord = {
 	[string]: any,
 }
 
+export type TPayloadSchemaRecord = {
+	[string]: any,
+}
+
+export type TPayloadSchemaDescriptorField = {
+	Name: string,
+	TypeName: TPayloadScalarType,
+}
+
+export type TPayloadSchemaDescriptor = {
+	Scalars: { TPayloadSchemaDescriptorField },
+	Arrays: { TPayloadSchemaDescriptorField },
+}
+
+export type TCompiledJob = ParallelLogistics.TCompiledJob & {
+	GetPayloadSchemaDescriptor: ((self: TCompiledJob) -> TPayloadSchemaDescriptor?)?,
+	GetPayloadCodec: ((self: TCompiledJob) -> any?)?,
+}
+
 export type TDefineJobConfig = {
 	Name: string,
 	Version: number,
 	Args: TAutoSchemaRecord,
 	Results: TAutoSchemaRecord,
 	SharedSchema: { [string]: any }?,
+	PayloadSchema: TPayloadSchemaRecord?,
 }
 
 export type TWorkerRequest = {
@@ -72,6 +108,7 @@ export type TWorkerRequest = {
 	LogicalWorkCount: number,
 	Args: { [string]: any },
 	SharedMemory: SharedTable?,
+	WorkerPayload: { [string]: any }?,
 }
 
 export type TWorkerExport = {
@@ -91,6 +128,7 @@ export type TRunRequest = {
 	LogicalWorkCount: number?,
 	BatchSize: number?,
 	SharedMemory: SharedTable?,
+	WorkerPayload: { [string]: any }?,
 }
 
 export type TRunOutput = {
@@ -139,8 +177,10 @@ export type TManagedJobBuildRunRequest = {
 export type TManagedJobDispatchStatus = TManagedDispatchStatus
 export type TManagedJobConfig = {
 	JobName: string,
-	BuildSharedMemory: (payload: any) -> TSharedPacket,
+	BuildSharedMemory: ((payload: any) -> TSharedPacket)?,
 	BuildBaseSharedMemory: ((payload: any) -> TSharedPacket?)?,
+	BuildWorkerPayload: ((payload: any) -> { [string]: any })?,
+	BuildBaseWorkerPayload: ((payload: any) -> { [string]: any }?)?,
 	BuildRunRequest: (payload: any) -> TManagedJobBuildRunRequest,
 	GetSessionToken: ((payload: any) -> any?)?,
 	MaxInFlightSeconds: number?,
@@ -199,6 +239,9 @@ export type TRegisteredJob = {
 	DefaultLogicalWorkCount: number?,
 	DefaultBatchSize: number?,
 	SharedMemory: SharedTable?,
+	WorkerPayloadBuffer: buffer?,
+	PayloadSchemaDescriptor: TPayloadSchemaDescriptor?,
+	PayloadCodec: any?,
 }
 
 export type TManagedJob = {
@@ -232,6 +275,7 @@ export type TRunner = {
 	HasJob: (self: TRunner, jobName: string) -> boolean,
 	CreateManagedJob: (self: TRunner, config: TManagedJobConfig) -> TManagedJob,
 	SetSharedMemory: (self: TRunner, jobName: string, sharedMemory: SharedTable?) -> TResult<boolean>,
+	SetWorkerPayload: (self: TRunner, jobName: string, workerPayload: { [string]: any }?) -> TResult<boolean>,
 	Run: (self: TRunner, request: TRunRequest) -> TResult<TRunnerRunHandle>,
 	RunAsync: (self: TRunner, request: TRunRequest) -> TResult<TRunPromise>,
 	Destroy: (self: TRunner) -> TResult<boolean>,

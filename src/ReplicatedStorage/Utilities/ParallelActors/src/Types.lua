@@ -12,6 +12,7 @@ export type TRunRequest = {
 	BatchSize: number?,
 	ArgsBuffer: buffer,
 	SharedMemory: SharedTable?,
+	WorkerPayloadBuffer: buffer?,
 }
 
 export type TShardRequest = {
@@ -23,6 +24,7 @@ export type TShardRequest = {
 	LogicalWorkCount: number,
 	ArgsBuffer: buffer,
 	SharedMemory: SharedTable?,
+	WorkerPayloadBuffer: buffer?,
 }
 
 export type TRunError = {
@@ -106,6 +108,7 @@ export type TRegisteredJob = {
 	WorkerModule: ModuleScript,
 	ArgsSchemaDescriptor: TSchemaDescriptor,
 	ResultSchemaDescriptor: TSchemaDescriptor,
+	PayloadSchemaDescriptor: { [string]: any }?,
 }
 
 export type TActorSlot = {
@@ -118,6 +121,7 @@ export type TActorSlot = {
 
 export type TShardRecord = TShardRequest & {
 	SharedMemory: SharedTable?,
+	WorkerPayloadBuffer: buffer?,
 }
 
 export type TRunRecord = {
@@ -146,6 +150,7 @@ export type TWorkplace = {
 	RegisterCompiledJob: (self: TWorkplace, job: any, workerModule: ModuleScript) -> (),
 	HasJob: (self: TWorkplace, jobName: string) -> boolean,
 	SetSharedMemory: (self: TWorkplace, jobName: string, sharedMemory: SharedTable?) -> (),
+	SetWorkerPayload: (self: TWorkplace, jobName: string, workerPayloadBuffer: buffer?) -> (),
 	Run: (self: TWorkplace, request: TRunRequest) -> TRunHandle,
 	Destroy: (self: TWorkplace) -> (),
 }

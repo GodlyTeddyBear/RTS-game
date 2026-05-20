@@ -121,19 +121,41 @@ function ManagedJob.new(runner: TRunner, config: TManagedJobConfig): TManagedJob
 	Validation.AssertManagedJobConfig(runner :: any, config :: any)
 	local registeredJob = (runner :: any)._registeredJobs[config.JobName]
 	local sharedSchema = registeredJob.Job:GetSchemas().Shared
-	assert(sharedSchema ~= nil, `ParallelRunner:CreateManagedJob("{config.JobName}") requires SharedSchema`)
 
 	local self = setmetatable({}, ManagedJob)
 	self._runner = runner
 	self._config = config
 	self._policyPreset = ManagedJobPolicies.Resolve(config.Policy)
 	self._state = ManagedAsync.CreateState()
-	self._sharedMemoryHandle = SharedPlus.Compiler.Compile(sharedSchema).new() :: TSharedCompiledHandle
+	self._sharedMemoryHandle = if sharedSchema ~= nil
+		and (type(config.BuildSharedMemory) == "function" or type(config.BuildBaseSharedMemory) == "function")
+		then SharedPlus.Compiler.Compile(sharedSchema).new() :: TSharedCompiledHandle
+		else nil
+	self._payloadCodec = registeredJob.PayloadCodec
 	self._lastError = nil
 	self._destroyed = false
 
 	(runner :: any)._managedJobs[self] = true
 	return self :: any
+end
+
+local function _ShallowMergePayloadTables(
+	basePayload: { [string]: any }?,
+	overlayPayload: { [string]: any }?
+): { [string]: any }?
+	if basePayload == nil then
+		return overlayPayload
+	end
+	if overlayPayload == nil then
+		return basePayload
+	end
+
+	local mergedPayload = table.clone(basePayload)
+	for key, value in overlayPayload do
+		mergedPayload[key] = value
+	end
+
+	return mergedPayload
 end
 
 function ManagedJob:_ExpireInFlightIfNeeded()
@@ -188,7 +210,7 @@ function ManagedJob:Dispatch(payload: any): TManagedJobDispatchStatus
 	end
 
 	local sharedPacket = nil :: TSharedPacket?
-	do
+	if self._config.BuildSharedMemory ~= nil then
 		local ok, sharedPacketOrError = pcall(self._config.BuildSharedMemory, payload)
 		if not ok then
 			_CompleteManagedRequest(
@@ -223,19 +245,21 @@ function ManagedJob:Dispatch(payload: any): TManagedJobDispatchStatus
 		baseSharedPacket = baseSharedPacketOrError
 	end
 
-	local okSharedPacket, sharedPacketValidationError = pcall(function()
-		Validation.AssertManagedSharedPacket(self._config.JobName, sharedPacket)
-	end)
-	if not okSharedPacket then
-		_CompleteManagedRequest(
-			self,
-			requestId :: number,
-			sessionToken,
-			payload,
-			nil,
-			_WrapBuilderFailure(self._config.JobName, "shared memory packet", payload, sharedPacketValidationError)
-		)
-		return "Dispatched"
+	if sharedPacket ~= nil then
+		local okSharedPacket, sharedPacketValidationError = pcall(function()
+			Validation.AssertManagedSharedPacket(self._config.JobName, sharedPacket)
+		end)
+		if not okSharedPacket then
+			_CompleteManagedRequest(
+				self,
+				requestId :: number,
+				sessionToken,
+				payload,
+				nil,
+				_WrapBuilderFailure(self._config.JobName, "shared memory packet", payload, sharedPacketValidationError)
+			)
+			return "Dispatched"
+		end
 	end
 
 	if baseSharedPacket ~= nil then
@@ -261,7 +285,7 @@ function ManagedJob:Dispatch(payload: any): TManagedJobDispatchStatus
 	end
 
 	local sharedMemory = nil
-	do
+	if sharedPacket ~= nil or baseSharedPacket ~= nil then
 		local closeApplySharedMemoryProfile = DebugPlus.begin(
 			MANAGED_JOB_DISPATCH_APPLY_SHARED_MEMORY_PROFILE_TAG,
 			MANAGED_JOB_DISPATCH_APPLY_SHARED_MEMORY_PROFILE_ENABLED
@@ -275,18 +299,17 @@ function ManagedJob:Dispatch(payload: any): TManagedJobDispatchStatus
 			)
 			sharedMemoryHandle:BeginWrite()
 			closeBeginWriteProfile()
-			-- Most expensive
-			local closeWritePacketProfile = DebugPlus.begin(
-				MANAGED_JOB_DISPATCH_WRITE_PACKET_PROFILE_TAG,
-				--false
-				MANAGED_JOB_DISPATCH_APPLY_SHARED_MEMORY_PROFILE_ENABLED
-			)
-			sharedMemoryHandle:WritePacket(sharedPacket :: TSharedPacket)
-			closeWritePacketProfile()
+			if sharedPacket ~= nil then
+				local closeWritePacketProfile = DebugPlus.begin(
+					MANAGED_JOB_DISPATCH_WRITE_PACKET_PROFILE_TAG,
+					MANAGED_JOB_DISPATCH_APPLY_SHARED_MEMORY_PROFILE_ENABLED
+				)
+				sharedMemoryHandle:WritePacket(sharedPacket :: TSharedPacket)
+				closeWritePacketProfile()
+			end
 
 			local closeFinalizeProfile = DebugPlus.begin(
 				MANAGED_JOB_DISPATCH_FINALIZE_PROFILE_TAG,
-				--false
 				MANAGED_JOB_DISPATCH_APPLY_SHARED_MEMORY_PROFILE_ENABLED
 			)
 			local finalizedSharedMemory = sharedMemoryHandle:Finalize(baseSharedPacket)
@@ -316,6 +339,78 @@ function ManagedJob:Dispatch(payload: any): TManagedJobDispatchStatus
 
 		sharedMemory = sharedMemoryOrError
 	end
+
+	local builtWorkerPayload = nil :: { [string]: any }?
+	if self._config.BuildWorkerPayload ~= nil then
+		local ok, workerPayloadOrError = pcall(self._config.BuildWorkerPayload, payload)
+		if not ok then
+			_CompleteManagedRequest(
+				self,
+				requestId :: number,
+				sessionToken,
+				payload,
+				nil,
+				_WrapBuilderFailure(self._config.JobName, "worker payload", payload, workerPayloadOrError)
+			)
+			return "Dispatched"
+		end
+
+		builtWorkerPayload = workerPayloadOrError
+	end
+
+	local baseWorkerPayload = nil :: { [string]: any }?
+	if self._config.BuildBaseWorkerPayload ~= nil then
+		local ok, baseWorkerPayloadOrError = pcall(self._config.BuildBaseWorkerPayload, payload)
+		if not ok then
+			_CompleteManagedRequest(
+				self,
+				requestId :: number,
+				sessionToken,
+				payload,
+				nil,
+				_WrapBuilderFailure(self._config.JobName, "base worker payload", payload, baseWorkerPayloadOrError)
+			)
+			return "Dispatched"
+		end
+
+		baseWorkerPayload = baseWorkerPayloadOrError
+	end
+
+	if builtWorkerPayload ~= nil then
+		local okWorkerPayload, workerPayloadValidationError = pcall(function()
+			Validation.AssertManagedWorkerPayload(self._config.JobName, builtWorkerPayload)
+		end)
+		if not okWorkerPayload then
+			_CompleteManagedRequest(
+				self,
+				requestId :: number,
+				sessionToken,
+				payload,
+				nil,
+				_WrapBuilderFailure(self._config.JobName, "worker payload", payload, workerPayloadValidationError)
+			)
+			return "Dispatched"
+		end
+	end
+
+	if baseWorkerPayload ~= nil then
+		local okBaseWorkerPayload, baseWorkerPayloadValidationError = pcall(function()
+			Validation.AssertManagedBaseWorkerPayload(self._config.JobName, baseWorkerPayload)
+		end)
+		if not okBaseWorkerPayload then
+			_CompleteManagedRequest(
+				self,
+				requestId :: number,
+				sessionToken,
+				payload,
+				nil,
+				_WrapBuilderFailure(self._config.JobName, "base worker payload", payload, baseWorkerPayloadValidationError)
+			)
+			return "Dispatched"
+		end
+	end
+
+	local resolvedWorkerPayload = _ShallowMergePayloadTables(baseWorkerPayload, builtWorkerPayload)
 
 	local runRequest = nil
 	do
@@ -356,6 +451,7 @@ function ManagedJob:Dispatch(payload: any): TManagedJobDispatchStatus
 		LogicalWorkCount = runRequest.LogicalWorkCount,
 		BatchSize = runRequest.BatchSize,
 		SharedMemory = sharedMemory,
+		WorkerPayload = resolvedWorkerPayload,
 	})
 	if not runResult.success then
 		_CompleteManagedRequest(
@@ -459,7 +555,9 @@ function ManagedJob:Destroy()
 	self._destroyed = true
 	ManagedAsync.ResetState(self._state)
 	self._lastError = nil
-	self._sharedMemoryHandle:Destroy()
+	if self._sharedMemoryHandle ~= nil then
+		self._sharedMemoryHandle:Destroy()
+	end
 	runner._managedJobs[self] = nil
 	self._runner = nil
 end

@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ParallelLogistics = require(ReplicatedStorage.Utilities.ParallelLogistics)
 local Sera = require(ReplicatedStorage.Utilities.Sera)
 
+local PayloadCodec = require(script.Parent.PayloadCodec)
 local Types = require(script.Parent.Types)
 local Validation = require(script.Parent.Validation)
 
@@ -12,6 +13,7 @@ type TAutoFieldMarker = Types.TAutoFieldMarker
 type TCompiledJob = Types.TCompiledJob
 type TDefineJobConfig = Types.TDefineJobConfig
 type TMarkerScope = Types.TMarkerScope
+type TPayloadScalarType = Types.TPayloadScalarType
 
 local TYPE_MAP = table.freeze({
 	u8 = Sera.Uint8,
@@ -113,6 +115,13 @@ local function _IsMarker(value: any, scope: TMarkerScope): boolean
 		and type(value.TypeName) == "string"
 end
 
+local function _IsAnyMarker(value: any): boolean
+	return type(value) == "table"
+		and value.__ParallelRunnerMarker == true
+		and (value.MarkerScope == "Arg" or value.MarkerScope == "Result")
+		and type(value.TypeName) == "string"
+end
+
 local function _InferFieldType(fieldValue: any, label: string)
 	local valueType = typeof(fieldValue)
 	if valueType == "number" then
@@ -137,6 +146,54 @@ local function _InferFieldType(fieldValue: any, label: string)
 	error(`{label} has unsupported inferred value type "{valueType}"`, 0)
 end
 
+local function _MapMarkerTypeName(typeName: string, label: string): TPayloadScalarType
+	assert(
+		typeName == "u8"
+			or typeName == "u16"
+			or typeName == "u32"
+			or typeName == "i8"
+			or typeName == "i16"
+			or typeName == "i32"
+			or typeName == "f32"
+			or typeName == "f64"
+			or typeName == "boolean"
+			or typeName == "string8"
+			or typeName == "string16"
+			or typeName == "string32"
+			or typeName == "vector3"
+			or typeName == "cframe"
+			or typeName == "lossyCFrame"
+			or typeName == "color3",
+		`{label} marker type "{typeName}" is unsupported`
+	)
+
+	return typeName :: TPayloadScalarType
+end
+
+local function _InferPayloadType(fieldValue: any, label: string): TPayloadScalarType
+	local valueType = typeof(fieldValue)
+	if valueType == "number" then
+		return "f32"
+	end
+	if valueType == "string" then
+		return "string16"
+	end
+	if valueType == "boolean" then
+		return "boolean"
+	end
+	if valueType == "Vector3" then
+		return "vector3"
+	end
+	if valueType == "CFrame" then
+		return "lossyCFrame"
+	end
+	if valueType == "Color3" then
+		return "color3"
+	end
+
+	error(`{label} has unsupported inferred value type "{valueType}"`, 0)
+end
+
 local function _ResolveFieldType(fieldName: string, fieldValue: any, scope: TMarkerScope)
 	local label = `ParallelRunner.Compiler {scope} field "{fieldName}"`
 	if _IsMarker(fieldValue, scope) then
@@ -150,6 +207,15 @@ local function _ResolveFieldType(fieldName: string, fieldValue: any, scope: TMar
 	end
 
 	return _InferFieldType(fieldValue, label)
+end
+
+local function _ResolvePayloadType(fieldName: string, fieldValue: any, labelPrefix: string): TPayloadScalarType
+	if _IsAnyMarker(fieldValue) then
+		return _MapMarkerTypeName((fieldValue :: TAutoFieldMarker).TypeName, `{labelPrefix} field "{fieldName}"`)
+	end
+
+	assert(type(fieldValue) ~= "table", `{labelPrefix} field "{fieldName}" nested tables are unsupported`)
+	return _InferPayloadType(fieldValue, `{labelPrefix} field "{fieldName}"`)
 end
 
 local function _CompileRecord(record: { [string]: any }, scope: TMarkerScope, label: string)
@@ -171,28 +237,125 @@ local function _CompileRecord(record: { [string]: any }, scope: TMarkerScope, la
 	return Sera.Schema(schemaFields)
 end
 
+local function _CompilePayloadSchema(record: { [string]: any }, label: string)
+	local payloadFields = {}
+	local fieldCount = 0
+
+	for fieldName, fieldValue in record do
+		assert(type(fieldName) == "string" and fieldName ~= "", `{label} field names must be non-empty strings`)
+
+		if type(fieldValue) == "table" and not _IsAnyMarker(fieldValue) then
+			local arrayLength = #fieldValue
+			assert(arrayLength == 1, `{label} field "{fieldName}" array schemas must contain exactly one item`)
+			assert(next(fieldValue, 1) == nil, `{label} field "{fieldName}" array schemas must be contiguous`)
+			payloadFields[fieldName] = {
+				Kind = "Array",
+				TypeName = _ResolvePayloadType(fieldName, fieldValue[1], label),
+			}
+			fieldCount += 1
+			continue
+		end
+
+		payloadFields[fieldName] = {
+			Kind = "Scalar",
+			TypeName = _ResolvePayloadType(fieldName, fieldValue, label),
+		}
+		fieldCount += 1
+	end
+
+	assert(fieldCount > 0, `{label} must contain at least one field`)
+	return PayloadCodec.BuildDescriptor(payloadFields)
+end
+
 local Compiler = {}
 
 Compiler.Arg = _BuildScope("Arg")
 Compiler.Result = _BuildScope("Result")
+
+local CompiledRunnerJob = {}
+CompiledRunnerJob.__index = CompiledRunnerJob
 
 function Compiler.Compile(config: TDefineJobConfig): TCompiledJob
 	Validation.AssertDefineJobConfig(config :: any)
 
 	local argsSchema = _CompileRecord(config.Args, "Arg", `ParallelRunner.DefineJob("{config.Name}") Args`)
 	local resultSchema = _CompileRecord(config.Results, "Result", `ParallelRunner.DefineJob("{config.Name}") Results`)
+	local payloadSchemaDescriptor = nil
+	local payloadCodec = nil
+	if config.PayloadSchema ~= nil then
+		payloadSchemaDescriptor =
+			_CompilePayloadSchema(config.PayloadSchema, `ParallelRunner.DefineJob("{config.Name}") PayloadSchema`)
+		payloadCodec = PayloadCodec.CompileDescriptor(config.Name, config.Version, payloadSchemaDescriptor)
+	end
 
-	return ParallelLogistics.DefineJob({
+	local logisticsJob = ParallelLogistics.DefineJob({
 		Name = config.Name,
 		Version = config.Version,
 		ArgsSchema = argsSchema,
 		ResultSchema = resultSchema,
 		SharedSchema = config.SharedSchema,
 	})
+
+	local self = setmetatable({}, CompiledRunnerJob)
+	self._logisticsJob = logisticsJob
+	self._payloadSchemaDescriptor = payloadSchemaDescriptor
+	self._payloadCodec = payloadCodec
+	return self :: any
 end
 
 function Compiler.DefineJob(config: TDefineJobConfig): TCompiledJob
 	return Compiler.Compile(config)
+end
+
+function CompiledRunnerJob:EncodeArgs(args: { [string]: any }): (buffer?, string?)
+	return self._logisticsJob:EncodeArgs(args)
+end
+
+function CompiledRunnerJob:DecodeArgs(argsBuffer: buffer, offset: number?): ({ [string]: any }?, number?, string?)
+	return self._logisticsJob:DecodeArgs(argsBuffer, offset)
+end
+
+function CompiledRunnerJob:EncodeResultRow(row: { [string]: any }): (buffer?, string?)
+	return self._logisticsJob:EncodeResultRow(row)
+end
+
+function CompiledRunnerJob:DecodeResultRow(rowBuffer: buffer, offset: number?): ({ [string]: any }?, number?, string?)
+	return self._logisticsJob:DecodeResultRow(rowBuffer, offset)
+end
+
+function CompiledRunnerJob:EncodeResultBatch(rows: { { [string]: any } }): (buffer?, string?)
+	return self._logisticsJob:EncodeResultBatch(rows)
+end
+
+function CompiledRunnerJob:DecodeResultBatch(
+	batchBuffer: buffer,
+	offset: number?
+): ({ { [string]: any } }?, number?, string?)
+	return self._logisticsJob:DecodeResultBatch(batchBuffer, offset)
+end
+
+function CompiledRunnerJob:GetName(): string
+	return self._logisticsJob:GetName()
+end
+
+function CompiledRunnerJob:GetVersion(): number
+	return self._logisticsJob:GetVersion()
+end
+
+function CompiledRunnerJob:GetSchemas()
+	return self._logisticsJob:GetSchemas()
+end
+
+function CompiledRunnerJob:GetEnvelopeInfo()
+	return self._logisticsJob:GetEnvelopeInfo()
+end
+
+function CompiledRunnerJob:GetPayloadSchemaDescriptor()
+	return self._payloadSchemaDescriptor
+end
+
+function CompiledRunnerJob:GetPayloadCodec()
+	return self._payloadCodec
 end
 
 return table.freeze(Compiler)

@@ -445,12 +445,12 @@ export type TFlowSeparationRunRequest = {
     @within Types
     MovementService-owned payload prepared before handing the solve to the managed job.
     .Snapshot TFlowSeparationSolveSnapshot -- Packed snapshot used by the worker solve.
-    .SharedPacket ParallelRunner.TSharedPacket -- Prebuilt SharedPlus packet consumed by the managed job.
+    .WorkerPayload table -- Dynamic worker payload encoded per dispatch.
     .RunRequest table -- Per-dispatch run request forwarded to ParallelRunner.
 ]=]
 export type TFlowSeparationDispatchPayload = {
 	Snapshot: TFlowSeparationSolveSnapshot,
-	SharedPacket: ParallelRunner.TSharedPacket,
+	WorkerPayload: TFlowSeparationWorkerPayload,
 	RunRequest: TFlowSeparationRunRequest,
 }
 
@@ -462,8 +462,26 @@ export type TFlowSeparationDispatchPayload = {
 export type TManagedJob = ParallelRunner.TManagedJob
 export type TParallelRunnerLike = ParallelRunner.TRunner
 export type TSharedPacket = ParallelRunner.TSharedPacket
+export type TSharedCompiledHandle = ParallelRunner.TSharedCompiledHandle
 
 export type TFlowSeparationWorkerSharedMemory = {
+	WallPackedKeys: { number },
+	CellWidthStuds: number?,
+	OriginX: number?,
+	OriginY: number?,
+	WallGridHalfSize: number?,
+	KForce: number?,
+	MinSeparationDistance: number?,
+	WallCollisionEnabled: boolean?,
+	WallCollisionAxisClampEnabled: boolean?,
+	WallCollisionCornerClampEnabled: boolean?,
+	WallCollisionUseUnitRadiusPadding: boolean?,
+	WallCollisionCellProbePaddingStuds: number?,
+	WallCollisionVelocityEpsilon: number?,
+	ClumpTouchPaddingStuds: number?,
+}
+
+export type TFlowSeparationWorkerPayload = {
 	EntityCount: number,
 	GoalGroupCellRecordStartIndex: { number },
 	GoalGroupCellRecordCount: { number },
@@ -484,21 +502,7 @@ export type TFlowSeparationWorkerSharedMemory = {
 	WalkSpeed: { number },
 	VelAlpha: { number },
 	IsSettled: { boolean },
-	WallPackedKeys: { number },
 	DeltaTime: number?,
-	CellWidthStuds: number?,
-	OriginX: number?,
-	OriginY: number?,
-	WallGridHalfSize: number?,
-	KForce: number?,
-	MinSeparationDistance: number?,
-	WallCollisionEnabled: boolean?,
-	WallCollisionAxisClampEnabled: boolean?,
-	WallCollisionCornerClampEnabled: boolean?,
-	WallCollisionUseUnitRadiusPadding: boolean?,
-	WallCollisionCellProbePaddingStuds: number?,
-	WallCollisionVelocityEpsilon: number?,
-	ClumpTouchPaddingStuds: number?,
 }
 
 export type TFlowSeparationWorkerRequest = {
@@ -510,6 +514,7 @@ export type TFlowSeparationWorkerRequest = {
 	LogicalWorkCount: number,
 	Args: { [string]: any }?,
 	SharedMemory: TFlowSeparationWorkerSharedMemory?,
+	WorkerPayload: TFlowSeparationWorkerPayload?,
 }
 
 export type TMovementService = {
@@ -560,9 +565,10 @@ export type TMovementService = {
 	_flowDispatchedSeparationSnapshot: TFlowSeparationSolveSnapshot?,
 	_flowDispatchedGoalKeyByEntity: { [number]: string }?,
 	_flowDispatchedFrameState: TFlowPublishedFrameState?,
-	_flowStaticSharedMemory: TSharedPacket?,
+	_flowStaticSharedMemory: SharedTable?,
+	_flowStaticSharedMemoryHandle: TSharedCompiledHandle?,
 	_flowStaticSharedMemoryPathfinder: TFastFlowPathfinder?,
-	_flowPreparedSharedPacket: TSharedPacket?,
+	_flowPreparedWorkerPayload: TFlowSeparationWorkerPayload?,
 	_flowDispatchPayload: TFlowSeparationDispatchPayload?,
 	_flowWallKeyCachePathfinder: TFastFlowPathfinder?,
 	_flowWallPackedKeys: { number }?,
@@ -633,12 +639,14 @@ export type TMovementService = {
 	_GetOrCreateFlowFrameStateRecycler: (self: TMovementService) -> TTableRecyclerLike,
 	_GetOrCreateFlowFrameState: (self: TMovementService) -> TFlowFrameStateHandle,
 	_DestroyFlowFrameState: (self: TMovementService) -> (),
-	_CreateFlowSeparationStaticSharedMemory: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TSharedPacket,
-	_CreateFlowSeparationDynamicSharedMemory: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TSharedPacket,
+	_GetOrCreateFlowSeparationStaticSharedMemoryHandle: (self: TMovementService) -> TSharedCompiledHandle,
+	_CreateFlowSeparationStaticSharedPacket: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TSharedPacket,
+	_BuildFlowSeparationStaticSharedMemory: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> SharedTable,
+	_CreateFlowSeparationWorkerPayload: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TFlowSeparationWorkerPayload,
+	_PrepareFlowSeparationWorkerPayload: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TFlowSeparationWorkerPayload,
 	_EnsureFlowSeparationStaticSharedMemory: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> (),
-	_CreateFlowSeparationSharedPacket: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TSharedPacket,
 	_CreateFlowSeparationRunRequest: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TFlowSeparationRunRequest,
-	_AssembleFlowSeparationDispatchPayload: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot, sharedPacket: TSharedPacket, runRequest: TFlowSeparationRunRequest) -> TFlowSeparationDispatchPayload,
+	_AssembleFlowSeparationDispatchPayload: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot, workerPayload: TFlowSeparationWorkerPayload, runRequest: TFlowSeparationRunRequest) -> TFlowSeparationDispatchPayload,
 	_ApplyFlowVelocityRows: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot, rows: { TFlowSeparationSolveRow }, velocityByEntity: { [number]: Vector2 }?, touchedSettledNeighborByEntity: { [number]: boolean }?) -> ({ [number]: Vector2 }, { [number]: boolean }),
 	_ResolveFlowBuildFrameState: (self: TMovementService, entity: number, movementState: TFlowMovementState) -> Result.Result<TFlowBuildFrameStatePayload>,
 	_ResolveFlowTickId: (self: TMovementService, services: TFlowSchedulerServices?) -> number,

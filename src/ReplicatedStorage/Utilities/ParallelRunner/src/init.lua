@@ -32,6 +32,7 @@ export type TManagedJobResult = Types.TManagedJobResult
 export type TManagedJob = Types.TManagedJob
 export type TSharedPacket = Types.TSharedPacket
 export type TSharedCompiledHandle = Types.TSharedCompiledHandle
+export type TPayloadSchemaDescriptor = Types.TPayloadSchemaDescriptor
 export type TRowFieldValidationResult = Types.TRowFieldValidationResult
 export type TSchemaRowValidationMode = Types.TSchemaRowValidationMode
 export type TSchemaRowValidationResult = Types.TSchemaRowValidationResult
@@ -115,6 +116,40 @@ local function _ResolveSharedMemory(
 	end
 
 	return registeredJob.SharedMemory, nil
+end
+
+local function _ResolveWorkerPayloadBuffer(
+	registeredJob: TRegisteredJob,
+	request: Types.TRunRequest
+): (buffer?, TResult<any>?)
+	if request.WorkerPayload == nil then
+		return registeredJob.WorkerPayloadBuffer, nil
+	end
+
+	local payloadCodec = registeredJob.PayloadCodec
+	if payloadCodec == nil then
+		return nil, _BuildSetupError(
+			"ParallelRunnerWorkerPayloadSchemaMissing",
+			`ParallelRunner:Run("{request.JobName}") cannot accept WorkerPayload because the job does not define PayloadSchema`,
+			{
+				JobName = request.JobName,
+			}
+		)
+	end
+
+	local workerPayloadBuffer, payloadEncodeError = payloadCodec:Encode(request.WorkerPayload)
+	if workerPayloadBuffer == nil then
+		return nil, _BuildSetupError(
+			"ParallelRunnerWorkerPayloadEncodeError",
+			`ParallelRunner:Run("{request.JobName}") failed to encode WorkerPayload`,
+			{
+				JobName = request.JobName,
+				Cause = payloadEncodeError,
+			}
+		)
+	end
+
+	return workerPayloadBuffer, nil
 end
 
 local function _BuildRunFailureResult(workplaceRunResult: TWorkplaceRunResult): TResult<Types.TRunOutput>
@@ -297,12 +332,23 @@ function ParallelRunner:RegisterJob(config: TRegisterJobConfig): TResult<boolean
 		end
 
 		(self._workplace :: any):RegisterCompiledJob(config.Job, config.WorkerModule)
+		local payloadSchemaDescriptor = nil
+		local payloadCodec = nil
+		if type((config.Job :: any).GetPayloadSchemaDescriptor) == "function" then
+			payloadSchemaDescriptor = (config.Job :: any):GetPayloadSchemaDescriptor()
+		end
+		if type((config.Job :: any).GetPayloadCodec) == "function" then
+			payloadCodec = (config.Job :: any):GetPayloadCodec()
+		end
 		self._registeredJobs[jobName] = {
 			Job = config.Job,
 			WorkerModule = config.WorkerModule,
 			DefaultLogicalWorkCount = config.DefaultLogicalWorkCount,
 			DefaultBatchSize = config.DefaultBatchSize,
 			SharedMemory = nil,
+			WorkerPayloadBuffer = nil,
+			PayloadSchemaDescriptor = payloadSchemaDescriptor,
+			PayloadCodec = payloadCodec,
 		}
 
 		return Ok(true)
@@ -361,6 +407,65 @@ function ParallelRunner:SetSharedMemory(jobName: string, sharedMemory: SharedTab
 	return resultOrError
 end
 
+function ParallelRunner:SetWorkerPayload(jobName: string, workerPayload: { [string]: any }?): TResult<boolean>
+	if self._destroyed then
+		return _BuildDestroyedError()
+	end
+
+	local ok, resultOrError = pcall(function()
+		Validation.AssertSetWorkerPayload(jobName, workerPayload)
+
+		local registeredJob = self._registeredJobs[jobName]
+		if registeredJob == nil then
+			return _BuildSetupError(
+				"ParallelRunnerRegistrationError",
+				`ParallelRunner:SetWorkerPayload("{jobName}") requires a registered job`,
+				{
+					JobName = jobName,
+				}
+			)
+		end
+
+		if workerPayload ~= nil and registeredJob.PayloadCodec == nil then
+			return _BuildSetupError(
+				"ParallelRunnerWorkerPayloadSchemaMissing",
+				`ParallelRunner:SetWorkerPayload("{jobName}") requires the job to define PayloadSchema`,
+				{
+					JobName = jobName,
+				}
+			)
+		end
+
+		local workerPayloadBuffer = nil
+		if workerPayload ~= nil then
+			local encodedBuffer, encodeError = registeredJob.PayloadCodec:Encode(workerPayload)
+			if encodedBuffer == nil then
+				return _BuildSetupError(
+					"ParallelRunnerWorkerPayloadEncodeError",
+					`ParallelRunner:SetWorkerPayload("{jobName}") failed to encode WorkerPayload`,
+					{
+						JobName = jobName,
+						Cause = encodeError,
+					}
+				)
+			end
+			workerPayloadBuffer = encodedBuffer
+		end
+
+		self._workplace:SetWorkerPayload(jobName, workerPayloadBuffer)
+		registeredJob.WorkerPayloadBuffer = workerPayloadBuffer
+		return Ok(true)
+	end)
+
+	if not ok then
+		return _BuildSetupError("ParallelRunnerSetWorkerPayloadError", tostring(resultOrError), {
+			JobName = jobName,
+		})
+	end
+
+	return resultOrError
+end
+
 function ParallelRunner:Run(request: TRunRequest): TResult<TRunnerRunHandle>
 	if self._destroyed then
 		return _BuildDestroyedError()
@@ -391,6 +496,10 @@ function ParallelRunner:Run(request: TRunRequest): TResult<TRunnerRunHandle>
 		if sharedMemoryError ~= nil then
 			return sharedMemoryError
 		end
+		local resolvedWorkerPayloadBuffer, workerPayloadError = _ResolveWorkerPayloadBuffer(registeredJob, request)
+		if workerPayloadError ~= nil then
+			return workerPayloadError
+		end
 
 		-- Encode args with the compiled transport contract before crossing into the workplace.
 		local argsBuffer, encodeError = registeredJob.Job:EncodeArgs(request.Args)
@@ -411,6 +520,7 @@ function ParallelRunner:Run(request: TRunRequest): TResult<TRunnerRunHandle>
 			BatchSize = resolvedBatchSize,
 			ArgsBuffer = argsBuffer,
 			SharedMemory = resolvedSharedMemory,
+			WorkerPayloadBuffer = resolvedWorkerPayloadBuffer,
 		})
 
 		local completionPromise = workplaceRunHandle:GetPromise()

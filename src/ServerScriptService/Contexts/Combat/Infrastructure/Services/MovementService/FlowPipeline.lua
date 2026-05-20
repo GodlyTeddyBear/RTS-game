@@ -58,7 +58,7 @@ end
 return function(MovementService: TMovementService)
 	-- Clears the staged payload that is handed to the managed job.
 	function MovementService:_ReleaseFlowDispatchPayload()
-		self._flowPreparedSharedPacket = nil
+		self._flowPreparedWorkerPayload = nil
 		self._flowDispatchPayload = nil
 	end
 
@@ -164,13 +164,6 @@ return function(MovementService: TMovementService)
 	function MovementService:_GetOrCreateFlowSeparationRunner(): Result.Result<TParallelRunnerLike>
 		local runner = self._flowSeparationParallelRunner
 		if runner then
-			local clearSharedMemoryResult = runner:SetSharedMemory("FlowSeparationSolve", nil)
-			if not clearSharedMemoryResult.success then
-				return Err("MovementParallelSharedMemoryFailed", Errors.MOVEMENT_PARALLEL_SHARED_MEMORY_FAILED, {
-					CauseType = clearSharedMemoryResult.type,
-					CauseMessage = clearSharedMemoryResult.message,
-				})
-			end
 			return Ok(runner)
 		end
 
@@ -191,14 +184,6 @@ return function(MovementService: TMovementService)
 			})
 		end
 
-		local clearSharedMemoryResult = runner:SetSharedMemory("FlowSeparationSolve", nil)
-		if not clearSharedMemoryResult.success then
-			return Err("MovementParallelSharedMemoryFailed", Errors.MOVEMENT_PARALLEL_SHARED_MEMORY_FAILED, {
-				CauseType = clearSharedMemoryResult.type,
-				CauseMessage = clearSharedMemoryResult.message,
-			})
-		end
-
 		self._flowSeparationParallelRunner = runner
 		return Ok(runner)
 	end
@@ -212,11 +197,8 @@ return function(MovementService: TMovementService)
 		local runner = runnerResult.value
 		local job = runner:CreateManagedJob({
 			JobName = "FlowSeparationSolve",
-			BuildSharedMemory = function(payload: TFlowSeparationDispatchPayload)
-				return payload.SharedPacket
-			end,
-			BuildBaseSharedMemory = function(_payload: TFlowSeparationDispatchPayload)
-				return self._flowStaticSharedMemory
+			BuildWorkerPayload = function(payload: TFlowSeparationDispatchPayload)
+				return payload.WorkerPayload
 			end,
 			BuildRunRequest = function(payload: TFlowSeparationDispatchPayload)
 				return payload.RunRequest
@@ -301,6 +283,11 @@ return function(MovementService: TMovementService)
 		self._flowSeparationParallelRunner = nil
 		self._flowStaticSharedMemory = nil
 		self._flowStaticSharedMemoryPathfinder = nil
+		local staticSharedMemoryHandle = self._flowStaticSharedMemoryHandle
+		if staticSharedMemoryHandle ~= nil then
+			staticSharedMemoryHandle:Destroy()
+		end
+		self._flowStaticSharedMemoryHandle = nil
 
 		self:_ReleaseFlowLatestParallelSolve()
 		self:_ReleaseFlowDispatchedSeparationSnapshot()
@@ -586,12 +573,17 @@ return function(MovementService: TMovementService)
 				end
 
 				self:_EnsureFlowSeparationStaticSharedMemory(snapshot)
+				if self._flowStaticSharedMemory == nil or self._flowStaticSharedMemoryPathfinder ~= self._flowWallKeyCachePathfinder then
+					self:_ReleaseFlowDispatchedSeparationSnapshot()
+					_TransitionFlowPipeline(self, "Idle")
+					return
+				end
 
 				local closePrepareSharedPacketProfile =
 					DebugPlus.begin(PIPELINE_PREPARING_SHARED_PACKET_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
-				self._flowPreparedSharedPacket = self:_CreateFlowSeparationSharedPacket(snapshot)
+				self._flowPreparedWorkerPayload = self:_PrepareFlowSeparationWorkerPayload(snapshot)
 				closePrepareSharedPacketProfile()
-				if not self._flowPreparedSharedPacket then
+				if not self._flowPreparedWorkerPayload then
 					self:_ReleaseFlowDispatchedSeparationSnapshot()
 					_TransitionFlowPipeline(self, "Idle")
 					return
@@ -607,8 +599,8 @@ return function(MovementService: TMovementService)
 				end
 
 				local snapshot = self._flowDispatchedSeparationSnapshot
-				local sharedPacket = self._flowPreparedSharedPacket
-				if not snapshot or not sharedPacket then
+				local workerPayload = self._flowPreparedWorkerPayload
+				if not snapshot or not workerPayload then
 					self:_ReleaseFlowDispatchedSeparationSnapshot()
 					_TransitionFlowPipeline(self, "Idle")
 					return
@@ -618,7 +610,7 @@ return function(MovementService: TMovementService)
 					DebugPlus.begin(PIPELINE_PREPARING_RUN_REQUEST_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 				local runRequest = self:_CreateFlowSeparationRunRequest(snapshot)
 				self._flowDispatchPayload =
-					self:_AssembleFlowSeparationDispatchPayload(snapshot, sharedPacket, runRequest)
+					self:_AssembleFlowSeparationDispatchPayload(snapshot, workerPayload, runRequest)
 				closePrepareRunRequestProfile()
 				if not self._flowDispatchPayload then
 					self:_ReleaseFlowDispatchedSeparationSnapshot()

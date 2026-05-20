@@ -192,6 +192,7 @@ function Workplace.new(config: TWorkplaceConfig): TWorkplace
 	self._nextRunId = 0
 	self._registeredJobs = {} :: { [string]: TRegisteredJob }
 	self._sharedMemoryByJobName = {} :: { [string]: SharedTable }
+	self._workerPayloadBufferByJobName = {} :: { [string]: buffer }
 	self._runsById = {} :: { [number]: TRunRecord }
 	self._pendingShards = {} :: { TShardRecord }
 	self._idleActors = {} :: { TActorSlot }
@@ -231,6 +232,9 @@ function Workplace:RegisterCompiledJob(job, workerModule: ModuleScript)
 		WorkerModule = workerModule,
 		ArgsSchemaDescriptor = _BuildSchemaDescriptor(schemas.Args),
 		ResultSchemaDescriptor = _BuildSchemaDescriptor(schemas.Result),
+		PayloadSchemaDescriptor = if type(job.GetPayloadSchemaDescriptor) == "function"
+			then job:GetPayloadSchemaDescriptor()
+			else nil,
 	}
 
 	self._registeredJobs[jobName] = registeredJob
@@ -240,6 +244,10 @@ function Workplace:RegisterCompiledJob(job, workerModule: ModuleScript)
 		local sharedMemory = self._sharedMemoryByJobName[jobName]
 		if sharedMemory ~= nil then
 			self:_SetActorSharedMemory(actorSlot, jobName, sharedMemory)
+		end
+		local workerPayloadBuffer = self._workerPayloadBufferByJobName[jobName]
+		if workerPayloadBuffer ~= nil then
+			self:_SetActorWorkerPayload(actorSlot, jobName, workerPayloadBuffer)
 		end
 	end
 end
@@ -258,6 +266,18 @@ function Workplace:SetSharedMemory(jobName: string, sharedMemory: SharedTable?)
 
 	for _, actorSlot in ipairs(self._hiredActors) do
 		self:_SetActorSharedMemory(actorSlot, jobName, sharedMemory)
+	end
+end
+
+function Workplace:SetWorkerPayload(jobName: string, workerPayloadBuffer: buffer?)
+	self:_AssertAlive()
+	Validation.AssertWorkerPayload(jobName, workerPayloadBuffer)
+	assert(self._registeredJobs[jobName] ~= nil, `ParallelActors:SetWorkerPayload("{jobName}") requires a registered job`)
+
+	self._workerPayloadBufferByJobName[jobName] = workerPayloadBuffer :: any
+
+	for _, actorSlot in ipairs(self._hiredActors) do
+		self:_SetActorWorkerPayload(actorSlot, jobName, workerPayloadBuffer)
 	end
 end
 
@@ -306,6 +326,7 @@ function Workplace:Destroy()
 	table.clear(self._pendingShards)
 	table.clear(self._registeredJobs)
 	table.clear(self._sharedMemoryByJobName)
+	table.clear(self._workerPayloadBufferByJobName)
 
 	for _, actorSlot in ipairs(self._idleActors) do
 		self:_ReturnActorToRecycler(actorSlot)
@@ -343,6 +364,12 @@ function Workplace:_HireActor()
 			self:_SetActorSharedMemory(actorSlot, jobName, sharedMemory)
 		end
 	end
+
+	for jobName, workerPayloadBuffer in self._workerPayloadBufferByJobName do
+		if self._registeredJobs[jobName] ~= nil then
+			self:_SetActorWorkerPayload(actorSlot, jobName, workerPayloadBuffer)
+		end
+	end
 end
 
 function Workplace:_RegisterJobOnActor(actorSlot: TActorSlot, registeredJob: TRegisteredJob)
@@ -352,12 +379,17 @@ function Workplace:_RegisterJobOnActor(actorSlot: TActorSlot, registeredJob: TRe
 		registeredJob.Version,
 		registeredJob.ArgsSchemaDescriptor,
 		registeredJob.ResultSchemaDescriptor,
+		registeredJob.PayloadSchemaDescriptor,
 		registeredJob.WorkerModule
 	)
 end
 
 function Workplace:_SetActorSharedMemory(actorSlot: TActorSlot, jobName: string, sharedMemory: SharedTable?)
 	actorSlot.Actor:SendMessage(Protocol.SetSharedMemory, jobName, sharedMemory)
+end
+
+function Workplace:_SetActorWorkerPayload(actorSlot: TActorSlot, jobName: string, workerPayloadBuffer: buffer?)
+	actorSlot.Actor:SendMessage(Protocol.SetWorkerPayload, jobName, workerPayloadBuffer)
 end
 
 function Workplace:_ResolveBatchSize(logicalWorkCount: number, requestedBatchSize: number?): number
@@ -391,6 +423,7 @@ function Workplace:_BuildShardRecords(request: TRunRequest, batchSize: number): 
 			LogicalWorkCount = request.LogicalWorkCount,
 			ArgsBuffer = request.ArgsBuffer,
 			SharedMemory = request.SharedMemory,
+			WorkerPayloadBuffer = request.WorkerPayloadBuffer,
 		})
 	end
 
@@ -553,7 +586,8 @@ function Workplace:_DispatchShard(actorSlot: TActorSlot, shardRecord: TShardReco
 		shardRecord.LogicalWorkCount,
 		shardRecord.ArgsBuffer,
 		bindable,
-		shardRecord.SharedMemory
+		shardRecord.SharedMemory,
+		shardRecord.WorkerPayloadBuffer
 	)
 end
 

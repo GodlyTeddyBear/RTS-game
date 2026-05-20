@@ -6,6 +6,7 @@ local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.Co
 local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local ParallelRunner = require(ReplicatedStorage.Utilities.ParallelRunner)
+local SharedPlus = require(ReplicatedStorage.Utilities.SharedPlus)
 local TableRecycler = require(ReplicatedStorage.Utilities.TableRecycler)
 local FlowFrameState = require(script.Parent.FlowFrameState)
 local MovementMath = require(script.Parent.Math.MovementMath)
@@ -21,18 +22,21 @@ type TFlowSeparationRunRequest = MovementTypes.TFlowSeparationRunRequest
 type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
 type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
 type TFlowSeparationSolveRow = MovementTypes.TFlowSeparationSolveRow
+type TFlowSeparationWorkerPayload = MovementTypes.TFlowSeparationWorkerPayload
 type TMovementService = MovementTypes.TMovementService
 type TTableRecyclerLike = MovementTypes.TTableRecyclerLike
+type TSharedCompiledHandle = MovementTypes.TSharedCompiledHandle
 type TSharedPacket = ParallelRunner.TSharedPacket
 
 local ResultApplication = ParallelRunner.ResultApplication
 local ValidationHelpers = ParallelRunner.ValidationHelpers
 local MOVEMENT_PROFILING_ENABLED = DebugConfig.COMBAT_MOVEMENT_PROFILING
 local BUILD_DISPATCH_SNAPSHOT_PROFILE_TAG = "Combat:MovementService:Flow:BuildDispatchSnapshot"
-local CREATE_STATIC_SHARED_MEMORY_PROFILE_TAG = "Combat:MovementService:Flow:CreateStaticSharedMemory"
-local CREATE_DYNAMIC_SHARED_MEMORY_PROFILE_TAG = "Combat:MovementService:Flow:CreateDynamicSharedMemory"
+local CREATE_STATIC_SHARED_PACKET_PROFILE_TAG = "Combat:MovementService:Flow:CreateStaticSharedPacket"
+local BUILD_STATIC_SHARED_MEMORY_PROFILE_TAG = "Combat:MovementService:Flow:BuildStaticSharedMemory"
+local CREATE_WORKER_PAYLOAD_PROFILE_TAG = "Combat:MovementService:Flow:CreateWorkerPayload"
 local APPLY_STATIC_SHARED_MEMORY_PROFILE_TAG = "Combat:MovementService:Flow:ApplyStaticSharedMemory"
-local PREPARE_SHARED_PACKET_PROFILE_TAG = "Combat:MovementService:Flow:PrepareSharedPacket"
+local PREPARE_WORKER_PAYLOAD_PROFILE_TAG = "Combat:MovementService:Flow:PrepareWorkerPayload"
 local PREPARE_RUN_REQUEST_PROFILE_TAG = "Combat:MovementService:Flow:PrepareRunRequest"
 local APPLY_VELOCITY_ROWS_PROFILE_TAG = "Combat:MovementService:Flow:ApplyVelocityRows"
 local Ok = Result.Ok
@@ -121,13 +125,30 @@ return function(MovementService: TMovementService)
 		self._flowFrameStateRecycler = nil
 	end
 
+	function MovementService:_GetOrCreateFlowSeparationStaticSharedMemoryHandle(): TSharedCompiledHandle
+		local sharedMemoryHandle = self._flowStaticSharedMemoryHandle
+		if sharedMemoryHandle ~= nil then
+			return sharedMemoryHandle
+		end
+
+		local flowSeparationJob = require(script.Parent.Parallel.FlowSeparationSolveOperation)
+		local sharedSchema = flowSeparationJob:GetSchemas().Shared
+		assert(sharedSchema ~= nil, "FlowSeparationSolve requires SharedSchema for static shared memory")
+
+		sharedMemoryHandle = SharedPlus.Compiler.Compile(sharedSchema).new({
+			RecyclerDebugName = "CombatMovement.FlowStaticSharedMemory",
+		}) :: TSharedCompiledHandle
+		self._flowStaticSharedMemoryHandle = sharedMemoryHandle
+		return sharedMemoryHandle
+	end
+
 	-- Builds the stable packet fields that can be reused across many flow dispatches.
-	function MovementService:_CreateFlowSeparationStaticSharedMemory(
+	function MovementService:_CreateFlowSeparationStaticSharedPacket(
 		snapshot: TFlowSeparationSolveSnapshot
 	): TSharedPacket
-		local closeCreateStaticSharedMemoryProfile =
-			DebugPlus.begin(CREATE_STATIC_SHARED_MEMORY_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
-		local sharedMemory = {
+		local closeCreateStaticSharedPacketProfile =
+			DebugPlus.begin(CREATE_STATIC_SHARED_PACKET_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
+		local sharedPacket = {
 			Arrays = {
 				WallPackedKeys = snapshot.WallPackedKeys,
 			},
@@ -147,46 +168,53 @@ return function(MovementService: TMovementService)
 				ClumpTouchPaddingStuds = snapshot.ClumpTouchPaddingStuds,
 			},
 		} :: TSharedPacket
-		closeCreateStaticSharedMemoryProfile()
-		return sharedMemory
+		closeCreateStaticSharedPacketProfile()
+		return sharedPacket
 	end
 
-	-- Converts the per-tick flow separation snapshot into a dynamic SharedPlus packet for the parallel job.
-	function MovementService:_CreateFlowSeparationDynamicSharedMemory(
+	function MovementService:_BuildFlowSeparationStaticSharedMemory(snapshot: TFlowSeparationSolveSnapshot): SharedTable
+		local closeBuildStaticSharedMemoryProfile =
+			DebugPlus.begin(BUILD_STATIC_SHARED_MEMORY_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
+		local sharedMemoryHandle = self:_GetOrCreateFlowSeparationStaticSharedMemoryHandle()
+		local sharedPacket = self:_CreateFlowSeparationStaticSharedPacket(snapshot)
+		sharedMemoryHandle:BeginWrite()
+		sharedMemoryHandle:WritePacket(sharedPacket)
+		local finalizedSharedMemory = sharedMemoryHandle:Finalize()
+		closeBuildStaticSharedMemoryProfile()
+		return finalizedSharedMemory
+	end
+
+	-- Converts the per-tick flow separation snapshot into a WorkerPayload table for the parallel job.
+	function MovementService:_CreateFlowSeparationWorkerPayload(
 		snapshot: TFlowSeparationSolveSnapshot
-	): TSharedPacket
-		local closeCreateDynamicSharedMemoryProfile =
-			DebugPlus.begin(CREATE_DYNAMIC_SHARED_MEMORY_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
-		local sharedMemory = {
-			Arrays = {
-				GoalGroupId = snapshot.GoalGroupId,
-				GoalGroupCellRecordStartIndex = snapshot.GoalGroupCellRecordStartIndex,
-				GoalGroupCellRecordCount = snapshot.GoalGroupCellRecordCount,
-				GoalGroupCellWidthStuds = snapshot.GoalGroupCellWidthStuds,
-				GroupCellX = snapshot.GroupCellX,
-				GroupCellY = snapshot.GroupCellY,
-				CellPackedKey = snapshot.CellPackedKey,
-				CellMemberStartIndex = snapshot.CellMemberStartIndex,
-				CellMemberCount = snapshot.CellMemberCount,
-				CellMemberEntityIndex = snapshot.CellMemberEntityIndex,
-				FlatPositionX = snapshot.FlatPositionX,
-				FlatPositionY = snapshot.FlatPositionY,
-				Radius = snapshot.Radius,
-				FlowVelocityX = snapshot.FlowVelocityX,
-				FlowVelocityY = snapshot.FlowVelocityY,
-				PreviousVelocityX = snapshot.PreviousVelocityX,
-				PreviousVelocityY = snapshot.PreviousVelocityY,
-				WalkSpeed = snapshot.WalkSpeed,
-				VelAlpha = snapshot.VelAlpha,
-				IsSettled = snapshot.IsSettled,
-			},
-			Scalars = {
-				EntityCount = snapshot.EntityCount,
-				DeltaTime = snapshot.DeltaTime,
-			},
-		} :: TSharedPacket
-		closeCreateDynamicSharedMemoryProfile()
-		return sharedMemory
+	): TFlowSeparationWorkerPayload
+		local closeCreateWorkerPayloadProfile =
+			DebugPlus.begin(CREATE_WORKER_PAYLOAD_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
+		local workerPayload = {
+			EntityCount = snapshot.EntityCount,
+			DeltaTime = snapshot.DeltaTime,
+			GoalGroupCellRecordStartIndex = snapshot.GoalGroupCellRecordStartIndex,
+			GoalGroupCellRecordCount = snapshot.GoalGroupCellRecordCount,
+			GoalGroupCellWidthStuds = snapshot.GoalGroupCellWidthStuds,
+			GroupCellX = snapshot.GroupCellX,
+			GroupCellY = snapshot.GroupCellY,
+			CellPackedKey = snapshot.CellPackedKey,
+			CellMemberStartIndex = snapshot.CellMemberStartIndex,
+			CellMemberCount = snapshot.CellMemberCount,
+			CellMemberEntityIndex = snapshot.CellMemberEntityIndex,
+			FlatPositionX = snapshot.FlatPositionX,
+			FlatPositionY = snapshot.FlatPositionY,
+			Radius = snapshot.Radius,
+			FlowVelocityX = snapshot.FlowVelocityX,
+			FlowVelocityY = snapshot.FlowVelocityY,
+			PreviousVelocityX = snapshot.PreviousVelocityX,
+			PreviousVelocityY = snapshot.PreviousVelocityY,
+			WalkSpeed = snapshot.WalkSpeed,
+			VelAlpha = snapshot.VelAlpha,
+			IsSettled = snapshot.IsSettled,
+		} :: TFlowSeparationWorkerPayload
+		closeCreateWorkerPayloadProfile()
+		return workerPayload
 	end
 
 	function MovementService:_EnsureFlowSeparationStaticSharedMemory(snapshot: TFlowSeparationSolveSnapshot)
@@ -196,22 +224,41 @@ return function(MovementService: TMovementService)
 		end
 
 		DebugPlus.profile(APPLY_STATIC_SHARED_MEMORY_PROFILE_TAG, function()
-			self._flowStaticSharedMemory = self:_CreateFlowSeparationStaticSharedMemory(snapshot)
+			local runnerResult = self:_GetOrCreateFlowSeparationRunner()
+			if not runnerResult.success then
+				Result.MentionError("Combat:MovementService", "Failed to resolve flow separation runner", {
+					CauseType = runnerResult.type,
+					CauseMessage = runnerResult.message,
+				}, runnerResult.type)
+				return
+			end
+
+			local rebuiltSharedMemory = self:_BuildFlowSeparationStaticSharedMemory(snapshot)
+			local applySharedMemoryResult = runnerResult.value:SetSharedMemory("FlowSeparationSolve", rebuiltSharedMemory)
+			if not applySharedMemoryResult.success then
+				Result.MentionError("Combat:MovementService", "Failed to apply static flow separation shared memory", {
+					CauseType = applySharedMemoryResult.type,
+					CauseMessage = applySharedMemoryResult.message,
+				}, "MovementParallelSharedMemoryFailed")
+				return
+			end
+
+			self._flowStaticSharedMemory = rebuiltSharedMemory
 			self._flowStaticSharedMemoryPathfinder = pathfinder
 		end, MOVEMENT_PROFILING_ENABLED)
 	end
 
-	-- Builds the managed-job shared packet after the snapshot has already been packed.
-	function MovementService:_CreateFlowSeparationSharedPacket(snapshot: TFlowSeparationSolveSnapshot): TSharedPacket
-		local sharedPacket
-		DebugPlus.profile(PREPARE_SHARED_PACKET_PROFILE_TAG, function()
-			sharedPacket = self:_CreateFlowSeparationDynamicSharedMemory(snapshot)
+	-- Builds the staged worker payload after the snapshot has already been packed.
+	function MovementService:_PrepareFlowSeparationWorkerPayload(snapshot: TFlowSeparationSolveSnapshot): TFlowSeparationWorkerPayload
+		local workerPayload
+		DebugPlus.profile(PREPARE_WORKER_PAYLOAD_PROFILE_TAG, function()
+			workerPayload = self:_CreateFlowSeparationWorkerPayload(snapshot)
 		end, MOVEMENT_PROFILING_ENABLED)
 
-		return sharedPacket
+		return workerPayload
 	end
 
-	-- Builds the per-dispatch run request after the shared packet has been prepared.
+	-- Builds the per-dispatch run request after the worker payload has been prepared.
 	function MovementService:_CreateFlowSeparationRunRequest(
 		snapshot: TFlowSeparationSolveSnapshot
 	): TFlowSeparationRunRequest
@@ -229,15 +276,15 @@ return function(MovementService: TMovementService)
 		return runRequest
 	end
 
-	-- Assembles the final managed-job payload once the staged packet and run request are ready.
+	-- Assembles the final managed-job payload once the staged worker payload and run request are ready.
 	function MovementService:_AssembleFlowSeparationDispatchPayload(
 		snapshot: TFlowSeparationSolveSnapshot,
-		sharedPacket: TSharedPacket,
+		workerPayload: TFlowSeparationWorkerPayload,
 		runRequest: TFlowSeparationRunRequest
 	): TFlowSeparationDispatchPayload
 		return {
 			Snapshot = snapshot,
-			SharedPacket = sharedPacket,
+			WorkerPayload = workerPayload,
 			RunRequest = runRequest,
 		} :: TFlowSeparationDispatchPayload
 	end
