@@ -100,4 +100,62 @@ function Validation.AssertSetSharedMemory(jobName: any, sharedMemory: any)
 	end
 end
 
+function Validation.AssertManagedJobConfig(runner: { [string]: any }, config: { [string]: any })
+	assert(type(config) == "table", "ParallelRunner:CreateManagedJob requires a config table")
+	assert(type(config.JobName) == "string" and config.JobName ~= "", "Managed job requires JobName")
+	assert(
+		type(config.BuildSharedMemory) == "function",
+		`ParallelRunner:CreateManagedJob("{tostring(config.JobName)}") requires BuildSharedMemory`
+	)
+	assert(
+		type(config.BuildRunRequest) == "function",
+		`ParallelRunner:CreateManagedJob("{tostring(config.JobName)}") requires BuildRunRequest`
+	)
+	if config.GetSessionToken ~= nil then
+		assert(
+			type(config.GetSessionToken) == "function",
+			`ParallelRunner:CreateManagedJob("{config.JobName}") GetSessionToken must be a function when provided`
+		)
+	end
+	if config.MaxInFlightSeconds ~= nil then
+		assert(
+			type(config.MaxInFlightSeconds) == "number" and config.MaxInFlightSeconds > 0,
+			`ParallelRunner:CreateManagedJob("{config.JobName}") MaxInFlightSeconds must be a positive number when provided`
+		)
+	end
+	assert(
+		runner._registeredJobs[config.JobName] ~= nil,
+		`ParallelRunner:CreateManagedJob("{config.JobName}") requires a registered job`
+	)
+	local registeredJob = runner._registeredJobs[config.JobName]
+	assert(
+		registeredJob.Job:GetSchemas().Shared ~= nil,
+		`ParallelRunner:CreateManagedJob("{config.JobName}") requires the registered job to define SharedSchema`
+	)
+end
+
+function Validation.AssertManagedSharedPacket(jobName: string, packet: any)
+	assert(
+		type(packet) == "table",
+		`ParallelRunner managed job "{jobName}" BuildSharedMemory must return a SharedPlus packet table`
+	)
+end
+
+function Validation.AssertManagedRunRequest(jobName: string, request: { [string]: any })
+	assert(type(request) == "table", `ParallelRunner managed job "{jobName}" BuildRunRequest must return a table`)
+	assert(type(request.Args) == "table", `ParallelRunner managed job "{jobName}" BuildRunRequest requires Args`)
+	assert(
+		type(request.LogicalWorkCount) == "number"
+			and request.LogicalWorkCount >= 0
+			and request.LogicalWorkCount % 1 == 0,
+		`ParallelRunner managed job "{jobName}" BuildRunRequest LogicalWorkCount must be a non-negative integer`
+	)
+	if request.BatchSize ~= nil then
+		assert(
+			type(request.BatchSize) == "number" and request.BatchSize > 0 and request.BatchSize % 1 == 0,
+			`ParallelRunner managed job "{jobName}" BuildRunRequest BatchSize must be a positive integer when provided`
+		)
+	end
+end
+
 return table.freeze(Validation)

@@ -6,6 +6,7 @@ local Promise = require(ReplicatedStorage.Packages.Promise)
 local ParallelActors = require(ReplicatedStorage.Utilities.ParallelActors)
 local ParallelLogistics = require(ReplicatedStorage.Utilities.ParallelLogistics)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local SharedPlus = require(ReplicatedStorage.Utilities.SharedPlus)
 
 export type TResult<T> = Result.Result<T>
 export type TRunPromise = typeof(Promise.new(function() end))
@@ -13,6 +14,8 @@ type TSignalConnection = {
 	Disconnect: (self: TSignalConnection) -> (),
 }
 export type TCompiledJob = ParallelLogistics.TCompiledJob
+export type TSharedPacket = SharedPlus.TPacket
+export type TSharedCompiledHandle = SharedPlus.TCompiledHandle
 export type TWorkplace = ParallelActors.TWorkplace
 export type TWorkplaceRunHandle = ParallelActors.TRunHandle
 export type TRunStatus = ParallelActors.TRunStatus
@@ -85,6 +88,61 @@ export type TRunOutput = {
 	Rows: { { [string]: any } },
 }
 
+export type TManagedAsyncResult = {
+	RequestId: number,
+	SessionToken: any?,
+	Payload: any?,
+	Rows: { { [string]: any } }?,
+	Err: TResult<TRunOutput>?,
+	CompletedClock: number?,
+}
+
+export type TManagedAsyncState = {
+	PendingRequestId: number,
+	LatestAppliedRequestId: number,
+	LatestCompletedResult: TManagedAsyncResult?,
+	InFlight: boolean,
+	InFlightRequestId: number?,
+	InFlightSessionToken: any?,
+	LastDispatchClock: number,
+}
+
+export type TManagedDispatchStatus = "Dispatched" | "InFlight"
+export type TManagedCompletionStatus = "Accepted" | "StaleRequest" | "ReplacedPrevious"
+export type TManagedConsumeStatus = "Accepted" | "NoResult" | "StaleRequest" | "SessionMismatch"
+export type TManagedJobPolicyPreset = "StrictFreshOnly"
+export type TManagedJobPolicyConfig = {
+	Preset: TManagedJobPolicyPreset,
+}
+
+export type TManagedJobBuildRunRequest = {
+	Args: { [string]: any },
+	LogicalWorkCount: number,
+	BatchSize: number?,
+}
+
+export type TManagedJobDispatchStatus = TManagedDispatchStatus
+export type TManagedJobConfig = {
+	JobName: string,
+	BuildSharedMemory: (payload: any) -> TSharedPacket,
+	BuildRunRequest: (payload: any) -> TManagedJobBuildRunRequest,
+	GetSessionToken: ((payload: any) -> any?)?,
+	MaxInFlightSeconds: number?,
+	Policy: (TManagedJobPolicyPreset | TManagedJobPolicyConfig)?,
+}
+
+export type TManagedJobResult = TManagedAsyncResult & {
+	PolicyStatus: "Fresh",
+}
+
+export type TManagedJobStatus = {
+	InFlight: boolean,
+	LastDispatchClock: number,
+	HasCompletedResult: boolean,
+	PolicyPreset: TManagedJobPolicyPreset,
+	LastError: TResult<TRunOutput>?,
+}
+
 export type TCompletedSignal = {
 	Connect: (self: TCompletedSignal, callback: (TResult<TRunOutput>) -> ()) -> TSignalConnection,
 	Once: (self: TCompletedSignal, callback: (TResult<TRunOutput>) -> ()) -> TSignalConnection,
@@ -98,6 +156,15 @@ export type TRegisteredJob = {
 	DefaultLogicalWorkCount: number?,
 	DefaultBatchSize: number?,
 	SharedMemory: SharedTable?,
+}
+
+export type TManagedJob = {
+	Dispatch: (self: TManagedJob, payload: any) -> TManagedJobDispatchStatus,
+	PollCompleted: (self: TManagedJob, currentSessionToken: any?) -> TManagedJobResult?,
+	HasInFlight: (self: TManagedJob) -> boolean,
+	GetStatus: (self: TManagedJob) -> TManagedJobStatus,
+	Reset: (self: TManagedJob) -> (),
+	Destroy: (self: TManagedJob) -> (),
 }
 
 export type TRunnerRunHandle = {
@@ -120,6 +187,7 @@ export type TRunnerRunHandle = {
 export type TRunner = {
 	RegisterJob: (self: TRunner, config: TRegisterJobConfig) -> TResult<boolean>,
 	HasJob: (self: TRunner, jobName: string) -> boolean,
+	CreateManagedJob: (self: TRunner, config: TManagedJobConfig) -> TManagedJob,
 	SetSharedMemory: (self: TRunner, jobName: string, sharedMemory: SharedTable?) -> TResult<boolean>,
 	Run: (self: TRunner, request: TRunRequest) -> TResult<TRunnerRunHandle>,
 	RunAsync: (self: TRunner, request: TRunRequest) -> TResult<TRunPromise>,

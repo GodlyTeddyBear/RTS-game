@@ -6,6 +6,8 @@ local ParallelActors = require(ReplicatedStorage.Utilities.ParallelActors)
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local Compiler = require(script.Compiler)
+local ManagedJob = require(script.ManagedJob)
+local ManagedJobPolicies = require(script.ManagedJobPolicies)
 local RunHandle = require(script.RunHandle)
 local Types = require(script.Types)
 local Validation = require(script.Validation)
@@ -18,6 +20,14 @@ export type TRegisterJobConfig = Types.TRegisterJobConfig
 export type TRunRequest = Types.TRunRequest
 export type TRunOutput = Types.TRunOutput
 export type TRunPromise = Types.TRunPromise
+export type TManagedJobPolicyPreset = Types.TManagedJobPolicyPreset
+export type TManagedJobConfig = Types.TManagedJobConfig
+export type TManagedJobDispatchStatus = Types.TManagedJobDispatchStatus
+export type TManagedJobStatus = Types.TManagedJobStatus
+export type TManagedJobResult = Types.TManagedJobResult
+export type TManagedJob = Types.TManagedJob
+export type TSharedPacket = Types.TSharedPacket
+export type TSharedCompiledHandle = Types.TSharedCompiledHandle
 export type TRunnerRunHandle = Types.TRunnerRunHandle
 export type TRunner = Types.TRunner
 
@@ -33,6 +43,7 @@ ParallelRunner.__index = ParallelRunner
 ParallelRunner.Compiler = Compiler
 ParallelRunner.Arg = Compiler.Arg
 ParallelRunner.Result = Compiler.Result
+ParallelRunner.ManagedJobPolicies = ManagedJobPolicies
 
 local WORKER_ERROR_PATTERN = "^%[([^%]]+)%]%s+([^:]+):%s+(.*)$"
 
@@ -173,6 +184,7 @@ function ParallelRunner.new(config: TRunnerConfig): TRunner
 		self._name = config.Name or "ParallelRunner"
 		self._defaultBatchSize = config.DefaultBatchSize
 		self._registeredJobs = {} :: { [string]: TRegisteredJob }
+		self._managedJobs = {}
 		self._destroyed = false
 
 		-- Build the underlying actor workplace once for this runner.
@@ -256,6 +268,11 @@ function ParallelRunner:HasJob(jobName: string): boolean
 	end
 
 	return self._registeredJobs[jobName] ~= nil
+end
+
+function ParallelRunner:CreateManagedJob(config: TManagedJobConfig): TManagedJob
+	assert(not self._destroyed, "ParallelRunner has already been destroyed")
+	return ManagedJob.new(self :: any, config)
 end
 
 function ParallelRunner:SetSharedMemory(jobName: string, sharedMemory: SharedTable?): TResult<boolean>
@@ -373,6 +390,14 @@ function ParallelRunner:Destroy(): TResult<boolean>
 		return Ok(true)
 	end
 
+	local managedJobs = {}
+	for job in self._managedJobs do
+		table.insert(managedJobs, job)
+	end
+	for _, job in ipairs(managedJobs) do
+		job:Destroy()
+	end
+
 	local ok, destroyError = pcall(function()
 		self._workplace:Destroy()
 	end)
@@ -381,6 +406,7 @@ function ParallelRunner:Destroy(): TResult<boolean>
 	end
 
 	table.clear(self._registeredJobs)
+	table.clear(self._managedJobs)
 	self._destroyed = true
 	return Ok(true)
 end
