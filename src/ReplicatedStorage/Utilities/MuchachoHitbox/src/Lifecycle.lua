@@ -40,9 +40,10 @@ function Lifecycle.ResolveStep(hitbox: THitbox): CFrame
 	return hitboxCFrame
 end
 
-function Lifecycle.RunSerialDetection(hitbox: THitbox, hitboxCFrame: CFrame)
+function Lifecycle.RunSerialDetection(hitbox: THitbox, hitboxCFrame: CFrame): boolean
 	local parts = Query.CastSpatialQuery(hitbox, hitboxCFrame)
 	Detection.Cast(hitbox, parts)
+	return #parts > 0
 end
 
 function Lifecycle.RunNoHitDetection(hitbox: THitbox)
@@ -75,6 +76,8 @@ function Lifecycle.Clear(hitbox: THitbox)
 	hitbox.TouchingParts = {}
 	hitbox.TouchingPartsSet = {}
 	hitbox._UpdateAccumulator = 0
+	hitbox._QueryCache = nil
+	hitbox._ParallelMissCount = 0
 
 	local runner = hitbox._Runner
 	if runner ~= nil then

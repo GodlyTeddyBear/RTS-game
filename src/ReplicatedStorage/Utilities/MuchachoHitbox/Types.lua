@@ -93,6 +93,8 @@ export type Hitbox = {
 
 	-- Throttle state
 	_UpdateAccumulator: number?,
+	_QueryCache: { [string]: any }?,
+	_ParallelMissCount: number?,
 	_Runner: HitboxRunner?,
 	HitListSet: { [Humanoid]: boolean }?,
 	TouchingPartsSet: { [BasePart]: boolean }?,

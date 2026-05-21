@@ -38,34 +38,90 @@ local function _createDefect(
 	return defect
 end
 
--- Invoke a named executor method behind xpcall so thrown errors stay inside the runtime boundary.
-local function _invokeExecutorMethod(
+local function _createInvocationData(actionId: string, entity: number, methodName: string): { [string]: any }
+	return {
+		ActionId = actionId,
+		Entity = entity,
+		Method = methodName,
+	}
+end
+
+local function _invokeStart(
+	executor: TExecutor,
+	actionId: string,
+	entity: number,
+	actionData: any?,
+	services: TExecutorServices
+): Result.Result<TStartInvocation>
+	local invocationData = _createInvocationData(actionId, entity, "Start")
+	local didSucceed, success, failureReason = xpcall(function()
+		return executor:Start(entity, actionData, services)
+	end, function(thrown)
+		return _createDefect(
+			ExecutorDefectTypes.ExecutorStartDefect,
+			tostring(thrown),
+			invocationData,
+			debug.traceback(nil, 2)
+		)
+	end)
+
+	if not didSucceed then
+		return success
+	end
+
+	return Ok({
+		Success = not not success,
+		FailureReason = failureReason,
+	})
+end
+
+local function _invokeTick(
+	executor: TExecutor,
+	actionId: string,
+	entity: number,
+	deltaTime: number,
+	services: TExecutorServices
+): Result.Result<string>
+	local invocationData = _createInvocationData(actionId, entity, "Tick")
+	local didSucceed, tickStatus = xpcall(function()
+		return executor:Tick(entity, deltaTime, services)
+	end, function(thrown)
+		return _createDefect(
+			ExecutorDefectTypes.ExecutorTickDefect,
+			tostring(thrown),
+			invocationData,
+			debug.traceback(nil, 2)
+		)
+	end)
+
+	if not didSucceed then
+		return tickStatus
+	end
+
+	return Ok(tickStatus)
+end
+
+local function _invokeVoidMethod(
 	executor: TExecutor,
 	methodName: string,
 	defectType: string,
 	actionId: string,
 	entity: number,
-	...: any
-): Result.Result<any>
-	local arguments = table.pack(...)
-	local invocationData = {
-		ActionId = actionId,
-		Entity = entity,
-		Method = methodName,
-	}
-
-	local results = table.pack(xpcall(function()
-		return (executor :: any)[methodName](executor, entity, table.unpack(arguments, 1, arguments.n))
+	services: TExecutorServices
+): Result.Result<boolean>
+	local invocationData = _createInvocationData(actionId, entity, methodName)
+	local didSucceed, defect = xpcall(function()
+		(executor :: any)[methodName](executor, entity, services)
+		return nil
 	end, function(thrown)
 		return _createDefect(defectType, tostring(thrown), invocationData, debug.traceback(nil, 2))
-	end))
+	end)
 
-	if not results[1] then
-		return results[2]
+	if not didSucceed then
+		return defect
 	end
 
-	local invocationResults = table.pack(table.unpack(results, 2, results.n))
-	return Ok(invocationResults)
+	return Ok(true)
 end
 
 --[=[
@@ -85,24 +141,7 @@ function ExecutorBoundary.TryStart(
 	actionData: any?,
 	services: TExecutorServices
 ): Result.Result<TStartInvocation>
-	local startResult = _invokeExecutorMethod(
-		executor,
-		"Start",
-		ExecutorDefectTypes.ExecutorStartDefect,
-		actionId,
-		entity,
-		actionData,
-		services
-	)
-	if not startResult.success then
-		return startResult
-	end
-
-	local values = startResult.value
-	return Ok({
-		Success = not not values[1],
-		FailureReason = values[2],
-	})
+	return _invokeStart(executor, actionId, entity, actionData, services)
 end
 
 --[=[
@@ -122,20 +161,7 @@ function ExecutorBoundary.TryTick(
 	deltaTime: number,
 	services: TExecutorServices
 ): Result.Result<string>
-	local tickResult = _invokeExecutorMethod(
-		executor,
-		"Tick",
-		ExecutorDefectTypes.ExecutorTickDefect,
-		actionId,
-		entity,
-		deltaTime,
-		services
-	)
-	if not tickResult.success then
-		return tickResult
-	end
-
-	return Ok(tickResult.value[1])
+	return _invokeTick(executor, actionId, entity, deltaTime, services)
 end
 
 --[=[
@@ -153,13 +179,7 @@ function ExecutorBoundary.TryCancel(
 	entity: number,
 	services: TExecutorServices
 ): Result.Result<boolean>
-	local cancelResult =
-		_invokeExecutorMethod(executor, "Cancel", ExecutorDefectTypes.ExecutorCancelDefect, actionId, entity, services)
-	if not cancelResult.success then
-		return cancelResult
-	end
-
-	return Ok(true)
+	return _invokeVoidMethod(executor, "Cancel", ExecutorDefectTypes.ExecutorCancelDefect, actionId, entity, services)
 end
 
 --[=[
@@ -177,19 +197,7 @@ function ExecutorBoundary.TryComplete(
 	entity: number,
 	services: TExecutorServices
 ): Result.Result<boolean>
-	local completeResult = _invokeExecutorMethod(
-		executor,
-		"Complete",
-		ExecutorDefectTypes.ExecutorCompleteDefect,
-		actionId,
-		entity,
-		services
-	)
-	if not completeResult.success then
-		return completeResult
-	end
-
-	return Ok(true)
+	return _invokeVoidMethod(executor, "Complete", ExecutorDefectTypes.ExecutorCompleteDefect, actionId, entity, services)
 end
 
 --[=[
@@ -207,13 +215,7 @@ function ExecutorBoundary.TryDeath(
 	entity: number,
 	services: TExecutorServices
 ): Result.Result<boolean>
-	local deathResult =
-		_invokeExecutorMethod(executor, "Death", ExecutorDefectTypes.ExecutorDeathDefect, actionId, entity, services)
-	if not deathResult.success then
-		return deathResult
-	end
-
-	return Ok(true)
+	return _invokeVoidMethod(executor, "Death", ExecutorDefectTypes.ExecutorDeathDefect, actionId, entity, services)
 end
 
 return table.freeze(ExecutorBoundary)

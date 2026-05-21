@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
 local ActionRuntimeShapeSpec = require(script.Parent.Parent.Specs.ActionRuntimeShapeSpec)
 local ActionId = require(script.Parent.Parent.ValueObjects.ActionId)
 
@@ -35,12 +36,15 @@ end
 
 function ActionValidationPolicy.CheckActionDefinition(definition: any): Result.Result<any>
 	if type(definition) ~= "table" then
-		return ActionRuntimeShapeSpec.HasValidActionDefinitionShape:IsSatisfiedBy({
-			ActionId = "unknown",
-			Definition = definition,
-			HasFactory = false,
-			HasExecutor = false,
-		})
+		local candidate = ScratchRecycler.AcquireMap()
+		candidate.ActionId = "unknown"
+		candidate.Definition = definition
+		candidate.HasFactory = false
+		candidate.HasExecutor = false
+
+		local result = ActionRuntimeShapeSpec.HasValidActionDefinitionShape:IsSatisfiedBy(candidate)
+		ScratchRecycler.ReleaseMap(candidate)
+		return result
 	end
 
 	local actionId = ActionId.From(definition.ActionId, "action definition ActionId")
@@ -64,9 +68,12 @@ function ActionValidationPolicy.CheckActionDefinition(definition: any): Result.R
 end
 
 function ActionValidationPolicy.CheckActionState(actionState: any): Result.Result<any>
-	return ActionRuntimeShapeSpec.HasValidActionStateShape:IsSatisfiedBy({
-		ActionState = actionState,
-	})
+	local candidate = ScratchRecycler.AcquireMap()
+	candidate.ActionState = actionState
+
+	local result = ActionRuntimeShapeSpec.HasValidActionStateShape:IsSatisfiedBy(candidate)
+	ScratchRecycler.ReleaseMap(candidate)
+	return result
 end
 
 function ActionValidationPolicy.CheckActionId(actionId: any, label: string): Result.Result<string>

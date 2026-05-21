@@ -40,6 +40,7 @@ Roquest = "prooheckcp/roquest@>0.0.0, <10.0.0"
 ZonePlus = "essentiallyblue/zoneplus@3.2.2"
 StudioComponents = "sircfenner/studiocomponents@1.0.0"
 Replecs = "pepeeltoro41/replecs@0.3.1"
+ShapeCastHitbox = "teamswordphin/shapecasthitbox@0.2.9"
 
 [server-dependencies]
 Profilestore = "lm-loleris/profilestore@1.0.3"

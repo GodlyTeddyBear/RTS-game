@@ -1,5 +1,8 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
 local AIShapeSpec = require(script.Parent.Parent.Specs.AIShapeSpec)
 
 local AIValidationPolicy = {}
@@ -14,6 +17,35 @@ end
 
 local function _AssertSatisfied(result: any, prefix: string)
 	assert(result.success, _BuildFailureMessage(prefix, result))
+end
+
+local function _CreateCandidateMap()
+	return ScratchRecycler.AcquireMap()
+end
+
+local function _ReleaseCandidateMap(candidate: { [any]: any })
+	ScratchRecycler.ReleaseMap(candidate)
+end
+
+local function _CheckRegistrationOptionsValue(options: any)
+	local candidate = _CreateCandidateMap()
+	candidate.Options = options
+
+	local result = AIShapeSpec.HasRegistrationOptions:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	return result
+end
+
+local function _CheckAssignmentRequestFields(actorType: any, behaviorName: any, archetypeName: any)
+	AIValidationPolicy.CheckActorType(actorType)
+
+	if behaviorName ~= nil then
+		AIValidationPolicy.CheckBehaviorRegistrationName(behaviorName)
+	end
+
+	if archetypeName ~= nil then
+		AIValidationPolicy.CheckArchetypeName(archetypeName)
+	end
 end
 
 local function _RequiresRuntimeBinding(requirements: any): boolean
@@ -39,48 +71,48 @@ function AIValidationPolicy.ContainsPhase(registeredPhases: { string }, expected
 end
 
 function AIValidationPolicy.CheckActorType(actorType: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasActorType:IsSatisfiedBy({
-			ActorType = actorType,
-		}),
-		"AI actorType is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.ActorType = actorType
+
+	local result = AIShapeSpec.HasActorType:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI actorType is invalid")
 end
 
 function AIValidationPolicy.CheckArchetypeName(archetypeName: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasArchetypeName:IsSatisfiedBy({
-			ArchetypeName = archetypeName,
-		}),
-		"AI archetype name is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.ArchetypeName = archetypeName
+
+	local result = AIShapeSpec.HasArchetypeName:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI archetype name is invalid")
 end
 
 function AIValidationPolicy.CheckAdapter(adapter: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasAdapterTable:IsSatisfiedBy({
-			Adapter = adapter,
-		}),
-		"AI adapter is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.Adapter = adapter
+
+	local result = AIShapeSpec.HasAdapterTable:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI adapter is invalid")
 end
 
 function AIValidationPolicy.CheckSemanticRequirements(requirements: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasSemanticRequirements:IsSatisfiedBy({
-			Requirements = requirements,
-		}),
-		"AI semantic requirements are invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.Requirements = requirements
+
+	local result = AIShapeSpec.HasSemanticRequirements:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI semantic requirements are invalid")
 end
 
 function AIValidationPolicy.CheckRuntimeBinding(runtimeBinding: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasRuntimeBinding:IsSatisfiedBy({
-			RuntimeBinding = runtimeBinding,
-		}),
-		"AI runtime binding is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.RuntimeBinding = runtimeBinding
+
+	local result = AIShapeSpec.HasRuntimeBinding:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI runtime binding is invalid")
 end
 
 function AIValidationPolicy.CheckRegistrationOptions(options: any?)
@@ -88,12 +120,8 @@ function AIValidationPolicy.CheckRegistrationOptions(options: any?)
 		return
 	end
 
-	_AssertSatisfied(
-		AIShapeSpec.HasRegistrationOptions:IsSatisfiedBy({
-			Options = options,
-		}),
-		"AI registration validation options are invalid"
-	)
+	local result = _CheckRegistrationOptionsValue(options)
+	_AssertSatisfied(result, "AI registration validation options are invalid")
 end
 
 function AIValidationPolicy.CheckSemanticContract(actorType: any, requirements: any?, runtimeBinding: any?, options: any?)
@@ -125,49 +153,73 @@ function AIValidationPolicy.CheckSemanticContract(actorType: any, requirements: 
 	)
 
 	local bindingResult = options.RuntimeOwner:GetSchedulerBindingStatus(runtimeBinding.ServiceField)
+	local bindingResultCandidate = _CreateCandidateMap()
+	bindingResultCandidate.BindingResult = bindingResult
+
+	local bindingTableResult = AIShapeSpec.HasBindingResultTable:IsSatisfiedBy(bindingResultCandidate)
+	_ReleaseCandidateMap(bindingResultCandidate)
 	_AssertSatisfied(
-		AIShapeSpec.HasBindingResultTable:IsSatisfiedBy({
-			BindingResult = bindingResult,
-		}),
+		bindingTableResult,
 		("AI actor '%s' runtime owner returned an invalid binding response"):format(actorType)
 	)
+
+	local successfulBindingCandidate = _CreateCandidateMap()
+	successfulBindingCandidate.BindingResult = bindingResult
+
+	local successfulBindingResult = AIShapeSpec.HasSuccessfulBindingResult:IsSatisfiedBy(successfulBindingCandidate)
+	_ReleaseCandidateMap(successfulBindingCandidate)
 	_AssertSatisfied(
-		AIShapeSpec.HasSuccessfulBindingResult:IsSatisfiedBy({
-			BindingResult = bindingResult,
-		}),
+		successfulBindingResult,
 		("AI actor '%s' runtime owner failed to resolve binding for '%s'"):format(
 			actorType,
 			runtimeBinding.ServiceField
 		)
 	)
+
+	local bindingStatusCandidate = _CreateCandidateMap()
+	bindingStatusCandidate.BindingResult = bindingResult
+
+	local bindingStatusResult = AIShapeSpec.HasBindingStatusTable:IsSatisfiedBy(bindingStatusCandidate)
+	_ReleaseCandidateMap(bindingStatusCandidate)
 	_AssertSatisfied(
-		AIShapeSpec.HasBindingStatusTable:IsSatisfiedBy({
-			BindingResult = bindingResult,
-		}),
+		bindingStatusResult,
 		("AI actor '%s' runtime owner returned an invalid binding status"):format(actorType)
 	)
 
 	local bindingStatus = bindingResult.value
-	local bindingCandidate = {
-		BindingStatus = bindingStatus,
-		RuntimeBinding = runtimeBinding,
-	}
+	local bindingTargetCandidate = _CreateCandidateMap()
+	bindingTargetCandidate.BindingStatus = bindingStatus
+	bindingTargetCandidate.RuntimeBinding = runtimeBinding
 
+	local bindingTargetResult = AIShapeSpec.HasBindingTarget:IsSatisfiedBy(bindingTargetCandidate)
+	_ReleaseCandidateMap(bindingTargetCandidate)
 	_AssertSatisfied(
-		AIShapeSpec.HasBindingTarget:IsSatisfiedBy(bindingCandidate),
+		bindingTargetResult,
 		("AI actor '%s' bound service field '%s' does not exist"):format(actorType, runtimeBinding.ServiceField)
 	)
 
 	if requirements ~= nil and requirements.FactsDependOnPolling == true then
+		local bindingPollMethodCandidate = _CreateCandidateMap()
+		bindingPollMethodCandidate.BindingStatus = bindingStatus
+		bindingPollMethodCandidate.RuntimeBinding = runtimeBinding
+
+		local bindingPollMethodResult = AIShapeSpec.HasBindingPollMethod:IsSatisfiedBy(bindingPollMethodCandidate)
+		_ReleaseCandidateMap(bindingPollMethodCandidate)
 		_AssertSatisfied(
-			AIShapeSpec.HasBindingPollMethod:IsSatisfiedBy(bindingCandidate),
+			bindingPollMethodResult,
 			("AI actor '%s' requires FactsDependOnPolling but '%s.Poll' is missing"):format(
 				actorType,
 				runtimeBinding.ServiceField
 			)
 		)
+		local bindingPollPhaseCandidate = _CreateCandidateMap()
+		bindingPollPhaseCandidate.BindingStatus = bindingStatus
+		bindingPollPhaseCandidate.RuntimeBinding = runtimeBinding
+
+		local bindingPollPhaseResult = AIShapeSpec.HasBindingPollPhase:IsSatisfiedBy(bindingPollPhaseCandidate)
+		_ReleaseCandidateMap(bindingPollPhaseCandidate)
 		_AssertSatisfied(
-			AIShapeSpec.HasBindingPollPhase:IsSatisfiedBy(bindingCandidate),
+			bindingPollPhaseResult,
 			("AI actor '%s' requires FactsDependOnPolling but '%s.Poll' is not registered on phase '%s'"):format(
 				actorType,
 				runtimeBinding.ServiceField,
@@ -177,15 +229,27 @@ function AIValidationPolicy.CheckSemanticContract(actorType: any, requirements: 
 	end
 
 	if requirements ~= nil and requirements.AttributesDependOnProjection == true then
+		local bindingSyncMethodCandidate = _CreateCandidateMap()
+		bindingSyncMethodCandidate.BindingStatus = bindingStatus
+		bindingSyncMethodCandidate.RuntimeBinding = runtimeBinding
+
+		local bindingSyncMethodResult = AIShapeSpec.HasBindingSyncMethod:IsSatisfiedBy(bindingSyncMethodCandidate)
+		_ReleaseCandidateMap(bindingSyncMethodCandidate)
 		_AssertSatisfied(
-			AIShapeSpec.HasBindingSyncMethod:IsSatisfiedBy(bindingCandidate),
+			bindingSyncMethodResult,
 			("AI actor '%s' requires AttributesDependOnProjection but '%s.SyncDirtyEntities' is missing"):format(
 				actorType,
 				runtimeBinding.ServiceField
 			)
 		)
+		local bindingSyncPhaseCandidate = _CreateCandidateMap()
+		bindingSyncPhaseCandidate.BindingStatus = bindingStatus
+		bindingSyncPhaseCandidate.RuntimeBinding = runtimeBinding
+
+		local bindingSyncPhaseResult = AIShapeSpec.HasBindingSyncPhase:IsSatisfiedBy(bindingSyncPhaseCandidate)
+		_ReleaseCandidateMap(bindingSyncPhaseCandidate)
 		_AssertSatisfied(
-			AIShapeSpec.HasBindingSyncPhase:IsSatisfiedBy(bindingCandidate),
+			bindingSyncPhaseResult,
 			("AI actor '%s' requires AttributesDependOnProjection but '%s.SyncDirtyEntities' is not registered on phase '%s'"):format(
 				actorType,
 				runtimeBinding.ServiceField,
@@ -196,12 +260,12 @@ function AIValidationPolicy.CheckSemanticContract(actorType: any, requirements: 
 end
 
 function AIValidationPolicy.CheckRegistration(registration: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasRegistrationTable:IsSatisfiedBy({
-			Registration = registration,
-		}),
-		"AI actor registration is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.Registration = registration
+
+	local result = AIShapeSpec.HasRegistrationTable:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI actor registration is invalid")
 
 	AIValidationPolicy.CheckActorType(registration.ActorType)
 	AIValidationPolicy.CheckAdapter(registration.Adapter)
@@ -349,58 +413,58 @@ function AIValidationPolicy.CheckActorPackages(actorPackages: any)
 end
 
 function AIValidationPolicy.CheckHooks(hooks: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasHooksTable:IsSatisfiedBy({
-			Hooks = hooks,
-		}),
-		"AI hooks are invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.Hooks = hooks
+
+	local result = AIShapeSpec.HasHooksTable:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI hooks are invalid")
 end
 
 function AIValidationPolicy.CheckActionDefinitions(actionDefinitions: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasActionDefinitionsTable:IsSatisfiedBy({
-			ActionDefinitions = actionDefinitions,
-		}),
-		"AI action definitions are invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.ActionDefinitions = actionDefinitions
+
+	local result = AIShapeSpec.HasActionDefinitionsTable:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI action definitions are invalid")
 end
 
 function AIValidationPolicy.CheckActionPack(actionPack: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasActionPack:IsSatisfiedBy({
-			ActionPack = actionPack,
-		}),
-		"AI action pack is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.ActionPack = actionPack
+
+	local result = AIShapeSpec.HasActionPack:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI action pack is invalid")
 	AIValidationPolicy.CheckActionDefinitions(actionPack.Definitions)
 end
 
 function AIValidationPolicy.CheckBehaviorRegistrationName(name: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasBehaviorRegistrationName:IsSatisfiedBy({
-			Name = name,
-		}),
-		"AI behavior registration name is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.Name = name
+
+	local result = AIShapeSpec.HasBehaviorRegistrationName:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI behavior registration name is invalid")
 end
 
 function AIValidationPolicy.CheckTickInterval(tickInterval: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasNonNegativeTickInterval:IsSatisfiedBy({
-			TickInterval = tickInterval,
-		}),
-		"AI tick interval is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.TickInterval = tickInterval
+
+	local result = AIShapeSpec.HasNonNegativeTickInterval:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI tick interval is invalid")
 end
 
 function AIValidationPolicy.CheckBehaviorRegistration(registration: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasBehaviorRegistrationTable:IsSatisfiedBy({
-			Registration = registration,
-		}),
-		"AI behavior registration is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.Registration = registration
+
+	local result = AIShapeSpec.HasBehaviorRegistrationTable:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI behavior registration is invalid")
 	AIValidationPolicy.CheckBehaviorRegistrationName(registration.Name)
 end
 
@@ -417,21 +481,14 @@ function AIValidationPolicy.CheckBehaviorAlias(aliasName: any, behaviorName: any
 end
 
 function AIValidationPolicy.CheckAssignmentRequest(request: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasAssignmentRequestTable:IsSatisfiedBy({
-			Request = request,
-		}),
-		"AI assignment request is invalid"
-	)
-	AIValidationPolicy.CheckActorType(request.ActorType)
+	local candidate = _CreateCandidateMap()
+	candidate.Request = request
 
-	if request.BehaviorName ~= nil then
-		AIValidationPolicy.CheckBehaviorRegistrationName(request.BehaviorName)
-	end
+	local result = AIShapeSpec.HasAssignmentRequestTable:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI assignment request is invalid")
 
-	if request.ArchetypeName ~= nil then
-		AIValidationPolicy.CheckArchetypeName(request.ArchetypeName)
-	end
+	_CheckAssignmentRequestFields(request.ActorType, request.BehaviorName, request.ArchetypeName)
 end
 
 function AIValidationPolicy.CheckAssignmentRequests(requests: any)
@@ -442,17 +499,14 @@ function AIValidationPolicy.CheckAssignmentRequests(requests: any)
 end
 
 function AIValidationPolicy.CheckActorSetupRequest(request: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasActorSetupRequest:IsSatisfiedBy({
-			Request = request,
-		}),
-		"AI actor setup request is invalid"
-	)
-	AIValidationPolicy.CheckAssignmentRequest({
-		ActorType = request.ActorType,
-		BehaviorName = request.BehaviorName,
-		ArchetypeName = request.ArchetypeName,
-	})
+	local candidate = _CreateCandidateMap()
+	candidate.Request = request
+
+	local result = AIShapeSpec.HasActorSetupRequest:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI actor setup request is invalid")
+
+	_CheckAssignmentRequestFields(request.ActorType, request.BehaviorName, request.ArchetypeName)
 end
 
 function AIValidationPolicy.CheckActorSetupRequests(requests: any)
@@ -463,12 +517,12 @@ function AIValidationPolicy.CheckActorSetupRequests(requests: any)
 end
 
 function AIValidationPolicy.CheckActorSetupResult(setupResult: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasActorSetupResult:IsSatisfiedBy({
-			SetupResult = setupResult,
-		}),
-		"AI actor setup result is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.SetupResult = setupResult
+
+	local result = AIShapeSpec.HasActorSetupResult:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI actor setup result is invalid")
 	AIValidationPolicy.CheckActorType(setupResult.ActorType)
 
 	if setupResult.BehaviorName ~= nil then
@@ -488,12 +542,12 @@ function AIValidationPolicy.CheckActorSetupResults(setupResults: any)
 end
 
 function AIValidationPolicy.CheckActorSetupWriteConfig(config: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasActorSetupWriteConfig:IsSatisfiedBy({
-			Config = config,
-		}),
-		"AI actor setup write config is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.Config = config
+
+	local result = AIShapeSpec.HasActorSetupWriteConfig:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI actor setup write config is invalid")
 
 	if config.ClearActionState ~= nil then
 		assert(type(config.ClearActionState) == "function", "AI actor setup write config.ClearActionState must be a function")
@@ -505,12 +559,12 @@ function AIValidationPolicy.CheckActorSetupWriteConfig(config: any)
 end
 
 function AIValidationPolicy.CheckFactorySetupWriteConfig(config: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasFactorySetupWriteConfig:IsSatisfiedBy({
-			Config = config,
-		}),
-		"AI factory setup write config is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.Config = config
+
+	local result = AIShapeSpec.HasFactorySetupWriteConfig:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI factory setup write config is invalid")
 
 	if config.ClearActionState ~= nil then
 		assert(
@@ -528,12 +582,12 @@ function AIValidationPolicy.CheckFactorySetupWriteConfig(config: any)
 end
 
 function AIValidationPolicy.CheckBehaviorCatalogConfig(config: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasBehaviorCatalogConfigTable:IsSatisfiedBy({
-			Config = config,
-		}),
-		"AI behavior catalog config is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.Config = config
+
+	local result = AIShapeSpec.HasBehaviorCatalogConfigTable:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI behavior catalog config is invalid")
 
 	if config.Behaviors ~= nil then
 		AIValidationPolicy.CheckBehaviorDefinitions(config.Behaviors)
@@ -568,21 +622,21 @@ function AIValidationPolicy.CheckBehaviorCatalogConfig(config: any)
 end
 
 function AIValidationPolicy.CheckFolder(folder: any, registrationKindName: string)
-	_AssertSatisfied(
-		AIShapeSpec.HasFolderInstance:IsSatisfiedBy({
-			Folder = folder,
-		}),
-		("AI %s folder is invalid"):format(registrationKindName)
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.Folder = folder
+
+	local result = AIShapeSpec.HasFolderInstance:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, ("AI %s folder is invalid"):format(registrationKindName))
 end
 
 function AIValidationPolicy.CheckSystemConfig(config: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasSystemConfig:IsSatisfiedBy({
-			Config = config,
-		}),
-		"AI system config is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.Config = config
+
+	local result = AIShapeSpec.HasSystemConfig:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI system config is invalid")
 
 	if config.Hooks ~= nil then
 		AIValidationPolicy.CheckHooks(config.Hooks)
@@ -592,18 +646,20 @@ function AIValidationPolicy.CheckSystemConfig(config: any)
 		AIValidationPolicy.CheckHooks(config.GlobalHooks)
 	end
 
-	AIValidationPolicy.CheckRegistrationOptions({
-		RuntimeOwner = config.RuntimeOwner,
-	})
+	local options = _CreateCandidateMap()
+	options.RuntimeOwner = config.RuntimeOwner
+	local optionsResult = _CheckRegistrationOptionsValue(options)
+	_ReleaseCandidateMap(options)
+	_AssertSatisfied(optionsResult, "AI registration validation options are invalid")
 end
 
 function AIValidationPolicy.CheckRuntime(runtime: any)
-	_AssertSatisfied(
-		AIShapeSpec.HasRuntime:IsSatisfiedBy({
-			Runtime = runtime,
-		}),
-		"AI runtime is invalid"
-	)
+	local candidate = _CreateCandidateMap()
+	candidate.Runtime = runtime
+
+	local result = AIShapeSpec.HasRuntime:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
+	_AssertSatisfied(result, "AI runtime is invalid")
 end
 
 return table.freeze(AIValidationPolicy)

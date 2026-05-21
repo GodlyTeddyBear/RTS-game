@@ -40,6 +40,12 @@ function Validation.AssertDefineJobConfig(config: { [string]: any })
 			`ParallelRunner.DefineJob("{config.Name}") PayloadSchema must be a table when provided`
 		)
 	end
+	if config.ManagerPayloadSchema ~= nil then
+		assert(
+			type(config.ManagerPayloadSchema) == "table",
+			`ParallelRunner.DefineJob("{config.Name}") ManagerPayloadSchema must be a table when provided`
+		)
+	end
 end
 
 function Validation.AssertJobRegistration(config: { [string]: any })
@@ -54,6 +60,16 @@ function Validation.AssertJobRegistration(config: { [string]: any })
 		typeof(config.WorkerModule) == "Instance" and config.WorkerModule:IsA("ModuleScript"),
 		"ParallelRunner:RegisterJob requires WorkerModule to be a ModuleScript"
 	)
+	if config.ManagerModule ~= nil then
+		assert(
+			typeof(config.ManagerModule) == "Instance" and config.ManagerModule:IsA("ModuleScript"),
+			"ParallelRunner:RegisterJob ManagerModule must be a ModuleScript when provided"
+		)
+		assert(
+			type(config.Job.GetManagerPayloadCodec) == "function" and config.Job:GetManagerPayloadCodec() ~= nil,
+			"ParallelRunner:RegisterJob ManagerModule requires the job to define ManagerPayloadSchema"
+		)
+	end
 	if config.DefaultLogicalWorkCount ~= nil then
 		assert(
 			type(config.DefaultLogicalWorkCount) == "number"
@@ -98,6 +114,20 @@ function Validation.AssertRunRequest(request: { [string]: any })
 		assert(
 			type(request.WorkerPayload) == "table",
 			`ParallelRunner:Run("{request.JobName}") WorkerPayload must be a table when provided`
+		)
+	end
+	if request.ManagerPayload ~= nil then
+		assert(
+			type(request.ManagerPayload) == "table",
+			`ParallelRunner:Run("{request.JobName}") ManagerPayload must be a table when provided`
+		)
+		assert(
+			request.WorkerPayload == nil,
+			`ParallelRunner:Run("{request.JobName}") cannot combine ManagerPayload with WorkerPayload`
+		)
+		assert(
+			request.LogicalWorkCount == nil,
+			`ParallelRunner:Run("{request.JobName}") cannot combine ManagerPayload with LogicalWorkCount`
 		)
 	end
 end

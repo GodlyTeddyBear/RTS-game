@@ -12,6 +12,7 @@ local Types = require(script.Parent.Types)
 local Validation = require(script.Parent.Validation)
 
 type TActorSlot = Types.TActorSlot
+type TManagerDispatch = Types.TManagerDispatch
 type TRegisteredJob = Types.TRegisteredJob
 type TRunError = Types.TRunError
 type TRunHandle = Types.TRunHandle
@@ -47,6 +48,30 @@ local function _RemoveArrayValue(list: { any }, value: any)
 	end
 end
 
+local function _BuildRunError(runRecord: TRunRecord, message: string): TRunError
+	return {
+		JobName = runRecord.JobName,
+		ShardIndex = 0,
+		StartTaskId = 0,
+		Message = message,
+		Traceback = nil,
+	}
+end
+
+local function _BuildSyntheticShard(runRecord: TRunRecord): TShardRecord
+	return {
+		RunId = runRecord.RunId,
+		JobName = runRecord.JobName,
+		ShardIndex = 0,
+		StartTaskId = 0,
+		BatchSize = 0,
+		LogicalWorkCount = 0,
+		ArgsBuffer = runRecord.Request.ArgsBuffer,
+		SharedMemory = runRecord.Request.SharedMemory,
+		WorkerPayloadBuffer = nil,
+	}
+end
+
 local function _CloneError(runError: TRunError?): TRunError?
 	if runError == nil then
 		return nil
@@ -61,6 +86,14 @@ local function _CloneError(runError: TRunError?): TRunError?
 	})
 end
 
+local function _CloneBuffer(sourceBuffer: buffer?): buffer?
+	if sourceBuffer == nil then
+		return nil
+	end
+
+	return buffer.fromstring(buffer.tostring(sourceBuffer))
+end
+
 local function _CloneShardCompletion(shardCompletion: TShardCompletion): TShardCompletion
 	return table.freeze({
 		RunId = shardCompletion.RunId,
@@ -68,7 +101,7 @@ local function _CloneShardCompletion(shardCompletion: TShardCompletion): TShardC
 		ShardIndex = shardCompletion.ShardIndex,
 		StartTaskId = shardCompletion.StartTaskId,
 		BatchSize = shardCompletion.BatchSize,
-		ResultBuffer = buffer.fromstring(buffer.tostring(shardCompletion.ResultBuffer)),
+		ResultBuffer = _CloneBuffer(shardCompletion.ResultBuffer) :: buffer,
 	})
 end
 
@@ -194,10 +227,13 @@ function Workplace.new(config: TWorkplaceConfig): TWorkplace
 	self._sharedMemoryByJobName = {} :: { [string]: SharedTable }
 	self._workerPayloadBufferByJobName = {} :: { [string]: buffer }
 	self._runsById = {} :: { [number]: TRunRecord }
+	self._pendingManagerRuns = {} :: { TRunRecord }
 	self._pendingShards = {} :: { TShardRecord }
 	self._idleActors = {} :: { TActorSlot }
 	self._busyActors = {} :: { [TActorSlot]: TShardRecord }
 	self._hiredActors = {} :: { TActorSlot }
+	self._managerActor = nil :: TActorSlot?
+	self._managerRun = nil :: TRunRecord?
 	self._destroyed = false
 
 	self._actorFolder = InstancePlus.new("Folder", {
@@ -205,6 +241,7 @@ function Workplace.new(config: TWorkplaceConfig): TWorkplace
 		Parent = Recycler.WorkplacesFolder,
 	})
 
+	self:_HireManagerActor()
 	for _ = 1, config.ActorCount do
 		self:_HireActor()
 	end
@@ -218,9 +255,9 @@ function Workplace:RegisterJob(jobName: string, executor)
 	error(`ParallelActors:RegisterJob("{jobName}") is unsupported in the real actor runtime; use RegisterCompiledJob`, 2)
 end
 
-function Workplace:RegisterCompiledJob(job, workerModule: ModuleScript)
+function Workplace:RegisterCompiledJob(job, workerModule: ModuleScript, managerModule: ModuleScript?)
 	self:_AssertAlive()
-	Validation.AssertCompiledJobRegistration(job, workerModule)
+	Validation.AssertCompiledJobRegistration(job, workerModule, managerModule)
 
 	local jobName = job:GetName()
 	assert(self._registeredJobs[jobName] == nil, `ParallelActors:RegisterCompiledJob("{jobName}") cannot overwrite an existing job`)
@@ -230,10 +267,14 @@ function Workplace:RegisterCompiledJob(job, workerModule: ModuleScript)
 		Name = jobName,
 		Version = job:GetVersion(),
 		WorkerModule = workerModule,
+		ManagerModule = managerModule,
 		ArgsSchemaDescriptor = _BuildSchemaDescriptor(schemas.Args),
 		ResultSchemaDescriptor = _BuildSchemaDescriptor(schemas.Result),
 		PayloadSchemaDescriptor = if type(job.GetPayloadSchemaDescriptor) == "function"
 			then job:GetPayloadSchemaDescriptor()
+			else nil,
+		ManagerPayloadSchemaDescriptor = if type(job.GetManagerPayloadSchemaDescriptor) == "function"
+			then job:GetManagerPayloadSchemaDescriptor()
 			else nil,
 	}
 
@@ -241,14 +282,13 @@ function Workplace:RegisterCompiledJob(job, workerModule: ModuleScript)
 
 	for _, actorSlot in ipairs(self._hiredActors) do
 		self:_RegisterJobOnActor(actorSlot, registeredJob)
-		local sharedMemory = self._sharedMemoryByJobName[jobName]
-		if sharedMemory ~= nil then
-			self:_SetActorSharedMemory(actorSlot, jobName, sharedMemory)
-		end
-		local workerPayloadBuffer = self._workerPayloadBufferByJobName[jobName]
-		if workerPayloadBuffer ~= nil then
-			self:_SetActorWorkerPayload(actorSlot, jobName, workerPayloadBuffer)
-		end
+		self:_ApplyCachedJobStateToActor(actorSlot, jobName)
+	end
+
+	local managerActor = self._managerActor
+	if managerActor ~= nil then
+		self:_RegisterJobOnActor(managerActor, registeredJob)
+		self:_ApplyCachedJobStateToActor(managerActor, jobName)
 	end
 end
 
@@ -267,6 +307,11 @@ function Workplace:SetSharedMemory(jobName: string, sharedMemory: SharedTable?)
 	for _, actorSlot in ipairs(self._hiredActors) do
 		self:_SetActorSharedMemory(actorSlot, jobName, sharedMemory)
 	end
+
+	local managerActor = self._managerActor
+	if managerActor ~= nil then
+		self:_SetActorSharedMemory(managerActor, jobName, sharedMemory)
+	end
 end
 
 function Workplace:SetWorkerPayload(jobName: string, workerPayloadBuffer: buffer?)
@@ -279,33 +324,36 @@ function Workplace:SetWorkerPayload(jobName: string, workerPayloadBuffer: buffer
 	for _, actorSlot in ipairs(self._hiredActors) do
 		self:_SetActorWorkerPayload(actorSlot, jobName, workerPayloadBuffer)
 	end
+
+	local managerActor = self._managerActor
+	if managerActor ~= nil then
+		self:_SetActorWorkerPayload(managerActor, jobName, workerPayloadBuffer)
+	end
 end
 
 function Workplace:Run(request: TRunRequest): TRunHandle
 	self:_AssertAlive()
 	Validation.AssertRunRequest(request :: any, self._registeredJobs[request.JobName] ~= nil)
 
-	local resolvedBatchSize = self:_ResolveBatchSize(request.LogicalWorkCount, request.BatchSize)
-	local shardRecords = self:_BuildShardRecords(request, resolvedBatchSize)
+	local isManagerRun = request.ManagerPayloadBuffer ~= nil
+	local resolvedBatchSize = if request.LogicalWorkCount ~= nil
+		then self:_ResolveBatchSize(request.LogicalWorkCount, request.BatchSize)
+		else 1
 
-	local runRecord = self:_CreateRunRecord(request, resolvedBatchSize, #shardRecords)
+	local runRecord = self:_CreateRunRecord(request, resolvedBatchSize)
 	local runHandle = RunHandle.new(self :: any, runRecord)
 	runRecord.Handle = runHandle
 	self._runsById[runRecord.RunId] = runRecord
-	self:_AttachRunListener(runRecord)
+	self:_AttachRunListeners(runRecord)
 
-	if #shardRecords == 0 then
-		runRecord.Status = "Completed"
-		self:_ResolveRun(runRecord)
-		self:_MaybeCleanupRunArtifacts(runRecord)
+	if isManagerRun then
+		runRecord.Status = "QueuedManager"
+		table.insert(self._pendingManagerRuns, runRecord)
+		self:_DrainManagerQueue()
 		return runHandle
 	end
 
-	for _, shardRecord in ipairs(shardRecords) do
-		table.insert(self._pendingShards, shardRecord)
-	end
-
-	self:_DrainQueue()
+	self:_QueueWorkerPhase(runRecord, request.LogicalWorkCount or 0, request.WorkerPayloadBuffer, request.BatchSize)
 	return runHandle
 end
 
@@ -323,6 +371,7 @@ function Workplace:Destroy()
 		self:_CancelRun(runId)
 	end
 
+	table.clear(self._pendingManagerRuns)
 	table.clear(self._pendingShards)
 	table.clear(self._registeredJobs)
 	table.clear(self._sharedMemoryByJobName)
@@ -337,12 +386,35 @@ function Workplace:Destroy()
 		actorSlot.ReleaseOnIdle = true
 	end
 
+	local managerActor = self._managerActor
+	if managerActor ~= nil then
+		if self._managerRun ~= nil then
+			managerActor.ReleaseOnIdle = true
+		else
+			self:_ReturnActorToRecycler(managerActor)
+			self._managerActor = nil
+		end
+	end
+
+	self._managerRun = nil
 	self._destroyed = true
 	self:_FinalizeDestroyIfIdle()
 end
 
 function Workplace:_AssertAlive()
 	assert(not self._destroyed, "ParallelActors workplace has already been destroyed")
+end
+
+function Workplace:_ApplyCachedJobStateToActor(actorSlot: TActorSlot, jobName: string)
+	local sharedMemory = self._sharedMemoryByJobName[jobName]
+	if sharedMemory ~= nil then
+		self:_SetActorSharedMemory(actorSlot, jobName, sharedMemory)
+	end
+
+	local workerPayloadBuffer = self._workerPayloadBufferByJobName[jobName]
+	if workerPayloadBuffer ~= nil then
+		self:_SetActorWorkerPayload(actorSlot, jobName, workerPayloadBuffer)
+	end
 end
 
 function Workplace:_HireActor()
@@ -355,20 +427,23 @@ function Workplace:_HireActor()
 	table.insert(self._hiredActors, actorSlot)
 	table.insert(self._idleActors, actorSlot)
 
-	for _, registeredJob in self._registeredJobs do
+	for jobName, registeredJob in self._registeredJobs do
 		self:_RegisterJobOnActor(actorSlot, registeredJob)
+		self:_ApplyCachedJobStateToActor(actorSlot, jobName)
 	end
+end
 
-	for jobName, sharedMemory in self._sharedMemoryByJobName do
-		if self._registeredJobs[jobName] ~= nil then
-			self:_SetActorSharedMemory(actorSlot, jobName, sharedMemory)
-		end
-	end
+function Workplace:_HireManagerActor()
+	local actorSlot = _AcquireActorSlot()
+	actorSlot.State = "ManagerIdle"
+	actorSlot.ReleaseOnIdle = false
+	actorSlot.Actor.Parent = self._actorFolder
+	_AttachWorkerScript(actorSlot)
+	self._managerActor = actorSlot
 
-	for jobName, workerPayloadBuffer in self._workerPayloadBufferByJobName do
-		if self._registeredJobs[jobName] ~= nil then
-			self:_SetActorWorkerPayload(actorSlot, jobName, workerPayloadBuffer)
-		end
+	for jobName, registeredJob in self._registeredJobs do
+		self:_RegisterJobOnActor(actorSlot, registeredJob)
+		self:_ApplyCachedJobStateToActor(actorSlot, jobName)
 	end
 end
 
@@ -380,7 +455,9 @@ function Workplace:_RegisterJobOnActor(actorSlot: TActorSlot, registeredJob: TRe
 		registeredJob.ArgsSchemaDescriptor,
 		registeredJob.ResultSchemaDescriptor,
 		registeredJob.PayloadSchemaDescriptor,
-		registeredJob.WorkerModule
+		registeredJob.ManagerPayloadSchemaDescriptor,
+		registeredJob.WorkerModule,
+		registeredJob.ManagerModule
 	)
 end
 
@@ -408,29 +485,7 @@ function Workplace:_ResolveBatchSize(logicalWorkCount: number, requestedBatchSiz
 	return math.max(1, math.ceil(logicalWorkCount / self._actorCount))
 end
 
-function Workplace:_BuildShardRecords(request: TRunRequest, batchSize: number): { TShardRecord }
-	local shardRecords = {}
-	local shardIndex = 0
-
-	for startTaskId = 1, request.LogicalWorkCount, batchSize do
-		shardIndex += 1
-		table.insert(shardRecords, {
-			RunId = self._nextRunId + 1,
-			JobName = request.JobName,
-			ShardIndex = shardIndex,
-			StartTaskId = startTaskId,
-			BatchSize = batchSize,
-			LogicalWorkCount = request.LogicalWorkCount,
-			ArgsBuffer = request.ArgsBuffer,
-			SharedMemory = request.SharedMemory,
-			WorkerPayloadBuffer = request.WorkerPayloadBuffer,
-		})
-	end
-
-	return shardRecords
-end
-
-function Workplace:_CreateRunRecord(request: TRunRequest, batchSize: number, shardCount: number): TRunRecord
+function Workplace:_CreateRunRecord(request: TRunRequest, batchSize: number): TRunRecord
 	self._nextRunId += 1
 
 	local resolveRun
@@ -443,15 +498,21 @@ function Workplace:_CreateRunRecord(request: TRunRequest, batchSize: number, sha
 	return {
 		RunId = self._nextRunId,
 		JobName = request.JobName,
+		Request = request,
 		Status = "Queued",
-		LogicalWorkCount = request.LogicalWorkCount,
+		LogicalWorkCount = request.LogicalWorkCount or 0,
 		BatchSize = batchSize,
-		ShardCount = shardCount,
-		QueuedShardCount = shardCount,
+		ShardCount = 0,
+		QueuedShardCount = 0,
 		ActiveShardCount = 0,
 		CompletedShardCount = 0,
 		ShardCompletionsByIndex = {},
 		FirstError = nil,
+		RequestedBatchSize = request.BatchSize,
+		UsedManagerStage = request.ManagerPayloadBuffer ~= nil,
+		ResolvedWorkerPayloadBuffer = request.WorkerPayloadBuffer,
+		ManagerDispatch = nil,
+		ManagerInFlight = false,
 		Handle = nil :: any,
 		Promise = promise,
 		Resolve = resolveRun,
@@ -459,10 +520,75 @@ function Workplace:_CreateRunRecord(request: TRunRequest, batchSize: number, sha
 		Settled = false,
 		ResultBindable = Instance.new("BindableEvent"),
 		ResultConnection = nil,
+		ManagerBindable = Instance.new("BindableEvent"),
+		ManagerConnection = nil,
 	}
 end
 
-function Workplace:_AttachRunListener(runRecord: TRunRecord)
+function Workplace:_AttachRunListeners(runRecord: TRunRecord)
+	local managerBindable = runRecord.ManagerBindable
+	if managerBindable ~= nil then
+		runRecord.ManagerConnection = managerBindable.Event:Connect(function(
+			actorId: number,
+			runId: number,
+			jobName: string,
+			logicalWorkCount: number?,
+			batchSize: number?,
+			workerPayloadBuffer: buffer?,
+			errorMessage: string?
+		)
+			local managerActor = self._managerActor
+			if managerActor == nil or managerActor.ActorId ~= actorId then
+				return
+			end
+
+			local activeRun = self._managerRun
+			if activeRun == nil or activeRun.RunId ~= runId then
+				return
+			end
+
+			if errorMessage ~= nil then
+				self:_FailRun(_BuildSyntheticShard(activeRun), _BuildRunError(activeRun, errorMessage))
+				self:_ReleaseManager()
+				return
+			end
+
+			if type(logicalWorkCount) ~= "number" or logicalWorkCount < 0 or logicalWorkCount % 1 ~= 0 then
+				self:_FailRun(
+					_BuildSyntheticShard(activeRun),
+					_BuildRunError(activeRun, "ParallelActors manager must resolve with a non-negative integer logical work count")
+				)
+				self:_ReleaseManager()
+				return
+			end
+
+			if batchSize ~= nil and (type(batchSize) ~= "number" or batchSize <= 0 or batchSize % 1 ~= 0) then
+				self:_FailRun(
+					_BuildSyntheticShard(activeRun),
+					_BuildRunError(activeRun, "ParallelActors manager returned an invalid batch size")
+				)
+				self:_ReleaseManager()
+				return
+			end
+
+			if workerPayloadBuffer ~= nil and typeof(workerPayloadBuffer) ~= "buffer" then
+				self:_FailRun(
+					_BuildSyntheticShard(activeRun),
+					_BuildRunError(activeRun, "ParallelActors manager returned an invalid worker payload buffer")
+				)
+				self:_ReleaseManager()
+				return
+			end
+
+			self:_CompleteManager(activeRun, {
+				LogicalWorkCount = logicalWorkCount,
+				BatchSize = batchSize,
+				WorkerPayloadBuffer = workerPayloadBuffer,
+			})
+			self:_ReleaseManager()
+		end)
+	end
+
 	local bindable = runRecord.ResultBindable
 	if bindable == nil then
 		return
@@ -528,6 +654,133 @@ function Workplace:_AttachRunListener(runRecord: TRunRecord)
 	end)
 end
 
+function Workplace:_BuildShardRecords(runRecord: TRunRecord, logicalWorkCount: number, workerPayloadBuffer: buffer?): { TShardRecord }
+	local shardRecords = {}
+	local batchSize = self:_ResolveBatchSize(logicalWorkCount, runRecord.RequestedBatchSize)
+	local request = runRecord.Request
+	local shardIndex = 0
+
+	runRecord.LogicalWorkCount = logicalWorkCount
+	runRecord.BatchSize = batchSize
+	runRecord.ResolvedWorkerPayloadBuffer = workerPayloadBuffer
+
+	for startTaskId = 1, logicalWorkCount, batchSize do
+		shardIndex += 1
+		table.insert(shardRecords, {
+			RunId = runRecord.RunId,
+			JobName = runRecord.JobName,
+			ShardIndex = shardIndex,
+			StartTaskId = startTaskId,
+			BatchSize = batchSize,
+			LogicalWorkCount = logicalWorkCount,
+			ArgsBuffer = request.ArgsBuffer,
+			SharedMemory = request.SharedMemory,
+			WorkerPayloadBuffer = workerPayloadBuffer,
+		})
+	end
+
+	return shardRecords
+end
+
+function Workplace:_QueueWorkerPhase(
+	runRecord: TRunRecord,
+	logicalWorkCount: number,
+	workerPayloadBuffer: buffer?,
+	requestedBatchSize: number?
+)
+	runRecord.RequestedBatchSize = requestedBatchSize
+
+	if logicalWorkCount == 0 then
+		runRecord.LogicalWorkCount = 0
+		runRecord.BatchSize = self:_ResolveBatchSize(0, requestedBatchSize)
+		runRecord.ResolvedWorkerPayloadBuffer = workerPayloadBuffer
+		runRecord.Status = "Completed"
+		self:_ResolveRun(runRecord)
+		self:_MaybeCleanupRunArtifacts(runRecord)
+		return
+	end
+
+	local shardRecords = self:_BuildShardRecords(runRecord, logicalWorkCount, workerPayloadBuffer)
+	runRecord.ShardCount = #shardRecords
+	runRecord.QueuedShardCount = #shardRecords
+	runRecord.ActiveShardCount = 0
+	runRecord.CompletedShardCount = 0
+	runRecord.Status = "QueuedWorkers"
+
+	for _, shardRecord in ipairs(shardRecords) do
+		table.insert(self._pendingShards, shardRecord)
+	end
+
+	self:_DrainQueue()
+end
+
+function Workplace:_CompleteManager(runRecord: TRunRecord, dispatch: TManagerDispatch)
+	if self:_IsTerminal(runRecord.Status) then
+		return
+	end
+
+	runRecord.ManagerInFlight = false
+	runRecord.ManagerDispatch = dispatch
+	self:_QueueWorkerPhase(
+		runRecord,
+		dispatch.LogicalWorkCount,
+		dispatch.WorkerPayloadBuffer,
+		dispatch.BatchSize or runRecord.Request.BatchSize
+	)
+end
+
+function Workplace:_DrainManagerQueue()
+	if self._destroyed then
+		return
+	end
+
+	local managerActor = self._managerActor
+	if managerActor == nil or self._managerRun ~= nil then
+		return
+	end
+
+	while #self._pendingManagerRuns > 0 do
+		local runRecord = table.remove(self._pendingManagerRuns, 1)
+		if runRecord == nil then
+			return
+		end
+		if self:_IsTerminal(runRecord.Status) then
+			continue
+		end
+
+		local registeredJob = self._registeredJobs[runRecord.JobName]
+		if registeredJob == nil or registeredJob.ManagerModule == nil then
+			self:_FailRun(
+				_BuildSyntheticShard(runRecord),
+				_BuildRunError(runRecord, "ParallelActors run requested manager payload but the job does not define a manager module")
+			)
+			continue
+		end
+
+		local managerBindable = runRecord.ManagerBindable
+		if managerBindable == nil then
+			self:_FailRun(_BuildSyntheticShard(runRecord), _BuildRunError(runRecord, "ParallelActors run is missing a manager bindable"))
+			continue
+		end
+
+		self._managerRun = runRecord
+		runRecord.ManagerInFlight = true
+		runRecord.Status = "RunningManager"
+		managerActor.State = "ManagerBusy"
+
+		managerActor.Actor:SendMessage(
+			Protocol.RunManager,
+			runRecord.RunId,
+			runRecord.JobName,
+			runRecord.Request.ArgsBuffer,
+			managerBindable,
+			runRecord.Request.SharedMemory,
+			runRecord.Request.ManagerPayloadBuffer
+		)
+		return
+	end
+end
+
 function Workplace:_DrainQueue()
 	if self._destroyed then
 		return
@@ -554,10 +807,7 @@ function Workplace:_DrainQueue()
 		self._busyActors[actorSlot] = shardRecord
 		runRecord.QueuedShardCount -= 1
 		runRecord.ActiveShardCount += 1
-		if runRecord.Status == "Queued" then
-			runRecord.Status = "Running"
-		end
-
+		runRecord.Status = "RunningWorkers"
 		self:_DispatchShard(actorSlot, shardRecord, runRecord)
 	end
 end
@@ -618,6 +868,8 @@ function Workplace:_FailRun(shardRecord: TShardRecord, runError: TRunError)
 
 	runRecord.Status = "Failed"
 	runRecord.FirstError = runError
+	runRecord.ManagerInFlight = false
+	self:_RemoveQueuedManagerRun(runRecord)
 	self:_RemoveQueuedShardsForRun(runRecord)
 	self:_ResolveRun(runRecord)
 	self:_MaybeCleanupRunArtifacts(runRecord)
@@ -630,10 +882,16 @@ function Workplace:_CancelRun(runId: number): boolean
 	end
 
 	runRecord.Status = "Cancelled"
+	runRecord.ManagerInFlight = false
+	self:_RemoveQueuedManagerRun(runRecord)
 	self:_RemoveQueuedShardsForRun(runRecord)
 	self:_ResolveRun(runRecord)
 	self:_MaybeCleanupRunArtifacts(runRecord)
 	return true
+end
+
+function Workplace:_RemoveQueuedManagerRun(runRecord: TRunRecord)
+	_RemoveArrayValue(self._pendingManagerRuns, runRecord)
 end
 
 function Workplace:_RemoveQueuedShardsForRun(runRecord: TRunRecord)
@@ -649,6 +907,32 @@ function Workplace:_RemoveQueuedShardsForRun(runRecord: TRunRecord)
 
 	runRecord.QueuedShardCount = 0
 	self._pendingShards = keptShards
+end
+
+function Workplace:_ReleaseManager()
+	local managerActor = self._managerActor
+	if managerActor == nil then
+		return
+	end
+	local completedRun = self._managerRun
+
+	if managerActor.ReleaseOnIdle or self._destroyed then
+		self:_ReturnActorToRecycler(managerActor)
+		self._managerActor = nil
+		self._managerRun = nil
+		if completedRun ~= nil then
+			self:_MaybeCleanupRunArtifacts(completedRun)
+		end
+		self:_FinalizeDestroyIfIdle()
+		return
+	end
+
+	managerActor.State = "ManagerIdle"
+	self._managerRun = nil
+	if completedRun ~= nil then
+		self:_MaybeCleanupRunArtifacts(completedRun)
+	end
+	self:_DrainManagerQueue()
 end
 
 function Workplace:_ReleaseActor(actorSlot: TActorSlot, shardRecord: TShardRecord)
@@ -723,11 +1007,17 @@ function Workplace:_BuildRunResult(runRecord: TRunRecord): TRunResult
 		ShardCount = runRecord.ShardCount,
 		ShardCompletions = table.freeze(shardCompletions),
 		FirstError = _CloneError(runRecord.FirstError),
+		UsedManagerStage = runRecord.UsedManagerStage,
+		ResolvedWorkerPayloadBuffer = _CloneBuffer(runRecord.ResolvedWorkerPayloadBuffer),
 	})
 end
 
 function Workplace:_MaybeCleanupRunArtifacts(runRecord: TRunRecord)
-	if not runRecord.Settled or runRecord.ActiveShardCount > 0 then
+	if not runRecord.Settled or runRecord.ActiveShardCount > 0 or runRecord.ManagerInFlight then
+		return
+	end
+
+	if self._managerRun ~= nil and self._managerRun.RunId == runRecord.RunId then
 		return
 	end
 
@@ -735,10 +1025,18 @@ function Workplace:_MaybeCleanupRunArtifacts(runRecord: TRunRecord)
 		runRecord.ResultConnection:Disconnect()
 		runRecord.ResultConnection = nil
 	end
+	if runRecord.ManagerConnection ~= nil then
+		runRecord.ManagerConnection:Disconnect()
+		runRecord.ManagerConnection = nil
+	end
 
 	if runRecord.ResultBindable ~= nil then
 		runRecord.ResultBindable:Destroy()
 		runRecord.ResultBindable = nil
+	end
+	if runRecord.ManagerBindable ~= nil then
+		runRecord.ManagerBindable:Destroy()
+		runRecord.ManagerBindable = nil
 	end
 
 	self._runsById[runRecord.RunId] = nil
@@ -750,6 +1048,9 @@ function Workplace:_FinalizeDestroyIfIdle()
 	end
 
 	if next(self._busyActors) ~= nil then
+		return
+	end
+	if self._managerRun ~= nil then
 		return
 	end
 

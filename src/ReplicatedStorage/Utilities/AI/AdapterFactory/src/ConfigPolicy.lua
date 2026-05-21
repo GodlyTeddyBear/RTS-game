@@ -1,5 +1,8 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
 local Types = require(script.Parent.Types)
 local HasRequiredCallbacksSpec = require(script.Parent.Specs.HasRequiredCallbacksSpec)
 local HasResolvableFactorySurfacesSpec = require(script.Parent.Specs.HasResolvableFactorySurfacesSpec)
@@ -25,6 +28,14 @@ local function _AssertSatisfied(result: any, message: string)
 	assert(result.success, message)
 end
 
+local function _CreateCandidateMap()
+	return ScratchRecycler.AcquireMap()
+end
+
+local function _ReleaseCandidateMap(candidate: { [any]: any })
+	ScratchRecycler.ReleaseMap(candidate)
+end
+
 function ConfigPolicy.GetRequiredCallbacks(): { string }
 	return REQUIRED_CALLBACKS
 end
@@ -32,20 +43,26 @@ end
 function ConfigPolicy.ValidateDirectConfig(config: TConfig)
 	assert(type(config) == "table", "AiAdapterFactory config must be a table")
 
+	local actorLabelCandidate = _CreateCandidateMap()
+	actorLabelCandidate.ActorLabel = config.ActorLabel
+
+	local actorLabelResult = HasValidActorLabelSpec.HasValidActorLabel:IsSatisfiedBy(actorLabelCandidate)
+	_ReleaseCandidateMap(actorLabelCandidate)
 	_AssertSatisfied(
-		HasValidActorLabelSpec.HasValidActorLabel:IsSatisfiedBy({
-			ActorLabel = config.ActorLabel,
-		}),
+		actorLabelResult,
 		"AiAdapterFactory ActorLabel must be a non-empty string"
 	)
 
 	for _, callbackName in ipairs(REQUIRED_CALLBACKS) do
+		local callbackCandidate = _CreateCandidateMap()
+		callbackCandidate.ConfigLabel = "AiAdapterFactory config"
+		callbackCandidate.CallbackName = callbackName
+		callbackCandidate.CallbackValue = (config :: any)[callbackName]
+
+		local callbackResult = HasRequiredCallbacksSpec.HasFunctionCallback:IsSatisfiedBy(callbackCandidate)
+		_ReleaseCandidateMap(callbackCandidate)
 		_AssertSatisfied(
-			HasRequiredCallbacksSpec.HasFunctionCallback:IsSatisfiedBy({
-				ConfigLabel = "AiAdapterFactory config",
-				CallbackName = callbackName,
-				CallbackValue = (config :: any)[callbackName],
-			}),
+			callbackResult,
 			("AiAdapterFactory config.%s must be a function"):format(callbackName)
 		)
 	end
@@ -55,10 +72,13 @@ function ConfigPolicy.ResolveFactoryConfig(config: TFactoryConfig): TConfig
 	assert(type(config) == "table", "AiAdapterFactory factory config must be a table")
 	assert(config.Factory ~= nil, "AiAdapterFactory factory config.Factory is required")
 
+	local actorLabelCandidate = _CreateCandidateMap()
+	actorLabelCandidate.ActorLabel = config.ActorLabel
+
+	local actorLabelResult = HasValidActorLabelSpec.HasValidActorLabel:IsSatisfiedBy(actorLabelCandidate)
+	_ReleaseCandidateMap(actorLabelCandidate)
 	_AssertSatisfied(
-		HasValidActorLabelSpec.HasValidActorLabel:IsSatisfiedBy({
-			ActorLabel = config.ActorLabel,
-		}),
+		actorLabelResult,
 		"AiAdapterFactory ActorLabel must be a non-empty string"
 	)
 
@@ -67,23 +87,31 @@ function ConfigPolicy.ResolveFactoryConfig(config: TFactoryConfig): TConfig
 
 	for _, surfaceName in ipairs(REQUIRED_CALLBACKS) do
 		local surfaceValue = (config :: any)[surfaceName]
+		local surfaceTypeCandidate = _CreateCandidateMap()
+		surfaceTypeCandidate.SurfaceName = surfaceName
+		surfaceTypeCandidate.SurfaceValue = surfaceValue
+
+		local surfaceTypeResult = HasResolvableFactorySurfacesSpec.HasSupportedFactorySurfaceType:IsSatisfiedBy(
+			surfaceTypeCandidate
+		)
+		_ReleaseCandidateMap(surfaceTypeCandidate)
 		_AssertSatisfied(
-			HasResolvableFactorySurfacesSpec.HasSupportedFactorySurfaceType:IsSatisfiedBy({
-				SurfaceName = surfaceName,
-				SurfaceValue = surfaceValue,
-			}),
+			surfaceTypeResult,
 			("AiAdapterFactory factory config.%s must be a method-name string or function"):format(surfaceName)
 		)
 
 		if type(surfaceValue) == "string" then
 			local methodName = surfaceValue
 			local methodValue = factoryObject[methodName]
+			local methodCandidate = _CreateCandidateMap()
+			methodCandidate.MethodName = methodName
+			methodCandidate.MethodValue = methodValue
+			methodCandidate.SurfaceName = surfaceName
+
+			local methodResult = HasResolvableFactorySurfacesSpec.HasResolvableFactoryMethod:IsSatisfiedBy(methodCandidate)
+			_ReleaseCandidateMap(methodCandidate)
 			_AssertSatisfied(
-				HasResolvableFactorySurfacesSpec.HasResolvableFactoryMethod:IsSatisfiedBy({
-					MethodName = methodName,
-					MethodValue = methodValue,
-					SurfaceName = surfaceName,
-				}),
+				methodResult,
 				("AiAdapterFactory factory is missing method '%s' for surface '%s'"):format(methodName, surfaceName)
 			)
 
@@ -111,12 +139,15 @@ function ConfigPolicy.ResolveFactoryConfig(config: TFactoryConfig): TConfig
 	}
 
 	for _, callbackName in ipairs(REQUIRED_CALLBACKS) do
+		local callbackCandidate = _CreateCandidateMap()
+		callbackCandidate.ConfigLabel = "AiAdapterFactory resolved config"
+		callbackCandidate.CallbackName = callbackName
+		callbackCandidate.CallbackValue = (resolvedConfig :: any)[callbackName]
+
+		local callbackResult = HasRequiredCallbacksSpec.HasFunctionCallback:IsSatisfiedBy(callbackCandidate)
+		_ReleaseCandidateMap(callbackCandidate)
 		_AssertSatisfied(
-			HasRequiredCallbacksSpec.HasFunctionCallback:IsSatisfiedBy({
-				ConfigLabel = "AiAdapterFactory resolved config",
-				CallbackName = callbackName,
-				CallbackValue = (resolvedConfig :: any)[callbackName],
-			}),
+			callbackResult,
 			("AiAdapterFactory resolved config.%s must be a function"):format(callbackName)
 		)
 	end

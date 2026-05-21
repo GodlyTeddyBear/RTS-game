@@ -287,6 +287,15 @@ function Compiler.Compile(config: TDefineJobConfig): TCompiledJob
 			_CompilePayloadSchema(config.PayloadSchema, `ParallelRunner.DefineJob("{config.Name}") PayloadSchema`)
 		payloadCodec = PayloadCodec.CompileDescriptor(config.Name, config.Version, payloadSchemaDescriptor)
 	end
+	local managerPayloadSchemaDescriptor = nil
+	local managerPayloadCodec = nil
+	if config.ManagerPayloadSchema ~= nil then
+		managerPayloadSchemaDescriptor = _CompilePayloadSchema(
+			config.ManagerPayloadSchema,
+			`ParallelRunner.DefineJob("{config.Name}") ManagerPayloadSchema`
+		)
+		managerPayloadCodec = PayloadCodec.CompileDescriptor(config.Name, config.Version, managerPayloadSchemaDescriptor)
+	end
 
 	local logisticsJob = ParallelLogistics.DefineJob({
 		Name = config.Name,
@@ -300,6 +309,8 @@ function Compiler.Compile(config: TDefineJobConfig): TCompiledJob
 	self._logisticsJob = logisticsJob
 	self._payloadSchemaDescriptor = payloadSchemaDescriptor
 	self._payloadCodec = payloadCodec
+	self._managerPayloadSchemaDescriptor = managerPayloadSchemaDescriptor
+	self._managerPayloadCodec = managerPayloadCodec
 	return self :: any
 end
 
@@ -356,6 +367,14 @@ end
 
 function CompiledRunnerJob:GetPayloadCodec()
 	return self._payloadCodec
+end
+
+function CompiledRunnerJob:GetManagerPayloadSchemaDescriptor()
+	return self._managerPayloadSchemaDescriptor
+end
+
+function CompiledRunnerJob:GetManagerPayloadCodec()
+	return self._managerPayloadCodec
 end
 
 return table.freeze(Compiler)

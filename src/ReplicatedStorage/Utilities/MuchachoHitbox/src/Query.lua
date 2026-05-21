@@ -13,6 +13,22 @@ local Query = {}
 local SHAPE_BLOCK = 1
 local SHAPE_BALL = 2
 
+type TQueryCache = {
+	OverlapParamsRef: OverlapParams?,
+	FilterTypeValue: number?,
+	FilterInstancesRef: { Instance }?,
+	CollisionGroup: string?,
+	RespectCanCollide: boolean?,
+	MaxParts: number?,
+	Shape: Enum.PartType?,
+	Size: Vector3 | number?,
+	QueryOptions: any,
+	ShapeId: number?,
+	ParallelSize: Vector3?,
+	FilterToken: string?,
+	CanUseParallel: boolean,
+}
+
 local function buildQueryOptionsFromOverlapParams(overlapParams: OverlapParams)
 	return SpatialQuery.CreateOverlapOptions({
 		FilterType = overlapParams.FilterType,
@@ -92,8 +108,83 @@ local function castQueryByShape(
 	error("Unsupported MuchachoHitbox shape id: " .. tostring(shapeId))
 end
 
+local function _GetOrCreateQueryCache(hitbox: THitbox): TQueryCache
+	local queryCache = hitbox._QueryCache
+	if queryCache ~= nil then
+		return queryCache
+	end
+
+	queryCache = {
+		OverlapParamsRef = nil,
+		FilterTypeValue = nil,
+		FilterInstancesRef = nil,
+		CollisionGroup = nil,
+		RespectCanCollide = nil,
+		MaxParts = nil,
+		Shape = nil,
+		Size = nil,
+		QueryOptions = nil,
+		ShapeId = nil,
+		ParallelSize = nil,
+		FilterToken = nil,
+		CanUseParallel = false,
+	}
+	hitbox._QueryCache = queryCache
+	return queryCache
+end
+
+local function _HasOverlapParamsChanged(queryCache: TQueryCache, overlapParams: OverlapParams): boolean
+	local filterInstances = overlapParams.FilterDescendantsInstances
+	return queryCache.OverlapParamsRef ~= overlapParams
+		or queryCache.FilterTypeValue ~= overlapParams.FilterType.Value
+		or queryCache.FilterInstancesRef ~= filterInstances
+		or queryCache.CollisionGroup ~= overlapParams.CollisionGroup
+		or queryCache.RespectCanCollide ~= overlapParams.RespectCanCollide
+		or queryCache.MaxParts ~= overlapParams.MaxParts
+end
+
+local function _HasShapeStateChanged(queryCache: TQueryCache, hitbox: THitbox): boolean
+	return queryCache.Shape ~= hitbox.Shape or queryCache.Size ~= hitbox.Size
+end
+
+local function _ResolveQueryCache(hitbox: THitbox): TQueryCache
+	local queryCache = _GetOrCreateQueryCache(hitbox)
+	local overlapParams = hitbox.OverlapParams
+	local didOverlapParamsChange = _HasOverlapParamsChanged(queryCache, overlapParams)
+	local didShapeStateChange = _HasShapeStateChanged(queryCache, hitbox)
+
+	if didOverlapParamsChange then
+		queryCache.OverlapParamsRef = overlapParams
+		queryCache.FilterTypeValue = overlapParams.FilterType.Value
+		queryCache.FilterInstancesRef = overlapParams.FilterDescendantsInstances
+		queryCache.CollisionGroup = overlapParams.CollisionGroup
+		queryCache.RespectCanCollide = overlapParams.RespectCanCollide
+		queryCache.MaxParts = overlapParams.MaxParts
+		queryCache.QueryOptions = buildQueryOptionsFromOverlapParams(overlapParams)
+		queryCache.FilterToken = nil
+	end
+
+	if didShapeStateChange then
+		queryCache.Shape = hitbox.Shape
+		queryCache.Size = hitbox.Size
+		queryCache.ShapeId = resolveShapeId(hitbox.Shape)
+		queryCache.ParallelSize = if queryCache.ShapeId ~= nil
+			then resolveParallelSize(queryCache.ShapeId, hitbox.Size)
+			else nil
+	end
+
+	if didOverlapParamsChange or didShapeStateChange then
+		queryCache.CanUseParallel = FilterRegistry.SupportsParallelOverlapParams(overlapParams)
+			and queryCache.ShapeId ~= nil
+			and queryCache.ParallelSize ~= nil
+	end
+
+	return queryCache
+end
+
 function Query.CastSpatialQuery(hitbox: THitbox, hitboxCFrame: CFrame): { BasePart }
-	local shapeId = resolveShapeId(hitbox.Shape)
+	local queryCache = _ResolveQueryCache(hitbox)
+	local shapeId = queryCache.ShapeId
 	if not shapeId then
 		error("Part type: " .. tostring(hitbox.Shape) .. " isn't compatible with MuchachoHitbox")
 	end
@@ -102,28 +193,26 @@ function Query.CastSpatialQuery(hitbox: THitbox, hitboxCFrame: CFrame): { BasePa
 		hitboxCFrame,
 		hitbox.Size,
 		shapeId,
-		buildQueryOptionsFromOverlapParams(hitbox.OverlapParams)
+		queryCache.QueryOptions
 	)
 end
 
 function Query.BuildParallelSnapshot(hitbox: THitbox, _hitboxCFrame: CFrame): (Vector3?, number?, string?)
-	local overlapParams = hitbox.OverlapParams
-	if not FilterRegistry.SupportsParallelOverlapParams(overlapParams) then
+	local queryCache = _ResolveQueryCache(hitbox)
+	if not queryCache.CanUseParallel then
 		return nil, nil, nil
 	end
 
-	local shapeId = resolveShapeId(hitbox.Shape)
-	local parallelSize = shapeId and resolveParallelSize(shapeId, hitbox.Size) or nil
-	if shapeId == nil or parallelSize == nil then
-		return nil, nil, nil
-	end
-
-	local filterToken = FilterRegistry.SyncOverlapParams(hitbox.Key, overlapParams)
+	local filterToken = queryCache.FilterToken
 	if not filterToken then
-		return nil, nil, nil
+		filterToken = FilterRegistry.SyncOverlapParams(hitbox.Key, hitbox.OverlapParams)
+		if not filterToken then
+			return nil, nil, nil
+		end
+		queryCache.FilterToken = filterToken
 	end
 
-	return parallelSize, shapeId, filterToken
+	return queryCache.ParallelSize, queryCache.ShapeId, filterToken
 end
 
 function Query.CastParallelPresenceQuery(

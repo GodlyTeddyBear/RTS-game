@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local BehaviorSystem = require(ReplicatedStorage.Utilities.AI.Behavior)
 local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
+local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
 
 local HookRunner = require(script.Parent.HookRunner)
 local RuntimeEnums = require(script.Parent.RuntimeEnums)
@@ -25,6 +26,13 @@ type TCleanupResult = Types.TCleanupResult
 type TCleanupBatchResult = Types.TCleanupBatchResult
 
 type THookOutcome = HookRunner.THookOutcome
+type TDirectServiceContext = {
+	RegistryService: any,
+	Entity: number,
+	CurrentTime: number,
+	TickId: number,
+	RuntimeProfile: TRuntimeFrameProfile?,
+}
 
 type TEntityFrameState = {
 	Entity: number,
@@ -63,17 +71,6 @@ type TRuntimeFrameProfile = {
 	ServiceBuildCount: number,
 }
 
-local _ResolveActorTypes
-local _BuildTreeContext
-local _CloneActionState
-local _GetActorLabel
-local _BuildCleanupResult
-local _CreateRuntimeFrameProfile
-local _CaptureMilliseconds
-local _BuildDirectCombatHookOutcome
-local _ShouldStopForTimeBudget
-local _BuildServiceTickDeadline
-
 local runFrameActorTypesProfileTag = "AI.Runtime.RunFrame.ActorTypes"
 local runFrameResolveActorTypesProfileTag = "AI.Runtime.RunFrame.ResolveActorTypes"
 local runFrameActorTypesIterateProfileTag = "AI.Runtime.RunFrame.ActorTypes.Iterate"
@@ -99,12 +96,317 @@ local runFrameBuildDirectCombatHookOutcomeBuildFactsPrecheckProfileTag =
 local runFrameBuildDirectCombatHookOutcomeBuildFactsGateProfileTag =
 	"AI.Runtime.BuildHookOutcome.DirectPath.BuildFacts.Gate"
 local runFrameProfilingEnabled = DebugConfig.AI_RUNTIME_FRAME_PROFILING
+local DIRECT_SERVICE_CONTEXT_KEY = {}
 
 local EMPTY_HOOK_OUTCOME: THookOutcome = table.freeze({
 	Facts = table.freeze({}),
 	BehaviorContext = table.freeze({}),
-	Services = table.freeze({}),
+	BaseServices = nil,
+	ServiceOverrides = nil,
 })
+
+local function _ResolveActorTypes(
+	frameContext: TFrameContext,
+	actorAdapters: { [string]: TActorAdapter },
+	actorOrder: { string }
+): { string }
+	if frameContext.ActorTypes == nil then
+		return actorOrder
+	end
+
+	for _, actorType in ipairs(frameContext.ActorTypes) do
+		assert(actorAdapters[actorType] ~= nil, ("AiRuntime frame requested unknown actor type '%s'"):format(actorType))
+	end
+
+	return frameContext.ActorTypes
+end
+
+local function _CreateRuntimeFrameProfile(): TRuntimeFrameProfile?
+	if DebugConfig.ENABLED ~= true or DebugConfig.AI_RUNTIME_PROFILING ~= true then
+		return nil
+	end
+
+	return {
+		FrameStartedAt = os.clock(),
+		ActorEnumerationMilliseconds = 0,
+		BuildEntityStateMilliseconds = 0,
+		InitialActionStateMilliseconds = 0,
+		RefreshActionStateMilliseconds = 0,
+		HookMilliseconds = 0,
+		FactBuildMilliseconds = 0,
+		ServiceBuildMilliseconds = 0,
+		TreeMilliseconds = 0,
+		TransitionMilliseconds = 0,
+		ActionMilliseconds = 0,
+		ActorCount = 0,
+		FullSkipCount = 0,
+		ActionOnlyCount = 0,
+		TreeEvaluatedCount = 0,
+		FactBuildCount = 0,
+		ServiceBuildCount = 0,
+	}
+end
+
+local function _CaptureMilliseconds(startedAt: number?): number
+	if startedAt == nil then
+		return 0
+	end
+
+	return (os.clock() - startedAt) * 1000
+end
+
+local function _BuildServiceTickDeadline(frameContext: TFrameContext): number?
+	local tickBudgetSeconds = frameContext.TickBudgetSeconds
+	if type(tickBudgetSeconds) ~= "number" or tickBudgetSeconds <= 0 then
+		return nil
+	end
+
+	return os.clock() + tickBudgetSeconds
+end
+
+local function _ShouldStopForTimeBudget(tickDeadline: number?): boolean
+	return type(tickDeadline) == "number" and os.clock() >= tickDeadline
+end
+
+local function _BuildDirectCombatHookOutcome(
+	frameContext: TFrameContext,
+	options: {
+		Entity: number,
+		NeedsFacts: boolean,
+		NeedsServices: boolean,
+		RuntimeProfile: TRuntimeFrameProfile?,
+	}
+): THookOutcome?
+	local baseServices = nil
+	local registryService = nil
+	local precheckPassed = DebugPlus.profile(
+		runFrameBuildDirectCombatHookOutcomeBuildFactsPrecheckProfileTag,
+		function()
+			baseServices = frameContext.Services
+			if type(baseServices) ~= "table" then
+				return false
+			end
+
+			registryService = baseServices.CombatActorRegistryService
+			if registryService == nil then
+				return false
+			end
+
+			return true
+		end,
+		runFrameProfilingEnabled
+	)
+	if not precheckPassed then
+		return nil
+	end
+
+	local currentTime = frameContext.CurrentTime
+	local runtimeProfile = options.RuntimeProfile
+
+	local facts = nil
+	local shouldBuildFacts = DebugPlus.profile(runFrameBuildDirectCombatHookOutcomeBuildFactsGateProfileTag, function()
+		return options.NeedsFacts == true
+	end, runFrameProfilingEnabled)
+	if shouldBuildFacts then
+		DebugPlus.profile(runFrameBuildDirectCombatHookOutcomeBuildFactsProfileTag, function()
+			local factBuildStartedAt = if runtimeProfile ~= nil then os.clock() else nil
+			facts = registryService:BuildFacts(options.Entity, currentTime)
+			if runtimeProfile ~= nil then
+				runtimeProfile.FactBuildCount += 1
+				runtimeProfile.FactBuildMilliseconds += _CaptureMilliseconds(factBuildStartedAt)
+			end
+		end, runFrameProfilingEnabled)
+	end
+
+	return {
+		Facts = if facts ~= nil then facts else EMPTY_HOOK_OUTCOME.Facts,
+		BehaviorContext = EMPTY_HOOK_OUTCOME.BehaviorContext,
+		BaseServices = if options.NeedsServices then baseServices else nil,
+		ServiceOverrides = if options.NeedsServices
+			then {
+				[DIRECT_SERVICE_CONTEXT_KEY] = {
+					RegistryService = registryService,
+					Entity = options.Entity,
+					CurrentTime = currentTime,
+					TickId = frameContext.TickId,
+					RuntimeProfile = runtimeProfile,
+				},
+			}
+			else nil,
+	}
+end
+
+local function _BuildHookContext(
+	entity: number,
+	actorType: string,
+	adapter: TActorAdapter,
+	actionState: TActionState,
+	frameContext: TFrameContext,
+	baseServices: { [string]: any },
+	needsFacts: boolean,
+	needsBehaviorContext: boolean,
+	needsServices: boolean,
+	frameProfile: TRuntimeFrameProfile?
+): Types.THookContext
+	return {
+		Entity = entity,
+		ActorType = actorType,
+		ActionState = actionState,
+		FrameContext = frameContext,
+		Services = baseServices,
+		Adapter = adapter,
+		NeedsFacts = needsFacts,
+		NeedsBehaviorContext = needsBehaviorContext,
+		NeedsServices = needsServices,
+		RuntimeProfile = frameProfile,
+	}
+end
+
+local function _BuildTreeContext(
+	entity: number,
+	actorType: string,
+	adapter: TActorAdapter,
+	hookOutcome: THookOutcome
+): { [string]: any }
+	local treeContext = {
+		Entity = entity,
+		ActorType = actorType,
+		Facts = hookOutcome.Facts,
+		ActionFactory = adapter,
+	}
+
+	for key, value in pairs(hookOutcome.BehaviorContext) do
+		if key ~= "Entity" and key ~= "ActorType" and key ~= "Facts" and key ~= "ActionFactory" then
+			treeContext[key] = value
+		end
+	end
+
+	return treeContext
+end
+
+local function _CloneActionState(actionState: TActionState?): TActionState
+	if actionState == nil then
+		return {
+			CurrentActionId = nil,
+			ActionState = "Idle",
+			ActionData = nil,
+			PendingActionId = nil,
+			PendingActionData = nil,
+			StartedAt = nil,
+			FinishedAt = nil,
+		}
+	end
+
+	return {
+		CurrentActionId = actionState.CurrentActionId,
+		ActionState = actionState.ActionState or "Idle",
+		ActionData = actionState.ActionData,
+		PendingActionId = actionState.PendingActionId,
+		PendingActionData = actionState.PendingActionData,
+		StartedAt = (actionState :: any).StartedAt or (actionState :: any).ActionStartedAt,
+		FinishedAt = (actionState :: any).FinishedAt,
+	}
+end
+
+local function _GetActorLabel(adapter: TActorAdapter): string?
+	if adapter.GetActorLabel == nil then
+		return nil
+	end
+
+	local actorLabel = adapter:GetActorLabel()
+	Validation.ValidateActorLabel("unknown", actorLabel)
+	return actorLabel
+end
+
+local function _BuildCleanupResult(
+	actorType: string,
+	entity: number,
+	cleanupKind: TCleanupKind,
+	status: string,
+	defect: TErrorSinkPayload?
+): TCleanupResult
+	return {
+		ActorType = actorType,
+		Entity = entity,
+		CleanupKind = cleanupKind,
+		Status = status,
+		Defect = defect,
+	}
+end
+
+local function _BuildCleanupDefect(
+	cleanupKind: TCleanupKind,
+	actorType: string,
+	entity: number,
+	adapter: TActorAdapter,
+	errorType: string,
+	errorMessage: string
+): TErrorSinkPayload
+	return {
+		Stage = if cleanupKind == RuntimeEnums.CleanupKind.Cancel.Name
+			then "CancelActorAction"
+			else "HandleActorDeath",
+		ActorType = actorType,
+		Entity = entity,
+		ActorLabel = _GetActorLabel(adapter),
+		ErrorType = errorType,
+		ErrorMessage = errorMessage,
+		Details = nil,
+	}
+end
+
+local function _BuildRuntimeContext(
+	deltaTime: number,
+	services: { [string]: any }
+): { DeltaTime: number, Services: { [string]: any } }
+	return {
+		DeltaTime = deltaTime,
+		Services = services,
+	}
+end
+
+local function _BuildExecutorServices(hookOutcome: THookOutcome, actionState: TActionState): { [string]: any }
+	local baseServices = hookOutcome.BaseServices
+	local serviceOverrides = hookOutcome.ServiceOverrides
+	local services
+	if baseServices ~= nil then
+		services = table.clone(baseServices)
+	else
+		services = {}
+	end
+	local directServiceContext = nil :: TDirectServiceContext?
+
+	if serviceOverrides ~= nil then
+		directServiceContext = (serviceOverrides :: any)[DIRECT_SERVICE_CONTEXT_KEY]
+		if directServiceContext ~= nil then
+			DebugPlus.profile(runFrameBuildDirectCombatHookOutcomeBuildServicesProfileTag, function()
+				local directContext = directServiceContext :: TDirectServiceContext
+				local serviceBuildStartedAt = if directContext.RuntimeProfile ~= nil then os.clock() else nil
+				local builtServices = directContext.RegistryService:BuildServices(
+					directContext.Entity,
+					directContext.CurrentTime,
+					directContext.TickId
+				)
+				for key, value in pairs(builtServices) do
+					services[key] = value
+				end
+				if directContext.RuntimeProfile ~= nil then
+					directContext.RuntimeProfile.ServiceBuildCount += 1
+					directContext.RuntimeProfile.ServiceBuildMilliseconds += _CaptureMilliseconds(serviceBuildStartedAt)
+				end
+			end, runFrameProfilingEnabled)
+		end
+
+		for key, value in pairs(serviceOverrides) do
+			if key ~= DIRECT_SERVICE_CONTEXT_KEY then
+				services[key] = value
+			end
+		end
+	end
+
+	services.ActionState = actionState
+	return services
+end
 
 --[=[
 	@class AiRuntimeService
@@ -274,7 +576,7 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 	local defects = {}
 	local entityResults = {}
 	local frameProfile = _CreateRuntimeFrameProfile()
-	local selectedEntitiesByActorType = {}
+	local selectedEntitiesByActorType = ScratchRecycler.AcquireMap()
 	local selectedActorCount = 0
 	local servicedActorCount = 0
 	local serviceTickDeadline = nil
@@ -294,12 +596,12 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 					frameProfile.ActorEnumerationMilliseconds += _CaptureMilliseconds(enumerationStartedAt)
 				end
 
+				-- Only the actor-type lookup container is recycler-owned here; the entity arrays stay adapter-owned.
 				selectedEntitiesByActorType[actorType] = entities
 				selectedActorCount += #entities
 			end
 
 			serviceTickDeadline = _BuildServiceTickDeadline(frameContext)
-			local s = os.clock()
 			for _, actorType in ipairs(actorTypes) do
 				local adapter = self._actorAdapters[actorType]
 				local entities = selectedEntitiesByActorType[actorType]
@@ -310,7 +612,6 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 				for _, entity in ipairs(entities) do
 					if servicedActorCount > 0 and _ShouldStopForTimeBudget(serviceTickDeadline) then
 						stopReason = "TimeBudgetExceeded"
-						print(((os.clock() - s) * 10 ^ 3) .. " MS", servicedActorCount)
 						return
 					end
 
@@ -323,16 +624,15 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 						entityResults,
 						frameProfile
 					)
-					local singleEntityStates = { entityState }
 
 					DebugPlus.profile(runFrameActorTypesTreePhaseProfileTag, function()
-						self:_RunTreePhase(singleEntityStates, frameContext, defects, frameProfile)
+						self:_RunTreePhase(entityState, frameContext, defects, frameProfile)
 					end, runFrameProfilingEnabled)
 					DebugPlus.profile(runFrameActorTypesTransitionPhaseProfileTag, function()
-						self:_RunTransitionPhase(singleEntityStates, frameContext, defects, frameProfile)
+						self:_RunTransitionPhase(entityState, frameContext, defects, frameProfile)
 					end, runFrameProfilingEnabled)
 					DebugPlus.profile(runFrameActorTypesActionPhaseProfileTag, function()
-						self:_RunActionPhase(singleEntityStates, frameContext, defects, frameProfile)
+						self:_RunActionPhase(entityState, frameContext, defects, frameProfile)
 					end, runFrameProfilingEnabled)
 
 					servicedActorCount += 1
@@ -345,6 +645,7 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 			end
 		end, runFrameProfilingEnabled)
 	end, runFrameProfilingEnabled)
+	ScratchRecycler.ReleaseMap(selectedEntitiesByActorType)
 
 	self._lastFrameTime = frameContext.CurrentTime
 	self:_EmitFrameProfile(frameProfile)
@@ -357,52 +658,6 @@ function Runtime:RunFrame(frameContext: TFrameContext): TRunFrameResult
 		RemainingSelectedActorCount = math.max(selectedActorCount - servicedActorCount, 0),
 		StopReason = stopReason,
 	})
-end
-
---[=[
-	@private
-	Builds the per-entity snapshots used by the tree, transition, and action phases.
-	@within AiRuntimeService
-	@param actorType string
-	@param adapter TActorAdapter
-	@param frameContext TFrameContext
-	@param defects { TErrorSinkPayload }
-	@param entityResults { TRunFrameEntityResult }
-	@return { any }
-]=]
-function Runtime:_BuildEntityStates(
-	actorType: string,
-	adapter: TActorAdapter,
-	frameContext: TFrameContext,
-	defects: { TErrorSinkPayload },
-	entityResults: { TRunFrameEntityResult },
-	frameProfile: TRuntimeFrameProfile?
-): { TEntityFrameState }
-	-- Entity state snapshots let the three runtime phases share the same per-entity inputs without repeated adapter calls.
-	local entityStates = {}
-	local enumerationStartedAt = if frameProfile ~= nil then os.clock() else nil
-	local entities = adapter:QueryActiveEntities(frameContext)
-	Validation.ValidateQueryActiveEntitiesResult(actorType, entities)
-	if frameProfile ~= nil then
-		frameProfile.ActorEnumerationMilliseconds += _CaptureMilliseconds(enumerationStartedAt)
-	end
-
-	local buildEntityStateStartedAt = if frameProfile ~= nil then os.clock() else nil
-
-	DebugPlus.profile(runFrameBuildEntityStatesIterateProfileTag, function()
-		for _, entity in ipairs(entities) do
-			table.insert(
-				entityStates,
-				self:_BuildEntityState(actorType, adapter, entity, frameContext, defects, entityResults, frameProfile)
-			)
-		end
-	end, runFrameProfilingEnabled)
-
-	if frameProfile ~= nil then
-		frameProfile.BuildEntityStateMilliseconds += _CaptureMilliseconds(buildEntityStateStartedAt)
-	end
-
-	return entityStates
 end
 
 function Runtime:_BuildEntityState(
@@ -419,18 +674,6 @@ function Runtime:_BuildEntityState(
 	if frameProfile ~= nil then
 		frameProfile.ActorCount += 1
 	end
-
-	local result = {
-		ActorType = actorType,
-		Entity = entity,
-		TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name,
-		StartStatus = nil,
-		CommitStatus = nil,
-		TickActionId = nil,
-		TickStatus = nil,
-		ResolveStatus = nil,
-	}
-	table.insert(entityResults, result)
 
 	local actionStateStartedAt = if frameProfile ~= nil then os.clock() else nil
 	local workingActionState = nil :: TActionState?
@@ -456,17 +699,27 @@ function Runtime:_BuildEntityState(
 	end, runFrameProfilingEnabled)
 	local resolvedWorkingActionState = workingActionState :: TActionState
 
-	if behaviorTree == nil then
-		result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name
-	elseif not shouldEvaluateTree then
-		result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNotReady.Name
-	end
-
 	local skipAllPhases = not hasCurrentAction and not hasPendingAction and not shouldEvaluateTree
 	local needsTransitionPhase = hasPendingAction or shouldEvaluateTree
 	local needsActionPhase = hasCurrentAction or hasPendingAction or shouldEvaluateTree
 	local needsFacts = shouldEvaluateTree
 	local hookOutcome = EMPTY_HOOK_OUTCOME
+	local initialTreeStatus = if behaviorTree == nil
+		then RuntimeEnums.TreeStatus.SkippedNoTree.Name
+		elseif not shouldEvaluateTree
+			then RuntimeEnums.TreeStatus.SkippedNotReady.Name
+			else RuntimeEnums.TreeStatus.SkippedNoTree.Name
+	local result = {
+		ActorType = actorType,
+		Entity = entity,
+		TreeStatus = initialTreeStatus,
+		StartStatus = nil,
+		CommitStatus = nil,
+		TickActionId = nil,
+		TickStatus = nil,
+		ResolveStatus = nil,
+	}
+	table.insert(entityResults, result)
 
 	if frameProfile ~= nil then
 		if skipAllPhases then
@@ -565,10 +818,8 @@ function Runtime:_CleanupActorAction(
 		true,
 		nil
 	)
-	local runtimeContext = {
-		DeltaTime = frameContext.DeltaTime,
-		Services = hookOutcome.Services,
-	}
+	local executorServices = _BuildExecutorServices(hookOutcome, workingActionState)
+	local runtimeContext = _BuildRuntimeContext(frameContext.DeltaTime, executorServices)
 
 	-- Cleanup uses the same runtime boundary as frame execution so cancellation and death stay behavior-system aware.
 	local cleanupResult = if cleanupKind == RuntimeEnums.CleanupKind.Cancel.Name
@@ -577,17 +828,7 @@ function Runtime:_CleanupActorAction(
 
 	if not cleanupResult.success then
 		-- Cleanup failures still clear the adapter state so stale actions do not linger after the defect.
-		local defect = {
-			Stage = if cleanupKind == RuntimeEnums.CleanupKind.Cancel.Name
-				then "CancelActorAction"
-				else "HandleActorDeath",
-			ActorType = actorType,
-			Entity = entity,
-			ActorLabel = _GetActorLabel(adapter),
-			ErrorType = cleanupResult.type,
-			ErrorMessage = cleanupResult.message,
-			Details = nil,
-		}
+		local defect = _BuildCleanupDefect(cleanupKind, actorType, entity, adapter, cleanupResult.type, cleanupResult.message)
 		self:_PushDefect(defects, defect)
 		adapter:ClearActionState(entity)
 
@@ -651,7 +892,7 @@ function Runtime:_BuildHookOutcome(
 	local hookStartedAt = if frameProfile ~= nil then os.clock() else nil
 	if self._useDirectCombatHookPath then
 		local directCombatHookOutcome = DebugPlus.profile(runFrameBuildHookOutcomeDirectPathProfileTag, function()
-			return _BuildDirectCombatHookOutcome(actionState, frameContext, {
+			return _BuildDirectCombatHookOutcome(frameContext, {
 				Entity = entity,
 				NeedsFacts = needsFacts,
 				NeedsServices = needsServices,
@@ -666,24 +907,23 @@ function Runtime:_BuildHookOutcome(
 		end
 	end
 
-	local hookContext = nil :: Types.THookContext?
+	local baseServices = nil :: { [string]: any }?
 	DebugPlus.profile(runFrameBuildHookOutcomeBuildContextProfileTag, function()
-		local baseServices = if frameContext.Services ~= nil then frameContext.Services else {}
-		hookContext = {
-			Entity = entity,
-			ActorType = actorType,
-			ActionState = actionState,
-			FrameContext = frameContext,
-			Services = baseServices,
-			Adapter = adapter,
-			NeedsFacts = needsFacts,
-			NeedsBehaviorContext = needsBehaviorContext,
-			NeedsServices = needsServices,
-			RuntimeProfile = frameProfile,
-		}
+		baseServices = if frameContext.Services ~= nil then frameContext.Services else {}
 	end, runFrameProfilingEnabled)
 
-	local resolvedHookContext = hookContext :: Types.THookContext
+	local resolvedHookContext = _BuildHookContext(
+		entity,
+		actorType,
+		adapter,
+		actionState,
+		frameContext,
+		baseServices :: { [string]: any },
+		needsFacts,
+		needsBehaviorContext,
+		needsServices,
+		frameProfile
+	)
 	local hookOutcome = DebugPlus.profile(runFrameBuildHookOutcomeRunHooksProfileTag, function()
 		return self:_RunHooks(entity, actorType, adapter, resolvedHookContext, defects)
 	end, runFrameProfilingEnabled)
@@ -698,71 +938,78 @@ end
 
 --[=[
 	@private
-	Runs the tree-evaluation phase for one batch of entity snapshots.
+	Runs the tree-evaluation phase for one entity snapshot.
 	@within AiRuntimeService
-	@param entityStates { TEntityFrameState }
+	@param entityState TEntityFrameState
 	@param frameContext TFrameContext
 	@param defects { TErrorSinkPayload }
 ]=]
 function Runtime:_RunTreePhase(
-	entityStates: { TEntityFrameState },
+	entityState: TEntityFrameState,
 	frameContext: TFrameContext,
 	defects: { TErrorSinkPayload },
 	frameProfile: TRuntimeFrameProfile?
 )
 	local treePhaseStartedAt = if frameProfile ~= nil then os.clock() else nil
-	for _, entityState in ipairs(entityStates) do
-		if not entityState.ShouldEvaluateTree then
-			continue
+	if not entityState.ShouldEvaluateTree then
+		if frameProfile ~= nil then
+			frameProfile.TreeMilliseconds += _CaptureMilliseconds(treePhaseStartedAt)
 		end
-
-		if entityState.BehaviorTree == nil then
-			-- No tree means there is nothing to evaluate for this entity.
-			entityState.Result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name
-			continue
-		end
-
-		local treeContext =
-			_BuildTreeContext(entityState.Entity, entityState.ActorType, entityState.Adapter, entityState.HookOutcome)
-		local didRun, runError = pcall(function()
-			entityState.BehaviorTree:run(treeContext)
-		end)
-
-		if not didRun then
-			-- Tree execution defects stay isolated to the tree phase and do not stop later entities.
-			entityState.Result.TreeStatus = RuntimeEnums.TreeStatus.TreeDefect.Name
-			self:_PushDefect(defects, {
-				Stage = "TreeRun",
-				ActorType = entityState.ActorType,
-				Entity = entityState.Entity,
-				ActorLabel = _GetActorLabel(entityState.Adapter),
-				ErrorType = "TreeRunFailed",
-				ErrorMessage = tostring(runError),
-				Details = nil,
-			})
-			continue
-		end
-
-		entityState.Result.TreeStatus = RuntimeEnums.TreeStatus.Ran.Name
-		entityState.TreeTouchedActionState = true
-		-- The tree advanced successfully, so the adapter records the new tick time for the next frame.
-		entityState.Adapter:UpdateLastTickTime(entityState.Entity, frameContext.CurrentTime)
-
-		if entityState.NeedsAdapterRefreshAfterTree then
-			local refreshActionStateStartedAt = if frameProfile ~= nil then os.clock() else nil
-			local refreshedActionState = entityState.Adapter:GetActionState(entityState.Entity)
-			Validation.ValidateActionState(refreshedActionState, "AiRuntime TreeRun RefreshActionState")
-			entityState.WorkingActionState = _CloneActionState(refreshedActionState)
-			if frameProfile ~= nil then
-				frameProfile.RefreshActionStateMilliseconds += _CaptureMilliseconds(refreshActionStateStartedAt)
-			end
-		end
-
-		local hasCurrentAction = type(entityState.WorkingActionState.CurrentActionId) == "string"
-		local hasPendingAction = type(entityState.WorkingActionState.PendingActionId) == "string"
-		entityState.NeedsTransitionPhase = hasPendingAction
-		entityState.NeedsActionPhase = hasCurrentAction or hasPendingAction
+		return
 	end
+
+	if entityState.BehaviorTree == nil then
+		-- No tree means there is nothing to evaluate for this entity.
+		entityState.Result.TreeStatus = RuntimeEnums.TreeStatus.SkippedNoTree.Name
+		if frameProfile ~= nil then
+			frameProfile.TreeMilliseconds += _CaptureMilliseconds(treePhaseStartedAt)
+		end
+		return
+	end
+
+	local treeContext =
+		_BuildTreeContext(entityState.Entity, entityState.ActorType, entityState.Adapter, entityState.HookOutcome)
+	local didRun, runError = pcall(function()
+		entityState.BehaviorTree:run(treeContext)
+	end)
+
+	if not didRun then
+		-- Tree execution defects stay isolated to the tree phase and do not stop later entities.
+		entityState.Result.TreeStatus = RuntimeEnums.TreeStatus.TreeDefect.Name
+		self:_PushDefect(defects, {
+			Stage = "TreeRun",
+			ActorType = entityState.ActorType,
+			Entity = entityState.Entity,
+			ActorLabel = _GetActorLabel(entityState.Adapter),
+			ErrorType = "TreeRunFailed",
+			ErrorMessage = tostring(runError),
+			Details = nil,
+		})
+		if frameProfile ~= nil then
+			frameProfile.TreeMilliseconds += _CaptureMilliseconds(treePhaseStartedAt)
+		end
+		return
+	end
+
+	entityState.Result.TreeStatus = RuntimeEnums.TreeStatus.Ran.Name
+	entityState.TreeTouchedActionState = true
+	-- The tree advanced successfully, so the adapter records the new tick time for the next frame.
+	entityState.Adapter:UpdateLastTickTime(entityState.Entity, frameContext.CurrentTime)
+
+	if entityState.NeedsAdapterRefreshAfterTree then
+		local refreshActionStateStartedAt = if frameProfile ~= nil then os.clock() else nil
+		local refreshedActionState = entityState.Adapter:GetActionState(entityState.Entity)
+		Validation.ValidateActionState(refreshedActionState, "AiRuntime TreeRun RefreshActionState")
+		entityState.WorkingActionState = _CloneActionState(refreshedActionState)
+		if frameProfile ~= nil then
+			frameProfile.RefreshActionStateMilliseconds += _CaptureMilliseconds(refreshActionStateStartedAt)
+		end
+	end
+
+	local hasCurrentAction = type(entityState.WorkingActionState.CurrentActionId) == "string"
+	local hasPendingAction = type(entityState.WorkingActionState.PendingActionId) == "string"
+	entityState.NeedsTransitionPhase = hasPendingAction
+	entityState.NeedsActionPhase = hasCurrentAction or hasPendingAction
 
 	if frameProfile ~= nil then
 		frameProfile.TreeMilliseconds += _CaptureMilliseconds(treePhaseStartedAt)
@@ -771,109 +1018,124 @@ end
 
 --[=[
 	@private
-	Runs the pending-action transition phase for one batch of entity snapshots.
+	Runs the pending-action transition phase for one entity snapshot.
 	@within AiRuntimeService
-	@param entityStates { TEntityFrameState }
+	@param entityState TEntityFrameState
 	@param frameContext TFrameContext
 	@param defects { TErrorSinkPayload }
 ]=]
 function Runtime:_RunTransitionPhase(
-	entityStates: { TEntityFrameState },
+	entityState: TEntityFrameState,
 	frameContext: TFrameContext,
 	defects: { TErrorSinkPayload },
 	frameProfile: TRuntimeFrameProfile?
 )
 	local transitionPhaseStartedAt = if frameProfile ~= nil then os.clock() else nil
-	for _, entityState in ipairs(entityStates) do
-		if not entityState.NeedsTransitionPhase then
-			continue
+	if not entityState.NeedsTransitionPhase then
+		if frameProfile ~= nil then
+			frameProfile.TransitionMilliseconds += _CaptureMilliseconds(transitionPhaseStartedAt)
 		end
+		return
+	end
 
-		local workingActionState = entityState.WorkingActionState
-		local runtimeContext = {
-			DeltaTime = frameContext.DeltaTime,
-			Services = entityState.HookOutcome.Services,
-		}
-		local startResult = self._runtime:StartPendingAction(entityState.Entity, workingActionState, runtimeContext)
+	local workingActionState = entityState.WorkingActionState
+	local executorServices = _BuildExecutorServices(entityState.HookOutcome, workingActionState)
+	local runtimeContext = _BuildRuntimeContext(frameContext.DeltaTime, executorServices)
+	local startResult = self._runtime:StartPendingAction(entityState.Entity, workingActionState, runtimeContext)
 
-		if not startResult.success then
-			-- Failed starts clear the action state so the next frame can retry from a clean boundary.
-			self:_PushRuntimeFailure(
-				defects,
-				"StartPendingAction",
-				entityState,
-				startResult.type,
-				startResult.message,
-				nil
-			)
-			entityState.WorkingActionState = _CloneActionState(nil)
-			entityState.Adapter:ClearActionState(entityState.Entity)
-			continue
-		end
-
-		local startStatus = startResult.value.Status
-		entityState.Result.StartStatus = startStatus
-
-		if
-			startStatus == RuntimeEnums.StartStatus.NoAction.Name
-			or startStatus == RuntimeEnums.StartStatus.Blocked.Name
-		then
-			-- These statuses intentionally leave the action state unchanged.
-			local hasCurrentAction = type(workingActionState.CurrentActionId) == "string"
-			entityState.NeedsActionPhase = hasCurrentAction
-			continue
-		end
-
-		if startStatus == RuntimeEnums.StartStatus.NoChange.Name then
-			-- No-change means the pending action should be dropped but the current action should stay intact.
-			workingActionState.PendingActionId = nil
-			workingActionState.PendingActionData = nil
-			entityState.WorkingActionState = workingActionState
-			entityState.Adapter:SetActionState(entityState.Entity, workingActionState)
-			entityState.NeedsActionPhase = type(workingActionState.CurrentActionId) == "string"
-			continue
-		end
-
-		if
-			startStatus == RuntimeEnums.StartStatus.MissingAction.Name
-			or startStatus == RuntimeEnums.StartStatus.FailedToStart.Name
-		then
-			-- Missing or failed starts reset the adapter state so the entity does not retain a bad pending action.
-			entityState.WorkingActionState = _CloneActionState(nil)
-			entityState.Adapter:ClearActionState(entityState.Entity)
-			entityState.NeedsActionPhase = false
-			continue
-		end
-
-		local commitResult =
-			self._runtime:CommitStartedAction(workingActionState, startResult.value, frameContext.CurrentTime)
-		entityState.Result.CommitStatus = commitResult.Status
-
-		if commitResult.Status == RuntimeEnums.CommitStatus.Committed.Name then
-			-- A successful commit writes the updated action state back to the adapter.
-			entityState.WorkingActionState = workingActionState
-			entityState.Adapter:SetActionState(entityState.Entity, workingActionState)
-			entityState.NeedsActionPhase = true
-			continue
-		end
-
-		-- Invalid transitions are reported as defects because the runtime should only see valid commit outcomes.
-		self:_PushDefect(defects, {
-			Stage = "CommitStartedAction",
-			ActorType = entityState.ActorType,
-			Entity = entityState.Entity,
-			ActorLabel = _GetActorLabel(entityState.Adapter),
-			ErrorType = "InvalidCommitTransition",
-			ErrorMessage = "AiRuntime received an invalid commit transition",
-			Details = {
-				StartStatus = startStatus,
-				CommitStatus = commitResult.Status,
-			},
-		})
+	if not startResult.success then
+		-- Failed starts clear the action state so the next frame can retry from a clean boundary.
+		self:_PushRuntimeFailure(
+			defects,
+			"StartPendingAction",
+			entityState,
+			startResult.type,
+			startResult.message,
+			nil
+		)
 		entityState.WorkingActionState = _CloneActionState(nil)
 		entityState.Adapter:ClearActionState(entityState.Entity)
 		entityState.NeedsActionPhase = false
+		if frameProfile ~= nil then
+			frameProfile.TransitionMilliseconds += _CaptureMilliseconds(transitionPhaseStartedAt)
+		end
+		return
 	end
+
+	local startStatus = startResult.value.Status
+	entityState.Result.StartStatus = startStatus
+
+	if
+		startStatus == RuntimeEnums.StartStatus.NoAction.Name
+		or startStatus == RuntimeEnums.StartStatus.Blocked.Name
+	then
+		-- These statuses intentionally leave the action state unchanged.
+		local hasCurrentAction = type(workingActionState.CurrentActionId) == "string"
+		entityState.NeedsActionPhase = hasCurrentAction
+		if frameProfile ~= nil then
+			frameProfile.TransitionMilliseconds += _CaptureMilliseconds(transitionPhaseStartedAt)
+		end
+		return
+	end
+
+	if startStatus == RuntimeEnums.StartStatus.NoChange.Name then
+		-- No-change means the pending action should be dropped but the current action should stay intact.
+		workingActionState.PendingActionId = nil
+		workingActionState.PendingActionData = nil
+		entityState.WorkingActionState = workingActionState
+		entityState.Adapter:SetActionState(entityState.Entity, workingActionState)
+		entityState.NeedsActionPhase = type(workingActionState.CurrentActionId) == "string"
+		if frameProfile ~= nil then
+			frameProfile.TransitionMilliseconds += _CaptureMilliseconds(transitionPhaseStartedAt)
+		end
+		return
+	end
+
+	if
+		startStatus == RuntimeEnums.StartStatus.MissingAction.Name
+		or startStatus == RuntimeEnums.StartStatus.FailedToStart.Name
+	then
+		-- Missing or failed starts reset the adapter state so the entity does not retain a bad pending action.
+		entityState.WorkingActionState = _CloneActionState(nil)
+		entityState.Adapter:ClearActionState(entityState.Entity)
+		entityState.NeedsActionPhase = false
+		if frameProfile ~= nil then
+			frameProfile.TransitionMilliseconds += _CaptureMilliseconds(transitionPhaseStartedAt)
+		end
+		return
+	end
+
+	local commitResult =
+		self._runtime:CommitStartedAction(workingActionState, startResult.value, frameContext.CurrentTime)
+	entityState.Result.CommitStatus = commitResult.Status
+
+	if commitResult.Status == RuntimeEnums.CommitStatus.Committed.Name then
+		-- A successful commit writes the updated action state back to the adapter.
+		entityState.WorkingActionState = workingActionState
+		entityState.Adapter:SetActionState(entityState.Entity, workingActionState)
+		entityState.NeedsActionPhase = true
+		if frameProfile ~= nil then
+			frameProfile.TransitionMilliseconds += _CaptureMilliseconds(transitionPhaseStartedAt)
+		end
+		return
+	end
+
+	-- Invalid transitions are reported as defects because the runtime should only see valid commit outcomes.
+	self:_PushDefect(defects, {
+		Stage = "CommitStartedAction",
+		ActorType = entityState.ActorType,
+		Entity = entityState.Entity,
+		ActorLabel = _GetActorLabel(entityState.Adapter),
+		ErrorType = "InvalidCommitTransition",
+		ErrorMessage = "AiRuntime received an invalid commit transition",
+		Details = {
+			StartStatus = startStatus,
+			CommitStatus = commitResult.Status,
+		},
+	})
+	entityState.WorkingActionState = _CloneActionState(nil)
+	entityState.Adapter:ClearActionState(entityState.Entity)
+	entityState.NeedsActionPhase = false
 
 	if frameProfile ~= nil then
 		frameProfile.TransitionMilliseconds += _CaptureMilliseconds(transitionPhaseStartedAt)
@@ -882,85 +1144,89 @@ end
 
 --[=[
 	@private
-	Runs the current-action tick and resolve phase for one batch of entity snapshots.
+	Runs the current-action tick and resolve phase for one entity snapshot.
 	@within AiRuntimeService
-	@param entityStates { TEntityFrameState }
+	@param entityState TEntityFrameState
 	@param frameContext TFrameContext
 	@param defects { TErrorSinkPayload }
 ]=]
 function Runtime:_RunActionPhase(
-	entityStates: { TEntityFrameState },
+	entityState: TEntityFrameState,
 	frameContext: TFrameContext,
 	defects: { TErrorSinkPayload },
 	frameProfile: TRuntimeFrameProfile?
 )
 	local actionPhaseStartedAt = if frameProfile ~= nil then os.clock() else nil
-	for _, entityState in ipairs(entityStates) do
-		if not entityState.NeedsActionPhase then
-			continue
+	if not entityState.NeedsActionPhase then
+		if frameProfile ~= nil then
+			frameProfile.ActionMilliseconds += _CaptureMilliseconds(actionPhaseStartedAt)
 		end
+		return
+	end
 
-		local workingActionState = entityState.WorkingActionState
-		entityState.HookOutcome.Services.ActionState = workingActionState
-		local runtimeContext = {
-			DeltaTime = frameContext.DeltaTime,
-			Services = entityState.HookOutcome.Services,
-		}
-		local closeTickCurrentActionProfile =
-			DebugPlus.begin(runFrameActionPhaseTickCurrentActionProfileTag, runFrameProfilingEnabled)
-		local tickResult = self._runtime:TickCurrentAction(entityState.Entity, workingActionState, runtimeContext)
-		closeTickCurrentActionProfile()
+	local workingActionState = entityState.WorkingActionState
+	local executorServices = _BuildExecutorServices(entityState.HookOutcome, workingActionState)
+	local runtimeContext = _BuildRuntimeContext(frameContext.DeltaTime, executorServices)
+	local closeTickCurrentActionProfile =
+		DebugPlus.begin(runFrameActionPhaseTickCurrentActionProfileTag, runFrameProfilingEnabled)
+	local tickResult = self._runtime:TickCurrentAction(entityState.Entity, workingActionState, runtimeContext)
+	closeTickCurrentActionProfile()
 
-		if not tickResult.success then
-			-- Tick failures clear the action state so the runtime can recover on the next frame.
-			self:_PushRuntimeFailure(
-				defects,
-				"TickCurrentAction",
-				entityState,
-				tickResult.type,
-				tickResult.message,
-				nil
-			)
-			entityState.WorkingActionState = _CloneActionState(nil)
-			entityState.Adapter:ClearActionState(entityState.Entity)
-			continue
+	if not tickResult.success then
+		-- Tick failures clear the action state so the runtime can recover on the next frame.
+		self:_PushRuntimeFailure(
+			defects,
+			"TickCurrentAction",
+			entityState,
+			tickResult.type,
+			tickResult.message,
+			nil
+		)
+		entityState.WorkingActionState = _CloneActionState(nil)
+		entityState.Adapter:ClearActionState(entityState.Entity)
+		if frameProfile ~= nil then
+			frameProfile.ActionMilliseconds += _CaptureMilliseconds(actionPhaseStartedAt)
 		end
+		return
+	end
 
-		local tickStatus = tickResult.value.Status
-		entityState.Result.TickActionId = tickResult.value.ActionId
-		entityState.Result.TickStatus = tickStatus
+	local tickStatus = tickResult.value.Status
+	entityState.Result.TickActionId = tickResult.value.ActionId
+	entityState.Result.TickStatus = tickStatus
 
-		local closeResolveFinishedActionProfile =
-			DebugPlus.begin(runFrameActionPhaseResolveFinishedActionProfileTag, runFrameProfilingEnabled)
-		local resolveResult =
-			self._runtime:ResolveFinishedAction(workingActionState, tickResult.value, frameContext.CurrentTime)
-		closeResolveFinishedActionProfile()
-		entityState.Result.ResolveStatus = resolveResult.Status
+	local closeResolveFinishedActionProfile =
+		DebugPlus.begin(runFrameActionPhaseResolveFinishedActionProfileTag, runFrameProfilingEnabled)
+	local resolveResult =
+		self._runtime:ResolveFinishedAction(workingActionState, tickResult.value, frameContext.CurrentTime)
+	closeResolveFinishedActionProfile()
+	entityState.Result.ResolveStatus = resolveResult.Status
 
-		if resolveResult.Status == RuntimeEnums.ResolveStatus.Resolved.Name then
-			-- Resolved actions keep the updated state because the action may have advanced into a new terminal status.
-			entityState.WorkingActionState = workingActionState
-			entityState.Adapter:SetActionState(entityState.Entity, workingActionState)
-			continue
+	if resolveResult.Status == RuntimeEnums.ResolveStatus.Resolved.Name then
+		-- Resolved actions keep the updated state because the action may have advanced into a new terminal status.
+		entityState.WorkingActionState = workingActionState
+		entityState.Adapter:SetActionState(entityState.Entity, workingActionState)
+		if frameProfile ~= nil then
+			frameProfile.ActionMilliseconds += _CaptureMilliseconds(actionPhaseStartedAt)
 		end
+		return
+	end
 
-		if resolveResult.Status == RuntimeEnums.ResolveStatus.InvalidResult.Name then
-			-- Invalid resolve transitions are defects because the shared runtime rejected the terminal status.
-			self:_PushDefect(defects, {
-				Stage = "ResolveFinishedAction",
-				ActorType = entityState.ActorType,
-				Entity = entityState.Entity,
-				ActorLabel = _GetActorLabel(entityState.Adapter),
-				ErrorType = "InvalidResolveTransition",
-				ErrorMessage = "AiRuntime received an invalid resolve transition",
-				Details = {
-					TickStatus = tickStatus,
-					ActionId = tickResult.value.ActionId,
-				},
-			})
-			entityState.WorkingActionState = _CloneActionState(nil)
-			entityState.Adapter:ClearActionState(entityState.Entity)
-		end
+	if resolveResult.Status == RuntimeEnums.ResolveStatus.InvalidResult.Name then
+		-- Invalid resolve transitions are defects because the shared runtime rejected the terminal status.
+		self:_PushDefect(defects, {
+			Stage = "ResolveFinishedAction",
+			ActorType = entityState.ActorType,
+			Entity = entityState.Entity,
+			ActorLabel = _GetActorLabel(entityState.Adapter),
+			ErrorType = "InvalidResolveTransition",
+			ErrorMessage = "AiRuntime received an invalid resolve transition",
+			Details = {
+				TickStatus = tickStatus,
+				ActionId = tickResult.value.ActionId,
+			},
+		})
+		entityState.WorkingActionState = _CloneActionState(nil)
+		entityState.Adapter:ClearActionState(entityState.Entity)
 	end
 
 	if frameProfile ~= nil then
@@ -1074,263 +1340,6 @@ function Runtime:_EmitFrameProfile(frameProfile: TRuntimeFrameProfile?)
 			frameProfile.ActionMilliseconds
 		)
 	)
-end
-
---[=[
-	@private
-	Selects the actor types for one frame from the optional frame filter or registration order.
-	@within AiRuntimeService
-	@param frameContext TFrameContext
-	@param actorAdapters { [string]: TActorAdapter }
-	@param actorOrder { string }
-	@return { string }
-]=]
-function _ResolveActorTypes(
-	frameContext: TFrameContext,
-	actorAdapters: { [string]: TActorAdapter },
-	actorOrder: { string }
-): { string }
-	-- An explicit frame filter wins over registration order when the caller only wants a subset of actor types.
-	if frameContext.ActorTypes == nil then
-		return actorOrder
-	end
-
-	for _, actorType in ipairs(frameContext.ActorTypes) do
-		-- Validate every requested actor type before the frame starts, so missing adapters fail fast.
-		assert(actorAdapters[actorType] ~= nil, ("AiRuntime frame requested unknown actor type '%s'"):format(actorType))
-	end
-
-	return frameContext.ActorTypes
-end
-
-function _CreateRuntimeFrameProfile(): TRuntimeFrameProfile?
-	if DebugConfig.ENABLED ~= true or DebugConfig.AI_RUNTIME_PROFILING ~= true then
-		return nil
-	end
-
-	return {
-		FrameStartedAt = os.clock(),
-		ActorEnumerationMilliseconds = 0,
-		BuildEntityStateMilliseconds = 0,
-		InitialActionStateMilliseconds = 0,
-		RefreshActionStateMilliseconds = 0,
-		HookMilliseconds = 0,
-		FactBuildMilliseconds = 0,
-		ServiceBuildMilliseconds = 0,
-		TreeMilliseconds = 0,
-		TransitionMilliseconds = 0,
-		ActionMilliseconds = 0,
-		ActorCount = 0,
-		FullSkipCount = 0,
-		ActionOnlyCount = 0,
-		TreeEvaluatedCount = 0,
-		FactBuildCount = 0,
-		ServiceBuildCount = 0,
-	}
-end
-
-function _CaptureMilliseconds(startedAt: number?): number
-	if startedAt == nil then
-		return 0
-	end
-
-	return (os.clock() - startedAt) * 1000
-end
-
-function _BuildServiceTickDeadline(frameContext: TFrameContext): number?
-	local tickBudgetSeconds = frameContext.TickBudgetSeconds
-	if type(tickBudgetSeconds) ~= "number" or tickBudgetSeconds <= 0 then
-		return nil
-	end
-
-	return os.clock() + tickBudgetSeconds
-end
-
-function _ShouldStopForTimeBudget(tickDeadline: number?): boolean
-	return type(tickDeadline) == "number" and os.clock() >= tickDeadline
-end
-
-function _BuildDirectCombatHookOutcome(
-	actionState: TActionState,
-	frameContext: TFrameContext,
-	options: {
-		Entity: number,
-		NeedsFacts: boolean,
-		NeedsServices: boolean,
-		RuntimeProfile: TRuntimeFrameProfile?,
-	}
-): THookOutcome?
-	local baseServices = nil
-	local registryService = nil
-	local precheckPassed = DebugPlus.profile(
-		runFrameBuildDirectCombatHookOutcomeBuildFactsPrecheckProfileTag,
-		function()
-			baseServices = frameContext.Services
-			if type(baseServices) ~= "table" then
-				return false
-			end
-
-			registryService = baseServices.CombatActorRegistryService
-			if registryService == nil then
-				return false
-			end
-
-			return true
-		end,
-		runFrameProfilingEnabled
-	)
-	if not precheckPassed then
-		return nil
-	end
-
-	local currentTime = frameContext.CurrentTime
-	local runtimeProfile = options.RuntimeProfile
-	local services = if options.NeedsServices then table.clone(baseServices) else nil
-	if services ~= nil then
-		DebugPlus.profile(runFrameBuildDirectCombatHookOutcomeBuildServicesProfileTag, function()
-			local serviceBuildStartedAt = if runtimeProfile ~= nil then os.clock() else nil
-			local builtServices = registryService:BuildServices(options.Entity, currentTime, frameContext.TickId)
-			for key, value in pairs(builtServices) do
-				services[key] = value
-			end
-			services.ActionState = actionState
-			if runtimeProfile ~= nil then
-				runtimeProfile.ServiceBuildCount += 1
-				runtimeProfile.ServiceBuildMilliseconds += _CaptureMilliseconds(serviceBuildStartedAt)
-			end
-		end, runFrameProfilingEnabled)
-	end
-
-	local facts = nil
-	local shouldBuildFacts = DebugPlus.profile(runFrameBuildDirectCombatHookOutcomeBuildFactsGateProfileTag, function()
-		return options.NeedsFacts == true
-	end, runFrameProfilingEnabled)
-	if shouldBuildFacts then
-		DebugPlus.profile(runFrameBuildDirectCombatHookOutcomeBuildFactsProfileTag, function()
-			local factBuildStartedAt = if runtimeProfile ~= nil then os.clock() else nil
-			facts = registryService:BuildFacts(options.Entity, currentTime)
-			if runtimeProfile ~= nil then
-				runtimeProfile.FactBuildCount += 1
-				runtimeProfile.FactBuildMilliseconds += _CaptureMilliseconds(factBuildStartedAt)
-			end
-		end, runFrameProfilingEnabled)
-	end
-
-	return {
-		Facts = if facts ~= nil then facts else EMPTY_HOOK_OUTCOME.Facts,
-		BehaviorContext = EMPTY_HOOK_OUTCOME.BehaviorContext,
-		Services = if services ~= nil then services else EMPTY_HOOK_OUTCOME.Services,
-	}
-end
-
---[=[
-	@private
-	Builds the behavior-tree execution context from hook output and adapter state.
-	@within AiRuntimeService
-	@param entity number
-	@param actorType string
-	@param adapter TActorAdapter
-	@param hookOutcome THookOutcome
-	@return { [string]: any }
-]=]
-function _BuildTreeContext(
-	entity: number,
-	actorType: string,
-	adapter: TActorAdapter,
-	hookOutcome: THookOutcome
-): { [string]: any }
-	local treeContext = {
-		Entity = entity,
-		ActorType = actorType,
-		Facts = hookOutcome.Facts,
-		ActionFactory = adapter,
-	}
-
-	for key, value in pairs(hookOutcome.BehaviorContext) do
-		if key ~= "Entity" and key ~= "ActorType" and key ~= "Facts" and key ~= "ActionFactory" then
-			-- Keep hook-provided fields, but never let them overwrite the reserved tree keys.
-			treeContext[key] = value
-		end
-	end
-
-	return treeContext
-end
-
---[=[
-	@private
-	Normalizes an adapter action-state snapshot into the shape expected by the shared BehaviorSystem boundary.
-	@within AiRuntimeService
-	@param actionState TActionState?
-	@return TActionState
-]=]
-function _CloneActionState(actionState: TActionState?): TActionState
-	if actionState == nil then
-		-- A missing state is normalized to the idle shape expected by the shared BehaviorSystem boundary.
-		return {
-			CurrentActionId = nil,
-			ActionState = "Idle",
-			ActionData = nil,
-			PendingActionId = nil,
-			PendingActionData = nil,
-			StartedAt = nil,
-			FinishedAt = nil,
-		}
-	end
-
-	-- Clone the known fields so later runtime phases mutate a local copy instead of the adapter payload.
-	return {
-		CurrentActionId = actionState.CurrentActionId,
-		ActionState = actionState.ActionState or "Idle",
-		ActionData = actionState.ActionData,
-		PendingActionId = actionState.PendingActionId,
-		PendingActionData = actionState.PendingActionData,
-		StartedAt = (actionState :: any).StartedAt or (actionState :: any).ActionStartedAt,
-		FinishedAt = (actionState :: any).FinishedAt,
-	}
-end
-
---[=[
-	@private
-	Returns the optional adapter label used in defect payloads.
-	@within AiRuntimeService
-	@param adapter TActorAdapter
-	@return string?
-]=]
-function _GetActorLabel(adapter: TActorAdapter): string?
-	if adapter.GetActorLabel == nil then
-		return nil
-	end
-
-	local actorLabel = adapter:GetActorLabel()
-	Validation.ValidateActorLabel("unknown", actorLabel)
-	return actorLabel
-end
-
---[=[
-	@private
-	Builds one immutable cleanup result payload.
-	@within AiRuntimeService
-	@param actorType string
-	@param entity number
-	@param cleanupKind TCleanupKind
-	@param status string
-	@param defect TErrorSinkPayload?
-	@return TCleanupResult
-]=]
-function _BuildCleanupResult(
-	actorType: string,
-	entity: number,
-	cleanupKind: TCleanupKind,
-	status: string,
-	defect: TErrorSinkPayload?
-): TCleanupResult
-	return {
-		ActorType = actorType,
-		Entity = entity,
-		CleanupKind = cleanupKind,
-		Status = status,
-		Defect = defect,
-	}
 end
 
 return table.freeze(Runtime)

@@ -11,6 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local RuntimeEnums = require(ReplicatedStorage.Utilities.AI.Runtime.src.RuntimeEnums)
 local ActionStateTransitionSpec = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Specs.ActionStateTransitionSpec)
+local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
 local Types = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Types)
 
 type TActionState = Types.TActionState
@@ -18,6 +19,13 @@ type TTickActionResult = Types.TTickActionResult
 type TResolveFinishedActionResult = Types.TResolveFinishedActionResult
 
 local ResolveFinishedAction = {}
+
+local function _createResult(status: any, actionId: string?): TResolveFinishedActionResult
+	return {
+		Status = status.Name,
+		ActionId = actionId,
+	}
+end
 
 --[=[
 	Clears the current action after a terminal tick result and restores the idle state.
@@ -38,30 +46,22 @@ function ResolveFinishedAction.Execute(
 	-- Skip non-terminal or no-op results because they do not resolve the current action
 	local status = tickResult.Status
 	if status == RuntimeEnums.TickStatus.Running.Name or status == RuntimeEnums.TickStatus.NoCurrentAction.Name then
-		return {
-			Status = RuntimeEnums.ResolveStatus.Skipped.Name,
-			ActionId = tickResult.ActionId,
-		}
+		return _createResult(RuntimeEnums.ResolveStatus.Skipped, tickResult.ActionId)
 	end
 
 	-- Only terminal statuses may clear the current action state
-	local terminalResult = ActionStateTransitionSpec.HasTerminalTickResult:IsSatisfiedBy({
-		TickResult = tickResult,
-	})
+	local transitionCandidate = ScratchRecycler.AcquireMap()
+	transitionCandidate.TickResult = tickResult
+	local terminalResult = ActionStateTransitionSpec.HasTerminalTickResult:IsSatisfiedBy(transitionCandidate)
+	ScratchRecycler.ReleaseMap(transitionCandidate)
 	if not terminalResult.success then
-		return {
-			Status = RuntimeEnums.ResolveStatus.InvalidResult.Name,
-			ActionId = tickResult.ActionId,
-		}
+		return _createResult(RuntimeEnums.ResolveStatus.InvalidResult, tickResult.ActionId)
 	end
 
 	-- Ensure the tick result still matches the action currently held by the state table
 	local currentActionId = actionState.CurrentActionId
 	if tickResult.ActionId ~= currentActionId then
-		return {
-			Status = RuntimeEnums.ResolveStatus.InvalidResult.Name,
-			ActionId = tickResult.ActionId,
-		}
+		return _createResult(RuntimeEnums.ResolveStatus.InvalidResult, tickResult.ActionId)
 	end
 
 	-- Clear the current action and record the finishing marker if one was supplied
@@ -74,10 +74,7 @@ function ResolveFinishedAction.Execute(
 		actionState.FinishedAt = finishedAt
 	end
 
-	return {
-		Status = RuntimeEnums.ResolveStatus.Resolved.Name,
-		ActionId = resolvedActionId,
-	}
+	return _createResult(RuntimeEnums.ResolveStatus.Resolved, resolvedActionId)
 end
 
 return table.freeze(ResolveFinishedAction)

@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
 local ChildArraySpec = require(script.Parent.Parent.Specs.ChildArraySpec)
 local DefinitionNodeSpec = require(script.Parent.Parent.Specs.DefinitionNodeSpec)
 local DefinitionRegistrySpec = require(script.Parent.Parent.Specs.DefinitionRegistrySpec)
@@ -25,10 +26,12 @@ local function _BuildLeafError(result: Result.Err, name: string, path: string): 
 end
 
 function DefinitionValidationPolicy.CheckRegistryTable(registry: any, label: string): Result.Result<any>
-	local result = DefinitionRegistrySpec.HasRegistryTable:IsSatisfiedBy({
-		Label = label,
-		Registry = registry,
-	})
+	local candidate = ScratchRecycler.AcquireMap()
+	candidate.Label = label
+	candidate.Registry = registry
+
+	local result = DefinitionRegistrySpec.HasRegistryTable:IsSatisfiedBy(candidate)
+	ScratchRecycler.ReleaseMap(candidate)
 	if result.success then
 		return result
 	end
@@ -37,11 +40,13 @@ function DefinitionValidationPolicy.CheckRegistryTable(registry: any, label: str
 end
 
 function DefinitionValidationPolicy.CheckRegistryFunction(name: any, builder: any, label: string): Result.Result<any>
-	local result = DefinitionRegistrySpec.HasRegistryEntryShape:IsSatisfiedBy({
-		Label = label,
-		Name = name,
-		Builder = builder,
-	})
+	local candidate = ScratchRecycler.AcquireMap()
+	candidate.Label = label
+	candidate.Name = name
+	candidate.Builder = builder
+
+	local result = DefinitionRegistrySpec.HasRegistryEntryShape:IsSatisfiedBy(candidate)
+	ScratchRecycler.ReleaseMap(candidate)
 	if result.success then
 		return result
 	end
@@ -55,9 +60,11 @@ end
 
 function DefinitionValidationPolicy.CheckNodeShape(node: any, path: string): Result.Result<any>
 	local normalizedPath = DefinitionPath.From(path)
-	local result = DefinitionNodeSpec.HasValidNodeShape:IsSatisfiedBy({
-		Node = node,
-	})
+	local candidate = ScratchRecycler.AcquireMap()
+	candidate.Node = node
+
+	local result = DefinitionNodeSpec.HasValidNodeShape:IsSatisfiedBy(candidate)
+	ScratchRecycler.ReleaseMap(candidate)
 	if result.success then
 		return result
 	end
@@ -67,9 +74,11 @@ end
 
 function DefinitionValidationPolicy.CheckNonEmptyChildren(children: any, path: string, nodeType: string): Result.Result<any>
 	local normalizedPath = DefinitionPath.From(path)
-	local result = ChildArraySpec.HasDenseNonEmptyChildArray:IsSatisfiedBy({
-		Children = children,
-	})
+	local candidate = ScratchRecycler.AcquireMap()
+	candidate.Children = children
+
+	local result = ChildArraySpec.HasDenseNonEmptyChildArray:IsSatisfiedBy(candidate)
+	ScratchRecycler.ReleaseMap(candidate)
 	if result.success then
 		return result
 	end
@@ -84,12 +93,14 @@ function DefinitionValidationPolicy.CheckKnownLeaf(
 	path: string
 ): Result.Result<any>
 	local normalizedPath = DefinitionPath.From(path)
-	local result = DefinitionRegistrySpec.HasKnownLeaf:IsSatisfiedBy({
-		Name = name,
-		Path = normalizedPath,
-		InConditions = type(conditions) == "table" and conditions[name] ~= nil,
-		InCommands = type(commands) == "table" and commands[name] ~= nil,
-	})
+	local candidate = ScratchRecycler.AcquireMap()
+	candidate.Name = name
+	candidate.Path = normalizedPath
+	candidate.InConditions = type(conditions) == "table" and conditions[name] ~= nil
+	candidate.InCommands = type(commands) == "table" and commands[name] ~= nil
+
+	local result = DefinitionRegistrySpec.HasKnownLeaf:IsSatisfiedBy(candidate)
+	ScratchRecycler.ReleaseMap(candidate)
 	if result.success then
 		return result
 	end
@@ -99,9 +110,11 @@ end
 
 function DefinitionValidationPolicy.CheckCompositeShape(node: any, path: string): Result.Result<any>
 	local normalizedPath = DefinitionPath.From(path)
-	local result = DefinitionNodeSpec.HasValidCompositeShape:IsSatisfiedBy({
-		Node = node,
-	})
+	local candidate = ScratchRecycler.AcquireMap()
+	candidate.Node = node
+
+	local result = DefinitionNodeSpec.HasValidCompositeShape:IsSatisfiedBy(candidate)
+	ScratchRecycler.ReleaseMap(candidate)
 	if result.success then
 		return result
 	end
@@ -111,9 +124,11 @@ end
 
 function DefinitionValidationPolicy.CheckSequenceNode(node: any, path: string): Result.Result<any>
 	local normalizedPath = DefinitionPath.From(path)
-	local result = DefinitionNodeSpec.HasSequenceNode:IsSatisfiedBy({
-		Node = node,
-	})
+	local candidate = ScratchRecycler.AcquireMap()
+	candidate.Node = node
+
+	local result = DefinitionNodeSpec.HasSequenceNode:IsSatisfiedBy(candidate)
+	ScratchRecycler.ReleaseMap(candidate)
 	if result.success then
 		return result
 	end
@@ -123,9 +138,11 @@ end
 
 function DefinitionValidationPolicy.CheckPriorityNode(node: any, path: string): Result.Result<any>
 	local normalizedPath = DefinitionPath.From(path)
-	local result = DefinitionNodeSpec.HasPriorityNode:IsSatisfiedBy({
-		Node = node,
-	})
+	local candidate = ScratchRecycler.AcquireMap()
+	candidate.Node = node
+
+	local result = DefinitionNodeSpec.HasPriorityNode:IsSatisfiedBy(candidate)
+	ScratchRecycler.ReleaseMap(candidate)
 	if result.success then
 		return result
 	end

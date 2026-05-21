@@ -19,6 +19,7 @@ local BehaviorSystem = require(ReplicatedStorage.Utilities.AI.Behavior)
 
 local BehaviorCatalog = require(script.BehaviorCatalog)
 local Builder = require(script.Builder)
+local ScratchRecycler = require(script.Infrastructure.ScratchRecycler)
 local SetupWriter = require(script.SetupWriter)
 local Types = require(script.Types)
 local Validation = require(script.Validation)
@@ -216,16 +217,21 @@ end
 	@return TActionPack
 ]=]
 function AI.CreateActionPack(name: string, definitions: { [string]: any }): TActionPack
-	local actionPack = {
-		Name = name,
-		Definitions = definitions,
-	}
+	-- Only the validation candidate is recycler-owned here; the returned action pack stays fresh and frozen.
+	local actionPack = ScratchRecycler.AcquireMap()
+	actionPack.Name = name
+	actionPack.Definitions = definitions
 	Validation.ValidateActionPack(actionPack)
+	ScratchRecycler.ReleaseMap(actionPack)
 
 	return table.freeze({
 		Name = name,
 		Definitions = table.freeze(table.clone(definitions)),
 	})
+end
+
+local function _ValidateBehaviorRegistrationFields(name: string)
+	Validation.ValidateBehaviorRegistrationName(name)
 end
 
 --[=[
@@ -236,15 +242,40 @@ end
 	@return TBehaviorRegistration
 ]=]
 function AI.CreateBehaviorRegistration(name: string, definition: any): TBehaviorRegistration
-	Validation.ValidateBehaviorRegistration({
-		Name = name,
-		Definition = definition,
-	})
+	_ValidateBehaviorRegistrationFields(name)
 
 	return table.freeze({
 		Name = name,
 		Definition = definition,
 	})
+end
+
+local function _RegisterResolvedActor(
+	runtime: TRegisterableRuntime,
+	actorType: string,
+	adapter: TActorAdapter,
+	actionDefinitions: any?
+)
+	runtime:RegisterActorType(actorType, adapter)
+
+	if actionDefinitions ~= nil then
+		runtime:RegisterActions(actionDefinitions)
+	end
+end
+
+local function _ValidateDiscreteRegistrationForUse(
+	actorType: string,
+	adapter: TActorAdapter,
+	actionDefinitions: any?,
+	options: TRegistrationValidationOptions?
+)
+	Validation.ValidateActorType(actorType)
+	Validation.ValidateAdapter(adapter)
+	Validation.ValidateRegistrationOptions(options)
+
+	if actionDefinitions ~= nil then
+		Validation.ValidateActionDefinitions(actionDefinitions)
+	end
 end
 
 --[=[
@@ -264,27 +295,18 @@ function AI.RegisterActor(
 )
 	Validation.ValidateRuntime(runtime)
 
-	local registration: TActorRegistration
-	local registrationOptions = options
-
 	if type(actorTypeOrRegistration) == "table" then
-		registration = actorTypeOrRegistration
-		registrationOptions = (adapterOrOptions :: any) :: TRegistrationValidationOptions?
-	else
-		registration = {
-			ActorType = actorTypeOrRegistration,
-			Adapter = (adapterOrOptions :: any) :: TActorAdapter,
-			Actions = actionDefinitions,
-		}
+		local registration = actorTypeOrRegistration
+		local registrationOptions = (adapterOrOptions :: any) :: TRegistrationValidationOptions?
+		Validation.ValidateRegistrationForUse(registration, registrationOptions)
+		_RegisterResolvedActor(runtime, registration.ActorType, registration.Adapter, registration.Actions)
+		return
 	end
 
-	Validation.ValidateRegistrationForUse(registration, registrationOptions)
-
-	runtime:RegisterActorType(registration.ActorType, registration.Adapter)
-
-	if registration.Actions ~= nil then
-		runtime:RegisterActions(registration.Actions)
-	end
+	local actorType = actorTypeOrRegistration
+	local adapter = (adapterOrOptions :: any) :: TActorAdapter
+	_ValidateDiscreteRegistrationForUse(actorType, adapter, actionDefinitions, options)
+	_RegisterResolvedActor(runtime, actorType, adapter, actionDefinitions)
 end
 
 --[=[
@@ -303,7 +325,7 @@ function AI.RegisterActors(
 
 	for _, registration in ipairs(registrations) do
 		Validation.ValidateRegistrationForUse(registration, options)
-		AI.RegisterActor(runtime, registration, options)
+		_RegisterResolvedActor(runtime, registration.ActorType, registration.Adapter, registration.Actions)
 	end
 end
 
@@ -323,13 +345,7 @@ function AI.RegisterActorBundles(
 
 	for _, bundle in ipairs(bundles) do
 		Validation.ValidateActorBundleForUse(bundle, options)
-		AI.RegisterActor(runtime, {
-			ActorType = bundle.ActorType,
-			Adapter = bundle.Adapter,
-			Actions = bundle.Actions,
-			SemanticRequirements = bundle.SemanticRequirements,
-			RuntimeBinding = bundle.RuntimeBinding,
-		}, options)
+		_RegisterResolvedActor(runtime, bundle.ActorType, bundle.Adapter, bundle.Actions)
 		if bundle.ActionPacks ~= nil then
 			AI.RegisterActionPacks(runtime, bundle.ActionPacks)
 		end
@@ -377,24 +393,43 @@ function AI.BuildBehaviors(runtime: TRegisterableRuntime, behaviorDefinitions: {
 	return Builder.BuildBehaviors(runtime, behaviorDefinitions)
 end
 
-local function _ResolveBehaviorName(buildResult: TSystemBuildResult, request: TAssignmentRequest): (string?, string)
-	-- Resolve in descending priority so explicit input always wins over defaults.
-	local explicitBehaviorName = request.BehaviorName
-	if explicitBehaviorName ~= nil then
-		return explicitBehaviorName, Types.Enums.AssignmentSource.Explicit.Name
+local function _AssertBuildResultTable(buildResult: TSystemBuildResult)
+	assert(type(buildResult) == "table", "AI buildResult must be a table")
+end
+
+local function _ValidateAssignmentRequestFields(actorType: string, behaviorName: string?, archetypeName: string?)
+	Validation.ValidateActorType(actorType)
+
+	if behaviorName ~= nil then
+		Validation.ValidateBehaviorRegistrationName(behaviorName)
 	end
 
-	local actorDefault = buildResult.ActorDefaults[request.ActorType]
+	if archetypeName ~= nil then
+		Validation.ValidateArchetypeName(archetypeName)
+	end
+end
+
+local function _ResolveBehaviorName(
+	buildResult: TSystemBuildResult,
+	actorType: string,
+	behaviorName: string?,
+	archetypeName: string?
+): (string?, string)
+	-- Resolve in descending priority so explicit input always wins over defaults.
+	if behaviorName ~= nil then
+		return behaviorName, Types.Enums.AssignmentSource.Explicit.Name
+	end
+
+	local actorDefault = buildResult.ActorDefaults[actorType]
 	if actorDefault ~= nil and actorDefault.DefaultBehaviorName ~= nil then
 		return actorDefault.DefaultBehaviorName, Types.Enums.AssignmentSource.ActorBundleDefault.Name
 	end
 
-	local actorTypeDefault = buildResult.Catalog.ActorDefaults[request.ActorType]
+	local actorTypeDefault = buildResult.Catalog.ActorDefaults[actorType]
 	if actorTypeDefault ~= nil then
 		return actorTypeDefault, Types.Enums.AssignmentSource.ActorTypeDefault.Name
 	end
 
-	local archetypeName = request.ArchetypeName
 	if archetypeName ~= nil then
 		local archetypeDefault = buildResult.Catalog.ArchetypeDefaults[archetypeName]
 		if archetypeDefault ~= nil then
@@ -410,6 +445,37 @@ local function _ResolveBehaviorName(buildResult: TSystemBuildResult, request: TA
 	return nil, Types.Enums.AssignmentSource.Missing.Name
 end
 
+local function _ResolveActorAssignment(
+	buildResult: TSystemBuildResult,
+	actorType: string,
+	behaviorName: string?,
+	archetypeName: string?
+): TAssignmentResult
+	_ValidateAssignmentRequestFields(actorType, behaviorName, archetypeName)
+	_AssertBuildResultTable(buildResult)
+
+	local resolvedBehaviorNameInput, source = _ResolveBehaviorName(buildResult, actorType, behaviorName, archetypeName)
+	local resolvedBehaviorName = if resolvedBehaviorNameInput ~= nil
+		then (buildResult.Catalog.Aliases[resolvedBehaviorNameInput] or resolvedBehaviorNameInput)
+		else nil
+	local tree = if resolvedBehaviorName ~= nil then buildResult.Behaviors[resolvedBehaviorName] else nil
+	local found = tree ~= nil
+
+	if not found then
+		source = Types.Enums.AssignmentSource.Missing.Name
+	end
+
+	return table.freeze({
+		ActorType = actorType,
+		BehaviorName = resolvedBehaviorNameInput,
+		ResolvedBehaviorName = resolvedBehaviorName,
+		Tree = tree,
+		Source = source,
+		ArchetypeName = archetypeName,
+		Found = found,
+	})
+end
+
 --[=[
 	Resolves the archetype-default built behavior tree from one build result.
 	@within AIEntry
@@ -418,9 +484,7 @@ end
 	@return any?
 ]=]
 function AI.ResolveBehaviorByArchetype(buildResult: TSystemBuildResult, archetypeName: string): any?
-	local assignment = AI.ResolveActorAssignment(buildResult, "__Archetype__", {
-		ArchetypeName = archetypeName,
-	})
+	local assignment = _ResolveActorAssignment(buildResult, "__Archetype__", nil, archetypeName)
 	return assignment.Tree
 end
 
@@ -437,35 +501,12 @@ function AI.ResolveActorAssignment(
 	actorType: string,
 	options: TResolveBehaviorOptions?
 ): TAssignmentResult
-	-- Build a local request record first so the same validation path can serve all resolver entrypoints.
-	local request = {
-		ActorType = actorType,
-		BehaviorName = if options ~= nil then options.BehaviorName else nil,
-		ArchetypeName = if options ~= nil then options.ArchetypeName else nil,
-	}
-	Validation.ValidateAssignmentRequest(request)
-	assert(type(buildResult) == "table", "AI buildResult must be a table")
-
-	local behaviorName, source = _ResolveBehaviorName(buildResult, request)
-	local resolvedBehaviorName = if behaviorName ~= nil
-		then (buildResult.Catalog.Aliases[behaviorName] or behaviorName)
-		else nil
-	local tree = if resolvedBehaviorName ~= nil then buildResult.Behaviors[resolvedBehaviorName] else nil
-	local found = tree ~= nil
-
-	if not found then
-		source = Types.Enums.AssignmentSource.Missing.Name
-	end
-
-	return table.freeze({
-		ActorType = actorType,
-		BehaviorName = behaviorName,
-		ResolvedBehaviorName = resolvedBehaviorName,
-		Tree = tree,
-		Source = source,
-		ArchetypeName = request.ArchetypeName,
-		Found = found,
-	})
+	return _ResolveActorAssignment(
+		buildResult,
+		actorType,
+		if options ~= nil then options.BehaviorName else nil,
+		if options ~= nil then options.ArchetypeName else nil
+	)
 end
 
 --[=[
@@ -481,12 +522,9 @@ function AI.CreateActorSetup(
 	_options: any?
 ): TActorSetupResult
 	Validation.ValidateActorSetupRequest(request)
-	assert(type(buildResult) == "table", "AI buildResult must be a table")
+	_AssertBuildResultTable(buildResult)
 
-	local assignment = AI.ResolveActorAssignment(buildResult, request.ActorType, {
-		BehaviorName = request.BehaviorName,
-		ArchetypeName = request.ArchetypeName,
-	})
+	local assignment = _ResolveActorAssignment(buildResult, request.ActorType, request.BehaviorName, request.ArchetypeName)
 	local initializeActionState = buildResult.SetupDefaults.InitializeActionStateByActorType[request.ActorType]
 	if initializeActionState == nil then
 		initializeActionState = buildResult.SetupDefaults.ClearActionStateOnWrite == true
@@ -520,7 +558,7 @@ function AI.CreateActorSetups(
 	_options: any?
 ): { TActorSetupResult }
 	Validation.ValidateActorSetupRequests(requests)
-	assert(type(buildResult) == "table", "AI buildResult must be a table")
+	_AssertBuildResultTable(buildResult)
 
 	local setupResults = {}
 	for _, request in ipairs(requests) do
@@ -574,16 +612,13 @@ end
 ]=]
 function AI.ResolveAssignments(buildResult: TSystemBuildResult, requests: { TAssignmentRequest }): { TAssignmentResult }
 	Validation.ValidateAssignmentRequests(requests)
-	assert(type(buildResult) == "table", "AI buildResult must be a table")
+	_AssertBuildResultTable(buildResult)
 
 	local assignmentResults = {}
 	for _, request in ipairs(requests) do
 		table.insert(
 			assignmentResults,
-			AI.ResolveActorAssignment(buildResult, request.ActorType, {
-				BehaviorName = request.BehaviorName,
-				ArchetypeName = request.ArchetypeName,
-			})
+			_ResolveActorAssignment(buildResult, request.ActorType, request.BehaviorName, request.ArchetypeName)
 		)
 	end
 

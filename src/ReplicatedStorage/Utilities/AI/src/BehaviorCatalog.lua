@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local StateMachine = require(ReplicatedStorage.Utilities.StateMachine)
+local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
 
 local Types = require(script.Parent.Types)
 local Validation = require(script.Parent.Validation)
@@ -35,6 +36,19 @@ local CATALOG_TRANSITIONS = table.freeze({
 })
 
 -- Small helpers keep the catalog phases explicit and keep the collect/resolve flow easy to skim.
+local function _AcquireSortedKeys(map: { [string]: any }): { string }
+	local keys = ScratchRecycler.AcquireArray()
+	for key in map do
+		table.insert(keys, key)
+	end
+	table.sort(keys)
+	return keys
+end
+
+local function _ReleaseSortedKeys(keys: { string })
+	ScratchRecycler.ReleaseArray(keys)
+end
+
 local function _GetSortedKeys(map: { [string]: any }): { string }
 	local keys = {}
 	for key in map do
@@ -42,6 +56,19 @@ local function _GetSortedKeys(map: { [string]: any }): { string }
 	end
 	table.sort(keys)
 	return keys
+end
+
+local function _ForEachSortedKey(map: { [string]: any }, callback: (string) -> ())
+	local keys = _AcquireSortedKeys(map)
+	local ok, err = pcall(function()
+		for _, key in ipairs(keys) do
+			callback(key)
+		end
+	end)
+	_ReleaseSortedKeys(keys)
+	if not ok then
+		error(err, 0)
+	end
 end
 
 local function _RequireState(catalog: any, expectedState: string, methodName: string)
@@ -66,9 +93,9 @@ end
 local function _BuildBehaviors(runtime: TRegisterableRuntime, behaviorDefinitions: { [string]: any }): { [string]: any }
 	local builtBehaviors = {}
 
-	for _, name in ipairs(_GetSortedKeys(behaviorDefinitions)) do
+	_ForEachSortedKey(behaviorDefinitions, function(name)
 		builtBehaviors[name] = runtime:BuildTree(behaviorDefinitions[name])
-	end
+	end)
 
 	return table.freeze(builtBehaviors)
 end
@@ -98,27 +125,27 @@ function BehaviorCatalog.new(config: TBehaviorCatalogConfig?): TBehaviorCatalog
 		Validation.ValidateBehaviorCatalogConfig(config)
 
 		if config.Behaviors ~= nil then
-			for _, name in ipairs(_GetSortedKeys(config.Behaviors)) do
+			_ForEachSortedKey(config.Behaviors, function(name)
 				self._definitions[name] = config.Behaviors[name]
-			end
+			end)
 		end
 
 		if config.Aliases ~= nil then
-			for _, aliasName in ipairs(_GetSortedKeys(config.Aliases)) do
+			_ForEachSortedKey(config.Aliases, function(aliasName)
 				self._aliases[aliasName] = config.Aliases[aliasName]
-			end
+			end)
 		end
 
 		if config.ActorDefaults ~= nil then
-			for _, actorType in ipairs(_GetSortedKeys(config.ActorDefaults)) do
+			_ForEachSortedKey(config.ActorDefaults, function(actorType)
 				self._actorDefaults[actorType] = config.ActorDefaults[actorType]
-			end
+			end)
 		end
 
 		if config.ArchetypeDefaults ~= nil then
-			for _, archetypeName in ipairs(_GetSortedKeys(config.ArchetypeDefaults)) do
+			_ForEachSortedKey(config.ArchetypeDefaults, function(archetypeName)
 				self._archetypeDefaults[archetypeName] = config.ArchetypeDefaults[archetypeName]
-			end
+			end)
 		end
 
 		self._fallbackBehaviorName = config.FallbackBehaviorName
@@ -151,9 +178,9 @@ function BehaviorCatalog:AddBehaviors(behaviorDefinitions: { [string]: any }): T
 	_RequireState(self, "Collect", "AddBehaviors")
 	Validation.ValidateBehaviorDefinitions(behaviorDefinitions)
 
-	for _, name in ipairs(_GetSortedKeys(behaviorDefinitions)) do
+	_ForEachSortedKey(behaviorDefinitions, function(name)
 		self._definitions[name] = behaviorDefinitions[name]
-	end
+	end)
 
 	return (self :: any) :: TBehaviorCatalog
 end

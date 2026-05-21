@@ -12,6 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RuntimeEnums = require(ReplicatedStorage.Utilities.AI.Runtime.src.RuntimeEnums)
 local ActionId = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.ActionId)
 local ActionStateTransitionSpec = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Specs.ActionStateTransitionSpec)
+local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
 local ExecutorBoundary = require(script.Parent.ExecutorBoundary)
 local RuntimeContextAdapter = require(script.Parent.RuntimeContextAdapter)
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -65,9 +66,10 @@ function StartPendingAction.TryExecute(
 	pendingActionId = ActionId.From(pendingActionId, "actionState.PendingActionId")
 
 	-- Block transitions when the owning action-state is not allowed to start
-	local transitionResult = ActionStateTransitionSpec.CanStartFromActionState:IsSatisfiedBy({
-		ActionState = actionState.ActionState,
-	})
+	local transitionCandidate = ScratchRecycler.AcquireMap()
+	transitionCandidate.ActionState = actionState.ActionState
+	local transitionResult = ActionStateTransitionSpec.CanStartFromActionState:IsSatisfiedBy(transitionCandidate)
+	ScratchRecycler.ReleaseMap(transitionCandidate)
 	if not transitionResult.success then
 		return Ok(_createResult(RuntimeEnums.StartStatus.Blocked, pendingActionId, nil, tostring(actionState.ActionState)))
 	end

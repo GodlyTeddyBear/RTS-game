@@ -88,6 +88,8 @@ export type TPayloadSchemaDescriptor = {
 export type TCompiledJob = ParallelLogistics.TCompiledJob & {
 	GetPayloadSchemaDescriptor: ((self: TCompiledJob) -> TPayloadSchemaDescriptor?)?,
 	GetPayloadCodec: ((self: TCompiledJob) -> any?)?,
+	GetManagerPayloadSchemaDescriptor: ((self: TCompiledJob) -> TPayloadSchemaDescriptor?)?,
+	GetManagerPayloadCodec: ((self: TCompiledJob) -> any?)?,
 }
 
 export type TDefineJobConfig = {
@@ -97,6 +99,7 @@ export type TDefineJobConfig = {
 	Results: TAutoSchemaRecord,
 	SharedSchema: { [string]: any }?,
 	PayloadSchema: TPayloadSchemaRecord?,
+	ManagerPayloadSchema: TPayloadSchemaRecord?,
 }
 
 export type TWorkerRequest = {
@@ -118,6 +121,7 @@ export type TWorkerExport = {
 export type TRegisterJobConfig = {
 	Job: TCompiledJob,
 	WorkerModule: ModuleScript,
+	ManagerModule: ModuleScript?,
 	DefaultLogicalWorkCount: number?,
 	DefaultBatchSize: number?,
 }
@@ -129,6 +133,7 @@ export type TRunRequest = {
 	BatchSize: number?,
 	SharedMemory: SharedTable?,
 	WorkerPayload: { [string]: any }?,
+	ManagerPayload: { [string]: any }?,
 }
 
 export type TRunOutput = {
@@ -139,6 +144,8 @@ export type TRunOutput = {
 	BatchSize: number,
 	ShardCount: number,
 	Rows: { { [string]: any } },
+	UsedManagerStage: boolean,
+	WorkerPayload: { [string]: any }?,
 }
 
 export type TManagedAsyncResult = {
@@ -236,12 +243,15 @@ export type TCompletedSignal = {
 export type TRegisteredJob = {
 	Job: TCompiledJob,
 	WorkerModule: ModuleScript,
+	ManagerModule: ModuleScript?,
 	DefaultLogicalWorkCount: number?,
 	DefaultBatchSize: number?,
 	SharedMemory: SharedTable?,
 	WorkerPayloadBuffer: buffer?,
 	PayloadSchemaDescriptor: TPayloadSchemaDescriptor?,
 	PayloadCodec: any?,
+	ManagerPayloadSchemaDescriptor: TPayloadSchemaDescriptor?,
+	ManagerPayloadCodec: any?,
 }
 
 export type TManagedJob = {

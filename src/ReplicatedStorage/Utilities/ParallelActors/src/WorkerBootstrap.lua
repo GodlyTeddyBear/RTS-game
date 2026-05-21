@@ -13,8 +13,11 @@ type TCompiledJob = ParallelLogistics.TCompiledJob
 type TActorJobState = {
 	CompiledJob: TCompiledJob,
 	PayloadCodec: any?,
+	ManagerPayloadCodec: any?,
 	WorkerModule: ModuleScript,
+	ManagerModule: ModuleScript?,
 	WorkerExport: { Execute: (request: { [string]: any }) -> any },
+	ManagerExport: { BuildDispatch: (request: { [string]: any }) -> any }?,
 	SharedMemory: SharedTable?,
 	WorkerPayload: { [string]: any }?,
 }
@@ -59,7 +62,12 @@ local function _BuildSchema(descriptor: { [string]: string })
 	return Sera.Schema(schemaFields)
 end
 
-local function _BuildCompiledJob(jobName: string, version: number, argsSchemaDescriptor: { [string]: string }, resultSchemaDescriptor: { [string]: string }): TCompiledJob
+local function _BuildCompiledJob(
+	jobName: string,
+	version: number,
+	argsSchemaDescriptor: { [string]: string },
+	resultSchemaDescriptor: { [string]: string }
+): TCompiledJob
 	return ParallelLogistics.DefineJob({
 		Name = jobName,
 		Version = version,
@@ -76,6 +84,43 @@ local function _WrapRowsResult(rowsResult: any, onRows: ({ { [string]: any } }) 
 	end
 
 	return onRows(rowsResult)
+end
+
+local function _BuildWorkerPayloadBuffer(jobState: TActorJobState, jobName: string, workerPayload: any): buffer?
+	if workerPayload == nil then
+		return nil
+	end
+
+	local payloadCodec = jobState.PayloadCodec
+	assert(payloadCodec ~= nil, _BuildWrappedWorkerError("ParallelRunnerManagerEncodeError", jobName, "worker payload schema is missing"))
+
+	local encodedPayload, encodeError = payloadCodec:Encode(workerPayload)
+	assert(encodedPayload ~= nil, _BuildWrappedWorkerError("ParallelRunnerManagerEncodeError", jobName, encodeError :: string))
+	return encodedPayload
+end
+
+local function _DecodeManagerPayload(jobState: TActorJobState, jobName: string, managerPayloadBuffer: buffer?): { [string]: any }?
+	if managerPayloadBuffer == nil then
+		return nil
+	end
+
+	local payloadCodec = jobState.ManagerPayloadCodec
+	assert(
+		payloadCodec ~= nil,
+		_BuildWrappedWorkerError(
+			"ParallelRunnerManagerPayloadDecodeError",
+			jobName,
+			"manager payload buffer was provided without a manager payload schema"
+		)
+	)
+
+	local decodedPayload, _, decodeError = payloadCodec:Decode(managerPayloadBuffer)
+	assert(
+		decodedPayload ~= nil,
+		_BuildWrappedWorkerError("ParallelRunnerManagerPayloadDecodeError", jobName, decodeError :: string)
+	)
+
+	return decodedPayload
 end
 
 local WorkerBootstrap = {}
@@ -95,19 +140,37 @@ function WorkerBootstrap.Start(workerScript: Script)
 		argsSchemaDescriptor: { [string]: string },
 		resultSchemaDescriptor: { [string]: string },
 		payloadSchemaDescriptor: { [string]: any }?,
-		workerModule: ModuleScript
+		managerPayloadSchemaDescriptor: { [string]: any }?,
+		workerModule: ModuleScript,
+		managerModule: ModuleScript?
 	)
 		local workerExport = require(workerModule)
 		assert(type(workerExport) == "table", `ParallelActors worker "{jobName}" module must return a table`)
 		assert(type((workerExport :: any).Execute) == "function", `ParallelActors worker "{jobName}" module must export Execute(request)`)
+
+		local managerExport = nil
+		if managerModule ~= nil then
+			local managerValue = require(managerModule)
+			assert(type(managerValue) == "table", `ParallelActors manager "{jobName}" module must return a table`)
+			assert(
+				type((managerValue :: any).BuildDispatch) == "function",
+				`ParallelActors manager "{jobName}" module must export BuildDispatch(request)`
+			)
+			managerExport = managerValue
+		end
 
 		jobsByName[jobName] = {
 			CompiledJob = _BuildCompiledJob(jobName, version, argsSchemaDescriptor, resultSchemaDescriptor),
 			PayloadCodec = if payloadSchemaDescriptor ~= nil
 				then PayloadCodec.CompileDescriptor(jobName, version, payloadSchemaDescriptor :: any)
 				else nil,
+			ManagerPayloadCodec = if managerPayloadSchemaDescriptor ~= nil
+				then PayloadCodec.CompileDescriptor(jobName, version, managerPayloadSchemaDescriptor :: any)
+				else nil,
 			WorkerModule = workerModule,
+			ManagerModule = managerModule,
 			WorkerExport = workerExport,
+			ManagerExport = managerExport,
 			SharedMemory = nil,
 			WorkerPayload = nil,
 		}
@@ -139,6 +202,121 @@ function WorkerBootstrap.Start(workerScript: Script)
 		local decodedPayload, _, decodeError = payloadCodec:Decode(workerPayloadBuffer)
 		assert(decodedPayload ~= nil, decodeError)
 		jobState.WorkerPayload = decodedPayload
+	end)
+
+	actor:BindToMessageParallel(Protocol.RunManager, function(
+		runId: number,
+		jobName: string,
+		argsBuffer: buffer,
+		bindable: BindableEvent,
+		sharedMemory: SharedTable?,
+		managerPayloadBuffer: buffer?
+	)
+		task.desynchronize()
+
+		if busy then
+			bindable:Fire(actorId, runId, jobName, nil, nil, nil, "ParallelActors actor is already busy")
+			return
+		end
+
+		busy = true
+
+		local function finish(
+			logicalWorkCount: number?,
+			batchSize: number?,
+			workerPayloadBuffer: buffer?,
+			errorMessage: string?
+		)
+			busy = false
+			bindable:Fire(actorId, runId, jobName, logicalWorkCount, batchSize, workerPayloadBuffer, errorMessage)
+		end
+
+		local jobState = jobsByName[jobName]
+		if jobState == nil then
+			finish(nil, nil, nil, `ParallelActors manager missing registered job "{jobName}"`)
+			return
+		end
+
+		local managerExport = jobState.ManagerExport
+		if managerExport == nil then
+			finish(
+				nil,
+				nil,
+				nil,
+				_BuildWrappedWorkerError("ParallelRunnerManagerModuleError", jobName, "manager module is not registered")
+			)
+			return
+		end
+
+		local decodedArgs, _, decodeError = jobState.CompiledJob:DecodeArgs(argsBuffer)
+		if decodedArgs == nil then
+			finish(nil, nil, nil, _BuildWrappedWorkerError("ParallelRunnerWorkerDecodeError", jobName, decodeError :: string))
+			return
+		end
+
+		local ok, dispatchOrError = pcall(function()
+			return managerExport.BuildDispatch({
+				RunId = runId,
+				JobName = jobName,
+				Args = decodedArgs,
+				SharedMemory = if sharedMemory ~= nil then sharedMemory else jobState.SharedMemory,
+				ManagerPayload = _DecodeManagerPayload(jobState, jobName, managerPayloadBuffer),
+			})
+		end)
+		if not ok then
+			finish(nil, nil, nil, _BuildWrappedWorkerError("ParallelRunnerManagerExecuteError", jobName, tostring(dispatchOrError)))
+			return
+		end
+
+		local dispatch = dispatchOrError
+		if type(dispatch) ~= "table" then
+			finish(
+				nil,
+				nil,
+				nil,
+				_BuildWrappedWorkerError("ParallelRunnerManagerModuleError", jobName, "manager BuildDispatch(request) must return a table")
+			)
+			return
+		end
+
+		local logicalWorkCount = dispatch.LogicalWorkCount
+		local batchSize = dispatch.BatchSize
+		if type(logicalWorkCount) ~= "number" or logicalWorkCount < 0 or logicalWorkCount % 1 ~= 0 then
+			finish(
+				nil,
+				nil,
+				nil,
+				_BuildWrappedWorkerError(
+					"ParallelRunnerManagerModuleError",
+					jobName,
+					"manager BuildDispatch(request) must return a non-negative integer LogicalWorkCount"
+				)
+			)
+			return
+		end
+		if batchSize ~= nil and (type(batchSize) ~= "number" or batchSize <= 0 or batchSize % 1 ~= 0) then
+			finish(
+				nil,
+				nil,
+				nil,
+				_BuildWrappedWorkerError(
+					"ParallelRunnerManagerModuleError",
+					jobName,
+					"manager BuildDispatch(request) BatchSize must be a positive integer when provided"
+				)
+			)
+			return
+		end
+
+		local okPayload, workerPayloadBufferOrError = pcall(function()
+			return _BuildWorkerPayloadBuffer(jobState, jobName, dispatch.WorkerPayload)
+		end)
+		if not okPayload then
+			finish(nil, nil, nil, tostring(workerPayloadBufferOrError))
+			return
+		end
+
+		finish(logicalWorkCount, batchSize, workerPayloadBufferOrError, nil)
 	end)
 
 	actor:BindToMessageParallel(Protocol.RunShard, function(

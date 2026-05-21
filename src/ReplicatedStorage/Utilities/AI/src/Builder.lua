@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Loader = require(ReplicatedStorage.Utilities.Loader)
 local StateMachine = require(ReplicatedStorage.Utilities.StateMachine)
+local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
 
 local BehaviorCatalog = require(script.Parent.BehaviorCatalog)
 local Types = require(script.Parent.Types)
@@ -43,6 +44,19 @@ local BUILDER_TRANSITIONS = table.freeze({
 })
 
 -- Small utility helpers keep the build phases easy to read without duplicating table-shape code.
+local function _AcquireSortedKeys(map: { [string]: any }): { string }
+	local keys = ScratchRecycler.AcquireArray()
+	for key in map do
+		table.insert(keys, key)
+	end
+	table.sort(keys)
+	return keys
+end
+
+local function _ReleaseSortedKeys(keys: { string })
+	ScratchRecycler.ReleaseArray(keys)
+end
+
 local function _GetSortedKeys(map: { [string]: any }): { string }
 	local keys = {}
 	for key in map do
@@ -50,6 +64,19 @@ local function _GetSortedKeys(map: { [string]: any }): { string }
 	end
 	table.sort(keys)
 	return keys
+end
+
+local function _ForEachSortedKey(map: { [string]: any }, callback: (string) -> ())
+	local keys = _AcquireSortedKeys(map)
+	local ok, err = pcall(function()
+		for _, key in ipairs(keys) do
+			callback(key)
+		end
+	end)
+	_ReleaseSortedKeys(keys)
+	if not ok then
+		error(err, 0)
+	end
 end
 
 local function _AppendHooks(target: { any }, hooks: { any })
@@ -83,29 +110,51 @@ local function _TrackOverwrite(self: any, registrationKindName: string, entryNam
 	table.insert(self._duplicateOverwrites, ("%s:%s"):format(registrationKindName, entryName))
 end
 
+local function _WithRuntimeOwnerOptions<T>(runtimeOwner: any, callback: ({ [any]: any }) -> T): T
+	local options = ScratchRecycler.AcquireMap()
+	options.RuntimeOwner = runtimeOwner
+
+	local value = nil :: T?
+	local ok, err = pcall(function()
+		value = callback(options)
+	end)
+
+	ScratchRecycler.ReleaseMap(options)
+
+	if not ok then
+		error(err, 0)
+	end
+
+	return value :: T
+end
+
 local function _MergeActionDefinitions(
 	self: any,
 	target: { [string]: any },
 	definitions: { [string]: any },
 	registrationKindName: string
 )
-	for _, actionId in ipairs(_GetSortedKeys(definitions)) do
+	_ForEachSortedKey(definitions, function(actionId)
 		if target[actionId] ~= nil then
 			_TrackOverwrite(self, registrationKindName, actionId)
 		end
 
 		target[actionId] = definitions[actionId]
+	end)
+end
+
+local function _MergeBehaviorDefinition(self: any, name: string, definition: any)
+	if self._behaviorDefinitions[name] ~= nil then
+		_TrackOverwrite(self, Types.Enums.RegistrationKind.Behavior.Name, name)
 	end
+
+	self._behaviorDefinitions[name] = definition
 end
 
 local function _MergeBehaviorDefinitions(self: any, definitions: { [string]: any })
-	for _, name in ipairs(_GetSortedKeys(definitions)) do
-		if self._behaviorDefinitions[name] ~= nil then
-			_TrackOverwrite(self, Types.Enums.RegistrationKind.Behavior.Name, name)
-		end
-
-		self._behaviorDefinitions[name] = definitions[name]
-	end
+	_ForEachSortedKey(definitions, function(name)
+		_MergeBehaviorDefinition(self, name, definitions[name])
+	end)
 end
 
 local function _BuildActorDefaults(actorBundles: { TActorBundle }): { [string]: { DefaultBehaviorName: string? } }
@@ -311,9 +360,9 @@ function Builder:LoadHooks(folder: Instance, predicate: ((ModuleScript) -> boole
 	Validation.ValidateFolder(folder, Types.Enums.RegistrationKind.Hook.Name)
 	local loadedHooks = Loader.LoadChildren(folder, predicate)
 
-	for _, moduleName in ipairs(_GetSortedKeys(loadedHooks)) do
+	_ForEachSortedKey(loadedHooks, function(moduleName)
 		table.insert(self._hookLayers.GlobalHooks, loadedHooks[moduleName])
-	end
+	end)
 
 	return (self :: any) :: TSystemBuilder
 end
@@ -363,11 +412,11 @@ function Builder:LoadActions(folder: Instance, predicate: ((ModuleScript) -> boo
 	Validation.ValidateFolder(folder, Types.Enums.RegistrationKind.Action.Name)
 	local loadedDefinitions = Loader.LoadChildren(folder, predicate)
 
-	for _, moduleName in ipairs(_GetSortedKeys(loadedDefinitions)) do
+	_ForEachSortedKey(loadedDefinitions, function(moduleName)
 		local definitionBundle = loadedDefinitions[moduleName]
 		Validation.ValidateActionDefinitions(definitionBundle)
 		_MergeActionDefinitions(self, self._actions, definitionBundle, Types.Enums.RegistrationKind.Action.Name)
-	end
+	end)
 
 	return (self :: any) :: TSystemBuilder
 end
@@ -380,9 +429,9 @@ end
 ]=]
 function Builder:AddActor(registration: TActorRegistration): TSystemBuilder
 	_AssertCollect(self, "AddActor")
-	Validation.ValidateRegistrationForUse(registration, {
-		RuntimeOwner = self._config.RuntimeOwner,
-	})
+	_WithRuntimeOwnerOptions(self._config.RuntimeOwner, function(options)
+		Validation.ValidateRegistrationForUse(registration, options)
+	end)
 	table.insert(self._actors, registration)
 
 	if registration.Actions ~= nil then
@@ -401,9 +450,9 @@ end
 ]=]
 function Builder:AddActorBundle(bundle: TActorBundle): TSystemBuilder
 	_AssertCollect(self, "AddActorBundle")
-	Validation.ValidateActorBundleForUse(bundle, {
-		RuntimeOwner = self._config.RuntimeOwner,
-	})
+	_WithRuntimeOwnerOptions(self._config.RuntimeOwner, function(options)
+		Validation.ValidateActorBundleForUse(bundle, options)
+	end)
 	table.insert(self._actorBundles, bundle)
 
 	-- Bundle-local hooks and action packs fold into the shared builder state before the actor registration is flattened.
@@ -469,9 +518,9 @@ end
 ]=]
 function Builder:AddActorPackage(actorPackage: TActorPackage): TSystemBuilder
 	_AssertCollect(self, "AddActorPackage")
-	Validation.ValidateActorPackageForUse(actorPackage, {
-		RuntimeOwner = self._config.RuntimeOwner,
-	})
+	_WithRuntimeOwnerOptions(self._config.RuntimeOwner, function(options)
+		Validation.ValidateActorPackageForUse(actorPackage, options)
+	end)
 
 	local actorBundle = actorPackage.ActorBundle
 	-- Package-level defaults override the bundle only when the bundle leaves them unset.
@@ -499,15 +548,15 @@ function Builder:AddActorPackage(actorPackage: TActorPackage): TSystemBuilder
 	end
 
 	if actorPackage.Aliases ~= nil then
-		for _, aliasName in ipairs(_GetSortedKeys(actorPackage.Aliases)) do
+		_ForEachSortedKey(actorPackage.Aliases, function(aliasName)
 			self:SetBehaviorAlias(aliasName, actorPackage.Aliases[aliasName])
-		end
+		end)
 	end
 
 	if actorPackage.ArchetypeDefaults ~= nil then
-		for _, archetypeName in ipairs(_GetSortedKeys(actorPackage.ArchetypeDefaults)) do
+		_ForEachSortedKey(actorPackage.ArchetypeDefaults, function(archetypeName)
 			self:SetArchetypeDefault(archetypeName, actorPackage.ArchetypeDefaults[archetypeName])
-		end
+		end)
 	end
 
 	if actorPackage.FallbackBehaviorName ~= nil then
@@ -662,9 +711,7 @@ end
 function Builder:AddBehavior(name: string, definition: any): TSystemBuilder
 	_AssertCollect(self, "AddBehavior")
 	Validation.ValidateBehaviorRegistrationName(name)
-	_MergeBehaviorDefinitions(self, {
-		[name] = definition,
-	})
+	_MergeBehaviorDefinition(self, name, definition)
 	return (self :: any) :: TSystemBuilder
 end
 
@@ -729,15 +776,15 @@ end
 function Builder:Build(): TSystemBuildResult
 	_AssertCollect(self, "Build")
 	for _, actorRegistration in ipairs(self._actors) do
-		Validation.ValidateRegistrationForUse(actorRegistration, {
-			RuntimeOwner = self._config.RuntimeOwner,
-		})
+		_WithRuntimeOwnerOptions(self._config.RuntimeOwner, function(options)
+			Validation.ValidateRegistrationForUse(actorRegistration, options)
+		end)
 	end
 
 	for _, actorBundle in ipairs(self._actorBundles) do
-		Validation.ValidateActorBundleForUse(actorBundle, {
-			RuntimeOwner = self._config.RuntimeOwner,
-		})
+		_WithRuntimeOwnerOptions(self._config.RuntimeOwner, function(options)
+			Validation.ValidateActorBundleForUse(actorBundle, options)
+		end)
 	end
 
 	-- The builder moves through explicit stages so diagnostics can explain exactly where construction stopped.
@@ -762,9 +809,9 @@ function Builder:Build(): TSystemBuildResult
 	-- Actor adapters register after actions because the runtime is now ready for tree execution.
 	self._buildStage = Types.Enums.BuildStage.RegisterActors.Name
 	for _, actorRegistration in ipairs(self._actors) do
-		self._ai.RegisterActor(runtime, actorRegistration, {
-			RuntimeOwner = self._config.RuntimeOwner,
-		})
+		_WithRuntimeOwnerOptions(self._config.RuntimeOwner, function(options)
+			self._ai.RegisterActor(runtime, actorRegistration, options)
+		end)
 	end
 
 	-- Behavior compilation is last because it depends on the runtime knowing the executors it can reference.

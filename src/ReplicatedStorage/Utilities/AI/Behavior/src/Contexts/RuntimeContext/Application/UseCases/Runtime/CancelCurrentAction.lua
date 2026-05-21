@@ -25,6 +25,13 @@ type TTryCancelActionResult = Types.TTryCancelActionResult
 
 local CancelCurrentAction = {}
 
+local function _createResult(status: any, actionId: string?): TCancelActionResult
+	return {
+		Status = status.Name,
+		ActionId = actionId,
+	}
+end
+
 --[=[
 	Cancels the active executor for an action-state and returns a structured result.
 	@within CancelCurrentAction
@@ -43,19 +50,13 @@ function CancelCurrentAction.TryExecute(
 	-- Exit early when there is no current action to cancel
 	local currentActionId = actionState.CurrentActionId
 	if type(currentActionId) ~= "string" or #currentActionId == 0 then
-		return Ok({
-			Status = RuntimeEnums.CancelStatus.NoCurrentAction.Name,
-			ActionId = nil,
-		})
+		return Ok(_createResult(RuntimeEnums.CancelStatus.NoCurrentAction, nil))
 	end
 
 	-- Report missing executors explicitly so the owning context can reconcile state
 	local executor = executors[currentActionId]
 	if executor == nil then
-		return Ok({
-			Status = RuntimeEnums.CancelStatus.MissingAction.Name,
-			ActionId = currentActionId,
-		})
+		return Ok(_createResult(RuntimeEnums.CancelStatus.MissingAction, currentActionId))
 	end
 
 	-- Cancel defensively so cleanup failures do not escape the runtime boundary
@@ -65,10 +66,7 @@ function CancelCurrentAction.TryExecute(
 		return cancelResult
 	end
 
-	return Ok({
-		Status = RuntimeEnums.CancelStatus.Cancelled.Name,
-		ActionId = currentActionId,
-	})
+	return Ok(_createResult(RuntimeEnums.CancelStatus.Cancelled, currentActionId))
 end
 
 return table.freeze(CancelCurrentAction)

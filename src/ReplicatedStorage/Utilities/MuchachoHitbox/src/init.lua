@@ -72,6 +72,8 @@ function MuchachoHitbox.CreateHitbox()
 	hitbox.TouchEnded = GoodSignal.new()
 
 	hitbox._UpdateAccumulator = 0
+	hitbox._QueryCache = nil
+	hitbox._ParallelMissCount = 0
 	hitbox._Runner = nil
 	hitbox._Connection = nil
 	hitbox._Box = nil

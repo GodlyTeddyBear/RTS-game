@@ -101,6 +101,10 @@ function HitboxService:_ResolveAttackerModel(_entity: number, _kind: TEntityKind
 end
 
 function HitboxService:_ResolveTouchedEntity(hitPart: BasePart): THitEntity?
+	if #self._targetResolvers == 0 then
+		return nil
+	end
+
 	for _, resolver in ipairs(self._targetResolvers) do
 		local hitEntity = resolver(hitPart)
 		if hitEntity ~= nil then
@@ -200,53 +204,40 @@ function HitboxService:CreateAttackHitboxForModel(
 	self._hitEntityKeys[handle] = self:_AcquireTempMap()
 
 	local onTouched = DebugPlus.wrap(touchProfileTag, function(hitPart: BasePart, _humanoid: Humanoid?)
-		local shouldSampleSubprofiles = false
-		if TOUCH_SUBPROFILE_SAMPLE_RATE <= 1 then
-			shouldSampleSubprofiles = true
-		else
+		local shouldSampleSubprofiles = TOUCH_SUBPROFILE_SAMPLE_RATE <= 1
+		if not shouldSampleSubprofiles then
 			self._touchSubprofileCounter += 1
 			shouldSampleSubprofiles = (self._touchSubprofileCounter % TOUCH_SUBPROFILE_SAMPLE_RATE) == 0
 		end
 
-		local hitEntity: THitEntity?
-		if shouldSampleSubprofiles then
-			hitEntity = self:_ResolveTouchedEntity(hitPart)
-		else
-			hitEntity = self:_ResolveTouchedEntity(hitPart)
-		end
+		local hitEntity = self:_ResolveTouchedEntity(hitPart)
 		if hitEntity == nil then
 			return
 		end
 
-		local hitKey = ""
-		local hitKeyMap = nil :: { [string]: boolean }?
-		if shouldSampleSubprofiles then
-			DebugPlus.profile(touchBuildKeyAndLookupProfileTag, function()
-				hitKey = _buildHitKey(hitEntity.Kind, hitEntity.Entity)
-				hitKeyMap = self._hitEntityKeys[handle]
-			end, HITBOX_PROFILING_ENABLED)
-		else
-			hitKey = _buildHitKey(hitEntity.Kind, hitEntity.Entity)
-			hitKeyMap = self._hitEntityKeys[handle]
-		end
-
-		local isDuplicateOrMissing = hitKeyMap == nil or hitKeyMap[hitKey] == true
-		if isDuplicateOrMissing then
+		local hitKeyMap = self._hitEntityKeys[handle]
+		if hitKeyMap == nil then
 			return
 		end
 
+		local hitKey = ""
 		if shouldSampleSubprofiles then
-			hitKeyMap[hitKey] = true
-			local hitList = self._hitEntities[handle]
-			if hitList ~= nil then
-				table.insert(hitList, hitEntity)
-			end
+			DebugPlus.profile(touchBuildKeyAndLookupProfileTag, function()
+				hitKey = _buildHitKey(hitEntity.Kind, hitEntity.Entity)
+			end, HITBOX_PROFILING_ENABLED)
 		else
-			hitKeyMap[hitKey] = true
-			local hitList = self._hitEntities[handle]
-			if hitList ~= nil then
-				table.insert(hitList, hitEntity)
-			end
+			hitKey = _buildHitKey(hitEntity.Kind, hitEntity.Entity)
+		end
+
+		if hitKeyMap[hitKey] == true then
+			return
+		end
+
+		hitKeyMap[hitKey] = true
+
+		local hitList = self._hitEntities[handle]
+		if hitList ~= nil then
+			table.insert(hitList, hitEntity)
 		end
 	end, HITBOX_PROFILING_ENABLED)
 

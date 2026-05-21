@@ -35,6 +35,7 @@ local internalRunner: THitboxRunner? = nil
 local OPERATION_NAME = "MuchachoHitboxPresence"
 local PARALLEL_ACTOR_COUNT = 32
 local PARALLEL_BATCH_SIZE = 1
+local PARALLEL_MISS_THRESHOLD = 2
 
 local Runner = {}
 
@@ -94,7 +95,8 @@ end
 local function _ApplySerialForSnapshot(runner: THitboxRunner, snapshot: TParallelSnapshot)
 	for index, hitbox in ipairs(snapshot.Hitboxes) do
 		if hitbox._Runner == runner then
-			Lifecycle.RunSerialDetection(hitbox, snapshot.QueryCFrames[index])
+			local didHitAny = Lifecycle.RunSerialDetection(hitbox, snapshot.QueryCFrames[index])
+			hitbox._ParallelMissCount = if didHitAny then 0 else ((hitbox._ParallelMissCount or 0) + 1)
 		end
 	end
 end
@@ -132,9 +134,11 @@ local function _ApplyCompletedResult(runner: THitboxRunner)
 		end
 
 		if row.HasAny then
-			Lifecycle.RunSerialDetection(hitbox, queryCFrame)
+			local didHitAny = Lifecycle.RunSerialDetection(hitbox, queryCFrame)
+			hitbox._ParallelMissCount = if didHitAny then 0 else ((hitbox._ParallelMissCount or 0) + 1)
 		else
 			Lifecycle.RunNoHitDetection(hitbox)
+			hitbox._ParallelMissCount = (hitbox._ParallelMissCount or 0) + 1
 		end
 	end
 
@@ -312,6 +316,13 @@ function Runner.Create(): THitboxRunner
 			end
 
 			local queryCFrame = Lifecycle.ResolveStep(hitbox)
+			local missCount = hitbox._ParallelMissCount or 0
+			if missCount < PARALLEL_MISS_THRESHOLD then
+				table.insert(serialHitboxes, hitbox)
+				table.insert(serialQueryCFrames, queryCFrame)
+				continue
+			end
+
 			local parallelSize, shapeId, filterToken = Query.BuildParallelSnapshot(hitbox, queryCFrame)
 			if not parallelSize or not shapeId or not filterToken then
 				table.insert(serialHitboxes, hitbox)
@@ -328,7 +339,8 @@ function Runner.Create(): THitboxRunner
 
 		for index, hitbox in ipairs(serialHitboxes) do
 			if hitbox._Runner == self then
-				Lifecycle.RunSerialDetection(hitbox, serialQueryCFrames[index])
+				local didHitAny = Lifecycle.RunSerialDetection(hitbox, serialQueryCFrames[index])
+				hitbox._ParallelMissCount = if didHitAny then 0 else ((hitbox._ParallelMissCount or 0) + 1)
 			end
 		end
 		_ReleaseArray(self, serialQueryCFrames)

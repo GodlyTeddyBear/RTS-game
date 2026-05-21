@@ -4,15 +4,25 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Promise = require(ReplicatedStorage.Packages.Promise)
 
-export type TRunStatus = "Queued" | "Running" | "Completed" | "Failed" | "Cancelled"
+export type TRunStatus =
+	"Queued"
+	| "Running"
+	| "QueuedManager"
+	| "RunningManager"
+	| "QueuedWorkers"
+	| "RunningWorkers"
+	| "Completed"
+	| "Failed"
+	| "Cancelled"
 
 export type TRunRequest = {
 	JobName: string,
-	LogicalWorkCount: number,
+	LogicalWorkCount: number?,
 	BatchSize: number?,
 	ArgsBuffer: buffer,
 	SharedMemory: SharedTable?,
 	WorkerPayloadBuffer: buffer?,
+	ManagerPayloadBuffer: buffer?,
 }
 
 export type TShardRequest = {
@@ -25,6 +35,14 @@ export type TShardRequest = {
 	ArgsBuffer: buffer,
 	SharedMemory: SharedTable?,
 	WorkerPayloadBuffer: buffer?,
+}
+
+export type TManagerRequest = {
+	RunId: number,
+	JobName: string,
+	ArgsBuffer: buffer,
+	SharedMemory: SharedTable?,
+	ManagerPayloadBuffer: buffer?,
 }
 
 export type TRunError = {
@@ -66,6 +84,8 @@ export type TRunResult = {
 	ShardCount: number,
 	ShardCompletions: { TShardCompletion },
 	FirstError: TRunError?,
+	UsedManagerStage: boolean,
+	ResolvedWorkerPayloadBuffer: buffer?,
 }
 
 export type TRunHandle = {
@@ -106,16 +126,18 @@ export type TRegisteredJob = {
 	Name: string,
 	Version: number,
 	WorkerModule: ModuleScript,
+	ManagerModule: ModuleScript?,
 	ArgsSchemaDescriptor: TSchemaDescriptor,
 	ResultSchemaDescriptor: TSchemaDescriptor,
 	PayloadSchemaDescriptor: { [string]: any }?,
+	ManagerPayloadSchemaDescriptor: { [string]: any }?,
 }
 
 export type TActorSlot = {
 	ActorId: number,
 	Actor: Actor,
 	WorkerScript: Script?,
-	State: "Available" | "HiredIdle" | "Busy",
+	State: "Available" | "HiredIdle" | "Busy" | "ManagerIdle" | "ManagerBusy",
 	ReleaseOnIdle: boolean?,
 }
 
@@ -124,9 +146,16 @@ export type TShardRecord = TShardRequest & {
 	WorkerPayloadBuffer: buffer?,
 }
 
+export type TManagerDispatch = {
+	LogicalWorkCount: number,
+	BatchSize: number?,
+	WorkerPayloadBuffer: buffer?,
+}
+
 export type TRunRecord = {
 	RunId: number,
 	JobName: string,
+	Request: TRunRequest,
 	Status: TRunStatus,
 	LogicalWorkCount: number,
 	BatchSize: number,
@@ -136,6 +165,11 @@ export type TRunRecord = {
 	CompletedShardCount: number,
 	ShardCompletionsByIndex: { [number]: TShardCompletion },
 	FirstError: TRunError?,
+	RequestedBatchSize: number?,
+	UsedManagerStage: boolean,
+	ResolvedWorkerPayloadBuffer: buffer?,
+	ManagerDispatch: TManagerDispatch?,
+	ManagerInFlight: boolean,
 	Handle: TRunHandle,
 	Promise: typeof(Promise.new(function() end)),
 	Resolve: (result: TRunResult) -> (),
@@ -143,11 +177,13 @@ export type TRunRecord = {
 	Settled: boolean,
 	ResultBindable: BindableEvent?,
 	ResultConnection: RBXScriptConnection?,
+	ManagerBindable: BindableEvent?,
+	ManagerConnection: RBXScriptConnection?,
 }
 
 export type TWorkplace = {
 	RegisterJob: (self: TWorkplace, jobName: string, executor: TJobExecutor) -> (),
-	RegisterCompiledJob: (self: TWorkplace, job: any, workerModule: ModuleScript) -> (),
+	RegisterCompiledJob: (self: TWorkplace, job: any, workerModule: ModuleScript, managerModule: ModuleScript?) -> (),
 	HasJob: (self: TWorkplace, jobName: string) -> boolean,
 	SetSharedMemory: (self: TWorkplace, jobName: string, sharedMemory: SharedTable?) -> (),
 	SetWorkerPayload: (self: TWorkplace, jobName: string, workerPayloadBuffer: buffer?) -> (),

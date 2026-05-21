@@ -76,6 +76,10 @@ local function _ResolveLogicalWorkCount(
 	registeredJob: TRegisteredJob,
 	request: Types.TRunRequest
 ): (number?, TResult<any>?)
+	if request.ManagerPayload ~= nil then
+		return nil, nil
+	end
+
 	if request.LogicalWorkCount then
 		return request.LogicalWorkCount, nil
 	end
@@ -92,6 +96,42 @@ local function _ResolveLogicalWorkCount(
 				JobName = request.JobName,
 			}
 		)
+end
+
+local function _ResolveManagerPayloadBuffer(
+	registeredJob: TRegisteredJob,
+	request: Types.TRunRequest
+): (buffer?, TResult<any>?)
+	if not request.ManagerPayload then
+		return nil, nil
+	end
+
+	local payloadCodec = registeredJob.ManagerPayloadCodec
+	if not payloadCodec then
+		return nil,
+			_BuildSetupError(
+				"ParallelRunnerManagerPayloadSchemaMissing",
+				`ParallelRunner:Run("{request.JobName}") cannot accept ManagerPayload because the job does not define ManagerPayloadSchema`,
+				{
+					JobName = request.JobName,
+				}
+			)
+	end
+
+	local managerPayloadBuffer, payloadEncodeError = payloadCodec:Encode(request.ManagerPayload)
+	if not managerPayloadBuffer then
+		return nil,
+			_BuildSetupError(
+				"ParallelRunnerManagerPayloadEncodeError",
+				`ParallelRunner:Run("{request.JobName}") failed to encode ManagerPayload`,
+				{
+					JobName = request.JobName,
+					Cause = payloadEncodeError,
+				}
+			)
+	end
+
+	return managerPayloadBuffer, nil
 end
 
 local function _ResolveBatchSize(self: any, registeredJob: TRegisteredJob, request: Types.TRunRequest): number?
@@ -335,24 +375,60 @@ function ParallelRunner:RegisterJob(config: TRegisterJobConfig): TResult<boolean
 			)
 		end
 
-		(self._workplace :: any):RegisterCompiledJob(config.Job, config.WorkerModule)
+		if config.ManagerModule ~= nil then
+			local managerExport = require(config.ManagerModule)
+			if type(managerExport) ~= "table" then
+				return _BuildSetupError(
+					"ParallelRunnerManagerModuleError",
+					`ParallelRunner:RegisterJob("{jobName}") ManagerModule must return a table`,
+					{
+						JobName = jobName,
+						ManagerModule = config.ManagerModule:GetFullName(),
+					}
+				)
+			end
+
+			if type((managerExport :: any).BuildDispatch) ~= "function" then
+				return _BuildSetupError(
+					"ParallelRunnerManagerModuleError",
+					`ParallelRunner:RegisterJob("{jobName}") ManagerModule must export BuildDispatch(request)`,
+					{
+						JobName = jobName,
+						ManagerModule = config.ManagerModule:GetFullName(),
+					}
+				)
+			end
+		end
+
+		(self._workplace :: any):RegisterCompiledJob(config.Job, config.WorkerModule, config.ManagerModule)
 		local payloadSchemaDescriptor = nil
 		local payloadCodec = nil
+		local managerPayloadSchemaDescriptor = nil
+		local managerPayloadCodec = nil
 		if type((config.Job :: any).GetPayloadSchemaDescriptor) == "function" then
 			payloadSchemaDescriptor = (config.Job :: any):GetPayloadSchemaDescriptor()
 		end
 		if type((config.Job :: any).GetPayloadCodec) == "function" then
 			payloadCodec = (config.Job :: any):GetPayloadCodec()
 		end
+		if type((config.Job :: any).GetManagerPayloadSchemaDescriptor) == "function" then
+			managerPayloadSchemaDescriptor = (config.Job :: any):GetManagerPayloadSchemaDescriptor()
+		end
+		if type((config.Job :: any).GetManagerPayloadCodec) == "function" then
+			managerPayloadCodec = (config.Job :: any):GetManagerPayloadCodec()
+		end
 		self._registeredJobs[jobName] = {
 			Job = config.Job,
 			WorkerModule = config.WorkerModule,
+			ManagerModule = config.ManagerModule,
 			DefaultLogicalWorkCount = config.DefaultLogicalWorkCount,
 			DefaultBatchSize = config.DefaultBatchSize,
 			SharedMemory = nil,
 			WorkerPayloadBuffer = nil,
 			PayloadSchemaDescriptor = payloadSchemaDescriptor,
 			PayloadCodec = payloadCodec,
+			ManagerPayloadSchemaDescriptor = managerPayloadSchemaDescriptor,
+			ManagerPayloadCodec = managerPayloadCodec,
 		}
 
 		return Ok(true)
@@ -507,6 +583,10 @@ function ParallelRunner:Run(request: TRunRequest): TResult<TRunnerRunHandle>
 		if workerPayloadError then
 			return workerPayloadError
 		end
+		local resolvedManagerPayloadBuffer, managerPayloadError = _ResolveManagerPayloadBuffer(registeredJob, request)
+		if managerPayloadError then
+			return managerPayloadError
+		end
 
 		-- Encode args with the compiled transport contract before crossing into the workplace.
 		local argsBuffer, encodeError = registeredJob.Job:EncodeArgs(request.Args)
@@ -524,11 +604,12 @@ function ParallelRunner:Run(request: TRunRequest): TResult<TRunnerRunHandle>
 		local workplaceRunHandle = DebugPlus.profile(RUN_PROFILE_WORKPLACE_RUN_TAG, function()
 			return self._workplace:Run({
 				JobName = request.JobName,
-				LogicalWorkCount = logicalWorkCount :: number,
+				LogicalWorkCount = logicalWorkCount,
 				BatchSize = resolvedBatchSize,
 				ArgsBuffer = argsBuffer,
 				SharedMemory = resolvedSharedMemory,
 				WorkerPayloadBuffer = resolvedWorkerPayloadBuffer,
+				ManagerPayloadBuffer = resolvedManagerPayloadBuffer,
 			})
 		end, RUN_PROFILE_ENABLED)
 
@@ -624,6 +705,36 @@ function ParallelRunner:_DecodeRunResult(
 		end
 	end
 
+	local workerPayload = nil
+	if workplaceRunResult.UsedManagerStage and workplaceRunResult.ResolvedWorkerPayloadBuffer ~= nil then
+		local payloadCodec = registeredJob.PayloadCodec
+		if payloadCodec == nil then
+			return Err(
+				"ParallelRunnerWorkerPayloadSchemaMissing",
+				`ParallelRunner run "{workplaceRunResult.JobName}" completed with manager payload data but the job has no PayloadSchema`,
+				{
+					JobName = workplaceRunResult.JobName,
+					RunId = workplaceRunResult.RunId,
+				}
+			)
+		end
+
+		local decodedPayload, _, payloadDecodeError = payloadCodec:Decode(workplaceRunResult.ResolvedWorkerPayloadBuffer)
+		if decodedPayload == nil then
+			return Err(
+				"ParallelRunnerWorkerPayloadDecodeError",
+				`ParallelRunner run "{workplaceRunResult.JobName}" failed to decode manager-built worker payload`,
+				{
+					JobName = workplaceRunResult.JobName,
+					RunId = workplaceRunResult.RunId,
+					Cause = payloadDecodeError,
+				}
+			)
+		end
+
+		workerPayload = decodedPayload
+	end
+
 	return Ok(table.freeze({
 		RunId = workplaceRunResult.RunId,
 		JobName = workplaceRunResult.JobName,
@@ -632,6 +743,8 @@ function ParallelRunner:_DecodeRunResult(
 		BatchSize = workplaceRunResult.BatchSize,
 		ShardCount = workplaceRunResult.ShardCount,
 		Rows = table.freeze(rows),
+		UsedManagerStage = workplaceRunResult.UsedManagerStage,
+		WorkerPayload = workerPayload,
 	}))
 end
 

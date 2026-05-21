@@ -24,13 +24,19 @@ function Validation.AssertJobRegistration(jobName: any, executor: any)
 	assert(type(executor) == "function", `ParallelActors:RegisterJob("{tostring(jobName)}") requires an executor function`)
 end
 
-function Validation.AssertCompiledJobRegistration(job: any, workerModule: any)
+function Validation.AssertCompiledJobRegistration(job: any, workerModule: any, managerModule: any?)
 	assert(type(job) == "table", "ParallelActors:RegisterCompiledJob requires a compiled job")
 	assert(type(job.GetName) == "function", "ParallelActors:RegisterCompiledJob requires a compiled ParallelLogistics job")
 	assert(
 		typeof(workerModule) == "Instance" and workerModule:IsA("ModuleScript"),
 		`ParallelActors:RegisterCompiledJob("{tostring(job:GetName())}") requires WorkerModule to be a ModuleScript`
 	)
+	if managerModule ~= nil then
+		assert(
+			typeof(managerModule) == "Instance" and managerModule:IsA("ModuleScript"),
+			`ParallelActors:RegisterCompiledJob("{tostring(job:GetName())}") requires ManagerModule to be a ModuleScript when provided`
+		)
+	end
 end
 
 function Validation.AssertSharedMemory(jobName: any, sharedMemory: any)
@@ -57,10 +63,24 @@ function Validation.AssertRunRequest(request: { [string]: any }, jobExists: bool
 	assert(type(request) == "table", "ParallelActors:Run requires a request table")
 	assert(type(request.JobName) == "string" and request.JobName ~= "", "ParallelActors:Run requires JobName")
 	assert(jobExists, `ParallelActors:Run("{tostring(request.JobName)}") requires a registered job`)
-	assert(
-		type(request.LogicalWorkCount) == "number" and request.LogicalWorkCount >= 0 and request.LogicalWorkCount % 1 == 0,
-		`ParallelActors:Run("{request.JobName}") requires LogicalWorkCount to be a non-negative integer`
-	)
+	local isManagerRun = request.ManagerPayloadBuffer ~= nil
+	if isManagerRun then
+		assert(
+			request.LogicalWorkCount == nil,
+			`ParallelActors:Run("{request.JobName}") cannot combine ManagerPayloadBuffer with LogicalWorkCount`
+		)
+		assert(
+			request.WorkerPayloadBuffer == nil,
+			`ParallelActors:Run("{request.JobName}") cannot combine ManagerPayloadBuffer with WorkerPayloadBuffer`
+		)
+	else
+		assert(
+			type(request.LogicalWorkCount) == "number"
+				and request.LogicalWorkCount >= 0
+				and request.LogicalWorkCount % 1 == 0,
+			`ParallelActors:Run("{request.JobName}") requires LogicalWorkCount to be a non-negative integer`
+		)
+	end
 	if request.BatchSize ~= nil then
 		assert(
 			type(request.BatchSize) == "number" and request.BatchSize > 0 and request.BatchSize % 1 == 0,
@@ -81,6 +101,12 @@ function Validation.AssertRunRequest(request: { [string]: any }, jobExists: bool
 		assert(
 			typeof(request.WorkerPayloadBuffer) == "buffer",
 			`ParallelActors:Run("{request.JobName}") WorkerPayloadBuffer must be a buffer when provided`
+		)
+	end
+	if request.ManagerPayloadBuffer ~= nil then
+		assert(
+			typeof(request.ManagerPayloadBuffer) == "buffer",
+			`ParallelActors:Run("{request.JobName}") ManagerPayloadBuffer must be a buffer when provided`
 		)
 	end
 end

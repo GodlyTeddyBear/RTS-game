@@ -17,6 +17,18 @@ local TERMINAL_STATUSES = {
 	Cancelled = true,
 }
 
+local QUEUED_STATUSES = {
+	Queued = true,
+	QueuedManager = true,
+	QueuedWorkers = true,
+}
+
+local RUNNING_STATUSES = {
+	Running = true,
+	RunningManager = true,
+	RunningWorkers = true,
+}
+
 local RunHandle = {}
 RunHandle.__index = RunHandle
 
@@ -54,11 +66,11 @@ function RunHandle:GetStatus()
 end
 
 function RunHandle:IsQueued(): boolean
-	return self:GetStatus() == "Queued"
+	return QUEUED_STATUSES[self:GetStatus()] == true
 end
 
 function RunHandle:IsRunning(): boolean
-	return self:GetStatus() == "Running"
+	return RUNNING_STATUSES[self:GetStatus()] == true
 end
 
 function RunHandle:IsCompleted(): boolean

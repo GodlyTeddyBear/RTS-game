@@ -1,5 +1,8 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
 local Types = require(script.Parent.Types)
 local ConfigPolicy = require(script.Parent.ConfigPolicy)
 local HasValidActionStateShapeSpec = require(script.Parent.Specs.HasValidActionStateShapeSpec)
@@ -15,6 +18,14 @@ type TFactoryConfig = Types.TFactoryConfig
 ]=]
 
 local Validation = {}
+
+local function _CreateCandidateMap()
+	return ScratchRecycler.AcquireMap()
+end
+
+local function _ReleaseCandidateMap(candidate: { [any]: any })
+	ScratchRecycler.ReleaseMap(candidate)
+end
 
 -- Direct callback adapters
 function Validation.ValidateConfig(config: TConfig)
@@ -46,9 +57,11 @@ function Validation.ValidateQueryActiveEntitiesResult(entities: any)
 end
 
 function Validation.ValidateActionState(actionState: any, sourceLabel: string)
-	local result = HasValidActionStateShapeSpec.HasValidActionStateShape:IsSatisfiedBy({
-		ActionState = actionState,
-	})
+	local candidate = _CreateCandidateMap()
+	candidate.ActionState = actionState
+
+	local result = HasValidActionStateShapeSpec.HasValidActionStateShape:IsSatisfiedBy(candidate)
+	_ReleaseCandidateMap(candidate)
 	assert(result.success, ("%s received an invalid action-state payload"):format(sourceLabel))
 end
 
