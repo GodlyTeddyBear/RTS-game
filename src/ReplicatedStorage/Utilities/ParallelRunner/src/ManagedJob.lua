@@ -412,6 +412,41 @@ function ManagedJob:Dispatch(payload: any): TManagedJobDispatchStatus
 
 	local resolvedWorkerPayload = _ShallowMergePayloadTables(baseWorkerPayload, builtWorkerPayload)
 
+	local builtManagerPayload = nil :: { [string]: any }?
+	if self._config.BuildManagerPayload ~= nil then
+		local ok, managerPayloadOrError = pcall(self._config.BuildManagerPayload, payload)
+		if not ok then
+			_CompleteManagedRequest(
+				self,
+				requestId :: number,
+				sessionToken,
+				payload,
+				nil,
+				_WrapBuilderFailure(self._config.JobName, "manager payload", payload, managerPayloadOrError)
+			)
+			return "Dispatched"
+		end
+
+		builtManagerPayload = managerPayloadOrError
+	end
+
+	if builtManagerPayload ~= nil then
+		local okManagerPayload, managerPayloadValidationError = pcall(function()
+			Validation.AssertManagedManagerPayload(self._config.JobName, builtManagerPayload)
+		end)
+		if not okManagerPayload then
+			_CompleteManagedRequest(
+				self,
+				requestId :: number,
+				sessionToken,
+				payload,
+				nil,
+				_WrapBuilderFailure(self._config.JobName, "manager payload", payload, managerPayloadValidationError)
+			)
+			return "Dispatched"
+		end
+	end
+
 	local runRequest = nil
 	do
 		local ok, runRequestOrError = pcall(self._config.BuildRunRequest, payload)
@@ -431,7 +466,7 @@ function ManagedJob:Dispatch(payload: any): TManagedJobDispatchStatus
 	end
 
 	local okRunRequest, runRequestValidationError = pcall(function()
-		Validation.AssertManagedRunRequest(self._config.JobName, runRequest)
+		Validation.AssertManagedRunRequest(self._config.JobName, runRequest, builtManagerPayload ~= nil)
 	end)
 	if not okRunRequest then
 		_CompleteManagedRequest(
@@ -452,6 +487,7 @@ function ManagedJob:Dispatch(payload: any): TManagedJobDispatchStatus
 		BatchSize = runRequest.BatchSize,
 		SharedMemory = sharedMemory,
 		WorkerPayload = resolvedWorkerPayload,
+		ManagerPayload = builtManagerPayload,
 	})
 	if not runResult.success then
 		_CompleteManagedRequest(

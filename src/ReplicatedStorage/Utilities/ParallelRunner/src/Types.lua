@@ -177,7 +177,7 @@ export type TManagedJobPolicyConfig = {
 
 export type TManagedJobBuildRunRequest = {
 	Args: { [string]: any },
-	LogicalWorkCount: number,
+	LogicalWorkCount: number?,
 	BatchSize: number?,
 }
 
@@ -188,6 +188,7 @@ export type TManagedJobConfig = {
 	BuildBaseSharedMemory: ((payload: any) -> TSharedPacket?)?,
 	BuildWorkerPayload: ((payload: any) -> { [string]: any })?,
 	BuildBaseWorkerPayload: ((payload: any) -> { [string]: any }?)?,
+	BuildManagerPayload: ((payload: any) -> { [string]: any }?)?,
 	BuildRunRequest: (payload: any) -> TManagedJobBuildRunRequest,
 	GetSessionToken: ((payload: any) -> any?)?,
 	MaxInFlightSeconds: number?,

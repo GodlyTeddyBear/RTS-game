@@ -15,8 +15,8 @@ type TFlowPipelineState = MovementTypes.TFlowPipelineState
 type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
 type TFlowPublishedSolve = MovementTypes.TFlowPublishedSolve
 type TFlowSeparationDispatchPayload = MovementTypes.TFlowSeparationDispatchPayload
+type TFlowSeparationManagerPayload = MovementTypes.TFlowSeparationManagerPayload
 type TFlowSeparationSolveRow = MovementTypes.TFlowSeparationSolveRow
-type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
 type TManagedJob = MovementTypes.TManagedJob
 type TMovementService = MovementTypes.TMovementService
 type TParallelRunnerLike = MovementTypes.TParallelRunnerLike
@@ -177,6 +177,7 @@ return function(MovementService: TMovementService)
 		local registerResult = runner:RegisterJob({
 			Job = require(script.Parent.Parallel.FlowSeparationSolveOperation),
 			WorkerModule = script.Parent.Parallel.FlowSeparationSolveWorker,
+			ManagerModule = script.Parent.Parallel.FlowSeparationSolveManager,
 		})
 		if not registerResult.success then
 			return Err("MovementParallelRegisterFailed", Errors.MOVEMENT_PARALLEL_REGISTER_FAILED, {
@@ -200,6 +201,9 @@ return function(MovementService: TMovementService)
 			JobName = "FlowSeparationSolve",
 			BuildWorkerPayload = function(payload: TFlowSeparationDispatchPayload)
 				return payload.WorkerPayload
+			end,
+			BuildManagerPayload = function(payload: TFlowSeparationDispatchPayload)
+				return payload.ManagerPayload
 			end,
 			BuildRunRequest = function(payload: TFlowSeparationDispatchPayload)
 				return payload.RunRequest
@@ -361,37 +365,42 @@ return function(MovementService: TMovementService)
 
 		-- Validate that the completed result matches the snapshot we dispatched earlier.
 		local payload = managedResult.Payload :: TFlowSeparationDispatchPayload?
-		local snapshot = payload and payload.Snapshot
+		local entityIds = payload and payload.EntityIds
 		local goalKeyByEntity = self._flowDispatchedGoalKeyByEntity
 		local frameState = self._flowDispatchedFrameState :: TFlowPublishedFrameState?
-		local hasSnapshot = snapshot ~= nil
-		local snapshotMatchesDispatched = hasSnapshot and snapshot == self._flowDispatchedSeparationSnapshot or false
+		local payloadMatchesDispatched = payload ~= nil and payload == self._flowDispatchPayload
+		local hasEntityIds = entityIds ~= nil
 		local hasGoalKeyByEntity = goalKeyByEntity ~= nil
 		local hasFrameState = frameState ~= nil
 		if
-			not hasSnapshot
-			or not snapshotMatchesDispatched
+			not payloadMatchesDispatched
+			or not hasEntityIds
 			or not hasGoalKeyByEntity
 			or not hasFrameState
 		then
 			closeConsumeProfile()
 			return Err(
-				"MovementParallelResultFailed:Snapshot",
+				"MovementParallelResultFailed:Payload",
 				Errors.MOVEMENT_PARALLEL_RESULT_FAILED,
-				_BuildConsumeErrorData("Snapshot", {
-					HasSnapshot = hasSnapshot,
-					SnapshotMatchesDispatched = snapshotMatchesDispatched,
+				_BuildConsumeErrorData("Payload", {
+					PayloadMatchesDispatched = payloadMatchesDispatched,
+					HasEntityIds = hasEntityIds,
 					HasGoalKeyByEntity = hasGoalKeyByEntity,
 					HasFrameState = hasFrameState,
 				})
 			)
 		end
 
+		local resolvedPayload = payload :: TFlowSeparationDispatchPayload
+		local resolvedEntityIds = entityIds :: { number }
+		local resolvedGoalKeyByEntity = goalKeyByEntity :: { [number]: string }
+		local resolvedFrameState = frameState :: TFlowPublishedFrameState
+
 		-- Publish the solve outputs into the reusable frame caches.
 		self:_ReleaseFlowLatestParallelSolve()
 
 		local velocityByEntity = self:_ApplyFlowVelocityRows(
-			snapshot,
+			resolvedEntityIds,
 			managedResult.Rows :: { TFlowSeparationSolveRow },
 			self._flowPublishedVelocityByEntity,
 			self._flowPublishedTouchedSettledNeighborByEntity
@@ -414,44 +423,44 @@ return function(MovementService: TMovementService)
 		-- Copy the per-entity goal, position, and settle state into published tables.
 		local publishedGoalKeyByEntity = self._flowPublishedGoalKeyByEntity
 		table.clear(publishedGoalKeyByEntity)
-		for entityId, goalKey in goalKeyByEntity do
+		for entityId, goalKey in resolvedGoalKeyByEntity do
 			publishedGoalKeyByEntity[entityId] = goalKey
 		end
 
 		local publishedGoalPositionByEntity = self._flowPublishedGoalPositionByEntity
 		table.clear(publishedGoalPositionByEntity)
-		for entityId, goalPosition in frameState.GoalPositionByEntity do
+		for entityId, goalPosition in resolvedFrameState.GoalPositionByEntity do
 			publishedGoalPositionByEntity[entityId] = goalPosition
 		end
 
 		local publishedGoalWorldSampleByEntity = self._flowPublishedGoalWorldSampleByEntity
 		table.clear(publishedGoalWorldSampleByEntity)
-		for entityId, goalWorldSample in frameState.GoalWorldSampleByEntity do
+		for entityId, goalWorldSample in resolvedFrameState.GoalWorldSampleByEntity do
 			publishedGoalWorldSampleByEntity[entityId] = goalWorldSample
 		end
 
 		local publishedPositionByEntity = self._flowPublishedPositionByEntity
 		table.clear(publishedPositionByEntity)
-		for entityId, position in frameState.PositionByEntity do
+		for entityId, position in resolvedFrameState.PositionByEntity do
 			publishedPositionByEntity[entityId] = position
 		end
 
 		local publishedWalkSpeedByEntity = self._flowPublishedWalkSpeedByEntity
 		table.clear(publishedWalkSpeedByEntity)
-		for entityId, walkSpeed in frameState.WalkSpeedByEntity do
+		for entityId, walkSpeed in resolvedFrameState.WalkSpeedByEntity do
 			publishedWalkSpeedByEntity[entityId] = walkSpeed
 		end
 
 		local publishedIsSettledByEntity = self._flowPublishedIsSettledByEntity
 		table.clear(publishedIsSettledByEntity)
-		for entityId, isSettled in frameState.IsSettledByEntity do
+		for entityId, isSettled in resolvedFrameState.IsSettledByEntity do
 			if isSettled then
 				publishedIsSettledByEntity[entityId] = true
 			end
 		end
 
 		local publishedSolve = self._flowPublishedSolve :: TFlowPublishedSolve
-		publishedSolve.TickId = snapshot.TickId
+		publishedSolve.TickId = resolvedPayload.RunRequest.Args.TickId
 		self._flowLatestParallelSolve = publishedSolve
 		self:_ReleaseFlowDispatchedSeparationSnapshot()
 		closeConsumeProfile()
@@ -463,12 +472,11 @@ return function(MovementService: TMovementService)
 		payload: TFlowSeparationDispatchPayload
 	): Result.Result<boolean>
 		local closeTryDispatchProfile = DebugPlus.begin(TRY_DISPATCH_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
-		local snapshot = payload.Snapshot
 		if not self:_IsFlowSeparationParallelEnabled() then
 			closeTryDispatchProfile()
 			return Ok(false)
 		end
-		if #snapshot.EntityIds < self:_GetFlowVelocityParallelMinEntityCount() then
+		if #payload.EntityIds < self:_GetFlowVelocityParallelMinEntityCount() then
 			closeTryDispatchProfile()
 			return Ok(false)
 		end
@@ -548,7 +556,7 @@ return function(MovementService: TMovementService)
 				local closeBuildSnapshotProfile =
 					DebugPlus.begin(PIPELINE_BUILDING_SNAPSHOT_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 				local snapshot, goalKeyByEntity, frameState =
-					self:_BuildFlowDispatchSnapshot(tickId, self:_ResolveFlowDeltaTime(services))
+					self:_BuildFlowDispatchManagerPayload(tickId, self:_ResolveFlowDeltaTime(services))
 				closeBuildSnapshotProfile()
 				if not snapshot or not goalKeyByEntity or not frameState then
 					_TransitionFlowPipeline(self, "Idle")
@@ -582,16 +590,6 @@ return function(MovementService: TMovementService)
 					return
 				end
 
-				local closePrepareSharedPacketProfile =
-					DebugPlus.begin(PIPELINE_PREPARING_SHARED_PACKET_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
-				self._flowPreparedWorkerPayload = self:_PrepareFlowSeparationWorkerPayload(snapshot)
-				closePrepareSharedPacketProfile()
-				if not self._flowPreparedWorkerPayload then
-					self:_ReleaseFlowDispatchedSeparationSnapshot()
-					_TransitionFlowPipeline(self, "Idle")
-					return
-				end
-
 				_TransitionFlowPipeline(self, "PreparingRunRequest")
 				state = "PreparingRunRequest"
 			end
@@ -602,18 +600,24 @@ return function(MovementService: TMovementService)
 				end
 
 				local snapshot = self._flowDispatchedSeparationSnapshot
-				local workerPayload = self._flowPreparedWorkerPayload
-				if not snapshot or not workerPayload then
+				if not snapshot then
 					self:_ReleaseFlowDispatchedSeparationSnapshot()
 					_TransitionFlowPipeline(self, "Idle")
 					return
 				end
 
+				local managerPayload = snapshot :: TFlowSeparationManagerPayload
+
 				local closePrepareRunRequestProfile =
 					DebugPlus.begin(PIPELINE_PREPARING_RUN_REQUEST_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
-				local runRequest = self:_CreateFlowSeparationRunRequest(snapshot)
+				local runRequest = self:_CreateFlowSeparationManagerRunRequest(managerPayload)
 				self._flowDispatchPayload =
-					self:_AssembleFlowSeparationDispatchPayload(snapshot, workerPayload, runRequest)
+					self:_AssembleFlowSeparationDispatchPayload(
+						managerPayload.EntityIds,
+						nil,
+						managerPayload,
+						runRequest
+					)
 				closePrepareRunRequestProfile()
 				if not self._flowDispatchPayload then
 					self:_ReleaseFlowDispatchedSeparationSnapshot()

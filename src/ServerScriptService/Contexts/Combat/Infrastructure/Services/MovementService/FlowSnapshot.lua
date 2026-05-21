@@ -18,6 +18,7 @@ type TFlowSchedulerServices = MovementTypes.TFlowSchedulerServices
 type TFlowMovementState = MovementTypes.TFlowMovementState
 type TFlowFrameStateHandle = MovementTypes.TFlowFrameStateHandle
 type TFlowSeparationDispatchPayload = MovementTypes.TFlowSeparationDispatchPayload
+type TFlowSeparationManagerPayload = MovementTypes.TFlowSeparationManagerPayload
 type TFlowSeparationRunRequest = MovementTypes.TFlowSeparationRunRequest
 type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
 type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
@@ -144,7 +145,7 @@ return function(MovementService: TMovementService)
 
 	-- Builds the stable packet fields that can be reused across many flow dispatches.
 	function MovementService:_CreateFlowSeparationStaticSharedPacket(
-		snapshot: TFlowSeparationSolveSnapshot
+		snapshot: TFlowSeparationManagerPayload
 	): TSharedPacket
 		local closeCreateStaticSharedPacketProfile =
 			DebugPlus.begin(CREATE_STATIC_SHARED_PACKET_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
@@ -172,7 +173,7 @@ return function(MovementService: TMovementService)
 		return sharedPacket
 	end
 
-	function MovementService:_BuildFlowSeparationStaticSharedMemory(snapshot: TFlowSeparationSolveSnapshot): SharedTable
+	function MovementService:_BuildFlowSeparationStaticSharedMemory(snapshot: TFlowSeparationManagerPayload): SharedTable
 		local closeBuildStaticSharedMemoryProfile =
 			DebugPlus.begin(BUILD_STATIC_SHARED_MEMORY_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 		local sharedMemoryHandle = self:_GetOrCreateFlowSeparationStaticSharedMemoryHandle()
@@ -217,7 +218,7 @@ return function(MovementService: TMovementService)
 		return workerPayload
 	end
 
-	function MovementService:_EnsureFlowSeparationStaticSharedMemory(snapshot: TFlowSeparationSolveSnapshot)
+	function MovementService:_EnsureFlowSeparationStaticSharedMemory(snapshot: TFlowSeparationManagerPayload)
 		local pathfinder = self._flowWallKeyCachePathfinder
 		if pathfinder and self._flowStaticSharedMemoryPathfinder == pathfinder and self._flowStaticSharedMemory then
 			return
@@ -279,14 +280,32 @@ return function(MovementService: TMovementService)
 		return runRequest
 	end
 
+	function MovementService:_CreateFlowSeparationManagerRunRequest(
+		managerPayload: TFlowSeparationManagerPayload
+	): TFlowSeparationRunRequest
+		local runRequest
+		DebugPlus.profile(PREPARE_RUN_REQUEST_PROFILE_TAG, function()
+			runRequest = {
+				Args = {
+					TickId = managerPayload.TickId,
+				},
+				BatchSize = self:_GetFlowSeparationParallelBatchSize(),
+			} :: TFlowSeparationRunRequest
+		end, MOVEMENT_PROFILING_ENABLED)
+
+		return runRequest
+	end
+
 	-- Assembles the final managed-job payload once the staged worker payload and run request are ready.
 	function MovementService:_AssembleFlowSeparationDispatchPayload(
-		snapshot: TFlowSeparationSolveSnapshot,
-		workerPayload: TFlowSeparationWorkerPayload,
+		entityIds: { number },
+		workerPayload: TFlowSeparationWorkerPayload?,
+		managerPayload: TFlowSeparationManagerPayload?,
 		runRequest: TFlowSeparationRunRequest
 	): TFlowSeparationDispatchPayload
 		return {
-			Snapshot = snapshot,
+			EntityIds = entityIds,
+			ManagerPayload = managerPayload,
 			WorkerPayload = workerPayload,
 			RunRequest = runRequest,
 		} :: TFlowSeparationDispatchPayload
@@ -294,7 +313,7 @@ return function(MovementService: TMovementService)
 
 	-- Converts solver rows back into entity-indexed velocity and settled-neighbor maps.
 	function MovementService:_ApplyFlowVelocityRows(
-		snapshot: TFlowSeparationSolveSnapshot,
+		entityIds: { number },
 		rows: { TFlowSeparationSolveRow },
 		velocityByEntity: { [number]: Vector2 }?,
 		touchedSettledNeighborByEntity: { [number]: boolean }?
@@ -310,8 +329,7 @@ return function(MovementService: TMovementService)
 		ResultApplication.ApplyRows({
 			Rows = rows,
 			ValidateRow = function(row)
-				local indexValidation =
-					ValidationHelpers.RequireIndexFields(row, { "EntityIndex" }, #snapshot.EntityIds)
+				local indexValidation = ValidationHelpers.RequireIndexFields(row, { "EntityIndex" }, #entityIds)
 				if not indexValidation.IsValid then
 					return indexValidation
 				end
@@ -330,7 +348,7 @@ return function(MovementService: TMovementService)
 				return numberValidation
 			end,
 			ResolveTarget = function(row)
-				return snapshot.EntityIds[row.EntityIndex]
+				return entityIds[row.EntityIndex]
 			end,
 			ApplyRow = function(entityId, row)
 				resolvedVelocityByEntity[entityId] = Vector2.new(row.VelocityX, row.VelocityY)
@@ -342,6 +360,137 @@ return function(MovementService: TMovementService)
 
 		closeApplyVelocityRowsProfile()
 		return resolvedVelocityByEntity, resolvedTouchedSettledNeighborByEntity
+	end
+
+	function MovementService:_BuildFlowDispatchManagerPayload(
+		tickId: number,
+		dt: number
+	): (
+		TFlowSeparationManagerPayload?,
+		{ [number]: string }?,
+		TFlowPublishedFrameState?
+	)
+		local closeBuildDispatchSnapshotProfile =
+			DebugPlus.begin(BUILD_DISPATCH_SNAPSHOT_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
+		table.clear(self._flowInvalidReasonByEntity)
+
+		local goalKeyByEntity = self._flowReusableGoalKeyByEntity :: { [number]: string }
+		table.clear(goalKeyByEntity)
+		local goalPositionByEntity = self._flowReusableGoalPositionByEntity :: { [number]: Vector3 }
+		local goalWorldSampleByEntity = self._flowReusableGoalWorldSampleByEntity :: { [number]: Vector3 }
+		local positionByEntity = self._flowReusablePositionByEntity :: { [number]: Vector3 }
+		local walkSpeedByEntity = self._flowReusableWalkSpeedByEntity :: { [number]: number }
+		local isSettledByEntity = self._flowReusableIsSettledByEntity :: { [number]: boolean }
+		table.clear(goalPositionByEntity)
+		table.clear(goalWorldSampleByEntity)
+		table.clear(positionByEntity)
+		table.clear(walkSpeedByEntity)
+		table.clear(isSettledByEntity)
+
+		local entityIds = {} :: { number }
+		local goalKeys = {} :: { string }
+		local flatPositionX = {} :: { number }
+		local flatPositionY = {} :: { number }
+		local radius = {} :: { number }
+		local flowVelocityX = {} :: { number }
+		local flowVelocityY = {} :: { number }
+		local previousVelocityX = {} :: { number }
+		local previousVelocityY = {} :: { number }
+		local walkSpeed = {} :: { number }
+		local velAlpha = {} :: { number }
+		local isSettled = {} :: { boolean }
+
+		for entity, movementState in self._movementByEntity do
+			if movementState.Mode == "Flow" then
+				local frameStateResult = self:_ResolveFlowBuildFrameState(entity, movementState)
+				if not frameStateResult.success then
+					self._flowInvalidReasonByEntity[entity] = frameStateResult.type
+					continue
+				end
+
+				local framePayload = frameStateResult.value
+				if framePayload.Skip then
+					continue
+				end
+
+				local flatPosition = MovementMath.FlatXZ(framePayload.Position)
+				entityIds[#entityIds + 1] = entity
+				goalKeys[#goalKeys + 1] = framePayload.GoalKey
+				flatPositionX[#flatPositionX + 1] = flatPosition.X
+				flatPositionY[#flatPositionY + 1] = flatPosition.Y
+				radius[#radius + 1] = framePayload.Radius
+				flowVelocityX[#flowVelocityX + 1] = framePayload.FlowDirectionXZ.X * framePayload.WalkSpeed
+				flowVelocityY[#flowVelocityY + 1] = framePayload.FlowDirectionXZ.Y * framePayload.WalkSpeed
+				previousVelocityX[#previousVelocityX + 1] = framePayload.PreviousVelocityXZ.X
+				previousVelocityY[#previousVelocityY + 1] = framePayload.PreviousVelocityXZ.Y
+				walkSpeed[#walkSpeed + 1] = framePayload.WalkSpeed
+				velAlpha[#velAlpha + 1] = self:_GetFlowVelocityAlpha()
+				isSettled[#isSettled + 1] = framePayload.IsSettled
+
+				goalKeyByEntity[entity] = framePayload.GoalKey
+				goalPositionByEntity[entity] = framePayload.GoalPosition
+				goalWorldSampleByEntity[entity] = framePayload.GoalWorldSample
+				positionByEntity[entity] = framePayload.Position
+				walkSpeedByEntity[entity] = framePayload.WalkSpeed
+				if framePayload.IsSettled then
+					isSettledByEntity[entity] = true
+				end
+			end
+		end
+
+		if #entityIds == 0 then
+			closeBuildDispatchSnapshotProfile()
+			return nil, nil, nil
+		end
+
+		local _pathfinder, mapping = self:_ResolveFastFlowRuntime()
+		if not mapping then
+			closeBuildDispatchSnapshotProfile()
+			return nil, nil, nil
+		end
+
+		local wallPackedKeys = self:_BuildPackedWallKeys()
+		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
+		local managerPayload = {
+			TickId = tickId,
+			EntityIds = entityIds,
+			GoalKeys = goalKeys,
+			FlatPositionX = flatPositionX,
+			FlatPositionY = flatPositionY,
+			Radius = radius,
+			FlowVelocityX = flowVelocityX,
+			FlowVelocityY = flowVelocityY,
+			PreviousVelocityX = previousVelocityX,
+			PreviousVelocityY = previousVelocityY,
+			WalkSpeed = walkSpeed,
+			VelAlpha = velAlpha,
+			IsSettled = isSettled,
+			DeltaTime = dt,
+			CellWidthStuds = mapping.CellWidthStuds,
+			OriginX = mapping.OriginWorld.X,
+			OriginY = mapping.OriginWorld.Z,
+			WallGridHalfSize = if type(self._flowWallGridHalfSize) == "number"
+				then self._flowWallGridHalfSize
+				else mapping.GridHalfSize,
+			WallPackedKeys = wallPackedKeys,
+			KForce = if type(config.KForce) == "number" then config.KForce else 80,
+			MinSeparationDistance = if type(config.MinSeparationDistance) == "number"
+				then config.MinSeparationDistance
+				else 1e-4,
+			WallCollisionEnabled = config.WallCollisionEnabled == true,
+			WallCollisionAxisClampEnabled = config.WallCollisionAxisClampEnabled ~= false,
+			WallCollisionCornerClampEnabled = config.WallCollisionCornerClampEnabled ~= false,
+			WallCollisionUseUnitRadiusPadding = config.WallCollisionUseUnitRadiusPadding == true,
+			WallCollisionCellProbePaddingStuds = if type(config.WallCollisionCellProbePaddingStuds) == "number"
+				then config.WallCollisionCellProbePaddingStuds
+				else 0,
+			WallCollisionVelocityEpsilon = if type(config.WallCollisionVelocityEpsilon) == "number"
+				then config.WallCollisionVelocityEpsilon
+				else 1e-4,
+			ClumpTouchPaddingStuds = self:_GetFlowClumpTouchPaddingStuds(),
+		} :: TFlowSeparationManagerPayload
+		closeBuildDispatchSnapshotProfile()
+		return managerPayload, goalKeyByEntity, self._flowReusableFrameState :: TFlowPublishedFrameState
 	end
 
 	-- Resolves the frame inputs needed to build the dispatch snapshot for one flow entity.

@@ -159,8 +159,9 @@ function Validation.AssertManagedJobConfig(runner: { [string]: any }, config: { 
 		type(config.BuildSharedMemory) == "function"
 			or type(config.BuildBaseSharedMemory) == "function"
 			or type(config.BuildWorkerPayload) == "function"
-			or type(config.BuildBaseWorkerPayload) == "function",
-		`ParallelRunner:CreateManagedJob("{tostring(config.JobName)}") requires a shared memory or worker payload builder`
+			or type(config.BuildBaseWorkerPayload) == "function"
+			or type(config.BuildManagerPayload) == "function",
+		`ParallelRunner:CreateManagedJob("{tostring(config.JobName)}") requires a shared memory, worker payload, or manager payload builder`
 	)
 	if config.BuildSharedMemory ~= nil then
 		assert(
@@ -184,6 +185,12 @@ function Validation.AssertManagedJobConfig(runner: { [string]: any }, config: { 
 		assert(
 			type(config.BuildBaseWorkerPayload) == "function",
 			`ParallelRunner:CreateManagedJob("{config.JobName}") BuildBaseWorkerPayload must be a function when provided`
+		)
+	end
+	if config.BuildManagerPayload ~= nil then
+		assert(
+			type(config.BuildManagerPayload) == "function",
+			`ParallelRunner:CreateManagedJob("{config.JobName}") BuildManagerPayload must be a function when provided`
 		)
 	end
 	assert(
@@ -219,6 +226,12 @@ function Validation.AssertManagedJobConfig(runner: { [string]: any }, config: { 
 			`ParallelRunner:CreateManagedJob("{config.JobName}") requires the registered job to define PayloadSchema`
 		)
 	end
+	if type(config.BuildManagerPayload) == "function" then
+		assert(
+			registeredJob.ManagerPayloadCodec ~= nil,
+			`ParallelRunner:CreateManagedJob("{config.JobName}") requires the registered job to define ManagerPayloadSchema`
+		)
+	end
 end
 
 function Validation.AssertManagedSharedPacket(jobName: string, packet: any)
@@ -249,15 +262,29 @@ function Validation.AssertManagedBaseWorkerPayload(jobName: string, workerPayloa
 	)
 end
 
-function Validation.AssertManagedRunRequest(jobName: string, request: { [string]: any })
+function Validation.AssertManagedManagerPayload(jobName: string, managerPayload: any)
+	assert(
+		type(managerPayload) == "table",
+		`ParallelRunner managed job "{jobName}" BuildManagerPayload must return a payload table`
+	)
+end
+
+function Validation.AssertManagedRunRequest(jobName: string, request: { [string]: any }, usesManagerPayload: boolean?)
 	assert(type(request) == "table", `ParallelRunner managed job "{jobName}" BuildRunRequest must return a table`)
 	assert(type(request.Args) == "table", `ParallelRunner managed job "{jobName}" BuildRunRequest requires Args`)
-	assert(
-		type(request.LogicalWorkCount) == "number"
-			and request.LogicalWorkCount >= 0
-			and request.LogicalWorkCount % 1 == 0,
-		`ParallelRunner managed job "{jobName}" BuildRunRequest LogicalWorkCount must be a non-negative integer`
-	)
+	if usesManagerPayload then
+		assert(
+			request.LogicalWorkCount == nil,
+			`ParallelRunner managed job "{jobName}" BuildRunRequest cannot combine manager payload dispatch with LogicalWorkCount`
+		)
+	else
+		assert(
+			type(request.LogicalWorkCount) == "number"
+				and request.LogicalWorkCount >= 0
+				and request.LogicalWorkCount % 1 == 0,
+			`ParallelRunner managed job "{jobName}" BuildRunRequest LogicalWorkCount must be a non-negative integer`
+		)
+	end
 	if request.BatchSize ~= nil then
 		assert(
 			type(request.BatchSize) == "number" and request.BatchSize > 0 and request.BatchSize % 1 == 0,

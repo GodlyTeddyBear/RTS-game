@@ -436,21 +436,54 @@ export type TFlowSeparationRunRequest = {
 	Args: {
 		TickId: number,
 	},
-	LogicalWorkCount: number,
-	BatchSize: number,
+	LogicalWorkCount: number?,
+	BatchSize: number?,
+}
+
+export type TFlowSeparationManagerPayload = {
+	TickId: number,
+	EntityIds: { number },
+	GoalKeys: { string },
+	FlatPositionX: { number },
+	FlatPositionY: { number },
+	Radius: { number },
+	FlowVelocityX: { number },
+	FlowVelocityY: { number },
+	PreviousVelocityX: { number },
+	PreviousVelocityY: { number },
+	WalkSpeed: { number },
+	VelAlpha: { number },
+	IsSettled: { boolean },
+	DeltaTime: number,
+	CellWidthStuds: number,
+	OriginX: number,
+	OriginY: number,
+	WallGridHalfSize: number,
+	WallPackedKeys: { number },
+	KForce: number,
+	MinSeparationDistance: number,
+	WallCollisionEnabled: boolean,
+	WallCollisionAxisClampEnabled: boolean,
+	WallCollisionCornerClampEnabled: boolean,
+	WallCollisionUseUnitRadiusPadding: boolean,
+	WallCollisionCellProbePaddingStuds: number,
+	WallCollisionVelocityEpsilon: number,
+	ClumpTouchPaddingStuds: number,
 }
 
 --[=[
     @interface TFlowSeparationDispatchPayload
     @within Types
     MovementService-owned payload prepared before handing the solve to the managed job.
-    .Snapshot TFlowSeparationSolveSnapshot -- Packed snapshot used by the worker solve.
-    .WorkerPayload table -- Dynamic worker payload encoded per dispatch.
+    .EntityIds { number } -- Packed entity ids used to map rows back onto live entities.
+    .ManagerPayload table? -- Manager-stage payload used to build the worker dispatch in parallel.
+    .WorkerPayload table? -- Dynamic worker payload encoded per dispatch.
     .RunRequest table -- Per-dispatch run request forwarded to ParallelRunner.
 ]=]
 export type TFlowSeparationDispatchPayload = {
-	Snapshot: TFlowSeparationSolveSnapshot,
-	WorkerPayload: TFlowSeparationWorkerPayload,
+	EntityIds: { number },
+	ManagerPayload: TFlowSeparationManagerPayload?,
+	WorkerPayload: TFlowSeparationWorkerPayload?,
 	RunRequest: TFlowSeparationRunRequest,
 }
 
@@ -562,7 +595,7 @@ export type TMovementService = {
 	_flowReusableFrameState: TFlowPublishedFrameState,
 	_flowPublishedFrameState: TFlowPublishedFrameState,
 	_flowRepresentativeStarts: { Vector3 },
-	_flowDispatchedSeparationSnapshot: TFlowSeparationSolveSnapshot?,
+	_flowDispatchedSeparationSnapshot: TFlowSeparationManagerPayload?,
 	_flowDispatchedGoalKeyByEntity: { [number]: string }?,
 	_flowDispatchedFrameState: TFlowPublishedFrameState?,
 	_flowStaticSharedMemory: SharedTable?,
@@ -640,17 +673,19 @@ export type TMovementService = {
 	_GetOrCreateFlowFrameState: (self: TMovementService) -> TFlowFrameStateHandle,
 	_DestroyFlowFrameState: (self: TMovementService) -> (),
 	_GetOrCreateFlowSeparationStaticSharedMemoryHandle: (self: TMovementService) -> TSharedCompiledHandle,
-	_CreateFlowSeparationStaticSharedPacket: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TSharedPacket,
-	_BuildFlowSeparationStaticSharedMemory: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> SharedTable,
+	_CreateFlowSeparationStaticSharedPacket: (self: TMovementService, snapshot: TFlowSeparationManagerPayload) -> TSharedPacket,
+	_BuildFlowSeparationStaticSharedMemory: (self: TMovementService, snapshot: TFlowSeparationManagerPayload) -> SharedTable,
 	_CreateFlowSeparationWorkerPayload: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TFlowSeparationWorkerPayload,
 	_PrepareFlowSeparationWorkerPayload: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TFlowSeparationWorkerPayload,
-	_EnsureFlowSeparationStaticSharedMemory: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> (),
+	_EnsureFlowSeparationStaticSharedMemory: (self: TMovementService, snapshot: TFlowSeparationManagerPayload) -> (),
 	_CreateFlowSeparationRunRequest: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot) -> TFlowSeparationRunRequest,
-	_AssembleFlowSeparationDispatchPayload: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot, workerPayload: TFlowSeparationWorkerPayload, runRequest: TFlowSeparationRunRequest) -> TFlowSeparationDispatchPayload,
-	_ApplyFlowVelocityRows: (self: TMovementService, snapshot: TFlowSeparationSolveSnapshot, rows: { TFlowSeparationSolveRow }, velocityByEntity: { [number]: Vector2 }?, touchedSettledNeighborByEntity: { [number]: boolean }?) -> ({ [number]: Vector2 }, { [number]: boolean }),
+	_CreateFlowSeparationManagerRunRequest: (self: TMovementService, managerPayload: TFlowSeparationManagerPayload) -> TFlowSeparationRunRequest,
+	_AssembleFlowSeparationDispatchPayload: (self: TMovementService, entityIds: { number }, workerPayload: TFlowSeparationWorkerPayload?, managerPayload: TFlowSeparationManagerPayload?, runRequest: TFlowSeparationRunRequest) -> TFlowSeparationDispatchPayload,
+	_ApplyFlowVelocityRows: (self: TMovementService, entityIds: { number }, rows: { TFlowSeparationSolveRow }, velocityByEntity: { [number]: Vector2 }?, touchedSettledNeighborByEntity: { [number]: boolean }?) -> ({ [number]: Vector2 }, { [number]: boolean }),
 	_ResolveFlowBuildFrameState: (self: TMovementService, entity: number, movementState: TFlowMovementState) -> Result.Result<TFlowBuildFrameStatePayload>,
 	_ResolveFlowTickId: (self: TMovementService, services: TFlowSchedulerServices?) -> number,
 	_ResolveFlowDeltaTime: (self: TMovementService, services: TFlowSchedulerServices?) -> number,
+	_BuildFlowDispatchManagerPayload: (self: TMovementService, tickId: number, dt: number) -> (TFlowSeparationManagerPayload?, { [number]: string }?, TFlowPublishedFrameState?),
 	_BuildFlowDispatchSnapshot: (self: TMovementService, tickId: number, dt: number) -> (TFlowSeparationSolveSnapshot?, { [number]: string }?, TFlowPublishedFrameState?),
 	_ReleaseFlowDispatchPayload: (self: TMovementService) -> (),
 	_ReleaseFlowLatestParallelSolve: (self: TMovementService) -> (),
