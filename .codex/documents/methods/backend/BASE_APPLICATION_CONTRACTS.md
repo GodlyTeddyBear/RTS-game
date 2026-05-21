@@ -1,6 +1,6 @@
 # BaseApplication Contracts
 
-Method contracts for using `ReplicatedStorage.Utilities.BaseApplication` and derived `BaseCommand` / `BaseQuery` helpers.
+Method contracts for using `ServerStorage.Utilities.BaseApplication` and derived `BaseCommand` / `BaseQuery` helpers.
 
 Canonical architecture references:
 - [../../architecture/backend/CQRS.md](../../architecture/backend/CQRS.md)
@@ -71,4 +71,3 @@ Canonical architecture references:
 - [ ] Registry dependencies are resolved through `_RequireDependency(...)` or `_RequireDependencies(...)`.
 - [ ] Event names are resolved through `_GetGameEvent(...)` before emission.
 - [ ] Base helpers contain only technical shared behavior (no domain-rule ownership).
-

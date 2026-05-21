@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local JECS = require(ReplicatedStorage.Packages.JECS)
-local BaseECSComponentRegistry = require(ReplicatedStorage.Utilities.BaseECSComponentRegistry)
+local BaseECSComponentRegistry = require(ServerStorage.Utilities.ECSUtilities.BaseECSComponentRegistry)
 local MapTypes = require(ReplicatedStorage.Contexts.Map.Types.MapTypes)
 
 export type MapRootComponent = MapTypes.MapRootComponent

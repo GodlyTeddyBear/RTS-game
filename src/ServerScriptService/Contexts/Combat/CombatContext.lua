@@ -2,10 +2,11 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
+local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local CombatTypes = require(ReplicatedStorage.Contexts.Combat.Types.CombatTypes)

@@ -1,7 +1,8 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
+local ServerStorage = game:GetService("ServerStorage")
+local BaseQuery = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseQuery)
 
 
 --[=[

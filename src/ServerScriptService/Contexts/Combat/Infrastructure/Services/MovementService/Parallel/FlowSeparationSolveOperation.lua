@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local ParallelRunner = require(ReplicatedStorage.Utilities.ParallelRunner)
+local ParallelRunner = require(ServerStorage.Utilities.ParallelRunner)
 
 local FlowSeparationSolveOperation = ParallelRunner.DefineJob({
 	Name = "FlowSeparationSolve",

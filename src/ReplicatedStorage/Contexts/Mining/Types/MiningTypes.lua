@@ -6,11 +6,10 @@
 	@server
 	@client
 ]=]
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
 local MiningTypes = {}
 
-local AIContractTypes = require(ReplicatedStorage.Utilities.AI.ContractTypes)
+local ServerStorage = game:GetService("ServerStorage")
+local AIContractTypes = require(ServerStorage.Utilities.ContextUtilities.AI.ContractTypes)
 
 export type TExtractorRecord = {
 	InstanceId: number,

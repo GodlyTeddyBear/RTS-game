@@ -31,10 +31,10 @@ src/ServerScriptService/Contexts/<ContextName>/
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local Result = require(ReplicatedStorage.Utilities.Result)
-local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
+local Result = require(ServerStorage.Utilities.Result)
+local BaseCommand = require(ServerStorage.Utilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
 local Try = Result.Try
@@ -73,10 +73,10 @@ return <Name>
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local Result = require(ReplicatedStorage.Utilities.Result)
-local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
+local Result = require(ServerStorage.Utilities.Result)
+local BaseQuery = require(ServerStorage.Utilities.BaseApplication.BaseQuery)
 
 local Ok = Result.Ok
 
@@ -107,9 +107,9 @@ return <Name>
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local Result = require(ReplicatedStorage.Utilities.Result)
+local Result = require(ServerStorage.Utilities.Result)
 local <ContextName>Specs = require(script.Parent.Parent.Specs["<ContextName>Specs"])
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -157,9 +157,9 @@ return table.freeze(<Name>)
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseECSWorldService = require(ReplicatedStorage.Utilities.BaseECSWorldService)
+local BaseECSWorldService = require(ServerStorage.Utilities.BaseECSWorldService)
 
 local <Name> = {}
 <Name>.__index = <Name>
@@ -187,9 +187,9 @@ return <Name>
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseECSComponentRegistry = require(ReplicatedStorage.Utilities.BaseECSComponentRegistry)
+local BaseECSComponentRegistry = require(ServerStorage.Utilities.BaseECSComponentRegistry)
 
 local <Name> = {}
 <Name>.__index = <Name>
@@ -227,9 +227,9 @@ return <Name>
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
+local BaseECSEntityFactory = require(ServerStorage.Utilities.BaseECSEntityFactory)
 
 local <Name> = {}
 <Name>.__index = <Name>
@@ -309,9 +309,9 @@ return <Name>
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseInstanceFactory = require(ReplicatedStorage.Utilities.BaseInstanceFactory)
+local BaseInstanceFactory = require(ServerStorage.Utilities.BaseInstanceFactory)
 
 local <Name> = {}
 <Name>.__index = <Name>

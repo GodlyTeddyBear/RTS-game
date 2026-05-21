@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
-local LocationECSEntityFactory = require(ReplicatedStorage.Utilities.LocationECSEntityFactory)
+local LocationECSEntityFactory = require(ServerStorage.Utilities.ECSUtilities.LocationECSEntityFactory)
 local Ok = Result.Ok
 
 --[=[

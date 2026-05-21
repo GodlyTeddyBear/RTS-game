@@ -8,11 +8,12 @@
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local RuntimeEnums = require(ReplicatedStorage.Utilities.AI.Runtime.src.RuntimeEnums)
+local RuntimeEnums = require(ServerStorage.Utilities.ContextUtilities.AI.Runtime.src.RuntimeEnums)
 local ActionId = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.ActionId)
 local ActionStateTransitionSpec = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Specs.ActionStateTransitionSpec)
-local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
+local ScratchRecycler = require(ServerStorage.Utilities.ContextUtilities.AI.src.Infrastructure.ScratchRecycler)
 local ExecutorBoundary = require(script.Parent.ExecutorBoundary)
 local RuntimeContextAdapter = require(script.Parent.RuntimeContextAdapter)
 local Result = require(ReplicatedStorage.Utilities.Result)

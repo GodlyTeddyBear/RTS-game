@@ -1,10 +1,11 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
-local ParallelActors = require(ReplicatedStorage.Utilities.ParallelActors)
+local ParallelActors = require(ServerStorage.Utilities.ParallelActors)
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local Compiler = require(script.Compiler)

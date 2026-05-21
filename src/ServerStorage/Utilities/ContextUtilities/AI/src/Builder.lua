@@ -1,10 +1,11 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Loader = require(ReplicatedStorage.Utilities.Loader)
 local StateMachine = require(ReplicatedStorage.Utilities.StateMachine)
-local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
+local ScratchRecycler = require(ServerStorage.Utilities.ContextUtilities.AI.src.Infrastructure.ScratchRecycler)
 
 local BehaviorCatalog = require(script.Parent.BehaviorCatalog)
 local Types = require(script.Parent.Types)

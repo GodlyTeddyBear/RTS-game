@@ -25,10 +25,10 @@ src/ServerScriptService/Contexts/<ContextName>/Infrastructure/Persistence/<Name>
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseGameObjectSyncService = require(ReplicatedStorage.Utilities.BaseGameObjectSyncService)
-local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
+local BaseGameObjectSyncService = require(ServerStorage.Utilities.BaseGameObjectSyncService)
+local ModelPlus = require(ServerStorage.Utilities.ModelPlus)
 
 local <Name> = {}
 <Name>.__index = <Name>
@@ -81,8 +81,9 @@ return <Name>
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseSyncService = require(ReplicatedStorage.Utilities.BaseSyncService)
+local BaseSyncService = require(ServerStorage.Utilities.BaseSyncService)
 local SharedAtoms = require(ReplicatedStorage.Contexts["<ContextName>"].Sync.SharedAtoms)
 
 local <Name> = {}
@@ -120,8 +121,9 @@ return <Name>
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseSyncClient = require(ReplicatedStorage.Utilities.BaseSyncClient)
+local BaseSyncClient = require(ServerStorage.Utilities.BaseSyncClient)
 local SharedAtoms = require(ReplicatedStorage.Contexts.<ContextName>.Sync.SharedAtoms)
 local BlinkClient = require(ReplicatedStorage.Network.Generated.<ContextName>SyncClient)
 
@@ -154,9 +156,9 @@ Use this shape when the sync service is responsible for profile-backed state ins
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BasePersistenceService = require(ReplicatedStorage.Utilities.BasePersistenceService)
+local BasePersistenceService = require(ServerStorage.Utilities.BasePersistenceService)
 
 local <Name> = {}
 <Name>.__index = <Name>

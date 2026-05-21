@@ -55,9 +55,9 @@ The factory does not invent defaults for missing required callbacks. If one of t
 ## Public Surface
 
 ```lua
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local AiAdapterFactory = require(ReplicatedStorage.Utilities.AI.AdapterFactory)
+local AiAdapterFactory = require(ServerStorage.Utilities.AI.AdapterFactory)
 
 local enemyAdapter = AiAdapterFactory.Create({
 	ActorLabel = "Enemy",

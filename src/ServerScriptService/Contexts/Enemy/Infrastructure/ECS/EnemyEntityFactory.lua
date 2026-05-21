@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
-local CombatECSEntityFactory = require(ReplicatedStorage.Utilities.CombatECSEntityFactory)
+local CombatECSEntityFactory = require(ServerStorage.Utilities.ECSUtilities.CombatECSEntityFactory)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 
 --[=[

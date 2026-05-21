@@ -10,7 +10,7 @@ Shared AI package module for validating symbolic behavior definitions and compil
 
 ## Internal Architecture (DDD-Mimic)
 
-`AI.Behavior` remains a utility library in `ReplicatedStorage`. It is **not** a server bounded context.
+`AI.Behavior` remains a utility library in `ServerStorage`. It is **not** a server bounded context.
 
 Its internals now mimic multiple bounded-style internal contexts for organization only:
 
@@ -115,9 +115,9 @@ Types:
 ## Example
 
 ```lua
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BehaviorSystem = require(ReplicatedStorage.Utilities.AI.Behavior)
+local BehaviorSystem = require(ServerStorage.Utilities.AI.Behavior)
 
 local conditions = {
 	HasWaypoints = function()
@@ -165,9 +165,9 @@ tree:run({
 ## Runtime Dispatch Example
 
 ```lua
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BehaviorSystem = require(ReplicatedStorage.Utilities.AI.Behavior)
+local BehaviorSystem = require(ServerStorage.Utilities.AI.Behavior)
 
 local conditions = {
 	HasTarget = function()

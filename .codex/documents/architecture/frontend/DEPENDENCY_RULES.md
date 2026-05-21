@@ -46,7 +46,7 @@ Presentation/[Component]View.lua (pure view) -> Presentation-only dependencies
 ### Shared Utility Scope
 
 ```text
-Any frontend layer -> ReplicatedStorage.Utilities
+Any frontend layer -> ServerStorage.Utilities
 ```
 
 - `Orient`, `ModelPlus`, `PlacementPlus`, and `SpatialQuery` are the required shared utility path when their use cases fit.

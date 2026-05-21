@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
+local BaseQuery = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseQuery)
 
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 

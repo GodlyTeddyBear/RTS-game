@@ -1,9 +1,7 @@
 --!strict
 --!optimize 2
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Query = require(ReplicatedStorage.Utilities.MuchachoHitbox.src.Query)
+local Query = require(script.Parent.Query)
 
 local Worker = {}
 

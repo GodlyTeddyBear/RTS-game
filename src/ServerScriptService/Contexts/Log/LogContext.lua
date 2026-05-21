@@ -1,10 +1,11 @@
 --!strict
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local HttpService = game:GetService("HttpService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
+local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local LogRetentionConfig = require(ReplicatedStorage.Contexts.Log.Config.LogRetentionConfig)
 local LogCommandTypes = require(ReplicatedStorage.Contexts.Log.Types.LogCommandTypes)

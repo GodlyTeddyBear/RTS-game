@@ -11,7 +11,8 @@
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local SimplePath = require(ReplicatedStorage.Utilities.SimplePath)
+local ServerStorage = game:GetService("ServerStorage")
+local SimplePath = require(ServerStorage.Utilities.SimplePath)
 local Promise = require(ReplicatedStorage.Packages.Promise)
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local Result = require(ReplicatedStorage.Utilities.Result)

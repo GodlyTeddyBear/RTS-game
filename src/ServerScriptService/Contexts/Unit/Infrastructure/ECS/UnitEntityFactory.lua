@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
+local BaseECSEntityFactory = require(ServerStorage.Utilities.ECSUtilities.BaseECSEntityFactory)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 
 type UnitDefinition = UnitTypes.UnitDefinition

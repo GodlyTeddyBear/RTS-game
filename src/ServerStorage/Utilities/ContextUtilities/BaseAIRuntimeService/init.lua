@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local AI = require(ReplicatedStorage.Utilities.AI)
+local AI = require(ServerStorage.Utilities.ContextUtilities.AI)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local SetupValidationPolicy = require(script.Policies.SetupValidationPolicy)
 

@@ -1,6 +1,6 @@
 # Utility Use
 
-This document defines how shared utilities should be used in this codebase, when they belong in `ReplicatedStorage/Utilities/`, and how to decide whether a helper is a shared utility or a context-owned service.
+This document defines how shared utilities should be used in this codebase, when they belong in `ServerStorage/Utilities/`, and how to decide whether a helper is a shared utility or a context-owned service.
 
 Use this as the default reference when introducing or reviewing a helper such as `ModelPlus`, `SpatialQuery`, `PlacementPlus`, `Specification`, `BaseContext`, `BaseApplication`, or `BasePersistenceService`.
 
@@ -30,7 +30,7 @@ Use this as the default reference when introducing or reviewing a helper such as
 
 ## Where Utilities Live
 
-- Shared utilities belong in `src/ReplicatedStorage/Utilities/` when they are intended to be required by multiple contexts or reused by infrastructure code.
+- Shared utilities belong in `src/ServerStorage/Utilities/` when they are intended to be required by multiple contexts or reused by infrastructure code.
 - Utilities may still have narrow purpose boundaries, but they are shared technical helpers rather than feature services.
 
 Examples of utility-style modules in this project:
@@ -234,7 +234,7 @@ Not a utility:
 
 - A utility starts containing feature logic instead of reusable technical helpers.
 - A utility owns the lifecycle of ECS entities, live instances, or persisted data.
-- A utility becomes context-specific but remains in `ReplicatedStorage/Utilities/`.
+- A utility becomes context-specific but remains in `ServerStorage/Utilities/`.
 - A caller uses a utility as a substitute for a proper ECS or persistence owner.
 - `BaseApplication` contains domain-rule branching or command/query orchestration beyond shared helper behavior.
 - `BasePersistenceService` subscribes to lifecycle events or bypasses explicit context-owned load/save boundaries.
@@ -245,5 +245,5 @@ Not a utility:
 
 - [ ] The helper is reusable and technically focused.
 - [ ] The helper does not own ECS, instance, or persistence lifecycle.
-- [ ] The helper fits in `ReplicatedStorage/Utilities/` without becoming a feature service.
+- [ ] The helper fits in `ServerStorage/Utilities/` without becoming a feature service.
 - [ ] ECS helpers like `ModelPlus` and `SpatialQuery` support ownership layers instead of replacing them.

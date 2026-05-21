@@ -1,10 +1,11 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
-local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
+local FastFlowHelper = require(ServerStorage.Utilities.FastFlowHelper)
 local StateMachine = require(ReplicatedStorage.Utilities.StateMachine)
 local TableRecycler = require(ReplicatedStorage.Utilities.TableRecycler)
 local MovementTypes = require(script.Types)

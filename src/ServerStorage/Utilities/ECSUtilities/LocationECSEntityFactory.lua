@@ -10,7 +10,8 @@
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
+local ServerStorage = game:GetService("ServerStorage")
+local BaseECSEntityFactory = require(ServerStorage.Utilities.ECSUtilities.BaseECSEntityFactory)
 
 -- Resolve an anchor part so zone entities can inherit a stable CFrame from
 -- models, parts, or nested containers.
@@ -33,7 +34,7 @@ local LocationECSEntityFactory = {}
 LocationECSEntityFactory.__index = LocationECSEntityFactory
 setmetatable(LocationECSEntityFactory, BaseECSEntityFactory)
 
--- ── Public ───────────────────────────────────────────────────────────────────
+-- â”€â”€ Public â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 --[=[
 	Creates a new location factory instance for the supplied context name.
@@ -49,7 +50,7 @@ function LocationECSEntityFactory.new(contextName: string)
 	return self
 end
 
--- ── Private ──────────────────────────────────────────────────────────────────
+-- â”€â”€ Private â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 -- Configures the zone and spatial component keys before any location entity is created.
 function LocationECSEntityFactory:_ConfigureLocationComponents(

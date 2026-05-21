@@ -1,11 +1,12 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BehaviorSystem = require(ReplicatedStorage.Utilities.AI.Behavior)
+local BehaviorSystem = require(ServerStorage.Utilities.ContextUtilities.AI.Behavior)
 local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
-local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
+local ScratchRecycler = require(ServerStorage.Utilities.ContextUtilities.AI.src.Infrastructure.ScratchRecycler)
 
 local HookRunner = require(script.Parent.HookRunner)
 local RuntimeEnums = require(script.Parent.RuntimeEnums)

@@ -8,8 +8,9 @@
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
+local BaseECSEntityFactory = require(ServerStorage.Utilities.ECSUtilities.BaseECSEntityFactory)
 local ExecutorTypes = require(ReplicatedStorage.Contexts.Combat.Types.ExecutorTypes)
 
 type TCombatAction = ExecutorTypes.TCombatActionComponent

@@ -1,9 +1,10 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local ItemConfig = require(ReplicatedStorage.Contexts.Inventory.Config.ItemConfig)
-local BaseCommand = require(ReplicatedStorage.Utilities.BaseApplication.BaseCommand)
+local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 

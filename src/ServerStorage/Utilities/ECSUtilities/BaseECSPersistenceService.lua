@@ -1,6 +1,7 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local BasePersistenceService = require(ReplicatedStorage.Utilities.BasePersistenceService)
 local Result = require(ReplicatedStorage.Utilities.Result)

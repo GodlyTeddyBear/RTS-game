@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseInstanceFactory = require(ReplicatedStorage.Utilities.BaseInstanceFactory)
+local BaseInstanceFactory = require(ServerStorage.Utilities.ECSUtilities.BaseInstanceFactory)
 
 local MiningInstanceFactory = {}
 MiningInstanceFactory.__index = MiningInstanceFactory

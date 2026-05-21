@@ -1,9 +1,10 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
-local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
+local ScratchRecycler = require(ServerStorage.Utilities.ContextUtilities.AI.src.Infrastructure.ScratchRecycler)
 local ActionRuntimeShapeSpec = require(script.Parent.Parent.Specs.ActionRuntimeShapeSpec)
 local ActionId = require(script.Parent.Parent.ValueObjects.ActionId)
 

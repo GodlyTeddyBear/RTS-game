@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseSyncService = require(ReplicatedStorage.Utilities.BaseSyncService)
+local BaseSyncService = require(ServerStorage.Utilities.ContextUtilities.BaseSyncService)
 local InventoryState = require(ReplicatedStorage.Contexts.Inventory.Types.InventoryState)
 local SharedAtoms = require(ReplicatedStorage.Contexts.Inventory.Sync.SharedAtoms)
 

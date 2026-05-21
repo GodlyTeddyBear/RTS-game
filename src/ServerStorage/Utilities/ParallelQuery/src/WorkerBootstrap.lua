@@ -1,11 +1,11 @@
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local HttpService = game:GetService("HttpService")
 
-local Parallelizer = require(ReplicatedStorage.Utilities.Parallelizer)
-local RowDefaults = require(ReplicatedStorage.Utilities.ParallelQuery.src.RowDefaults)
-local Validation = require(ReplicatedStorage.Utilities.ParallelQuery.src.Validation)
+local Parallelizer = require(ServerStorage.Utilities.Parallelizer)
+local RowDefaults = require(script.Parent.RowDefaults)
+local Validation = require(script.Parent.Validation)
 
 local OPERATIONS_FOLDER_NAME = "Operations"
 local OPERATION_CONFIG_JSON_ATTRIBUTE_NAME = "ParallelQueryOperationConfigJson"

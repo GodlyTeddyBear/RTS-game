@@ -1,9 +1,10 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local ParallelLogistics = require(ReplicatedStorage.Utilities.ParallelLogistics)
-local PayloadCodec = require(ReplicatedStorage.Utilities.ParallelRunner.src.PayloadCodec)
+local ParallelLogistics = require(ServerStorage.Utilities.ParallelLogistics)
+local PayloadCodec = require(ServerStorage.Utilities.ParallelRunner.src.PayloadCodec)
 local Sera = require(ReplicatedStorage.Utilities.Sera)
 
 local Protocol = require(script.Parent.Protocol)

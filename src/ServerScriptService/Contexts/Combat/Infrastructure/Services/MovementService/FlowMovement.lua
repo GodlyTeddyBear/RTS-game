@@ -1,9 +1,10 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
-local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
+local FastFlowHelper = require(ServerStorage.Utilities.FastFlowHelper)
 local Option = require(ReplicatedStorage.Utilities.Option)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local FlowMath = require(script.Parent.Math.FlowMath)

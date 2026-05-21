@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseExecutor = require(ReplicatedStorage.Utilities.BaseExecutor)
+local BaseExecutor = require(ServerStorage.Utilities.ContextUtilities.BaseExecutor)
 
 --[=[
 	@class IdleExecutor

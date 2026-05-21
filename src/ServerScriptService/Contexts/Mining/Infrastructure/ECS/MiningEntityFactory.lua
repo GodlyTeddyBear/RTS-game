@@ -1,9 +1,10 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local MiningTypes = require(ReplicatedStorage.Contexts.Mining.Types.MiningTypes)
-local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
+local BaseECSEntityFactory = require(ServerStorage.Utilities.ECSUtilities.BaseECSEntityFactory)
 
 type TExtractorRecord = MiningTypes.TExtractorRecord
 type TResourceNodeRecord = MiningTypes.TResourceNodeRecord

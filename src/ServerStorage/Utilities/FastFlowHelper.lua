@@ -1,8 +1,8 @@
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local FastFlow = require(ReplicatedStorage.Utilities.FastFlow)
+local FastFlow = require(ServerStorage.Utilities.FastFlow)
 
 local ZERO_STEERING_EPSILON_SQUARED = 1e-6
 

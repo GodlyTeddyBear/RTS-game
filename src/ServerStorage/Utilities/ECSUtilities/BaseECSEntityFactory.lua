@@ -1,6 +1,7 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local JECS = require(ReplicatedStorage.Packages.JECS)
 local ECS = require(ReplicatedStorage.Utilities.ECS)
 local ECSIdentitySchema = ECS.IdentitySchema
@@ -36,7 +37,7 @@ type ECSRevealBinding = {
 local BaseECSEntityFactory = {}
 BaseECSEntityFactory.__index = BaseECSEntityFactory
 
--- ── Public ────────────────────────────────────────────────────────────────────
+-- â”€â”€ Public â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 --[=[
 	Creates a new base factory helper.

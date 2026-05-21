@@ -11,9 +11,10 @@
 -- [Dependencies]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
+local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local CommanderTypes = require(ReplicatedStorage.Contexts.Commander.Types.CommanderTypes)
 local CommanderConfig = require(ReplicatedStorage.Contexts.Commander.Config.CommanderConfig)

@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local ActorRegistryBase = require(ReplicatedStorage.Utilities.ActorRegistryBase)
+local ActorRegistryBase = require(ServerStorage.Utilities.ContextUtilities.ActorRegistryBase)
 
 local TestRegistry = {}
 TestRegistry.__index = TestRegistry

@@ -1,11 +1,12 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local BehaviorConfig = require(ReplicatedStorage.Contexts.Combat.Config.BehaviorConfig)
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local EnemyTypes = require(ReplicatedStorage.Contexts.Enemy.Types.EnemyTypes)
-local BaseRuntimeProfileModule = require(ReplicatedStorage.Utilities.BaseRuntimeProfileModule)
+local BaseRuntimeProfileModule = require(ServerStorage.Utilities.ECSUtilities.BaseRuntimeProfileModule)
 local SwarmBehavior = require(script.Parent.Parent.Parent.BehaviorSystem.Behaviors.SwarmBehavior)
 local TankBehavior = require(script.Parent.Parent.Parent.BehaviorSystem.Behaviors.TankBehavior)
 

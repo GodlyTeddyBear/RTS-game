@@ -1,10 +1,11 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Promise = require(ReplicatedStorage.Packages.Promise)
-local ParallelActors = require(ReplicatedStorage.Utilities.ParallelActors)
-local ParallelLogistics = require(ReplicatedStorage.Utilities.ParallelLogistics)
+local ParallelActors = require(ServerStorage.Utilities.ParallelActors)
+local ParallelLogistics = require(ServerStorage.Utilities.ParallelLogistics)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local SharedPlus = require(ReplicatedStorage.Utilities.SharedPlus)
 

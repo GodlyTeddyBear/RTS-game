@@ -33,7 +33,7 @@ The owning context still owns:
 ## Public Surface
 
 ```lua
-local AiRuntime = require(ReplicatedStorage.Utilities.AI.Runtime)
+local AiRuntime = require(ServerStorage.Utilities.AI.Runtime)
 
 local runtime = AiRuntime.new({
 	Conditions = conditions,

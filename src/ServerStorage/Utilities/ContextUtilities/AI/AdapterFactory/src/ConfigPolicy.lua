@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
+local ScratchRecycler = require(ServerStorage.Utilities.ContextUtilities.AI.src.Infrastructure.ScratchRecycler)
 local Types = require(script.Parent.Types)
 local HasRequiredCallbacksSpec = require(script.Parent.Specs.HasRequiredCallbacksSpec)
 local HasResolvableFactorySurfacesSpec = require(script.Parent.Specs.HasResolvableFactorySurfacesSpec)

@@ -8,8 +8,9 @@
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local RuntimeEnums = require(ReplicatedStorage.Utilities.AI.Runtime.src.RuntimeEnums)
+local RuntimeEnums = require(ServerStorage.Utilities.ContextUtilities.AI.Runtime.src.RuntimeEnums)
 local ExecutorBoundary = require(script.Parent.ExecutorBoundary)
 local RuntimeContextAdapter = require(script.Parent.RuntimeContextAdapter)
 local Result = require(ReplicatedStorage.Utilities.Result)

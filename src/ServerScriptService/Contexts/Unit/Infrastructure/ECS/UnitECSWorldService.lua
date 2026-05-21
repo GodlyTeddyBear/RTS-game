@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseECSWorldService = require(ReplicatedStorage.Utilities.BaseECSWorldService)
+local BaseECSWorldService = require(ServerStorage.Utilities.ECSUtilities.BaseECSWorldService)
 
 local UnitECSWorldService = {}
 UnitECSWorldService.__index = UnitECSWorldService

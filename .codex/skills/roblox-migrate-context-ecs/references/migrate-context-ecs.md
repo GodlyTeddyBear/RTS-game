@@ -39,10 +39,10 @@ Use this workflow to migrate one existing bounded context and its application, p
 - `src/ServerScriptService/Contexts/Commander/Infrastructure/ECS/CommanderECSWorldService.lua`
 - `src/ServerScriptService/Contexts/Commander/Infrastructure/ECS/CommanderComponentRegistry.lua`
 - `src/ServerScriptService/Contexts/Commander/Infrastructure/ECS/CommanderEntityFactory.lua`
-- `src/ReplicatedStorage/Utilities/BaseGameObjectSyncService.lua`
+- `src/ServerStorage/Utilities/BaseGameObjectSyncService.lua`
 - `src/ServerScriptService/Contexts/Enemy/Infrastructure/Persistence/EnemyGameObjectSyncService.lua`
 - `src/ServerScriptService/Contexts/Structure/Infrastructure/Persistence/StructureGameObjectSyncService.lua`
-- `src/ReplicatedStorage/Utilities/BaseInstanceFactory.lua`
+- `src/ServerStorage/Utilities/BaseInstanceFactory.lua`
 - `src/ServerScriptService/Contexts/Enemy/Infrastructure/Services/EnemyInstanceFactory.lua`
 6. Audit the target context for manual `Registry.new(...)`, `WrapContext(...)`, `_InitModule(...)`, lifecycle ordering, cross-context `Knit.GetService(...)`, signals, persistence loader hooks, scheduler registrations, runtime instance binding tables, direct reveal/tag stamping, direct dependency assignment in commands/queries, ad-hoc profile-path traversal, and `Destroy()` cleanup.
 7. Convert context-owned modules to BaseContext service-table config.
@@ -58,7 +58,7 @@ Use this workflow to migrate one existing bounded context and its application, p
 
 ## BaseContext Rules
 
-- Require `ReplicatedStorage.Utilities.BaseContext` from the context entry module.
+- Require `ServerStorage.Utilities.BaseContext` from the context entry module.
 - Replace manual `Registry.new(...)`, direct `WrapContext(...)`, custom `_InitModule(...)`, and manual registry init/start loops when BaseContext can own them.
 - Declare context-owned modules in typed layer arrays: `{ BaseContext.TModuleSpec }`.
 - Compose layer arrays into one `BaseContext.TModuleLayers` value.

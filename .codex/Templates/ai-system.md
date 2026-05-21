@@ -1,6 +1,6 @@
 # AI System Template
 
-Use this as the scaffold reference for a context-owned AI system built on `ReplicatedStorage/Utilities/AI`.
+Use this as the scaffold reference for a context-owned AI system built on `ServerStorage/Utilities/AI`.
 
 The AI package is shared infrastructure. The context still owns:
 
@@ -33,7 +33,7 @@ src/ServerScriptService/Contexts/<ContextName>/
 |   `-- Services/
 |       `-- <ContextName>BehaviorRuntimeService.lua
 
-src/ReplicatedStorage/Utilities/AI/
+src/ServerStorage/Utilities/AI/
 |-- init.lua
 |-- src/
 |   |-- Builder.lua
@@ -56,10 +56,11 @@ This example shows a context wiring the AI runtime into `BaseContext`, registeri
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
-local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseContext = require(ServerStorage.Utilities.BaseContext)
+local Result = require(ServerStorage.Utilities.Result)
 
 local <ContextName>BehaviorRuntimeService = require(script.Parent.Infrastructure.Services.<ContextName>BehaviorRuntimeService)
 local <ContextName>BehaviorConfig = require(script.Parent.Config.<ContextName>BehaviorConfig)
@@ -196,10 +197,10 @@ This is the context-owned service that creates the AI runtime, registers actor a
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local AI = require(ReplicatedStorage.Utilities.AI)
-local Result = require(ReplicatedStorage.Utilities.Result)
+local AI = require(ServerStorage.Utilities.AI)
+local Result = require(ServerStorage.Utilities.Result)
 
 local <ContextName>BehaviorConfig = require(script.Parent.Parent.Config.<ContextName>BehaviorConfig)
 local Nodes = require(script.Parent.Parent.BehaviorSystem.Nodes)
@@ -325,9 +326,9 @@ return <ContextName>BehaviorRuntimeService
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local AI = require(ReplicatedStorage.Utilities.AI)
+local AI = require(ServerStorage.Utilities.AI)
 local BehaviorSystem = AI.GetBehaviorSystem()
 
 local Conditions = {
@@ -393,9 +394,9 @@ The public executor lifecycle is `Start`, `Tick`, `Cancel`, `Complete`, and `Dea
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseExecutor = require(ReplicatedStorage.Utilities.BaseExecutor)
+local BaseExecutor = require(ServerStorage.Utilities.BaseExecutor)
 
 local CombatAttackExecutor = {}
 CombatAttackExecutor.__index = CombatAttackExecutor
@@ -441,9 +442,9 @@ return CombatAttackExecutor
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local AI = require(ReplicatedStorage.Utilities.AI)
+local AI = require(ServerStorage.Utilities.AI)
 local BehaviorSystem = AI.GetBehaviorSystem()
 
 return {
@@ -503,9 +504,9 @@ return table.freeze(PerceptionHook)
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local AI = require(ReplicatedStorage.Utilities.AI)
+local AI = require(ServerStorage.Utilities.AI)
 
 local writer = AI.CreateFactorySetupWriter({
 	Factory = enemyEntityFactory,
@@ -540,9 +541,9 @@ Use the builder when one context wants to assemble behaviors, actor bundles, def
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local AI = require(ReplicatedStorage.Utilities.AI)
+local AI = require(ServerStorage.Utilities.AI)
 
 local builtAi = AI.CreateSystem({
 	Conditions = require(script.Parent.Infrastructure.BehaviorSystem.Nodes).Conditions,

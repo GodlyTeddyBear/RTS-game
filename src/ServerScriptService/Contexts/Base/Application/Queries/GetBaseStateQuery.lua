@@ -7,9 +7,10 @@
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
-local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
+local BaseQuery = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseQuery)
 local BaseTypes = require(ReplicatedStorage.Contexts.Base.Types.BaseTypes)
 
 local Ok = Result.Ok

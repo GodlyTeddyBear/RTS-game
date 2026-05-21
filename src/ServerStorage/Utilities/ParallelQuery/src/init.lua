@@ -3,8 +3,9 @@
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
+local ServerStorage = game:GetService("ServerStorage")
 
-local Parallelizer = require(ReplicatedStorage.Utilities.Parallelizer)
+local Parallelizer = require(ServerStorage.Utilities.Parallelizer)
 local Promise = require(ReplicatedStorage.Packages.Promise)
 
 local Field = require(script.Field)

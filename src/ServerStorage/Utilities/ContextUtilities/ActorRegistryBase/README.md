@@ -37,9 +37,9 @@ Those pieces stay in the subclass through the `_Validate*`, `_Build*`, `_IsRecor
 Typical setup:
 
 ```lua
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local ActorRegistryBase = require(ReplicatedStorage.Utilities.ActorRegistryBase)
+local ActorRegistryBase = require(ServerStorage.Utilities.ActorRegistryBase)
 
 local CombatActorRegistryService = {}
 CombatActorRegistryService.__index = CombatActorRegistryService
@@ -92,7 +92,7 @@ Use the base methods in this order:
 ## Example
 
 ```lua
-local ActorRegistryBase = require(ReplicatedStorage.Utilities.ActorRegistryBase)
+local ActorRegistryBase = require(ServerStorage.Utilities.ActorRegistryBase)
 
 local CombatActorRegistryService = {}
 CombatActorRegistryService.__index = CombatActorRegistryService

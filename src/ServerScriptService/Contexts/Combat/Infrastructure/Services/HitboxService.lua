@@ -1,11 +1,12 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local Workspace = game:GetService("Workspace")
 
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
-local MuchachoHitbox = require(ReplicatedStorage.Utilities.MuchachoHitbox)
+local MuchachoHitbox = require(ServerStorage.Utilities.MuchachoHitbox)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 local TableRecycler = require(ReplicatedStorage.Utilities.TableRecycler)
 

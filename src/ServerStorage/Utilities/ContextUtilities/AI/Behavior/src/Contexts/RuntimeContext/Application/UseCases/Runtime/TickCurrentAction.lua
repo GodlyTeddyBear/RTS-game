@@ -8,10 +8,11 @@
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
-local RuntimeEnums = require(ReplicatedStorage.Utilities.AI.Runtime.src.RuntimeEnums)
+local RuntimeEnums = require(ServerStorage.Utilities.ContextUtilities.AI.Runtime.src.RuntimeEnums)
 local ActionId = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.ActionId)
 local TickStatus = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.ValueObjects.TickStatus)
 local ExecutorBoundary = require(script.Parent.ExecutorBoundary)

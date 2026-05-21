@@ -1,9 +1,10 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local BehaviorConfig = require(ReplicatedStorage.Contexts.Combat.Config.BehaviorConfig)
-local BaseRuntimeProfileModule = require(ReplicatedStorage.Utilities.BaseRuntimeProfileModule)
+local BaseRuntimeProfileModule = require(ServerStorage.Utilities.ECSUtilities.BaseRuntimeProfileModule)
 local UnitIdleBehavior = require(script.Parent.Parent.Parent.BehaviorSystem.Behaviors.UnitIdleBehavior)
 
 local BaseProfiles = BaseRuntimeProfileModule.new({

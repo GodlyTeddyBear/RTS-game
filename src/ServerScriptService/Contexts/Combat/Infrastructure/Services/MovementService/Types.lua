@@ -1,10 +1,11 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local EnemyTypes = require(ReplicatedStorage.Contexts.Enemy.Types.EnemyTypes)
-local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
-local ParallelRunner = require(ReplicatedStorage.Utilities.ParallelRunner)
+local FastFlowHelper = require(ServerStorage.Utilities.FastFlowHelper)
+local ParallelRunner = require(ServerStorage.Utilities.ParallelRunner)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local TableRecycler = require(ReplicatedStorage.Utilities.TableRecycler)
 

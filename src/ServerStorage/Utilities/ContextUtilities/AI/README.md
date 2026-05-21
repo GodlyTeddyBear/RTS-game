@@ -11,7 +11,7 @@ Shared package root for the project's AI utilities. `AI` exposes the package ent
 - `src/Validation.lua` centralizes input-shape checks for the facade surface.
 - `src/Types.lua` defines the shared facade types.
 - `src/Enums.lua` defines the shared enum registries used by the facade and diagnostics.
-- `src/ReplicatedStorage/Utilities/ActorRegistryBase/` provides the reusable actor registry base, errors, metadata policy, and runtime-binding specs for derived context registries.
+- `src/ServerStorage/Utilities/ContextUtilities/ActorRegistryBase/` provides the reusable actor registry base, errors, metadata policy, and runtime-binding specs for derived context registries.
 
 ## Purpose
 
@@ -25,9 +25,9 @@ Shared package root for the project's AI utilities. `AI` exposes the package ent
 The preferred facade path is `AI.CreateSystem(...)`, which collects hooks, actions, action packs, actors, actor bundles, and named behavior definitions before producing a ready runtime plus built behavior trees, catalog defaults, and build diagnostics.
 
 ```lua
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local AI = require(ReplicatedStorage.Utilities.AI)
+local AI = require(ServerStorage.Utilities.AI)
 
 local builtAi = AI.CreateSystem({
 	Conditions = Conditions,
@@ -137,9 +137,9 @@ The builder enforces a lifecycle internally using `StateMachine`, so mutation me
 ## Usage
 
 ```lua
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local AI = require(ReplicatedStorage.Utilities.AI)
+local AI = require(ServerStorage.Utilities.AI)
 
 local runtime = AI.CreateRuntime({
 	Conditions = Conditions,

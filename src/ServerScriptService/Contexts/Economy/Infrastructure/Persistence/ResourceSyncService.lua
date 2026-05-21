@@ -10,8 +10,9 @@
 -- [Dependencies]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseSyncService = require(ReplicatedStorage.Utilities.BaseSyncService)
+local BaseSyncService = require(ServerStorage.Utilities.ContextUtilities.BaseSyncService)
 local SharedAtoms = require(ReplicatedStorage.Contexts.Economy.Sync.SharedAtoms)
 local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTypes)
 

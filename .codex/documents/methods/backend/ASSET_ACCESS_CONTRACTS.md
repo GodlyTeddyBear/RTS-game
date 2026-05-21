@@ -27,7 +27,7 @@ This contract applies to backend modules that load models, effects, animations, 
 
 ### Registry creation before asset usage
 
-- Require `ReplicatedStorage.Utilities.Assets.AssetFetcher`.
+- Require `ServerStorage.Utilities.Assets.AssetFetcher`.
 - In `Init` (or equivalent setup lifecycle), create the appropriate registry for the owned asset folder.
 - Cache the registry as module state (example: `self._entityRegistry`, `self._buildingRegistry`).
 

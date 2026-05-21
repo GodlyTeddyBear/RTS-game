@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseGameObjectSyncService = require(ReplicatedStorage.Utilities.BaseGameObjectSyncService)
+local BaseGameObjectSyncService = require(ServerStorage.Utilities.ECSUtilities.BaseGameObjectSyncService)
 local UnitConfig = require(ReplicatedStorage.Contexts.Unit.Config.UnitConfig)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)

@@ -12,7 +12,7 @@ Canonical architecture references:
 
 ## Core Rules
 
-- Use `ReplicatedStorage.Utilities.BaseContext` for new backend context entry modules.
+- Use `ServerStorage.Utilities.BaseContext` for new backend context entry modules.
 - Import BaseContext config and wrapper types from the public module path, such as `BaseContext.TModuleSpec`, `BaseContext.TModuleLayers`, and `BaseContext.TBaseContext`.
 - Create one BaseContext wrapper per Knit service with `BaseContext.new(<ContextService>)`.
 - Place the wrapper after the `Knit.CreateService(...)` service table and before lifecycle methods.
@@ -61,7 +61,7 @@ Canonical architecture references:
 
 ```lua
 -- Correct: context-owned services and queries are declared on the service table.
-local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
+local BaseContext = require(ServerStorage.Utilities.BaseContext)
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
@@ -159,7 +159,7 @@ WrapContext(ExampleContext, "Example")
 
 ## Checklist
 
-- [ ] Service requires `ReplicatedStorage.Utilities.BaseContext`.
+- [ ] Service requires `ServerStorage.Utilities.BaseContext`.
 - [ ] Service module config uses BaseContext-exported types instead of local duplicate spec types.
 - [ ] Layer arrays are typed as `{ BaseContext.TModuleSpec }`.
 - [ ] Composed module config is typed as `BaseContext.TModuleLayers`.

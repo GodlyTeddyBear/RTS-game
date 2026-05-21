@@ -1,9 +1,10 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local CharmSync = require(ReplicatedStorage.Packages["Charm-sync"])
-local BaseSyncService = require(ReplicatedStorage.Utilities.BaseSyncService)
+local BaseSyncService = require(ServerStorage.Utilities.ContextUtilities.BaseSyncService)
 local EquipmentTypes = require(ReplicatedStorage.Contexts.Equipment.Types.EquipmentTypes)
 local SharedAtoms = require(ReplicatedStorage.Contexts.Equipment.Sync.SharedAtoms)
 

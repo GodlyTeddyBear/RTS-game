@@ -89,8 +89,8 @@ src/ReplicatedStorage/Contexts/<ContextName>/
   - Service/query/policy modules should import from that single file for context-wide data shapes.
   - Do not duplicate context-shared `export type` shapes across multiple modules.
 - Result boundary rule for future methods in `<ContextName>Context.lua`:
-  - Require `ReplicatedStorage.Utilities.Result` and use `Catch` for context method boundaries (or `Ok(value)` for simple getters).
-  - Require `ReplicatedStorage.Utilities.BaseContext` and use `BaseContext.new(<ContextName>Context)` to wrap the service table before lifecycle methods.
+  - Require `ServerStorage.Utilities.Result` and use `Catch` for context method boundaries (or `Ok(value)` for simple getters).
+  - Require `ServerStorage.Utilities.BaseContext` and use `BaseContext.new(<ContextName>Context)` to wrap the service table before lifecycle methods.
   - Public server-to-server context methods should return `Result.Result<T>` and preserve propagation by return value.
   - Use `result:unwrapOr(default)` only in terminal/private boundaries where default fallback is intentional.
   - `.Client` methods that call `Execute` directly should own a `Catch`; `.Client` methods that delegate to `self.Server:Method()` should not add another `Catch`.

@@ -23,9 +23,10 @@ src/ServerScriptService/Contexts/<RuntimeContextName>/
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
+local BaseContext = require(ServerStorage.Utilities.BaseContext)
 
 local <RuntimeContextName>ActorRegistryService = require(script.Parent.Infrastructure.Services["<RuntimeContextName>ActorRegistryService"])
 local <RuntimeContextName>BehaviorRuntimeService = require(script.Parent.Infrastructure.Services["<RuntimeContextName>BehaviorRuntimeService"])
@@ -83,9 +84,9 @@ return <RuntimeContextName>Context
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseAIRuntimeService = require(ReplicatedStorage.Utilities.BaseAIRuntimeService)
+local BaseAIRuntimeService = require(ServerStorage.Utilities.BaseAIRuntimeService)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 local RuntimeAdapterHook = require(script.Parent.Parent.BehaviorSystem.Hooks.<RuntimeAdapterHookModule>)
 
@@ -198,9 +199,9 @@ end
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local ActorRegistryBase = require(ReplicatedStorage.Utilities.ActorRegistryBase)
+local ActorRegistryBase = require(ServerStorage.Utilities.ActorRegistryBase)
 
 local <RuntimeContextName>ActorRegistryService = {}
 <RuntimeContextName>ActorRegistryService.__index = <RuntimeContextName>ActorRegistryService

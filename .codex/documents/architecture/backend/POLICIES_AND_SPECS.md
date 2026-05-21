@@ -52,10 +52,10 @@ A specification is a module-level constant that encapsulates a single eligibilit
 
 ### Construction
 
-Specs use the `Specification` utility from `ReplicatedStorage/Utilities/Specification.lua`.
+Specs use the `Specification` utility from `ServerStorage/Utilities/Specification.lua`.
 
 ```lua
-local Spec = require(ReplicatedStorage.Utilities.Specification)
+local Spec = require(ServerStorage.Utilities.Specification)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local HasNoActiveExpedition = Spec.new(

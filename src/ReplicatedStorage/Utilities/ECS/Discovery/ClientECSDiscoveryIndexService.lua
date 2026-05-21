@@ -2,6 +2,7 @@
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local ECSIdentitySchema = require(ReplicatedStorage.Utilities.ECS.Reveal.ECSIdentitySchema)
@@ -81,12 +82,12 @@ export type TConfig = {
 	@class ClientECSDiscoveryIndexService
 	@client
 ]=]
--- ── Types ──────────────────────────────────────────────────────────────────
+-- â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 local ClientECSDiscoveryIndexService = {}
 ClientECSDiscoveryIndexService.__index = ClientECSDiscoveryIndexService
 
--- ── Public ─────────────────────────────────────────────────────────────────
+-- â”€â”€ Public â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 --[=[
 	Constructs a client-side discovery index.
@@ -291,7 +292,7 @@ function ClientECSDiscoveryIndexService:FindAllByAttribute(attributeName: string
 	return results
 end
 
--- ── Private ────────────────────────────────────────────────────────────────
+-- â”€â”€ Private â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 -- Keeps iteration deterministic while dropping stale records when instances are removed.
 function ClientECSDiscoveryIndexService:_IterateLiveRecords(callback: (Instance, ECSDiscoveryRecord) -> ())

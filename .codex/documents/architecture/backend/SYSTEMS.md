@@ -69,7 +69,7 @@ GameEvents.Bus:Emit(GameEvents.Events.Persistence.ProfileLoaded, player)
 
 ## Shared Utilities
 
-Common backend and ECS utilities live in `ReplicatedStorage/Utilities/` and are described in [UTILITY_USE.md](UTILITY_USE.md).
+Common backend and ECS utilities live in `ServerStorage/Utilities/` and are described in [UTILITY_USE.md](UTILITY_USE.md).
 
 Base-class style utilities are a valid pattern here when they provide shared technical behavior without owning a context lifecycle. For example, `BaseAction` is a reusable action base class that centralizes marker dispatch, null checking, and callback routing while leaving subclass-specific logic in the derived class.
 

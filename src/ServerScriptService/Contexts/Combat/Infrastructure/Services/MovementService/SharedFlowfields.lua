@@ -1,10 +1,11 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
+local FastFlowHelper = require(ServerStorage.Utilities.FastFlowHelper)
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
-local vector2 = require(ReplicatedStorage.Utilities.Parallelizer.Index.DataTypes.vector2)
+local vector2 = require(ServerStorage.Utilities.Parallelizer.Index.DataTypes.vector2)
 local MovementTypes = require(script.Parent.Types)
 local MovementMath = require(script.Parent.Math.MovementMath)
 local Result = require(ReplicatedStorage.Utilities.Result)

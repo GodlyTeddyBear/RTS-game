@@ -1,9 +1,9 @@
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local HttpService = game:GetService("HttpService")
 
-local Parallelizer = require(ReplicatedStorage.Utilities.Parallelizer)
+local Parallelizer = require(ServerStorage.Utilities.Parallelizer)
 
 local Types = require(script.Parent.Types)
 

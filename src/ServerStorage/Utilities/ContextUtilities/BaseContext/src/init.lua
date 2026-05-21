@@ -1,9 +1,10 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
-local WrapContext = require(ReplicatedStorage.Utilities.WrapContext)
+local WrapContext = require(ServerStorage.Utilities.ContextUtilities.WrapContext)
 local Registry = require(script.Parent.Parent.Registry)
 
 local BootstrapMethods = require(script.Public.Bootstrap)
@@ -61,7 +62,13 @@ export type TBaseContext = {
 	GetSchedulerDeltaTime: (self: TBaseContext) -> number,
 	OnGameEvent: (self: TBaseContext, eventName: string, callback: (...any) -> (), cacheAs: string?) -> any,
 	GetContextEvent: (self: TBaseContext, contextName: string, eventName: string) -> string,
-	OnContextEvent: (self: TBaseContext, contextName: string, eventName: string, callback: (...any) -> (), cacheAs: string?) -> any,
+	OnContextEvent: (
+		self: TBaseContext,
+		contextName: string,
+		eventName: string,
+		callback: (...any) -> (),
+		cacheAs: string?
+	) -> any,
 	EmitGameEvent: (self: TBaseContext, eventName: string, ...any) -> (),
 	EmitContextEvent: (self: TBaseContext, contextName: string, eventName: string, ...any) -> (),
 	OnPlayerAdded: (self: TBaseContext, callback: (Player) -> (), cacheAs: string?) -> any,

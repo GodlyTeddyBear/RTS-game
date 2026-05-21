@@ -1,9 +1,10 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Sera = require(ReplicatedStorage.Utilities.Sera)
-local Envelope = require(ReplicatedStorage.Utilities.ParallelLogistics.src.Envelope)
+local Envelope = require(ServerStorage.Utilities.ParallelLogistics.src.Envelope)
 
 type TPayloadScalarType =
 	"u8"

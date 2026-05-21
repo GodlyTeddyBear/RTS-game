@@ -8,9 +8,10 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTypes)
-local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
+local BaseQuery = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseQuery)
 
 type ResourceWallet = EconomyTypes.ResourceWallet
 

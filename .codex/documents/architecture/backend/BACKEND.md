@@ -10,7 +10,7 @@ This is the root document for backend architecture. Read this first, then follow
 - Game entities are managed through **JECS** with the ECS ownership split documented in [ECS_OVERVIEW.md](ECS_OVERVIEW.md).
 - Player data is persisted with **ProfileStore**.
 - State is replicated to clients with **Charm-sync**.
-- Shared technical helpers live in `ReplicatedStorage/Utilities/` and are documented in [UTILITY_USE.md](UTILITY_USE.md).
+- Shared technical helpers live in `ServerStorage/Utilities/` and are documented in [UTILITY_USE.md](UTILITY_USE.md).
 - Persistence lifecycle is event-driven through `GameEvents.Events.Persistence`:
   - `Persistence.ProfileLoaded` -> contexts hydrate runtime state from profile data.
   - `Persistence.ProfileSaving` -> contexts flush runtime state into `profile.Data`.
@@ -77,7 +77,7 @@ src/
 |           |-- Config/                  # Context configuration files
 |           |-- Errors.lua               # Error message constants
 |
-`-- ReplicatedStorage/
+`-- ServerStorage/
     |-- Config/
     |   `-- DebugConfig.lua             # Master debug switch
     |-- Packages/                       # Wally dependencies

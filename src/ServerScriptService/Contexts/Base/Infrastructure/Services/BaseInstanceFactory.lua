@@ -1,10 +1,11 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local RunService = game:GetService("RunService")
 
 local BaseConfig = require(ReplicatedStorage.Contexts.Base.Config.BaseConfig)
-local BaseInstanceFactoryBase = require(ReplicatedStorage.Utilities.BaseInstanceFactory)
+local BaseInstanceFactoryBase = require(ServerStorage.Utilities.ECSUtilities.BaseInstanceFactory)
 
 type TBindBaseInstanceOptions = {
 	BaseId: string,

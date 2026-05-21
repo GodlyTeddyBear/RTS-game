@@ -2,9 +2,10 @@
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Lifecycle = require(script.Parent.Lifecycle)
-local ParallelRunner = if RunService:IsServer() then require(ReplicatedStorage.Utilities.ParallelRunner) else nil
+local ParallelRunner = if RunService:IsServer() then require(ServerStorage.Utilities.ParallelRunner) else nil
 local Query = require(script.Parent.Query)
 local TableRecycler = require(ReplicatedStorage.Utilities.TableRecycler)
 local Types = require(script.Parent.Parent.Types)

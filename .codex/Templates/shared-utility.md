@@ -1,6 +1,6 @@
 # Shared Utility Template
 
-Use this as the scaffold reference for a shared technical utility in `ReplicatedStorage/Utilities/`, including `PlacementPlus`, `SpatialQuery`, `Orient`, `StateMachine`, and `ModelPlus`.
+Use this as the scaffold reference for a shared technical utility in `ServerStorage/Utilities/`, including `PlacementPlus`, `SpatialQuery`, `Orient`, `StateMachine`, and `ModelPlus`.
 
 If `$ARGUMENTS` is empty, stop and ask for the utility name and whether it is a single file or a package.
 
@@ -15,8 +15,8 @@ Use the shape that matches the utility type.
 Use this shape for `ModelPlus`, `StateMachine`, and similar single-module helpers.
 
 ```text
-src/ReplicatedStorage/Utilities/ModelPlus.lua
-src/ReplicatedStorage/Utilities/StateMachine.lua
+src/ServerStorage/Utilities/ModelPlus.lua
+src/ServerStorage/Utilities/StateMachine.lua
 ```
 
 ### Package Utility
@@ -24,7 +24,7 @@ src/ReplicatedStorage/Utilities/StateMachine.lua
 Use this shape for folder-backed utilities such as `PlacementPlus`, `SpatialQuery`, and `Orient`.
 
 ```text
-src/ReplicatedStorage/Utilities/PlacementPlus/
+src/ServerStorage/Utilities/PlacementPlus/
 |-- init.lua
 `-- src/
     |-- Candidate.lua
@@ -36,7 +36,7 @@ src/ReplicatedStorage/Utilities/PlacementPlus/
 ```
 
 ```text
-src/ReplicatedStorage/Utilities/SpatialQuery/
+src/ServerStorage/Utilities/SpatialQuery/
 |-- init.lua
 `-- src/
     |-- init.lua
@@ -49,7 +49,7 @@ src/ReplicatedStorage/Utilities/SpatialQuery/
 ```
 
 ```text
-src/ReplicatedStorage/Utilities/Orient/
+src/ServerStorage/Utilities/Orient/
 |-- init.lua
 `-- src/
     |-- Constants.lua
@@ -121,10 +121,10 @@ Use `PlacementPlus` when a caller needs a placement candidate that may be shown,
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local PlacementPlus = require(ReplicatedStorage.Utilities.PlacementPlus)
-local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
+local PlacementPlus = require(ServerStorage.Utilities.PlacementPlus)
+local ModelPlus = require(ServerStorage.Utilities.ModelPlus)
 
 local function buildPreviewCandidate(model: Model, cursorPosition: Vector3, gridSize: Vector3, validationOptions: any)
 	local footprint = PlacementPlus.BuildFootprintFromBounds(model:GetExtentsSize())
@@ -207,9 +207,9 @@ Use `SpatialQuery` when the caller needs reusable spatial selection or filtering
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
+local SpatialQuery = require(ServerStorage.Utilities.SpatialQuery)
 
 local function findNearestEnemy(origin: Vector3, enemies: { Model }, maxRange: number): Model?
 	return SpatialQuery.FindBestCandidate(enemies, function(enemy: Model)
@@ -233,9 +233,9 @@ return findNearestEnemy
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
+local SpatialQuery = require(ServerStorage.Utilities.SpatialQuery)
 
 local function canSeeTarget(origin: Vector3, target: Model, raycastOptions: RaycastParams): boolean
 	return SpatialQuery.IsWithinRaycastRange(origin, target:GetPivot().Position, raycastOptions)
@@ -282,9 +282,9 @@ Use `Orient` when the caller needs reusable facing, translation, projection, int
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local Orient = require(ReplicatedStorage.Utilities.Orient)
+local Orient = require(ServerStorage.Utilities.Orient)
 
 local function turnToward(model: Model, targetPosition: Vector3)
 	local pivot = model:GetPivot()
@@ -300,9 +300,9 @@ end
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local Orient = require(ReplicatedStorage.Utilities.Orient)
+local Orient = require(ServerStorage.Utilities.Orient)
 
 local function stepForward(position: Vector3, target: Vector3, speed: number, dt: number): Vector3
 	return Orient.MoveTowards(position, target, speed * dt)
@@ -314,9 +314,9 @@ end
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local Orient = require(ReplicatedStorage.Utilities.Orient)
+local Orient = require(ServerStorage.Utilities.Orient)
 
 local function snapYaw(model: Model, angleStepDegrees: number)
 	return Orient.SnapYaw(model:GetPivot(), angleStepDegrees)
@@ -358,10 +358,10 @@ Use `StateMachine` when a flow has legal transitions and the caller needs a guar
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local Result = require(ReplicatedStorage.Utilities.Result)
-local StateMachine = require(ReplicatedStorage.Utilities.StateMachine)
+local Result = require(ServerStorage.Utilities.Result)
+local StateMachine = require(ServerStorage.Utilities.StateMachine)
 
 local RunStateMachine = StateMachine.new({
 	InitialState = "Idle",
@@ -429,9 +429,9 @@ Use `ModelPlus` when the caller needs reusable model pivot, bounds, or traversal
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
+local ModelPlus = require(ServerStorage.Utilities.ModelPlus)
 
 local function placeStructure(model: Model, worldPos: Vector3)
 	ModelPlus.MoveBottomAligned(model, worldPos)
@@ -443,9 +443,9 @@ end
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
+local ModelPlus = require(ServerStorage.Utilities.ModelPlus)
 
 local function readFootprint(model: Model)
 	local boundsCFrame, boundsSize = ModelPlus.GetBounds(model)
@@ -461,9 +461,9 @@ end
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
+local ModelPlus = require(ServerStorage.Utilities.ModelPlus)
 
 local function findPrimaryPart(model: Model): BasePart?
 	return ModelPlus.FindDescendant(model, function(instance: Instance)

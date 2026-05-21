@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BehaviorTree = require(ReplicatedStorage.Utilities.BehaviorTree)
+local BehaviorTree = require(ServerStorage.Utilities.ContextUtilities.BehaviorTree)
 
 local Types = require(script.Parent.Parent.Parent.Parent.Parent.Parent.SharedDomain.Types)
 local ValidateDefinition = require(script.Parent.ValidateDefinition)

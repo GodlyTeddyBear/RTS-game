@@ -1,10 +1,11 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.StructureConfig)
 local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.StructureTypes)
-local CombatECSEntityFactory = require(ReplicatedStorage.Utilities.CombatECSEntityFactory)
+local CombatECSEntityFactory = require(ServerStorage.Utilities.ECSUtilities.CombatECSEntityFactory)
 
 type StructureType = StructureTypes.StructureType
 type TStructureConfig = StructureTypes.TStructureConfig

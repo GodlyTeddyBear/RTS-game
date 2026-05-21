@@ -1,11 +1,12 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local ScratchRecycler = require(ReplicatedStorage.Utilities.AI.src.Infrastructure.ScratchRecycler)
+local ScratchRecycler = require(ServerStorage.Utilities.ContextUtilities.AI.src.Infrastructure.ScratchRecycler)
 local RuntimeShapeSpec = require(script.Parent.Parent.Specs.RuntimeShapeSpec)
 local HasValidActionStateShapeSpec = require(
-	ReplicatedStorage.Utilities.AI.AdapterFactory.src.Specs.HasValidActionStateShapeSpec
+	ServerStorage.Utilities.ContextUtilities.AI.AdapterFactory.src.Specs.HasValidActionStateShapeSpec
 )
 
 local REQUIRED_ADAPTER_METHODS = table.freeze({

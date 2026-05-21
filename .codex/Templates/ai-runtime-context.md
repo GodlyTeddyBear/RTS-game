@@ -29,10 +29,11 @@ src/ServerScriptService/Contexts/<ConsumerContextName>/
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
-local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseContext = require(ServerStorage.Utilities.BaseContext)
+local Result = require(ServerStorage.Utilities.Result)
 
 local <ConsumerContextName><RuntimeOwnerName>AdapterService = require(script.Parent.Infrastructure.Services["<ConsumerContextName><RuntimeOwnerName>AdapterService"])
 
@@ -84,10 +85,10 @@ return <ConsumerContextName>Context
 ```lua
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local AI = require(ReplicatedStorage.Utilities.AI)
-local Result = require(ReplicatedStorage.Utilities.Result)
+local AI = require(ServerStorage.Utilities.AI)
+local Result = require(ServerStorage.Utilities.Result)
 local Nodes = require(script.Parent.Parent.BehaviorSystem.Nodes)
 local Executors = require(script.Parent.Parent.BehaviorSystem.Executors)
 local RuntimeProfiles = require(script.Parent.Parent.Runtime.Profiles["<ConsumerContextName>RuntimeProfiles"])
@@ -183,8 +184,9 @@ return <ConsumerContextName><RuntimeOwnerName>AdapterService
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseRuntimeProfileModule = require(ReplicatedStorage.Utilities.BaseRuntimeProfileModule)
+local BaseRuntimeProfileModule = require(ServerStorage.Utilities.BaseRuntimeProfileModule)
 local <ConsumerContextName>Config = require(ReplicatedStorage.Contexts.<ConsumerContextName>.Config.<ConsumerContextName>Config)
 local <ConsumerContextName>Types = require(ReplicatedStorage.Contexts.<ConsumerContextName>.Types.<ConsumerContextName>Types)
 local <ConsumerContextName>RuntimeProfiles = {}

@@ -36,10 +36,11 @@ src/ReplicatedStorage/Contexts/<ContextName>/
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
-local Result = require(ReplicatedStorage.Utilities.Result)
+local BaseContext = require(ServerStorage.Utilities.BaseContext)
+local Result = require(ServerStorage.Utilities.Result)
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
 local <ContextName>ComponentRegistry = require(script.Parent.Infrastructure.ECS["<ContextName>ComponentRegistry"])

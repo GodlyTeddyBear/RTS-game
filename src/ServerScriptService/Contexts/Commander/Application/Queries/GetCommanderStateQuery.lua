@@ -1,9 +1,10 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local CommanderTypes = require(ReplicatedStorage.Contexts.Commander.Types.CommanderTypes)
-local BaseQuery = require(ReplicatedStorage.Utilities.BaseApplication.BaseQuery)
+local BaseQuery = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseQuery)
 
 type CommanderState = CommanderTypes.CommanderState
 

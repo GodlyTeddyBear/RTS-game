@@ -24,7 +24,7 @@ Do **not** log:
 Use for successful operations that are worth tracing.
 
 ```lua
-local Result = require(ReplicatedStorage.Utilities.Result)
+local Result = require(ServerStorage.Utilities.Result)
 local MentionSuccess = Result.MentionSuccess
 
 MentionSuccess("Unlock:EvaluateChapterAdvancement:Execute", "Player advanced to new chapter", {

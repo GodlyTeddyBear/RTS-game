@@ -1,8 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseAIRuntimeService = require(ReplicatedStorage.Utilities.BaseAIRuntimeService)
+local BaseAIRuntimeService = require(ServerStorage.Utilities.ContextUtilities.BaseAIRuntimeService)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 local MiningActorAdapterHook = require(script.Parent.Parent.BehaviorSystem.Hooks.MiningActorAdapterHook)
 

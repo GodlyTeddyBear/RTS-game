@@ -8,8 +8,9 @@
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BehaviorTree = require(ReplicatedStorage.Utilities.BehaviorTree)
+local BehaviorTree = require(ServerStorage.Utilities.ContextUtilities.BehaviorTree)
 
 local Helpers = {}
 

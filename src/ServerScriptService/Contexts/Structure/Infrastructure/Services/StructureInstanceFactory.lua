@@ -1,10 +1,11 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
-local BaseInstanceFactory = require(ReplicatedStorage.Utilities.BaseInstanceFactory)
+local BaseInstanceFactory = require(ServerStorage.Utilities.ECSUtilities.BaseInstanceFactory)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
 local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)

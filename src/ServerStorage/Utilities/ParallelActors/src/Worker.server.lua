@@ -1,7 +1,6 @@
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local WorkerBootstrap = require(ReplicatedStorage.Utilities.ParallelActors.src.WorkerBootstrap)
+local ServerStorage = game:GetService("ServerStorage")
+local WorkerBootstrap = require(ServerStorage.Utilities.ParallelActors.src.WorkerBootstrap)
 
 WorkerBootstrap.Start(script)

@@ -8,9 +8,10 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local BaseContext = require(ReplicatedStorage.Utilities.BaseContext)
+local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local BaseTypes = require(ReplicatedStorage.Contexts.Base.Types.BaseTypes)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)

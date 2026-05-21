@@ -7,8 +7,9 @@
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseECSEntityFactory = require(ReplicatedStorage.Utilities.BaseECSEntityFactory)
+local BaseECSEntityFactory = require(ServerStorage.Utilities.ECSUtilities.BaseECSEntityFactory)
 local BaseTypes = require(ReplicatedStorage.Contexts.Base.Types.BaseTypes)
 
 type BaseState = BaseTypes.BaseState

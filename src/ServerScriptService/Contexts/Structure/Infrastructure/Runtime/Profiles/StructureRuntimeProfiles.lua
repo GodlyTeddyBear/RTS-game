@@ -1,11 +1,12 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local BehaviorConfig = require(ReplicatedStorage.Contexts.Combat.Config.BehaviorConfig)
 local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.StructureConfig)
 local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.StructureTypes)
-local BaseRuntimeProfileModule = require(ReplicatedStorage.Utilities.BaseRuntimeProfileModule)
+local BaseRuntimeProfileModule = require(ServerStorage.Utilities.ECSUtilities.BaseRuntimeProfileModule)
 local StructureBehavior = require(script.Parent.Parent.Parent.BehaviorSystem.Behaviors.StructureBehavior)
 local ExtractorBehavior = require(script.Parent.Parent.Parent.BehaviorSystem.Behaviors.ExtractorBehavior)
 local StasisBehavior = require(script.Parent.Parent.Parent.BehaviorSystem.Behaviors.StasisBehavior)

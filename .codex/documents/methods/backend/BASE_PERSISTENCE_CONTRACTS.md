@@ -1,6 +1,6 @@
 # BasePersistenceService Contracts
 
-Method contracts for using `ReplicatedStorage.Utilities.BasePersistenceService` as a shared persistence helper.
+Method contracts for using `ServerStorage.Utilities.BasePersistenceService` as a shared persistence helper.
 
 Canonical architecture references:
 - [../../architecture/backend/ERROR_HANDLING.md](../../architecture/backend/ERROR_HANDLING.md)
@@ -68,4 +68,3 @@ Canonical architecture references:
 - [ ] Context persistence modules expose explicit `Load...` / `Save...` entrypoints.
 - [ ] Profile/path boundary failures use `Result` contracts.
 - [ ] Path traversal and writes go through explicit helper methods.
-

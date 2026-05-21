@@ -69,8 +69,9 @@ return <FeatureName>Controller
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local BaseSyncClient = require(ReplicatedStorage.Utilities.BaseSyncClient)
+local BaseSyncClient = require(ServerStorage.Utilities.BaseSyncClient)
 local SharedAtoms = require(ReplicatedStorage.Contexts["<FeatureName>"].Sync.SharedAtoms)
 local BlinkClient = require(ReplicatedStorage.Network.Generated["<FeatureName>SyncClient"])
 

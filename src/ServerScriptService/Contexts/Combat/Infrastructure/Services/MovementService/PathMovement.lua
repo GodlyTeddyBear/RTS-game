@@ -1,9 +1,10 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Promise = require(ReplicatedStorage.Packages.Promise)
-local PathfindingHelper = require(ReplicatedStorage.Utilities.PathfindingHelper)
+local PathfindingHelper = require(ServerStorage.Utilities.PathfindingHelper)
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
 local BoidsConfig = require(ReplicatedStorage.Contexts.Combat.Config.BoidsConfig)
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)

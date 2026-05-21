@@ -1,11 +1,12 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
 local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
-local ParallelRunner = require(ReplicatedStorage.Utilities.ParallelRunner)
+local ParallelRunner = require(ServerStorage.Utilities.ParallelRunner)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local MovementTypes = require(script.Parent.Types)
 local Errors = require(script.Parent.Parent.Parent.Parent.Errors)

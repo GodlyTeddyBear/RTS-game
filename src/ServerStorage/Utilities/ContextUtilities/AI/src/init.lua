@@ -11,11 +11,12 @@
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
-local AiAdapterFactory = require(ReplicatedStorage.Utilities.AI.AdapterFactory)
-local AIContractTypes = require(ReplicatedStorage.Utilities.AI.ContractTypes)
-local AiRuntime = require(ReplicatedStorage.Utilities.AI.Runtime)
-local BehaviorSystem = require(ReplicatedStorage.Utilities.AI.Behavior)
+local AiAdapterFactory = require(ServerStorage.Utilities.ContextUtilities.AI.AdapterFactory)
+local AIContractTypes = require(ServerStorage.Utilities.ContextUtilities.AI.ContractTypes)
+local AiRuntime = require(ServerStorage.Utilities.ContextUtilities.AI.Runtime)
+local BehaviorSystem = require(ServerStorage.Utilities.ContextUtilities.AI.Behavior)
 
 local BehaviorCatalog = require(script.BehaviorCatalog)
 local Builder = require(script.Builder)

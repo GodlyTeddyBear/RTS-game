@@ -7,13 +7,14 @@
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local Workspace = game:GetService("Workspace")
 
-local AI = require(ReplicatedStorage.Utilities.AI)
+local AI = require(ServerStorage.Utilities.ContextUtilities.AI)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local FastFlow = require(ReplicatedStorage.Utilities.FastFlow)
-local FastFlowHelper = require(ReplicatedStorage.Utilities.FastFlowHelper)
-local RuntimeFactCache = require(ReplicatedStorage.Utilities.RuntimeFactCache)
+local FastFlow = require(ServerStorage.Utilities.FastFlow)
+local FastFlowHelper = require(ServerStorage.Utilities.FastFlowHelper)
+local RuntimeFactCache = require(ServerStorage.Utilities.ContextUtilities.RuntimeFactCache)
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local EnemyTypes = require(ReplicatedStorage.Contexts.Enemy.Types.EnemyTypes)
