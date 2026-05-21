@@ -474,6 +474,25 @@ function BaseInstanceFactory:GetEntity(instance: Instance): number?
 end
 
 --[=[
+	Returns the entity bound to the provided instance or one of its ancestors.
+	@within BaseInstanceFactory
+	@param instance Instance? -- Instance or descendant to resolve.
+	@return number? -- Bound entity id or nil.
+]=]
+function BaseInstanceFactory:ResolveEntity(instance: Instance?): number?
+	local cursor = instance
+	while cursor ~= nil do
+		local entity = self._instanceToEntity[cursor]
+		if entity ~= nil then
+			return entity
+		end
+		cursor = cursor.Parent
+	end
+
+	return nil
+end
+
+--[=[
 	Returns whether the entity currently has a bound instance.
 	@within BaseInstanceFactory
 	@param entityId number -- Entity id to check.

@@ -12,7 +12,7 @@ function StructureHitTargetResolverFactory.Create(dependencies: {
 				return nil
 			end
 
-			local enemyEntity = dependencies.EnemyInstanceFactory:GetEntity(model)
+			local enemyEntity = dependencies.EnemyInstanceFactory:ResolveEntity(model)
 			if enemyEntity == nil then
 				return nil
 			end

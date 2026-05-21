@@ -22,7 +22,7 @@ function StructureProjectileResolverFactory.Create(dependencies: {
 				return nil
 			end
 
-			return dependencies.EnemyInstanceFactory:GetEntity(model)
+			return dependencies.EnemyInstanceFactory:ResolveEntity(model)
 		end,
 		IsEnemyAlive = function(enemyEntity: number): boolean
 			return dependencies.EnemyEntityFactory:IsAlive(enemyEntity)
