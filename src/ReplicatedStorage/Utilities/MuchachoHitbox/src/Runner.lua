@@ -6,18 +6,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lifecycle = require(script.Parent.Lifecycle)
 local ParallelRunner = if RunService:IsServer() then require(ReplicatedStorage.Utilities.ParallelRunner) else nil
 local Query = require(script.Parent.Query)
+local TableRecycler = require(ReplicatedStorage.Utilities.TableRecycler)
 local Types = require(script.Parent.Parent.Types)
 
 type THitbox = Types.Hitbox
 type THitboxRunner = Types.HitboxRunner
-
-type TPendingParallelHitbox = {
-	Hitbox: THitbox,
-	QueryCFrame: CFrame,
-	Size: Vector3,
-	ShapeId: number,
-	FilterToken: string,
-}
+type TTableRecyclerHandle = TableRecycler.TTableRecyclerHandle
 
 type TParallelSnapshot = {
 	Hitboxes: { THitbox },
@@ -52,32 +46,49 @@ local function _CreateAsyncState()
 		InFlight = false,
 		InFlightDispatchSerial = nil,
 		InFlightHandle = nil,
+		InFlightSnapshot = nil,
 		ShouldDropInFlightResult = false,
 	}
 end
 
-local function _CreateParallelSnapshot(
-	pendingHitboxes: { TPendingParallelHitbox },
-	dispatchSerial: number
-): TParallelSnapshot
-	local snapshot: TParallelSnapshot = {
-		Hitboxes = table.create(#pendingHitboxes),
-		QueryCFrames = table.create(#pendingHitboxes),
-		Sizes = table.create(#pendingHitboxes),
-		ShapeIds = table.create(#pendingHitboxes),
-		FilterTokens = table.create(#pendingHitboxes),
-		DispatchSerial = dispatchSerial,
-	}
+local function _CreateRecycler(): TTableRecyclerHandle
+	return TableRecycler.new({
+		Strict = true,
+		DebugName = "MuchachoHitbox.Runner",
+	})
+end
 
-	for index, pendingHitbox in ipairs(pendingHitboxes) do
-		snapshot.Hitboxes[index] = pendingHitbox.Hitbox
-		snapshot.QueryCFrames[index] = pendingHitbox.QueryCFrame
-		snapshot.Sizes[index] = pendingHitbox.Size
-		snapshot.ShapeIds[index] = pendingHitbox.ShapeId
-		snapshot.FilterTokens[index] = pendingHitbox.FilterToken
-	end
+local function _AcquireArray<TValue>(runner: THitboxRunner, capacityHint: number?): { TValue }
+	return runner._tableRecycler:AcquireArray(capacityHint) :: { TValue }
+end
 
-	return snapshot
+local function _AcquireMap<TKey, TValue>(runner: THitboxRunner): { [TKey]: TValue }
+	return runner._tableRecycler:AcquireMap() :: { [TKey]: TValue }
+end
+
+local function _ReleaseArray(runner: THitboxRunner, tbl: { any })
+	local didRelease, releaseError = runner._tableRecycler:ReleaseArray(tbl)
+	assert(didRelease, releaseError)
+end
+
+local function _ReleaseMap(runner: THitboxRunner, tbl: { [any]: any })
+	local didRelease, releaseError = runner._tableRecycler:ReleaseMap(tbl)
+	assert(didRelease, releaseError)
+end
+
+local function _CreateParallelSnapshot(runner: THitboxRunner, dispatchSerial: number): TParallelSnapshot
+	local snapshot = _AcquireMap(runner) :: any
+	snapshot.Hitboxes = _AcquireArray(runner, nil)
+	snapshot.QueryCFrames = _AcquireArray(runner, nil)
+	snapshot.Sizes = _AcquireArray(runner, nil)
+	snapshot.ShapeIds = _AcquireArray(runner, nil)
+	snapshot.FilterTokens = _AcquireArray(runner, nil)
+	snapshot.DispatchSerial = dispatchSerial
+	return snapshot :: TParallelSnapshot
+end
+
+local function _ReleaseParallelSnapshot(runner: THitboxRunner, snapshot: TParallelSnapshot)
+	_ReleaseMap(runner, snapshot :: any)
 end
 
 local function _ApplySerialForSnapshot(runner: THitboxRunner, snapshot: TParallelSnapshot)
@@ -97,16 +108,18 @@ local function _ApplyCompletedResult(runner: THitboxRunner)
 
 	state.LatestCompletedResult = nil
 	if result.DispatchSerial <= state.LatestAppliedDispatchSerial then
+		_ReleaseParallelSnapshot(runner, result.Snapshot)
 		return
 	end
 
 	state.LatestAppliedDispatchSerial = result.DispatchSerial
 	if result.Err ~= nil or result.Rows == nil then
 		_ApplySerialForSnapshot(runner, result.Snapshot)
+		_ReleaseParallelSnapshot(runner, result.Snapshot)
 		return
 	end
 
-	for _, row in ipairs(result.Rows) do
+	for _, row in result.Rows do
 		local hitboxIndex = row.HitboxIndex
 		if type(hitboxIndex) ~= "number" then
 			continue
@@ -114,23 +127,26 @@ local function _ApplyCompletedResult(runner: THitboxRunner)
 
 		local hitbox = result.Snapshot.Hitboxes[hitboxIndex]
 		local queryCFrame = result.Snapshot.QueryCFrames[hitboxIndex]
-		if hitbox == nil or queryCFrame == nil or hitbox._Runner ~= runner then
+		if not hitbox or not queryCFrame or hitbox._Runner ~= runner then
 			continue
 		end
 
-		if row.HasAny == true then
+		if row.HasAny then
 			Lifecycle.RunSerialDetection(hitbox, queryCFrame)
 		else
 			Lifecycle.RunNoHitDetection(hitbox)
 		end
 	end
+
+	_ReleaseParallelSnapshot(runner, result.Snapshot)
 end
 
 local function _DispatchParallelSnapshot(runner: THitboxRunner, snapshot: TParallelSnapshot)
 	local parallelRunner = runner._parallelRunner
 	local state = runner._queryAsyncState
-	if parallelRunner == nil then
+	if not parallelRunner then
 		_ApplySerialForSnapshot(runner, snapshot)
+		_ReleaseParallelSnapshot(runner, snapshot)
 		return
 	end
 
@@ -138,6 +154,7 @@ local function _DispatchParallelSnapshot(runner: THitboxRunner, snapshot: TParal
 	state.InFlight = true
 	state.InFlightDispatchSerial = dispatchSerial
 	state.InFlightHandle = nil
+	state.InFlightSnapshot = snapshot
 	state.ShouldDropInFlightResult = false
 
 	local runResult = parallelRunner:Run({
@@ -158,7 +175,9 @@ local function _DispatchParallelSnapshot(runner: THitboxRunner, snapshot: TParal
 		state.InFlight = false
 		state.InFlightDispatchSerial = nil
 		state.InFlightHandle = nil
+		state.InFlightSnapshot = nil
 		_ApplySerialForSnapshot(runner, snapshot)
+		_ReleaseParallelSnapshot(runner, snapshot)
 		return
 	end
 
@@ -172,18 +191,21 @@ local function _DispatchParallelSnapshot(runner: THitboxRunner, snapshot: TParal
 				return
 			end
 
+			local completedSnapshot = state.InFlightSnapshot :: TParallelSnapshot
 			state.InFlight = false
 			state.InFlightDispatchSerial = nil
 			state.InFlightHandle = nil
+			state.InFlightSnapshot = nil
 			if state.ShouldDropInFlightResult then
 				state.ShouldDropInFlightResult = false
+				_ReleaseParallelSnapshot(runner, completedSnapshot)
 				return
 			end
 
 			if result.success then
 				state.LatestCompletedResult = {
 					DispatchSerial = dispatchSerial,
-					Snapshot = snapshot,
+					Snapshot = completedSnapshot,
 					Rows = result.value.Rows :: any,
 					Err = nil,
 				}
@@ -192,7 +214,7 @@ local function _DispatchParallelSnapshot(runner: THitboxRunner, snapshot: TParal
 
 			state.LatestCompletedResult = {
 				DispatchSerial = dispatchSerial,
-				Snapshot = snapshot,
+				Snapshot = completedSnapshot,
 				Rows = nil,
 				Err = result,
 			}
@@ -202,17 +224,20 @@ local function _DispatchParallelSnapshot(runner: THitboxRunner, snapshot: TParal
 				return
 			end
 
+			local completedSnapshot = state.InFlightSnapshot :: TParallelSnapshot
 			state.InFlight = false
 			state.InFlightDispatchSerial = nil
 			state.InFlightHandle = nil
+			state.InFlightSnapshot = nil
 			if state.ShouldDropInFlightResult then
 				state.ShouldDropInFlightResult = false
+				_ReleaseParallelSnapshot(runner, completedSnapshot)
 				return
 			end
 
 			state.LatestCompletedResult = {
 				DispatchSerial = dispatchSerial,
-				Snapshot = snapshot,
+				Snapshot = completedSnapshot,
 				Rows = nil,
 				Err = err,
 			}
@@ -220,7 +245,7 @@ local function _DispatchParallelSnapshot(runner: THitboxRunner, snapshot: TParal
 end
 
 local function _CreateParallelRunner()
-	if ParallelRunner == nil then
+	if not ParallelRunner then
 		return nil
 	end
 
@@ -252,6 +277,7 @@ function Runner.Create(): THitboxRunner
 	runner._destroyed = false
 	runner._parallelRunner = _CreateParallelRunner()
 	runner._queryAsyncState = _CreateAsyncState()
+	runner._tableRecycler = _CreateRecycler()
 
 	function runner:Register(hitbox: THitbox)
 		if self._destroyed then
@@ -272,8 +298,10 @@ function Runner.Create(): THitboxRunner
 
 		_ApplyCompletedResult(self)
 
-		local serialHitboxes = {}
-		local parallelHitboxes = {}
+		local serialHitboxes = _AcquireArray(self, nil)
+		local serialQueryCFrames = _AcquireArray(self, nil)
+		local nextDispatchSerial = self._queryAsyncState.NextDispatchSerial + 1
+		local snapshot = _CreateParallelSnapshot(self, nextDispatchSerial)
 
 		for hitbox in pairs(self._hitboxes) do
 			if hitbox._Runner ~= self then
@@ -284,40 +312,38 @@ function Runner.Create(): THitboxRunner
 			end
 
 			local queryCFrame = Lifecycle.ResolveStep(hitbox)
-			local parallelSnapshot = Query.BuildParallelSnapshot(hitbox, queryCFrame)
-			if parallelSnapshot == nil then
-				table.insert(serialHitboxes, {
-					Hitbox = hitbox,
-					QueryCFrame = queryCFrame,
-				})
+			local parallelSize, shapeId, filterToken = Query.BuildParallelSnapshot(hitbox, queryCFrame)
+			if not parallelSize or not shapeId or not filterToken then
+				table.insert(serialHitboxes, hitbox)
+				table.insert(serialQueryCFrames, queryCFrame)
 				continue
 			end
 
-			table.insert(parallelHitboxes, {
-				Hitbox = hitbox,
-				QueryCFrame = queryCFrame,
-				Size = parallelSnapshot.Size,
-				ShapeId = parallelSnapshot.ShapeId,
-				FilterToken = parallelSnapshot.FilterToken,
-			})
+			table.insert(snapshot.Hitboxes, hitbox)
+			table.insert(snapshot.QueryCFrames, queryCFrame)
+			table.insert(snapshot.Sizes, parallelSize)
+			table.insert(snapshot.ShapeIds, shapeId)
+			table.insert(snapshot.FilterTokens, filterToken)
 		end
 
-		for _, pendingHitbox in ipairs(serialHitboxes) do
-			if pendingHitbox.Hitbox._Runner == self then
-				Lifecycle.RunSerialDetection(pendingHitbox.Hitbox, pendingHitbox.QueryCFrame)
+		for index, hitbox in ipairs(serialHitboxes) do
+			if hitbox._Runner == self then
+				Lifecycle.RunSerialDetection(hitbox, serialQueryCFrames[index])
 			end
 		end
+		_ReleaseArray(self, serialQueryCFrames)
+		_ReleaseArray(self, serialHitboxes)
 
-		if #parallelHitboxes == 0 then
+		if #snapshot.Hitboxes == 0 then
+			_ReleaseParallelSnapshot(self, snapshot)
 			return
 		end
 
-		local nextDispatchSerial = self._queryAsyncState.NextDispatchSerial + 1
 		self._queryAsyncState.NextDispatchSerial = nextDispatchSerial
-		local snapshot = _CreateParallelSnapshot(parallelHitboxes, nextDispatchSerial)
 		if self._queryAsyncState.InFlight then
 			self._queryAsyncState.ShouldDropInFlightResult = true
 			_ApplySerialForSnapshot(self, snapshot)
+			_ReleaseParallelSnapshot(self, snapshot)
 			return
 		end
 
@@ -332,17 +358,26 @@ function Runner.Create(): THitboxRunner
 		self._destroyed = true
 		local asyncState = self._queryAsyncState
 		local inFlightHandle = asyncState.InFlightHandle
-		if inFlightHandle ~= nil then
+		if inFlightHandle then
 			inFlightHandle:Cancel()
 		end
 		asyncState.InFlight = false
 		asyncState.InFlightDispatchSerial = nil
 		asyncState.InFlightHandle = nil
+		local inFlightSnapshot = asyncState.InFlightSnapshot :: TParallelSnapshot?
+		if inFlightSnapshot then
+			_ReleaseParallelSnapshot(self, inFlightSnapshot)
+		end
+		asyncState.InFlightSnapshot = nil
 		asyncState.ShouldDropInFlightResult = false
+		local latestCompletedResult = asyncState.LatestCompletedResult :: TParallelResult?
+		if latestCompletedResult then
+			_ReleaseParallelSnapshot(self, latestCompletedResult.Snapshot)
+		end
 		asyncState.LatestCompletedResult = nil
 
 		local parallelRunner = self._parallelRunner
-		if parallelRunner ~= nil then
+		if parallelRunner then
 			parallelRunner:Destroy()
 			self._parallelRunner = nil
 		end
@@ -354,20 +389,22 @@ function Runner.Create(): THitboxRunner
 		end
 
 		table.clear(self._hitboxes)
+		local didDestroyRecycler, destroyRecyclerError = self._tableRecycler:Destroy()
+		assert(didDestroyRecycler, destroyRecyclerError)
 	end
 
 	return runner
 end
 
 function Runner.GetInternal(): THitboxRunner
-	if internalRunner == nil then
+	if not internalRunner then
 		internalRunner = Runner.Create()
 	end
 
-	if internalRunnerConnection == nil then
+	if not internalRunnerConnection then
 		internalRunnerConnection = RunService.Heartbeat:Connect(function(deltaTime: number)
 			local runner = internalRunner
-			if runner ~= nil then
+			if runner then
 				runner:Step(deltaTime)
 			end
 		end)

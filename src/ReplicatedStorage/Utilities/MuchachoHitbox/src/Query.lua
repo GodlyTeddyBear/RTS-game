@@ -56,7 +56,7 @@ local function resolveParallelSize(shapeId: number, size: Vector3 | number): Vec
 
 	if shapeId == SHAPE_BALL then
 		local radius = resolveBallRadius(size)
-		if radius == nil then
+		if not radius then
 			return nil
 		end
 
@@ -82,7 +82,7 @@ local function castQueryByShape(
 	end
 	if shapeId == SHAPE_BALL then
 		local radius = resolveBallRadius(size)
-		if radius == nil then
+		if not radius then
 			return {}
 		end
 
@@ -94,41 +94,46 @@ end
 
 function Query.CastSpatialQuery(hitbox: THitbox, hitboxCFrame: CFrame): { BasePart }
 	local shapeId = resolveShapeId(hitbox.Shape)
-	if shapeId == nil then
+	if not shapeId then
 		error("Part type: " .. tostring(hitbox.Shape) .. " isn't compatible with MuchachoHitbox")
 	end
 
-	return castQueryByShape(hitboxCFrame, hitbox.Size, shapeId, buildQueryOptionsFromOverlapParams(hitbox.OverlapParams))
+	return castQueryByShape(
+		hitboxCFrame,
+		hitbox.Size,
+		shapeId,
+		buildQueryOptionsFromOverlapParams(hitbox.OverlapParams)
+	)
 end
 
-function Query.BuildParallelSnapshot(hitbox: THitbox, hitboxCFrame: CFrame): { QueryCFrame: CFrame, Size: Vector3, ShapeId: number, FilterToken: string }?
+function Query.BuildParallelSnapshot(hitbox: THitbox, _hitboxCFrame: CFrame): (Vector3?, number?, string?)
 	local overlapParams = hitbox.OverlapParams
 	if not FilterRegistry.SupportsParallelOverlapParams(overlapParams) then
-		return nil
+		return nil, nil, nil
 	end
 
 	local shapeId = resolveShapeId(hitbox.Shape)
-	local parallelSize = if shapeId ~= nil then resolveParallelSize(shapeId, hitbox.Size) else nil
+	local parallelSize = shapeId and resolveParallelSize(shapeId, hitbox.Size) or nil
 	if shapeId == nil or parallelSize == nil then
-		return nil
+		return nil, nil, nil
 	end
 
 	local filterToken = FilterRegistry.SyncOverlapParams(hitbox.Key, overlapParams)
-	if filterToken == nil then
-		return nil
+	if not filterToken then
+		return nil, nil, nil
 	end
 
-	return {
-		QueryCFrame = hitboxCFrame,
-		Size = parallelSize,
-		ShapeId = shapeId,
-		FilterToken = filterToken,
-	}
+	return parallelSize, shapeId, filterToken
 end
 
-function Query.CastParallelPresenceQuery(queryCFrame: CFrame, size: Vector3, shapeId: number, filterToken: string): boolean
+function Query.CastParallelPresenceQuery(
+	queryCFrame: CFrame,
+	size: Vector3,
+	shapeId: number,
+	filterToken: string
+): boolean
 	local overlapParams = FilterRegistry.ResolveOverlapParams(filterToken)
-	if overlapParams == nil then
+	if not overlapParams then
 		return false
 	end
 

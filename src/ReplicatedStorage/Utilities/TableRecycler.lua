@@ -267,7 +267,7 @@ local function _CollectReleaseGraph(
 		if type(value) == "table" then
 			local childKind = KIND_BY_TABLE[value]
 			if childKind == nil then
-				return _Fail(self, "TableRecycler: nested foreign tables cannot be recycled", 2)
+				continue
 			end
 
 			if OWNER_BY_TABLE[value] ~= self then

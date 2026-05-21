@@ -7,6 +7,7 @@ local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local MuchachoHitbox = require(ReplicatedStorage.Utilities.MuchachoHitbox)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
+local TableRecycler = require(ReplicatedStorage.Utilities.TableRecycler)
 
 local HITBOX_PROFILING_ENABLED = true
 local TOUCH_SUBPROFILE_SAMPLE_RATE = 1
@@ -33,6 +34,8 @@ export type THitEntity = {
 	Kind: TEntityKind,
 	Entity: number,
 }
+
+type TTableRecyclerHandle = TableRecycler.TTableRecyclerHandle
 
 local HitboxService = {}
 HitboxService.__index = HitboxService
@@ -61,6 +64,7 @@ function HitboxService.new()
 	self._hitboxFolder = EnsureHitboxFolder()
 	self._targetResolvers = {} :: { (BasePart) -> THitEntity? }
 	self._runner = nil :: any
+	self._tableRecycler = nil :: TTableRecyclerHandle?
 	self._touchSubprofileCounter = 0
 	return self
 end
@@ -105,6 +109,38 @@ function HitboxService:_ResolveTouchedEntity(hitPart: BasePart): THitEntity?
 	end
 
 	return nil
+end
+
+function HitboxService:_GetOrCreateTableRecycler(): TTableRecyclerHandle
+	local recycler = self._tableRecycler
+	if recycler ~= nil then
+		return recycler
+	end
+
+	recycler = TableRecycler.new({
+		Strict = true,
+		DebugName = "CombatHitboxService.Temps",
+	})
+	self._tableRecycler = recycler
+	return recycler
+end
+
+function HitboxService:_AcquireTempArray<TValue>(capacityHint: number?): { TValue }
+	return self:_GetOrCreateTableRecycler():AcquireArray(capacityHint) :: { TValue }
+end
+
+function HitboxService:_AcquireTempMap<TKey, TValue>(): { [TKey]: TValue }
+	return self:_GetOrCreateTableRecycler():AcquireMap() :: { [TKey]: TValue }
+end
+
+function HitboxService:_ReleaseTempArray(tbl: { any })
+	local didRelease, releaseError = self:_GetOrCreateTableRecycler():ReleaseArray(tbl)
+	assert(didRelease, releaseError)
+end
+
+function HitboxService:_ReleaseTempMap(tbl: { [any]: any })
+	local didRelease, releaseError = self:_GetOrCreateTableRecycler():ReleaseMap(tbl)
+	assert(didRelease, releaseError)
 end
 
 function HitboxService:CreateAttackHitbox(
@@ -161,7 +197,7 @@ function HitboxService:CreateAttackHitboxForModel(
 	local janitor = Janitor.new()
 	self._janitors[handle] = janitor
 	self._hitEntities[handle] = {}
-	self._hitEntityKeys[handle] = {}
+	self._hitEntityKeys[handle] = self:_AcquireTempMap()
 
 	local onTouched = DebugPlus.wrap(touchProfileTag, function(hitPart: BasePart, _humanoid: Humanoid?)
 		local shouldSampleSubprofiles = false
@@ -215,10 +251,7 @@ function HitboxService:CreateAttackHitboxForModel(
 	end, HITBOX_PROFILING_ENABLED)
 
 	janitor:Add(hitbox, "Destroy")
-	janitor:Add(
-		hitbox.Touched:Connect(onTouched),
-		"Disconnect"
-	)
+	janitor:Add(hitbox.Touched:Connect(onTouched), "Disconnect")
 
 	hitbox:Start(self._runner)
 	closeCreateProfile()
@@ -255,6 +288,11 @@ function HitboxService:DestroyHitbox(handle: THitboxHandle)
 			end)
 		end
 
+		local hitKeyMap = self._hitEntityKeys[handle]
+		if hitKeyMap ~= nil then
+			self:_ReleaseTempMap(hitKeyMap)
+		end
+
 		self._janitors[handle] = nil
 		self._hitEntities[handle] = nil
 		self._hitEntityKeys[handle] = nil
@@ -262,7 +300,7 @@ function HitboxService:DestroyHitbox(handle: THitboxHandle)
 end
 
 function HitboxService:CleanupAll()
-	local handles = {}
+	local handles = self:_AcquireTempArray(nil)
 	for handle in self._janitors do
 		table.insert(handles, handle)
 	end
@@ -270,6 +308,8 @@ function HitboxService:CleanupAll()
 	for _, handle in ipairs(handles) do
 		self:DestroyHitbox(handle)
 	end
+
+	self:_ReleaseTempArray(handles)
 end
 
 function HitboxService:Destroy()
@@ -279,6 +319,13 @@ function HitboxService:Destroy()
 	if runner ~= nil then
 		runner:Destroy()
 		self._runner = nil
+	end
+
+	local recycler = self._tableRecycler
+	if recycler ~= nil then
+		local didDestroyRecycler, destroyRecyclerError = recycler:Destroy()
+		assert(didDestroyRecycler, destroyRecyclerError)
+		self._tableRecycler = nil
 	end
 end
 
