@@ -24,6 +24,8 @@ local StructureEntityFactory = {}
 StructureEntityFactory.__index = StructureEntityFactory
 setmetatable(StructureEntityFactory, CombatECSEntityFactory)
 
+local didWarnGetEntityByModelDeprecated = false
+
 --[=[
 	Creates a new entity factory wrapper.
 	@within StructureEntityFactory
@@ -61,6 +63,7 @@ function StructureEntityFactory:_OnInit(_registry: any, _name: string, _componen
 		"StructureEntityFactory: missing StructureComponentRegistry components"
 	)
 	self:_ConfigureSpatialComponents("ModelRefComponent", "TransformComponent")
+	self:RegisterUniqueLookupIndex("StructureId")
 end
 
 --[=[
@@ -85,22 +88,34 @@ function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord)
 		and type(structureConfig.AttackDamage) == "number"
 		and type(structureConfig.AttackCooldown) == "number"
 	then
-		self:_Set(entity, components.AttackStatsComponent, {
-			AttackRange = structureConfig.AttackRange,
-			AttackDamage = structureConfig.AttackDamage,
-		AttackCooldown = structureConfig.AttackCooldown,
-		} :: TAttackStatsComponent)
+		self:_Set(
+			entity,
+			components.AttackStatsComponent,
+			{
+				AttackRange = structureConfig.AttackRange,
+				AttackDamage = structureConfig.AttackDamage,
+				AttackCooldown = structureConfig.AttackCooldown,
+			} :: TAttackStatsComponent
+		)
 
 		-- Start ready so the first acquired target can be attacked immediately.
-		self:_Set(entity, components.AttackCooldownComponent, {
-			Elapsed = structureConfig.AttackCooldown,
-		} :: TAttackCooldownComponent)
+		self:_Set(
+			entity,
+			components.AttackCooldownComponent,
+			{
+				Elapsed = structureConfig.AttackCooldown,
+			} :: TAttackCooldownComponent
+		)
 	end
 
-	self:_Set(entity, components.HealthComponent, {
-		Current = structureConfig.MaxHealth,
-		Max = structureConfig.MaxHealth,
-	} :: THealthComponent)
+	self:_Set(
+		entity,
+		components.HealthComponent,
+		{
+			Current = structureConfig.MaxHealth,
+			Max = structureConfig.MaxHealth,
+		} :: THealthComponent
+	)
 
 	-- Store a nil target until the targeting system resolves a nearby enemy.
 	self:_Set(entity, components.TargetComponent, {
@@ -110,17 +125,26 @@ function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord)
 	self:_Set(entity, components.CombatActionComponent, self:BuildDefaultCombatAction())
 
 	-- Persist the runtime instance id and world-space anchor for targeting queries.
-	self:_Set(entity, components.InstanceRefComponent, {
-		InstanceId = record.InstanceId,
-		WorldPos = record.WorldPos,
-	} :: TInstanceRefComponent)
+	self:_Set(
+		entity,
+		components.InstanceRefComponent,
+		{
+			InstanceId = record.InstanceId,
+			WorldPos = record.WorldPos,
+		} :: TInstanceRefComponent
+	)
 	self:SetTransformCFrame(entity, CFrame.new(record.WorldPos))
 
 	-- Keep the canonical identity separate from the runtime instance ref.
-	self:_Set(entity, components.IdentityComponent, {
-		StructureId = structureId,
-		StructureType = record.StructureType,
-	} :: TIdentityComponent)
+	self:_Set(
+		entity,
+		components.IdentityComponent,
+		{
+			StructureId = structureId,
+			StructureType = record.StructureType,
+		} :: TIdentityComponent
+	)
+	self:SetUniqueLookup("StructureId", structureId, entity)
 
 	-- Mark the entity active so queries and systems can pick it up this frame.
 	self:_Add(entity, components.ActiveTag)
@@ -252,9 +276,13 @@ function StructureEntityFactory:SetCooldownElapsed(entity: number?, elapsed: num
 
 	local components = self:GetComponentsOrThrow()
 
-	self:_Set(entity, components.AttackCooldownComponent, {
-		Elapsed = elapsed,
-	} :: TAttackCooldownComponent)
+	self:_Set(
+		entity,
+		components.AttackCooldownComponent,
+		{
+			Elapsed = elapsed,
+		} :: TAttackCooldownComponent
+	)
 	self:MarkDirty(entity)
 end
 
@@ -267,10 +295,14 @@ function StructureEntityFactory:ApplyDamage(entity: number, amount: number): boo
 	local nextHp = math.max(0, health.Current - amount)
 	local components = self:GetComponentsOrThrow()
 
-	self:_Set(entity, components.HealthComponent, {
-		Current = nextHp,
-		Max = health.Max,
-	} :: THealthComponent)
+	self:_Set(
+		entity,
+		components.HealthComponent,
+		{
+			Current = nextHp,
+			Max = health.Max,
+		} :: THealthComponent
+	)
 	self:MarkDirty(entity)
 
 	return nextHp <= 0
@@ -334,7 +366,15 @@ function StructureEntityFactory:GetModelRef(entity: number?): { Model: Model }?
 	return CombatECSEntityFactory.GetModelRef(self, entity)
 end
 
+---@deprecated prefer StructureInstanceFactory:GetEntity(model) for live runtime lookups.
 function StructureEntityFactory:GetEntityByModel(model: Model): number?
+	if not didWarnGetEntityByModelDeprecated then
+		didWarnGetEntityByModelDeprecated = true
+		warn(
+			"[StructureEntityFactory] GetEntityByModel is deprecated; prefer StructureInstanceFactory:GetEntity(model) for live runtime lookups."
+		)
+	end
+
 	for _, entity in ipairs(self:QueryActiveEntities()) do
 		local modelRef = self:GetModelRef(entity)
 		if modelRef ~= nil and modelRef.Model == model then
@@ -346,16 +386,10 @@ function StructureEntityFactory:GetEntityByModel(model: Model): number?
 end
 
 function StructureEntityFactory:GetEntityByStructureId(structureId: string): number?
-	for _, entity in ipairs(self:QueryActiveEntities()) do
-		local identity = self:GetIdentity(entity)
-		if identity ~= nil and identity.StructureId == structureId then
-			return entity
-		end
-	end
-
-	return nil
+	return self:FindEntityByUniqueLookup("StructureId", structureId)
 end
 
+---@deprecated prefer runtime association caches instead of entity-factory instance-id scans.
 function StructureEntityFactory:GetEntityByInstanceId(instanceId: number): number?
 	for _, entity in ipairs(self:QueryActiveEntities()) do
 		local instanceRef = self:GetInstanceRef(entity)
@@ -417,6 +451,7 @@ function StructureEntityFactory:DeleteEntity(entity: number?)
 		self:_Remove(entity, components.ActiveTag)
 	end
 
+	self:ClearUniqueLookup("StructureId", entity)
 	self:MarkForDestruction(entity)
 end
 

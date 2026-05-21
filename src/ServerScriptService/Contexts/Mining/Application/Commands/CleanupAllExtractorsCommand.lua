@@ -37,6 +37,7 @@ end
 function CleanupAllExtractorsCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_factory = "MiningEntityFactory",
+		_instanceFactory = "MiningInstanceFactory",
 	})
 end
 
@@ -47,6 +48,7 @@ end
     @return Result.Result<boolean> -- Whether the cleanup completed.
 ]=]
 function CleanupAllExtractorsCommand:Execute(): Result.Result<boolean>
+	self._instanceFactory:Destroy()
 	self._factory:DeleteAll()
 	self._factory:FlushPendingDeletes()
 	return Ok(true)

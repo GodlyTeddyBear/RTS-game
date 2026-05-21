@@ -214,6 +214,10 @@ function BaseContextService:GetEntityFactory(): Result.Result<any>
 	return Ok(self._entityFactory)
 end
 
+function BaseContextService:GetInstanceFactory(): Result.Result<any>
+	return Ok(self._instanceFactory)
+end
+
 --[=[
     Run base cleanup before tearing down the wrapped BaseContext.
     @within BaseContext

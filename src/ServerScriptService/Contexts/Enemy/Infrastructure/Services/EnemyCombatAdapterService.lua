@@ -186,11 +186,15 @@ function EnemyCombatAdapterService:Start(registry: any, _name: string)
 	self._baseContext = registry:Get("BaseContext")
 	self._worldContext = registry:Get("WorldContext")
 	self._structureEntityFactory = self._structureContext:GetEntityFactory().value
+	self._structureInstanceFactory = self._structureContext:GetInstanceFactory().value
 	self._baseEntityFactory = self._baseContext:GetEntityFactory().value
+	self._baseInstanceFactory = self._baseContext:GetInstanceFactory().value
 	self._combatServices = self._combatContext:GetCombatRuntimeServices().value
 	self._targetingResolver = EnemyTargetingResolverFactory.Create({
 		BaseEntityFactory = self._baseEntityFactory,
 		StructureEntityFactory = self._structureEntityFactory,
+		BaseInstanceFactory = self._baseInstanceFactory,
+		StructureInstanceFactory = self._structureInstanceFactory,
 	})
 	self._factsResolver = EnemyFactsResolverFactory.Create({
 		EnemyEntityFactory = self._entityFactory,
@@ -206,7 +210,7 @@ function EnemyCombatAdapterService:Start(registry: any, _name: string)
 		EnemyEntityFactory = self._entityFactory,
 	})
 	self._hitboxProxyResolver = EnemyHitboxProxyResolverFactory.Create({
-		EnemyEntityFactory = self._entityFactory,
+		EnemyInstanceFactory = self._instanceFactory,
 		HitboxService = self._combatServices.HitboxService,
 	})
 	self._goalAssignmentResolver = EnemyGoalAssignmentResolverFactory.Create({
@@ -512,14 +516,40 @@ function EnemyCombatAdapterService:_ConfigureCombatServices()
 
 	-- Install shared enemy target resolution before any combat tick asks for hit validation.
 	local hitTargetResolver = EnemyHitTargetResolverFactory.Create({
-		BaseEntityFactory = self._baseEntityFactory,
-		StructureEntityFactory = self._structureEntityFactory,
+		BaseInstanceFactory = self._baseInstanceFactory,
+		StructureInstanceFactory = self._structureInstanceFactory,
 	})
 
 	self._combatServices.HitboxService:RegisterTargetResolver(function(hitPart: BasePart): any?
 		return hitTargetResolver.ResolveHitTarget(hitPart)
 	end)
+	self._combatServices.HitboxService:RegisterWhitelistResolver("Enemy", function(
+		_attackerEntity: number,
+		_attackerKind: any,
+		attackerModel: Model?
+	): { Instance }
+		local whitelistInstances = {} :: { Instance }
+
+		for _, structureEntity in ipairs(self._structureEntityFactory:QueryActiveEntities()) do
+			local structureModel = self._structureInstanceFactory:GetInstance(structureEntity)
+			if structureModel ~= nil and structureModel.Parent ~= nil and structureModel ~= attackerModel then
+				table.insert(whitelistInstances, structureModel)
+			end
+		end
+
+		local baseEntity = self._baseEntityFactory:GetBaseEntity()
+		if baseEntity ~= nil and self._baseEntityFactory:IsActive() then
+			local baseInstance = self._baseInstanceFactory:GetBaseModel(baseEntity)
+				or self._baseInstanceFactory:GetBaseInstance(baseEntity)
+			if baseInstance ~= nil and baseInstance.Parent ~= nil and baseInstance ~= attackerModel then
+				table.insert(whitelistInstances, baseInstance)
+			end
+		end
+
+		return whitelistInstances
+	end)
 	self._combatServices.MovementService:ConfigureEnemyEntityFactory(self._entityFactory)
+	self._combatServices.MovementService:ConfigureEnemyInstanceFactory(self._instanceFactory)
 	self._combatServices.StatusService:ConfigureEnemyEntityFactory(self._entityFactory)
 	self._combatServices.MovementService:ConfigureLockOnService(self._combatServices.LockOnService)
 	self._combatServices.MovementService:ConfigureFlowfieldDebugRenderer(function(
@@ -532,8 +562,11 @@ function EnemyCombatAdapterService:_ConfigureCombatServices()
 	self._combatServices.MovementService:ConfigureFastFlow(nil, nil)
 	self._combatServices.LockOnService:ConfigureFactories(
 		self._entityFactory,
+		self._instanceFactory,
 		self._structureEntityFactory,
-		self._baseEntityFactory
+		self._structureInstanceFactory,
+		self._baseEntityFactory,
+		self._baseInstanceFactory
 	)
 	self._combatServices.CombatHitResolutionService:ConfigureEnemyMeleeResolver(
 		EnemyMeleeResolverFactory.Create({

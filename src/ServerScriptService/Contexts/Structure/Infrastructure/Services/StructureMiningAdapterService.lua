@@ -56,6 +56,7 @@ function StructureMiningAdapterService.new()
 	local self = setmetatable({}, StructureMiningAdapterService)
 	self._runtimeOwner = nil
 	self._pendingStructureEntitiesByInstanceId = {}
+	self._miningEntitiesByInstanceId = {}
 	self._instanceIdsByEntity = {}
 	self._registeredActorHandlesByEntity = {}
 	self._miningEntityFactory = nil
@@ -149,7 +150,6 @@ function StructureMiningAdapterService:ResolvePendingActor(instanceId: number): 
 		end
 
 		local structureEntity = self._pendingStructureEntitiesByInstanceId[instanceId]
-			or self._entityFactory:GetEntityByInstanceId(instanceId)
 		if type(structureEntity) ~= "number" or not self:_IsStructureEntityActive(structureEntity) then
 			return Result.Ok(false)
 		end
@@ -164,10 +164,18 @@ function StructureMiningAdapterService:ResolvePendingActor(instanceId: number): 
 			return refreshResult
 		end
 
-		if self._miningEntityFactory:FindExtractorByInstanceId(instanceId) == nil then
+		local miningEntityResult = self._miningContext:GetExtractorEntityByInstanceId(instanceId)
+		if not miningEntityResult.success then
+			return miningEntityResult
+		end
+
+		local miningEntity = miningEntityResult.value
+		if type(miningEntity) ~= "number" then
 			self._pendingStructureEntitiesByInstanceId[instanceId] = structureEntity
 			return Result.Ok(false)
 		end
+
+		self._miningEntitiesByInstanceId[instanceId] = miningEntity
 
 		local runtimeProfile = StructureRuntimeProfiles.GetByVariant("Extract")
 		local actorHandle = self:_BuildActorHandle(structureEntity)
@@ -198,6 +206,7 @@ function StructureMiningAdapterService:ResolvePendingActor(instanceId: number): 
 					self._registeredActorHandlesByEntity[structureEntity] = nil
 					self._instanceIdsByEntity[structureEntity] = nil
 					self._pendingStructureEntitiesByInstanceId[instanceId] = nil
+					self._miningEntitiesByInstanceId[instanceId] = nil
 					if self:_IsStructureEntityActive(structureEntity) then
 						self._entityFactory:ClearAction(structureEntity)
 					end
@@ -227,6 +236,7 @@ function StructureMiningAdapterService:UnregisterActor(entity: number): Result.R
 
 		if type(instanceId) == "number" then
 			self._pendingStructureEntitiesByInstanceId[instanceId] = nil
+			self._miningEntitiesByInstanceId[instanceId] = nil
 		end
 
 		if actorHandle == nil then
@@ -290,6 +300,9 @@ function StructureMiningAdapterService:_RefreshMiningDependencies(): Result.Resu
 	self._miningEntityFactory = miningEntityFactoryResult.value
 	self._extractorMiningSystem = extractorMiningSystemResult.value
 	self._miningProxyResolver = StructureMiningProxyResolverFactory.Create({
+		ResolveMiningEntityByInstanceId = function(resolvedInstanceId: number): number?
+			return self._miningEntitiesByInstanceId[resolvedInstanceId]
+		end,
 		MiningEntityFactory = self._miningEntityFactory,
 		ExtractorMiningSystem = self._extractorMiningSystem,
 	})
@@ -311,7 +324,7 @@ function StructureMiningAdapterService:_IsMiningEntityActive(instanceId: number)
 		return false
 	end
 
-	local miningEntity = self._miningEntityFactory:FindExtractorByInstanceId(instanceId)
+	local miningEntity = self._miningEntitiesByInstanceId[instanceId]
 	return self._miningEntityFactory:IsActive(miningEntity)
 end
 

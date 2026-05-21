@@ -52,6 +52,7 @@ function MiningEntityFactory:_OnInit(_registry: any, _name: string, _componentRe
 			and self._components.ResourceNodeTag ~= nil,
 		"MiningEntityFactory: missing MiningComponentRegistry components"
 	)
+	self:RegisterBucketLookupIndex("ResourceNodeType")
 end
 
 -- Creates a mining extractor entity from the supplied record.
@@ -108,6 +109,7 @@ function MiningEntityFactory:CreateResourceNode(record: TResourceNodeRecord): nu
 	} :: TNodeInstanceComponent)
 
 	self:_Add(entity, components.ResourceNodeTag)
+	self:SetBucketLookup("ResourceNodeType", record.ResourceType, entity)
 	return entity
 end
 
@@ -183,6 +185,7 @@ function MiningEntityFactory:GetInstanceRef(entity: number): TInstanceRefCompone
 	return self:_Get(entity, components.InstanceRefComponent)
 end
 
+---@deprecated prefer explicit runtime association caches instead of entity-factory instance-id scans.
 function MiningEntityFactory:FindExtractorByInstanceId(instanceId: number): number?
 	for _, entity in ipairs(self:QueryActiveEntities()) do
 		local instanceRef = self:GetInstanceRef(entity)
@@ -247,14 +250,7 @@ end
     @return { number } -- The matching resource-node entity ids.
 ]=]
 function MiningEntityFactory:QueryResourceNodesByType(resourceType: string): { number }
-	local matches = {}
-	for _, entity in ipairs(self:QueryResourceNodes()) do
-		local resourceNode = self:GetResourceNode(entity)
-		if resourceNode ~= nil and resourceNode.ResourceType == resourceType then
-			table.insert(matches, entity)
-		end
-	end
-	return matches
+	return self:QueryBucketLookup("ResourceNodeType", resourceType)
 end
 
 -- Finds a resource-node entity by its backing instance, if one is registered.
@@ -264,6 +260,7 @@ end
     @param instance BasePart -- The backing resource part.
     @return number? -- The matching entity id, if present.
 ]=]
+---@deprecated prefer MiningInstanceFactory:GetEntity(instance) for runtime resource-node lookups.
 function MiningEntityFactory:FindResourceNodeByInstance(instance: BasePart): number?
 	for _, entity in ipairs(self:QueryResourceNodes()) do
 		local nodeInstance = self:GetNodeInstance(entity)
@@ -293,6 +290,7 @@ function MiningEntityFactory:DeleteEntity(entity: number?)
 
 	if self:_Has(entity, components.ResourceNodeTag) then
 		self:_Remove(entity, components.ResourceNodeTag)
+		self:ClearBucketLookup("ResourceNodeType", entity)
 	end
 
 	self:MarkForDestruction(entity)

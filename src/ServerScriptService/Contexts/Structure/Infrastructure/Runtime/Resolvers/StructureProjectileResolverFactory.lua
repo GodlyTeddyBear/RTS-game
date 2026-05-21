@@ -3,15 +3,15 @@
 local StructureProjectileResolverFactory = {}
 
 function StructureProjectileResolverFactory.Create(dependencies: {
-	StructureEntityFactory: any,
+	StructureInstanceFactory: any,
 	EnemyContext: any,
 	EnemyEntityFactory: any,
 	EnemyInstanceFactory: any,
 }): any
 	return table.freeze({
 		ResolveStructureModel = function(structureEntity: number): Model?
-			local modelRef = dependencies.StructureEntityFactory:GetModelRef(structureEntity)
-			return if modelRef ~= nil then modelRef.Model else nil
+			local instance = dependencies.StructureInstanceFactory:GetInstance(structureEntity)
+			return if instance ~= nil and instance:IsA("Model") then instance else nil
 		end,
 		ResolveEnemyCFrame = function(enemyEntity: number): CFrame?
 			return dependencies.EnemyEntityFactory:GetEntityCFrame(enemyEntity)

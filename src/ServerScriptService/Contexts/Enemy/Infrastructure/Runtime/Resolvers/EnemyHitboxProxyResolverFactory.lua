@@ -7,15 +7,14 @@ local HitboxConfig = require(ReplicatedStorage.Contexts.Combat.Config.HitboxConf
 local EnemyHitboxProxyResolverFactory = {}
 
 function EnemyHitboxProxyResolverFactory.Create(dependencies: {
-	EnemyEntityFactory: any,
+	EnemyInstanceFactory: any,
 	HitboxService: any,
 }): any
 	return table.freeze({
 		CreateProxy = function(entity: number): any
 			return {
 				CreateAttackHitbox = function(_proxy: any, _runtimeId: number, attackerKind: any, config: any)
-					local modelRef = dependencies.EnemyEntityFactory:GetModelRef(entity)
-					local model = if modelRef ~= nil then modelRef.Model else nil
+					local model = dependencies.EnemyInstanceFactory:GetInstance(entity)
 					return dependencies.HitboxService:CreateAttackHitboxForModel(
 						entity,
 						attackerKind,

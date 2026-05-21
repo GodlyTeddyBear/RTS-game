@@ -118,9 +118,11 @@ function StructureCombatAdapterService:Start(registry: any, _name: string)
 	self._enemyContext = registry:Get("EnemyContext")
 	self._enemyEntityFactory = self._enemyContext:GetEntityFactory().value
 	self._enemyInstanceFactory = self._enemyContext:GetInstanceFactory().value
+	self._instanceFactory = registry:Get("StructureInstanceFactory")
 	self._combatServices = self._combatContext:GetCombatRuntimeServices().value
 	self._targetingResolver = StructureTargetingResolverFactory.Create({
 		EnemyEntityFactory = self._enemyEntityFactory,
+		EnemyInstanceFactory = self._enemyInstanceFactory,
 	})
 	self._factsResolver = StructureFactsResolverFactory.Create({
 		StructureEntityFactory = self._entityFactory,
@@ -296,11 +298,27 @@ function StructureCombatAdapterService:_ConfigureCombatServices()
 	self._combatServices.HitboxService:RegisterTargetResolver(function(hitPart: BasePart): any?
 		return hitTargetResolver.ResolveHitTarget(hitPart)
 	end)
+	self._combatServices.HitboxService:RegisterWhitelistResolver("Structure", function(
+		_attackerEntity: number,
+		_attackerKind: any,
+		attackerModel: Model?
+	): { Instance }
+		local whitelistInstances = {} :: { Instance }
+
+		for _, enemyEntity in ipairs(self._enemyEntityFactory:QueryAliveEntities()) do
+			local enemyModel = self._enemyInstanceFactory:GetInstance(enemyEntity)
+			if enemyModel ~= nil and enemyModel.Parent ~= nil and enemyModel ~= attackerModel then
+				table.insert(whitelistInstances, enemyModel)
+			end
+		end
+
+		return whitelistInstances
+	end)
 
 	-- Wire the projectile resolver to enemy and structure contexts so attacks can resolve live targets.
 	self._combatServices.ProjectileService:ConfigureStructureBulletResolver(
 		StructureProjectileResolverFactory.Create({
-			StructureEntityFactory = self._entityFactory,
+			StructureInstanceFactory = self._instanceFactory,
 			EnemyContext = self._enemyContext,
 			EnemyEntityFactory = self._enemyEntityFactory,
 			EnemyInstanceFactory = self._enemyInstanceFactory,

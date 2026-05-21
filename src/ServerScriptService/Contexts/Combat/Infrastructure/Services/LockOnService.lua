@@ -41,10 +41,20 @@ end
 function LockOnService:Start()
 end
 
-function LockOnService:ConfigureFactories(enemyEntityFactory: any, structureEntityFactory: any, baseEntityFactory: any)
+function LockOnService:ConfigureFactories(
+	enemyEntityFactory: any,
+	enemyInstanceFactory: any,
+	structureEntityFactory: any,
+	structureInstanceFactory: any,
+	baseEntityFactory: any,
+	baseInstanceFactory: any
+)
 	self._enemyEntityFactory = enemyEntityFactory
+	self._enemyInstanceFactory = enemyInstanceFactory
 	self._structureEntityFactory = structureEntityFactory
+	self._structureInstanceFactory = structureInstanceFactory
 	self._baseEntityFactory = baseEntityFactory
+	self._baseInstanceFactory = baseInstanceFactory
 end
 
 function LockOnService:SetBoidsFacingFlatForward(entity: number, flatForward: Vector3?)
@@ -72,8 +82,7 @@ local function _setHumanoidAutoRotate(humanoid: Humanoid?, enabled: boolean)
 end
 
 function LockOnService:_GetHumanoid(entity: number): Humanoid?
-	local modelRef = self._enemyEntityFactory:GetModelRef(entity)
-	local model = if modelRef ~= nil then modelRef.Model else nil
+	local model = if self._enemyInstanceFactory ~= nil then self._enemyInstanceFactory:GetInstance(entity) else nil
 	return if model ~= nil then model:FindFirstChildWhichIsA("Humanoid") else nil
 end
 
@@ -88,12 +97,12 @@ function LockOnService:AttachConstraint(entity: number)
 		return
 	end
 
-	local modelRef = self._enemyEntityFactory:GetModelRef(entity)
-	if modelRef == nil or modelRef.Model == nil then
+	local model = if self._enemyInstanceFactory ~= nil then self._enemyInstanceFactory:GetInstance(entity) else nil
+	if model == nil or not model:IsA("Model") then
 		return
 	end
 
-	local primaryPart = modelRef.Model.PrimaryPart
+	local primaryPart = model.PrimaryPart
 	if primaryPart == nil then
 		return
 	end
@@ -207,8 +216,27 @@ function LockOnService:UpdateAll(entities: { number })
 				continue
 			end
 
-			local targetCFrame = self._baseEntityFactory:GetTargetCFrame()
-			targetPosition = if targetCFrame then targetCFrame.Position else nil
+			local baseEntity = self._baseEntityFactory:GetBaseEntity()
+			if baseEntity == nil or self._baseInstanceFactory == nil then
+				constraint.Enabled = false
+				_setHumanoidAutoRotate(humanoid, true)
+				continue
+			end
+
+			local baseAnchor = self._baseInstanceFactory:GetBaseAnchor(baseEntity)
+			if baseAnchor ~= nil then
+				targetPosition = baseAnchor.Position
+			else
+				local baseInstance = self._baseInstanceFactory:GetBaseInstance(baseEntity)
+				if baseInstance ~= nil then
+					if baseInstance:IsA("BasePart") then
+						targetPosition = baseInstance.Position
+					else
+						local baseModel = self._baseInstanceFactory:GetBaseModel(baseEntity)
+						targetPosition = if baseModel ~= nil then baseModel:GetPivot().Position else nil
+					end
+				end
+			end
 		elseif targetKind == "Structure" then
 			if targetEntity == nil then
 				constraint.Enabled = false
@@ -220,7 +248,14 @@ function LockOnService:UpdateAll(entities: { number })
 				_setHumanoidAutoRotate(humanoid, true)
 				continue
 			end
-			targetPosition = self._structureEntityFactory:GetPosition(targetEntity)
+			local structureModel = if self._structureInstanceFactory ~= nil
+				then self._structureInstanceFactory:GetInstance(targetEntity)
+				else nil
+			if structureModel ~= nil and structureModel:IsA("Model") then
+				targetPosition = structureModel:GetPivot().Position
+			else
+				targetPosition = self._structureEntityFactory:GetPosition(targetEntity)
+			end
 		elseif targetKind == "Enemy" then
 			if targetEntity == nil then
 				constraint.Enabled = false

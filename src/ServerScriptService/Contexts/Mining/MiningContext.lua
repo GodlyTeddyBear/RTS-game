@@ -25,6 +25,7 @@ local MiningEntityFactory = require(script.Parent.Infrastructure.ECS.MiningEntit
 local MiningActorRegistryService = require(script.Parent.Infrastructure.Services.MiningActorRegistryService)
 local MiningBehaviorRuntimeService = require(script.Parent.Infrastructure.Services.MiningBehaviorRuntimeService)
 local ExtractorMiningSystem = require(script.Parent.Infrastructure.Services.ExtractorMiningSystem)
+local MiningInstanceFactory = require(script.Parent.Infrastructure.Services.MiningInstanceFactory)
 local ResourceNodeRegistryService = require(script.Parent.Infrastructure.Services.ResourceNodeRegistryService)
 local ResourceGatherInteractionService = require(script.Parent.Infrastructure.Services.ResourceGatherInteractionService)
 local RegisterExtractorCommand = require(script.Parent.Application.Commands.RegisterExtractorCommand)
@@ -50,6 +51,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "MiningEntityFactory",
 		Module = MiningEntityFactory,
 		CacheAs = "_entityFactory",
+	},
+	{
+		Name = "MiningInstanceFactory",
+		Module = MiningInstanceFactory,
+		CacheAs = "_instanceFactory",
 	},
 	{
 		Name = "MiningActorRegistryService",
@@ -128,6 +134,7 @@ local MiningContext = Knit.CreateService({
 			{ Field = "_structurePlacedConnection", Method = "Disconnect" },
 			{ Field = "_runStateChangedConnection", Method = "Disconnect" },
 			{ Field = "_resourceNodeClickedConnection", Method = "Disconnect" },
+			{ Field = "_instanceFactory", Method = "Destroy" },
 			{ Field = "_resourceGatherInteractionService", Method = "Destroy" },
 		},
 	},
@@ -147,6 +154,7 @@ function MiningContext:KnitInit()
 	self._runStateChangedConnection = nil :: RBXScriptConnection?
 	self._resourceNodeClickedConnection = nil :: RBXScriptConnection?
 	self._behaviorTickId = 0
+	self._extractorEntitiesByInstanceId = {} :: { [number]: number }
 end
 
 --[=[
@@ -267,6 +275,8 @@ function MiningContext:_RegisterExtractor(record: StructureRecord): Result.Resul
 			return registerResult
 		end
 
+		self._extractorEntitiesByInstanceId[record.InstanceId] = registerResult.value
+
 		local resolveResult = self._structureContext:ResolveMiningExtractorActor(record.InstanceId)
 		if not resolveResult.success then
 			return resolveResult
@@ -278,6 +288,7 @@ end
 
 function MiningContext:_CleanupAll(): Result.Result<boolean>
 	return Catch(function()
+		table.clear(self._extractorEntitiesByInstanceId)
 		return self._cleanupAllExtractorsCommand:Execute()
 	end, "Mining:CleanupAll")
 end
@@ -339,6 +350,14 @@ end
 
 function MiningContext:GetEntityFactory(): Result.Result<any>
 	return Result.Ok(self._entityFactory)
+end
+
+function MiningContext:GetInstanceFactory(): Result.Result<any>
+	return Result.Ok(self._instanceFactory)
+end
+
+function MiningContext:GetExtractorEntityByInstanceId(instanceId: number): Result.Result<number?>
+	return Result.Ok(self._extractorEntitiesByInstanceId[instanceId])
 end
 
 function MiningContext:GetExtractorMiningSystem(): Result.Result<any>

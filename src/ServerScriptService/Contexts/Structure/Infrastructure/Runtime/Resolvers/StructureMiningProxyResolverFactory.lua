@@ -3,6 +3,7 @@
 local StructureMiningProxyResolverFactory = {}
 
 function StructureMiningProxyResolverFactory.Create(dependencies: {
+	ResolveMiningEntityByInstanceId: (instanceId: number) -> number?,
 	MiningEntityFactory: any,
 	ExtractorMiningSystem: any,
 }): any
@@ -10,11 +11,11 @@ function StructureMiningProxyResolverFactory.Create(dependencies: {
 		CreateProxy = function(instanceId: number): any
 			return table.freeze({
 				IsActive = function(_self: any): boolean
-					local miningEntity = dependencies.MiningEntityFactory:FindExtractorByInstanceId(instanceId)
+					local miningEntity = dependencies.ResolveMiningEntityByInstanceId(instanceId)
 					return dependencies.MiningEntityFactory:IsActive(miningEntity)
 				end,
 				Advance = function(_self: any, dt: number): boolean
-					local miningEntity = dependencies.MiningEntityFactory:FindExtractorByInstanceId(instanceId)
+					local miningEntity = dependencies.ResolveMiningEntityByInstanceId(instanceId)
 					if not dependencies.MiningEntityFactory:IsActive(miningEntity) then
 						return false
 					end

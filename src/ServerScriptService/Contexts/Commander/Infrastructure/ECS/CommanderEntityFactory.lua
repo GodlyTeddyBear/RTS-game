@@ -41,10 +41,7 @@ local function _cloneCooldowns(source: CooldownState): CooldownState
 end
 
 function CommanderEntityFactory.new()
-	local self = setmetatable(BaseECSEntityFactory.new("Commander"), CommanderEntityFactory)
-	self._entityByUserId = {} :: { [number]: number }
-	self._userIdByEntity = {} :: { [number]: number }
-	return self
+	return setmetatable(BaseECSEntityFactory.new("Commander"), CommanderEntityFactory)
 end
 
 function CommanderEntityFactory:_GetComponentRegistryName(): string
@@ -60,20 +57,20 @@ function CommanderEntityFactory:_OnInit(_registry: any, _name: string, _componen
 			and self._components.ActiveTag ~= nil,
 		"CommanderEntityFactory: missing CommanderComponentRegistry components"
 	)
+	self:RegisterUniqueLookupIndex("UserId")
 end
 
 function CommanderEntityFactory:CreateOrResetCommander(userId: number, maxHp: number): number
 	self:RequireReady()
 
-	local entity = self._entityByUserId[userId]
+	local entity = self:GetEntityByUserId(userId)
 	if entity == nil then
 		entity = self:_CreateEntity()
-		self._entityByUserId[userId] = entity
-		self._userIdByEntity[entity] = userId
 		self:_Set(entity, self._components.IdentityComponent, {
 			UserId = userId,
 		} :: IdentityComponent)
 	end
+	self:SetUniqueLookup("UserId", userId, entity)
 
 	self:_Set(entity, self._components.HealthComponent, {
 		Hp = maxHp,
@@ -89,17 +86,17 @@ end
 
 function CommanderEntityFactory:GetEntityByUserId(userId: number): number?
 	self:RequireReady()
-	return self._entityByUserId[userId]
+	return self:FindEntityByUniqueLookup("UserId", userId)
 end
 
 function CommanderEntityFactory:GetUserIdByEntity(entity: number): number?
 	self:RequireReady()
-	return self._userIdByEntity[entity]
+	return self:GetUniqueLookupKey("UserId", entity)
 end
 
 function CommanderEntityFactory:GetHealth(userId: number): HealthComponent?
 	self:RequireReady()
-	local entity = self._entityByUserId[userId]
+	local entity = self:GetEntityByUserId(userId)
 	if entity == nil then
 		return nil
 	end
@@ -108,7 +105,7 @@ end
 
 function CommanderEntityFactory:SetHP(userId: number, hp: number): number?
 	self:RequireReady()
-	local entity = self._entityByUserId[userId]
+	local entity = self:GetEntityByUserId(userId)
 	if entity == nil then
 		return nil
 	end
@@ -128,7 +125,7 @@ end
 
 function CommanderEntityFactory:ApplyDamage(userId: number, amount: number): number?
 	self:RequireReady()
-	local entity = self._entityByUserId[userId]
+	local entity = self:GetEntityByUserId(userId)
 	if entity == nil then
 		return nil
 	end
@@ -149,7 +146,7 @@ end
 
 function CommanderEntityFactory:GetCooldowns(userId: number): CooldownState?
 	self:RequireReady()
-	local entity = self._entityByUserId[userId]
+	local entity = self:GetEntityByUserId(userId)
 	if entity == nil then
 		return nil
 	end
@@ -164,7 +161,7 @@ end
 
 function CommanderEntityFactory:SetCooldown(userId: number, slotKey: SlotKey, duration: number)
 	self:RequireReady()
-	local entity = self._entityByUserId[userId]
+	local entity = self:GetEntityByUserId(userId)
 	if entity == nil then
 		return
 	end
@@ -183,7 +180,7 @@ end
 
 function CommanderEntityFactory:ClearCooldown(userId: number, slotKey: SlotKey)
 	self:RequireReady()
-	local entity = self._entityByUserId[userId]
+	local entity = self:GetEntityByUserId(userId)
 	if entity == nil then
 		return
 	end
@@ -218,7 +215,7 @@ end
 
 function CommanderEntityFactory:RemoveCommander(userId: number)
 	self:RequireReady()
-	local entity = self._entityByUserId[userId]
+	local entity = self:GetEntityByUserId(userId)
 	if entity == nil then
 		return
 	end
@@ -227,8 +224,7 @@ function CommanderEntityFactory:RemoveCommander(userId: number)
 		self:_Remove(entity, self._components.ActiveTag)
 	end
 
-	self._entityByUserId[userId] = nil
-	self._userIdByEntity[entity] = nil
+	self:ClearUniqueLookup("UserId", entity)
 	self:MarkForDestruction(entity)
 end
 

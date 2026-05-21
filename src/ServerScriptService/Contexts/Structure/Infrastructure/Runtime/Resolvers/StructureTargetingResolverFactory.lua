@@ -9,6 +9,7 @@ local StructureTargetingResolverFactory = {}
 
 function StructureTargetingResolverFactory.Create(dependencies: {
 	EnemyEntityFactory: any,
+	EnemyInstanceFactory: any,
 }): any
 	local resolver = {}
 
@@ -18,8 +19,8 @@ function StructureTargetingResolverFactory.Create(dependencies: {
 			end
 
 			local targetPosition = resolver.ResolveEnemyTargetPosition(enemyEntity)
-			local modelRef = dependencies.EnemyEntityFactory:GetModelRef(enemyEntity)
-			if targetPosition == nil or modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
+			local enemyModel = dependencies.EnemyInstanceFactory:GetInstance(enemyEntity)
+			if targetPosition == nil or enemyModel == nil or not enemyModel:IsA("Model") or enemyModel.Parent == nil then
 				return false
 			end
 
@@ -29,7 +30,7 @@ function StructureTargetingResolverFactory.Create(dependencies: {
 				attackRange,
 				SpatialQuery.MergeOptions(
 					SpatialQuery.Presets.CharactersOnly,
-					SpatialQuery.Presets.IncludeInstances({ modelRef.Model })
+					SpatialQuery.Presets.IncludeInstances({ enemyModel })
 				),
 				0.05
 			)
@@ -40,12 +41,12 @@ function StructureTargetingResolverFactory.Create(dependencies: {
 				return nil
 			end
 
-			local modelRef = dependencies.EnemyEntityFactory:GetModelRef(enemyEntity)
-			if modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
+			local enemyModel = dependencies.EnemyInstanceFactory:GetInstance(enemyEntity)
+			if enemyModel == nil or not enemyModel:IsA("Model") or enemyModel.Parent == nil then
 				return nil
 			end
 
-			return ModelPlus.GetCenterPosition(modelRef.Model)
+			return ModelPlus.GetCenterPosition(enemyModel)
 	end
 
 	function resolver.FindNearestEnemyInRange(position: Vector3, attackRange: number): number?

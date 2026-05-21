@@ -73,6 +73,7 @@ end
 ]=]
 function ResourceNodeRegistryService:Start(registry: any, _name: string)
 	self._factory = registry:Get("MiningEntityFactory")
+	self._instanceFactory = registry:Get("MiningInstanceFactory")
 	self._mapContext = registry:Get("MapContext")
 end
 
@@ -120,7 +121,7 @@ function ResourceNodeRegistryService:_RegisterResourceNode(resourcePart: BasePar
 		PartName = resourcePart.Name,
 	})
 
-	local existingEntity = self._factory:FindResourceNodeByInstance(resourcePart)
+	local existingEntity = self._instanceFactory:GetEntity(resourcePart)
 	if existingEntity ~= nil then
 		return Ok(existingEntity)
 	end
@@ -132,6 +133,7 @@ function ResourceNodeRegistryService:_RegisterResourceNode(resourcePart: BasePar
 	}
 
 	local entity = self._factory:CreateResourceNode(nodeRecord)
+	self._instanceFactory:BindResourceNode(entity, resourcePart)
 	return Ok(entity)
 end
 

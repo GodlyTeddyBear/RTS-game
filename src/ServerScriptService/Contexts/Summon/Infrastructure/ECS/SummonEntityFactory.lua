@@ -43,10 +43,7 @@ local function _nextDroneId(ownerUserId: number, entity: number): string
 end
 
 function SummonEntityFactory.new()
-	local self = setmetatable(BaseECSEntityFactory.new("Summon"), SummonEntityFactory)
-	self._ownerEntities = {} :: { [number]: { [number]: true } }
-	self._ownerByEntity = {} :: { [number]: number }
-	return self
+	return setmetatable(BaseECSEntityFactory.new("Summon"), SummonEntityFactory)
 end
 
 function SummonEntityFactory:_GetComponentRegistryName(): string
@@ -64,34 +61,7 @@ function SummonEntityFactory:_OnInit(_registry: any, _name: string, _componentRe
 			and self._components.ActiveTag ~= nil,
 		"SummonEntityFactory: missing SummonComponentRegistry components"
 	)
-end
-
-function SummonEntityFactory:_TrackOwnerEntity(ownerUserId: number, entity: number)
-	local ownerSet = self._ownerEntities[ownerUserId]
-	if ownerSet == nil then
-		ownerSet = {}
-		self._ownerEntities[ownerUserId] = ownerSet
-	end
-	ownerSet[entity] = true
-	self._ownerByEntity[entity] = ownerUserId
-end
-
-function SummonEntityFactory:_UntrackOwnerEntity(entity: number)
-	local ownerUserId = self._ownerByEntity[entity]
-	if ownerUserId == nil then
-		return
-	end
-
-	self._ownerByEntity[entity] = nil
-	local ownerSet = self._ownerEntities[ownerUserId]
-	if ownerSet == nil then
-		return
-	end
-
-	ownerSet[entity] = nil
-	if next(ownerSet) == nil then
-		self._ownerEntities[ownerUserId] = nil
-	end
+	self:RegisterBucketLookupIndex("OwnerUserId")
 end
 
 function SummonEntityFactory:CreateDrone(ownerUserId: number, spawnCFrame: CFrame, now: number, tuning: SwarmTuning): number
@@ -122,7 +92,7 @@ function SummonEntityFactory:CreateDrone(ownerUserId: number, spawnCFrame: CFram
 	} :: LifetimeComponent)
 
 	self:_Add(entity, self._components.ActiveTag)
-	self:_TrackOwnerEntity(ownerUserId, entity)
+	self:SetBucketLookup("OwnerUserId", ownerUserId, entity)
 
 	return entity
 end
@@ -150,7 +120,7 @@ end
 
 function SummonEntityFactory:GetOwnerUserId(entity: number): number?
 	self:RequireReady()
-	return self._ownerByEntity[entity]
+	return self:GetBucketLookupKey("OwnerUserId", entity)
 end
 
 function SummonEntityFactory:GetPosition(entity: number): CFrame?
@@ -208,23 +178,12 @@ end
 
 function SummonEntityFactory:QueryOwnerEntities(ownerUserId: number): { number }
 	self:RequireReady()
-	local ownerSet = self._ownerEntities[ownerUserId]
-	if ownerSet == nil then
-		return {}
-	end
-
-	local entities = {}
-	for entity in ownerSet do
-		if self:_Exists(entity) and self:IsActive(entity) then
-			table.insert(entities, entity)
-		end
-	end
-	return entities
+	return self:QueryBucketLookup("OwnerUserId", ownerUserId)
 end
 
 function SummonEntityFactory:GetOwnerDroneCount(ownerUserId: number): number
 	self:RequireReady()
-	return #self:QueryOwnerEntities(ownerUserId)
+	return self:GetBucketLookupCount("OwnerUserId", ownerUserId)
 end
 
 function SummonEntityFactory:DeleteEntity(entity: number?)
@@ -242,7 +201,7 @@ function SummonEntityFactory:DeleteEntity(entity: number?)
 		self:_Remove(entity, self._components.ActiveTag)
 	end
 
-	self:_UntrackOwnerEntity(entity)
+	self:ClearBucketLookup("OwnerUserId", entity)
 	self:MarkForDestruction(entity)
 end
 

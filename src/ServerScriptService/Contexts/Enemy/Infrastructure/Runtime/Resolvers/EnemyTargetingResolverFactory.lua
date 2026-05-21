@@ -9,7 +9,9 @@ local EnemyTargetingResolverFactory = {}
 
 function EnemyTargetingResolverFactory.Create(dependencies: {
 	BaseEntityFactory: any,
+	BaseInstanceFactory: any,
 	StructureEntityFactory: any,
+	StructureInstanceFactory: any,
 }): any
 	local resolver = {}
 
@@ -22,21 +24,27 @@ function EnemyTargetingResolverFactory.Create(dependencies: {
 					return nil, nil
 				end
 
-				local baseRef = dependencies.BaseEntityFactory:GetInstanceRef()
-				if baseRef == nil or baseRef.Instance == nil then
+				local baseEntity = dependencies.BaseEntityFactory:GetBaseEntity()
+				if baseEntity == nil then
 					return nil, nil
 				end
 
-				if baseRef.Instance:IsA("Model") then
-					return baseRef.Instance, ModelPlus.GetCenterPosition(baseRef.Instance)
+				local baseInstance = dependencies.BaseInstanceFactory:GetBaseInstance(baseEntity)
+				if baseInstance == nil then
+					return nil, nil
 				end
 
-				if baseRef.Instance:IsA("BasePart") then
-					return baseRef.Instance, baseRef.Instance.Position
+				if baseInstance:IsA("Model") then
+					return baseInstance, ModelPlus.GetCenterPosition(baseInstance)
 				end
 
-				if baseRef.Anchor ~= nil then
-					return baseRef.Instance, baseRef.Anchor.Position
+				if baseInstance:IsA("BasePart") then
+					return baseInstance, baseInstance.Position
+				end
+
+				local baseAnchor = dependencies.BaseInstanceFactory:GetBaseAnchor(baseEntity)
+				if baseAnchor ~= nil then
+					return baseInstance, baseAnchor.Position
 				end
 
 				return nil, nil
@@ -47,11 +55,11 @@ function EnemyTargetingResolverFactory.Create(dependencies: {
 					return nil, nil
 				end
 
-				local modelRef = dependencies.StructureEntityFactory:GetModelRef(targetEntity)
-				if modelRef == nil or modelRef.Model == nil or modelRef.Model.Parent == nil then
+				local structureModel = dependencies.StructureInstanceFactory:GetInstance(targetEntity)
+				if structureModel == nil or not structureModel:IsA("Model") or structureModel.Parent == nil then
 					return nil, nil
 				end
-				return modelRef.Model, ModelPlus.GetCenterPosition(modelRef.Model)
+				return structureModel, ModelPlus.GetCenterPosition(structureModel)
 			end
 
 			return nil, nil

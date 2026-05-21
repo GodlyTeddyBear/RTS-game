@@ -55,6 +55,12 @@ function BaseECSEntityFactory.new(contextName: string)
 	self._destructionQueue = {} :: { number }
 	self._destructionQueueCounts = {} :: { [number]: number }
 	self._revealBindingsByEntity = {} :: { [number]: ECSRevealBinding }
+	self._uniqueLookupEntitiesByIndex = {} :: { [string]: { [any]: number } }
+	self._uniqueLookupKeysByEntity = {} :: { [string]: { [number]: any } }
+	self._uniqueLookupKeyTypes = {} :: { [string]: string }
+	self._bucketLookupEntitiesByIndex = {} :: { [string]: { [any]: { [number]: true } } }
+	self._bucketLookupKeysByEntity = {} :: { [string]: { [number]: any } }
+	self._bucketLookupKeyTypes = {} :: { [string]: string }
 	return self
 end
 
@@ -273,8 +279,281 @@ end
 ]=]
 function BaseECSEntityFactory:_DeleteNow(entity: number)
 	self:_RequireEntityExists(entity, "_DeleteNow")
+	self:_ClearAllLookupMemberships(entity)
 	self:_ClearRevealForEntity(entity)
 	self._world:delete(entity)
+end
+
+--[=[
+	Registers a named unique lookup index for this factory.
+	@within BaseECSEntityFactory
+	@param indexName string -- Stable lookup index name.
+]=]
+function BaseECSEntityFactory:RegisterUniqueLookupIndex(indexName: string)
+	assert(type(indexName) == "string" and indexName ~= "", ("%sEntityFactory:RegisterUniqueLookupIndex requires index name"):format(self._contextName))
+
+	if self._uniqueLookupEntitiesByIndex[indexName] ~= nil then
+		return
+	end
+
+	self._uniqueLookupEntitiesByIndex[indexName] = {}
+	self._uniqueLookupKeysByEntity[indexName] = {}
+end
+
+--[=[
+	Registers a named bucket lookup index for this factory.
+	@within BaseECSEntityFactory
+	@param indexName string -- Stable lookup index name.
+]=]
+function BaseECSEntityFactory:RegisterBucketLookupIndex(indexName: string)
+	assert(type(indexName) == "string" and indexName ~= "", ("%sEntityFactory:RegisterBucketLookupIndex requires index name"):format(self._contextName))
+
+	if self._bucketLookupEntitiesByIndex[indexName] ~= nil then
+		return
+	end
+
+	self._bucketLookupEntitiesByIndex[indexName] = {}
+	self._bucketLookupKeysByEntity[indexName] = {}
+end
+
+local function _assertLookupKeyType(
+	contextName: string,
+	indexName: string,
+	key: any,
+	keyTypes: { [string]: string }
+)
+	assert(key ~= nil, ("%sEntityFactory:%s lookup key cannot be nil"):format(contextName, indexName))
+
+	local nextType = type(key)
+	local previousType = keyTypes[indexName]
+	if previousType == nil then
+		keyTypes[indexName] = nextType
+		return
+	end
+
+	assert(
+		previousType == nextType,
+		("%sEntityFactory:%s lookup key type mismatch (%s ~= %s)"):format(contextName, indexName, previousType, nextType)
+	)
+end
+
+function BaseECSEntityFactory:_RequireUniqueLookupIndex(indexName: string)
+	assert(
+		self._uniqueLookupEntitiesByIndex[indexName] ~= nil and self._uniqueLookupKeysByEntity[indexName] ~= nil,
+		("%sEntityFactory:%s unique lookup index is not registered"):format(self._contextName, indexName)
+	)
+end
+
+function BaseECSEntityFactory:_RequireBucketLookupIndex(indexName: string)
+	assert(
+		self._bucketLookupEntitiesByIndex[indexName] ~= nil and self._bucketLookupKeysByEntity[indexName] ~= nil,
+		("%sEntityFactory:%s bucket lookup index is not registered"):format(self._contextName, indexName)
+	)
+end
+
+--[=[
+	Assigns a unique lookup key to an entity, replacing any prior entity or key membership.
+	@within BaseECSEntityFactory
+	@param indexName string -- Registered unique index name.
+	@param key any -- Non-nil lookup key.
+	@param entity number -- Entity id to bind.
+]=]
+function BaseECSEntityFactory:SetUniqueLookup(indexName: string, key: any, entity: number)
+	self:_RequireEntityExists(entity, "SetUniqueLookup")
+	self:_RequireUniqueLookupIndex(indexName)
+	_assertLookupKeyType(self._contextName, indexName, key, self._uniqueLookupKeyTypes)
+
+	local entitiesByKey = self._uniqueLookupEntitiesByIndex[indexName]
+	local keysByEntity = self._uniqueLookupKeysByEntity[indexName]
+	local previousKey = keysByEntity[entity]
+	if previousKey ~= nil then
+		entitiesByKey[previousKey] = nil
+	end
+
+	local previousEntity = entitiesByKey[key]
+	if previousEntity ~= nil and previousEntity ~= entity then
+		keysByEntity[previousEntity] = nil
+	end
+
+	entitiesByKey[key] = entity
+	keysByEntity[entity] = key
+end
+
+--[=[
+	Clears the unique lookup membership for an entity.
+	@within BaseECSEntityFactory
+	@param indexName string -- Registered unique index name.
+	@param entity number -- Entity id to unbind.
+]=]
+function BaseECSEntityFactory:ClearUniqueLookup(indexName: string, entity: number)
+	self:_RequireUniqueLookupIndex(indexName)
+
+	local entitiesByKey = self._uniqueLookupEntitiesByIndex[indexName]
+	local keysByEntity = self._uniqueLookupKeysByEntity[indexName]
+	local key = keysByEntity[entity]
+	if key == nil then
+		return
+	end
+
+	keysByEntity[entity] = nil
+	if entitiesByKey[key] == entity then
+		entitiesByKey[key] = nil
+	end
+end
+
+--[=[
+	Resolves an entity from a registered unique lookup index.
+	@within BaseECSEntityFactory
+	@param indexName string -- Registered unique index name.
+	@param key any -- Lookup key.
+	@return number? -- Matching entity id or nil.
+]=]
+function BaseECSEntityFactory:FindEntityByUniqueLookup(indexName: string, key: any): number?
+	self:_RequireUniqueLookupIndex(indexName)
+	if key == nil then
+		return nil
+	end
+
+	return self._uniqueLookupEntitiesByIndex[indexName][key]
+end
+
+--[=[
+	Returns the current unique lookup key assigned to an entity.
+	@within BaseECSEntityFactory
+	@param indexName string -- Registered unique index name.
+	@param entity number -- Entity id.
+	@return any -- Current lookup key or nil.
+]=]
+function BaseECSEntityFactory:GetUniqueLookupKey(indexName: string, entity: number)
+	self:_RequireUniqueLookupIndex(indexName)
+	return self._uniqueLookupKeysByEntity[indexName][entity]
+end
+
+--[=[
+	Assigns a bucket lookup key to an entity, replacing its prior bucket membership.
+	@within BaseECSEntityFactory
+	@param indexName string -- Registered bucket index name.
+	@param key any -- Non-nil lookup key.
+	@param entity number -- Entity id to bind.
+]=]
+function BaseECSEntityFactory:SetBucketLookup(indexName: string, key: any, entity: number)
+	self:_RequireEntityExists(entity, "SetBucketLookup")
+	self:_RequireBucketLookupIndex(indexName)
+	_assertLookupKeyType(self._contextName, indexName, key, self._bucketLookupKeyTypes)
+
+	self:ClearBucketLookup(indexName, entity)
+
+	local bucketsByKey = self._bucketLookupEntitiesByIndex[indexName]
+	local keysByEntity = self._bucketLookupKeysByEntity[indexName]
+	local entitySet = bucketsByKey[key]
+	if entitySet == nil then
+		entitySet = {}
+		bucketsByKey[key] = entitySet
+	end
+
+	entitySet[entity] = true
+	keysByEntity[entity] = key
+end
+
+--[=[
+	Clears the bucket lookup membership for an entity.
+	@within BaseECSEntityFactory
+	@param indexName string -- Registered bucket index name.
+	@param entity number -- Entity id to unbind.
+]=]
+function BaseECSEntityFactory:ClearBucketLookup(indexName: string, entity: number)
+	self:_RequireBucketLookupIndex(indexName)
+
+	local bucketsByKey = self._bucketLookupEntitiesByIndex[indexName]
+	local keysByEntity = self._bucketLookupKeysByEntity[indexName]
+	local key = keysByEntity[entity]
+	if key == nil then
+		return
+	end
+
+	keysByEntity[entity] = nil
+	local entitySet = bucketsByKey[key]
+	if entitySet == nil then
+		return
+	end
+
+	entitySet[entity] = nil
+	if next(entitySet) == nil then
+		bucketsByKey[key] = nil
+	end
+end
+
+--[=[
+	Collects the entities assigned to a bucket lookup key.
+	@within BaseECSEntityFactory
+	@param indexName string -- Registered bucket index name.
+	@param key any -- Lookup key.
+	@return { number } -- Matching entity ids.
+]=]
+function BaseECSEntityFactory:QueryBucketLookup(indexName: string, key: any): { number }
+	self:_RequireBucketLookupIndex(indexName)
+	if key == nil then
+		return {}
+	end
+
+	local entitySet = self._bucketLookupEntitiesByIndex[indexName][key]
+	if entitySet == nil then
+		return {}
+	end
+
+	local entities = {}
+	for entity in entitySet do
+		table.insert(entities, entity)
+	end
+	table.sort(entities)
+	return entities
+end
+
+--[=[
+	Counts the entities assigned to a bucket lookup key.
+	@within BaseECSEntityFactory
+	@param indexName string -- Registered bucket index name.
+	@param key any -- Lookup key.
+	@return number -- Matching entity count.
+]=]
+function BaseECSEntityFactory:GetBucketLookupCount(indexName: string, key: any): number
+	self:_RequireBucketLookupIndex(indexName)
+	if key == nil then
+		return 0
+	end
+
+	local entitySet = self._bucketLookupEntitiesByIndex[indexName][key]
+	if entitySet == nil then
+		return 0
+	end
+
+	local count = 0
+	for _entity in entitySet do
+		count += 1
+	end
+	return count
+end
+
+--[=[
+	Returns the current bucket lookup key assigned to an entity.
+	@within BaseECSEntityFactory
+	@param indexName string -- Registered bucket index name.
+	@param entity number -- Entity id.
+	@return any -- Current lookup key or nil.
+]=]
+function BaseECSEntityFactory:GetBucketLookupKey(indexName: string, entity: number)
+	self:_RequireBucketLookupIndex(indexName)
+	return self._bucketLookupKeysByEntity[indexName][entity]
+end
+
+function BaseECSEntityFactory:_ClearAllLookupMemberships(entity: number)
+	for indexName in self._uniqueLookupKeysByEntity do
+		self:ClearUniqueLookup(indexName, entity)
+	end
+
+	for indexName in self._bucketLookupKeysByEntity do
+		self:ClearBucketLookup(indexName, entity)
+	end
 end
 
 --[=[

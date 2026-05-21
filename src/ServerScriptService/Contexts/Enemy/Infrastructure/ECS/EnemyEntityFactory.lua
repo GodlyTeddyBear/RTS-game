@@ -32,6 +32,7 @@ function EnemyEntityFactory:_OnInit(_registry: any, _name: string, _componentReg
 		"EnemyEntityFactory: missing EnemyComponentRegistry components"
 	)
 	self:_ConfigureSpatialComponents("ModelRefComponent", "TransformComponent")
+	self:RegisterUniqueLookupIndex("EnemyId")
 end
 
 function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFrame: CFrame, waveNumber: number): number
@@ -70,6 +71,7 @@ function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFra
 		Role = role,
 		WaveNumber = waveNumber,
 	})
+	self:SetUniqueLookup("EnemyId", enemyId, entity)
 	self:_Set(entity, components.CombatActionComponent, self:BuildDefaultCombatAction())
 	self:_Set(entity, components.AttackCooldownComponent, {
 		Cooldown = roleConfig.AttackCooldown,
@@ -260,14 +262,7 @@ end
 
 function EnemyEntityFactory:GetEntityByEnemyId(enemyId: string): number?
 	self:RequireReady()
-	for _, entity in ipairs(self:QueryAliveEntities()) do
-		local identity = self:GetIdentity(entity)
-		if identity ~= nil and identity.EnemyId == enemyId then
-			return entity
-		end
-	end
-
-	return nil
+	return self:FindEntityByUniqueLookup("EnemyId", enemyId)
 end
 
 function EnemyEntityFactory:GetPathState(entity: number)
@@ -377,6 +372,7 @@ end
 
 function EnemyEntityFactory:DeleteEntity(entity: number)
 	self:RequireReady()
+	self:ClearUniqueLookup("EnemyId", entity)
 	self:MarkForDestruction(entity)
 	self:FlushDestructionQueue()
 end

@@ -210,6 +210,10 @@ function MovementService:ConfigureEnemyEntityFactory(enemyEntityFactory: TEnemyE
 	self._enemyEntityFactory = enemyEntityFactory
 end
 
+function MovementService:ConfigureEnemyInstanceFactory(enemyInstanceFactory: any)
+	self._enemyInstanceFactory = enemyInstanceFactory
+end
+
 --[=[
     Wires the lock-on service used to keep boids and humanoids facing correctly.
     @within MovementService

@@ -158,6 +158,7 @@ end
     @within BaseEntityFactory
     @return Model? -- Base model or the nearest ancestor model.
 ]=]
+---@deprecated prefer BaseInstanceFactory:GetBaseModel(entity) for runtime lookups.
 function BaseEntityFactory:GetModel(): Model?
 	local ref = self:GetInstanceRef()
 	if ref == nil then
@@ -177,6 +178,7 @@ end
     @param instance Instance -- Instance to test against the stored base instance.
     @return boolean -- Whether the instance is part of the base.
 ]=]
+---@deprecated prefer BaseInstanceFactory:GetEntity(instance) / GetBaseInstance(entity) for runtime lookups.
 function BaseEntityFactory:IsPartOfBase(instance: Instance): boolean
 	local ref = self:GetInstanceRef()
 	if ref == nil then

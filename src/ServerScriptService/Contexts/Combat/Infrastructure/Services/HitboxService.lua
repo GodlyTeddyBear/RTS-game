@@ -29,6 +29,7 @@ type THitboxConfig = {
 
 export type THitboxHandle = string
 export type TEntityKind = "Enemy" | "Structure" | "Base"
+type TWhitelistResolver = (attackerEntity: number, attackerKind: TEntityKind, attackerModel: Model?) -> { Instance }
 
 export type THitEntity = {
 	Kind: TEntityKind,
@@ -63,6 +64,7 @@ function HitboxService.new()
 	self._hitEntityKeys = {} :: { [THitboxHandle]: { [string]: boolean } }
 	self._hitboxFolder = EnsureHitboxFolder()
 	self._targetResolvers = {} :: { (BasePart) -> THitEntity? }
+	self._whitelistResolvers = {} :: { [TEntityKind]: TWhitelistResolver }
 	self._runner = nil :: any
 	self._tableRecycler = nil :: TTableRecyclerHandle?
 	self._touchSubprofileCounter = 0
@@ -81,6 +83,10 @@ end
 
 function HitboxService:RegisterTargetResolver(resolver: (BasePart) -> THitEntity?)
 	table.insert(self._targetResolvers, resolver)
+end
+
+function HitboxService:RegisterWhitelistResolver(attackerKind: TEntityKind, resolver: TWhitelistResolver)
+	self._whitelistResolvers[attackerKind] = resolver
 end
 
 function HitboxService:Tick(dt: number)
@@ -113,6 +119,31 @@ function HitboxService:_ResolveTouchedEntity(hitPart: BasePart): THitEntity?
 	end
 
 	return nil
+end
+
+function HitboxService:_ResolveWhitelistInstances(
+	attackerEntity: number,
+	attackerKind: TEntityKind,
+	attackerModel: Model?
+): { Instance }
+	local whitelistInstances = self:_AcquireTempArray(nil)
+	local resolver = self._whitelistResolvers[attackerKind]
+	if resolver == nil then
+		return whitelistInstances
+	end
+
+	local resolvedInstances = resolver(attackerEntity, attackerKind, attackerModel)
+	if type(resolvedInstances) ~= "table" then
+		return whitelistInstances
+	end
+
+	for _, instance in ipairs(resolvedInstances) do
+		if instance ~= nil and instance.Parent ~= nil and instance ~= attackerModel then
+			table.insert(whitelistInstances, instance)
+		end
+	end
+
+	return whitelistInstances
 end
 
 function HitboxService:_GetOrCreateTableRecycler(): TTableRecyclerHandle
@@ -191,7 +222,8 @@ function HitboxService:CreateAttackHitboxForModel(
 	hitbox.VisualizerContainer = self._hitboxFolder
 	hitbox.AutoDestroy = false
 
-	hitbox.OverlapParams = SpatialQuery.BuildOverlapParams(SpatialQuery.Presets.ExcludeModel(model))
+	local whitelistInstances = self:_ResolveWhitelistInstances(attackerEntity, attackerKind, model)
+	hitbox.OverlapParams = SpatialQuery.BuildOverlapParams(SpatialQuery.Presets.IncludeInstances(whitelistInstances))
 
 	if self._runner == nil then
 		self._runner = MuchachoHitbox.CreateRunner()
@@ -243,6 +275,9 @@ function HitboxService:CreateAttackHitboxForModel(
 
 	janitor:Add(hitbox, "Destroy")
 	janitor:Add(hitbox.Touched:Connect(onTouched), "Disconnect")
+	janitor:Add(function()
+		self:_ReleaseTempArray(whitelistInstances)
+	end)
 
 	hitbox:Start(self._runner)
 	closeCreateProfile()

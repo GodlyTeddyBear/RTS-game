@@ -3,15 +3,23 @@
 local EnemyHitTargetResolverFactory = {}
 
 function EnemyHitTargetResolverFactory.Create(dependencies: {
-	BaseEntityFactory: any,
-	StructureEntityFactory: any,
+	BaseInstanceFactory: any,
+	StructureInstanceFactory: any,
 }): any
 	return table.freeze({
 		ResolveHitTarget = function(hitPart: BasePart): any?
-			if dependencies.BaseEntityFactory:IsPartOfBase(hitPart) then
+			local baseEntity = dependencies.BaseInstanceFactory:GetEntity(hitPart)
+			if baseEntity == nil then
+				local baseModel = hitPart:FindFirstAncestorOfClass("Model")
+				if baseModel ~= nil then
+					baseEntity = dependencies.BaseInstanceFactory:GetEntity(baseModel)
+				end
+			end
+
+			if baseEntity ~= nil then
 				return {
 					Kind = "Base",
-					Entity = 0,
+					Entity = baseEntity,
 				}
 			end
 
@@ -20,7 +28,7 @@ function EnemyHitTargetResolverFactory.Create(dependencies: {
 				return nil
 			end
 
-			local structureEntity = dependencies.StructureEntityFactory:GetEntityByModel(model)
+			local structureEntity = dependencies.StructureInstanceFactory:GetEntity(model)
 			if structureEntity == nil then
 				return nil
 			end

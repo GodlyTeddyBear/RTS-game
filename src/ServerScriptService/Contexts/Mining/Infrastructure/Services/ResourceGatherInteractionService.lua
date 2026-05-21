@@ -43,6 +43,7 @@ end
 ]=]
 function ResourceGatherInteractionService:Init(registry: any, _name: string)
 	self._factory = registry:Get("MiningEntityFactory")
+	self._instanceFactory = registry:Get("MiningInstanceFactory")
 end
 
 -- Attaches click detectors to every registered resource node.
@@ -73,7 +74,7 @@ end
     @return any? -- The resource-node record, if present.
 ]=]
 function ResourceGatherInteractionService:GetResourceNodeForPart(resourcePart: BasePart): (number?, any?)
-	local entity = self._factory:FindResourceNodeByInstance(resourcePart)
+	local entity = self._instanceFactory:GetEntity(resourcePart)
 	if entity == nil then
 		return nil, nil
 	end

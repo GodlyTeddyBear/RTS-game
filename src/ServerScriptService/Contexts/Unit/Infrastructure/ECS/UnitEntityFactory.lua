@@ -23,10 +23,7 @@ local function _ownerKey(ownerKind: string, ownerId: string): string
 end
 
 function UnitEntityFactory.new()
-	local self = setmetatable(BaseECSEntityFactory.new("Unit"), UnitEntityFactory)
-	self._ownerEntities = {} :: { [string]: { [number]: true } }
-	self._ownerKeyByEntity = {} :: { [number]: string }
-	return self
+	return setmetatable(BaseECSEntityFactory.new("Unit"), UnitEntityFactory)
 end
 
 function UnitEntityFactory:_GetComponentRegistryName(): string
@@ -48,35 +45,7 @@ function UnitEntityFactory:_OnInit(_registry: any, _name: string, _componentRegi
 		"UnitEntityFactory: missing UnitComponentRegistry components"
 	)
 	self:_ConfigureSpatialComponents("ModelRefComponent", "TransformComponent")
-end
-
-function UnitEntityFactory:_TrackOwnerEntity(ownerKind: string, ownerId: string, entity: number)
-	local key = _ownerKey(ownerKind, ownerId)
-	local ownerSet = self._ownerEntities[key]
-	if ownerSet == nil then
-		ownerSet = {}
-		self._ownerEntities[key] = ownerSet
-	end
-	ownerSet[entity] = true
-	self._ownerKeyByEntity[entity] = key
-end
-
-function UnitEntityFactory:_UntrackOwnerEntity(entity: number)
-	local key = self._ownerKeyByEntity[entity]
-	if key == nil then
-		return
-	end
-
-	self._ownerKeyByEntity[entity] = nil
-	local ownerSet = self._ownerEntities[key]
-	if ownerSet == nil then
-		return
-	end
-
-	ownerSet[entity] = nil
-	if next(ownerSet) == nil then
-		self._ownerEntities[key] = nil
-	end
+	self:RegisterBucketLookupIndex("OwnerKey")
 end
 
 function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitRequest, definition: UnitDefinition, now: number): number
@@ -118,7 +87,7 @@ function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitReques
 
 	self:_Add(entity, self._components.ActiveTag)
 	self:_Add(entity, self._components.DirtyTag)
-	self:_TrackOwnerEntity(request.OwnerKind, request.OwnerId, entity)
+	self:SetBucketLookup("OwnerKey", _ownerKey(request.OwnerKind, request.OwnerId), entity)
 
 	return entity
 end
@@ -179,22 +148,11 @@ end
 
 function UnitEntityFactory:QueryOwnerEntities(ownerKind: string, ownerId: string): { number }
 	self:RequireReady()
-	local ownerSet = self._ownerEntities[_ownerKey(ownerKind, ownerId)]
-	if ownerSet == nil then
-		return {}
-	end
-
-	local entities = {}
-	for entity in ownerSet do
-		if self:_Exists(entity) and self:IsActive(entity) then
-			table.insert(entities, entity)
-		end
-	end
-	return entities
+	return self:QueryBucketLookup("OwnerKey", _ownerKey(ownerKind, ownerId))
 end
 
 function UnitEntityFactory:GetOwnerUnitCount(ownerKind: string, ownerId: string): number
-	return #self:QueryOwnerEntities(ownerKind, ownerId)
+	return self:GetBucketLookupCount("OwnerKey", _ownerKey(ownerKind, ownerId))
 end
 
 function UnitEntityFactory:DeleteEntity(entity: number?): boolean
@@ -210,7 +168,7 @@ function UnitEntityFactory:DeleteEntity(entity: number?): boolean
 		self:_Remove(entity, self._components.DirtyTag)
 	end
 
-	self:_UntrackOwnerEntity(entity)
+	self:ClearBucketLookup("OwnerKey", entity)
 	self:MarkForDestruction(entity)
 	return true
 end

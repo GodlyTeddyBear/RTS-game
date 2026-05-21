@@ -129,6 +129,12 @@ function BaseInstanceFactory:GetBaseModel(entity: number): Model?
 	return instance:FindFirstAncestorOfClass("Model")
 end
 
+function BaseInstanceFactory:GetBaseAnchor(entity: number): BasePart?
+	local binding = self._revealBindingsByEntity[entity]
+	local options = if binding ~= nil then binding.CreateOptions else nil
+	return if type(options) == "table" then options.Anchor else nil
+end
+
 function BaseInstanceFactory:Destroy()
 	local entityIds = {}
 	for entity in self._entityToInstance do

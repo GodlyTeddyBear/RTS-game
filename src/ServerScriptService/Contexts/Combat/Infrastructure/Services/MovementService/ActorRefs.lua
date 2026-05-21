@@ -33,8 +33,9 @@ return function(MovementService: TMovementService)
 	-- Resolves the entity model used as the root for humanoid and root-part lookups.
 	function MovementService:_GetEntityModel(entity: number): Model?
 		local refs = self:_GetOrCreateFlowActorRefs(entity)
-		local modelRef = self._enemyEntityFactory:GetModelRef(entity)
-		local resolvedModel = Option.Wrap(modelRef and modelRef.Model or nil):UnwrapOr(nil)
+		local resolvedModel = Option.Wrap(
+			if self._enemyInstanceFactory ~= nil then self._enemyInstanceFactory:GetInstance(entity) else nil
+		):UnwrapOr(nil)
 		if refs.Model ~= resolvedModel then
 			refs.Model = resolvedModel
 			refs.RootPart = nil
