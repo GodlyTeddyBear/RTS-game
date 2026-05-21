@@ -11,13 +11,15 @@ type TFlowSeparationWorkerSharedMemory = MovementTypes.TFlowSeparationWorkerShar
 type TFlowSeparationWorkerPayload = MovementTypes.TFlowSeparationWorkerPayload
 
 local function _HasCoreSharedMemoryFields(memory: TFlowSeparationWorkerSharedMemory): boolean
-	return memory.WallPackedKeys ~= nil
+	return memory.WallGrid ~= nil and type(memory.WallGridWidth) == "number"
 end
 
 local function _HasCoreWorkerPayloadFields(payload: TFlowSeparationWorkerPayload): boolean
 	return not not (
 		payload.GoalGroupCellRecordStartIndex
 		and payload.GoalGroupCellRecordCount
+		and payload.GoalGroupCellLookupStartIndex
+		and payload.GoalGroupCellLookupCount
 		and payload.GoalGroupCellWidthStuds
 		and payload.GroupCellX
 		and payload.GroupCellY
@@ -25,6 +27,8 @@ local function _HasCoreWorkerPayloadFields(payload: TFlowSeparationWorkerPayload
 		and payload.CellMemberStartIndex
 		and payload.CellMemberCount
 		and payload.CellMemberEntityIndex
+		and payload.LookupPackedKey
+		and payload.LookupCellRecordIndex
 		and payload.FlatPositionX
 		and payload.FlatPositionY
 		and payload.Radius
@@ -65,6 +69,8 @@ function Worker.Execute(request: TFlowSeparationWorkerRequest)
 			EntityIndex = entityIndex,
 			GoalGroupCellRecordStartIndex = payload.GoalGroupCellRecordStartIndex,
 			GoalGroupCellRecordCount = payload.GoalGroupCellRecordCount,
+			GoalGroupCellLookupStartIndex = payload.GoalGroupCellLookupStartIndex,
+			GoalGroupCellLookupCount = payload.GoalGroupCellLookupCount,
 			GoalGroupCellWidthStuds = payload.GoalGroupCellWidthStuds,
 			GroupCellX = payload.GroupCellX,
 			GroupCellY = payload.GroupCellY,
@@ -72,6 +78,8 @@ function Worker.Execute(request: TFlowSeparationWorkerRequest)
 			CellMemberStartIndex = payload.CellMemberStartIndex,
 			CellMemberCount = payload.CellMemberCount,
 			CellMemberEntityIndex = payload.CellMemberEntityIndex,
+			LookupPackedKey = payload.LookupPackedKey,
+			LookupCellRecordIndex = payload.LookupCellRecordIndex,
 			FlatPositionX = payload.FlatPositionX,
 			FlatPositionY = payload.FlatPositionY,
 			Radius = payload.Radius,
@@ -82,12 +90,13 @@ function Worker.Execute(request: TFlowSeparationWorkerRequest)
 			WalkSpeed = payload.WalkSpeed,
 			VelAlpha = payload.VelAlpha,
 			IsSettled = payload.IsSettled,
-			WallPackedKeys = shared.WallPackedKeys,
+			WallGrid = shared.WallGrid,
 			DeltaTime = (type(payload.DeltaTime) == "number") and payload.DeltaTime or 0,
 			CellWidthStuds = (type(shared.CellWidthStuds) == "number") and shared.CellWidthStuds or 1,
 			OriginX = (type(shared.OriginX) == "number") and shared.OriginX or 0,
 			OriginY = (type(shared.OriginY) == "number") and shared.OriginY or 0,
 			WallGridHalfSize = (type(shared.WallGridHalfSize) == "number") and shared.WallGridHalfSize or nil,
+			WallGridWidth = (type(shared.WallGridWidth) == "number") and shared.WallGridWidth or nil,
 			KForce = (type(shared.KForce) == "number") and shared.KForce or 80,
 			MinSeparationDistance = (type(shared.MinSeparationDistance) == "number") and shared.MinSeparationDistance
 				or 1e-4,

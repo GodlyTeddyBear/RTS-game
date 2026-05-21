@@ -88,6 +88,7 @@ export type TFastFlowWallsLike = {
 	_Grid: { [number]: boolean }?,
 	_GetCellPos: ((self: TFastFlowWallsLike, index: number) -> Vector2)?,
 	_Size: number?,
+	_Width: number?,
 	IsCellInBounds: ((self: TFastFlowWallsLike, cell: Vector2) -> boolean)?,
 	GetCell: ((self: TFastFlowWallsLike, cell: Vector2) -> boolean?)?,
 }
@@ -223,7 +224,8 @@ export type TFlowActorRefs = {
     .OriginX number -- World origin X coordinate.
     .OriginY number -- World origin Z coordinate projected into Y.
     .WallGridHalfSize number -- Half-size of the wall grid used for wall collision lookup.
-    .WallPackedKeys { number } -- Packed wall cell keys used by the solve.
+    .WallGridWidth number -- Width of the wall grid used for direct index lookup.
+    .WallGrid { boolean } -- Dense 1-based wall occupancy array used by the solve.
     .KForce number -- Separation force constant.
     .MinSeparationDistance number -- Minimum allowed distance between agents.
     .WallCollisionEnabled boolean -- Whether wall collision handling is enabled.
@@ -263,7 +265,8 @@ export type TFlowSeparationSolveSnapshot = {
 	OriginX: number,
 	OriginY: number,
 	WallGridHalfSize: number,
-	WallPackedKeys: { number },
+	WallGridWidth: number,
+	WallGrid: { boolean },
 	KForce: number,
 	MinSeparationDistance: number,
 	WallCollisionEnabled: boolean,
@@ -322,7 +325,8 @@ export type TFlowFrameStateHandle = {
 		originX: number,
 		originY: number,
 		wallGridHalfSize: number,
-		wallPackedKeys: { number },
+		wallGridWidth: number,
+		wallGrid: { boolean },
 		kForce: number,
 		minSeparationDistance: number,
 		wallCollisionEnabled: boolean,
@@ -460,7 +464,8 @@ export type TFlowSeparationManagerPayload = {
 	OriginX: number,
 	OriginY: number,
 	WallGridHalfSize: number,
-	WallPackedKeys: { number },
+	WallGridWidth: number,
+	WallGrid: { boolean },
 	KForce: number,
 	MinSeparationDistance: number,
 	WallCollisionEnabled: boolean,
@@ -499,11 +504,12 @@ export type TSharedPacket = ParallelRunner.TSharedPacket
 export type TSharedCompiledHandle = ParallelRunner.TSharedCompiledHandle
 
 export type TFlowSeparationWorkerSharedMemory = {
-	WallPackedKeys: { number },
+	WallGrid: { boolean },
 	CellWidthStuds: number?,
 	OriginX: number?,
 	OriginY: number?,
 	WallGridHalfSize: number?,
+	WallGridWidth: number?,
 	KForce: number?,
 	MinSeparationDistance: number?,
 	WallCollisionEnabled: boolean?,
@@ -519,6 +525,8 @@ export type TFlowSeparationWorkerPayload = {
 	EntityCount: number,
 	GoalGroupCellRecordStartIndex: { number },
 	GoalGroupCellRecordCount: { number },
+	GoalGroupCellLookupStartIndex: { number },
+	GoalGroupCellLookupCount: { number },
 	GoalGroupCellWidthStuds: { number },
 	GroupCellX: { number },
 	GroupCellY: { number },
@@ -526,6 +534,8 @@ export type TFlowSeparationWorkerPayload = {
 	CellMemberStartIndex: { number },
 	CellMemberCount: { number },
 	CellMemberEntityIndex: { number },
+	LookupPackedKey: { number },
+	LookupCellRecordIndex: { number },
 	FlatPositionX: { number },
 	FlatPositionY: { number },
 	Radius: { number },
@@ -605,8 +615,9 @@ export type TMovementService = {
 	_flowPreparedWorkerPayload: TFlowSeparationWorkerPayload?,
 	_flowDispatchPayload: TFlowSeparationDispatchPayload?,
 	_flowWallKeyCachePathfinder: TFastFlowPathfinder?,
-	_flowWallPackedKeys: { number }?,
+	_flowWallGridCache: { boolean }?,
 	_flowWallGridHalfSize: number?,
+	_flowWallGridWidth: number?,
 	Init: (self: TMovementService, registry: TRegistryLike, name: string) -> (),
 	Start: (self: TMovementService) -> (),
 	ConfigureEnemyEntityFactory: (self: TMovementService, enemyEntityFactory: TEnemyEntityFactoryLike) -> (),
@@ -669,7 +680,7 @@ export type TMovementService = {
 	_AttachEntityToFlowGoal: (self: TMovementService, entity: number, goalPosition: Vector3, forceRefresh: boolean?, forceUnpruned: boolean?) -> Result.Result<TResolvedSharedFlowfield>,
 	_EmitFlowfieldDebug: (self: TMovementService, flowfield: TFlowfieldLike, goalPosition: Vector3) -> (),
 	_RepairFlowDirectionXZ: (self: TMovementService, entity: number, movementState: TFlowMovementState, goalPosition: Vector3, position: Vector3) -> Result.Result<TFlowRepairResult>,
-	_BuildPackedWallKeys: (self: TMovementService) -> { number },
+	_BuildWallGridSnapshot: (self: TMovementService) -> { boolean },
 	_GetOrCreateFlowFrameStateRecycler: (self: TMovementService) -> TTableRecyclerLike,
 	_GetOrCreateFlowFrameState: (self: TMovementService) -> TFlowFrameStateHandle,
 	_DestroyFlowFrameState: (self: TMovementService) -> (),

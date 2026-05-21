@@ -15,8 +15,8 @@ function MovementMath.PackedSeparationCellKey(gx: number, gz: number): number
 	return sum * (sum + 1) / 2 + z
 end
 
-function MovementMath.PackWallKey(gx: number, gy: number): number
-	return (gx + 0x8000) * 0x10000 + (gy + 0x8000)
+function MovementMath.WallGridIndex(gx: number, gy: number, wallGridHalfSize: number, wallGridWidth: number): number
+	return (gx + wallGridHalfSize) * wallGridWidth + (gy + wallGridHalfSize) + 1
 end
 
 function MovementMath.FlatPositionToCell(flatPosition: Vector2, cellWidthStuds: number): (number, number)

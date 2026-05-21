@@ -45,42 +45,49 @@ local Ok = Result.Ok
 local Err = Result.Err
 
 return function(MovementService: TMovementService)
-	-- Builds the packed wall-key array used by the flow separation snapshot.
-	function MovementService:_BuildPackedWallKeys(): { number }
-		local packedKeys = self._flowWallPackedKeys
-		if not packedKeys then
-			packedKeys = {}
-			self._flowWallPackedKeys = packedKeys
+	-- Builds the dense wall-grid snapshot used by the flow separation shared memory.
+	function MovementService:_BuildWallGridSnapshot(): { boolean }
+		local wallGrid = self._flowWallGridCache
+		if not wallGrid then
+			wallGrid = {}
+			self._flowWallGridCache = wallGrid
 		end
 
 		local pathfinder, mapping = self:_ResolveFastFlowRuntime()
 		if not pathfinder or not mapping then
-			table.clear(packedKeys)
+			table.clear(wallGrid)
 			self._flowWallKeyCachePathfinder = nil
 			self._flowWallGridHalfSize = 0
-			return packedKeys
+			self._flowWallGridWidth = 0
+			return wallGrid
 		end
 
 		if self._flowWallKeyCachePathfinder == pathfinder then
-			return packedKeys
+			return wallGrid
 		end
 
 		local walls = pathfinder._Walls
-		table.clear(packedKeys)
+		local wallGridWidth = if type(walls) == "table" and type(walls._Width) == "number"
+			then walls._Width
+			else mapping.GridHalfSize * 2 + 1
+		local wallGridCellCount = wallGridWidth * wallGridWidth
+		table.clear(wallGrid)
+		for index = 1, wallGridCellCount do
+			wallGrid[index] = false
+		end
 
-		if walls and type(walls._Grid) == "table" and type(walls._GetCellPos) == "function" then
+		if walls and type(walls._Grid) == "table" then
 			for index, value in walls._Grid do
 				if value then
-					local cell = walls:_GetCellPos(index)
-					table.insert(packedKeys, MovementMath.PackWallKey(cell.X, cell.Y))
+					wallGrid[index + 1] = true
 				end
 			end
 		end
 
-		table.sort(packedKeys)
 		self._flowWallKeyCachePathfinder = pathfinder
 		self._flowWallGridHalfSize = if type(walls) == "table" and type(walls._Size) == "number" then walls._Size else 0
-		return packedKeys
+		self._flowWallGridWidth = wallGridWidth
+		return wallGrid
 	end
 
 	-- Lazily creates the recycler used by flow frame-state snapshots.
@@ -152,13 +159,14 @@ return function(MovementService: TMovementService)
 			DebugPlus.begin(CREATE_STATIC_SHARED_PACKET_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 		local sharedPacket = {
 			Arrays = {
-				WallPackedKeys = snapshot.WallPackedKeys,
+				WallGrid = snapshot.WallGrid,
 			},
 			Scalars = {
 				CellWidthStuds = snapshot.CellWidthStuds,
 				OriginX = snapshot.OriginX,
 				OriginY = snapshot.OriginY,
 				WallGridHalfSize = snapshot.WallGridHalfSize,
+				WallGridWidth = snapshot.WallGridWidth,
 				KForce = snapshot.KForce,
 				MinSeparationDistance = snapshot.MinSeparationDistance,
 				WallCollisionEnabled = snapshot.WallCollisionEnabled,
@@ -235,7 +243,21 @@ return function(MovementService: TMovementService)
 				return
 			end
 
-			local rebuiltSharedMemory = self:_BuildFlowSeparationStaticSharedMemory(snapshot)
+			local didBuildSharedMemory, rebuiltSharedMemoryOrError = xpcall(function()
+				return self:_BuildFlowSeparationStaticSharedMemory(snapshot)
+			end, debug.traceback)
+			if not didBuildSharedMemory then
+				local sharedMemoryHandle = self._flowStaticSharedMemoryHandle
+				if sharedMemoryHandle ~= nil then
+					sharedMemoryHandle:Destroy()
+					self._flowStaticSharedMemoryHandle = nil
+				end
+				Result.MentionError("Combat:MovementService", "Failed to build static flow separation shared memory", {
+					CauseMessage = rebuiltSharedMemoryOrError,
+				}, "MovementParallelSharedMemoryBuildFailed")
+				return
+			end
+			local rebuiltSharedMemory = rebuiltSharedMemoryOrError
 			local applySharedMemoryResult =
 				runnerResult.value:SetSharedMemory("FlowSeparationSolve", rebuiltSharedMemory)
 			if not applySharedMemoryResult.success then
@@ -450,7 +472,7 @@ return function(MovementService: TMovementService)
 			return nil, nil, nil
 		end
 
-		local wallPackedKeys = self:_BuildPackedWallKeys()
+		local wallGrid = self:_BuildWallGridSnapshot()
 		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
 		local managerPayload = {
 			TickId = tickId,
@@ -473,7 +495,10 @@ return function(MovementService: TMovementService)
 			WallGridHalfSize = if type(self._flowWallGridHalfSize) == "number"
 				then self._flowWallGridHalfSize
 				else mapping.GridHalfSize,
-			WallPackedKeys = wallPackedKeys,
+			WallGridWidth = if type(self._flowWallGridWidth) == "number"
+				then self._flowWallGridWidth
+				else mapping.GridHalfSize * 2 + 1,
+			WallGrid = wallGrid,
 			KForce = if type(config.KForce) == "number" then config.KForce else 80,
 			MinSeparationDistance = if type(config.MinSeparationDistance) == "number"
 				then config.MinSeparationDistance
@@ -662,7 +687,7 @@ return function(MovementService: TMovementService)
 			return nil, nil, nil
 		end
 
-		local wallPackedKeys = self:_BuildPackedWallKeys()
+		local wallGrid = self:_BuildWallGridSnapshot()
 		local config = CombatMovementConfig.FLOW_SOFT_SEPARATION
 		local snapshot = frameState:BuildSeparationSnapshot(
 			tickId,
@@ -671,7 +696,8 @@ return function(MovementService: TMovementService)
 			mapping.OriginWorld.X,
 			mapping.OriginWorld.Z,
 			if type(self._flowWallGridHalfSize) == "number" then self._flowWallGridHalfSize else mapping.GridHalfSize,
-			wallPackedKeys,
+			if type(self._flowWallGridWidth) == "number" then self._flowWallGridWidth else mapping.GridHalfSize * 2 + 1,
+			wallGrid,
 			if type(config.KForce) == "number" then config.KForce else 80,
 			if type(config.MinSeparationDistance) == "number" then config.MinSeparationDistance else 1e-4,
 			config.WallCollisionEnabled == true,

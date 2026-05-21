@@ -27,12 +27,16 @@ local function _AppendCellRecords(
 	payload: TFlowSeparationManagerPayload,
 	goalGroupCellRecordStartIndex: { number },
 	goalGroupCellRecordCount: { number },
+	goalGroupCellLookupStartIndex: { number },
+	goalGroupCellLookupCount: { number },
 	groupCellX: { number },
 	groupCellY: { number },
 	cellPackedKey: { number },
 	cellMemberStartIndex: { number },
 	cellMemberCount: { number },
 	cellMemberEntityIndex: { number },
+	lookupPackedKey: { number },
+	lookupCellRecordIndex: { number },
 	radiusByEntityIndex: { number }
 )
 	local bucketsByPackedKey = {} :: { [number]: { number } }
@@ -61,10 +65,14 @@ local function _AppendCellRecords(
 
 	local recordStartIndex = #cellPackedKey + 1
 	local recordCount = #packedKeys
+	local lookupStartIndex = #lookupPackedKey + 1
+	local lookupCount = #packedKeys
 
 	for _, entityIndex in ipairs(entityIndices) do
 		goalGroupCellRecordStartIndex[entityIndex] = recordStartIndex
 		goalGroupCellRecordCount[entityIndex] = recordCount
+		goalGroupCellLookupStartIndex[entityIndex] = lookupStartIndex
+		goalGroupCellLookupCount[entityIndex] = lookupCount
 	end
 
 	for _, packedKey in ipairs(packedKeys) do
@@ -74,6 +82,8 @@ local function _AppendCellRecords(
 			cellPackedKey[recordIndex] = packedKey
 			cellMemberStartIndex[recordIndex] = #cellMemberEntityIndex + 1
 			cellMemberCount[recordIndex] = #bucket
+			lookupPackedKey[#lookupPackedKey + 1] = packedKey
+			lookupCellRecordIndex[#lookupCellRecordIndex + 1] = recordIndex
 
 			for _, entityIndex in ipairs(bucket) do
 				cellMemberEntityIndex[#cellMemberEntityIndex + 1] = entityIndex
@@ -94,6 +104,8 @@ function Manager.BuildDispatch(request: { ManagerPayload: TFlowSeparationManager
 				DeltaTime = 0,
 				GoalGroupCellRecordStartIndex = {},
 				GoalGroupCellRecordCount = {},
+				GoalGroupCellLookupStartIndex = {},
+				GoalGroupCellLookupCount = {},
 				GoalGroupCellWidthStuds = {},
 				GroupCellX = {},
 				GroupCellY = {},
@@ -101,6 +113,8 @@ function Manager.BuildDispatch(request: { ManagerPayload: TFlowSeparationManager
 				CellMemberStartIndex = {},
 				CellMemberCount = {},
 				CellMemberEntityIndex = {},
+				LookupPackedKey = {},
+				LookupCellRecordIndex = {},
 				FlatPositionX = {},
 				FlatPositionY = {},
 				Radius = {},
@@ -118,6 +132,8 @@ function Manager.BuildDispatch(request: { ManagerPayload: TFlowSeparationManager
 	local entityCount = #payload.EntityIds
 	local goalGroupCellRecordStartIndex = table.create(entityCount, 0)
 	local goalGroupCellRecordCount = table.create(entityCount, 0)
+	local goalGroupCellLookupStartIndex = table.create(entityCount, 0)
+	local goalGroupCellLookupCount = table.create(entityCount, 0)
 	local goalGroupCellWidthStuds = table.create(entityCount, 0)
 	local groupCellX = table.create(entityCount, 0)
 	local groupCellY = table.create(entityCount, 0)
@@ -125,6 +141,8 @@ function Manager.BuildDispatch(request: { ManagerPayload: TFlowSeparationManager
 	local cellMemberStartIndex = {} :: { number }
 	local cellMemberCount = {} :: { number }
 	local cellMemberEntityIndex = {} :: { number }
+	local lookupPackedKey = {} :: { number }
+	local lookupCellRecordIndex = {} :: { number }
 	local entityIndicesByGoalKey = {} :: { [string]: { number } }
 	local activeGoalKeys = {} :: { string }
 	local radiusByEntityIndex = table.create(entityCount, 0)
@@ -156,12 +174,16 @@ function Manager.BuildDispatch(request: { ManagerPayload: TFlowSeparationManager
 				payload,
 				goalGroupCellRecordStartIndex,
 				goalGroupCellRecordCount,
+				goalGroupCellLookupStartIndex,
+				goalGroupCellLookupCount,
 				groupCellX,
 				groupCellY,
 				cellPackedKey,
 				cellMemberStartIndex,
 				cellMemberCount,
 				cellMemberEntityIndex,
+				lookupPackedKey,
+				lookupCellRecordIndex,
 				radiusByEntityIndex
 			)
 		end
@@ -172,6 +194,8 @@ function Manager.BuildDispatch(request: { ManagerPayload: TFlowSeparationManager
 		DeltaTime = payload.DeltaTime,
 		GoalGroupCellRecordStartIndex = goalGroupCellRecordStartIndex,
 		GoalGroupCellRecordCount = goalGroupCellRecordCount,
+		GoalGroupCellLookupStartIndex = goalGroupCellLookupStartIndex,
+		GoalGroupCellLookupCount = goalGroupCellLookupCount,
 		GoalGroupCellWidthStuds = goalGroupCellWidthStuds,
 		GroupCellX = groupCellX,
 		GroupCellY = groupCellY,
@@ -179,6 +203,8 @@ function Manager.BuildDispatch(request: { ManagerPayload: TFlowSeparationManager
 		CellMemberStartIndex = cellMemberStartIndex,
 		CellMemberCount = cellMemberCount,
 		CellMemberEntityIndex = cellMemberEntityIndex,
+		LookupPackedKey = lookupPackedKey,
+		LookupCellRecordIndex = lookupCellRecordIndex,
 		FlatPositionX = payload.FlatPositionX,
 		FlatPositionY = payload.FlatPositionY,
 		Radius = payload.Radius,

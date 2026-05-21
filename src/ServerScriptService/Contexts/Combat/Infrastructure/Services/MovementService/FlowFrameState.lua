@@ -50,7 +50,7 @@ type TFlowFrameStateInternal = TFlowFrameStateHandle & {
 	_snapshotVelAlpha: { number },
 	_snapshotIsSettled: { boolean },
 	_snapshot: TFlowSeparationSolveSnapshot,
-	_defaultWallPackedKeys: { number },
+	_defaultWallGrid: { boolean },
 	_entityIndicesByGoalKey: { [string]: { number } },
 	_activeGoalKeys: { string },
 	_goalGroupIdByGoalKey: { [string]: number },
@@ -165,7 +165,7 @@ local function _AcquireNamedArrays(recycler: TTableRecyclerHandle, fieldNames: {
 end
 
 local _DESTROY_EXTRA_ARRAY_RELEASE_FIELD_NAMES = {
-	"_defaultWallPackedKeys",
+	"_defaultWallGrid",
 	"_activeGoalKeys",
 	"_scratchCellPackedKeys",
 	"_scratchFreeCellBuckets",
@@ -342,7 +342,8 @@ local function _ClearSnapshotForDestroy(self: TFlowFrameStateInternal)
 	snapshot.OriginX = nil
 	snapshot.OriginY = nil
 	snapshot.WallGridHalfSize = nil
-	snapshot.WallPackedKeys = nil
+	snapshot.WallGridWidth = nil
+	snapshot.WallGrid = nil
 	snapshot.KForce = nil
 	snapshot.MinSeparationDistance = nil
 	snapshot.WallCollisionEnabled = nil
@@ -398,7 +399,7 @@ function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHand
 		namedArrays[fieldName] = fieldArray
 	end
 
-	local defaultWallPackedKeys = _AcquireArray(recycler) :: { number }
+	local defaultWallGrid = _AcquireArray(recycler) :: { boolean }
 	local entityIndicesByGoalKey = _AcquireMap(recycler) :: { [string]: { number } }
 	local activeGoalKeys = _AcquireArray(recycler) :: { string }
 	local goalGroupIdByGoalKey = _AcquireMap(recycler) :: { [string]: number }
@@ -417,7 +418,8 @@ function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHand
 	snapshot.OriginX = 0
 	snapshot.OriginY = 0
 	snapshot.WallGridHalfSize = 0
-	snapshot.WallPackedKeys = defaultWallPackedKeys
+	snapshot.WallGridWidth = 0
+	snapshot.WallGrid = defaultWallGrid
 	snapshot.KForce = 0
 	snapshot.MinSeparationDistance = 0
 	snapshot.WallCollisionEnabled = false
@@ -466,7 +468,7 @@ function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHand
 		_snapshotVelAlpha = namedArrays._snapshotVelAlpha :: { number },
 		_snapshotIsSettled = namedArrays._snapshotIsSettled :: { boolean },
 		_snapshot = snapshot :: TFlowSeparationSolveSnapshot,
-		_defaultWallPackedKeys = defaultWallPackedKeys,
+		_defaultWallGrid = defaultWallGrid,
 		_entityIndicesByGoalKey = entityIndicesByGoalKey,
 		_activeGoalKeys = activeGoalKeys,
 		_goalGroupIdByGoalKey = goalGroupIdByGoalKey,
@@ -501,7 +503,7 @@ function FlowFrameState:Reset()
 
 	table.clear(selfInternal._activeGoalKeys)
 	_ResetScratchCellBuckets(selfInternal)
-	selfInternal._snapshot.WallPackedKeys = selfInternal._defaultWallPackedKeys
+	selfInternal._snapshot.WallGrid = selfInternal._defaultWallGrid
 end
 
 --[=[
@@ -737,7 +739,8 @@ end
     @param originX number -- World origin X coordinate.
     @param originY number -- World origin Z coordinate projected into Y.
     @param wallGridHalfSize number -- Half-size of the wall grid.
-    @param wallPackedKeys { number } -- Packed wall cell keys.
+    @param wallGridWidth number -- Width of the wall grid used for direct index lookup.
+    @param wallGrid { boolean } -- Dense 1-based wall occupancy array used by the solve.
     @param kForce number -- Separation force constant.
     @param minSeparationDistance number -- Minimum agent separation distance.
     @param wallCollisionEnabled boolean -- Whether wall collision is enabled.
@@ -756,7 +759,8 @@ function FlowFrameState:BuildSeparationSnapshot(
 	originX: number,
 	originY: number,
 	wallGridHalfSize: number,
-	wallPackedKeys: { number },
+	wallGridWidth: number,
+	wallGrid: { boolean },
 	kForce: number,
 	minSeparationDistance: number,
 	wallCollisionEnabled: boolean,
@@ -835,7 +839,8 @@ function FlowFrameState:BuildSeparationSnapshot(
 	snapshot.OriginX = originX
 	snapshot.OriginY = originY
 	snapshot.WallGridHalfSize = wallGridHalfSize
-	snapshot.WallPackedKeys = wallPackedKeys
+	snapshot.WallGridWidth = wallGridWidth
+	snapshot.WallGrid = wallGrid
 	snapshot.KForce = kForce
 	snapshot.MinSeparationDistance = minSeparationDistance
 	snapshot.WallCollisionEnabled = wallCollisionEnabled

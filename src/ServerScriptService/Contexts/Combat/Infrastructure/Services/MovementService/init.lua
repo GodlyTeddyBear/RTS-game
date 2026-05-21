@@ -178,8 +178,9 @@ function MovementService.new()
 	self._flowPreparedWorkerPayload = nil :: TFlowSeparationWorkerPayload?
 	self._flowDispatchPayload = nil :: TFlowSeparationDispatchPayload?
 	self._flowWallKeyCachePathfinder = nil
-	self._flowWallPackedKeys = nil
+	self._flowWallGridCache = nil
 	self._flowWallGridHalfSize = nil
+	self._flowWallGridWidth = nil
 	return self
 end
 
@@ -234,8 +235,9 @@ function MovementService:ConfigureFastFlow(pathfinder: TFastFlowPathfinder?, map
 	self._fastFlowPathfinder = pathfinder
 	self._fastFlowMapping = mapping
 	self._flowWallKeyCachePathfinder = nil
-	self._flowWallPackedKeys = nil
+	self._flowWallGridCache = nil
 	self._flowWallGridHalfSize = nil
+	self._flowWallGridWidth = nil
 end
 
 --[=[
@@ -295,8 +297,9 @@ function MovementService:ResetFastFlowRuntime()
 	self._flowStaticSharedMemory = nil
 	self._flowStaticSharedMemoryPathfinder = nil
 	self._flowWallKeyCachePathfinder = nil
-	self._flowWallPackedKeys = nil
+	self._flowWallGridCache = nil
 	self._flowWallGridHalfSize = nil
+	self._flowWallGridWidth = nil
 
 	-- Rebuild the state machine so the next flow session starts from Idle.
 	self._flowPipelineStateMachine:Destroy()
