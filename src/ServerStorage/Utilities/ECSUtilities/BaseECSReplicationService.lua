@@ -14,6 +14,12 @@ export type THandshakePayload = {
 	Handshake: any,
 }
 
+export type TBootstrapPayload = {
+	Handshake: any,
+	Buffer: buffer,
+	Variants: { { any } }?,
+}
+
 export type TSharedSchema = {
 	sharedComponents: { any }?,
 	sharedTags: { any }?,
@@ -418,9 +424,13 @@ function BaseECSReplicationService:ValidateSharedSchema(schema: TSharedSchema)
 	self:_ValidateSharedSchema(schema)
 end
 
-function BaseECSReplicationService:RemoveRegisteredCustomId(customId: any)
+function BaseECSReplicationService:ForgetTrackedCustomId(customId: any)
 	self:RequireReady()
 	self._schemaState.CustomIds[customId] = nil
+end
+
+function BaseECSReplicationService:RemoveRegisteredCustomId(customId: any)
+	self:ForgetTrackedCustomId(customId)
 end
 
 function BaseECSReplicationService:GetAppliedSharedSchema(): TSharedSchema?
@@ -533,19 +543,41 @@ function BaseECSReplicationService:DescribeSharedSchemaMismatch(handshake: any)
 	end
 
 	local expectedSerdes = {}
-	for _, name in ipairs(summary.Serdes) do
-		expectedSerdes[name] = true
+	for componentId, serdes in self._schemaState.Serdes do
+		local entityName = assert(_GetEntityName(self._world, componentId))
+		expectedSerdes[entityName] = {
+			includes_variants = serdes.includes_variants or false,
+			bytespan = serdes.bytespan,
+		}
 	end
 
 	local missingSerdes = {}
 	local extraSerdes = {}
-	for name in expectedSerdes do
+	local mismatchedSerdes = {}
+	for name, expectedInfo in expectedSerdes do
 		if handshakeSerdes[name] == nil then
 			table.insert(missingSerdes, name)
+		else
+			local handshakeInfo = handshakeSerdes[name]
+			local receivedIncludesVariants = false
+			local receivedBytespan = nil
+			if type(handshakeInfo) == "table" then
+				receivedIncludesVariants = handshakeInfo.includes_variants or false
+				receivedBytespan = handshakeInfo.bytespan
+			end
+			if receivedIncludesVariants ~= expectedInfo.includes_variants or receivedBytespan ~= expectedInfo.bytespan then
+				table.insert(mismatchedSerdes, table.freeze({
+					Component = name,
+					ExpectedIncludesVariants = expectedInfo.includes_variants,
+					ReceivedIncludesVariants = receivedIncludesVariants,
+					ExpectedBytespan = expectedInfo.bytespan,
+					ReceivedBytespan = receivedBytespan,
+				}))
+			end
 		end
 	end
 	for name in handshakeSerdes do
-		if expectedSerdes[name] ~= true then
+		if expectedSerdes[name] == nil then
 			table.insert(extraSerdes, name)
 		end
 	end
@@ -556,6 +588,9 @@ function BaseECSReplicationService:DescribeSharedSchemaMismatch(handshake: any)
 	table.sort(extraCustomIds)
 	table.sort(missingSerdes)
 	table.sort(extraSerdes)
+	table.sort(mismatchedSerdes, function(left, right)
+		return left.Component < right.Component
+	end)
 
 	return table.freeze({
 		MissingComponents = table.freeze(missingComponents),
@@ -564,6 +599,7 @@ function BaseECSReplicationService:DescribeSharedSchemaMismatch(handshake: any)
 		ExtraCustomIds = table.freeze(extraCustomIds),
 		MissingSerdes = table.freeze(missingSerdes),
 		ExtraSerdes = table.freeze(extraSerdes),
+		MismatchedSerdes = table.freeze(mismatchedSerdes),
 		LastVerificationError = self._lastHandshakeVerificationError,
 	})
 end
@@ -619,29 +655,48 @@ function BaseECSReplicationService:RemovePlayerAlias(alias: any)
 	self._replecsServer:remove_player_alias(alias)
 end
 
-function BaseECSReplicationService:HydratePlayer(player: Player)
+function BaseECSReplicationService:BuildBootstrapPayload(player: Player): TBootstrapPayload?
 	if not self._initialized then
-		return
+		return nil
 	end
 	if not self:_IsPlayerValid(player) then
-		return
+		return nil
 	end
 
 	local server = self:GetReplecsServerOrThrow()
-
-	-- Handshake must arrive before the first full payload for this session.
-	self:_SendHandshake(player, {
-		Handshake = server:generate_handshake(),
-	})
-
-	-- The full snapshot seeds the client mirror world before deltas arrive.
 	local packetBuffer, packetVariants = server:get_full(player)
-	self:_SendFull(player, {
+
+	return {
+		Handshake = server:generate_handshake(),
 		Buffer = packetBuffer,
 		Variants = packetVariants,
-	})
+	}
+end
 
-	server:mark_player_ready(player)
+function BaseECSReplicationService:SendBootstrapPayload(player: Player): boolean
+	local payload = self:BuildBootstrapPayload(player)
+	if payload == nil then
+		return false
+	end
+
+	self:_SendBootstrap(player, payload)
+	return true
+end
+
+function BaseECSReplicationService:CompleteBootstrap(player: Player): boolean
+	if not self._initialized then
+		return false
+	end
+	if not self:_IsPlayerValid(player) then
+		return false
+	end
+
+	self:GetReplecsServerOrThrow():mark_player_ready(player)
+	return true
+end
+
+function BaseECSReplicationService:HydratePlayer(player: Player): boolean
+	return self:SendBootstrapPayload(player)
 end
 
 function BaseECSReplicationService:HydrateAllPlayers()
@@ -738,7 +793,7 @@ function BaseECSReplicationService:_ResolveWorld(registry: TRegistry)
 end
 
 function BaseECSReplicationService:_CreateReplecsLibrary()
-	return require(ReplicatedStorage.Packages.Replecs)
+	return require(ReplicatedStorage.Utilities.Replecs)
 end
 
 function BaseECSReplicationService:_OnInit(_registry: TRegistry, _name: string)
@@ -778,6 +833,10 @@ end
 
 function BaseECSReplicationService:_SendFull(_player: Player, _payload: TReplicationPacketPayload)
 	return
+end
+
+function BaseECSReplicationService:_SendBootstrap(_player: Player, _payload: TBootstrapPayload)
+	error(("%sECSReplicationService must implement _SendBootstrap"):format(self._contextName))
 end
 
 function BaseECSReplicationService:_SendReliable(_player: Player, _payload: TReplicationPacketPayload)

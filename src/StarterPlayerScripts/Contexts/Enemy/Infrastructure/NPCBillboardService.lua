@@ -4,11 +4,11 @@
     NPCBillboardService - Manages per-NPC BillboardGui healthbar lifecycle.
 
     Each NPC gets one BillboardGui mounted above its head. The HP bar is driven
-    by the "Health" and "MaxHealth" model attributes, which the server stamps at
-    spawn and updates via EnemyGameObjectSyncService on every dirty-entity sync.
+    by the Enemy client replication mirror, keyed by the model's revealed
+    `EnemyId` attribute.
 
     Usage:
-        local svc = NPCBillboardService.new()
+        local svc = NPCBillboardService.new(enemyReplicationClient)
         svc:Mount(npcId, model, displayName)
         svc:Unmount(npcId)
 ]]
@@ -27,8 +27,7 @@ type TBillboardEntry = {
 	Gui: BillboardGui,
 	Root: any,
 	DisplayName: string,
-	HPConn: RBXScriptConnection,
-	MaxHPConn: RBXScriptConnection,
+	StateConnection: any,
 }
 
 local NPCBillboardService = {}
@@ -36,11 +35,13 @@ NPCBillboardService.__index = NPCBillboardService
 
 export type TNPCBillboardService = typeof(setmetatable({} :: {
 	_Entries: { [string]: TBillboardEntry },
+	_EnemyReplicationClient: any,
 }, NPCBillboardService))
 
-function NPCBillboardService.new(): TNPCBillboardService
+function NPCBillboardService.new(enemyReplicationClient: any): TNPCBillboardService
 	local self = setmetatable({}, NPCBillboardService)
 	self._Entries = {}
+	self._EnemyReplicationClient = enemyReplicationClient
 	return self
 end
 
@@ -52,9 +53,7 @@ local function findAttachPart(model: Model): BasePart?
 	return model.PrimaryPart
 end
 
-local function renderFromAttributes(root: any, displayName: string, model: Model)
-	local hp = model:GetAttribute("Health") :: number? or 0
-	local maxHP = model:GetAttribute("MaxHealth") :: number? or 1
+local function renderBillboard(root: any, displayName: string, hp: number, maxHP: number)
 	root:render(e(NPCHealthBillboard, {
 		DisplayName = displayName,
 		HP = hp,
@@ -64,8 +63,9 @@ end
 
 --[[
     Mount a billboard above the NPC model. Idempotent and safe to call again
-    if already mounted (no-op). Reads Health/MaxHealth from model attributes
-    and re-renders whenever either attribute changes.
+    if already mounted (no-op). Reads health from the Enemy replication mirror
+    keyed by the model's revealed `EnemyId` and re-renders whenever the
+    replicated health state changes.
 ]]
 function NPCBillboardService:Mount(npcId: string, model: Model, displayName: string)
 	if self._Entries[npcId] then
@@ -89,27 +89,29 @@ function NPCBillboardService:Mount(npcId: string, model: Model, displayName: str
 
 	local root = ReactRoblox.createRoot(gui)
 
-	-- Initial render at spawn HP
-	local initialHP = model:GetAttribute("Health") :: number? or 0
-	gui.Enabled = initialHP > 0
-	renderFromAttributes(root, displayName, model)
-
 	local function rerender()
-		local hp = model:GetAttribute("Health") :: number? or 0
-		gui.Enabled = hp > 0
-		renderFromAttributes(root, displayName, model)
+		local state = self._EnemyReplicationClient:GetEnemyState(npcId)
+		local hp = if state ~= nil then state.CurrentHealth else 0
+		local maxHP = if state ~= nil and state.MaxHealth > 0 then state.MaxHealth else 1
+		gui.Enabled = state ~= nil and state.IsAlive and hp > 0
+		renderBillboard(root, displayName, hp, maxHP)
 	end
 
-	-- Re-render whenever server syncs a new health value.
-	local healthConn = model:GetAttributeChangedSignal("Health"):Connect(rerender)
-	local maxHealthConn = model:GetAttributeChangedSignal("MaxHealth"):Connect(rerender)
+	local stateConnection = self._EnemyReplicationClient:ObserveEnemyStateChanged(function(changedEnemyId: string)
+		if changedEnemyId ~= npcId then
+			return
+		end
+
+		rerender()
+	end)
+
+	rerender()
 
 	self._Entries[npcId] = {
 		Gui = gui,
 		Root = root,
 		DisplayName = displayName,
-		HPConn = healthConn,
-		MaxHPConn = maxHealthConn,
+		StateConnection = stateConnection,
 	}
 end
 
@@ -122,8 +124,7 @@ function NPCBillboardService:Unmount(npcId: string)
 		return
 	end
 
-	entry.HPConn:Disconnect()
-	entry.MaxHPConn:Disconnect()
+	entry.StateConnection:Disconnect()
 	entry.Root:unmount()
 	entry.Gui:Destroy()
 	self._Entries[npcId] = nil

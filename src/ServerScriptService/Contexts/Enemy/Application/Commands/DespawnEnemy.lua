@@ -29,6 +29,7 @@ function DespawnEnemy:Init(registry: any, _name: string)
 		_entityFactory = "EnemyEntityFactory",
 		_instanceFactory = "EnemyInstanceFactory",
 		_combatAdapterService = "EnemyCombatAdapterService",
+		_replicationService = "EnemyECSReplicationService",
 	})
 end
 
@@ -43,6 +44,7 @@ function DespawnEnemy:Execute(entity: any): Result.Result<boolean>
 		end
 
 		self._combatAdapterService:UnregisterActor(entity)
+		self._replicationService:UnregisterEnemyEntity(entity)
 		self._instanceFactory:DestroyInstance(entity)
 		self._entityFactory:DeleteEntity(entity)
 		return Ok(true)

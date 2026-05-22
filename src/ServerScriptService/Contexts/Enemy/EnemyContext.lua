@@ -21,6 +21,7 @@ local EnemyEntityFactory = require(script.Parent.Infrastructure.ECS.EnemyEntityF
 local EnemyInstanceFactory = require(script.Parent.Infrastructure.Services.EnemyInstanceFactory)
 local EnemyCombatAdapterService = require(script.Parent.Infrastructure.Services.EnemyCombatAdapterService)
 local EnemyGameObjectSyncService = require(script.Parent.Infrastructure.Persistence.EnemyGameObjectSyncService)
+local EnemyECSReplicationService = require(script.Parent.Infrastructure.Persistence.EnemyECSReplicationService)
 local EnemySpawnPolicy = require(script.Parent.EnemyDomain.Policies.EnemySpawnPolicy)
 
 local SpawnEnemyCommand = require(script.Parent.Application.Commands.SpawnEnemy)
@@ -37,6 +38,12 @@ local Ok = Result.Ok
 
 -- [Dependencies]
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "ClientSignals",
+		Factory = function(service: any, _baseContext: any)
+			return service.Client
+		end,
+	},
 	{
 		Name = "EnemyComponentRegistry",
 		Module = EnemyComponentRegistry,
@@ -55,6 +62,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "EnemyCombatAdapterService",
 		Module = EnemyCombatAdapterService,
 		CacheAs = "_combatAdapterService",
+	},
+	{
+		Name = "EnemyECSReplicationService",
+		Module = EnemyECSReplicationService,
+		CacheAs = "_replicationService",
 	},
 	{
 		Name = "EnemyGameObjectSyncService",
@@ -126,7 +138,12 @@ local EnemyModules: BaseContext.TModuleLayers = {
 ]=]
 local EnemyContext = Knit.CreateService({
 	Name = "EnemyContext",
-	Client = {},
+	Client = {
+		EnemyBootstrap = Knit.CreateSignal(),
+		EnemyReliable = Knit.CreateSignal(),
+		EnemyUnreliable = Knit.CreateSignal(),
+		EnemyEntity = Knit.CreateSignal(),
+	},
 	WorldService = {
 		Name = "EnemyECSWorldService",
 		Module = EnemyECSWorldService,
@@ -180,6 +197,8 @@ function EnemyContext:KnitStart()
 	EnemyBaseContext:KnitStart()
 	EnemyBaseContext:RegisterPollSystem("_syncService", nil, "EnemySync")
 	EnemyBaseContext:RegisterSyncSystem("_syncService", nil, "EnemySync")
+	EnemyBaseContext:RegisterMethodSystem("EnemySync", "_replicationService", "FlushReliable")
+	EnemyBaseContext:RegisterMethodSystem("EnemySync", "_replicationService", "FlushUnreliable")
 	self._combatAdapterService:ConfigureRuntimeOwner(self)
 	local registerActorTypeResult = self._combatAdapterService:RegisterActorType()
 	if not registerActorTypeResult.success then
@@ -409,6 +428,10 @@ function EnemyContext:GetGameObjectSyncService(): Result.Result<any>
 	return Ok(self._syncService)
 end
 
+function EnemyContext:GetReplicationService(): Result.Result<any>
+	return Ok(self._replicationService)
+end
+
 function EnemyContext:GetSchedulerBindingStatus(targetField: string): Result.Result<any>
 	return Ok(EnemyBaseContext:GetSchedulerBindingStatus(targetField))
 end
@@ -447,6 +470,14 @@ function EnemyContext:Destroy()
 			CauseMessage = destroyResult.message,
 		}, destroyResult.type)
 	end
+end
+
+function EnemyContext.Client:RequestEnemyReplication(player: Player): boolean
+	return self.Server._replicationService:HydratePlayer(player)
+end
+
+function EnemyContext.Client:AcknowledgeEnemyReplicationBootstrap(player: Player): boolean
+	return self.Server._replicationService:CompleteBootstrap(player)
 end
 
 return EnemyContext

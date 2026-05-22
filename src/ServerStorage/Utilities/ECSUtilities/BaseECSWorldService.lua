@@ -1,6 +1,7 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Replecs = require(ReplicatedStorage.Utilities.Replecs)
 local JECS = require(ReplicatedStorage.Packages.JECS)
 
 --[=[

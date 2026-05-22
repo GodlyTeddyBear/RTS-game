@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+require(ReplicatedStorage.Utilities.Replecs)
 local JECS = require(ReplicatedStorage.Packages.JECS)
 
 export type TReplicationPacketPayload = {
@@ -11,6 +12,12 @@ export type TReplicationPacketPayload = {
 
 export type THandshakePayload = {
 	Handshake: any,
+}
+
+export type TBootstrapPayload = {
+	Handshake: any,
+	Buffer: buffer,
+	Variants: { { any } }?,
 }
 
 export type TSharedSchema = {
@@ -33,6 +40,10 @@ type TSchemaState = {
 	Serdes: { [any]: any },
 	ComponentCustomHandlers: { [any]: (any) -> any },
 }
+
+local MAX_PENDING_RELIABLE_PACKETS = 32
+local MAX_PENDING_ENTITY_PACKETS = 32
+local MAX_PENDING_UNRELIABLE_PACKETS = 64
 
 local function _RunCleanupTask(cleanupTask: TTransportCleanupTask)
 	if cleanupTask == nil then
@@ -115,6 +126,14 @@ local function _CreateSchemaState(): TSchemaState
 	}
 end
 
+local function _CreatePendingPacketState()
+	return {
+		Reliable = {},
+		Entity = {},
+		Unreliable = {},
+	}
+end
+
 local BaseECSReplicationClient = {}
 BaseECSReplicationClient.__index = BaseECSReplicationClient
 
@@ -129,10 +148,12 @@ function BaseECSReplicationClient.new(contextName: string)
 	self._started = false
 	self._handshakeVerified = false
 	self._hasReceivedFull = false
+	self._bootstrapCompleted = false
 	self._cleanupTasks = {}
 	self._appliedSharedSchema = nil
 	self._schemaState = _CreateSchemaState()
 	self._lastHandshakeVerificationError = nil
+	self._pendingPackets = _CreatePendingPacketState()
 	return self
 end
 
@@ -232,6 +253,11 @@ function BaseECSReplicationClient:RemoveSharedTag(tagId: any)
 end
 
 function BaseECSReplicationClient:HandleHandshake(payload: THandshakePayload)
+	self:RequireReady()
+	if self._handshakeVerified or self._hasReceivedFull or self._bootstrapCompleted then
+		self:ResetBootstrapState()
+	end
+
 	local verified, message = self:VerifyHandshake(payload.Handshake)
 	assert(verified, ("%sECSReplicationClient: handshake verification failed: %s"):format(self._contextName, tostring(message)))
 	self._handshakeVerified = true
@@ -242,23 +268,49 @@ function BaseECSReplicationClient:HandleFull(payload: TReplicationPacketPayload)
 	assert(self._handshakeVerified, ("%sECSReplicationClient: received full payload before handshake"):format(self._contextName))
 	self._replecsClient:apply_full(payload.Buffer, payload.Variants)
 	self._hasReceivedFull = true
+	self:_FlushPendingPackets()
+	self:_FinalizeBootstrap()
+end
+
+function BaseECSReplicationClient:HandleBootstrap(payload: TBootstrapPayload): boolean
+	self:RequireReady()
+	self:HandleHandshake({
+		Handshake = payload.Handshake,
+	})
+	self:HandleFull({
+		Buffer = payload.Buffer,
+		Variants = payload.Variants,
+	})
+	return true
 end
 
 function BaseECSReplicationClient:HandleReliable(payload: TReplicationPacketPayload)
 	self:RequireReady()
-	assert(self._hasReceivedFull, ("%sECSReplicationClient: received reliable payload before full snapshot"):format(self._contextName))
+	assert(self._handshakeVerified, ("%sECSReplicationClient: received reliable payload before handshake"):format(self._contextName))
+	if not self._hasReceivedFull then
+		self:_QueuePendingPacket("Reliable", payload)
+		return
+	end
 	self._replecsClient:apply_updates(payload.Buffer, payload.Variants)
 end
 
 function BaseECSReplicationClient:HandleUnreliable(payload: TReplicationPacketPayload)
 	self:RequireReady()
-	assert(self._hasReceivedFull, ("%sECSReplicationClient: received unreliable payload before full snapshot"):format(self._contextName))
+	assert(self._handshakeVerified, ("%sECSReplicationClient: received unreliable payload before handshake"):format(self._contextName))
+	if not self._hasReceivedFull then
+		self:_QueuePendingPacket("Unreliable", payload)
+		return
+	end
 	self._replecsClient:apply_unreliable(payload.Buffer, payload.Variants)
 end
 
 function BaseECSReplicationClient:HandleEntity(payload: TReplicationPacketPayload)
 	self:RequireReady()
-	assert(self._hasReceivedFull, ("%sECSReplicationClient: received entity payload before full snapshot"):format(self._contextName))
+	assert(self._handshakeVerified, ("%sECSReplicationClient: received entity payload before handshake"):format(self._contextName))
+	if not self._hasReceivedFull then
+		self:_QueuePendingPacket("Entity", payload)
+		return
+	end
 	self._replecsClient:apply_entity(payload.Buffer, payload.Variants)
 end
 
@@ -458,9 +510,13 @@ function BaseECSReplicationClient:ValidateSharedSchema(schema: TSharedSchema)
 	self:_ValidateSharedSchema(schema)
 end
 
-function BaseECSReplicationClient:RemoveRegisteredCustomId(customId: any)
+function BaseECSReplicationClient:ForgetTrackedCustomId(customId: any)
 	self:RequireReady()
 	self._schemaState.CustomIds[customId] = nil
+end
+
+function BaseECSReplicationClient:RemoveRegisteredCustomId(customId: any)
+	self:ForgetTrackedCustomId(customId)
 end
 
 function BaseECSReplicationClient:RemoveComponentCustomHandler(componentId: any)
@@ -579,19 +635,41 @@ function BaseECSReplicationClient:DescribeSharedSchemaMismatch(handshake: any)
 	end
 
 	local expectedSerdes = {}
-	for _, name in ipairs(summary.Serdes) do
-		expectedSerdes[name] = true
+	for componentId, serdes in self._schemaState.Serdes do
+		local entityName = assert(_GetEntityName(self._world, componentId))
+		expectedSerdes[entityName] = {
+			includes_variants = serdes.includes_variants or false,
+			bytespan = serdes.bytespan,
+		}
 	end
 
 	local missingSerdes = {}
 	local extraSerdes = {}
-	for name in expectedSerdes do
+	local mismatchedSerdes = {}
+	for name, expectedInfo in expectedSerdes do
 		if handshakeSerdes[name] == nil then
 			table.insert(missingSerdes, name)
+		else
+			local handshakeInfo = handshakeSerdes[name]
+			local receivedIncludesVariants = false
+			local receivedBytespan = nil
+			if type(handshakeInfo) == "table" then
+				receivedIncludesVariants = handshakeInfo.includes_variants or false
+				receivedBytespan = handshakeInfo.bytespan
+			end
+			if receivedIncludesVariants ~= expectedInfo.includes_variants or receivedBytespan ~= expectedInfo.bytespan then
+				table.insert(mismatchedSerdes, table.freeze({
+					Component = name,
+					ExpectedIncludesVariants = expectedInfo.includes_variants,
+					ReceivedIncludesVariants = receivedIncludesVariants,
+					ExpectedBytespan = expectedInfo.bytespan,
+					ReceivedBytespan = receivedBytespan,
+				}))
+			end
 		end
 	end
 	for name in handshakeSerdes do
-		if expectedSerdes[name] ~= true then
+		if expectedSerdes[name] == nil then
 			table.insert(extraSerdes, name)
 		end
 	end
@@ -602,6 +680,9 @@ function BaseECSReplicationClient:DescribeSharedSchemaMismatch(handshake: any)
 	table.sort(extraCustomIds)
 	table.sort(missingSerdes)
 	table.sort(extraSerdes)
+	table.sort(mismatchedSerdes, function(left, right)
+		return left.Component < right.Component
+	end)
 
 	return table.freeze({
 		MissingComponents = table.freeze(missingComponents),
@@ -610,6 +691,7 @@ function BaseECSReplicationClient:DescribeSharedSchemaMismatch(handshake: any)
 		ExtraCustomIds = table.freeze(extraCustomIds),
 		MissingSerdes = table.freeze(missingSerdes),
 		ExtraSerdes = table.freeze(extraSerdes),
+		MismatchedSerdes = table.freeze(mismatchedSerdes),
 		LastVerificationError = self._lastHandshakeVerificationError,
 	})
 end
@@ -622,8 +704,19 @@ function BaseECSReplicationClient:HasReceivedFull(): boolean
 	return self._hasReceivedFull
 end
 
+function BaseECSReplicationClient:HasCompletedBootstrap(): boolean
+	return self._bootstrapCompleted
+end
+
 function BaseECSReplicationClient:IsStarted(): boolean
 	return self._started
+end
+
+function BaseECSReplicationClient:ResetBootstrapState()
+	self._handshakeVerified = false
+	self._hasReceivedFull = false
+	self._bootstrapCompleted = false
+	self._pendingPackets = _CreatePendingPacketState()
 end
 
 function BaseECSReplicationClient:Destroy()
@@ -648,8 +741,7 @@ function BaseECSReplicationClient:Destroy()
 	self._replecsClient = nil
 	self._initialized = false
 	self._started = false
-	self._handshakeVerified = false
-	self._hasReceivedFull = false
+	self:ResetBootstrapState()
 	self._appliedSharedSchema = nil
 	self._schemaState = _CreateSchemaState()
 	self._lastHandshakeVerificationError = nil
@@ -660,7 +752,7 @@ function BaseECSReplicationClient:_CreateWorld()
 end
 
 function BaseECSReplicationClient:_CreateReplecsLibrary()
-	return require(ReplicatedStorage.Packages.Replecs)
+	return require(ReplicatedStorage.Utilities.Replecs)
 end
 
 function BaseECSReplicationClient:_BuildComponents(_world: any, _replecsLibrary: any)
@@ -712,6 +804,53 @@ end
 
 function BaseECSReplicationClient:_OnDestroy()
 	return
+end
+
+function BaseECSReplicationClient:_OnBootstrapCompleted()
+	return
+end
+
+function BaseECSReplicationClient:_FinalizeBootstrap()
+	if self._bootstrapCompleted then
+		return
+	end
+
+	self._bootstrapCompleted = true
+	self:_OnBootstrapCompleted()
+end
+
+function BaseECSReplicationClient:_QueuePendingPacket(queueName: "Reliable" | "Entity" | "Unreliable", payload: TReplicationPacketPayload)
+	local queue = self._pendingPackets[queueName]
+
+	if queueName == "Unreliable" then
+		if #queue >= MAX_PENDING_UNRELIABLE_PACKETS then
+			table.remove(queue, 1)
+		end
+		table.insert(queue, payload)
+		return
+	end
+
+	local queueLimit = if queueName == "Reliable" then MAX_PENDING_RELIABLE_PACKETS else MAX_PENDING_ENTITY_PACKETS
+	if #queue >= queueLimit then
+		self:ResetBootstrapState()
+		error(("%sECSReplicationClient: pending %s packet queue overflow before full snapshot"):format(self._contextName, string.lower(queueName)))
+	end
+
+	table.insert(queue, payload)
+end
+
+function BaseECSReplicationClient:_FlushPendingPackets()
+	for _, payload in ipairs(self._pendingPackets.Reliable) do
+		self._replecsClient:apply_updates(payload.Buffer, payload.Variants)
+	end
+	for _, payload in ipairs(self._pendingPackets.Entity) do
+		self._replecsClient:apply_entity(payload.Buffer, payload.Variants)
+	end
+	for _, payload in ipairs(self._pendingPackets.Unreliable) do
+		self._replecsClient:apply_unreliable(payload.Buffer, payload.Variants)
+	end
+
+	self._pendingPackets = _CreatePendingPacketState()
 end
 
 return BaseECSReplicationClient

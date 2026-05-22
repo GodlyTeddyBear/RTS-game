@@ -69,17 +69,11 @@ function EnemyGameObjectSyncService:_SyncEntity(entity: number, model: Model)
 	local components = self:GetComponentsOrThrow()
 	local world = self:GetWorldOrThrow()
 
-	local health = entityFactory:GetHealth(entity)
 	local role = entityFactory:GetRole(entity)
 	local baseMoveSpeed = entityFactory:GetBaseMoveSpeed(entity)
 	local currentMoveSpeed = entityFactory:GetCurrentMoveSpeed(entity)
 	local pathState = entityFactory:GetPathState(entity)
 	local combatAction = _ResolveCombatRuntimeAction(self, entity)
-
-	if health then
-		self:SetAttributeIfChanged(model, "Health", health.Current)
-		self:SetAttributeIfChanged(model, "MaxHealth", health.Max)
-	end
 
 	if role then
 		self:SetAttributeIfChanged(model, "MoveSpeed", currentMoveSpeed or role.MoveSpeed)

@@ -13,9 +13,11 @@ local function createStubClient(world: any)
 		InitCalls = 0,
 		DestroyCalls = 0,
 		Handshake = {
-			Components = {
+			components = {
 				Health = true,
 			},
+			custom_ids = {},
+			serdes = {},
 		},
 		SharedCount = 5,
 		ServerIds = {},
@@ -180,6 +182,7 @@ function TestReplicationClient.new()
 	local self = BaseECSReplicationClient.new("Test")
 	self.TransportConnectCalls = 0
 	self.TransportCleanupCalls = 0
+	self.BootstrapCompletedCalls = 0
 	return setmetatable(self, TestReplicationClient)
 end
 
@@ -213,6 +216,10 @@ function TestReplicationClient:_ConnectTransport()
 	return function()
 		self.TransportCleanupCalls += 1
 	end
+end
+
+function TestReplicationClient:_OnBootstrapCompleted()
+	self.BootstrapCompletedCalls += 1
 end
 
 local SharedSchemaReplicationClient = {}
@@ -264,7 +271,7 @@ describe("BaseECSReplicationClient", function()
 		expect(client:IsStarted()).toBe(true)
 	end)
 
-	it("enforces handshake then full then delta ordering", function()
+	it("stages post-handshake deltas until full state is applied", function()
 		local client = TestReplicationClient.new()
 
 		client:Init()
@@ -285,13 +292,7 @@ describe("BaseECSReplicationClient", function()
 			Handshake = client:GetReplecsClientOrThrow().Handshake,
 		})
 		expect(client:HasVerifiedHandshake()).toBe(true)
-		client:HandleFull({
-			Buffer = buffer.create(2),
-			Variants = {
-				{ "full" },
-			},
-		})
-		expect(client:HasReceivedFull()).toBe(true)
+
 		client:HandleReliable({
 			Buffer = buffer.create(3),
 			Variants = {
@@ -312,10 +313,94 @@ describe("BaseECSReplicationClient", function()
 		})
 
 		local replecsClient = client:GetReplecsClientOrThrow()
+		expect(#replecsClient.AppliedReliable).toBe(0)
+		expect(#replecsClient.AppliedUnreliable).toBe(0)
+		expect(#replecsClient.AppliedEntity).toBe(0)
+
+		client:HandleFull({
+			Buffer = buffer.create(2),
+			Variants = {
+				{ "full" },
+			},
+		})
+		expect(client:HasReceivedFull()).toBe(true)
+		expect(client:HasCompletedBootstrap()).toBe(true)
+		expect(client.BootstrapCompletedCalls).toBe(1)
+
 		expect(#replecsClient.AppliedFull).toBe(1)
 		expect(#replecsClient.AppliedReliable).toBe(1)
 		expect(#replecsClient.AppliedUnreliable).toBe(1)
 		expect(#replecsClient.AppliedEntity).toBe(1)
+	end)
+
+	it("handles bootstrap atomically", function()
+		local client = TestReplicationClient.new()
+
+		client:Init()
+
+		local handled = client:HandleBootstrap({
+			Handshake = client:GetReplecsClientOrThrow().Handshake,
+			Buffer = buffer.create(2),
+			Variants = {
+				{ "full" },
+			},
+		})
+
+		expect(handled).toBe(true)
+		expect(client:HasVerifiedHandshake()).toBe(true)
+		expect(client:HasReceivedFull()).toBe(true)
+		expect(client:HasCompletedBootstrap()).toBe(true)
+		expect(client.BootstrapCompletedCalls).toBe(1)
+		expect(#client:GetReplecsClientOrThrow().AppliedFull).toBe(1)
+	end)
+
+	it("resets bootstrap state on reliable queue overflow", function()
+		local client = TestReplicationClient.new()
+
+		client:Init()
+		client:HandleHandshake({
+			Handshake = client:GetReplecsClientOrThrow().Handshake,
+		})
+
+		for _ = 1, 32 do
+			client:HandleReliable({
+				Buffer = buffer.create(1),
+			})
+		end
+
+		expect(function()
+			client:HandleReliable({
+				Buffer = buffer.create(1),
+			})
+		end).toThrow()
+		expect(client:HasVerifiedHandshake()).toBe(false)
+		expect(client:HasReceivedFull()).toBe(false)
+		expect(client:HasCompletedBootstrap()).toBe(false)
+	end)
+
+	it("drops oldest unreliable packets when the pending queue is full", function()
+		local client = TestReplicationClient.new()
+
+		client:Init()
+		client:HandleHandshake({
+			Handshake = client:GetReplecsClientOrThrow().Handshake,
+		})
+
+		for index = 1, 65 do
+			local packetBuffer = buffer.create(1)
+			buffer.writeu8(packetBuffer, 0, index)
+			client:HandleUnreliable({
+				Buffer = packetBuffer,
+			})
+		end
+
+		client:HandleFull({
+			Buffer = buffer.create(1),
+		})
+
+		local replecsClient = client:GetReplecsClientOrThrow()
+		expect(#replecsClient.AppliedUnreliable).toBe(64)
+		expect(buffer.readu8(replecsClient.AppliedUnreliable[1].Buffer, 0)).toBe(2)
 	end)
 
 	it("fails fast on handshake mismatch", function()
@@ -398,6 +483,7 @@ describe("BaseECSReplicationClient", function()
 		expect(client:IsStarted()).toBe(false)
 		expect(client:HasVerifiedHandshake()).toBe(false)
 		expect(client:HasReceivedFull()).toBe(false)
+		expect(client:HasCompletedBootstrap()).toBe(false)
 	end)
 
 	it("supports a transport-style end to end envelope flow", function()
@@ -502,6 +588,17 @@ describe("BaseECSReplicationClient", function()
 			})
 		end).toThrow()
 
+		client:RegisterSerdes(client:GetComponentsOrThrow().HealthComponent, {
+			serialize = function(_value: any)
+				return buffer.create(0)
+			end,
+			deserialize = function(_packetBuffer: buffer)
+				return nil
+			end,
+			includes_variants = false,
+			bytespan = 8,
+		})
+
 		local verified, message = client:VerifyHandshake({
 			components = {},
 			custom_ids = {},
@@ -514,9 +611,15 @@ describe("BaseECSReplicationClient", function()
 		local mismatch = client:DescribeSharedSchemaMismatch({
 			components = {},
 			custom_ids = {},
-			serdes = {},
+			serdes = {
+				Health = {
+					includes_variants = true,
+					bytespan = 16,
+				},
+			},
 		})
 		expect(mismatch.LastVerificationError).toBe("mismatch")
+		expect(#mismatch.MismatchedSerdes).toBe(1)
 	end)
 
 	it("tracks schema summary and removal helpers", function()
@@ -551,7 +654,7 @@ describe("BaseECSReplicationClient", function()
 
 		client:RemoveSharedComponent(client._bootstrapComponent)
 		client:RemoveSharedTag(client._bootstrapTag)
-		client:RemoveRegisteredCustomId(client:GetAppliedSharedSchema().customIds[1])
+		client:ForgetTrackedCustomId(client:GetAppliedSharedSchema().customIds[1])
 		client:RemoveSerdes(client._bootstrapComponent)
 		client:RemoveComponentCustomHandler(client._bootstrapComponent)
 
@@ -561,5 +664,21 @@ describe("BaseECSReplicationClient", function()
 		expect(updatedSummary.CustomIdCount).toBe(0)
 		expect(updatedSummary.SerdesCount).toBe(0)
 		expect(updatedSummary.ComponentCustomHandlerCount).toBe(0)
+	end)
+
+	it("supports explicit bootstrap state reset", function()
+		local client = TestReplicationClient.new()
+
+		client:Init()
+		client:HandleBootstrap({
+			Handshake = client:GetReplecsClientOrThrow().Handshake,
+			Buffer = buffer.create(1),
+		})
+
+		client:ResetBootstrapState()
+
+		expect(client:HasVerifiedHandshake()).toBe(false)
+		expect(client:HasReceivedFull()).toBe(false)
+		expect(client:HasCompletedBootstrap()).toBe(false)
 	end)
 end)

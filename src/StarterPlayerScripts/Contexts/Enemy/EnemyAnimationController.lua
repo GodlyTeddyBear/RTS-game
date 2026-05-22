@@ -19,6 +19,7 @@ local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 
 local AnimateEnemyModule = require(script.Parent.AnimateEnemyModule)
 local NPCBillboardService = require(script.Parent.Infrastructure.NPCBillboardService)
+local EnemyReplicationClient = require(script.Parent.Infrastructure.Services.EnemyReplicationClient)
 local AttackAction = require(script.Parent.Actions.AttackAction)
 
 local TAG = "[EnemyAnimation]"
@@ -90,7 +91,8 @@ function EnemyAnimationController:KnitInit()
 	self._workspaceChildAddedConnection = nil :: RBXScriptConnection?
 	self._tagAddedConnection = nil :: RBXScriptConnection?
 	self._tagRemovedConnection = nil :: RBXScriptConnection?
-	self._npcBillboardService = NPCBillboardService.new()
+	self._enemyReplicationClient = EnemyReplicationClient.new()
+	self._npcBillboardService = NPCBillboardService.new(self._enemyReplicationClient)
 	self._combatService = nil
 
 	registry:Register("NPCBillboardService", self._npcBillboardService, "Infrastructure")
@@ -223,6 +225,8 @@ end
 function EnemyAnimationController:KnitStart()
 	local registry = self.Registry
 	self._combatService = Knit.GetService("CombatContext")
+	self._enemyReplicationClient:Init()
+	self._enemyReplicationClient:Start()
 
 	-- Track enemies that arrive through the replicated animation tag.
 	self._tagAddedConnection = CollectionService:GetInstanceAddedSignal(ANIMATED_ENEMY_TAG):Connect(function(instance)
@@ -292,6 +296,11 @@ function EnemyAnimationController:Destroy()
 	-- Release any model-specific animation cleanup after the global listeners are gone.
 	for model in self._tracked do
 		self:_UntrackModel(model)
+	end
+
+	if self._enemyReplicationClient then
+		self._enemyReplicationClient:Destroy()
+		self._enemyReplicationClient = nil
 	end
 end
 

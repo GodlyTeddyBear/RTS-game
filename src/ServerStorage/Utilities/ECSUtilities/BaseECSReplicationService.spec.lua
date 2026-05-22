@@ -20,9 +20,11 @@ local function createStubServer(world: any)
 		InitCalls = 0,
 		DestroyCalls = 0,
 		Handshake = {
-			Components = {
+			components = {
 				Health = true,
 			},
+			custom_ids = {},
+			serdes = {},
 		},
 		SharedCount = 3,
 		MarkedPlayers = {},
@@ -208,12 +210,16 @@ local function createStubServer(world: any)
 		local index = 0
 		local packets = self.CollectUpdatesPackets
 		return function()
-			index += 1
-			local packet = packets[index]
-			if packet == nil then
-				return nil
+			while true do
+				index += 1
+				local packet = packets[index]
+				if packet == nil then
+					return nil
+				end
+				if self:is_player_ready(packet.Player) then
+					return packet.Player, packet.Buffer, packet.Variants
+				end
 			end
-			return packet.Player, packet.Buffer, packet.Variants
 		end
 	end
 
@@ -221,12 +227,16 @@ local function createStubServer(world: any)
 		local index = 0
 		local packets = self.CollectUnreliablePackets
 		return function()
-			index += 1
-			local packet = packets[index]
-			if packet == nil then
-				return nil
+			while true do
+				index += 1
+				local packet = packets[index]
+				if packet == nil then
+					return nil
+				end
+				if self:is_player_ready(packet.Player) then
+					return packet.Player, packet.Buffer, packet.Variants
+				end
 			end
-			return packet.Player, packet.Buffer, packet.Variants
 		end
 	end
 
@@ -258,6 +268,7 @@ function TestReplicationService.new(world: any)
 	self._testWorld = world
 	self.SentHandshake = {}
 	self.SentFull = {}
+	self.SentBootstrap = {}
 	self.SentReliable = {}
 	self.SentUnreliable = {}
 	self.SentEntity = {}
@@ -305,6 +316,13 @@ end
 
 function TestReplicationService:_SendFull(player: any, payload: any)
 	table.insert(self.SentFull, {
+		Player = player,
+		Payload = payload,
+	})
+end
+
+function TestReplicationService:_SendBootstrap(player: any, payload: any)
+	table.insert(self.SentBootstrap, {
 		Player = player,
 		Payload = payload,
 	})
@@ -406,7 +424,7 @@ describe("BaseECSReplicationService", function()
 		expect(world:has(aliveTag, service:GetReplecsServerOrThrow().components.shared)).toBe(true)
 	end)
 
-	it("hydrates players in handshake then full then ready order", function()
+	it("builds and sends bootstrap payloads without marking players ready", function()
 		local world = JECS.World.new()
 		local registry = createRegistry(world, {})
 		local service = TestReplicationService.new(world)
@@ -415,12 +433,19 @@ describe("BaseECSReplicationService", function()
 		}
 
 		service:Init(registry, "TestService")
-		service:HydratePlayer(fakePlayer :: any)
+		local payload = service:BuildBootstrapPayload(fakePlayer :: any)
+		local sent = service:HydratePlayer(fakePlayer :: any)
 
-		expect(#service.SentHandshake).toBe(1)
-		expect(#service.SentFull).toBe(1)
-		expect(service.SentHandshake[1].Player).toBe(fakePlayer)
-		expect(service.SentFull[1].Player).toBe(fakePlayer)
+		expect(payload).never.toBeNil()
+		expect(payload.Handshake).toBe(service:GetReplecsServerOrThrow().Handshake)
+		expect(#service.SentBootstrap).toBe(1)
+		expect(sent).toBe(true)
+		expect(service.SentBootstrap[1].Player).toBe(fakePlayer)
+		expect(service.SentBootstrap[1].Payload.Handshake).toBe(payload.Handshake)
+		expect(service:GetReplecsServerOrThrow().MarkedPlayers[1]).toBeNil()
+
+		local completed = service:CompleteBootstrap(fakePlayer :: any)
+		expect(completed).toBe(true)
 		expect(service:GetReplecsServerOrThrow().MarkedPlayers[1]).toBe(fakePlayer)
 	end)
 
@@ -466,6 +491,16 @@ describe("BaseECSReplicationService", function()
 		service:FlushReliable()
 		service:FlushUnreliable()
 		local sentCount = service:CollectEntityPackets(10)
+
+		expect(#service.SentReliable).toBe(0)
+		expect(#service.SentUnreliable).toBe(0)
+		expect(#service.SentEntity).toBe(0)
+		expect(sentCount).toBe(0)
+
+		service:CompleteBootstrap(player :: any)
+		service:FlushReliable()
+		service:FlushUnreliable()
+		sentCount = service:CollectEntityPackets(10)
 
 		expect(#service.SentReliable).toBe(1)
 		expect(#service.SentUnreliable).toBe(1)
@@ -531,7 +566,7 @@ describe("BaseECSReplicationService", function()
 		expect(server.StopPairCalls[1].KeepState).toBe(true)
 	end)
 
-	it("hydrates all players and destroys idempotently", function()
+	it("hydrates all players without activating them and destroys idempotently", function()
 		local world = JECS.World.new()
 		local registry = createRegistry(world, {})
 		local service = TestReplicationService.new(world)
@@ -542,8 +577,8 @@ describe("BaseECSReplicationService", function()
 		service:Init(registry, "TestService")
 		service:HydrateAllPlayers()
 
-		expect(#service.SentHandshake).toBe(2)
-		expect(#service.SentFull).toBe(2)
+		expect(#service.SentBootstrap).toBe(2)
+		expect(#service:GetReplecsServerOrThrow().MarkedPlayers).toBe(0)
 
 		local server = service:GetReplecsServerOrThrow()
 		service:Destroy()
@@ -634,6 +669,17 @@ describe("BaseECSReplicationService", function()
 			})
 		end).toThrow()
 
+		service:RegisterSerdes(namedComponent, {
+			serialize = function(_value: any)
+				return buffer.create(0)
+			end,
+			deserialize = function(_packetBuffer: buffer)
+				return nil
+			end,
+			includes_variants = false,
+			bytespan = 8,
+		})
+
 		local verified, message = service:VerifyHandshake({
 			components = {},
 			custom_ids = {},
@@ -646,9 +692,15 @@ describe("BaseECSReplicationService", function()
 		local mismatch = service:DescribeSharedSchemaMismatch({
 			components = {},
 			custom_ids = {},
-			serdes = {},
+			serdes = {
+				Health = {
+					includes_variants = true,
+					bytespan = 16,
+				},
+			},
 		})
 		expect(mismatch.LastVerificationError).toBe("mismatch")
+		expect(#mismatch.MismatchedSerdes).toBe(1)
 	end)
 
 	it("tracks applied schema state and removal helpers", function()
@@ -704,7 +756,7 @@ describe("BaseECSReplicationService", function()
 
 		service:RemoveSharedComponent(healthComponent)
 		service:RemoveSharedTag(aliveTag)
-		service:RemoveRegisteredCustomId(trackedCustomId)
+		service:ForgetTrackedCustomId(trackedCustomId)
 		service:RemoveSerdes(healthComponent)
 		service:RemoveComponentCustomHandler(healthComponent)
 

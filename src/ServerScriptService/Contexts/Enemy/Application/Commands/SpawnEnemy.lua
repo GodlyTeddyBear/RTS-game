@@ -32,6 +32,7 @@ function SpawnEnemy:Init(registry: any, _name: string)
 		_spawnPolicy = "EnemySpawnPolicy",
 		_entityFactory = "EnemyEntityFactory",
 		_instanceFactory = "EnemyInstanceFactory",
+		_replicationService = "EnemyECSReplicationService",
 		_syncService = "EnemyGameObjectSyncService",
 	})
 end
@@ -50,6 +51,7 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 
 		ModelPlus.MoveToCFrame(model, spawnCFrame)
 		self._entityFactory:SetModelRef(entity, model)
+		self._replicationService:RegisterEnemyEntity(entity)
 		self._syncService:RegisterEntity(entity, model)
 		self:_EmitGameEvent("Wave", "EnemySpawned", entity, role, waveNumber)
 
