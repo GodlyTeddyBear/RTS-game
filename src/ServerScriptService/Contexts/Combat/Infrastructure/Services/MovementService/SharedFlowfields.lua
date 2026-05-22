@@ -5,7 +5,6 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local FastFlowHelper = require(ServerStorage.Utilities.FastFlowHelper)
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
-local vector2 = require(ServerStorage.Utilities.Parallelizer.Index.DataTypes.vector2)
 local MovementTypes = require(script.Parent.Types)
 local MovementMath = require(script.Parent.Math.MovementMath)
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -471,10 +470,10 @@ return function(MovementService: TMovementService)
 
 					local mergedDirection = self:_SampleFlowDirectionXZ(movementState, position)
 					if mergedDirection then
-						return Ok(({
+						return Ok({
 							Direction = mergedDirection,
 							Status = "Recovered",
-						} :: TFlowRepairResult))
+						} :: TFlowRepairResult)
 					end
 				end
 			end
@@ -483,10 +482,10 @@ return function(MovementService: TMovementService)
 			local openCellDirection =
 				self:_TryRecoverFlowDirectionFromOpenCell(entity, movementState, position, pathfinder, mapping)
 			if openCellDirection then
-				return Ok(({
+				return Ok({
 					Direction = openCellDirection,
 					Status = "Recovered",
-				} :: TFlowRepairResult))
+				} :: TFlowRepairResult)
 			end
 		end
 
@@ -510,26 +509,26 @@ return function(MovementService: TMovementService)
 		-- Try the regenerated field first, then fall back to an open-cell escape if needed.
 		local regeneratedDirection = self:_SampleFlowDirectionXZ(movementState, position)
 		if regeneratedDirection then
-			return Ok(({
+			return Ok({
 				Direction = regeneratedDirection,
 				Status = "Recovered",
-			} :: TFlowRepairResult))
+			} :: TFlowRepairResult)
 		end
 
 		if pathfinder and mapping then
 			local openCellDirection =
 				self:_TryRecoverFlowDirectionFromOpenCell(entity, movementState, position, pathfinder, mapping)
 			if openCellDirection then
-				return Ok(({
+				return Ok({
 					Direction = openCellDirection,
 					Status = "Recovered",
-				} :: TFlowRepairResult))
+				} :: TFlowRepairResult)
 			end
 		end
 
-		return Ok(({
+		return Ok({
 			Direction = nil,
 			Status = "RetryLater",
-		} :: TFlowRepairResult))
+		} :: TFlowRepairResult)
 	end
 end

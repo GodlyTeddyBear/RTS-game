@@ -801,8 +801,8 @@ function FlowFrameState:BuildSeparationSnapshot(
 
 				cellBucket[#cellBucket + 1] = orderedEntityCount
 			end
-
-			table.sort(selfInternal._scratchCellPackedKeys)
+			-- Removed binary search so no longer useful
+			--table.sort(selfInternal._scratchCellPackedKeys)
 
 			local groupCellRecordStartIndex = #selfInternal._snapshotCellPackedKey + 1
 			local groupCellRecordCount = #selfInternal._scratchCellPackedKeys

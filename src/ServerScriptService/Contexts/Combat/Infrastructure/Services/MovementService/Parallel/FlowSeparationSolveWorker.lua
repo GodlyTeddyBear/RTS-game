@@ -18,8 +18,8 @@ local function _HasCoreWorkerPayloadFields(payload: TFlowSeparationWorkerPayload
 	return not not (
 		payload.GoalGroupCellRecordStartIndex
 		and payload.GoalGroupCellRecordCount
-		and payload.GoalGroupCellLookupStartIndex
-		and payload.GoalGroupCellLookupCount
+		and payload.GoalGroupCellHashStartIndex
+		and payload.GoalGroupCellHashSlotCount
 		and payload.GoalGroupCellWidthStuds
 		and payload.GroupCellX
 		and payload.GroupCellY
@@ -27,8 +27,8 @@ local function _HasCoreWorkerPayloadFields(payload: TFlowSeparationWorkerPayload
 		and payload.CellMemberStartIndex
 		and payload.CellMemberCount
 		and payload.CellMemberEntityIndex
-		and payload.LookupPackedKey
-		and payload.LookupCellRecordIndex
+		and payload.CellHashPackedKey
+		and payload.CellHashRecordIndex
 		and payload.FlatPositionX
 		and payload.FlatPositionY
 		and payload.Radius
@@ -69,8 +69,8 @@ function Worker.Execute(request: TFlowSeparationWorkerRequest)
 			EntityIndex = entityIndex,
 			GoalGroupCellRecordStartIndex = payload.GoalGroupCellRecordStartIndex,
 			GoalGroupCellRecordCount = payload.GoalGroupCellRecordCount,
-			GoalGroupCellLookupStartIndex = payload.GoalGroupCellLookupStartIndex,
-			GoalGroupCellLookupCount = payload.GoalGroupCellLookupCount,
+			GoalGroupCellHashStartIndex = payload.GoalGroupCellHashStartIndex,
+			GoalGroupCellHashSlotCount = payload.GoalGroupCellHashSlotCount,
 			GoalGroupCellWidthStuds = payload.GoalGroupCellWidthStuds,
 			GroupCellX = payload.GroupCellX,
 			GroupCellY = payload.GroupCellY,
@@ -78,8 +78,8 @@ function Worker.Execute(request: TFlowSeparationWorkerRequest)
 			CellMemberStartIndex = payload.CellMemberStartIndex,
 			CellMemberCount = payload.CellMemberCount,
 			CellMemberEntityIndex = payload.CellMemberEntityIndex,
-			LookupPackedKey = payload.LookupPackedKey,
-			LookupCellRecordIndex = payload.LookupCellRecordIndex,
+			CellHashPackedKey = payload.CellHashPackedKey,
+			CellHashRecordIndex = payload.CellHashRecordIndex,
 			FlatPositionX = payload.FlatPositionX,
 			FlatPositionY = payload.FlatPositionY,
 			Radius = payload.Radius,

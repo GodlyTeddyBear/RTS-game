@@ -26,32 +26,42 @@ local function _GridToWorldFlat(
 	return originX + gx * cellWidthStuds, originY + gy * cellWidthStuds
 end
 
-local function _FindLookupCellRecordIndex(
-	lookupPackedKeyArray: { number },
-	lookupCellRecordIndexArray: { number },
+local function _FindHashedCellRecordIndex(
+	cellHashPackedKeyArray: { number },
+	cellHashRecordIndexArray: { number },
 	startIndex: number,
-	count: number,
-	value: number
+	slotCount: number,
+	packedKey: number
 ): number?
-	local endIndex = startIndex + count - 1
-	for lookupIndex = startIndex, endIndex do
-		if lookupPackedKeyArray[lookupIndex] == value then
-			local cellRecordIndex = lookupCellRecordIndexArray[lookupIndex]
-			if type(cellRecordIndex) == "number" then
-				return cellRecordIndex
-			end
+	if slotCount <= 0 then
+		return nil
+	end
+
+	local slotMask = slotCount - 1
+	local slotOffset = bit32.band(packedKey, slotMask)
+
+	for _ = 1, slotCount do
+		local hashIndex = startIndex + slotOffset
+		local cellRecordIndex = cellHashRecordIndexArray[hashIndex]
+		if cellRecordIndex == 0 then
 			return nil
 		end
+		if cellHashPackedKeyArray[hashIndex] == packedKey and type(cellRecordIndex) == "number" then
+			return cellRecordIndex
+		end
+
+		slotOffset = bit32.band(slotOffset + 1, slotMask)
 	end
+
 	return nil
 end
 
 local function _AccumulateNeighborCell(
 	entityIndex: number,
-	lookupPackedKeyArray: { number },
-	lookupCellRecordIndexArray: { number },
-	goalGroupCellLookupStartIndex: number,
-	goalGroupCellLookupCount: number,
+	cellHashPackedKeyArray: { number },
+	cellHashRecordIndexArray: { number },
+	goalGroupCellHashStartIndex: number,
+	goalGroupCellHashSlotCount: number,
 	neighborCellPackedKey: number,
 	cellMemberStartIndexArray: { number },
 	cellMemberCountArray: { number },
@@ -71,11 +81,11 @@ local function _AccumulateNeighborCell(
 	separationY: number,
 	touchedSettledNeighbor: boolean
 ): (number, number, boolean)
-	local cellRecordIndex = _FindLookupCellRecordIndex(
-		lookupPackedKeyArray,
-		lookupCellRecordIndexArray,
-		goalGroupCellLookupStartIndex,
-		goalGroupCellLookupCount,
+	local cellRecordIndex = _FindHashedCellRecordIndex(
+		cellHashPackedKeyArray,
+		cellHashRecordIndexArray,
+		goalGroupCellHashStartIndex,
+		goalGroupCellHashSlotCount,
 		neighborCellPackedKey
 	)
 	if not cellRecordIndex then
@@ -191,8 +201,8 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 	EntityIndex: number,
 	GoalGroupCellRecordStartIndex: { number },
 	GoalGroupCellRecordCount: { number },
-	GoalGroupCellLookupStartIndex: { number },
-	GoalGroupCellLookupCount: { number },
+	GoalGroupCellHashStartIndex: { number },
+	GoalGroupCellHashSlotCount: { number },
 	GoalGroupCellWidthStuds: { number },
 	GroupCellX: { number },
 	GroupCellY: { number },
@@ -200,8 +210,8 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 	CellMemberStartIndex: { number },
 	CellMemberCount: { number },
 	CellMemberEntityIndex: { number },
-	LookupPackedKey: { number },
-	LookupCellRecordIndex: { number },
+	CellHashPackedKey: { number },
+	CellHashRecordIndex: { number },
 	FlatPositionX: { number },
 	FlatPositionY: { number },
 	Radius: { number },
@@ -230,8 +240,8 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 	ClumpTouchPaddingStuds: number,
 }): (Vector2, boolean)
 	local entityIndex = config.EntityIndex
-	local goalGroupCellLookupStartIndex = config.GoalGroupCellLookupStartIndex[entityIndex]
-	local goalGroupCellLookupCount = config.GoalGroupCellLookupCount[entityIndex]
+	local goalGroupCellHashStartIndex = config.GoalGroupCellHashStartIndex[entityIndex]
+	local goalGroupCellHashSlotCount = config.GoalGroupCellHashSlotCount[entityIndex]
 	local groupCellX = config.GroupCellX[entityIndex]
 	local groupCellY = config.GroupCellY[entityIndex]
 	local walkSpeed = config.WalkSpeed[entityIndex]
@@ -247,8 +257,8 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 	local cellMemberStartIndexArray = config.CellMemberStartIndex
 	local cellMemberCountArray = config.CellMemberCount
 	local cellMemberEntityIndexArray = config.CellMemberEntityIndex
-	local lookupPackedKeyArray = config.LookupPackedKey
-	local lookupCellRecordIndexArray = config.LookupCellRecordIndex
+	local cellHashPackedKeyArray = config.CellHashPackedKey
+	local cellHashRecordIndexArray = config.CellHashRecordIndex
 	local flatPositionXArray = config.FlatPositionX
 	local flatPositionYArray = config.FlatPositionY
 	local radiusArray = config.Radius
@@ -270,7 +280,7 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 	local wallGridHalfSize = config.WallGridHalfSize
 	local wallGridWidth = config.WallGridWidth
 
-	if type(goalGroupCellLookupStartIndex) ~= "number" or type(goalGroupCellLookupCount) ~= "number" then
+	if type(goalGroupCellHashStartIndex) ~= "number" or type(goalGroupCellHashSlotCount) ~= "number" then
 		return Vector2.zero, false
 	end
 	if type(groupCellX) ~= "number" or type(groupCellY) ~= "number" then
@@ -309,10 +319,10 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 		if cellGroupIndex == 1 then
 			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(
 				entityIndex,
-				lookupPackedKeyArray,
-				lookupCellRecordIndexArray,
-				goalGroupCellLookupStartIndex,
-				goalGroupCellLookupCount,
+				cellHashPackedKeyArray,
+				cellHashRecordIndexArray,
+				goalGroupCellHashStartIndex,
+				goalGroupCellHashSlotCount,
 				neighborCellPackedKey1,
 				cellMemberStartIndexArray,
 				cellMemberCountArray,
@@ -332,16 +342,16 @@ function FlowSeparationMath.ResolveVelocityWithWalls(config: {
 				separationY,
 				touchedSettledNeighbor
 			)
-			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, lookupPackedKeyArray, lookupCellRecordIndexArray, goalGroupCellLookupStartIndex, goalGroupCellLookupCount, neighborCellPackedKey2, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
-			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, lookupPackedKeyArray, lookupCellRecordIndexArray, goalGroupCellLookupStartIndex, goalGroupCellLookupCount, neighborCellPackedKey3, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
+			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, cellHashPackedKeyArray, cellHashRecordIndexArray, goalGroupCellHashStartIndex, goalGroupCellHashSlotCount, neighborCellPackedKey2, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
+			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, cellHashPackedKeyArray, cellHashRecordIndexArray, goalGroupCellHashStartIndex, goalGroupCellHashSlotCount, neighborCellPackedKey3, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
 		elseif cellGroupIndex == 4 then
-			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, lookupPackedKeyArray, lookupCellRecordIndexArray, goalGroupCellLookupStartIndex, goalGroupCellLookupCount, neighborCellPackedKey4, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
-			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, lookupPackedKeyArray, lookupCellRecordIndexArray, goalGroupCellLookupStartIndex, goalGroupCellLookupCount, neighborCellPackedKey5, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
-			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, lookupPackedKeyArray, lookupCellRecordIndexArray, goalGroupCellLookupStartIndex, goalGroupCellLookupCount, neighborCellPackedKey6, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
+			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, cellHashPackedKeyArray, cellHashRecordIndexArray, goalGroupCellHashStartIndex, goalGroupCellHashSlotCount, neighborCellPackedKey4, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
+			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, cellHashPackedKeyArray, cellHashRecordIndexArray, goalGroupCellHashStartIndex, goalGroupCellHashSlotCount, neighborCellPackedKey5, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
+			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, cellHashPackedKeyArray, cellHashRecordIndexArray, goalGroupCellHashStartIndex, goalGroupCellHashSlotCount, neighborCellPackedKey6, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
 		else
-			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, lookupPackedKeyArray, lookupCellRecordIndexArray, goalGroupCellLookupStartIndex, goalGroupCellLookupCount, neighborCellPackedKey7, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
-			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, lookupPackedKeyArray, lookupCellRecordIndexArray, goalGroupCellLookupStartIndex, goalGroupCellLookupCount, neighborCellPackedKey8, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
-			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, lookupPackedKeyArray, lookupCellRecordIndexArray, goalGroupCellLookupStartIndex, goalGroupCellLookupCount, neighborCellPackedKey9, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
+			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, cellHashPackedKeyArray, cellHashRecordIndexArray, goalGroupCellHashStartIndex, goalGroupCellHashSlotCount, neighborCellPackedKey7, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
+			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, cellHashPackedKeyArray, cellHashRecordIndexArray, goalGroupCellHashStartIndex, goalGroupCellHashSlotCount, neighborCellPackedKey8, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
+			separationX, separationY, touchedSettledNeighbor = _AccumulateNeighborCell(entityIndex, cellHashPackedKeyArray, cellHashRecordIndexArray, goalGroupCellHashStartIndex, goalGroupCellHashSlotCount, neighborCellPackedKey9, cellMemberStartIndexArray, cellMemberCountArray, cellMemberEntityIndexArray, flatPositionX, flatPositionY, radius, flatPositionXArray, flatPositionYArray, radiusArray, isSettled, isSettledArray, clumpTouchPaddingStuds, kForce, minSeparationDistance, separationX, separationY, touchedSettledNeighbor)
 		end
 	end
 
