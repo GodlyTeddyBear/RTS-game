@@ -49,6 +49,12 @@ function StructureComponentRegistry:_RegisterComponents(_registry: any, _name: s
 	self:RegisterComponent("TransformComponent", "Structure.Transform", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] stable identity metadata.
 	self:RegisterComponent("IdentityComponent", "Structure.Identity", "AUTHORITATIVE")
+	-- [DERIVED] client-facing animation state resolved from the runtime profile.
+	self:RegisterComponent("AnimationStateComponent", "Structure.AnimationState", "DERIVED")
+	-- [DERIVED] client-facing animation looping flag for the active animation state.
+	self:RegisterComponent("AnimationLoopingComponent", "Structure.AnimationLooping", "DERIVED")
+	-- [DERIVED] replicated enemy id used by the client aim layer.
+	self:RegisterComponent("TargetEnemyIdComponent", "Structure.TargetEnemyId", "DERIVED")
 	self:RegisterTag("ActiveTag", "Structure.ActiveTag")
 	self:RegisterTag("DirtyTag", "Structure.DirtyTag")
 end

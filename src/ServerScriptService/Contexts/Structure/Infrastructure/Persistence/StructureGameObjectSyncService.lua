@@ -157,9 +157,13 @@ function StructureGameObjectSyncService:_SyncEntity(entity: number, model: Model
 		StructureType = structureType,
 		CombatAction = combatAction,
 	})
+	local targetEnemyId = self:_ResolveTargetEnemyId(targetEnemyEntity)
+	factory:SetAnimationPresentation(entity, nextAnimationState, isAnimationLooping)
+	factory:SetTargetEnemyIdPresentation(entity, targetEnemyId)
+
 	self:SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
 	self:SetAttributeIfChanged(model, "AnimationLooping", isAnimationLooping)
-	self:SetAttributeIfChanged(model, "TargetEnemyId", self:_ResolveTargetEnemyId(targetEnemyEntity))
+	self:SetAttributeIfChanged(model, "TargetEnemyId", targetEnemyId)
 end
 
 function StructureGameObjectSyncService:_ResolveTargetEnemyId(targetEnemyEntity: number?): string?

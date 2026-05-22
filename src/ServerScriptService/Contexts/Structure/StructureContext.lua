@@ -26,6 +26,7 @@ local StructureInstanceFactory = require(script.Parent.Infrastructure.Services.S
 local StructureCombatAdapterService = require(script.Parent.Infrastructure.Services.StructureCombatAdapterService)
 local StructureMiningAdapterService = require(script.Parent.Infrastructure.Services.StructureMiningAdapterService)
 local StructureGameObjectSyncService = require(script.Parent.Infrastructure.Persistence.StructureGameObjectSyncService)
+local StructureECSReplicationService = require(script.Parent.Infrastructure.Persistence.StructureECSReplicationService)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
 local RegisterStructureCommand = require(script.Parent.Application.Commands.RegisterStructureCommand)
 local ApplyDamageStructureCommand = require(script.Parent.Application.Commands.ApplyDamageStructureCommand)
@@ -41,6 +42,12 @@ type StructureAttackPayload = StructureTypes.StructureAttackPayload
 type RunState = "Idle" | "Prep" | "Wave" | "Resolution" | "Climax" | "Endless" | "RunEnd"
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "ClientSignals",
+		Factory = function(service: any, _baseContext: any)
+			return service.Client
+		end,
+	},
 	{
 		Name = "StructureComponentRegistry",
 		Module = StructureComponentRegistry,
@@ -69,6 +76,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "StructureGameObjectSyncService",
 		Module = StructureGameObjectSyncService,
 		CacheAs = "_gameObjectSyncService",
+	},
+	{
+		Name = "StructureECSReplicationService",
+		Module = StructureECSReplicationService,
+		CacheAs = "_replicationService",
 	},
 	{
 		Name = "OnStructureAttacked",
@@ -132,7 +144,12 @@ local StructureModules: BaseContext.TModuleLayers = {
 ]=]
 local StructureContext = Knit.CreateService({
 	Name = "StructureContext",
-	Client = {},
+	Client = {
+		StructureBootstrap = Knit.CreateSignal(),
+		StructureReliable = Knit.CreateSignal(),
+		StructureUnreliable = Knit.CreateSignal(),
+		StructureEntity = Knit.CreateSignal(),
+	},
 	WorldService = {
 		Name = "StructureECSWorldService",
 		Module = StructureECSWorldService,
@@ -183,6 +200,8 @@ function StructureContext:KnitStart()
 	StructureBaseContext:KnitStart()
 	StructureBaseContext:RegisterMethodSystem("CombatTick", "_entityFactory", "FlushPendingDeletes")
 	StructureBaseContext:RegisterSyncSystem("_gameObjectSyncService", "SyncAll", "StructureSync")
+	StructureBaseContext:RegisterMethodSystem("StructureSync", "_replicationService", "FlushReliable")
+	StructureBaseContext:RegisterMethodSystem("StructureSync", "_replicationService", "FlushUnreliable")
 	self._combatAdapterService:ConfigureRuntimeOwner(self)
 	local registerActorTypeResult = self._combatAdapterService:RegisterActorType()
 	if not registerActorTypeResult.success then
@@ -348,6 +367,10 @@ function StructureContext:GetGameObjectSyncService(): Result.Result<any>
 	return Ok(self._gameObjectSyncService)
 end
 
+function StructureContext:GetReplicationService(): Result.Result<any>
+	return Ok(self._replicationService)
+end
+
 function StructureContext:GetSchedulerBindingStatus(targetField: string): Result.Result<any>
 	return Ok(StructureBaseContext:GetSchedulerBindingStatus(targetField))
 end
@@ -375,6 +398,14 @@ function StructureContext:Destroy()
 			CauseMessage = destroyResult.message,
 		}, destroyResult.type)
 	end
+end
+
+function StructureContext.Client:RequestStructureReplication(player: Player): boolean
+	return self.Server._replicationService:HydratePlayer(player)
+end
+
+function StructureContext.Client:AcknowledgeStructureReplicationBootstrap(player: Player): boolean
+	return self.Server._replicationService:CompleteBootstrap(player)
 end
 
 return StructureContext

@@ -1,5 +1,14 @@
 --!strict
 
+--[=[
+    @class EnemyReplicationClient
+    Enemy-context client replication adapter that extends the shared ECS
+    client base, connects to `EnemyContext`, and rebuilds a typed enemy state
+    index after each replicated packet so gameplay code can observe enemy
+    updates without reading the ECS world directly.
+    @client
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GoodSignal = require(ReplicatedStorage.Packages.Goodsignal)
@@ -7,6 +16,7 @@ require(ReplicatedStorage.Utilities.Replecs)
 local JECS = require(ReplicatedStorage.Packages.JECS)
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseECSReplicationClient = require(ReplicatedStorage.Utilities.BaseECSReplicationClient)
+local StashPlus = require(ReplicatedStorage.Utilities.StashPlus)
 
 type TBootstrapPayload = BaseECSReplicationClient.TBootstrapPayload
 type TReplicationPacketPayload = BaseECSReplicationClient.TReplicationPacketPayload
@@ -28,10 +38,14 @@ local EnemyReplicationClient = {}
 EnemyReplicationClient.__index = EnemyReplicationClient
 setmetatable(EnemyReplicationClient, { __index = BaseECSReplicationClient })
 
+-- Keeps the ECS entity name assignment in one place so component setup stays readable.
 local function _NameEntity(world: any, entity: any, name: string)
 	world:set(entity, JECS.Name, name)
 end
 
+--- Creates the enemy replication client.
+--- @within EnemyReplicationClient
+--- @return EnemyReplicationClient -- The new client instance.
 function EnemyReplicationClient.new()
 	local self = setmetatable(BaseECSReplicationClient.new("Enemy"), EnemyReplicationClient)
 	self.StateChanged = GoodSignal.new()
@@ -40,6 +54,9 @@ function EnemyReplicationClient.new()
 	return self
 end
 
+--- Builds the enemy ECS components and tags used by the client mirror world.
+--- @within EnemyReplicationClient
+--- @param world any -- The client mirror world.
 function EnemyReplicationClient:_BuildComponents(world: any, _replecsLibrary: any)
 	local identityComponent = world:component()
 	_NameEntity(world, identityComponent, "Enemy.Identity")
@@ -77,6 +94,9 @@ function EnemyReplicationClient:_BuildComponents(world: any, _replecsLibrary: an
 	})
 end
 
+--- Declares the enemy shared schema that should be mirrored from the server.
+--- @within EnemyReplicationClient
+--- @return BaseECSReplicationClient.TSharedSchema -- The enemy shared schema.
 function EnemyReplicationClient:_GetSharedSchema()
 	local components = self:GetComponentsOrThrow()
 
@@ -96,74 +116,99 @@ function EnemyReplicationClient:_GetSharedSchema()
 	}
 end
 
+--- Rebuilds the typed enemy state index after the mirror world changes.
+--- @within EnemyReplicationClient
 function EnemyReplicationClient:_RegisterReplicatedSurface()
 	self:_RebuildEnemyStateIndex()
 end
 
+--- Applies an atomic bootstrap packet and then rebuilds the enemy state index.
+--- @within EnemyReplicationClient
+--- @param payload TBootstrapPayload -- The bootstrap packet from the server.
+--- @return boolean -- True when the bootstrap packet was handled.
 function EnemyReplicationClient:HandleBootstrap(payload: TBootstrapPayload): boolean
 	local handled = BaseECSReplicationClient.HandleBootstrap(self, payload)
 	self:_RebuildEnemyStateIndex()
 	return handled
 end
 
+--- Applies a reliable packet and refreshes the enemy state index.
+--- @within EnemyReplicationClient
+--- @param payload TReplicationPacketPayload -- The reliable packet from the server.
 function EnemyReplicationClient:HandleReliable(payload: TReplicationPacketPayload)
 	BaseECSReplicationClient.HandleReliable(self, payload)
 	self:_RebuildEnemyStateIndex()
 end
 
+--- Applies an unreliable packet and refreshes the enemy state index.
+--- @within EnemyReplicationClient
+--- @param payload TReplicationPacketPayload -- The unreliable packet from the server.
 function EnemyReplicationClient:HandleUnreliable(payload: TReplicationPacketPayload)
 	BaseECSReplicationClient.HandleUnreliable(self, payload)
 	self:_RebuildEnemyStateIndex()
 end
 
+--- Applies an entity-scoped packet and refreshes the enemy state index.
+--- @within EnemyReplicationClient
+--- @param payload TReplicationPacketPayload -- The entity packet from the server.
 function EnemyReplicationClient:HandleEntity(payload: TReplicationPacketPayload)
 	BaseECSReplicationClient.HandleEntity(self, payload)
 	self:_RebuildEnemyStateIndex()
 end
 
+--- Connects the client to `EnemyContext` replication signals.
+--- @within EnemyReplicationClient
 function EnemyReplicationClient:_ConnectTransport()
 	self._enemyContext = Knit.GetService("EnemyContext")
+	local stash = StashPlus.new()
 
-	local connections = {
-		self._enemyContext.EnemyBootstrap:Connect(function(payload)
-			self:HandleBootstrap(payload)
-		end),
-		self._enemyContext.EnemyReliable:Connect(function(payload)
-			self:HandleReliable(payload)
-		end),
-		self._enemyContext.EnemyUnreliable:Connect(function(payload)
-			self:HandleUnreliable(payload)
-		end),
-		self._enemyContext.EnemyEntity:Connect(function(payload)
-			self:HandleEntity(payload)
-		end),
-	}
+	stash:AddConnection(self._enemyContext.EnemyBootstrap:Connect(function(payload)
+		self:HandleBootstrap(payload)
+	end))
+	stash:AddConnection(self._enemyContext.EnemyReliable:Connect(function(payload)
+		self:HandleReliable(payload)
+	end))
+	stash:AddConnection(self._enemyContext.EnemyUnreliable:Connect(function(payload)
+		self:HandleUnreliable(payload)
+	end))
+	stash:AddConnection(self._enemyContext.EnemyEntity:Connect(function(payload)
+		self:HandleEntity(payload)
+	end))
 
-	return function()
-		for _, connection in ipairs(connections) do
-			connection:Disconnect()
-		end
-	end
+	return stash
 end
 
+--- Requests enemy replication once the transport is connected.
+--- @within EnemyReplicationClient
 function EnemyReplicationClient:_OnStart()
 	assert(self._enemyContext ~= nil, "EnemyReplicationClient: missing EnemyContext")
 	self._enemyContext:RequestEnemyReplication()
 end
 
+--- Acknowledges the bootstrap once the full enemy snapshot has been applied.
+--- @within EnemyReplicationClient
 function EnemyReplicationClient:_OnBootstrapCompleted()
 	assert(self._enemyContext ~= nil, "EnemyReplicationClient: missing EnemyContext")
 	self._enemyContext:AcknowledgeEnemyReplicationBootstrap()
 end
 
+--- Returns the cached replicated state for a single enemy id.
+--- @within EnemyReplicationClient
+--- @param enemyId string -- The stable enemy id from replication.
+--- @return TEnemyReplicatedState? -- The cached enemy state, if present.
 function EnemyReplicationClient:GetEnemyState(enemyId: string): TEnemyReplicatedState?
 	return self._enemyStateById[enemyId]
 end
 
+--- Subscribes to enemy state change notifications.
+--- @within EnemyReplicationClient
+--- @param callback (enemyId: string) -> () -- Called whenever one enemy state changes.
 function EnemyReplicationClient:ObserveEnemyStateChanged(callback: (enemyId: string) -> ())
 	return self.StateChanged:Connect(callback)
 end
 
+--- Disconnects enemy observers and clears the cached replication state.
+--- @within EnemyReplicationClient
 function EnemyReplicationClient:Destroy()
 	if self.StateChanged ~= nil then
 		self.StateChanged:DisconnectAll()
@@ -174,6 +219,7 @@ function EnemyReplicationClient:Destroy()
 	table.clear(self._enemyStateById)
 end
 
+-- Rebuilds the enemy index in phases: collect entities, compare to the previous cache, then fire change notifications.
 function EnemyReplicationClient:_RebuildEnemyStateIndex()
 	local world = self:GetWorldOrThrow()
 	local components = self:GetComponentsOrThrow()
@@ -181,6 +227,7 @@ function EnemyReplicationClient:_RebuildEnemyStateIndex()
 	local changedEnemyIds = {}
 	local previousStateById = self._enemyStateById
 
+	-- Read the current replicated state for every alive enemy entity.
 	for entity, identity, health in world:query(components.IdentityComponent, components.HealthComponent):iter() do
 		if type(identity) ~= "table" or type(identity.EnemyId) ~= "string" then
 			continue
@@ -228,6 +275,7 @@ function EnemyReplicationClient:_RebuildEnemyStateIndex()
 		end
 	end
 
+	-- Mark enemies that disappeared entirely since the previous rebuild.
 	for enemyId in previousStateById do
 		if nextStateById[enemyId] == nil then
 			changedEnemyIds[enemyId] = true
@@ -236,6 +284,7 @@ function EnemyReplicationClient:_RebuildEnemyStateIndex()
 
 	self._enemyStateById = nextStateById
 
+	-- Notify observers after the cache swap so readers always see a coherent snapshot.
 	for enemyId in changedEnemyIds do
 		self.StateChanged:Fire(enemyId)
 	end

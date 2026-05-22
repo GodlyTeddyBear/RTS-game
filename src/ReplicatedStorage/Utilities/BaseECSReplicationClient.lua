@@ -1,5 +1,17 @@
 --!strict
 
+--[=[
+    @class BaseECSReplicationClient
+    Shared client-side ECS replication base that builds the mirror world,
+    verifies the server handshake, applies bootstrap and delta packets, and
+    lets concrete clients project replicated entities into domain state.
+
+    Flow: create the mirror world -> build the Replecs client -> apply shared
+    schema -> connect transport -> stage packets until the first full snapshot
+    arrives, then keep the mirror world in sync.
+    @client
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 require(ReplicatedStorage.Utilities.Replecs)
@@ -137,6 +149,10 @@ end
 local BaseECSReplicationClient = {}
 BaseECSReplicationClient.__index = BaseECSReplicationClient
 
+--- Creates a new base replication client for a named context.
+--- @within BaseECSReplicationClient
+--- @param contextName string -- The owning context name used in assertions and diagnostics.
+--- @return BaseECSReplicationClient -- The new client instance.
 function BaseECSReplicationClient.new(contextName: string)
 	local self = setmetatable({}, BaseECSReplicationClient)
 	self._contextName = contextName
@@ -157,6 +173,8 @@ function BaseECSReplicationClient.new(contextName: string)
 	return self
 end
 
+--- Resolves the mirror world, the Replecs client, and the shared schema for this context.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:Init()
 	assert(not self._initialized, ("%sECSReplicationClient: Init called twice"):format(self._contextName))
 
@@ -168,8 +186,14 @@ function BaseECSReplicationClient:Init()
 	assert(self._replecsLibrary ~= nil, ("%sECSReplicationClient: missing Replecs library"):format(self._contextName))
 
 	self._replecsClient = self._replecsLibrary.create_client(self._world)
-	assert(self._replecsClient ~= nil, ("%sECSReplicationClient: failed to create Replecs client"):format(self._contextName))
-	assert(type(self._replecsClient.init) == "function", ("%sECSReplicationClient: Replecs client missing init"):format(self._contextName))
+	assert(
+		self._replecsClient ~= nil,
+		("%sECSReplicationClient: failed to create Replecs client"):format(self._contextName)
+	)
+	assert(
+		type(self._replecsClient.init) == "function",
+		("%sECSReplicationClient: Replecs client missing init"):format(self._contextName)
+	)
 
 	self._replecsClient:init(self._world)
 
@@ -186,6 +210,8 @@ function BaseECSReplicationClient:Init()
 	self:_RegisterReplicatedSurface()
 end
 
+--- Starts the client transport after initialization has completed.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:Start()
 	self:RequireReady()
 	assert(not self._started, ("%sECSReplicationClient: Start called twice"):format(self._contextName))
@@ -195,6 +221,8 @@ function BaseECSReplicationClient:Start()
 	self._started = true
 end
 
+--- Asserts that the client has been initialized and its core dependencies exist.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:RequireReady()
 	assert(self._initialized, ("%sECSReplicationClient: used before Init"):format(self._contextName))
 	assert(self._world ~= nil, ("%sECSReplicationClient: missing world"):format(self._contextName))
@@ -203,11 +231,15 @@ function BaseECSReplicationClient:RequireReady()
 	assert(self._replecsClient ~= nil, ("%sECSReplicationClient: missing Replecs client"):format(self._contextName))
 end
 
+--- Returns the active ECS mirror world after initialization.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:GetWorldOrThrow()
 	self:RequireReady()
 	return self._world
 end
 
+--- Returns the registered component table after initialization.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:GetComponentsOrThrow()
 	self:RequireReady()
 	return self._components
@@ -252,6 +284,8 @@ function BaseECSReplicationClient:RemoveSharedTag(tagId: any)
 	self._schemaState.SharedTags[tagId] = nil
 end
 
+--- Handles the handshake packet and resets stale bootstrap state when needed.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:HandleHandshake(payload: THandshakePayload)
 	self:RequireReady()
 	if self._handshakeVerified or self._hasReceivedFull or self._bootstrapCompleted then
@@ -259,19 +293,29 @@ function BaseECSReplicationClient:HandleHandshake(payload: THandshakePayload)
 	end
 
 	local verified, message = self:VerifyHandshake(payload.Handshake)
-	assert(verified, ("%sECSReplicationClient: handshake verification failed: %s"):format(self._contextName, tostring(message)))
+	assert(
+		verified,
+		("%sECSReplicationClient: handshake verification failed: %s"):format(self._contextName, tostring(message))
+	)
 	self._handshakeVerified = true
 end
 
+--- Applies the full snapshot packet and finalizes bootstrap ordering.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:HandleFull(payload: TReplicationPacketPayload)
 	self:RequireReady()
-	assert(self._handshakeVerified, ("%sECSReplicationClient: received full payload before handshake"):format(self._contextName))
+	assert(
+		self._handshakeVerified,
+		("%sECSReplicationClient: received full payload before handshake"):format(self._contextName)
+	)
 	self._replecsClient:apply_full(payload.Buffer, payload.Variants)
 	self._hasReceivedFull = true
 	self:_FlushPendingPackets()
 	self:_FinalizeBootstrap()
 end
 
+--- Applies a combined handshake plus full-state bootstrap packet.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:HandleBootstrap(payload: TBootstrapPayload): boolean
 	self:RequireReady()
 	self:HandleHandshake({
@@ -284,9 +328,14 @@ function BaseECSReplicationClient:HandleBootstrap(payload: TBootstrapPayload): b
 	return true
 end
 
+--- Applies a reliable delta packet or queues it until the full snapshot arrives.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:HandleReliable(payload: TReplicationPacketPayload)
 	self:RequireReady()
-	assert(self._handshakeVerified, ("%sECSReplicationClient: received reliable payload before handshake"):format(self._contextName))
+	assert(
+		self._handshakeVerified,
+		("%sECSReplicationClient: received reliable payload before handshake"):format(self._contextName)
+	)
 	if not self._hasReceivedFull then
 		self:_QueuePendingPacket("Reliable", payload)
 		return
@@ -294,9 +343,14 @@ function BaseECSReplicationClient:HandleReliable(payload: TReplicationPacketPayl
 	self._replecsClient:apply_updates(payload.Buffer, payload.Variants)
 end
 
+--- Applies an unreliable delta packet or queues it until the full snapshot arrives.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:HandleUnreliable(payload: TReplicationPacketPayload)
 	self:RequireReady()
-	assert(self._handshakeVerified, ("%sECSReplicationClient: received unreliable payload before handshake"):format(self._contextName))
+	assert(
+		self._handshakeVerified,
+		("%sECSReplicationClient: received unreliable payload before handshake"):format(self._contextName)
+	)
 	if not self._hasReceivedFull then
 		self:_QueuePendingPacket("Unreliable", payload)
 		return
@@ -304,9 +358,14 @@ function BaseECSReplicationClient:HandleUnreliable(payload: TReplicationPacketPa
 	self._replecsClient:apply_unreliable(payload.Buffer, payload.Variants)
 end
 
+--- Applies an entity-scoped packet or queues it until the full snapshot arrives.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:HandleEntity(payload: TReplicationPacketPayload)
 	self:RequireReady()
-	assert(self._handshakeVerified, ("%sECSReplicationClient: received entity payload before handshake"):format(self._contextName))
+	assert(
+		self._handshakeVerified,
+		("%sECSReplicationClient: received entity payload before handshake"):format(self._contextName)
+	)
 	if not self._hasReceivedFull then
 		self:_QueuePendingPacket("Entity", payload)
 		return
@@ -314,11 +373,15 @@ function BaseECSReplicationClient:HandleEntity(payload: TReplicationPacketPayloa
 	self._replecsClient:apply_entity(payload.Buffer, payload.Variants)
 end
 
+--- Generates a handshake for the current client schema.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:GenerateHandshake()
 	self:RequireReady()
 	return self._replecsClient:generate_handshake()
 end
 
+--- Verifies a handshake and stores the last verification error when it fails.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:VerifyHandshake(handshake: any): (boolean, string?)
 	self:RequireReady()
 	local verified, message = self._replecsClient:verify_handshake(handshake)
@@ -399,6 +462,7 @@ function BaseECSReplicationClient:UnregisterEntity(clientEntity: any)
 	self._replecsClient:unregister_entity(clientEntity)
 end
 
+-- This is one and done, do not use for frequency
 function BaseECSReplicationClient:AfterReplication(callback: () -> ())
 	self:RequireReady()
 	self._replecsClient:after_replication(callback)
@@ -423,29 +487,35 @@ function BaseECSReplicationClient:Override(action: string, relationOrEntity: any
 	return self._replecsClient:override(action, relationOrEntity, callback)
 end
 
+--- Applies a shared schema to the client mirror world and tracks the snapshot.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:ApplySharedSchema(schema: TSharedSchema)
 	self:RequireReady()
 	self:ValidateSharedSchema(schema)
 
 	if schema.sharedComponents ~= nil then
+		-- Register shared components before any packets rely on the ids.
 		for _, componentId in ipairs(schema.sharedComponents) do
 			self:RegisterSharedComponent(componentId)
 		end
 	end
 
 	if schema.sharedTags ~= nil then
+		-- Register shared tags alongside shared components for the same handshake surface.
 		for _, tagId in ipairs(schema.sharedTags) do
 			self:RegisterSharedTag(tagId)
 		end
 	end
 
 	if schema.customIds ~= nil then
+		-- Track custom ids before any packets rely on them.
 		for _, customId in ipairs(schema.customIds) do
 			self:RegisterCustomId(customId)
 		end
 	end
 
 	if schema.serdes ~= nil then
+		-- Install component-specific serializers after the ids have been registered.
 		for componentId, serdes in schema.serdes do
 			self:RegisterSerdes(componentId, serdes)
 		end
@@ -454,6 +524,7 @@ function BaseECSReplicationClient:ApplySharedSchema(schema: TSharedSchema)
 	if schema.componentCustomHandlers ~= nil then
 		local world = self:GetWorldOrThrow()
 		local customHandlerComponent = self:GetReplecsComponentsOrThrow().custom_handler
+		-- Apply custom handler components last so the mirror world has every dependency in place.
 		for componentId, handler in schema.componentCustomHandlers do
 			world:set(componentId, customHandlerComponent, handler)
 			self._schemaState.ComponentCustomHandlers[componentId] = handler
@@ -485,7 +556,10 @@ function BaseECSReplicationClient:ValidateSharedSchema(schema: TSharedSchema)
 
 	if schema.customIds ~= nil then
 		for index, customId in ipairs(schema.customIds) do
-			assert(_GetCustomIdIdentifier(customId) ~= nil, ("shared schema customIds entry %d is invalid"):format(index))
+			assert(
+				_GetCustomIdIdentifier(customId) ~= nil,
+				("shared schema customIds entry %d is invalid"):format(index)
+			)
 		end
 	end
 
@@ -494,8 +568,14 @@ function BaseECSReplicationClient:ValidateSharedSchema(schema: TSharedSchema)
 			local entityName = _GetEntityName(self._world, componentId)
 			assert(entityName ~= nil, "shared schema serdes target is missing JECS.Name")
 			assert(type(serdes) == "table", ("shared schema serdes for %s must be a table"):format(entityName))
-			assert(type(serdes.serialize) == "function", ("shared schema serdes for %s is missing serialize"):format(entityName))
-			assert(type(serdes.deserialize) == "function", ("shared schema serdes for %s is missing deserialize"):format(entityName))
+			assert(
+				type(serdes.serialize) == "function",
+				("shared schema serdes for %s is missing serialize"):format(entityName)
+			)
+			assert(
+				type(serdes.deserialize) == "function",
+				("shared schema serdes for %s is missing deserialize"):format(entityName)
+			)
 		end
 	end
 
@@ -503,7 +583,10 @@ function BaseECSReplicationClient:ValidateSharedSchema(schema: TSharedSchema)
 		for componentId, handler in schema.componentCustomHandlers do
 			local entityName = _GetEntityName(self._world, componentId)
 			assert(entityName ~= nil, "shared schema component custom handler target is missing JECS.Name")
-			assert(type(handler) == "function", ("shared schema custom handler for %s must be a function"):format(entityName))
+			assert(
+				type(handler) == "function",
+				("shared schema custom handler for %s must be a function"):format(entityName)
+			)
 		end
 	end
 
@@ -587,13 +670,21 @@ function BaseECSReplicationClient:GetLastHandshakeVerificationError(): string?
 	return self._lastHandshakeVerificationError
 end
 
+--- Describes the differences between the tracked shared schema and a handshake payload.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:DescribeSharedSchemaMismatch(handshake: any)
 	self:RequireReady()
 
 	local summary = self:GetSchemaSummary()
-	local handshakeComponents = if type(handshake) == "table" and type(handshake.components) == "table" then handshake.components else {}
-	local handshakeCustomIds = if type(handshake) == "table" and type(handshake.custom_ids) == "table" then handshake.custom_ids else {}
-	local handshakeSerdes = if type(handshake) == "table" and type(handshake.serdes) == "table" then handshake.serdes else {}
+	local handshakeComponents = if type(handshake) == "table" and type(handshake.components) == "table"
+		then handshake.components
+		else {}
+	local handshakeCustomIds = if type(handshake) == "table" and type(handshake.custom_ids) == "table"
+		then handshake.custom_ids
+		else {}
+	local handshakeSerdes = if type(handshake) == "table" and type(handshake.serdes) == "table"
+		then handshake.serdes
+		else {}
 
 	local expectedComponents = {}
 	for _, name in ipairs(summary.SharedComponents) do
@@ -646,6 +737,7 @@ function BaseECSReplicationClient:DescribeSharedSchemaMismatch(handshake: any)
 	local missingSerdes = {}
 	local extraSerdes = {}
 	local mismatchedSerdes = {}
+	-- Compare the negotiated serdes shape against the tracked world configuration.
 	for name, expectedInfo in expectedSerdes do
 		if handshakeSerdes[name] == nil then
 			table.insert(missingSerdes, name)
@@ -657,14 +749,20 @@ function BaseECSReplicationClient:DescribeSharedSchemaMismatch(handshake: any)
 				receivedIncludesVariants = handshakeInfo.includes_variants or false
 				receivedBytespan = handshakeInfo.bytespan
 			end
-			if receivedIncludesVariants ~= expectedInfo.includes_variants or receivedBytespan ~= expectedInfo.bytespan then
-				table.insert(mismatchedSerdes, table.freeze({
-					Component = name,
-					ExpectedIncludesVariants = expectedInfo.includes_variants,
-					ReceivedIncludesVariants = receivedIncludesVariants,
-					ExpectedBytespan = expectedInfo.bytespan,
-					ReceivedBytespan = receivedBytespan,
-				}))
+			if
+				receivedIncludesVariants ~= expectedInfo.includes_variants
+				or receivedBytespan ~= expectedInfo.bytespan
+			then
+				table.insert(
+					mismatchedSerdes,
+					table.freeze({
+						Component = name,
+						ExpectedIncludesVariants = expectedInfo.includes_variants,
+						ReceivedIncludesVariants = receivedIncludesVariants,
+						ExpectedBytespan = expectedInfo.bytespan,
+						ReceivedBytespan = receivedBytespan,
+					})
+				)
 			end
 		end
 	end
@@ -719,6 +817,8 @@ function BaseECSReplicationClient:ResetBootstrapState()
 	self._pendingPackets = _CreatePendingPacketState()
 end
 
+--- Tears down the replication client and clears all cached state.
+--- @within BaseECSReplicationClient
 function BaseECSReplicationClient:Destroy()
 	if not self._initialized and self._replecsClient == nil then
 		return
@@ -765,7 +865,9 @@ function BaseECSReplicationClient:_SnapshotSharedSchema(schema: TSharedSchema): 
 		sharedTags = _CopyArray(schema.sharedTags),
 		customIds = _CopyArray(schema.customIds),
 		serdes = if schema.serdes ~= nil then table.clone(schema.serdes) else nil,
-		componentCustomHandlers = if schema.componentCustomHandlers ~= nil then table.clone(schema.componentCustomHandlers) else nil,
+		componentCustomHandlers = if schema.componentCustomHandlers ~= nil
+			then table.clone(schema.componentCustomHandlers)
+			else nil,
 	}
 	return table.freeze(snapshot)
 end
@@ -819,7 +921,10 @@ function BaseECSReplicationClient:_FinalizeBootstrap()
 	self:_OnBootstrapCompleted()
 end
 
-function BaseECSReplicationClient:_QueuePendingPacket(queueName: "Reliable" | "Entity" | "Unreliable", payload: TReplicationPacketPayload)
+function BaseECSReplicationClient:_QueuePendingPacket(
+	queueName: "Reliable" | "Entity" | "Unreliable",
+	payload: TReplicationPacketPayload
+)
 	local queue = self._pendingPackets[queueName]
 
 	if queueName == "Unreliable" then
@@ -833,7 +938,12 @@ function BaseECSReplicationClient:_QueuePendingPacket(queueName: "Reliable" | "E
 	local queueLimit = if queueName == "Reliable" then MAX_PENDING_RELIABLE_PACKETS else MAX_PENDING_ENTITY_PACKETS
 	if #queue >= queueLimit then
 		self:ResetBootstrapState()
-		error(("%sECSReplicationClient: pending %s packet queue overflow before full snapshot"):format(self._contextName, string.lower(queueName)))
+		error(
+			("%sECSReplicationClient: pending %s packet queue overflow before full snapshot"):format(
+				self._contextName,
+				string.lower(queueName)
+			)
+		)
 	end
 
 	table.insert(queue, payload)

@@ -45,7 +45,8 @@ function RegisterStructureCommand:Init(registry: any, _name: string)
 		_policy = "RegisterStructurePolicy",
 		_factory = "StructureEntityFactory",
 		_instanceFactory = "StructureInstanceFactory",
-		_syncService = "StructureGameObjectSyncService"
+		_replicationService = "StructureECSReplicationService",
+		_syncService = "StructureGameObjectSyncService",
 	})
 end
 
@@ -76,6 +77,7 @@ function RegisterStructureCommand:Execute(record: StructureRecord): Result.Resul
 			resolved.RotationQuarterTurns
 		)
 		self._factory:SetModelRef(entity, model)
+		self._replicationService:RegisterStructureEntity(entity)
 		self._syncService:RegisterEntity(entity, model)
 
 		-- Emit a milestone for traceability when a structure becomes active.

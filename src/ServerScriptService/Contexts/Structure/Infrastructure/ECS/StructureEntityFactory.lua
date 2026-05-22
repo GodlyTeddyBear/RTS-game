@@ -59,6 +59,9 @@ function StructureEntityFactory:_OnInit(_registry: any, _name: string, _componen
 			and self._components.ModelRefComponent ~= nil
 			and self._components.TransformComponent ~= nil
 			and self._components.IdentityComponent ~= nil
+			and self._components.AnimationStateComponent ~= nil
+			and self._components.AnimationLoopingComponent ~= nil
+			and self._components.TargetEnemyIdComponent ~= nil
 			and self._components.ActiveTag ~= nil
 			and self._components.DirtyTag ~= nil,
 		"StructureEntityFactory: missing StructureComponentRegistry components"
@@ -146,6 +149,9 @@ function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord)
 		} :: TIdentityComponent
 	)
 	self:SetUniqueLookup("StructureId", structureId, entity)
+	self:_Set(entity, components.AnimationStateComponent, "Idle")
+	self:_Set(entity, components.AnimationLoopingComponent, true)
+	self:_Set(entity, components.TargetEnemyIdComponent, nil)
 
 	-- Mark the entity active so queries and systems can pick it up this frame.
 	self:_Add(entity, components.ActiveTag)
@@ -323,6 +329,68 @@ function StructureEntityFactory:GetIdentity(entity: number?): TIdentityComponent
 	local components = self:GetComponentsOrThrow()
 
 	return self:_Get(entity, components.IdentityComponent)
+end
+
+function StructureEntityFactory:GetAnimationState(entity: number?): string?
+	if entity == nil then
+		return nil
+	end
+
+	local components = self:GetComponentsOrThrow()
+	local animationState = self:_Get(entity, components.AnimationStateComponent)
+	return if type(animationState) == "string" then animationState else nil
+end
+
+function StructureEntityFactory:IsAnimationLooping(entity: number?): boolean?
+	if entity == nil then
+		return nil
+	end
+
+	local components = self:GetComponentsOrThrow()
+	local isLooping = self:_Get(entity, components.AnimationLoopingComponent)
+	return if type(isLooping) == "boolean" then isLooping else nil
+end
+
+function StructureEntityFactory:SetAnimationPresentation(entity: number?, animationState: string, isLooping: boolean)
+	if entity == nil then
+		return
+	end
+
+	local currentAnimationState = self:GetAnimationState(entity)
+	local currentLooping = self:IsAnimationLooping(entity)
+	if currentAnimationState == animationState and currentLooping == isLooping then
+		return
+	end
+
+	local components = self:GetComponentsOrThrow()
+	self:_Set(entity, components.AnimationStateComponent, animationState)
+	self:_Set(entity, components.AnimationLoopingComponent, isLooping)
+	self:MarkDirty(entity)
+end
+
+function StructureEntityFactory:GetTargetEnemyId(entity: number?): string?
+	if entity == nil then
+		return nil
+	end
+
+	local components = self:GetComponentsOrThrow()
+	local targetEnemyId = self:_Get(entity, components.TargetEnemyIdComponent)
+	return if type(targetEnemyId) == "string" and targetEnemyId ~= "" then targetEnemyId else nil
+end
+
+function StructureEntityFactory:SetTargetEnemyIdPresentation(entity: number?, targetEnemyId: string?)
+	if entity == nil then
+		return
+	end
+
+	local normalizedTargetEnemyId = if type(targetEnemyId) == "string" and targetEnemyId ~= "" then targetEnemyId else nil
+	if self:GetTargetEnemyId(entity) == normalizedTargetEnemyId then
+		return
+	end
+
+	local components = self:GetComponentsOrThrow()
+	self:_Set(entity, components.TargetEnemyIdComponent, normalizedTargetEnemyId)
+	self:MarkDirty(entity)
 end
 
 --[=[

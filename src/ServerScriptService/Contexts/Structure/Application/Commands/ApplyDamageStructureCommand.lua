@@ -31,6 +31,7 @@ function ApplyDamageStructureCommand:Init(registry: any, _name: string)
 		_instanceFactory = "StructureInstanceFactory",
 		_combatAdapterService = "StructureCombatAdapterService",
 		_miningAdapterService = "StructureMiningAdapterService",
+		_replicationService = "StructureECSReplicationService",
 	})
 end
 
@@ -63,6 +64,7 @@ function ApplyDamageStructureCommand:Execute(entity: any, amount: number): Resul
 		if didDie then
 			self._combatAdapterService:UnregisterActor(entity)
 			self._miningAdapterService:UnregisterActor(entity)
+			self._replicationService:UnregisterStructureEntity(entity)
 			self._instanceFactory:DestroyInstance(entity)
 			self._factory:ClearModelRef(entity)
 			self._factory:DeleteEntity(entity)

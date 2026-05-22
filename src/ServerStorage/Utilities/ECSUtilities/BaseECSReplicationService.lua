@@ -1,5 +1,17 @@
 --!strict
 
+--[=[
+    @class BaseECSReplicationService
+    Shared server-side ECS replication base that wires a context world into a
+    Replecs server, owns shared schema registration, and exposes bootstrap and
+    packet flush helpers for concrete contexts.
+
+    Flow: resolve ECS dependencies -> create the Replecs server -> register the
+    replicated surface -> validate and apply shared schema -> hydrate players
+    and flush entity packets through the concrete transport hooks.
+    @server
+]=]
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -99,6 +111,11 @@ end
 local BaseECSReplicationService = {}
 BaseECSReplicationService.__index = BaseECSReplicationService
 
+-- Lifecycle
+--- Creates a new base replication service for a named context.
+--- @within BaseECSReplicationService
+--- @param contextName string -- The owning context name used in assertions and diagnostics.
+--- @return BaseECSReplicationService -- The new service instance.
 function BaseECSReplicationService.new(contextName: string)
 	local self = setmetatable({}, BaseECSReplicationService)
 	self._contextName = contextName
@@ -116,6 +133,10 @@ function BaseECSReplicationService.new(contextName: string)
 	return self
 end
 
+--- Resolves the ECS runtime, Replecs server, and shared schema for this context.
+--- @within BaseECSReplicationService
+--- @param registry any -- The context registry.
+--- @param name string -- The registered context name.
 function BaseECSReplicationService:Init(registry: TRegistry, name: string)
 	assert(not self._initialized, ("%sECSReplicationService: Init called twice"):format(self._contextName))
 
@@ -164,6 +185,8 @@ function BaseECSReplicationService:Init(registry: TRegistry, name: string)
 	end
 end
 
+--- Asserts that the service has been initialized and its core dependencies exist.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:RequireReady()
 	assert(self._initialized, ("%sECSReplicationService: used before Init"):format(self._contextName))
 	assert(self._world ~= nil, ("%sECSReplicationService: missing world"):format(self._contextName))
@@ -173,16 +196,22 @@ function BaseECSReplicationService:RequireReady()
 	assert(self._replecsServer ~= nil, ("%sECSReplicationService: missing Replecs server"):format(self._contextName))
 end
 
+--- Returns the active ECS world after initialization.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:GetWorldOrThrow()
 	self:RequireReady()
 	return self._world
 end
 
+--- Returns the registered component table after initialization.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:GetComponentsOrThrow()
 	self:RequireReady()
 	return self._components
 end
 
+--- Returns the entity factory used by the context.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:GetEntityFactoryOrThrow()
 	self:RequireReady()
 	return self._entityFactory
@@ -340,35 +369,42 @@ function BaseECSReplicationService:StopRelation(entity: number, relationId: any,
 	self._replecsServer:stop_relation(entity, relationId, keepState)
 end
 
+--- Applies a shared schema to the server world and tracks the applied snapshot.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:ApplySharedSchema(schema: TSharedSchema)
 	self:RequireReady()
 	self:ValidateSharedSchema(schema)
 
 	if schema.sharedComponents ~= nil then
+		-- Register shared components first so the world matches the negotiated schema.
 		for _, componentId in ipairs(schema.sharedComponents) do
 			self:RegisterSharedComponent(componentId)
 		end
 	end
 
 	if schema.sharedTags ~= nil then
+		-- Register shared tags alongside shared components for the same handshake surface.
 		for _, tagId in ipairs(schema.sharedTags) do
 			self:RegisterSharedTag(tagId)
 		end
 	end
 
 	if schema.customIds ~= nil then
+		-- Track custom ids before any packets rely on them.
 		for _, customId in ipairs(schema.customIds) do
 			self:RegisterCustomId(customId)
 		end
 	end
 
 	if schema.serdes ~= nil then
+		-- Install component-specific serializers after the ids have been registered.
 		for componentId, serdes in schema.serdes do
 			self:RegisterSerdes(componentId, serdes)
 		end
 	end
 
 	if schema.componentCustomHandlers ~= nil then
+		-- Apply custom handler components last so the world has every dependency in place.
 		for componentId, handler in schema.componentCustomHandlers do
 			self:SetComponentCustomHandler(componentId, handler)
 		end
@@ -378,6 +414,8 @@ function BaseECSReplicationService:ApplySharedSchema(schema: TSharedSchema)
 	self:_OnSharedSchemaApplied(schema)
 end
 
+--- Validates a shared schema before it is applied to the world.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:ValidateSharedSchema(schema: TSharedSchema)
 	self:RequireReady()
 	assert(type(schema) == "table", "shared schema must be a table")
@@ -443,6 +481,8 @@ function BaseECSReplicationService:HasAppliedSharedSchema(): boolean
 	return self._appliedSharedSchema ~= nil
 end
 
+--- Returns a sorted, frozen summary of the tracked shared schema state.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:GetSchemaSummary()
 	self:RequireReady()
 
@@ -490,11 +530,15 @@ function BaseECSReplicationService:GetSchemaSummary()
 	return table.freeze(summary)
 end
 
+--- Returns the last handshake verification error, if one was recorded.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:GetLastHandshakeVerificationError(): string?
 	self:RequireReady()
 	return self._lastHandshakeVerificationError
 end
 
+--- Describes the differences between the tracked shared schema and a handshake payload.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:DescribeSharedSchemaMismatch(handshake: any)
 	self:RequireReady()
 
@@ -554,6 +598,7 @@ function BaseECSReplicationService:DescribeSharedSchemaMismatch(handshake: any)
 	local missingSerdes = {}
 	local extraSerdes = {}
 	local mismatchedSerdes = {}
+	-- Compare the negotiated serdes shape against the tracked world configuration.
 	for name, expectedInfo in expectedSerdes do
 		if handshakeSerdes[name] == nil then
 			table.insert(missingSerdes, name)
@@ -655,6 +700,8 @@ function BaseECSReplicationService:RemovePlayerAlias(alias: any)
 	self._replecsServer:remove_player_alias(alias)
 end
 
+--- Builds the bootstrap payload for a valid player.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:BuildBootstrapPayload(player: Player): TBootstrapPayload?
 	if not self._initialized then
 		return nil
@@ -673,6 +720,8 @@ function BaseECSReplicationService:BuildBootstrapPayload(player: Player): TBoots
 	}
 end
 
+--- Sends the bootstrap payload to a player when the player is valid.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:SendBootstrapPayload(player: Player): boolean
 	local payload = self:BuildBootstrapPayload(player)
 	if payload == nil then
@@ -695,10 +744,14 @@ function BaseECSReplicationService:CompleteBootstrap(player: Player): boolean
 	return true
 end
 
+--- Hydrates a single player by sending its bootstrap payload.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:HydratePlayer(player: Player): boolean
 	return self:SendBootstrapPayload(player)
 end
 
+--- Hydrates every valid player currently in the server.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:HydrateAllPlayers()
 	if not self._initialized then
 		return
@@ -709,12 +762,15 @@ function BaseECSReplicationService:HydrateAllPlayers()
 	end
 end
 
+--- Collects and sends entity-scoped packets for a single entity.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:CollectEntityPackets(entity: number): number
 	if not self._initialized then
 		return 0
 	end
 
 	local packetCount = 0
+	-- Forward each generated packet to the concrete transport hook.
 	for player, packetBuffer, packetVariants in self:GetReplecsServerOrThrow():collect_entity(entity) do
 		self:_SendEntity(player, {
 			Buffer = packetBuffer,
@@ -726,11 +782,14 @@ function BaseECSReplicationService:CollectEntityPackets(entity: number): number
 	return packetCount
 end
 
+--- Flushes the reliable packet queue through the concrete transport hook.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:FlushReliable()
 	if not self._initialized then
 		return
 	end
 
+	-- Emit the buffered reliable packets without mutating the server world.
 	for player, packetBuffer, packetVariants in self:GetReplecsServerOrThrow():collect_updates() do
 		self:_SendReliable(player, {
 			Buffer = packetBuffer,
@@ -739,11 +798,14 @@ function BaseECSReplicationService:FlushReliable()
 	end
 end
 
+--- Flushes the unreliable packet queue through the concrete transport hook.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:FlushUnreliable()
 	if not self._initialized then
 		return
 	end
 
+	-- Emit the buffered unreliable packets without mutating the server world.
 	for player, packetBuffer, packetVariants in self:GetReplecsServerOrThrow():collect_unreliable() do
 		self:_SendUnreliable(player, {
 			Buffer = packetBuffer,
@@ -752,6 +814,8 @@ function BaseECSReplicationService:FlushUnreliable()
 	end
 end
 
+--- Tears down the replication server and clears all cached state.
+--- @within BaseECSReplicationService
 function BaseECSReplicationService:Destroy()
 	if not self._initialized and self._replecsServer == nil then
 		return

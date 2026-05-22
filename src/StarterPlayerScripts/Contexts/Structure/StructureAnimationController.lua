@@ -19,6 +19,7 @@ local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.Plac
 local AnimateStructureModule = require(script.Parent.AnimateStructureModule)
 local StructureAttackAction = require(script.Parent.Actions.StructureAttackAction)
 local StructureExtractAction = require(script.Parent.Actions.StructureExtractAction)
+local StructureReplicationClient = require(script.Parent.Infrastructure.Persistence.StructureReplicationClient)
 
 type TTrackedEntry = {
 	Cleanup: (() -> ())?,
@@ -38,15 +39,24 @@ local function _IsStructureModel(instance: Instance): boolean
 	return instance:IsA("Model") and type(instance:GetAttribute("PlacementInstanceId")) == "number"
 end
 
-local function _BuildStructureActorHandleFromModel(model: Model): string?
+local function _ResolveStructureIdFromModel(model: Model): string?
 	local structureId = model:GetAttribute("StructureId")
 	if type(structureId) == "string" and structureId ~= "" then
-		return "Structure:" .. structureId
+		return structureId
 	end
 
 	local placementInstanceId = model:GetAttribute("PlacementInstanceId")
 	if type(placementInstanceId) == "number" then
-		return "Structure:" .. tostring(placementInstanceId)
+		return tostring(placementInstanceId)
+	end
+
+	return nil
+end
+
+local function _BuildStructureActorHandleFromModel(model: Model): string?
+	local structureId = _ResolveStructureIdFromModel(model)
+	if structureId ~= nil then
+		return "Structure:" .. structureId
 	end
 
 	return nil
@@ -63,6 +73,7 @@ function StructureAnimationController:KnitInit()
 	self._placementsFolderConnectionRemoved = nil :: RBXScriptConnection?
 	self._workspaceChildAddedConnection = nil :: RBXScriptConnection?
 	self._combatService = nil
+	self._structureReplicationClient = StructureReplicationClient.new()
 end
 
 function StructureAnimationController:_BuildStructureActorHandle(model: Model): string?
@@ -109,7 +120,7 @@ function StructureAnimationController:_TrackModel(model: Model)
 		})
 	end
 
-	AnimateStructureModule.setup(model, buildContext())
+	AnimateStructureModule.setup(model, buildContext(), self._structureReplicationClient)
 		:andThen(function(cleanup)
 			local tracked = self._tracked[model]
 			if tracked == nil then
@@ -154,7 +165,7 @@ function StructureAnimationController:_GetTargetWorldPosition(model: Model): Vec
 		return nil
 	end
 
-	local targetEnemyId = model:GetAttribute("TargetEnemyId")
+	local targetEnemyId = self:_ResolveReplicatedTargetEnemyId(model)
 	if type(targetEnemyId) ~= "string" or targetEnemyId == "" then
 		entry.TargetEnemyId = nil
 		entry.TargetModel = nil
@@ -171,6 +182,25 @@ function StructureAnimationController:_GetTargetWorldPosition(model: Model): Vec
 	end
 
 	return entry.TargetModel:GetPivot().Position
+end
+
+function StructureAnimationController:_ResolveReplicatedTargetEnemyId(model: Model): string?
+	local structureReplicationClient = self._structureReplicationClient
+	if structureReplicationClient == nil then
+		return nil
+	end
+
+	local structureId = _ResolveStructureIdFromModel(model)
+	if structureId == nil then
+		return nil
+	end
+
+	local structureState = structureReplicationClient:GetStructureState(structureId)
+	if structureState == nil then
+		return nil
+	end
+
+	return structureState.TargetEnemyId
 end
 
 function StructureAnimationController:_ResolveEnemyModelById(enemyId: string): Model?
@@ -221,6 +251,8 @@ end
 
 function StructureAnimationController:KnitStart()
 	self._combatService = Knit.GetService("CombatContext")
+	self._structureReplicationClient:Init()
+	self._structureReplicationClient:Start()
 
 	local placementsFolder = Workspace:FindFirstChild(PlacementConfig.PLACEMENT_FOLDER_NAME)
 	if placementsFolder and placementsFolder:IsA("Folder") then
@@ -250,6 +282,11 @@ function StructureAnimationController:Destroy()
 
 	for model in self._tracked do
 		self:_UntrackModel(model)
+	end
+
+	if self._structureReplicationClient ~= nil then
+		self._structureReplicationClient:Destroy()
+		self._structureReplicationClient = nil
 	end
 end
 
