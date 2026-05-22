@@ -2,6 +2,8 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CharmSync = require(ReplicatedStorage.Packages["Charm-sync"])
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 
 --[[
 	Base Sync Service (Server)
@@ -28,6 +30,8 @@ local CharmSync = require(ReplicatedStorage.Packages["Charm-sync"])
 local BaseSyncService = {}
 BaseSyncService.__index = BaseSyncService
 
+local SYNC_SERVICE_PROFILING_ENABLED = DebugConfig.SYNC_SERVICE_PROFILING
+
 local function deepClone(tbl: any): any
 	if type(tbl) ~= "table" then
 		return tbl
@@ -42,44 +46,50 @@ local function deepClone(tbl: any): any
 end
 
 function BaseSyncService:Init(registry: any, _name: string)
-	self.BlinkServer = registry:Get("BlinkServer")
-	self.Atom = self.CreateAtom()
+	self._profileName = self.ProfileName or _name or self.AtomKey or "SyncService"
 
-	local atomKey = self.AtomKey
-	local blinkEventName = self.BlinkEventName
+	self:_Profile("Init", function()
+		self.BlinkServer = registry:Get("BlinkServer")
+		self.Atom = self.CreateAtom()
 
-	self.Syncer = CharmSync.server({
-		atoms = { [atomKey] = self.Atom },
-		interval = self.SyncInterval or 0.33,
-		preserveHistory = false,
-		autoSerialize = false,
-	})
+		local atomKey = self.AtomKey
+		local blinkEventName = self.BlinkEventName
 
-	self.Cleanup = self.Syncer:connect(function(player: Player, payload: any)
-		if self.UseRawPayload then
-			self.BlinkServer[blinkEventName].Fire(player, payload)
-			return
-		end
+		self.Syncer = CharmSync.server({
+			atoms = { [atomKey] = self.Atom },
+			interval = self.SyncInterval or 0.33,
+			preserveHistory = false,
+			autoSerialize = false,
+		})
 
-		local userId = player.UserId
-		local allState = self.Atom()
-		local playerState = allState[userId]
+		self.Cleanup = self.Syncer:connect(function(player: Player, payload: any)
+			if self.UseRawPayload then
+				self.BlinkServer[blinkEventName].Fire(player, payload)
+				return
+			end
 
-		if playerState == nil then
-			return
-		end
+			local userId = player.UserId
+			local allState = self.Atom()
+			local playerState = allState[userId]
 
-		local fullStatePayload = {
-			type = "init",
-			data = { [atomKey] = playerState },
-		}
+			if playerState == nil then
+				return
+			end
 
-		self.BlinkServer[blinkEventName].Fire(player, fullStatePayload)
+			local fullStatePayload = {
+				type = "init",
+				data = { [atomKey] = playerState },
+			}
+
+			self.BlinkServer[blinkEventName].Fire(player, fullStatePayload)
+		end)
 	end)
 end
 
 function BaseSyncService:HydratePlayer(player: Player)
-	self.Syncer:hydrate(player)
+	self:_Profile("HydratePlayer", function()
+		self.Syncer:hydrate(player)
+	end)
 end
 
 function BaseSyncService:GetAtom()
@@ -106,26 +116,44 @@ end
 
 --- Sets atom[userId] = data
 function BaseSyncService:LoadUserData(userId: number, data: any)
-	self.Atom(function(current)
-		local updated = table.clone(current)
-		updated[userId] = data
-		return updated
+	self:_Profile("LoadUserData", function()
+		self.Atom(function(current)
+			local updated = table.clone(current)
+			updated[userId] = data
+			return updated
+		end)
 	end)
 end
 
 --- Clears atom[userId]
 function BaseSyncService:RemoveUserData(userId: number)
-	self.Atom(function(current)
-		local updated = table.clone(current)
-		updated[userId] = nil
-		return updated
+	self:_Profile("RemoveUserData", function()
+		self.Atom(function(current)
+			local updated = table.clone(current)
+			updated[userId] = nil
+			return updated
+		end)
 	end)
 end
 
 function BaseSyncService:Destroy()
-	if self.Cleanup then
-		self.Cleanup()
-	end
+	self:_Profile("Destroy", function()
+		if self.Cleanup then
+			self.Cleanup()
+		end
+	end)
+end
+
+function BaseSyncService:_BuildProfileLabel(operationName: string): string
+	return (`{self._profileName or self.AtomKey or "SyncService"}:{operationName}`)
+end
+
+function BaseSyncService:_Profile<T...>(operationName: string, callback: () -> T...): T...
+	return DebugPlus.profile(
+		self:_BuildProfileLabel(operationName),
+		callback,
+		SYNC_SERVICE_PROFILING_ENABLED
+	)
 end
 
 return BaseSyncService

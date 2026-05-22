@@ -3,6 +3,8 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local SharedAtoms = require(ReplicatedStorage.Contexts.Log.Sync.SharedAtoms)
 local LogRetentionConfig = require(ReplicatedStorage.Contexts.Log.Config.LogRetentionConfig)
 
@@ -20,6 +22,9 @@ local DEVELOPER_USER_ID = 205423638
 
 local LogSyncService = {}
 LogSyncService.__index = LogSyncService
+
+local PROFILE_NAME = "LogSyncService"
+local SYNC_SERVICE_PROFILING_ENABLED = DebugConfig.SYNC_SERVICE_PROFILING
 
 export type LogEntry = SharedAtoms.LogEntry
 
@@ -56,83 +61,86 @@ end
 
 --- Appends an entry to the atom, enforces retention, and fires Blink to the developer.
 function LogSyncService:Push(entry: LogEntry)
-	local scopeKey = LogRetentionConfig.buildScopeKey(entry.context, entry.category)
+	DebugPlus.profile(("%s:Push"):format(PROFILE_NAME), function()
+		local scopeKey = LogRetentionConfig.buildScopeKey(entry.context, entry.category)
 
-	self._atom(function(current: { LogEntry })
-		local updated = table.clone(current)
-		table.insert(updated, entry)
+		self._atom(function(current: { LogEntry })
+			local updated = table.clone(current)
+			table.insert(updated, entry)
 
-		local scopedIds = self._idsByScope[scopeKey]
-		if not scopedIds then
-			scopedIds = {}
-			self._idsByScope[scopeKey] = scopedIds
+			local scopedIds = self._idsByScope[scopeKey]
+			if not scopedIds then
+				scopedIds = {}
+				self._idsByScope[scopeKey] = scopedIds
+			end
+			table.insert(scopedIds, entry.id)
+
+			local maxEntries = LogRetentionConfig.resolveScopeLimit(entry.context, entry.category)
+			while #scopedIds > maxEntries do
+				local staleId = table.remove(scopedIds, 1)
+				updated = removeEntryById(updated, staleId)
+			end
+
+			return updated
+		end)
+
+		local developerPlayer = Players:GetPlayerByUserId(DEVELOPER_USER_ID)
+		if developerPlayer then
+			self._blinkServer.SyncLog.Fire(developerPlayer, {
+				type = "entry",
+				data = entry,
+			})
 		end
-		table.insert(scopedIds, entry.id)
-
-		local maxEntries = LogRetentionConfig.resolveScopeLimit(entry.context, entry.category)
-		while #scopedIds > maxEntries do
-			local staleId = table.remove(scopedIds, 1)
-			updated = removeEntryById(updated, staleId)
-		end
-
-		return updated
-	end)
-
-	local developerPlayer = Players:GetPlayerByUserId(DEVELOPER_USER_ID)
-	if developerPlayer then
-		self._blinkServer.SyncLog.Fire(developerPlayer, {
-			type = "entry",
-			data = entry,
-		})
-	end
+	end, SYNC_SERVICE_PROFILING_ENABLED)
 end
 
 --- Clears entries matching the optional scope filters and fires a Blink clear signal.
 function LogSyncService:Clear(contextFilter: string?, categoryFilter: string?)
-	local normalizedContext = LogRetentionConfig.normalizeFilter(contextFilter)
-	local normalizedCategory = LogRetentionConfig.normalizeFilter(categoryFilter)
+	DebugPlus.profile(("%s:Clear"):format(PROFILE_NAME), function()
+		local normalizedContext = LogRetentionConfig.normalizeFilter(contextFilter)
+		local normalizedCategory = LogRetentionConfig.normalizeFilter(categoryFilter)
 
-	self._atom(function(current: { LogEntry })
-		if normalizedContext == nil and normalizedCategory == nil then
-			table.clear(self._idsByScope)
-			return {}
-		end
-
-		local retained = table.create(#current)
-		for _, entry in ipairs(current) do
-			local matchesContext = normalizedContext == nil or string.lower(entry.context) == normalizedContext
-			local matchesCategory = normalizedCategory == nil or string.lower(entry.category) == normalizedCategory
-			if not (matchesContext and matchesCategory) then
-				table.insert(retained, entry)
+		self._atom(function(current: { LogEntry })
+			if normalizedContext == nil and normalizedCategory == nil then
+				table.clear(self._idsByScope)
+				return {}
 			end
-		end
 
-		-- Rebuild idsByScope from retained entries
-		local newIdsByScope = {} :: { [string]: { number } }
-		for _, entry in ipairs(retained) do
-			local scopeKey = LogRetentionConfig.buildScopeKey(entry.context, entry.category)
-			local ids = newIdsByScope[scopeKey]
-			if not ids then
-				ids = {}
-				newIdsByScope[scopeKey] = ids
+			local retained = table.create(#current)
+			for _, entry in ipairs(current) do
+				local matchesContext = normalizedContext == nil or string.lower(entry.context) == normalizedContext
+				local matchesCategory = normalizedCategory == nil or string.lower(entry.category) == normalizedCategory
+				if not (matchesContext and matchesCategory) then
+					table.insert(retained, entry)
+				end
 			end
-			table.insert(ids, entry.id)
+
+			local newIdsByScope = {} :: { [string]: { number } }
+			for _, entry in ipairs(retained) do
+				local scopeKey = LogRetentionConfig.buildScopeKey(entry.context, entry.category)
+				local ids = newIdsByScope[scopeKey]
+				if not ids then
+					ids = {}
+					newIdsByScope[scopeKey] = ids
+				end
+				table.insert(ids, entry.id)
+			end
+			self._idsByScope = newIdsByScope
+
+			return retained
+		end)
+
+		local developerPlayer = Players:GetPlayerByUserId(DEVELOPER_USER_ID)
+		if developerPlayer then
+			self._blinkServer.SyncLog.Fire(developerPlayer, {
+				type = "clear",
+				data = {
+					context = normalizedContext,
+					category = normalizedCategory,
+				},
+			})
 		end
-		self._idsByScope = newIdsByScope
-
-		return retained
-	end)
-
-	local developerPlayer = Players:GetPlayerByUserId(DEVELOPER_USER_ID)
-	if developerPlayer then
-		self._blinkServer.SyncLog.Fire(developerPlayer, {
-			type = "clear",
-			data = {
-				context = normalizedContext,
-				category = normalizedCategory,
-			},
-		})
-	end
+	end, SYNC_SERVICE_PROFILING_ENABLED)
 end
 
 --- Returns a deep clone of all current entries for hydration on connect.
@@ -142,13 +150,15 @@ end
 
 --- Fires the full entry list to the developer player for initial hydration.
 function LogSyncService:HydrateDeveloper(player: Player)
-	local entries = self:GetEntriesReadOnly()
-	for _, entry in ipairs(entries) do
-		self._blinkServer.SyncLog.Fire(player, {
-			type = "entry",
-			data = entry,
-		})
-	end
+	DebugPlus.profile(("%s:HydrateDeveloper"):format(PROFILE_NAME), function()
+		local entries = self:GetEntriesReadOnly()
+		for _, entry in ipairs(entries) do
+			self._blinkServer.SyncLog.Fire(player, {
+				type = "entry",
+				data = entry,
+			})
+		end
+	end, SYNC_SERVICE_PROFILING_ENABLED)
 end
 
 return LogSyncService

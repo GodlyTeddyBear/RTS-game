@@ -76,49 +76,55 @@ function EquipmentSyncService:GetEquippedItemReadOnly(ownerKey: string, slotId: 
 end
 
 function EquipmentSyncService:SetEquipped(ownerKey: string, slotId: string, equippedItem: TEquippedItem)
-	self.Atom(function(current: TEquipmentState)
-		local updated: TEquipmentState = {
-			Owners = table.clone(current.Owners),
-		}
+	self:_Profile("SetEquipped", function()
+		self.Atom(function(current: TEquipmentState)
+			local updated: TEquipmentState = {
+				Owners = table.clone(current.Owners),
+			}
 
-		local ownerEquipment = updated.Owners[ownerKey]
-		local nextOwnerEquipment = {
-			Slots = if ownerEquipment ~= nil then table.clone(ownerEquipment.Slots) else {},
-		}
-		nextOwnerEquipment.Slots[slotId] = equippedItem
-		updated.Owners[ownerKey] = nextOwnerEquipment
-		return updated
+			local ownerEquipment = updated.Owners[ownerKey]
+			local nextOwnerEquipment = {
+				Slots = if ownerEquipment ~= nil then table.clone(ownerEquipment.Slots) else {},
+			}
+			nextOwnerEquipment.Slots[slotId] = equippedItem
+			updated.Owners[ownerKey] = nextOwnerEquipment
+			return updated
+		end)
 	end)
 end
 
 function EquipmentSyncService:ClearSlot(ownerKey: string, slotId: string)
-	self.Atom(function(current: TEquipmentState)
-		local ownerEquipment = current.Owners[ownerKey]
-		if ownerEquipment == nil or ownerEquipment.Slots[slotId] == nil then
-			return current
-		end
+	self:_Profile("ClearSlot", function()
+		self.Atom(function(current: TEquipmentState)
+			local ownerEquipment = current.Owners[ownerKey]
+			if ownerEquipment == nil or ownerEquipment.Slots[slotId] == nil then
+				return current
+			end
 
-		local updated: TEquipmentState = {
-			Owners = table.clone(current.Owners),
-		}
-		local nextSlots = table.clone(ownerEquipment.Slots)
-		nextSlots[slotId] = nil
-
-		if next(nextSlots) == nil then
-			updated.Owners[ownerKey] = nil
-		else
-			updated.Owners[ownerKey] = {
-				Slots = nextSlots,
+			local updated: TEquipmentState = {
+				Owners = table.clone(current.Owners),
 			}
-		end
+			local nextSlots = table.clone(ownerEquipment.Slots)
+			nextSlots[slotId] = nil
 
-		return updated
+			if next(nextSlots) == nil then
+				updated.Owners[ownerKey] = nil
+			else
+				updated.Owners[ownerKey] = {
+					Slots = nextSlots,
+				}
+			end
+
+			return updated
+		end)
 	end)
 end
 
 function EquipmentSyncService:ClearAll()
-	self.Atom(function()
-		return SharedAtoms.CreateEmptyState()
+	self:_Profile("ClearAll", function()
+		self.Atom(function()
+			return SharedAtoms.CreateEmptyState()
+		end)
 	end)
 end
 

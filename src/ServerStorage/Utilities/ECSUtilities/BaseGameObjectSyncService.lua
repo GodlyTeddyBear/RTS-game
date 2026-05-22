@@ -1,5 +1,9 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
+
 --[=[
 	@type TRegistry
 	@within BaseGameObjectSyncService
@@ -29,6 +33,8 @@ type TRegistry = {
 ]=]
 local BaseGameObjectSyncService = {}
 BaseGameObjectSyncService.__index = BaseGameObjectSyncService
+
+local SYNC_SERVICE_PROFILING_ENABLED = DebugConfig.SYNC_SERVICE_PROFILING
 
 -- ── Private ───────────────────────────────────────────────────────────────────
 
@@ -74,47 +80,49 @@ end
 	@param name string -- Registered module name.
 ]=]
 function BaseGameObjectSyncService:Init(registry: TRegistry, name: string)
-	-- Resolve the registry keys required by the derived sync implementation.
-	local componentRegistryName = _AssertNonEmptyString(
-		self:_GetComponentRegistryName(),
-		("%sGameObjectSyncService: missing component registry name"):format(self._contextName)
-	)
-	local entityFactoryName = _AssertNonEmptyString(
-		self:_GetEntityFactoryName(),
-		("%sGameObjectSyncService: missing entity factory name"):format(self._contextName)
-	)
-
-	-- Load the shared JECS world and the context-specific component lookup.
-	self._world = registry:Get("World")
-	assert(self._world ~= nil, ("%sGameObjectSyncService: missing World"):format(self._contextName))
-
-	local componentRegistry = registry:Get(componentRegistryName)
-	assert(componentRegistry ~= nil, ("%sGameObjectSyncService: missing %s"):format(self._contextName, componentRegistryName))
-	assert(
-		type(componentRegistry.GetComponents) == "function",
-		("%sGameObjectSyncService: %s missing GetComponents"):format(self._contextName, componentRegistryName)
-	)
-
-	self._components = componentRegistry:GetComponents()
-	assert(self._components ~= nil, ("%sGameObjectSyncService: %s returned nil components"):format(self._contextName, componentRegistryName))
-
-	-- Load the context entity factory that owns authoritative ECS reads.
-	self._entityFactory = registry:Get(entityFactoryName)
-	assert(self._entityFactory ~= nil, ("%sGameObjectSyncService: missing %s"):format(self._contextName, entityFactoryName))
-
-	-- Resolve the optional instance factory only when the derived service uses one.
-	local instanceFactoryName = self:_GetInstanceFactoryName()
-	if instanceFactoryName ~= nil and instanceFactoryName ~= "" then
-		self._instanceFactory = registry:Get(instanceFactoryName)
-		assert(
-			self._instanceFactory ~= nil,
-			("%sGameObjectSyncService: missing %s"):format(self._contextName, instanceFactoryName)
+	self:_Profile("Init", function()
+		-- Resolve the registry keys required by the derived sync implementation.
+		local componentRegistryName = _AssertNonEmptyString(
+			self:_GetComponentRegistryName(),
+			("%sGameObjectSyncService: missing component registry name"):format(self._contextName)
 		)
-	end
+		local entityFactoryName = _AssertNonEmptyString(
+			self:_GetEntityFactoryName(),
+			("%sGameObjectSyncService: missing entity factory name"):format(self._contextName)
+		)
 
-	-- Let the derived service finish any custom initialization before marking ready.
-	self:_OnInit(registry, name)
-	self._initialized = true
+		-- Load the shared JECS world and the context-specific component lookup.
+		self._world = registry:Get("World")
+		assert(self._world ~= nil, ("%sGameObjectSyncService: missing World"):format(self._contextName))
+
+		local componentRegistry = registry:Get(componentRegistryName)
+		assert(componentRegistry ~= nil, ("%sGameObjectSyncService: missing %s"):format(self._contextName, componentRegistryName))
+		assert(
+			type(componentRegistry.GetComponents) == "function",
+			("%sGameObjectSyncService: %s missing GetComponents"):format(self._contextName, componentRegistryName)
+		)
+
+		self._components = componentRegistry:GetComponents()
+		assert(self._components ~= nil, ("%sGameObjectSyncService: %s returned nil components"):format(self._contextName, componentRegistryName))
+
+		-- Load the context entity factory that owns authoritative ECS reads.
+		self._entityFactory = registry:Get(entityFactoryName)
+		assert(self._entityFactory ~= nil, ("%sGameObjectSyncService: missing %s"):format(self._contextName, entityFactoryName))
+
+		-- Resolve the optional instance factory only when the derived service uses one.
+		local instanceFactoryName = self:_GetInstanceFactoryName()
+		if instanceFactoryName ~= nil and instanceFactoryName ~= "" then
+			self._instanceFactory = registry:Get(instanceFactoryName)
+			assert(
+				self._instanceFactory ~= nil,
+				("%sGameObjectSyncService: missing %s"):format(self._contextName, instanceFactoryName)
+			)
+		end
+
+		-- Let the derived service finish any custom initialization before marking ready.
+		self:_OnInit(registry, name)
+		self._initialized = true
+	end)
 end
 
 --[=[
@@ -190,8 +198,10 @@ end
 	@param model Model? -- Optional already-resolved model.
 ]=]
 function BaseGameObjectSyncService:RegisterEntity(entity: number, model: Model?)
-	self:RequireReady()
-	self:_SafeSyncEntity(entity, model, "RegisterEntity", false)
+	self:_Profile("RegisterEntity", function()
+		self:RequireReady()
+		self:_SafeSyncEntity(entity, model, "RegisterEntity", false)
+	end)
 end
 
 --[=[
@@ -199,11 +209,13 @@ end
 	@within BaseGameObjectSyncService
 ]=]
 function BaseGameObjectSyncService:SyncAll()
-	self:RequireReady()
+	self:_Profile("SyncAll", function()
+		self:RequireReady()
 
-	for _, entity in ipairs(self:_QueryAllEntities()) do
-		self:_SafeSyncEntity(entity, nil, "SyncAll", false)
-	end
+		for _, entity in ipairs(self:_QueryAllEntities()) do
+			self:_SafeSyncEntity(entity, nil, "SyncAll", false)
+		end
+	end)
 end
 
 --[=[
@@ -211,11 +223,13 @@ end
 	@within BaseGameObjectSyncService
 ]=]
 function BaseGameObjectSyncService:SyncDirtyEntities()
-	self:RequireReady()
+	self:_Profile("SyncDirtyEntities", function()
+		self:RequireReady()
 
-	for _, entity in ipairs(self:_QueryDirtyEntities()) do
-		self:_SafeSyncEntity(entity, nil, "SyncDirtyEntities", true)
-	end
+		for _, entity in ipairs(self:_QueryDirtyEntities()) do
+			self:_SafeSyncEntity(entity, nil, "SyncDirtyEntities", true)
+		end
+	end)
 end
 
 --[=[
@@ -223,23 +237,25 @@ end
 	@within BaseGameObjectSyncService
 ]=]
 function BaseGameObjectSyncService:Poll()
-	self:RequireReady()
+	self:_Profile("Poll", function()
+		self:RequireReady()
 
-	-- Poll only the entities the derived service explicitly opted into runtime reads.
-	for _, entity in ipairs(self:_QueryPollEntities()) do
-		local model = self:_ResolveModel(entity, nil)
-		if model == nil or model.Parent == nil then
-			continue
+		-- Poll only the entities the derived service explicitly opted into runtime reads.
+		for _, entity in ipairs(self:_QueryPollEntities()) do
+			local model = self:_ResolveModel(entity, nil)
+			if model == nil or model.Parent == nil then
+				continue
+			end
+
+			local success, err = pcall(function()
+				self:_PollEntity(entity, model)
+			end)
+
+			if not success then
+				self:_OnSyncFailed(entity, err, "Poll")
+			end
 		end
-
-		local success, err = pcall(function()
-			self:_PollEntity(entity, model)
-		end)
-
-		if not success then
-			self:_OnSyncFailed(entity, err, "Poll")
-		end
-	end
+	end)
 end
 
 --[=[
@@ -258,8 +274,10 @@ end
 	@within BaseGameObjectSyncService
 ]=]
 function BaseGameObjectSyncService:CleanupAll()
-	self:RequireReady()
-	self:_OnCleanupAll()
+	self:_Profile("CleanupAll", function()
+		self:RequireReady()
+		self:_OnCleanupAll()
+	end)
 end
 
 -- ── Private Overrides ─────────────────────────────────────────────────────────
@@ -433,28 +451,42 @@ end
 	Resolves a model and safely runs the derived sync step for one entity.
 ]=]
 function BaseGameObjectSyncService:_SafeSyncEntity(entity: number, explicitModel: Model?, operation: string, shouldClearDirty: boolean)
-	-- Resolve the target model and skip the pass when the entity no longer has a live model.
-	local model = self:_ResolveModel(entity, explicitModel)
-	if model == nil or (explicitModel == nil and model.Parent == nil) then
+	self:_Profile(("%s:Entity"):format(operation), function()
+		-- Resolve the target model and skip the pass when the entity no longer has a live model.
+		local model = self:_ResolveModel(entity, explicitModel)
+		if model == nil or (explicitModel == nil and model.Parent == nil) then
+			if shouldClearDirty then
+				self:_ClearDirty(entity)
+			end
+			return
+		end
+
+		-- Guard the derived sync logic so one entity failure does not stop the batch.
+		local success, err = pcall(function()
+			self:_SyncEntity(entity, model)
+		end)
+
+		if not success then
+			self:_OnSyncFailed(entity, err, operation)
+		end
+
+		-- Clear dirty state only after the sync attempt has finished.
 		if shouldClearDirty then
 			self:_ClearDirty(entity)
 		end
-		return
-	end
-
-	-- Guard the derived sync logic so one entity failure does not stop the batch.
-	local success, err = pcall(function()
-		self:_SyncEntity(entity, model)
 	end)
+end
 
-	if not success then
-		self:_OnSyncFailed(entity, err, operation)
-	end
+function BaseGameObjectSyncService:_BuildProfileLabel(operationName: string): string
+	return (`{self._contextName}:GameObjectSyncService:{operationName}`)
+end
 
-	-- Clear dirty state only after the sync attempt has finished.
-	if shouldClearDirty then
-		self:_ClearDirty(entity)
-	end
+function BaseGameObjectSyncService:_Profile<T...>(operationName: string, callback: () -> T...): T...
+	return DebugPlus.profile(
+		self:_BuildProfileLabel(operationName),
+		callback,
+		SYNC_SERVICE_PROFILING_ENABLED
+	)
 end
 
 return BaseGameObjectSyncService

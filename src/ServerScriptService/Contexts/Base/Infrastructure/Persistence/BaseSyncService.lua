@@ -10,6 +10,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
 local CharmSync = require(ReplicatedStorage.Packages["Charm-sync"])
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local SharedAtoms = require(ReplicatedStorage.Contexts.Base.Sync.SharedAtoms)
 local BaseTypes = require(ReplicatedStorage.Contexts.Base.Types.BaseTypes)
 
@@ -17,6 +19,9 @@ type BaseState = BaseTypes.BaseState
 
 local BaseSyncService = {}
 BaseSyncService.__index = BaseSyncService
+
+local PROFILE_NAME = "BaseSyncService"
+local SYNC_SERVICE_PROFILING_ENABLED = DebugConfig.SYNC_SERVICE_PROFILING
 
 --[=[
     Create a new base sync service.
@@ -55,7 +60,9 @@ end
     @within BaseSyncService
 ]=]
 function BaseSyncService:SyncBaseState()
-	self._atom(self._entityFactory:GetBaseState() :: BaseState?)
+	DebugPlus.profile(("%s:SyncBaseState"):format(PROFILE_NAME), function()
+		self._atom(self._entityFactory:GetBaseState() :: BaseState?)
+	end, SYNC_SERVICE_PROFILING_ENABLED)
 end
 
 --[=[
@@ -63,7 +70,9 @@ end
     @within BaseSyncService
 ]=]
 function BaseSyncService:ClearState()
-	self._atom(nil)
+	DebugPlus.profile(("%s:ClearState"):format(PROFILE_NAME), function()
+		self._atom(nil)
+	end, SYNC_SERVICE_PROFILING_ENABLED)
 end
 
 --[=[
@@ -72,7 +81,9 @@ end
     @param player Player -- Player to hydrate.
 ]=]
 function BaseSyncService:HydratePlayer(player: Player)
-	self._syncer:hydrate(player)
+	DebugPlus.profile(("%s:HydratePlayer"):format(PROFILE_NAME), function()
+		self._syncer:hydrate(player)
+	end, SYNC_SERVICE_PROFILING_ENABLED)
 end
 
 --[=[
@@ -80,9 +91,11 @@ end
     @within BaseSyncService
 ]=]
 function BaseSyncService:HydrateAllPlayers()
-	for _, player in Players:GetPlayers() do
-		self:HydratePlayer(player)
-	end
+	DebugPlus.profile(("%s:HydrateAllPlayers"):format(PROFILE_NAME), function()
+		for _, player in Players:GetPlayers() do
+			self:HydratePlayer(player)
+		end
+	end, SYNC_SERVICE_PROFILING_ENABLED)
 end
 
 --[=[
@@ -107,9 +120,11 @@ end
     @within BaseSyncService
 ]=]
 function BaseSyncService:Destroy()
-	if self._cleanup then
-		self._cleanup()
-	end
+	DebugPlus.profile(("%s:Destroy"):format(PROFILE_NAME), function()
+		if self._cleanup then
+			self._cleanup()
+		end
+	end, SYNC_SERVICE_PROFILING_ENABLED)
 end
 
 return BaseSyncService

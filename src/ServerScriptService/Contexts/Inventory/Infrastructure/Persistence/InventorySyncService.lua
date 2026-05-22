@@ -31,14 +31,16 @@ function InventorySyncService:GetInventoriesAtom()
 end
 
 function InventorySyncService:CreateInventory(userId: number, maxCapacity: number?)
-	self:LoadUserData(userId, {
-		Slots = {},
-		Metadata = {
-			TotalSlots = maxCapacity or DEFAULT_TOTAL_SLOTS,
-			UsedSlots = 0,
-			LastModified = 0,
-		},
-	})
+	self:_Profile("CreateInventory", function()
+		self:LoadUserData(userId, {
+			Slots = {},
+			Metadata = {
+				TotalSlots = maxCapacity or DEFAULT_TOTAL_SLOTS,
+				UsedSlots = 0,
+				LastModified = 0,
+			},
+		})
+	end)
 end
 
 function InventorySyncService:ResetInventory(userId: number)
@@ -56,89 +58,99 @@ function InventorySyncService:EnsureInventory(userId: number): TInventoryState
 end
 
 function InventorySyncService:RemoveInventory(userId: number)
-	self:RemoveUserData(userId)
+	self:_Profile("RemoveInventory", function()
+		self:RemoveUserData(userId)
+	end)
 end
 
 function InventorySyncService:SetSlot(userId: number, slotIndex: number, slotData: TInventorySlot?)
-	self.Atom(function(current)
-		local updated = table.clone(current)
-		local inventory = updated[userId]
-		if inventory == nil then
+	self:_Profile("SetSlot", function()
+		self.Atom(function(current)
+			local updated = table.clone(current)
+			local inventory = updated[userId]
+			if inventory == nil then
+				return updated
+			end
+
+			local nextInventory = table.clone(inventory)
+			nextInventory.Slots = table.clone(inventory.Slots)
+			nextInventory.Slots[slotIndex] = slotData
+			updated[userId] = nextInventory
+
 			return updated
-		end
-
-		local nextInventory = table.clone(inventory)
-		nextInventory.Slots = table.clone(inventory.Slots)
-		nextInventory.Slots[slotIndex] = slotData
-		updated[userId] = nextInventory
-
-		return updated
+		end)
 	end)
 end
 
 function InventorySyncService:UpdateSlotQuantity(userId: number, slotIndex: number, newQuantity: number)
-	self.Atom(function(current)
-		local updated = table.clone(current)
-		local inventory = updated[userId]
-		if inventory == nil then
+	self:_Profile("UpdateSlotQuantity", function()
+		self.Atom(function(current)
+			local updated = table.clone(current)
+			local inventory = updated[userId]
+			if inventory == nil then
+				return updated
+			end
+
+			local slot = inventory.Slots[slotIndex]
+			if slot == nil then
+				return updated
+			end
+
+			local nextInventory = table.clone(inventory)
+			nextInventory.Slots = table.clone(inventory.Slots)
+			if newQuantity <= 0 then
+				nextInventory.Slots[slotIndex] = nil
+			else
+				local nextSlot = table.clone(slot)
+				nextSlot.Quantity = newQuantity
+				nextInventory.Slots[slotIndex] = nextSlot
+			end
+			updated[userId] = nextInventory
+
 			return updated
-		end
-
-		local slot = inventory.Slots[slotIndex]
-		if slot == nil then
-			return updated
-		end
-
-		local nextInventory = table.clone(inventory)
-		nextInventory.Slots = table.clone(inventory.Slots)
-		if newQuantity <= 0 then
-			nextInventory.Slots[slotIndex] = nil
-		else
-			local nextSlot = table.clone(slot)
-			nextSlot.Quantity = newQuantity
-			nextInventory.Slots[slotIndex] = nextSlot
-		end
-		updated[userId] = nextInventory
-
-		return updated
+		end)
 	end)
 end
 
 function InventorySyncService:ClearAllSlots(userId: number)
-	self.Atom(function(current)
-		local updated = table.clone(current)
-		local inventory = updated[userId]
-		if inventory == nil then
+	self:_Profile("ClearAllSlots", function()
+		self.Atom(function(current)
+			local updated = table.clone(current)
+			local inventory = updated[userId]
+			if inventory == nil then
+				return updated
+			end
+
+			local nextInventory = table.clone(inventory)
+			nextInventory.Slots = {}
+			nextInventory.Metadata = table.clone(inventory.Metadata)
+			nextInventory.Metadata.UsedSlots = 0
+			nextInventory.Metadata.LastModified = os.time()
+			updated[userId] = nextInventory
+
 			return updated
-		end
-
-		local nextInventory = table.clone(inventory)
-		nextInventory.Slots = {}
-		nextInventory.Metadata = table.clone(inventory.Metadata)
-		nextInventory.Metadata.UsedSlots = 0
-		nextInventory.Metadata.LastModified = os.time()
-		updated[userId] = nextInventory
-
-		return updated
+		end)
 	end)
 end
 
 function InventorySyncService:UpdateMetadata(userId: number, metadata: { [string]: any })
-	self.Atom(function(current)
-		local updated = table.clone(current)
-		local inventory = updated[userId]
-		if inventory == nil then
+	self:_Profile("UpdateMetadata", function()
+		self.Atom(function(current)
+			local updated = table.clone(current)
+			local inventory = updated[userId]
+			if inventory == nil then
+				return updated
+			end
+
+			local nextInventory = table.clone(inventory)
+			nextInventory.Metadata = table.clone(inventory.Metadata)
+			for key, value in pairs(metadata) do
+				nextInventory.Metadata[key] = value
+			end
+			updated[userId] = nextInventory
+
 			return updated
-		end
-
-		local nextInventory = table.clone(inventory)
-		nextInventory.Metadata = table.clone(inventory.Metadata)
-		for key, value in pairs(metadata) do
-			nextInventory.Metadata[key] = value
-		end
-		updated[userId] = nextInventory
-
-		return updated
+		end)
 	end)
 end
 

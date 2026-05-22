@@ -32,22 +32,28 @@ function CommanderSyncService:Init(registry: any, name: string)
 end
 
 function CommanderSyncService:SyncCommanderState(userId: number)
-	local state = self._entityFactory:GetCommanderState(userId) :: CommanderState?
-	if state == nil then
-		self:RemoveUserData(userId)
-		return
-	end
+	self:_Profile("SyncCommanderState", function()
+		local state = self._entityFactory:GetCommanderState(userId) :: CommanderState?
+		if state == nil then
+			self:RemoveUserData(userId)
+			return
+		end
 
-	self:LoadUserData(userId, state)
+		self:LoadUserData(userId, state)
+	end)
 end
 
 function CommanderSyncService:HydrateAndSyncPlayer(player: Player)
-	self:SyncCommanderState(player.UserId)
-	BaseSyncService.HydratePlayer(self, player)
+	self:_Profile("HydrateAndSyncPlayer", function()
+		self:SyncCommanderState(player.UserId)
+		BaseSyncService.HydratePlayer(self, player)
+	end)
 end
 
 function CommanderSyncService:RemovePlayer(userId: number)
-	self:RemoveUserData(userId)
+	self:_Profile("RemovePlayer", function()
+		self:RemoveUserData(userId)
+	end)
 end
 
 function CommanderSyncService:GetStateReadOnly(userId: number): CommanderState?

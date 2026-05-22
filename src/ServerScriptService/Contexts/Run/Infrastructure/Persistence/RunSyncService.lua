@@ -100,16 +100,18 @@ end
 	@param snapshot RunSnapshot -- The new run snapshot.
 ]=]
 function RunSyncService:SetState(snapshot: RunSnapshot)
-	-- Replace the atom value wholesale so Charm-sync can diff the run snapshot cleanly.
-	-- This keeps the payload shape stable across server and client mirrors.
-	self.Atom(function()
-		return {
-			State = snapshot.State,
-			WaveNumber = snapshot.WaveNumber,
-			PhaseStartedAt = snapshot.PhaseStartedAt,
-			PhaseEndsAt = snapshot.PhaseEndsAt,
-			PhaseDuration = snapshot.PhaseDuration,
-		}
+	self:_Profile("SetState", function()
+		-- Replace the atom value wholesale so Charm-sync can diff the run snapshot cleanly.
+		-- This keeps the payload shape stable across server and client mirrors.
+		self.Atom(function()
+			return {
+				State = snapshot.State,
+				WaveNumber = snapshot.WaveNumber,
+				PhaseStartedAt = snapshot.PhaseStartedAt,
+				PhaseEndsAt = snapshot.PhaseEndsAt,
+				PhaseDuration = snapshot.PhaseDuration,
+			}
+		end)
 	end)
 end
 

@@ -76,7 +76,9 @@ end
 	@param startingWallet ResourceWallet -- The wallet to clone into the atom.
 ]=]
 function ResourceSyncService:InitPlayer(userId: number, startingWallet: ResourceWallet)
-	self:LoadUserData(userId, cloneWallet(startingWallet))
+	self:_Profile("InitPlayer", function()
+		self:LoadUserData(userId, cloneWallet(startingWallet))
+	end)
 end
 
 --[=[
@@ -86,16 +88,18 @@ end
 	@param runStats ProfileRunStats -- The run stats snapshot to sync.
 ]=]
 function ResourceSyncService:SyncRunStats(userId: number, runStats: ProfileRunStats)
-	self.Atom(function(current)
-		local wallet = current[userId]
-		if wallet == nil then
-			return current
-		end
+	self:_Profile("SyncRunStats", function()
+		self.Atom(function(current)
+			local wallet = current[userId]
+			if wallet == nil then
+				return current
+			end
 
-		local updated = table.clone(current)
-		updated[userId] = cloneWallet(wallet)
-		updated[userId].RunStats = cloneRunStats(runStats)
-		return updated
+			local updated = table.clone(current)
+			updated[userId] = cloneWallet(wallet)
+			updated[userId].RunStats = cloneRunStats(runStats)
+			return updated
+		end)
 	end)
 end
 
@@ -109,25 +113,27 @@ end
 	@param amount number -- The amount to add.
 ]=]
 function ResourceSyncService:AddResource(userId: number, resourceType: string, amount: number)
-	self.Atom(function(current)
-		-- Leave uninitialized players untouched so the command layer can reject them explicitly.
-		local wallet = current[userId]
-		if wallet == nil then
-			return current
-		end
+	self:_Profile("AddResource", function()
+		self.Atom(function(current)
+			-- Leave uninitialized players untouched so the command layer can reject them explicitly.
+			local wallet = current[userId]
+			if wallet == nil then
+				return current
+			end
 
-		-- Clone the atom root and the target wallet so Charm sees a new reference chain.
-		local updated = table.clone(current)
-		updated[userId] = cloneWallet(wallet)
+			-- Clone the atom root and the target wallet so Charm sees a new reference chain.
+			local updated = table.clone(current)
+			updated[userId] = cloneWallet(wallet)
 
-		-- Apply the grant to the correct balance bucket.
-		if resourceType == "Energy" then
-			updated[userId].Energy += amount
-		else
-			updated[userId].Resources[resourceType] = (updated[userId].Resources[resourceType] or 0) + amount
-		end
+			-- Apply the grant to the correct balance bucket.
+			if resourceType == "Energy" then
+				updated[userId].Energy += amount
+			else
+				updated[userId].Resources[resourceType] = (updated[userId].Resources[resourceType] or 0) + amount
+			end
 
-		return updated
+			return updated
+		end)
 	end)
 end
 
@@ -141,25 +147,27 @@ end
 	@param cost number -- The amount to subtract.
 ]=]
 function ResourceSyncService:SubtractResource(userId: number, resourceType: string, cost: number)
-	self.Atom(function(current)
-		-- Leave uninitialized players untouched so the command layer can reject them explicitly.
-		local wallet = current[userId]
-		if wallet == nil then
-			return current
-		end
+	self:_Profile("SubtractResource", function()
+		self.Atom(function(current)
+			-- Leave uninitialized players untouched so the command layer can reject them explicitly.
+			local wallet = current[userId]
+			if wallet == nil then
+				return current
+			end
 
-		-- Clone the atom root and the target wallet so Charm sees a new reference chain.
-		local updated = table.clone(current)
-		updated[userId] = cloneWallet(wallet)
+			-- Clone the atom root and the target wallet so Charm sees a new reference chain.
+			local updated = table.clone(current)
+			updated[userId] = cloneWallet(wallet)
 
-		-- Apply the deduction to the correct balance bucket.
-		if resourceType == "Energy" then
-			updated[userId].Energy -= cost
-		else
-			updated[userId].Resources[resourceType] = (updated[userId].Resources[resourceType] or 0) - cost
-		end
+			-- Apply the deduction to the correct balance bucket.
+			if resourceType == "Energy" then
+				updated[userId].Energy -= cost
+			else
+				updated[userId].Resources[resourceType] = (updated[userId].Resources[resourceType] or 0) - cost
+			end
 
-		return updated
+			return updated
+		end)
 	end)
 end
 
@@ -170,24 +178,26 @@ end
 	@param costMap ResourceCostMap -- Costs by resource type.
 ]=]
 function ResourceSyncService:SubtractResources(userId: number, costMap: ResourceCostMap)
-	self.Atom(function(current)
-		local wallet = current[userId]
-		if wallet == nil then
-			return current
-		end
-
-		local updated = table.clone(current)
-		updated[userId] = cloneWallet(wallet)
-
-		for resourceType, cost in costMap do
-			if resourceType == "Energy" then
-				updated[userId].Energy -= cost
-			else
-				updated[userId].Resources[resourceType] = (updated[userId].Resources[resourceType] or 0) - cost
+	self:_Profile("SubtractResources", function()
+		self.Atom(function(current)
+			local wallet = current[userId]
+			if wallet == nil then
+				return current
 			end
-		end
 
-		return updated
+			local updated = table.clone(current)
+			updated[userId] = cloneWallet(wallet)
+
+			for resourceType, cost in costMap do
+				if resourceType == "Energy" then
+					updated[userId].Energy -= cost
+				else
+					updated[userId].Resources[resourceType] = (updated[userId].Resources[resourceType] or 0) - cost
+				end
+			end
+
+			return updated
+		end)
 	end)
 end
 
@@ -254,7 +264,9 @@ end
 	@param userId number -- The player user id.
 ]=]
 function ResourceSyncService:RemovePlayer(userId: number)
-	self:RemoveUserData(userId)
+	self:_Profile("RemovePlayer", function()
+		self:RemoveUserData(userId)
+	end)
 end
 
 return ResourceSyncService

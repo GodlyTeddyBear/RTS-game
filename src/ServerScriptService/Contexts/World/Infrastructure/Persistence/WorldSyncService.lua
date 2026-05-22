@@ -3,6 +3,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CharmSync = require(ReplicatedStorage.Packages["Charm-sync"])
+local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
+local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local SharedAtoms = require(ReplicatedStorage.Contexts.World.Sync.SharedAtoms)
 local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 
@@ -11,6 +13,9 @@ type GridSpec = WorldTypes.GridSpec
 
 local WorldSyncService = {}
 WorldSyncService.__index = WorldSyncService
+
+local PROFILE_NAME = "WorldSyncService"
+local SYNC_SERVICE_PROFILING_ENABLED = DebugConfig.SYNC_SERVICE_PROFILING
 
 local function _FreezeGridSpecs(gridSpecs: { GridSpec }): { [number]: any }
 	local payload = table.create(#gridSpecs)
@@ -97,43 +102,51 @@ function WorldSyncService:Init(registry: any, _name: string)
 end
 
 function WorldSyncService:HydratePlayer(player: Player)
-	self.Syncer:hydrate(player)
+	DebugPlus.profile(("%s:HydratePlayer"):format(PROFILE_NAME), function()
+		self.Syncer:hydrate(player)
+	end, SYNC_SERVICE_PROFILING_ENABLED)
 end
 
 function WorldSyncService:SetSnapshot(gridSpecs: { GridSpec }, tiles: { Tile }, occupiedCoords: { any }?)
-	local frozenGridSpecs = _FreezeGridSpecs(gridSpecs)
-	local frozenTiles = _FreezeTiles(tiles)
-	local frozenOccupiedCoords = _FreezeOccupiedCoords(occupiedCoords or {})
+	DebugPlus.profile(("%s:SetSnapshot"):format(PROFILE_NAME), function()
+		local frozenGridSpecs = _FreezeGridSpecs(gridSpecs)
+		local frozenTiles = _FreezeTiles(tiles)
+		local frozenOccupiedCoords = _FreezeOccupiedCoords(occupiedCoords or {})
 
-	self.Atom(function(current)
-		return {
-			StaticVersion = current.StaticVersion + 1,
-			OccupancyVersion = current.OccupancyVersion + 1,
-			GridSpecs = frozenGridSpecs,
-			Tiles = frozenTiles,
-			OccupiedCoords = frozenOccupiedCoords,
-		}
-	end)
+		self.Atom(function(current)
+			return {
+				StaticVersion = current.StaticVersion + 1,
+				OccupancyVersion = current.OccupancyVersion + 1,
+				GridSpecs = frozenGridSpecs,
+				Tiles = frozenTiles,
+				OccupiedCoords = frozenOccupiedCoords,
+			}
+		end)
+	end, SYNC_SERVICE_PROFILING_ENABLED)
 end
 
 function WorldSyncService:SetOccupancySnapshot(occupiedCoords: { any })
-	local frozenOccupiedCoords = _FreezeOccupiedCoords(occupiedCoords)
+	DebugPlus.profile(("%s:SetOccupancySnapshot"):format(PROFILE_NAME), function()
+		local frozenOccupiedCoords = _FreezeOccupiedCoords(occupiedCoords)
 
-	self.Atom(function(current)
-		return {
-			StaticVersion = current.StaticVersion,
-			OccupancyVersion = current.OccupancyVersion + 1,
-			GridSpecs = current.GridSpecs,
-			Tiles = current.Tiles,
-			OccupiedCoords = frozenOccupiedCoords,
-		}
-	end)
+		self.Atom(function(current)
+			return {
+				StaticVersion = current.StaticVersion,
+				OccupancyVersion = current.OccupancyVersion + 1,
+				GridSpecs = current.GridSpecs,
+				Tiles = current.Tiles,
+				OccupiedCoords = frozenOccupiedCoords,
+			}
+		end)
+	end, SYNC_SERVICE_PROFILING_ENABLED)
 end
 
 function WorldSyncService:Destroy()
-	if self.Cleanup then
-		self.Cleanup()
-	end
+	DebugPlus.profile(("%s:Destroy"):format(PROFILE_NAME), function()
+		if self.Cleanup then
+			self.Cleanup()
+		end
+	end, SYNC_SERVICE_PROFILING_ENABLED)
 end
 
 return WorldSyncService

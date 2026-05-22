@@ -24,6 +24,7 @@ return table.freeze({
 	COMBAT_SCHEDULER_PROFILING = true, -- Enables CombatContext scheduler profiling scopes (testing only)
 	AI_RUNTIME_FRAME_PROFILING = true, -- Enables AI.Runtime.RunFrame DebugPlus scopes (testing only)
 	COMBAT_MOVEMENT_PROFILING = true, -- Enables MovementService profiling scopes (testing only)
+	SYNC_SERVICE_PROFILING = false, -- Enables DebugPlus scopes around sync-service mutation and hydration paths (testing only)
 	PARALLEL_RUNNER_PROFILING = true, -- Enables ParallelRunner managed-job dispatch profiling scopes (testing only)
 	PARALLEL_QUERY_PROFILING = true, -- Enables ParallelQuery DebugPlus scopes on coarse runner and managed-job paths (testing only)
 	AI_RUNTIME_PROFILING = false, -- Enables shared AI runtime phase timing logs (testing only)
