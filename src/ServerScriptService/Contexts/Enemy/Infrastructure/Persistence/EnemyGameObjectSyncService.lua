@@ -64,24 +64,12 @@ function EnemyGameObjectSyncService:_PollEntity(entity: number, model: Model)
 	self:GetEntityFactoryOrThrow():UpdatePosition(entity, ModelPlus.GetPivot(model))
 end
 
-function EnemyGameObjectSyncService:_SyncEntity(entity: number, model: Model)
+function EnemyGameObjectSyncService:_SyncEntity(entity: number, _model: Model)
 	local entityFactory = self:GetEntityFactoryOrThrow()
-	local components = self:GetComponentsOrThrow()
-	local world = self:GetWorldOrThrow()
-
 	local role = entityFactory:GetRole(entity)
-	local baseMoveSpeed = entityFactory:GetBaseMoveSpeed(entity)
 	local currentMoveSpeed = entityFactory:GetCurrentMoveSpeed(entity)
 	local pathState = entityFactory:GetPathState(entity)
 	local combatAction = _ResolveCombatRuntimeAction(self, entity)
-
-	if role then
-		self:SetAttributeIfChanged(model, "MoveSpeed", currentMoveSpeed or role.MoveSpeed)
-		self:SetAttributeIfChanged(model, "BaseMoveSpeed", baseMoveSpeed or role.MoveSpeed)
-		self:SetAttributeIfChanged(model, "CurrentMoveSpeed", currentMoveSpeed or role.MoveSpeed)
-		self:SetAttributeIfChanged(model, "Damage", role.Damage)
-		self:SetAttributeIfChanged(model, "TargetPreference", role.TargetPreference)
-	end
 
 	local roleName = if role ~= nil then role.Role else nil
 	local moveSpeed = if currentMoveSpeed ~= nil then currentMoveSpeed else if role ~= nil then role.MoveSpeed else nil
@@ -101,11 +89,7 @@ function EnemyGameObjectSyncService:_SyncEntity(entity: number, model: Model)
 		IsMoving = isMoving,
 		CombatAction = combatAction,
 	})
-	self:SetAttributeIfChanged(model, "AnimationState", nextAnimationState)
-	self:SetAttributeIfChanged(model, "AnimationLooping", isAnimationLooping)
-
-	self:SetAttributeIfChanged(model, "Alive", world:has(entity, components.AliveTag))
-	self:SetAttributeIfChanged(model, "GoalReached", world:has(entity, components.GoalReachedTag))
+	entityFactory:SetAnimationPresentation(entity, nextAnimationState, isAnimationLooping)
 end
 
 return EnemyGameObjectSyncService

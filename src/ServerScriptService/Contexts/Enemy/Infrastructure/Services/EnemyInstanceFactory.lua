@@ -154,12 +154,6 @@ function EnemyInstanceFactory:_PrepareInstance(instance: Instance, _entityId: nu
 
 	assert(model.PrimaryPart ~= nil, "Enemy model missing PrimaryPart: " .. model.Name)
 	model.PrimaryPart.Anchored = false
-	if model:GetAttribute("AnimationState") == nil then
-		model:SetAttribute("AnimationState", "Idle")
-	end
-	if model:GetAttribute("AnimationLooping") == nil then
-		model:SetAttribute("AnimationLooping", true)
-	end
 	EntityCollisionService:ApplyModel(model)
 end
 

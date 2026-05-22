@@ -81,6 +81,8 @@ function EnemyEntityFactory:CreateEnemy(enemyId: string, role: string, spawnCFra
 	self:_Set(entity, components.BehaviorConfigComponent, {
 		TickInterval = 0.15,
 	})
+	self:_Set(entity, components.AnimationStateComponent, "Idle")
+	self:_Set(entity, components.AnimationLoopingComponent, true)
 	self:_Set(entity, components.TargetComponent, {
 		TargetEntity = nil,
 		TargetKind = "Structure",
@@ -259,6 +261,32 @@ end
 function EnemyEntityFactory:GetIdentity(entity: number)
 	self:RequireReady()
 	return self:_Get(entity, self._components.IdentityComponent)
+end
+
+function EnemyEntityFactory:GetAnimationState(entity: number): string?
+	self:RequireReady()
+	local animationState = self:_Get(entity, self._components.AnimationStateComponent)
+	return if type(animationState) == "string" then animationState else nil
+end
+
+function EnemyEntityFactory:IsAnimationLooping(entity: number): boolean?
+	self:RequireReady()
+	local isLooping = self:_Get(entity, self._components.AnimationLoopingComponent)
+	return if type(isLooping) == "boolean" then isLooping else nil
+end
+
+function EnemyEntityFactory:SetAnimationPresentation(entity: number, animationState: string, isLooping: boolean)
+	self:RequireReady()
+
+	local currentAnimationState = self:GetAnimationState(entity)
+	local currentLooping = self:IsAnimationLooping(entity)
+	if currentAnimationState == animationState and currentLooping == isLooping then
+		return
+	end
+
+	self:_Set(entity, self._components.AnimationStateComponent, animationState)
+	self:_Set(entity, self._components.AnimationLoopingComponent, isLooping)
+	self:_Add(entity, self._components.DirtyTag)
 end
 
 function EnemyEntityFactory:GetEntityByEnemyId(enemyId: string): number?

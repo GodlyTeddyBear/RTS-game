@@ -12,6 +12,7 @@ local AnimationRigResolver = require(script.Parent.Parent.Parent.Infrastructure.
 local LoadAnimationVariantCommand = require(script.Parent.LoadAnimationVariantCommand)
 
 type TAnimationPreset = Types.TAnimationPreset
+type TAnimationPresetOptions = Types.TAnimationPresetOptions
 
 local SetupAnimationCommand = {}
 SetupAnimationCommand.__index = SetupAnimationCommand
@@ -46,7 +47,12 @@ function SetupAnimationCommand.new()
 	return self
 end
 
-function SetupAnimationCommand:Execute(model: Model, preset: TAnimationPreset, context: any)
+function SetupAnimationCommand:Execute(
+	model: Model,
+	preset: TAnimationPreset,
+	context: any,
+	options: TAnimationPresetOptions?
+)
 	local ctx = context or {}
 	ctx.Model = model
 	ctx = table.freeze(ctx)
@@ -91,14 +97,24 @@ function SetupAnimationCommand:Execute(model: Model, preset: TAnimationPreset, c
 							animationsFolder,
 							controllerJanitor,
 							ctx,
-							preset
+							preset,
+							options
 						)
 					end),
 					"Disconnect"
 				)
 			end
 
-			self._loadAnimationVariantCommand:Execute(model, registry, rig.Animator, animationsFolder, controllerJanitor, ctx, preset)
+			self._loadAnimationVariantCommand:Execute(
+				model,
+				registry,
+				rig.Animator,
+				animationsFolder,
+				controllerJanitor,
+				ctx,
+				preset,
+				options
+			)
 
 			return function()
 				_CleanupJanitor(lifetimeJanitor)

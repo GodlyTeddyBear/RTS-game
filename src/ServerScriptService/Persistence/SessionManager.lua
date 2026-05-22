@@ -89,6 +89,7 @@ local function _onPlayerAdded(profileStore: PStore, player: Player)
 				_activateSession(profile, player)
 			else
 				profile:EndSession()
+				return Promise.reject("No session")
 			end
 		end)
 		:catch(function(err)

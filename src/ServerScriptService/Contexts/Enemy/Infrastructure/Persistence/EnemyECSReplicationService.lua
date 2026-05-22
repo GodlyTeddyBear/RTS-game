@@ -34,9 +34,14 @@ function EnemyECSReplicationService:_GetSharedSchema()
 		sharedComponents = {
 			components.IdentityComponent,
 			components.HealthComponent,
+			components.CurrentMoveSpeedComponent,
+			components.RoleComponent,
+			components.AnimationStateComponent,
+			components.AnimationLoopingComponent,
 		},
 		sharedTags = {
 			components.AliveTag,
+			components.GoalReachedTag,
 		},
 	}
 end
@@ -53,7 +58,12 @@ function EnemyECSReplicationService:RegisterEnemyEntity(entity: number)
 	self:RegisterNetworkedEntity(entity)
 	self:RegisterReliableComponent(entity, components.IdentityComponent)
 	self:RegisterReliableComponent(entity, components.HealthComponent)
+	self:RegisterReliableComponent(entity, components.CurrentMoveSpeedComponent)
+	self:RegisterReliableComponent(entity, components.RoleComponent)
+	self:RegisterReliableComponent(entity, components.AnimationStateComponent)
+	self:RegisterReliableComponent(entity, components.AnimationLoopingComponent)
 	self:RegisterReliableComponent(entity, components.AliveTag)
+	self:RegisterReliableComponent(entity, components.GoalReachedTag)
 end
 
 function EnemyECSReplicationService:UnregisterEnemyEntity(entity: number)

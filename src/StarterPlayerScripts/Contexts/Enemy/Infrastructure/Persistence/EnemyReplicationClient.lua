@@ -8,11 +8,20 @@ local JECS = require(ReplicatedStorage.Packages.JECS)
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseECSReplicationClient = require(ReplicatedStorage.Utilities.BaseECSReplicationClient)
 
+type TBootstrapPayload = BaseECSReplicationClient.TBootstrapPayload
+type TReplicationPacketPayload = BaseECSReplicationClient.TReplicationPacketPayload
+
 export type TEnemyReplicatedState = {
 	EnemyId: string,
+	Role: string?,
+	WaveNumber: number?,
 	CurrentHealth: number,
 	MaxHealth: number,
+	CurrentMoveSpeed: number?,
+	AnimationState: string?,
+	IsAnimationLooping: boolean?,
 	IsAlive: boolean,
+	IsGoalReached: boolean,
 }
 
 local EnemyReplicationClient = {}
@@ -38,13 +47,33 @@ function EnemyReplicationClient:_BuildComponents(world: any, _replecsLibrary: an
 	local healthComponent = world:component()
 	_NameEntity(world, healthComponent, "Enemy.Health")
 
+	local currentMoveSpeedComponent = world:component()
+	_NameEntity(world, currentMoveSpeedComponent, "Enemy.CurrentMoveSpeed")
+
+	local roleComponent = world:component()
+	_NameEntity(world, roleComponent, "Enemy.Role")
+
+	local animationStateComponent = world:component()
+	_NameEntity(world, animationStateComponent, "Enemy.AnimationState")
+
+	local animationLoopingComponent = world:component()
+	_NameEntity(world, animationLoopingComponent, "Enemy.AnimationLooping")
+
 	local aliveTag = world:entity()
 	_NameEntity(world, aliveTag, "Enemy.AliveTag")
+
+	local goalReachedTag = world:entity()
+	_NameEntity(world, goalReachedTag, "Enemy.GoalReachedTag")
 
 	return table.freeze({
 		IdentityComponent = identityComponent,
 		HealthComponent = healthComponent,
+		CurrentMoveSpeedComponent = currentMoveSpeedComponent,
+		RoleComponent = roleComponent,
+		AnimationStateComponent = animationStateComponent,
+		AnimationLoopingComponent = animationLoopingComponent,
 		AliveTag = aliveTag,
+		GoalReachedTag = goalReachedTag,
 	})
 end
 
@@ -55,17 +84,41 @@ function EnemyReplicationClient:_GetSharedSchema()
 		sharedComponents = {
 			components.IdentityComponent,
 			components.HealthComponent,
+			components.CurrentMoveSpeedComponent,
+			components.RoleComponent,
+			components.AnimationStateComponent,
+			components.AnimationLoopingComponent,
 		},
 		sharedTags = {
 			components.AliveTag,
+			components.GoalReachedTag,
 		},
 	}
 end
 
 function EnemyReplicationClient:_RegisterReplicatedSurface()
-	self:AfterReplication(function()
-		self:_RebuildEnemyStateIndex()
-	end)
+	self:_RebuildEnemyStateIndex()
+end
+
+function EnemyReplicationClient:HandleBootstrap(payload: TBootstrapPayload): boolean
+	local handled = BaseECSReplicationClient.HandleBootstrap(self, payload)
+	self:_RebuildEnemyStateIndex()
+	return handled
+end
+
+function EnemyReplicationClient:HandleReliable(payload: TReplicationPacketPayload)
+	BaseECSReplicationClient.HandleReliable(self, payload)
+	self:_RebuildEnemyStateIndex()
+end
+
+function EnemyReplicationClient:HandleUnreliable(payload: TReplicationPacketPayload)
+	BaseECSReplicationClient.HandleUnreliable(self, payload)
+	self:_RebuildEnemyStateIndex()
+end
+
+function EnemyReplicationClient:HandleEntity(payload: TReplicationPacketPayload)
+	BaseECSReplicationClient.HandleEntity(self, payload)
+	self:_RebuildEnemyStateIndex()
 end
 
 function EnemyReplicationClient:_ConnectTransport()
@@ -137,20 +190,39 @@ function EnemyReplicationClient:_RebuildEnemyStateIndex()
 		end
 
 		local enemyId = identity.EnemyId
+		local currentMoveSpeed = world:get(entity, components.CurrentMoveSpeedComponent)
+		local roleState = world:get(entity, components.RoleComponent)
+		local animationState = world:get(entity, components.AnimationStateComponent)
+		local animationLooping = world:get(entity, components.AnimationLoopingComponent)
+		local roleName = if type(roleState) == "table" and type(roleState.Role) == "string"
+			then roleState.Role
+			else identity.Role
 		local nextState = table.freeze({
 			EnemyId = enemyId,
+			Role = roleName,
+			WaveNumber = identity.WaveNumber,
 			CurrentHealth = health.Current or 0,
 			MaxHealth = health.Max or 0,
+			CurrentMoveSpeed = if type(currentMoveSpeed) == "table" then currentMoveSpeed.Value else nil,
+			AnimationState = if type(animationState) == "string" then animationState else nil,
+			IsAnimationLooping = if type(animationLooping) == "boolean" then animationLooping else nil,
 			IsAlive = world:has(entity, components.AliveTag),
+			IsGoalReached = world:has(entity, components.GoalReachedTag),
 		})
 
 		nextStateById[enemyId] = nextState
 
 		local previousState = previousStateById[enemyId]
 		if previousState == nil
+			or previousState.Role ~= nextState.Role
+			or previousState.WaveNumber ~= nextState.WaveNumber
 			or previousState.CurrentHealth ~= nextState.CurrentHealth
 			or previousState.MaxHealth ~= nextState.MaxHealth
+			or previousState.CurrentMoveSpeed ~= nextState.CurrentMoveSpeed
+			or previousState.AnimationState ~= nextState.AnimationState
+			or previousState.IsAnimationLooping ~= nextState.IsAnimationLooping
 			or previousState.IsAlive ~= nextState.IsAlive
+			or previousState.IsGoalReached ~= nextState.IsGoalReached
 		then
 			changedEnemyIds[enemyId] = true
 		end

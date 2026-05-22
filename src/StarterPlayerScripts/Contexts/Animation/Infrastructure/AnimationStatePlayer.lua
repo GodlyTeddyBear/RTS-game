@@ -7,6 +7,7 @@ local ActionEventRouter = require(ReplicatedStorage.Utilities.ActionSystem.Actio
 local Types = require(ReplicatedStorage.Contexts.Animation.Types.AnimationTypes)
 
 type TAnimationPreset = Types.TAnimationPreset
+type TAnimationStateSource = Types.TAnimationStateSource
 
 local AnimationStatePlayer = {}
 
@@ -18,16 +19,34 @@ function AnimationStatePlayer.Bind(
 	core: any,
 	validCoreStates: { [string]: boolean },
 	context: any,
-	preset: TAnimationPreset
+	preset: TAnimationPreset,
+	stateSource: TAnimationStateSource
 )
 	local activeAction: string? = nil
 	local activeCallbackState: string? = nil
 	local stoppedConnection: RBXScriptConnection? = nil
 	local routerCleanup: (() -> ())? = nil
+	local stateCleanup: (() -> ())? = nil
+	local loopingCleanup: (() -> ())? = nil
 	local poseController = if core ~= nil then core.PoseController else nil
 	local useStateDrivenCorePoses = preset.UseStateDrivenCorePoses == true
 		and poseController ~= nil
 		and next(validCoreStates) ~= nil
+	local latestLooping = true
+
+	local function readState(): string
+		local state = stateSource:GetState()
+		if type(state) == "string" and state ~= "" then
+			return state
+		end
+
+		return "Idle"
+	end
+
+	local function syncLooping()
+		local isLooping = stateSource:GetLooping()
+		latestLooping = if type(isLooping) == "boolean" then isLooping else true
+	end
 
 	local function setCoreActive(enabled: boolean)
 		if not poseController then
@@ -139,7 +158,7 @@ function AnimationStatePlayer.Bind(
 				routerCleanup = nil
 			end
 
-			if activeAction == animState and model:GetAttribute("AnimationLooping") == true then
+			if activeAction == animState and latestLooping == true then
 				local newTrack = action:PlayAction(animState)
 				if actionDef and newTrack then
 					actionDef:OnStart(newTrack, context)
@@ -172,21 +191,31 @@ function AnimationStatePlayer.Bind(
 		playState(state)
 	end
 
-	janitor:Add(
-		model:GetAttributeChangedSignal("AnimationState"):Connect(function()
-			applyState((model:GetAttribute("AnimationState") or "Idle") :: string)
-		end),
-		"Disconnect"
-	)
+	stateCleanup = stateSource:ObserveStateChanged(function()
+		syncLooping()
+		applyState(readState())
+	end)
+	loopingCleanup = stateSource:ObserveLoopingChanged(function()
+		syncLooping()
+	end)
 
 	janitor:Add(function()
+		if stateCleanup then
+			stateCleanup()
+			stateCleanup = nil
+		end
+		if loopingCleanup then
+			loopingCleanup()
+			loopingCleanup = nil
+		end
 		stopActive()
 		if useStateDrivenCorePoses then
 			setCoreActive(true)
 		end
 	end, true)
 
-	applyState((model:GetAttribute("AnimationState") or "Idle") :: string)
+	syncLooping()
+	applyState(readState())
 end
 
 return AnimationStatePlayer

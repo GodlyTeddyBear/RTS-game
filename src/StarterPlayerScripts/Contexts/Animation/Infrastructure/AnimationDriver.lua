@@ -17,9 +17,43 @@ local AnimationPoseFilter = require(script.Parent.AnimationPoseFilter)
 local Types = require(ReplicatedStorage.Contexts.Animation.Types.AnimationTypes)
 
 type TAnimationPreset = Types.TAnimationPreset
+type TAnimationPresetOptions = Types.TAnimationPresetOptions
 type TActionEntry = Types.TActionEntry
 
 local AnimationDriver = {}
+
+local function _CreateAttributeStateSource(model: Model)
+	return table.freeze({
+		GetState = function(_self)
+			local state = model:GetAttribute("AnimationState")
+			if type(state) == "string" and state ~= "" then
+				return state
+			end
+
+			return "Idle"
+		end,
+		GetLooping = function(_self)
+			local isLooping = model:GetAttribute("AnimationLooping")
+			if type(isLooping) == "boolean" then
+				return isLooping
+			end
+
+			return true
+		end,
+		ObserveStateChanged = function(_, callback: () -> ())
+			local connection = model:GetAttributeChangedSignal("AnimationState"):Connect(callback)
+			return function()
+				connection:Disconnect()
+			end
+		end,
+		ObserveLoopingChanged = function(_, callback: () -> ())
+			local connection = model:GetAttributeChangedSignal("AnimationLooping"):Connect(callback)
+			return function()
+				connection:Disconnect()
+			end
+		end,
+	})
+end
 
 local function _Log(preset: TAnimationPreset, ...)
 	if preset.Debug ~= true then
@@ -110,7 +144,8 @@ local function _LoadVariant(
 	animationsFolder: Folder,
 	controllerJanitor: any,
 	context: any,
-	preset: TAnimationPreset
+	preset: TAnimationPreset,
+	options: TAnimationPresetOptions?
 )
 	local variant = _GetVariant(model, preset)
 	_Log(preset, model.Name, "- Loading animations for variant:", variant)
@@ -145,7 +180,8 @@ local function _LoadVariant(
 			core,
 			_BuildCoreKeyMap(loaded.CoreAnimations),
 			context,
-			preset
+			preset,
+			if options ~= nil and options.StateSource ~= nil then options.StateSource else _CreateAttributeStateSource(model)
 		)
 
 		if preset.EnableEmotes == true then
@@ -165,7 +201,7 @@ local function _ResolveAnimationsFolder(model: Model, preset: TAnimationPreset)
 	return AnimationRigResolver.ResolveObjectValueAnimationsFolder(model, preset.Tag)
 end
 
-function AnimationDriver.setup(model: Model, preset: TAnimationPreset, context: any)
+function AnimationDriver.setup(model: Model, preset: TAnimationPreset, context: any, options: TAnimationPresetOptions?)
 	local ctx = context or {}
 	ctx.Model = model
 	ctx = table.freeze(ctx)
@@ -204,13 +240,13 @@ function AnimationDriver.setup(model: Model, preset: TAnimationPreset, context: 
 			if preset.ReloadOnVariantChanged == true and preset.VariantAttribute then
 				lifetimeJanitor:Add(
 					model:GetAttributeChangedSignal(preset.VariantAttribute):Connect(function()
-						_LoadVariant(model, registry, rig.Animator, animationsFolder, controllerJanitor, ctx, preset)
+						_LoadVariant(model, registry, rig.Animator, animationsFolder, controllerJanitor, ctx, preset, options)
 					end),
 					"Disconnect"
 				)
 			end
 
-			_LoadVariant(model, registry, rig.Animator, animationsFolder, controllerJanitor, ctx, preset)
+			_LoadVariant(model, registry, rig.Animator, animationsFolder, controllerJanitor, ctx, preset, options)
 
 			return function()
 				_CleanupJanitor(lifetimeJanitor)

@@ -12,6 +12,7 @@ local AnimationClipLoader = require(script.Parent.Parent.Parent.Infrastructure.A
 local AnimationPoseFilter = require(script.Parent.Parent.Parent.Infrastructure.AnimationPoseFilter)
 
 type TAnimationPreset = Types.TAnimationPreset
+type TAnimationPresetOptions = Types.TAnimationPresetOptions
 type TActionEntry = Types.TActionEntry
 
 local LoadAnimationVariantCommand = {}
@@ -112,7 +113,8 @@ function LoadAnimationVariantCommand:Execute(
 	animationsFolder: Folder,
 	controllerJanitor: any,
 	context: any,
-	preset: TAnimationPreset
+	preset: TAnimationPreset,
+	options: TAnimationPresetOptions?
 )
 	local variant = _GetVariant(model, preset)
 	_Log(preset, model.Name, "- Loading animations for variant:", variant)
@@ -147,7 +149,8 @@ function LoadAnimationVariantCommand:Execute(
 			core,
 			_BuildCoreKeyMap(loaded.CoreAnimations),
 			context,
-			preset
+			preset,
+			if options ~= nil then options.StateSource else nil
 		)
 
 		if preset.EnableEmotes == true then

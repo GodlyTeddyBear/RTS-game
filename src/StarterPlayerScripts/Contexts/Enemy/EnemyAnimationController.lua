@@ -147,7 +147,7 @@ function EnemyAnimationController:_TrackModel(model: Model)
 	end
 
 	-- Attach the shared enemy locomotion animation driver and retain its cleanup handle.
-	AnimateEnemyModule.setup(model, buildContext())
+	AnimateEnemyModule.setup(model, buildContext(), self._enemyReplicationClient)
 		:andThen(function(cleanup)
 			local tracked = self._tracked[model]
 			if tracked == nil then

@@ -74,6 +74,44 @@ local function _FindAnimationInSlot(slot: Instance?): Animation?
 	return slot:FindFirstChildWhichIsA("Animation", true)
 end
 
+local function _CollectActionSlotNames(
+	variantFolder: Instance?,
+	defaultFolder: Instance?,
+	coreFolders: { [string]: boolean }
+): { string }
+	local slotNames = {}
+	local seenSlotNames = {}
+
+	local function collectFromFolder(folder: Instance?)
+		if folder == nil then
+			return
+		end
+
+		for _, child in folder:GetChildren() do
+			if coreFolders[child.Name:lower()] then
+				continue
+			end
+
+			if _FindAnimationInSlot(child) == nil then
+				continue
+			end
+
+			local slotKey = child.Name:lower()
+			if seenSlotNames[slotKey] then
+				continue
+			end
+
+			seenSlotNames[slotKey] = true
+			table.insert(slotNames, child.Name)
+		end
+	end
+
+	collectFromFolder(variantFolder)
+	collectFromFolder(defaultFolder)
+
+	return slotNames
+end
+
 local function _FindVariantAnimation(animationsFolder: Folder, variant: string, folderName: string): Animation?
 	local variantFolder = animationsFolder:FindFirstChild(variant)
 	if not variantFolder then
@@ -89,8 +127,8 @@ local function _GetDefaultClip(registry: any, animationsFolder: Folder, folderNa
 		return defaultAnimation
 	end
 
-	if registry:Exists("Default", folderName) then
-		return registry:Get("Default", folderName)
+	if registry:Exists(folderName, "Default") then
+		return registry:Get(folderName, "Default")
 	end
 
 	return nil
@@ -122,8 +160,8 @@ function AnimationClipLoader.GetVariantClip(
 		if variantAnimation then
 			return variantAnimation
 		end
-		if registry:Exists(variant, folderName) then
-			return registry:Get(variant, folderName)
+		if registry:Exists(folderName, variant) then
+			return registry:Get(folderName, variant)
 		end
 	end
 
@@ -131,8 +169,8 @@ function AnimationClipLoader.GetVariantClip(
 	if defaultAnimation then
 		return defaultAnimation
 	end
-	if registry:Exists("Default", folderName) then
-		return registry:Get("Default", folderName)
+	if registry:Exists(folderName, "Default") then
+		return registry:Get(folderName, "Default")
 	end
 
 	if preset.WarnOnMissingAnimation == true then
@@ -238,24 +276,16 @@ function AnimationClipLoader.BuildActionsAndEmotes(
 		coreFolders[entry.Folder:lower()] = true
 	end
 
-	local sourceFolder = animationsFolder:FindFirstChild(variant) or animationsFolder:FindFirstChild("Default")
-	if not sourceFolder then
+	local variantFolder = animationsFolder:FindFirstChild(variant)
+	local defaultFolder = animationsFolder:FindFirstChild("Default")
+	if variantFolder == nil and defaultFolder == nil then
 		return actions, emotes
 	end
 
-	for _, child in sourceFolder:GetChildren() do
-		local slotAnimation = _FindAnimationInSlot(child)
-		if not slotAnimation then
-			continue
-		end
-
-		local lookupName = child.Name
+	for _, slotName in ipairs(_CollectActionSlotNames(variantFolder, defaultFolder, coreFolders)) do
+		local lookupName = slotName
 		if preset.ActionNameTransform then
-			lookupName = child.Name:lower()
-		end
-
-		if coreFolders[lookupName:lower()] then
-			continue
+			lookupName = slotName:lower()
 		end
 
 		local animation = AnimationClipLoader.GetVariantClip(model, registry, animationsFolder, variant, lookupName, preset)

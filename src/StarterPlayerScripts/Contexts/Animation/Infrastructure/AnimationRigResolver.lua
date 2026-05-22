@@ -5,6 +5,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Promise = require(ReplicatedStorage.Packages.Promise)
 
 local AnimationRigResolver = {}
+local DESCENDANT_SETTLE_TIMEOUT_SECONDS = 10
+local DESCENDANT_SETTLE_WINDOW_SECONDS = 0.25
 
 local function _FindChildCaseInsensitive(parent: Instance, childName: string): Instance?
 	local direct = parent:FindFirstChild(childName)
@@ -41,10 +43,34 @@ local function _GetOrCreateAnimator(model: Model, humanoid: Humanoid, tag: strin
 		return existing
 	end
 
-	warn(tag, model.Name, "- Animator not found on Humanoid, creating one")
+	--warn(tag, model.Name, "- Animator not found on Humanoid, creating one")
 	local animator = Instance.new("Animator")
 	animator.Parent = humanoid
 	return animator
+end
+
+local function _WaitForDescendantsToSettle(root: Instance, timeoutSeconds: number, settleWindowSeconds: number): boolean
+	local waitStartedAt = os.clock()
+	local lastDescendantChangeAt = os.clock()
+
+	local connection = root.DescendantAdded:Connect(function()
+		lastDescendantChangeAt = os.clock()
+	end)
+
+	while true do
+		if os.clock() - lastDescendantChangeAt >= settleWindowSeconds then
+			break
+		end
+
+		if os.clock() - waitStartedAt >= timeoutSeconds then
+			break
+		end
+
+		task.wait(0.05)
+	end
+
+	connection:Disconnect()
+	return os.clock() - lastDescendantChangeAt >= settleWindowSeconds
 end
 
 function AnimationRigResolver.ResolveRig(model: Model, tag: string)
@@ -103,6 +129,7 @@ end
 
 function AnimationRigResolver.WaitForHierarchyReplication(model: Model, animationsFolder: Folder, tag: string)
 	return Promise.new(function(resolve, reject)
+		local waitStartedAt = os.clock()
 		local defaultFolder = animationsFolder:FindFirstChild("Default") or animationsFolder:WaitForChild("Default", 10)
 		if not defaultFolder or not defaultFolder:IsA("Folder") then
 			reject(tag .. " " .. model.Name .. " - Default animations folder not found")
@@ -124,6 +151,11 @@ function AnimationRigResolver.WaitForHierarchyReplication(model: Model, animatio
 		if not animation then
 			reject(tag .. " " .. model.Name .. " - Default/idle Animation not found")
 			return
+		end
+
+		local remainingTime = math.max(0, DESCENDANT_SETTLE_TIMEOUT_SECONDS - (os.clock() - waitStartedAt))
+		if remainingTime > 0 then
+			_WaitForDescendantsToSettle(animationsFolder, remainingTime, DESCENDANT_SETTLE_WINDOW_SECONDS)
 		end
 
 		resolve(animationsFolder)

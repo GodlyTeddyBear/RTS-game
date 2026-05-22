@@ -25,8 +25,16 @@ export type TPoseFilterMode = "Whitelist" | "Blacklist"
 export type TPresetId = "Player" | "Worker" | "CombatNPC" | "EnemyLocomotion" | "Structure"
 export type TAimStrategy = "IKControl"
 
+export type TAnimationStateSource = {
+	GetState: (self: TAnimationStateSource) -> string?,
+	GetLooping: (self: TAnimationStateSource) -> boolean?,
+	ObserveStateChanged: (self: TAnimationStateSource, callback: () -> ()) -> (() -> ()),
+	ObserveLoopingChanged: (self: TAnimationStateSource, callback: () -> ()) -> (() -> ()),
+}
+
 export type TAnimationPresetOptions = {
 	AnimationsFolder: Folder?,
+	StateSource: TAnimationStateSource?,
 }
 
 export type TIKAimRigConfig = {

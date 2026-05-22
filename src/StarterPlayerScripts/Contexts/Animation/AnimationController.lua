@@ -35,7 +35,7 @@ function AnimationController:Setup(
 	options: TAnimationPresetOptions?
 )
 	local preset = self:GetPreset(presetId, options)
-	return self._setupAnimationCommand:Execute(model, preset, context)
+	return self._setupAnimationCommand:Execute(model, preset, context, options)
 end
 
 function AnimationController:SetupWithFolder(
