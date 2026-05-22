@@ -4,7 +4,7 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local React = require(ReplicatedStorage.Packages.React)
-local getBaseProductionAtom = require(script.Parent.Parent.Parent.Infrastructure.BaseProductionAtom)
+local getBaseProductionAtom = require(script.Parent.Parent.Parent.Infrastructure.Persistence.BaseProductionAtom)
 local BaseProductionService = require(script.Parent.Parent.Parent.Infrastructure.Services.BaseProductionService)
 
 type TBaseProductionState = getBaseProductionAtom.TBaseProductionState
@@ -65,3 +65,4 @@ local function useBaseProductionActions(): TBaseProductionActions
 end
 
 return useBaseProductionActions
+

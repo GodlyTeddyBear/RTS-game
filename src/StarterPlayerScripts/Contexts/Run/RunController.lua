@@ -13,7 +13,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local RunSyncClient = require(script.Parent.Infrastructure.RunSyncClient)
+local RunSyncClient = require(script.Parent.Infrastructure.Persistence.RunSyncClient)
 
 --[=[
 	@class RunController
@@ -55,3 +55,4 @@ function RunController:GetAtom()
 end
 
 return RunController
+

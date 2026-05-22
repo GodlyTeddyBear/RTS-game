@@ -3,7 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local EquipmentSyncClient = require(script.Parent.Infrastructure.EquipmentSyncClient)
+local EquipmentSyncClient = require(script.Parent.Infrastructure.Persistence.EquipmentSyncClient)
 
 local EquipmentController = Knit.CreateController({
 	Name = "EquipmentController",
@@ -22,3 +22,4 @@ function EquipmentController:GetAtom()
 end
 
 return EquipmentController
+

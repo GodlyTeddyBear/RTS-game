@@ -13,7 +13,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local ResourceSyncClient = require(script.Parent.Infrastructure.ResourceSyncClient)
+local ResourceSyncClient = require(script.Parent.Infrastructure.Persistence.ResourceSyncClient)
 
 --[=[
 	@class EconomyController
@@ -54,3 +54,4 @@ function EconomyController:GetAtom()
 end
 
 return EconomyController
+

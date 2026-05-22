@@ -3,7 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local InventorySyncClient = require(script.Parent.Infrastructure.InventorySyncClient)
+local InventorySyncClient = require(script.Parent.Infrastructure.Persistence.InventorySyncClient)
 
 local InventoryController = Knit.CreateController({
 	Name = "InventoryController",
@@ -22,3 +22,4 @@ function InventoryController:GetAtom()
 end
 
 return InventoryController
+

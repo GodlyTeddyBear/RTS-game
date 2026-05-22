@@ -23,8 +23,8 @@ local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 local PlacementFootprintResolver = require(ReplicatedStorage.Contexts.Placement.PlacementFootprintResolver)
 
 local PlacementCursorGridService = require(script.Parent.Infrastructure.Services.PlacementCursorGridService)
-local PlacementGhostModel = require(script.Parent.Infrastructure.Services.PlacementGhostModel)
-local PlacementHighlightPool = require(script.Parent.Infrastructure.Services.PlacementHighlightPool)
+local PlacementGhostModel = require(script.Parent.Infrastructure.PlacementGhostModel)
+local PlacementHighlightPool = require(script.Parent.Infrastructure.PlacementHighlightPool)
 
 local BuildOccupiedSetQuery = require(script.Parent.Application.Queries.BuildOccupiedSetQuery)
 local BuildPlacementSignatureQuery = require(script.Parent.Application.Queries.BuildPlacementSignatureQuery)
@@ -266,3 +266,4 @@ function PlacementCursorController:_ConfirmPlacement()
 end
 
 return PlacementCursorController
+

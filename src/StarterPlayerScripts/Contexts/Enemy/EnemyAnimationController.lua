@@ -18,8 +18,8 @@ local ActionRegistry = require(ReplicatedStorage.Utilities.ActionSystem.ActionRe
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 
 local AnimateEnemyModule = require(script.Parent.AnimateEnemyModule)
-local NPCBillboardService = require(script.Parent.Infrastructure.NPCBillboardService)
-local EnemyReplicationClient = require(script.Parent.Infrastructure.Services.EnemyReplicationClient)
+local NPCBillboardService = require(script.Parent.Infrastructure.Services.NPCBillboardService)
+local EnemyReplicationClient = require(script.Parent.Infrastructure.Persistence.EnemyReplicationClient)
 local AttackAction = require(script.Parent.Actions.AttackAction)
 
 local TAG = "[EnemyAnimation]"
@@ -236,11 +236,12 @@ function EnemyAnimationController:KnitStart()
 	end)
 
 	-- Stop tracking when the animation tag is removed from a model.
-	self._tagRemovedConnection = CollectionService:GetInstanceRemovedSignal(ANIMATED_ENEMY_TAG):Connect(function(instance)
-		if instance:IsA("Model") then
-			self:_UntrackModel(instance)
-		end
-	end)
+	self._tagRemovedConnection = CollectionService:GetInstanceRemovedSignal(ANIMATED_ENEMY_TAG)
+		:Connect(function(instance)
+			if instance:IsA("Model") then
+				self:_UntrackModel(instance)
+			end
+		end)
 
 	-- Attach to any tagged models that already exist before the controller starts.
 	for _, instance in CollectionService:GetTagged(ANIMATED_ENEMY_TAG) do
@@ -305,3 +306,4 @@ function EnemyAnimationController:Destroy()
 end
 
 return EnemyAnimationController
+

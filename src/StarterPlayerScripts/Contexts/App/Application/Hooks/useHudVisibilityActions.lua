@@ -4,7 +4,7 @@
 	React hook that returns imperative actions for global App HUD visibility.
 	@client
 ]=]
-local hudVisibilityAtom = require(script.Parent.Parent.Parent.Infrastructure.HudVisibilityAtom)
+local hudVisibilityAtom = require(script.Parent.Parent.Parent.Infrastructure.Persistence.HudVisibilityAtom)
 
 export type THudVisibilityActions = {
 	setGameHudEnabled: (enabled: boolean, reason: string?) -> (),
@@ -22,3 +22,4 @@ local function useHudVisibilityActions(): THudVisibilityActions
 end
 
 return useHudVisibilityActions
+

@@ -6,7 +6,7 @@
 ]=]
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ReactCharm = require(ReplicatedStorage.Packages["React-charm"])
-local hudVisibilityAtom = require(script.Parent.Parent.Parent.Infrastructure.HudVisibilityAtom)
+local hudVisibilityAtom = require(script.Parent.Parent.Parent.Infrastructure.Persistence.HudVisibilityAtom)
 
 export type THudVisibilityState = typeof(hudVisibilityAtom())
 
@@ -15,3 +15,4 @@ local function useHudVisibility(): THudVisibilityState
 end
 
 return useHudVisibility
+

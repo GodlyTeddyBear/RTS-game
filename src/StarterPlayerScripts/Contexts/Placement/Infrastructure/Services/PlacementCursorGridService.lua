@@ -7,7 +7,7 @@ local PlacementFootprintResolver = require(ReplicatedStorage.Contexts.Placement.
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 local WorldConfig = require(ReplicatedStorage.Contexts.World.Config.WorldConfig)
-local PlacementGridRuntime = require(script.Parent.PlacementGridRuntime)
+local PlacementGridRuntime = require(script.Parent.Parent.PlacementGridRuntime)
 local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 
 type GridCoord = WorldTypes.GridCoord
@@ -480,3 +480,4 @@ function PlacementCursorGridService.GetValidTiles(
 end
 
 return table.freeze(PlacementCursorGridService)
+

@@ -2,7 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local PlacementCursorGridService = require(script.Parent.PlacementCursorGridService)
+local PlacementCursorGridService = require(script.Parent.Services.PlacementCursorGridService)
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 
@@ -172,3 +172,4 @@ function PlacementHighlightPool:Destroy()
 end
 
 return PlacementHighlightPool
+

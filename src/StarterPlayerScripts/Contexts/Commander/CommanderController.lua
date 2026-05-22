@@ -13,7 +13,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local CommanderSyncClient = require(script.Parent.Infrastructure.CommanderSyncClient)
+local CommanderSyncClient = require(script.Parent.Infrastructure.Persistence.CommanderSyncClient)
 
 local CommanderController = Knit.CreateController({
 	Name = "CommanderController",
@@ -77,3 +77,4 @@ function CommanderController:UseAbility(slotKey: string)
 end
 
 return CommanderController
+

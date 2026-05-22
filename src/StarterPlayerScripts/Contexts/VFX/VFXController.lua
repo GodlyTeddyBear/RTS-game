@@ -11,7 +11,7 @@ local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Registry = require(ReplicatedStorage.Utilities.Registry)
 
-local VFXEngine = require(script.Parent.Infrastructure.VFXEngine)
+local VFXEngine = require(script.Parent.Infrastructure.Services.VFXEngine)
 
 local VFXController = Knit.CreateController({
 	Name = "VFXController",
@@ -129,3 +129,4 @@ function VFXController:_TrySpawnAtPosition(effectKey: string, vfxOptions: any, c
 end
 
 return VFXController
+

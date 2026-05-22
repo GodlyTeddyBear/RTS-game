@@ -18,7 +18,7 @@ local React = require(ReplicatedStorage.Packages.React)
 local ReactRoblox = require(ReplicatedStorage.Packages.ReactRoblox)
 local e = React.createElement
 
-local NPCHealthBillboard = require(script.Parent.Parent.Presentation.NPCHealthBillboard)
+local NPCHealthBillboard = require(script.Parent.Parent.Parent.Presentation.NPCHealthBillboard)
 
 local STUDS_OFFSET = Vector3.new(0, 3, 0)
 local BILLBOARD_SIZE = UDim2.fromScale(4, 1)
@@ -33,10 +33,13 @@ type TBillboardEntry = {
 local NPCBillboardService = {}
 NPCBillboardService.__index = NPCBillboardService
 
-export type TNPCBillboardService = typeof(setmetatable({} :: {
-	_Entries: { [string]: TBillboardEntry },
-	_EnemyReplicationClient: any,
-}, NPCBillboardService))
+export type TNPCBillboardService = typeof(setmetatable(
+	{} :: {
+		_Entries: { [string]: TBillboardEntry },
+		_EnemyReplicationClient: any,
+	},
+	NPCBillboardService
+))
 
 function NPCBillboardService.new(enemyReplicationClient: any): TNPCBillboardService
 	local self = setmetatable({}, NPCBillboardService)

@@ -4,7 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GoodSignal = require(ReplicatedStorage.Packages.Goodsignal)
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local BaseSyncClient = require(script.Parent.Infrastructure.BaseSyncClient)
+local BaseSyncClient = require(script.Parent.Infrastructure.Persistence.BaseSyncClient)
 local BaseDiscoveryService = require(script.Parent.Infrastructure.Services.BaseDiscoveryService)
 local BaseClickService = require(script.Parent.Infrastructure.Services.BaseClickService)
 
@@ -48,3 +48,4 @@ function BaseController:Destroy()
 end
 
 return BaseController
+

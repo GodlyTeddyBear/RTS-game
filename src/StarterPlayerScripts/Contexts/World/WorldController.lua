@@ -3,7 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local WorldGridSyncClient = require(script.Parent.Infrastructure.WorldGridSyncClient)
+local WorldGridSyncClient = require(script.Parent.Infrastructure.Persistence.WorldGridSyncClient)
 
 local WorldController = Knit.CreateController({
 	Name = "WorldController",
@@ -212,3 +212,4 @@ function WorldController:GetTileDescriptor(coord: any): any?
 end
 
 return WorldController
+

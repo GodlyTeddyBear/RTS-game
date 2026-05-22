@@ -4,7 +4,7 @@
 	React hook that returns imperative navigation actions for pushing, replacing, going back, and resetting the screen stack.
 	@client
 ]=]
-local navigationAtom = require(script.Parent.Parent.Parent.Infrastructure.NavigationAtom)
+local navigationAtom = require(script.Parent.Parent.Parent.Infrastructure.Persistence.NavigationAtom)
 
 --[=[
 	Return a table of navigation action functions for modifying the screen stack.
@@ -83,3 +83,4 @@ function _CanGoBack(): boolean
 end
 
 return useNavigationActions
+

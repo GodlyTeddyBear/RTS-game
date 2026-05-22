@@ -6,7 +6,7 @@
 ]=]
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ReactCharm = require(ReplicatedStorage.Packages["React-charm"])
-local navigationAtom = require(script.Parent.Parent.Parent.Infrastructure.NavigationAtom)
+local navigationAtom = require(script.Parent.Parent.Parent.Infrastructure.Persistence.NavigationAtom)
 
 --[=[
 	Subscribe to the global navigation atom and return the current navigation state.
@@ -18,3 +18,4 @@ local function useNavigation()
 end
 
 return useNavigation
+

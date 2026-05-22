@@ -11,8 +11,8 @@ local React = require(ReplicatedStorage.Packages.React)
 local e = React.createElement
 local ReactRoblox = require(ReplicatedStorage.Packages.ReactRoblox)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local LogSyncClient = require(script.Parent.Infrastructure.LogSyncClient)
-local CommandSyncClient = require(script.Parent.Infrastructure.CommandSyncClient)
+local LogSyncClient = require(script.Parent.Infrastructure.Persistence.LogSyncClient)
+local CommandSyncClient = require(script.Parent.Infrastructure.Persistence.CommandSyncClient)
 
 local DEVELOPER_USER_ID = 205423638
 
@@ -323,3 +323,4 @@ function LogController:ClearLogsByScope(filters: ClearFilters)
 end
 
 return LogController
+

@@ -20,7 +20,7 @@ local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local Events = GameEvents.Events
 
 local SoundtrackController = require(ReplicatedStorage.Utilities.SoundtrackController)
-local PositionalSoundService = require(script.Parent.Infrastructure.PositionalSoundService)
+local PositionalSoundService = require(script.Parent.Infrastructure.Services.PositionalSoundService)
 local SoundMap = require(script.Parent.Config.SoundMap)
 local SoundIds = require(ReplicatedStorage.Contexts.Sound.Config.SoundIds)
 
@@ -308,3 +308,4 @@ function SoundController:GetSoundtrackController()
 end
 
 return SoundController
+
