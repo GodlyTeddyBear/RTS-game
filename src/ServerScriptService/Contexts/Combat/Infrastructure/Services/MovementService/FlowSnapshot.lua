@@ -169,6 +169,9 @@ return function(MovementService: TMovementService)
 				WallGridWidth = snapshot.WallGridWidth,
 				KForce = snapshot.KForce,
 				MinSeparationDistance = snapshot.MinSeparationDistance,
+				AggregateCellMinMembers = snapshot.AggregateCellMinMembers,
+				AggregateForceScale = snapshot.AggregateForceScale,
+				AggregateInfluenceRadiusMultiplier = snapshot.AggregateInfluenceRadiusMultiplier,
 				WallCollisionEnabled = snapshot.WallCollisionEnabled,
 				WallCollisionAxisClampEnabled = snapshot.WallCollisionAxisClampEnabled,
 				WallCollisionCornerClampEnabled = snapshot.WallCollisionCornerClampEnabled,
@@ -205,6 +208,8 @@ return function(MovementService: TMovementService)
 			DeltaTime = snapshot.DeltaTime,
 			GoalGroupCellRecordStartIndex = snapshot.GoalGroupCellRecordStartIndex,
 			GoalGroupCellRecordCount = snapshot.GoalGroupCellRecordCount,
+			GoalGroupCellHashStartIndex = {},
+			GoalGroupCellHashSlotCount = {},
 			GoalGroupCellWidthStuds = snapshot.GoalGroupCellWidthStuds,
 			GroupCellX = snapshot.GroupCellX,
 			GroupCellY = snapshot.GroupCellY,
@@ -212,6 +217,11 @@ return function(MovementService: TMovementService)
 			CellMemberStartIndex = snapshot.CellMemberStartIndex,
 			CellMemberCount = snapshot.CellMemberCount,
 			CellMemberEntityIndex = snapshot.CellMemberEntityIndex,
+			CellHashPackedKey = {},
+			CellHashRecordIndex = {},
+			CellAggregatePositionSumX = {},
+			CellAggregatePositionSumY = {},
+			CellHasSettledMember = {},
 			FlatPositionX = snapshot.FlatPositionX,
 			FlatPositionY = snapshot.FlatPositionY,
 			Radius = snapshot.Radius,
@@ -503,6 +513,14 @@ return function(MovementService: TMovementService)
 			MinSeparationDistance = if type(config.MinSeparationDistance) == "number"
 				then config.MinSeparationDistance
 				else 1e-4,
+			AggregateCellMinMembers = if type(config.AggregateCellMinMembers) == "number"
+					and config.AggregateCellMinMembers > 1
+				then math.floor(config.AggregateCellMinMembers)
+				else 4,
+			AggregateForceScale = if type(config.AggregateForceScale) == "number" then config.AggregateForceScale else 1,
+			AggregateInfluenceRadiusMultiplier = if type(config.AggregateInfluenceRadiusMultiplier) == "number"
+				then config.AggregateInfluenceRadiusMultiplier
+				else 1,
 			WallCollisionEnabled = config.WallCollisionEnabled == true,
 			WallCollisionAxisClampEnabled = config.WallCollisionAxisClampEnabled ~= false,
 			WallCollisionCornerClampEnabled = config.WallCollisionCornerClampEnabled ~= false,

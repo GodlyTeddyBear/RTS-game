@@ -70,6 +70,9 @@ local function _AppendCellRecords(
 	cellMemberEntityIndex: { number },
 	cellHashPackedKey: { number },
 	cellHashRecordIndex: { number },
+	cellAggregatePositionSumX: { number },
+	cellAggregatePositionSumY: { number },
+	cellHasSettledMember: { boolean },
 	radiusByEntityIndex: { number }
 )
 	local bucketsByPackedKey = {} :: { [number]: { number } }
@@ -118,6 +121,9 @@ local function _AppendCellRecords(
 		local bucket = bucketsByPackedKey[packedKey]
 		if bucket ~= nil then
 			local recordIndex = #cellPackedKey + 1
+			local aggregatePositionSumX = 0
+			local aggregatePositionSumY = 0
+			local hasSettledMember = false
 			cellPackedKey[recordIndex] = packedKey
 			cellMemberStartIndex[recordIndex] = #cellMemberEntityIndex + 1
 			cellMemberCount[recordIndex] = #bucket
@@ -132,7 +138,16 @@ local function _AppendCellRecords(
 
 			for _, entityIndex in ipairs(bucket) do
 				cellMemberEntityIndex[#cellMemberEntityIndex + 1] = entityIndex
+				aggregatePositionSumX += payload.FlatPositionX[entityIndex]
+				aggregatePositionSumY += payload.FlatPositionY[entityIndex]
+				if payload.IsSettled[entityIndex] then
+					hasSettledMember = true
+				end
 			end
+
+			cellAggregatePositionSumX[recordIndex] = aggregatePositionSumX
+			cellAggregatePositionSumY[recordIndex] = aggregatePositionSumY
+			cellHasSettledMember[recordIndex] = hasSettledMember
 		end
 	end
 end
@@ -160,6 +175,9 @@ function Manager.BuildDispatch(request: { ManagerPayload: TFlowSeparationManager
 				CellMemberEntityIndex = {},
 				CellHashPackedKey = {},
 				CellHashRecordIndex = {},
+				CellAggregatePositionSumX = {},
+				CellAggregatePositionSumY = {},
+				CellHasSettledMember = {},
 				FlatPositionX = {},
 				FlatPositionY = {},
 				Radius = {},
@@ -188,6 +206,9 @@ function Manager.BuildDispatch(request: { ManagerPayload: TFlowSeparationManager
 	local cellMemberEntityIndex = {} :: { number }
 	local cellHashPackedKey = {} :: { number }
 	local cellHashRecordIndex = {} :: { number }
+	local cellAggregatePositionSumX = {} :: { number }
+	local cellAggregatePositionSumY = {} :: { number }
+	local cellHasSettledMember = {} :: { boolean }
 	local entityIndicesByGoalKey = {} :: { [string]: { number } }
 	local activeGoalKeys = {} :: { string }
 	local radiusByEntityIndex = table.create(entityCount, 0)
@@ -229,6 +250,9 @@ function Manager.BuildDispatch(request: { ManagerPayload: TFlowSeparationManager
 				cellMemberEntityIndex,
 				cellHashPackedKey,
 				cellHashRecordIndex,
+				cellAggregatePositionSumX,
+				cellAggregatePositionSumY,
+				cellHasSettledMember,
 				radiusByEntityIndex
 			)
 		end
@@ -250,6 +274,9 @@ function Manager.BuildDispatch(request: { ManagerPayload: TFlowSeparationManager
 		CellMemberEntityIndex = cellMemberEntityIndex,
 		CellHashPackedKey = cellHashPackedKey,
 		CellHashRecordIndex = cellHashRecordIndex,
+		CellAggregatePositionSumX = cellAggregatePositionSumX,
+		CellAggregatePositionSumY = cellAggregatePositionSumY,
+		CellHasSettledMember = cellHasSettledMember,
 		FlatPositionX = payload.FlatPositionX,
 		FlatPositionY = payload.FlatPositionY,
 		Radius = payload.Radius,

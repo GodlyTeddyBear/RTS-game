@@ -29,6 +29,9 @@ local function _HasCoreWorkerPayloadFields(payload: TFlowSeparationWorkerPayload
 		and payload.CellMemberEntityIndex
 		and payload.CellHashPackedKey
 		and payload.CellHashRecordIndex
+		and payload.CellAggregatePositionSumX
+		and payload.CellAggregatePositionSumY
+		and payload.CellHasSettledMember
 		and payload.FlatPositionX
 		and payload.FlatPositionY
 		and payload.Radius
@@ -80,6 +83,9 @@ function Worker.Execute(request: TFlowSeparationWorkerRequest)
 			CellMemberEntityIndex = payload.CellMemberEntityIndex,
 			CellHashPackedKey = payload.CellHashPackedKey,
 			CellHashRecordIndex = payload.CellHashRecordIndex,
+			CellAggregatePositionSumX = payload.CellAggregatePositionSumX,
+			CellAggregatePositionSumY = payload.CellAggregatePositionSumY,
+			CellHasSettledMember = payload.CellHasSettledMember,
 			FlatPositionX = payload.FlatPositionX,
 			FlatPositionY = payload.FlatPositionY,
 			Radius = payload.Radius,
@@ -100,6 +106,14 @@ function Worker.Execute(request: TFlowSeparationWorkerRequest)
 			KForce = (type(shared.KForce) == "number") and shared.KForce or 80,
 			MinSeparationDistance = (type(shared.MinSeparationDistance) == "number") and shared.MinSeparationDistance
 				or 1e-4,
+			AggregateCellMinMembers = (type(shared.AggregateCellMinMembers) == "number")
+					and shared.AggregateCellMinMembers
+				or 4,
+			AggregateForceScale = (type(shared.AggregateForceScale) == "number") and shared.AggregateForceScale
+				or 1,
+			AggregateInfluenceRadiusMultiplier = (type(shared.AggregateInfluenceRadiusMultiplier) == "number")
+					and shared.AggregateInfluenceRadiusMultiplier
+				or 1,
 			WallCollisionEnabled = shared.WallCollisionEnabled == true,
 			WallCollisionAxisClampEnabled = shared.WallCollisionAxisClampEnabled == true,
 			WallCollisionCornerClampEnabled = shared.WallCollisionCornerClampEnabled == true,

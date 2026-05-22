@@ -123,6 +123,10 @@ CombatMovementConfig.FLOW_SOFT_SEPARATION = table.freeze({
 	KForce = 80,
 	VelAlpha = 0.15,
 	MinSeparationDistance = 1e-4,
+	-- Dense-cell aggregate fallback tuning.
+	AggregateCellMinMembers = 2,
+	AggregateForceScale = 1.0,
+	AggregateInfluenceRadiusMultiplier = 1.0,
 	WalkSpeedWriteEpsilon = 0.05,
 	-- Radius inside which clump-idle behavior can activate.
 	ClumpIdleRadiusStuds = 8,
