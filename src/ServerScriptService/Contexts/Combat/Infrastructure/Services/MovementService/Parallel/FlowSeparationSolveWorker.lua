@@ -55,7 +55,11 @@ function Worker.Execute(request: TFlowSeparationWorkerRequest)
 	end
 
 	local entityCount = payload.EntityCount
-	if type(entityCount) ~= "number" or not _HasCoreSharedMemoryFields(shared) or not _HasCoreWorkerPayloadFields(payload) then
+	if
+		type(entityCount) ~= "number"
+		or not _HasCoreSharedMemoryFields(shared)
+		or not _HasCoreWorkerPayloadFields(payload)
+	then
 		return {}
 	end
 
@@ -63,6 +67,10 @@ function Worker.Execute(request: TFlowSeparationWorkerRequest)
 	local rows = {}
 
 	for offset = 0, request.BatchSize - 1 do
+		if (request.BatchSize - 1) / offset > 2 then
+			task.wait()
+		end
+
 		local entityIndex = request.StartTaskId + offset
 		if entityIndex > resolvedLogicalWorkCount then
 			break
@@ -109,8 +117,7 @@ function Worker.Execute(request: TFlowSeparationWorkerRequest)
 			AggregateCellMinMembers = (type(shared.AggregateCellMinMembers) == "number")
 					and shared.AggregateCellMinMembers
 				or 4,
-			AggregateForceScale = (type(shared.AggregateForceScale) == "number") and shared.AggregateForceScale
-				or 1,
+			AggregateForceScale = (type(shared.AggregateForceScale) == "number") and shared.AggregateForceScale or 1,
 			AggregateInfluenceRadiusMultiplier = (type(shared.AggregateInfluenceRadiusMultiplier) == "number")
 					and shared.AggregateInfluenceRadiusMultiplier
 				or 1,
@@ -124,7 +131,8 @@ function Worker.Execute(request: TFlowSeparationWorkerRequest)
 			WallCollisionVelocityEpsilon = (type(shared.WallCollisionVelocityEpsilon) == "number")
 					and shared.WallCollisionVelocityEpsilon
 				or 1e-4,
-			ClumpTouchPaddingStuds = (type(shared.ClumpTouchPaddingStuds) == "number") and shared.ClumpTouchPaddingStuds
+			ClumpTouchPaddingStuds = (type(shared.ClumpTouchPaddingStuds) == "number")
+					and shared.ClumpTouchPaddingStuds
 				or 0,
 		})
 

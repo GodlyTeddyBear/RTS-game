@@ -52,6 +52,7 @@ function Worker.Execute(request)
 			HitboxIndex = hitboxIndex,
 			HasAny = Query.CastParallelPresenceQuery(queryCFrame, size, shapeId, filterToken),
 		}
+		task.wait()
 	end
 
 	return rows

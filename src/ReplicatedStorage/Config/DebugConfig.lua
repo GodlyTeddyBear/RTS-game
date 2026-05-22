@@ -16,7 +16,7 @@ return table.freeze({
 	MILLISECOND = MILLISECOND, -- One millisecond expressed in seconds for time-based debug config values
 	MICROSECOND = MICROSECOND, -- One microsecond expressed in seconds for time-based debug config values
 	SCHEDULER_INTERVAL = 1 / 60, -- Seconds between server scheduler ticks (testing only)
-	COMBAT_TICK_TIME_BUDGET_SECONDS = 4 * MILLISECOND, -- Max wall-clock seconds one combat session frame may spend before spillback (testing only)
+	COMBAT_TICK_TIME_BUDGET_SECONDS = 3 * MILLISECOND, -- Max wall-clock seconds one combat session frame may spend before spillback (testing only)
 	COMBAT_MOVEMENT_PIPELINE_STAGE_RESERVE_SECONDS = 0.5 * MILLISECOND, -- Amount needed left to continue, Reserve budget that makes the movement pipeline defer later stages to the next tick (testing only)
 	COMBAT_RUNTIME_ESTIMATE_WARN_MILLISECONDS_PER_TICK = 4 * MILLISECOND, -- Warn when one combat tick budget exceeds the recommended combat-script budget per tick
 	COMBAT_RUNTIME_ESTIMATE_WARN_MILLISECONDS_PER_SECOND = 240 * MILLISECOND, -- Warn when estimated combat runtime envelope exceeds the recommended sustained combat-script budget per second
