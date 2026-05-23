@@ -12,6 +12,7 @@ local CoroutineScheduler = require(ReplicatedStorage.Utilities.CoroutineSchedule
 local RenderCharacterExclusion = require(ReplicatedStorage.Contexts.Render.RenderCharacterExclusion)
 local RenderConfig = require(ReplicatedStorage.Contexts.Render.Config.RenderConfig)
 local RenderPropertyRegistry = require(ReplicatedStorage.Contexts.Render.RenderPropertyRegistry)
+local RenderRingQueue = require(script.Parent.RenderRingQueue)
 local RenderTransportSchema = require(ReplicatedStorage.Contexts.Render.RenderTransportSchema)
 local RenderTypes = require(ReplicatedStorage.Contexts.Render.Types.RenderTypes)
 
@@ -21,6 +22,7 @@ type TRenderRegistryBootstrapChunk = RenderTypes.TRenderRegistryBootstrapChunk
 type TRenderRegistryDelta = RenderTypes.TRenderRegistryDelta
 type TRenderPropertyDescriptor = RenderPropertyRegistry.TRenderPropertyDescriptor
 type TScheduler = CoroutineScheduler.SchedulerType
+type TRingQueue<T> = RenderRingQueue.RingQueue<T>
 type TInboundWorkItem = {
 	Kind: "BootstrapChunk" | "Delta",
 	Payload: TRenderRegistryBootstrapChunk | TRenderRegistryDelta,
@@ -95,7 +97,7 @@ function RenderRegistryClientService.new()
 	self._soa = _CreateClientSoA()
 	self._idByInstance = {} :: { [Instance]: TRenderId }
 	self._liveInstancesById = {} :: { [TRenderId]: Instance }
-	self._inboundQueue = {} :: { TInboundWorkItem }
+	self._inboundQueue = RenderRingQueue.new() :: TRingQueue<TInboundWorkItem>
 	self._inboundWorkerRunning = false
 	self._unresolvedIdsById = {} :: { [TRenderId]: true }
 	self._resolutionWorkerRunning = false
@@ -134,7 +136,7 @@ function RenderRegistryClientService:Destroy()
 	self._soa.Count = 0
 	table.clear(self._idByInstance)
 	table.clear(self._liveInstancesById)
-	table.clear(self._inboundQueue)
+	self._inboundQueue:Clear()
 	table.clear(self._unresolvedIdsById)
 end
 
@@ -255,7 +257,7 @@ function RenderRegistryClientService:_ScanClientRoots()
 end
 
 function RenderRegistryClientService:_EnqueueInboundWork(workItem: TInboundWorkItem)
-	table.insert(self._inboundQueue, workItem)
+	self._inboundQueue:Push(workItem)
 	if self._inboundWorkerRunning then
 		return
 	end
@@ -270,8 +272,12 @@ function RenderRegistryClientService:_DrainInboundQueue()
 	local processedCount = 0
 	local yieldEveryItems = math.max(1, RenderConfig.ClientProfile.InboundYieldEveryItems)
 
-	while #self._inboundQueue > 0 do
-		local workItem = table.remove(self._inboundQueue, 1)
+	while not self._inboundQueue:IsEmpty() do
+		local workItem = self._inboundQueue:Pop()
+		if workItem == nil then
+			continue
+		end
+
 		if workItem.Kind == "BootstrapChunk" then
 			self:_ApplyBootstrapChunk(workItem.Payload :: TRenderRegistryBootstrapChunk)
 		else

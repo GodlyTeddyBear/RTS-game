@@ -7,6 +7,7 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
 
+local RenderExportService = require(script.Parent.Infrastructure.Services.RenderExportService)
 local RenderRegistryService = require(script.Parent.Infrastructure.Services.RenderRegistryService)
 local RenderRuntimeService = require(script.Parent.Infrastructure.Services.RenderRuntimeService)
 
@@ -18,6 +19,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Factory = function(service: any, _baseContext: any)
 			return service.Client
 		end,
+	},
+	{
+		Name = "RenderExportService",
+		Module = RenderExportService,
+		CacheAs = "_renderExportService",
 	},
 	{
 		Name = "RenderRegistryService",
@@ -46,6 +52,7 @@ local RenderContext = Knit.CreateService({
 		Fields = {
 			{ Field = "_renderRuntimeService", Method = "Destroy" },
 			{ Field = "_renderRegistryService", Method = "Destroy" },
+			{ Field = "_renderExportService", Method = "Destroy" },
 		},
 	},
 })

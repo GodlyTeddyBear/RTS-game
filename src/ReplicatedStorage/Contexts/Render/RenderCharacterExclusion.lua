@@ -1,6 +1,9 @@
 --!strict
 
 local Players = game:GetService("Players")
+local ServerStorage = game:GetService("ServerStorage")
+
+local EXPORTED_FOLDER_NAME = "Exported"
 
 local RenderCharacterExclusion = {}
 
@@ -14,7 +17,20 @@ local function _IsCurrentPlayerCharacter(model: Model): boolean
 	return false
 end
 
+local function _IsExportedInstance(instance: Instance): boolean
+	local exportedFolder = ServerStorage:FindFirstChild(EXPORTED_FOLDER_NAME)
+	if exportedFolder == nil then
+		return false
+	end
+
+	return instance:IsDescendantOf(exportedFolder)
+end
+
 function RenderCharacterExclusion.IsExcludedInstance(instance: Instance): boolean
+	if _IsExportedInstance(instance) then
+		return true
+	end
+
 	local current = instance
 
 	while current ~= nil do
