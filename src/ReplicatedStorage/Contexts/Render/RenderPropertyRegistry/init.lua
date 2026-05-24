@@ -36,7 +36,7 @@ export type TRenderPropertyDescriptor = {
 }
 
 export type TRenderPropertyDefinition = {
-	DesiredValue: any,
+	DesiredValue: any?,
 }
 
 export type TRenderPropertyDefinitions = {
@@ -313,9 +313,9 @@ end
 local function _CreateDescriptor(propertyKey: string, definition: TRenderPropertyDefinition): TRenderPropertyDescriptor
 	assert(type(propertyKey) == "string" and propertyKey ~= "", "RenderPropertyRegistry: property key is required")
 	assert(type(definition) == "table", `RenderPropertyRegistry: definition for "{propertyKey}" must be a table`)
-	assert(definition.DesiredValue ~= nil, `RenderPropertyRegistry: definition for "{propertyKey}" is missing DesiredValue`)
 
 	local desiredValue = definition.DesiredValue
+	assert(desiredValue ~= nil, `RenderPropertyRegistry: definition for "{propertyKey}" is missing DesiredValue`)
 	local inferredCodec = _InferCodecFromDesiredValue(desiredValue)
 
 	local fieldNames = _BuildPropertyFieldNames(propertyKey, inferredCodec.WireSuffix)
@@ -399,8 +399,12 @@ local function _BuildDescriptors(
 	for index, propertyKey in ipairs(propertyKeys) do
 		assert(descriptorsByKey[propertyKey] == nil, `RenderPropertyRegistry: duplicate property key "{propertyKey}"`)
 		local definition = definitions[propertyKey]
+		if definition.DesiredValue == nil then
+			continue
+		end
+
 		local descriptor = _CreateDescriptor(propertyKey, definition)
-		descriptors[index] = descriptor
+		table.insert(descriptors, descriptor)
 		descriptorsByKey[descriptor.Key] = descriptor
 	end
 

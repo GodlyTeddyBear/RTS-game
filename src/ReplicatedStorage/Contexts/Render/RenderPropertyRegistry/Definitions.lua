@@ -1,7 +1,7 @@
 --!strict
 
 export type TRenderPropertyDefinition = {
-	DesiredValue: any,
+	DesiredValue: any?,
 }
 
 export type TRenderPropertyDefinitions = {
@@ -13,7 +13,7 @@ local PropertyDefinitions: TRenderPropertyDefinitions = {
 		DesiredValue = false,
 	},
 	Color = {
-		DesiredValue = Color3.fromRGB(128, 128, 128),
+		--DesiredValue = Color3.fromRGB(128, 128, 128),
 	},
 	Material = {
 		DesiredValue = Enum.Material.SmoothPlastic,
