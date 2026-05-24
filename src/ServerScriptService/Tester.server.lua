@@ -16,6 +16,7 @@ local REPORTER = TestEZ.Reporters.TextReporter
 local SPEC_NAME_FILTERS = {
 	-- "BaseECSReplicationClient",
 	-- "ActorRegistryBase",
+	"TeamService",
 }
 local TEST_CONTAINERS = {
 	ReplicatedStorage,

@@ -1,8 +1,8 @@
 --!strict
 
-local Manager = require(script.Parent.Manager)
-local Relationships = require(script.Parent.Relationships)
-local Types = require(script.Parent.Types)
+local Manager = require(script.Manager)
+local Relationships = require(script.Relationships)
+local Types = require(script.Types)
 
 export type TTeamId = Types.TTeamId
 export type TGroupId = Types.TGroupId

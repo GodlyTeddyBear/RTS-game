@@ -5,7 +5,7 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SelectionPlus = require(ReplicatedStorage.Utilities.SelectionPlus)
-local UnitSelectionTypes = require(ReplicatedStorage.Contexts.UnitSelection.Types.UnitSelectionTypes)
+local UnitSelectionTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitSelectionTypes)
 
 type TSelectableUnitRecord = UnitSelectionTypes.TSelectableUnitRecord
 

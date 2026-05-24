@@ -129,8 +129,8 @@ function Manager:UpdateTeam(teamId: TTeamId, patch: TTeamUpdatePatch): TResolved
 	local previousDefinition = self:_RequireTeam(teamId)
 	local nextDefinition = Validation.ApplyTeamPatch(previousDefinition, patch)
 
+	self:_ClearRobloxProjectionForDefinition(teamId, previousDefinition)
 	self._teamsById[teamId] = nextDefinition
-	self:ClearRobloxProjection(teamId)
 	self:_ResyncPlayersForTeam(teamId)
 	self.TeamUpdated:Fire(teamId, Validation.CloneFrozen(nextDefinition), Validation.CloneFrozen(previousDefinition))
 
@@ -484,6 +484,10 @@ end
 function Manager:ClearRobloxProjection(teamId: TTeamId): ()
 	Validation.ValidateTeamId(teamId)
 	local definition = self:_RequireTeam(teamId)
+	self:_ClearRobloxProjectionForDefinition(teamId, definition)
+end
+
+function Manager:_ClearRobloxProjectionForDefinition(teamId: TTeamId, definition: TResolvedTeamDefinition): ()
 	local memberKeys = self._memberKeysByTeamId[teamId]
 
 	if memberKeys ~= nil then

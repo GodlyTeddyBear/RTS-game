@@ -1,6 +1,6 @@
 --!strict
 
-local UnitSelectionTypes = require(game:GetService("ReplicatedStorage").Contexts.UnitSelection.Types.UnitSelectionTypes)
+local UnitSelectionTypes = require(game:GetService("ReplicatedStorage").Contexts.Unit.Types.UnitSelectionTypes)
 local BuildUnitSelectionState = require(script.Parent.Parent.BuildUnitSelectionState)
 
 type TUnitSelectionState = UnitSelectionTypes.TUnitSelectionState

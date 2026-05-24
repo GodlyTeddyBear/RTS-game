@@ -3,7 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Charm = require(ReplicatedStorage.Packages.Charm)
-local UnitSelectionTypes = require(ReplicatedStorage.Contexts.UnitSelection.Types.UnitSelectionTypes)
+local UnitSelectionTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitSelectionTypes)
 
 type TUnitSelectionState = UnitSelectionTypes.TUnitSelectionState
 

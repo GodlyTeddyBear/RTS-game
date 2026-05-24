@@ -7,7 +7,7 @@ local GoodSignal = require(ReplicatedStorage.Packages.Goodsignal)
 local MouseService = require(ReplicatedStorage.Utilities.MouseService)
 local SelectionPlus = require(ReplicatedStorage.Utilities.SelectionPlus)
 local StashPlus = require(ReplicatedStorage.Utilities.StashPlus)
-local UnitSelectionTypes = require(ReplicatedStorage.Contexts.UnitSelection.Types.UnitSelectionTypes)
+local UnitSelectionTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitSelectionTypes)
 
 type TSelectableUnitRecord = UnitSelectionTypes.TSelectableUnitRecord
 
@@ -179,7 +179,7 @@ function UnitSelectionRuntimeService:_ConnectSignals()
 		end
 
 		if self:_ShouldSelectOnRelease(event) then
-			self.SingleSelectionRequested:Fire(event.ResolvedTarget)
+			self.SingleSelectionRequested:Fire(event)
 		end
 
 		if not self._isMarqueeActive then

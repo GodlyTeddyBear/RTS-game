@@ -4,7 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local UnitSelectionTypes = require(ReplicatedStorage.Contexts.UnitSelection.Types.UnitSelectionTypes)
+local UnitSelectionTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitSelectionTypes)
 
 local CommitMarqueeUnitSelectionCommand = require(script.Parent.Application.Commands.CommitMarqueeUnitSelectionCommand)
 local CommitSingleUnitSelectionCommand = require(script.Parent.Application.Commands.CommitSingleUnitSelectionCommand)
@@ -14,6 +14,8 @@ local RecallUnitControlGroupCommand = require(script.Parent.Application.Commands
 local RefreshUnitSelectionCommand = require(script.Parent.Application.Commands.RefreshUnitSelectionCommand)
 local UpdateMarqueePreviewStateCommand = require(script.Parent.Application.Commands.UpdateMarqueePreviewStateCommand)
 local BuildSelectedUnitRecordsQuery = require(script.Parent.Application.Queries.BuildSelectedUnitRecordsQuery)
+local ResolveOwnedUnitSelectionFromCharacterClickQuery =
+	require(script.Parent.Application.Queries.ResolveOwnedUnitSelectionFromCharacterClickQuery)
 local ResolveOwnedUnitSelectionQuery = require(script.Parent.Application.Queries.ResolveOwnedUnitSelectionQuery)
 local ResolveOwnedUnitSelectionByUnitGuidsQuery = require(script.Parent.Application.Queries.ResolveOwnedUnitSelectionByUnitGuidsQuery)
 local UnitSelectionAtom = require(script.Parent.Infrastructure.Persistence.UnitSelectionAtom)
@@ -29,6 +31,8 @@ local UnitSelectionController = Knit.CreateController({
 function UnitSelectionController:KnitInit()
 	self._selectionAtom = UnitSelectionAtom()
 	self._resolveOwnedUnitSelectionQuery = ResolveOwnedUnitSelectionQuery.new()
+	self._resolveOwnedUnitSelectionFromCharacterClickQuery =
+		ResolveOwnedUnitSelectionFromCharacterClickQuery.new(self._resolveOwnedUnitSelectionQuery)
 	self._resolveOwnedUnitSelectionByUnitGuidsQuery =
 		ResolveOwnedUnitSelectionByUnitGuidsQuery.new(self._resolveOwnedUnitSelectionQuery)
 	self._buildSelectedUnitRecordsQuery = BuildSelectedUnitRecordsQuery.new()
@@ -43,6 +47,7 @@ function UnitSelectionController:KnitInit()
 	self._runtimeService = UnitSelectionRuntimeService.new()
 	self._isSelectionEnabled = true
 	self._isShiftSelectionModifierActive = false
+	self._isAltSelectionClearModifierActive = false
 	self._isControlGroupModifierActive = false
 	self._inputUnbinds = {}
 end
@@ -53,17 +58,25 @@ function UnitSelectionController:KnitStart()
 	self._deps = {
 		selectionAtom = self._selectionAtom,
 		buildSelectedUnitRecordsQuery = self._buildSelectedUnitRecordsQuery,
+		resolveOwnedUnitSelectionFromCharacterClickQuery = self._resolveOwnedUnitSelectionFromCharacterClickQuery,
 		resolveOwnedUnitSelectionQuery = self._resolveOwnedUnitSelectionQuery,
 		resolveOwnedUnitSelectionByUnitGuidsQuery = self._resolveOwnedUnitSelectionByUnitGuidsQuery,
 		runtimeService = self._runtimeService,
 		marqueeOverlayService = self._marqueeOverlayService,
 	}
 
-	self._runtimeService.SingleSelectionRequested:Connect(function(resolvedTarget: any)
+	self._runtimeService.SingleSelectionRequested:Connect(function(gestureEvent: any)
 		if not self._isSelectionEnabled then
 			return
 		end
 
+		if self._isAltSelectionClearModifierActive then
+			self._clearUnitSelectionCommand:Execute(self._deps)
+			return
+		end
+
+		local resolvedTarget =
+			self._resolveOwnedUnitSelectionFromCharacterClickQuery:Execute(gestureEvent.MouseSnapshot)
 		self._commitSingleUnitSelectionCommand:Execute(
 			self._deps,
 			resolvedTarget,
@@ -110,6 +123,23 @@ function UnitSelectionController:KnitStart()
 		self._playerInputController:BindActionDeactivated("ShiftSelectionModifier", function(_gameProcessed: boolean, _data: any)
 			self._isShiftSelectionModifierActive = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
 				or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+		end)
+	)
+	table.insert(
+		self._inputUnbinds,
+		self._playerInputController:BindAction("AltSelectionClearModifier", function(gameProcessed: boolean, _data: any)
+			if gameProcessed or not self._isSelectionEnabled then
+				return
+			end
+
+			self._isAltSelectionClearModifierActive = true
+		end)
+	)
+	table.insert(
+		self._inputUnbinds,
+		self._playerInputController:BindActionDeactivated("AltSelectionClearModifier", function(_gameProcessed: boolean, _data: any)
+			self._isAltSelectionClearModifierActive = UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt)
+				or UserInputService:IsKeyDown(Enum.KeyCode.RightAlt)
 		end)
 	)
 	table.insert(
@@ -178,6 +208,7 @@ function UnitSelectionController:_SetSelectionEnabled(isEnabled: boolean)
 	end
 
 	self._isShiftSelectionModifierActive = false
+	self._isAltSelectionClearModifierActive = false
 	self._isControlGroupModifierActive = false
 end
 

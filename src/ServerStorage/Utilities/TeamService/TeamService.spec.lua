@@ -29,20 +29,21 @@ return function()
 			})
 
 			local fetchedDefinition = manager:GetTeam("Player")
-			expect(registeredDefinition.TeamId).toBe("Player")
-			expect(fetchedDefinition).never.toBeNil()
-			expect(fetchedDefinition.TeamId).toBe("Player")
-			expect(table.isfrozen(fetchedDefinition)).toBe(true)
+			expect(registeredDefinition.TeamId).to.equal("Player")
+			expect(fetchedDefinition).to.be.ok()
+			expect(fetchedDefinition.TeamId).to.equal("Player")
+			expect(table.isfrozen(fetchedDefinition)).to.equal(true)
 			expect(function()
 				(fetchedDefinition :: any).TeamId = "Changed"
-			end).toThrow()
+			end).to.throw()
 
 			manager:Destroy()
 		end)
 
 		it("keeps relationships based on primary team only when groups are present", function()
 			local manager = TeamService.new()
-			local playerOne = Instance.new("Player")
+			local playerOne = Instance.new("Folder")
+			playerOne:SetAttribute("TeamMemberId", "player:1")
 			local npcRoot = Instance.new("Folder")
 			npcRoot:SetAttribute("TeamMemberId", "npc:wave_1_grunt_3")
 
@@ -57,9 +58,9 @@ return function()
 			manager:AddMemberToGroup(playerOne, "selection:1")
 			manager:AddMemberToGroup(npcRoot, "selection:1")
 
-			expect(manager:AreHostile(playerOne, npcRoot)).toBe(true)
-			expect(manager:IsMemberInGroup(playerOne, "selection:1")).toBe(true)
-			expect(manager:IsMemberInGroup(npcRoot, "selection:1")).toBe(true)
+			expect(manager:AreHostile(playerOne, npcRoot)).to.equal(true)
+			expect(manager:IsMemberInGroup(playerOne, "selection:1")).to.equal(true)
+			expect(manager:IsMemberInGroup(npcRoot, "selection:1")).to.equal(true)
 
 			manager:Destroy()
 			playerOne:Destroy()
@@ -81,17 +82,16 @@ return function()
 				TeamId = "Enemy",
 			})
 
-			expect(manager:AssignMembers({ memberA, memberB }, "Enemy")).toBe(2)
-			expect(manager:GetMemberCount("Enemy")).toBe(2)
-			expect(manager:UnassignMembers({ memberA, memberB })).toBe(2)
-			expect(manager:GetMemberCount("Enemy")).toBe(0)
+			expect(manager:AssignMembers({ memberA, memberB }, "Enemy")).to.equal(2)
+			expect(manager:GetMemberCount("Enemy")).to.equal(2)
+			expect(manager:UnassignMembers({ memberA, memberB })).to.equal(2)
+			expect(manager:GetMemberCount("Enemy")).to.equal(0)
 
 			manager:Destroy()
 		end)
 
 		it("updates team metadata and refreshes Roblox projection", function()
 			local manager = TeamService.new()
-			local player = Instance.new("Player")
 
 			manager:RegisterTeam({
 				TeamId = "Alpha",
@@ -102,9 +102,9 @@ return function()
 				},
 			})
 
-			manager:AssignMember(player, "Alpha")
-			expect(player.Team).never.toBeNil()
-			expect(player.Team.Name).toBe("AlphaTeam")
+			local initialProjection = manager:EnsureRobloxTeam("Alpha")
+			expect(initialProjection).to.be.ok()
+			expect(initialProjection.Name).to.equal("AlphaTeam")
 
 			manager:UpdateTeam("Alpha", {
 				DisplayName = "Alpha Updated",
@@ -115,12 +115,14 @@ return function()
 				},
 			})
 
-			expect(player.Team).never.toBeNil()
-			expect(player.Team.Name).toBe("AlphaNew")
-			expect(player.Team.AutoAssignable).toBe(true)
+			local updatedProjection = manager:EnsureRobloxTeam("Alpha")
+			expect(Teams:FindFirstChild("AlphaTeam")).never.to.be.ok()
+			expect(updatedProjection).to.be.ok()
+			expect(updatedProjection.Name).to.equal("AlphaNew")
+			expect(updatedProjection.AutoAssignable).to.equal(true)
+			expect(updatedProjection.TeamColor).to.equal(BrickColor.new("Bright red"))
 
 			manager:Destroy()
-			player:Destroy()
 		end)
 
 		it("exports and imports round-trip state with groups", function()
@@ -142,12 +144,12 @@ return function()
 			local snapshot = sourceManager:ExportState()
 			local summary = targetManager:ImportState(snapshot)
 
-			expect(summary.TeamCount).toBe(2)
-			expect(summary.MemberCount).toBe(1)
-			expect(summary.GroupCount).toBe(1)
-			expect(targetManager:GetMemberTeam(member).TeamId).toBe("Enemy")
-			expect(targetManager:IsMemberInGroup(member, "wave:1")).toBe(true)
-			expect(targetManager:GetRelationshipByTeamIds("Player", "Enemy")).toBe(TeamService.Relationship.Hostile)
+			expect(summary.TeamCount).to.equal(2)
+			expect(summary.MemberCount).to.equal(1)
+			expect(summary.GroupCount).to.equal(1)
+			expect(targetManager:GetMemberTeam(member).TeamId).to.equal("Enemy")
+			expect(targetManager:IsMemberInGroup(member, "wave:1")).to.equal(true)
+			expect(targetManager:GetRelationshipByTeamIds("Player", "Enemy")).to.equal(TeamService.Relationship.Hostile)
 
 			sourceManager:Destroy()
 			targetManager:Destroy()
@@ -161,9 +163,9 @@ return function()
 				OwnerId = "123",
 			})
 
-			expect(resolvedMembership.PrimaryTeamId).toBe("Player")
-			expect(#resolvedMembership.GroupIds).toBe(1)
-			expect(resolvedMembership.GroupIds[1]).toBe("PlayerBase:123")
+			expect(resolvedMembership.PrimaryTeamId).to.equal("Player")
+			expect(#resolvedMembership.GroupIds).to.equal(1)
+			expect(resolvedMembership.GroupIds[1]).to.equal("PlayerBase:123")
 
 			manager:Destroy()
 		end)
@@ -191,15 +193,16 @@ return function()
 						},
 					},
 				} :: any)
-			end).toThrow()
+			end).to.throw()
 
-			expect(manager:HasTeam("Player")).toBe(true)
+			expect(manager:HasTeam("Player")).to.equal(true)
 			manager:Destroy()
 		end)
 
 		it("rejects duplicate teams and team removal with active members unless forced", function()
 			local manager = TeamService.new()
-			local player = Instance.new("Player")
+			local member = Instance.new("Folder")
+			member:SetAttribute("TeamMemberId", "player:2")
 
 			manager:RegisterTeam({
 				TeamId = "Player",
@@ -209,24 +212,24 @@ return function()
 				manager:RegisterTeam({
 					TeamId = "Player",
 				})
-			end).toThrow()
+			end).to.throw()
 
-			manager:AssignMember(player, "Player")
-			manager:AddMemberToGroup(player, "selection:1")
+			manager:AssignMember(member, "Player")
+			manager:AddMemberToGroup(member, "selection:1")
 
 			expect(function()
 				manager:RemoveTeam("Player")
-			end).toThrow()
+			end).to.throw()
 
 			local removedDefinition = manager:RemoveTeam("Player", {
 				Force = true,
 			})
-			expect(removedDefinition.TeamId).toBe("Player")
-			expect(manager:GetMemberTeam(player)).toBeNil()
-			expect(manager:IsMemberInGroup(player, "selection:1")).toBe(true)
+			expect(removedDefinition.TeamId).to.equal("Player")
+			expect(manager:GetMemberTeam(member)).never.to.be.ok()
+			expect(manager:IsMemberInGroup(member, "selection:1")).to.equal(true)
 
 			manager:Destroy()
-			player:Destroy()
+			member:Destroy()
 		end)
 
 		it("rejects raw instances without TeamMemberId when no custom resolver exists", function()
@@ -235,7 +238,7 @@ return function()
 
 			expect(function()
 				manager:GetMemberKey(instance)
-			end).toThrow()
+			end).to.throw()
 
 			manager:Destroy()
 			instance:Destroy()

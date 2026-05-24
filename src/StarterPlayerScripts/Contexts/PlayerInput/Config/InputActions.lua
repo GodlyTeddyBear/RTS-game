@@ -21,6 +21,9 @@ local selectionContext = {
 	ShiftSelectionModifier = {
 		PC = { Input = { Enum.KeyCode.LeftShift, Enum.KeyCode.RightShift } },
 	},
+	AltSelectionClearModifier = {
+		PC = { Input = { Enum.KeyCode.LeftAlt, Enum.KeyCode.RightAlt } },
+	},
 	ControlGroupModifier = {
 		PC = { Input = { Enum.KeyCode.LeftControl, Enum.KeyCode.RightControl } },
 	},
