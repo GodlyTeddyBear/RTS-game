@@ -55,6 +55,11 @@ return {
 			PC = { Input = Enum.KeyCode.X, Toggle = true },
 		},
 	},
+	SelectionMode = {
+		ToggleSelectionMode = {
+			PC = { Input = Enum.KeyCode.Z },
+		},
+	},
 	Placement = {
 		Enabled = false,
 		CancelPlacement = {

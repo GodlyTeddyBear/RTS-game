@@ -50,6 +50,7 @@ function UnitSelectionController:KnitInit()
 	self._runtimeService = UnitSelectionRuntimeService.new()
 	self._isSelectionEnabled = false
 	self._isRunActive = false
+	self._isSelectionModeEnabled = false
 	self._isShiftSelectionModifierActive = false
 	self._isAltSelectionClearModifierActive = false
 	self._isControlGroupModifierActive = false
@@ -116,6 +117,16 @@ function UnitSelectionController:KnitStart()
 		self._refreshUnitSelectionCommand:Execute(self._deps, previousSnapshot)
 	end)
 
+	table.insert(
+		self._inputUnbinds,
+		self._playerInputController:BindAction("ToggleSelectionMode", function(gameProcessed: boolean, _data: any)
+			if gameProcessed then
+				return
+			end
+
+			self:_ToggleSelectionMode()
+		end)
+	)
 	table.insert(
 		self._inputUnbinds,
 		self._playerInputController:BindAction("ShiftSelectionModifier", function(gameProcessed: boolean, _data: any)
@@ -228,7 +239,17 @@ function UnitSelectionController:_RefreshSelectionEnabledState()
 end
 
 function UnitSelectionController:_ShouldEnableSelection(): boolean
-	return self._isRunActive and not self._placementCursorController:IsActive()
+	return self._isRunActive and self._isSelectionModeEnabled and not self._placementCursorController:IsActive()
+end
+
+function UnitSelectionController:_ToggleSelectionMode()
+	self._isSelectionModeEnabled = not self._isSelectionModeEnabled
+
+	if not self._isSelectionModeEnabled then
+		self._clearUnitSelectionCommand:Execute(self._deps)
+	end
+
+	self:_RefreshSelectionEnabledState()
 end
 
 function UnitSelectionController:_ObserveRunStateChanges()

@@ -8,6 +8,10 @@ type TUnitSelectionState = UnitSelectionTypes.TUnitSelectionState
 local EMPTY_GUIDS = table.freeze({})
 
 local function _BuildMarqueeRect(snapshot: any): TMarqueeRect?
+	if snapshot == nil then
+		return nil
+	end
+
 	local normalizedScreenRect = snapshot.NormalizedScreenRect
 	if normalizedScreenRect == nil then
 		return nil
