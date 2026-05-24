@@ -13,9 +13,11 @@ type IdentityComponent = UnitTypes.IdentityComponent
 type OwnershipComponent = UnitTypes.OwnershipComponent
 type TransformComponent = UnitTypes.TransformComponent
 type HealthComponent = UnitTypes.HealthComponent
+type MoveSpeedComponent = UnitTypes.MoveSpeedComponent
 type AnimationStateComponent = UnitTypes.AnimationStateComponent
 type AnimationLoopingComponent = UnitTypes.AnimationLoopingComponent
 type RoleComponent = UnitTypes.RoleComponent
+type PathStateComponent = UnitTypes.PathStateComponent
 type LifetimeComponent = UnitTypes.LifetimeComponent
 
 local UnitEntityFactory = {}
@@ -41,6 +43,9 @@ function UnitEntityFactory:_OnInit(_registry: any, _name: string, _componentRegi
 			and self._components.OwnershipComponent ~= nil
 			and self._components.TransformComponent ~= nil
 			and self._components.HealthComponent ~= nil
+			and self._components.BaseMoveSpeedComponent ~= nil
+			and self._components.CurrentMoveSpeedComponent ~= nil
+			and self._components.PathStateComponent ~= nil
 			and self._components.AnimationStateComponent ~= nil
 			and self._components.AnimationLoopingComponent ~= nil
 			and self._components.RoleComponent ~= nil
@@ -52,6 +57,7 @@ function UnitEntityFactory:_OnInit(_registry: any, _name: string, _componentRegi
 	)
 	self:_ConfigureSpatialComponents("ModelRefComponent", "TransformComponent")
 	self:RegisterBucketLookupIndex("OwnerKey")
+	self:RegisterUniqueLookupIndex("UnitGuid")
 end
 
 function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitRequest, definition: UnitDefinition, now: number): number
@@ -78,6 +84,17 @@ function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitReques
 		MaxHp = definition.MaxHp,
 	} :: HealthComponent)
 
+	self:_Set(entity, self._components.BaseMoveSpeedComponent, {
+		Value = definition.MoveSpeed,
+	} :: MoveSpeedComponent)
+	self:_Set(entity, self._components.CurrentMoveSpeedComponent, {
+		Value = definition.MoveSpeed,
+	} :: MoveSpeedComponent)
+	self:_Set(entity, self._components.PathStateComponent, {
+		GoalPosition = nil,
+		IsMoving = false,
+	} :: PathStateComponent)
+
 	local animationState, isLooping = UnitRuntimeProfiles.ResolveAnimationState({
 		VariantId = definition.RuntimeProfileId,
 		CombatAction = nil,
@@ -101,6 +118,7 @@ function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitReques
 	self:_Add(entity, self._components.ActiveTag)
 	self:_Add(entity, self._components.DirtyTag)
 	self:SetBucketLookup("OwnerKey", _ownerKey(request.OwnerKind, request.OwnerId), entity)
+	self:SetUniqueLookup("UnitGuid", unitGuid, entity)
 
 	return entity
 end
@@ -133,6 +151,35 @@ function UnitEntityFactory:GetHealth(entity: number): HealthComponent?
 	return self:_Get(entity, self._components.HealthComponent)
 end
 
+function UnitEntityFactory:GetBaseMoveSpeed(entity: number): number?
+	self:RequireReady()
+	local moveSpeed = self:_Get(entity, self._components.BaseMoveSpeedComponent)
+	return if moveSpeed ~= nil then moveSpeed.Value else nil
+end
+
+function UnitEntityFactory:GetCurrentMoveSpeed(entity: number): number?
+	self:RequireReady()
+	local moveSpeed = self:_Get(entity, self._components.CurrentMoveSpeedComponent)
+	return if moveSpeed ~= nil then moveSpeed.Value else nil
+end
+
+function UnitEntityFactory:SetCurrentMoveSpeed(entity: number, speed: number)
+	self:RequireReady()
+	if type(speed) ~= "number" then
+		return
+	end
+
+	local currentMoveSpeed = self:_Get(entity, self._components.CurrentMoveSpeedComponent)
+	if currentMoveSpeed ~= nil and currentMoveSpeed.Value == speed then
+		return
+	end
+
+	self:_Set(entity, self._components.CurrentMoveSpeedComponent, {
+		Value = speed,
+	} :: MoveSpeedComponent)
+	self:_Add(entity, self._components.DirtyTag)
+end
+
 function UnitEntityFactory:GetAnimationState(entity: number): AnimationStateComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.AnimationStateComponent)
@@ -146,6 +193,56 @@ end
 function UnitEntityFactory:GetRole(entity: number): RoleComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.RoleComponent)
+end
+
+function UnitEntityFactory:GetPathState(entity: number): PathStateComponent?
+	self:RequireReady()
+	return self:_Get(entity, self._components.PathStateComponent)
+end
+
+function UnitEntityFactory:SetGoalPosition(entity: number, goalPosition: Vector3)
+	self:RequireReady()
+	local state = self:GetPathState(entity)
+	if state == nil then
+		return
+	end
+
+	self:_Set(entity, self._components.PathStateComponent, {
+		GoalPosition = goalPosition,
+		IsMoving = false,
+	} :: PathStateComponent)
+	self:_Add(entity, self._components.DirtyTag)
+end
+
+function UnitEntityFactory:ClearGoalPosition(entity: number)
+	self:RequireReady()
+	local state = self:GetPathState(entity)
+	if state == nil then
+		return
+	end
+
+	self:_Set(entity, self._components.PathStateComponent, {
+		GoalPosition = nil,
+		IsMoving = false,
+	} :: PathStateComponent)
+	self:_Add(entity, self._components.DirtyTag)
+end
+
+function UnitEntityFactory:SetPathMoving(entity: number, isMoving: boolean)
+	self:RequireReady()
+	local state = self:GetPathState(entity)
+	if state == nil then
+		return
+	end
+	if state.IsMoving == isMoving then
+		return
+	end
+
+	self:_Set(entity, self._components.PathStateComponent, {
+		GoalPosition = state.GoalPosition,
+		IsMoving = isMoving,
+	} :: PathStateComponent)
+	self:_Add(entity, self._components.DirtyTag)
 end
 
 function UnitEntityFactory:GetLifetime(entity: number): LifetimeComponent?
@@ -174,6 +271,11 @@ function UnitEntityFactory:QueryOwnerEntities(ownerKind: string, ownerId: string
 	return self:QueryBucketLookup("OwnerKey", _ownerKey(ownerKind, ownerId))
 end
 
+function UnitEntityFactory:GetEntityByUnitGuid(unitGuid: string): number?
+	self:RequireReady()
+	return self:FindEntityByUniqueLookup("UnitGuid", unitGuid)
+end
+
 function UnitEntityFactory:GetOwnerUnitCount(ownerKind: string, ownerId: string): number
 	return self:GetBucketLookupCount("OwnerKey", _ownerKey(ownerKind, ownerId))
 end
@@ -192,6 +294,7 @@ function UnitEntityFactory:DeleteEntity(entity: number?): boolean
 	end
 
 	self:ClearBucketLookup("OwnerKey", entity)
+	self:ClearUniqueLookup("UnitGuid", entity)
 	self:MarkForDestruction(entity)
 	return true
 end

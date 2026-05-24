@@ -39,6 +39,11 @@ export type SpawnUnitResult = {
 	UnitId: UnitDefinitionId,
 }
 
+export type IssueMoveOrderRequest = {
+	UnitGuids: { string },
+	Destination: Vector3,
+}
+
 export type IdentityComponent = {
 	UnitGuid: string,
 	UnitId: UnitDefinitionId,
@@ -59,6 +64,10 @@ export type HealthComponent = {
 	MaxHp: number,
 }
 
+export type MoveSpeedComponent = {
+	Value: number,
+}
+
 export type AnimationStateComponent = string
 export type AnimationLoopingComponent = boolean
 
@@ -66,6 +75,11 @@ export type RoleComponent = {
 	Role: UnitRole,
 	DisplayName: string,
 	MaxHp: number,
+}
+
+export type PathStateComponent = {
+	GoalPosition: Vector3?,
+	IsMoving: boolean,
 }
 
 export type LifetimeComponent = {

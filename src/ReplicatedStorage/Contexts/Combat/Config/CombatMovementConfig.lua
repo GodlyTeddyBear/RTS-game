@@ -26,6 +26,19 @@ CombatMovementConfig.AGENT_PARAMS_BY_ROLE = table.freeze({
 	}),
 })
 
+CombatMovementConfig.AGENT_PARAMS_BY_UNIT_ROLE = table.freeze({
+	Builder = table.freeze({
+		AgentRadius = 2,
+		AgentHeight = 5,
+		AgentCanJump = true,
+	}),
+	Combat = table.freeze({
+		AgentRadius = 2,
+		AgentHeight = 5,
+		AgentCanJump = true,
+	}),
+})
+
 --[=[
 	@prop DEFAULT_AGENT_PARAMS table
 	@within CombatMovementConfig

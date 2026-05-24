@@ -12,16 +12,20 @@ local CommitMarqueeUnitSelectionCommand = require(script.Parent.Application.Comm
 local CommitSingleUnitSelectionCommand = require(script.Parent.Application.Commands.CommitSingleUnitSelectionCommand)
 local AssignUnitControlGroupCommand = require(script.Parent.Application.Commands.AssignUnitControlGroupCommand)
 local ClearUnitSelectionCommand = require(script.Parent.Application.Commands.ClearUnitSelectionCommand)
+local IssueUnitMoveOrderCommand = require(script.Parent.Application.Commands.IssueUnitMoveOrderCommand)
 local RecallUnitControlGroupCommand = require(script.Parent.Application.Commands.RecallUnitControlGroupCommand)
 local RefreshUnitSelectionCommand = require(script.Parent.Application.Commands.RefreshUnitSelectionCommand)
 local UpdateMarqueePreviewStateCommand = require(script.Parent.Application.Commands.UpdateMarqueePreviewStateCommand)
+local BuildMoveOrderUnitGuidsQuery = require(script.Parent.Application.Queries.BuildMoveOrderUnitGuidsQuery)
 local BuildSelectedUnitRecordsQuery = require(script.Parent.Application.Queries.BuildSelectedUnitRecordsQuery)
+local ResolveMoveOrderDestinationQuery = require(script.Parent.Application.Queries.ResolveMoveOrderDestinationQuery)
 local ResolveOwnedUnitSelectionFromCharacterClickQuery =
 	require(script.Parent.Application.Queries.ResolveOwnedUnitSelectionFromCharacterClickQuery)
 local ResolveOwnedUnitSelectionQuery = require(script.Parent.Application.Queries.ResolveOwnedUnitSelectionQuery)
 local ResolveOwnedUnitSelectionByUnitGuidsQuery = require(script.Parent.Application.Queries.ResolveOwnedUnitSelectionByUnitGuidsQuery)
 local UnitSelectionAtom = require(script.Parent.Infrastructure.Persistence.UnitSelectionAtom)
 local UnitSelectionMarqueeOverlayService = require(script.Parent.Infrastructure.Services.UnitSelectionMarqueeOverlayService)
+local UnitRemoteClient = require(script.Parent.Infrastructure.Services.UnitRemoteClient)
 local UnitSelectionRuntimeService = require(script.Parent.Infrastructure.Services.UnitSelectionRuntimeService)
 
 type TUnitSelectionState = UnitSelectionTypes.TUnitSelectionState
@@ -38,15 +42,19 @@ function UnitSelectionController:KnitInit()
 		ResolveOwnedUnitSelectionFromCharacterClickQuery.new(self._resolveOwnedUnitSelectionQuery)
 	self._resolveOwnedUnitSelectionByUnitGuidsQuery =
 		ResolveOwnedUnitSelectionByUnitGuidsQuery.new(self._resolveOwnedUnitSelectionQuery)
+	self._buildMoveOrderUnitGuidsQuery = BuildMoveOrderUnitGuidsQuery.new()
+	self._resolveMoveOrderDestinationQuery = ResolveMoveOrderDestinationQuery.new()
 	self._buildSelectedUnitRecordsQuery = BuildSelectedUnitRecordsQuery.new()
 	self._assignUnitControlGroupCommand = AssignUnitControlGroupCommand.new()
 	self._clearUnitSelectionCommand = ClearUnitSelectionCommand.new()
 	self._commitSingleUnitSelectionCommand = CommitSingleUnitSelectionCommand.new()
 	self._commitMarqueeUnitSelectionCommand = CommitMarqueeUnitSelectionCommand.new()
+	self._issueUnitMoveOrderCommand = IssueUnitMoveOrderCommand.new()
 	self._recallUnitControlGroupCommand = RecallUnitControlGroupCommand.new()
 	self._refreshUnitSelectionCommand = RefreshUnitSelectionCommand.new()
 	self._updateMarqueePreviewStateCommand = UpdateMarqueePreviewStateCommand.new()
 	self._marqueeOverlayService = UnitSelectionMarqueeOverlayService.new()
+	self._unitRemoteClient = UnitRemoteClient.new()
 	self._runtimeService = UnitSelectionRuntimeService.new()
 	self._isSelectionEnabled = false
 	self._isRunActive = false
@@ -66,10 +74,13 @@ function UnitSelectionController:KnitStart()
 	self._runAtom = self._runController:GetAtom()
 	self._deps = {
 		selectionAtom = self._selectionAtom,
+		buildMoveOrderUnitGuidsQuery = self._buildMoveOrderUnitGuidsQuery,
 		buildSelectedUnitRecordsQuery = self._buildSelectedUnitRecordsQuery,
+		resolveMoveOrderDestinationQuery = self._resolveMoveOrderDestinationQuery,
 		resolveOwnedUnitSelectionFromCharacterClickQuery = self._resolveOwnedUnitSelectionFromCharacterClickQuery,
 		resolveOwnedUnitSelectionQuery = self._resolveOwnedUnitSelectionQuery,
 		resolveOwnedUnitSelectionByUnitGuidsQuery = self._resolveOwnedUnitSelectionByUnitGuidsQuery,
+		unitRemoteClient = self._unitRemoteClient,
 		runtimeService = self._runtimeService,
 		marqueeOverlayService = self._marqueeOverlayService,
 	}
@@ -86,6 +97,11 @@ function UnitSelectionController:KnitStart()
 
 		local resolvedTarget =
 			self._resolveOwnedUnitSelectionFromCharacterClickQuery:Execute(gestureEvent.MouseSnapshot)
+		if resolvedTarget == nil then
+			self._issueUnitMoveOrderCommand:Execute(self._deps, gestureEvent.MouseSnapshot)
+			return
+		end
+
 		self._commitSingleUnitSelectionCommand:Execute(
 			self._deps,
 			resolvedTarget,
@@ -206,6 +222,7 @@ function UnitSelectionController:KnitStart()
 	end)
 
 	self._runtimeService:Start()
+	self._unitRemoteClient:Start()
 end
 
 function UnitSelectionController:GetAtom(): () -> TUnitSelectionState

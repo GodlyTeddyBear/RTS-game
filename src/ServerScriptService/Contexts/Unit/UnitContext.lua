@@ -20,6 +20,7 @@ local UnitSpawnPolicy = require(script.Parent.UnitDomain.Policies.UnitSpawnPolic
 local SpawnUnitCommand = require(script.Parent.Application.Commands.SpawnUnitCommand)
 local DespawnUnitCommand = require(script.Parent.Application.Commands.DespawnUnitCommand)
 local CleanupUnitsCommand = require(script.Parent.Application.Commands.CleanupUnitsCommand)
+local IssueUnitMoveOrderCommand = require(script.Parent.Application.Commands.IssueUnitMoveOrderCommand)
 local GetActiveUnitsQuery = require(script.Parent.Application.Queries.GetActiveUnitsQuery)
 local GetOwnerUnitCountQuery = require(script.Parent.Application.Queries.GetOwnerUnitCountQuery)
 
@@ -91,6 +92,11 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		CacheAs = "_cleanupUnitsCommand",
 	},
 	{
+		Name = "IssueUnitMoveOrderCommand",
+		Module = IssueUnitMoveOrderCommand,
+		CacheAs = "_issueUnitMoveOrderCommand",
+	},
+	{
 		Name = "GetActiveUnitsQuery",
 		Module = GetActiveUnitsQuery,
 		CacheAs = "_getActiveUnitsQuery",
@@ -144,6 +150,7 @@ end
 
 function UnitContext:KnitStart()
 	UnitBaseContext:KnitStart()
+	UnitBaseContext:RegisterPollSystem("_syncService", nil, "UnitSync")
 	UnitBaseContext:RegisterSyncSystem("_syncService", nil, "UnitSync")
 	UnitBaseContext:RegisterMethodSystem("UnitSync", "_replicationService", "FlushReliable")
 	UnitBaseContext:RegisterMethodSystem("UnitSync", "_replicationService", "FlushUnreliable")
@@ -195,6 +202,12 @@ function UnitContext:CleanupAll(): Result.Result<boolean>
 	return Catch(function()
 		return self._cleanupUnitsCommand:Execute(nil, nil)
 	end, "Unit:CleanupAll")
+end
+
+function UnitContext:IssueMoveOrder(player: Player, request: UnitTypes.IssueMoveOrderRequest): Result.Result<number>
+	return Catch(function()
+		return self._issueUnitMoveOrderCommand:Execute(player, request)
+	end, "Unit:IssueMoveOrder")
 end
 
 function UnitContext:GetActiveUnits(): Result.Result<{ number }>
@@ -265,6 +278,11 @@ end
 
 function UnitContext.Client:AcknowledgeUnitReplicationBootstrap(player: Player): boolean
 	return self.Server._replicationService:CompleteBootstrap(player)
+end
+
+function UnitContext.Client:IssueMoveOrder(player: Player, request: UnitTypes.IssueMoveOrderRequest): boolean
+	local result = self.Server:IssueMoveOrder(player, request)
+	return result.success and result.value > 0
 end
 
 return UnitContext

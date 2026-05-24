@@ -30,6 +30,10 @@ function UnitGameObjectSyncService:_QueryAllEntities(): { number }
 	return self:GetEntityFactoryOrThrow():QueryActiveEntities()
 end
 
+function UnitGameObjectSyncService:_QueryPollEntities(): { number }
+	return self:GetEntityFactoryOrThrow():QueryActiveEntities()
+end
+
 function UnitGameObjectSyncService:_GetDirtyTag(): any?
 	return self:GetComponentsOrThrow().DirtyTag
 end
@@ -73,6 +77,10 @@ function UnitGameObjectSyncService:_SyncEntity(entity: number, model: Model)
 	self:SetAttributeIfChanged(model, "Active", entityFactory:IsActive(entity))
 	self:SetAttributeIfChanged(model, "AnimationState", entityFactory:GetAnimationState(entity))
 	self:SetAttributeIfChanged(model, "AnimationLooping", entityFactory:GetAnimationLooping(entity))
+end
+
+function UnitGameObjectSyncService:_PollEntity(entity: number, model: Model)
+	self:GetEntityFactoryOrThrow():SetTransform(entity, ModelPlus.GetPivot(model))
 end
 
 return UnitGameObjectSyncService

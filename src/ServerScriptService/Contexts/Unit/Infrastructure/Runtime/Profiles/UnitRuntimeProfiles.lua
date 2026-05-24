@@ -5,6 +5,7 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local BehaviorConfig = require(ReplicatedStorage.Contexts.Combat.Config.BehaviorConfig)
 local BaseRuntimeProfileModule = require(ServerStorage.Utilities.ECSUtilities.BaseRuntimeProfileModule)
+local UnitBuilderBehavior = require(script.Parent.Parent.Parent.BehaviorSystem.Behaviors.UnitBuilderBehavior)
 local UnitIdleBehavior = require(script.Parent.Parent.Parent.BehaviorSystem.Behaviors.UnitIdleBehavior)
 
 local BaseProfiles = BaseRuntimeProfileModule.new({
@@ -13,6 +14,16 @@ local BaseProfiles = BaseRuntimeProfileModule.new({
 		Idle = BaseRuntimeProfileModule.CreateProfile({
 			VariantId = "Idle",
 			BehaviorDefinition = UnitIdleBehavior,
+			DefaultAnimationState = "Idle",
+			AnimationByActionIdAndState = {},
+			LoopingByAnimationState = {
+				Idle = true,
+			},
+			TickInterval = BehaviorConfig.DEFAULT.TickInterval,
+		}),
+		Builder = BaseRuntimeProfileModule.CreateProfile({
+			VariantId = "Builder",
+			BehaviorDefinition = UnitBuilderBehavior,
 			DefaultAnimationState = "Idle",
 			AnimationByActionIdAndState = {},
 			LoopingByAnimationState = {

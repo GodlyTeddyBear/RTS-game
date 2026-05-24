@@ -24,7 +24,7 @@ UnitConfig.Definitions = {
 	} :: UnitDefinition),
 	Builder = table.freeze({
 		UnitId = "Builder",
-		RuntimeProfileId = "Idle",
+		RuntimeProfileId = "Builder",
 		Role = "Builder",
 		DisplayName = "Builder",
 		MaxHp = 140,

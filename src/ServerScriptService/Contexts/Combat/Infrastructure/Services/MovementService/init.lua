@@ -103,6 +103,7 @@ require(script.FlowFrameState)
 require(script.FlowSnapshot)(MovementService)
 require(script.FlowPipeline)(MovementService)
 require(script.FlowMovement)(MovementService)
+require(script.UnitPathMovement)(MovementService)
 
 --[=[
     Creates a new movement service with empty runtime caches and state tables.
@@ -112,6 +113,7 @@ require(script.FlowMovement)(MovementService)
 function MovementService.new()
 	local self = setmetatable({}, MovementService)
 	self._movementByEntity = {} :: { [number]: TMovementState }
+	self._unitMovementByEntity = {}
 	self._movementTempTableRecycler = nil
 	self._fastFlowPathfinder = nil
 	self._fastFlowMapping = nil
@@ -120,6 +122,7 @@ function MovementService.new()
 	self._activeFlowEntitiesByGoalKey = {} :: { [string]: { [number]: boolean } }
 	self._flowSettledByEntity = {} :: { [number]: boolean }
 	self._flowActorRefsByEntity = {} :: { [number]: TFlowActorRefs }
+	self._unitActorRefsByEntity = {}
 	self._flowVelocityByEntity = {} :: { [number]: Vector2 }
 	self._flowFrameSerial = 0
 	self._flowPipelineStateMachine = _CreateFlowPipelineStateMachine()
@@ -181,6 +184,8 @@ function MovementService.new()
 	self._flowWallGridCache = nil
 	self._flowWallGridHalfSize = nil
 	self._flowWallGridWidth = nil
+	self._unitEntityFactory = nil
+	self._unitInstanceFactory = nil
 	return self
 end
 
@@ -214,6 +219,14 @@ end
 
 function MovementService:ConfigureEnemyInstanceFactory(enemyInstanceFactory: any)
 	self._enemyInstanceFactory = enemyInstanceFactory
+end
+
+function MovementService:ConfigureUnitEntityFactory(unitEntityFactory: any)
+	self._unitEntityFactory = unitEntityFactory
+end
+
+function MovementService:ConfigureUnitInstanceFactory(unitInstanceFactory: any)
+	self._unitInstanceFactory = unitInstanceFactory
 end
 
 --[=[
@@ -427,6 +440,7 @@ end
 ]=]
 function MovementService:CleanupAll()
 	local entities = self:_AcquireMovementTempArray()
+	local unitEntities = self:_AcquireMovementTempArray()
 	local success, err = xpcall(function()
 		-- Capture movement entities first so cleanup can mutate the live maps safely.
 		for entityId in self._movementByEntity do
@@ -444,15 +458,24 @@ function MovementService:CleanupAll()
 		for _, entityId in ipairs(entities) do
 			self:StopMovement(entityId)
 		end
+
+		for entityId in self._unitMovementByEntity do
+			table.insert(unitEntities, entityId)
+		end
+		for _, entityId in ipairs(unitEntities) do
+			self:StopUnitMovement(entityId)
+		end
 	end, function(message)
 		return debug.traceback(message, 2)
 	end)
 	self:_ReleaseMovementTempArray(entities)
+	self:_ReleaseMovementTempArray(unitEntities)
 	if not success then
 		error(err, 0)
 	end
 
 	table.clear(self._flowActorRefsByEntity)
+	table.clear(self._unitActorRefsByEntity)
 	self:ResetFastFlowRuntime()
 end
 

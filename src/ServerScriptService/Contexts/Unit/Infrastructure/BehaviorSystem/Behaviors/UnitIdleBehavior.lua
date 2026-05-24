@@ -2,7 +2,7 @@
 
 local UnitIdleBehavior = table.freeze({
 	Priority = {
-		"UnitIdle",
+		"Idle",
 	},
 })
 

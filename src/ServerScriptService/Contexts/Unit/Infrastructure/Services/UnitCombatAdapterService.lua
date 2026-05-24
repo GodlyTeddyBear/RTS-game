@@ -14,6 +14,7 @@ local Nodes = require(script.Parent.Parent.BehaviorSystem.Nodes)
 local Executors = require(script.Parent.Parent.BehaviorSystem.Executors)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 local UnitRuntimeProfiles = require(script.Parent.Parent.Runtime.Profiles.UnitRuntimeProfiles)
+local UnitMovementProxyResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.UnitMovementProxyResolverFactory)
 local UnitServiceProxyResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.UnitServiceProxyResolverFactory)
 
 type UnitDefinition = UnitTypes.UnitDefinition
@@ -55,8 +56,19 @@ end
 ]=]
 function UnitCombatAdapterService:Start(registry: any, _name: string)
 	self._combatContext = registry:Get("CombatContext")
+	self._instanceFactory = registry:Get("UnitInstanceFactory")
+	self._combatServices = self._combatContext:GetCombatRuntimeServices().value
+	self._combatServices.MovementService:ConfigureUnitEntityFactory(self._entityFactory)
+	self._combatServices.MovementService:ConfigureUnitInstanceFactory(self._instanceFactory)
+	self._movementProxyResolver = UnitMovementProxyResolverFactory.Create({
+		MovementService = self._combatServices.MovementService,
+	})
 	self._serviceProxyResolver = UnitServiceProxyResolverFactory.Create({
 		UnitEntityFactory = self._entityFactory,
+		MovementProxyResolver = self._movementProxyResolver,
+		GetRuntimeOwner = function()
+			return self._runtimeOwner
+		end,
 	})
 end
 
@@ -120,6 +132,12 @@ function UnitCombatAdapterService:RegisterActor(entity: number): Result.Result<s
 			BuildServices = function(currentTime: number, tickId: number?): { [string]: any }
 				return self._serviceProxyResolver.BuildServices(entity, currentTime, tickId)
 			end,
+			OnCancel = function()
+				self._combatServices.MovementService:StopUnitMovement(entity)
+			end,
+			OnRemoved = function()
+				self._combatServices.MovementService:StopUnitMovement(entity)
+			end,
 		},
 	})
 end
@@ -132,6 +150,9 @@ end
     @return Result.Result<boolean> -- Whether the actor was removed successfully.
 ]=]
 function UnitCombatAdapterService:UnregisterActor(entity: number): Result.Result<boolean>
+	if self._combatServices ~= nil then
+		self._combatServices.MovementService:StopUnitMovement(entity)
+	end
 	return self._combatContext:UnregisterCombatActor(self:_BuildActorHandle(entity))
 end
 
