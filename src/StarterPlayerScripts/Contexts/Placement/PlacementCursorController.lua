@@ -87,6 +87,9 @@ function PlacementCursorController:KnitInit()
 	self._placementCancelledSignal = Instance.new("BindableEvent")
 	self.PlacementCancelled = self._placementCancelledSignal.Event
 	self._controllerJanitor:Add(self._placementCancelledSignal, "Destroy")
+	self._placementModeChangedSignal = Instance.new("BindableEvent")
+	self.PlacementModeChanged = self._placementModeChangedSignal.Event
+	self._controllerJanitor:Add(self._placementModeChangedSignal, "Destroy")
 
 	self._buildOccupiedSetQuery = BuildOccupiedSetQuery.new()
 	self._buildPlacementSignatureQuery = BuildPlacementSignatureQuery.new()
@@ -204,6 +207,10 @@ end
 ]=]
 function PlacementCursorController:ExitPlacementMode()
 	self._exitPlacementModeCommand:Execute(self, self._commandDeps)
+end
+
+function PlacementCursorController:IsActive(): boolean
+	return self._state == "Active"
 end
 
 --[=[

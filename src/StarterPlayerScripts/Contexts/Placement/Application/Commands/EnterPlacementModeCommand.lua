@@ -108,6 +108,7 @@ function EnterPlacementModeCommand:Execute(state: any, deps: any, structureType:
 	state._validTileSet = {}
 	state._footprintCacheLookup = footprintCacheLookup
 	state._sessionId += 1
+	state._placementModeChangedSignal:Fire(true)
 
 	-- Switch the player's input context only after the session state is ready.
 	deps.playerInputController:ToggleContext("Placement", true)

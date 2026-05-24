@@ -1,6 +1,6 @@
 # Methods Contracts
 
-Low-level method contracts for implementation work. These documents convert backend conventions into explicit pass/fail rules.
+Low-level method contracts for implementation work. These documents convert backend, frontend, ECS, testing, and planning conventions into explicit pass/fail rules.
 
 ---
 
@@ -35,6 +35,11 @@ Low-level method contracts for implementation work. These documents convert back
 
 - [backend/EVENTS_CONTRACTS.md](backend/EVENTS_CONTRACTS.md) - GameEvents module authoring rules: `events`/`schemas` table structure, naming, schema types, and caller constraints.
 - [backend/ERRORS_CONTRACTS.md](backend/ERRORS_CONTRACTS.md) - Per-context `Errors.lua` authoring rules: key naming, string prefixes, `table.freeze` requirement, Moonwave docs, and `Result.Err` usage.
+
+
+## Testing Contracts
+
+- [testing/TEST_SPEC_CONTRACTS.md](testing/TEST_SPEC_CONTRACTS.md) - Repository test spec file rules: `*.spec.lua` naming, single returned function contract, hook placement, and isolation boundaries.
 
 
 ---

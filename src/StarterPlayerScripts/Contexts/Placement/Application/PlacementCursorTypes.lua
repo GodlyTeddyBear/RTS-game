@@ -30,6 +30,7 @@ export type TPlacementCursorSessionState = {
 	_highlightPool: any,
 	_ghost: any,
 	_placementCancelledSignal: BindableEvent,
+	_placementModeChangedSignal: BindableEvent,
 }
 
 export type TPlacementCursorDeps = {

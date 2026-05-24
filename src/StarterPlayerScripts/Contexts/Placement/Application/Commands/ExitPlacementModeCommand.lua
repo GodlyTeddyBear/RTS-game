@@ -67,6 +67,7 @@ function ExitPlacementModeCommand:Execute(state: any, deps: any)
 
 	-- Notify any listeners that placement mode ended so they can reset their UI state.
 	state._placementCancelledSignal:Fire()
+	state._placementModeChangedSignal:Fire(false)
 end
 
 return ExitPlacementModeCommand

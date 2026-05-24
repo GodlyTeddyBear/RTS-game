@@ -58,7 +58,7 @@ local WaveConfig = {
 	WAVE_TABLE = {
 		[1] = {
 			{ Role = "Tank", Count = 0, GroupDelay = 0 },
-			{ Role = "Swarm", Count = 300, GroupDelay = 0.01 },
+			{ Role = "Swarm", Count = 10, GroupDelay = 0.01 },
 		},
 		[2] = {
 			{ Role = "Swarm", Count = 6, GroupDelay = 0 },

@@ -69,7 +69,8 @@ This file is the repo-level policy entry point for Codex.
 
 | File | Purpose |
 |------|---------|
-| [.codex/documents/methods/METHODS_INDEX.md](.codex/documents/methods/METHODS_INDEX.md) | Index for backend and frontend method-contract docs. |
+| [.codex/documents/methods/METHODS_INDEX.md](.codex/documents/methods/METHODS_INDEX.md) | Index for repo method-contract docs, including backend, frontend, ECS, testing, and planning. |
+| [.codex/documents/methods/testing/TEST_SPEC_CONTRACTS.md](.codex/documents/methods/testing/TEST_SPEC_CONTRACTS.md) | Test spec file contract for `*.spec.lua` modules that return a registration function. |
 | [.codex/documents/ONBOARDING.md](.codex/documents/ONBOARDING.md) | Routing map for selecting the next architecture, style, method, or pattern docs. |
 | [.codex/documents/AGENT_RULES.md](.codex/documents/AGENT_RULES.md) | Behavioral rules for Codex in this project. |
 | [.codex/documents/coding-style/CODING_STYLE.md](.codex/documents/coding-style/CODING_STYLE.md) | Navigation hub for coding-style docs. |
