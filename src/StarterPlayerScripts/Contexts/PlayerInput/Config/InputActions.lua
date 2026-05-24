@@ -18,6 +18,7 @@
 ]]
 
 local selectionContext = {
+	Enabled = false,
 	ShiftSelectionModifier = {
 		PC = { Input = { Enum.KeyCode.LeftShift, Enum.KeyCode.RightShift } },
 	},

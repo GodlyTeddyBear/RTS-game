@@ -1,9 +1,11 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
+local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 local UnitSelectionTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitSelectionTypes)
 
 local CommitMarqueeUnitSelectionCommand = require(script.Parent.Application.Commands.CommitMarqueeUnitSelectionCommand)
@@ -23,6 +25,7 @@ local UnitSelectionMarqueeOverlayService = require(script.Parent.Infrastructure.
 local UnitSelectionRuntimeService = require(script.Parent.Infrastructure.Services.UnitSelectionRuntimeService)
 
 type TUnitSelectionState = UnitSelectionTypes.TUnitSelectionState
+type RunState = RunTypes.RunState
 
 local UnitSelectionController = Knit.CreateController({
 	Name = "UnitSelectionController",
@@ -45,16 +48,21 @@ function UnitSelectionController:KnitInit()
 	self._updateMarqueePreviewStateCommand = UpdateMarqueePreviewStateCommand.new()
 	self._marqueeOverlayService = UnitSelectionMarqueeOverlayService.new()
 	self._runtimeService = UnitSelectionRuntimeService.new()
-	self._isSelectionEnabled = true
+	self._isSelectionEnabled = false
+	self._isRunActive = false
 	self._isShiftSelectionModifierActive = false
 	self._isAltSelectionClearModifierActive = false
 	self._isControlGroupModifierActive = false
+	self._lastObservedRunState = "Idle" :: RunState
+	self._runStateWatcherConnection = nil :: RBXScriptConnection?
 	self._inputUnbinds = {}
 end
 
 function UnitSelectionController:KnitStart()
 	self._playerInputController = Knit.GetController("PlayerInputController")
 	self._placementCursorController = Knit.GetController("PlacementCursorController")
+	self._runController = Knit.GetController("RunController")
+	self._runAtom = self._runController:GetAtom()
 	self._deps = {
 		selectionAtom = self._selectionAtom,
 		buildSelectedUnitRecordsQuery = self._buildSelectedUnitRecordsQuery,
@@ -178,9 +186,12 @@ function UnitSelectionController:KnitStart()
 		)
 	end
 
-	self:_SetSelectionEnabled(not self._placementCursorController:IsActive())
-	self._placementCursorController.PlacementModeChanged:Connect(function(isActive: boolean)
-		self:_SetSelectionEnabled(not isActive)
+	self:_ApplyRunState(self:_GetCurrentRunState())
+	self._placementCursorController.PlacementModeChanged:Connect(function(_isActive: boolean)
+		self:_ApplyRunState(self:_GetCurrentRunState())
+	end)
+	self._runStateWatcherConnection = RunService.Heartbeat:Connect(function()
+		self:_ObserveRunStateChanges()
 	end)
 
 	self._runtimeService:Start()
@@ -212,9 +223,57 @@ function UnitSelectionController:_SetSelectionEnabled(isEnabled: boolean)
 	self._isControlGroupModifierActive = false
 end
 
+function UnitSelectionController:_RefreshSelectionEnabledState()
+	self:_SetSelectionEnabled(self:_ShouldEnableSelection())
+end
+
+function UnitSelectionController:_ShouldEnableSelection(): boolean
+	return self._isRunActive and not self._placementCursorController:IsActive()
+end
+
+function UnitSelectionController:_ObserveRunStateChanges()
+	local currentRunState = self:_GetCurrentRunState()
+	if currentRunState == self._lastObservedRunState then
+		return
+	end
+
+	self:_ApplyRunState(currentRunState)
+end
+
+function UnitSelectionController:_GetCurrentRunState(): RunState
+	local runState = self._runAtom()
+	return runState.State
+end
+
+function UnitSelectionController:_ApplyRunState(runState: RunState)
+	local wasRunActive = self._isRunActive
+
+	self._lastObservedRunState = runState
+	self._isRunActive = self:_IsRunActive(runState)
+
+	if wasRunActive and not self._isRunActive then
+		self._clearUnitSelectionCommand:Execute(self._deps)
+	end
+
+	self:_RefreshSelectionEnabledState()
+end
+
+function UnitSelectionController:_IsRunActive(runState: RunState): boolean
+	return runState == "Prep"
+		or runState == "Wave"
+		or runState == "Resolution"
+		or runState == "Climax"
+		or runState == "Endless"
+end
+
 function UnitSelectionController:Destroy()
 	for _, unbind in ipairs(self._inputUnbinds) do
 		unbind()
+	end
+
+	if self._runStateWatcherConnection ~= nil then
+		self._runStateWatcherConnection:Disconnect()
+		self._runStateWatcherConnection = nil
 	end
 
 	if self._runtimeService ~= nil then
