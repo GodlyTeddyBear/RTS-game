@@ -15,7 +15,7 @@ local RenderController = Knit.CreateController({
 function RenderController:KnitInit()
 	self._renderRegistryClientService = RenderRegistryClientService.new()
 	self._renderProfileService = RenderProfileService.new(self._renderRegistryClientService)
-	self._renderVisualReplacementService = RenderVisualReplacementService.new()
+	self._renderVisualReplacementService = RenderVisualReplacementService.new(self._renderRegistryClientService)
 end
 
 function RenderController:KnitStart()

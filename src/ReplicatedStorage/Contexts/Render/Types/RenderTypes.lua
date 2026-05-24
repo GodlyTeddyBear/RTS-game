@@ -3,6 +3,7 @@
 local RenderTypes = {}
 
 export type TRenderId = string
+export type TRenderAccessoryId = string
 
 export type TRenderRegistryServerSoA = {
 	Count: number,
@@ -55,6 +56,34 @@ export type TRenderRegistryDelta = {
 	AddedReflectanceByIndex: { [number]: number? }?,
 	AddedTransparencyByIndex: { [number]: number? }?,
 	RemovedIds: { TRenderId }?,
+}
+
+export type TRenderAccessoryEntry = {
+	AccessoryId: TRenderAccessoryId,
+	AccessoryName: string,
+	ParentRenderId: TRenderId,
+	VisualId: string,
+}
+
+export type TRenderAccessoryBootstrapChunk = {
+	Version: number?,
+	ChunkIndex: number,
+	ChunkCount: number,
+	Count: number,
+	AccessoryIdsByIndex: { TRenderAccessoryId },
+	AccessoryNamesByIndex: { string },
+	ParentRenderIdsByIndex: { TRenderId },
+	VisualIdsByIndex: { string },
+}
+
+export type TRenderAccessoryDelta = {
+	Version: number?,
+	AddedCount: number?,
+	AddedAccessoryIdsByIndex: { TRenderAccessoryId }?,
+	AddedAccessoryNamesByIndex: { string }?,
+	AddedParentRenderIdsByIndex: { TRenderId }?,
+	AddedVisualIdsByIndex: { string }?,
+	RemovedAccessoryIds: { TRenderAccessoryId }?,
 }
 
 return table.freeze(RenderTypes)

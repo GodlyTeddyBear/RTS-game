@@ -7,6 +7,7 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
 
+local RenderAccessoryService = require(script.Parent.Infrastructure.Services.RenderAccessoryService)
 local RenderExportService = require(script.Parent.Infrastructure.Services.RenderExportService)
 local RenderRegistryService = require(script.Parent.Infrastructure.Services.RenderRegistryService)
 local RenderRuntimeService = require(script.Parent.Infrastructure.Services.RenderRuntimeService)
@@ -19,6 +20,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Factory = function(service: any, _baseContext: any)
 			return service.Client
 		end,
+	},
+	{
+		Name = "RenderAccessoryService",
+		Module = RenderAccessoryService,
+		CacheAs = "_renderAccessoryService",
 	},
 	{
 		Name = "RenderExportService",
@@ -46,12 +52,15 @@ local RenderContext = Knit.CreateService({
 	Client = {
 		RenderRegistryBootstrapChunk = Knit.CreateSignal(),
 		RenderRegistryDelta = Knit.CreateSignal(),
+		RenderAccessoryBootstrapChunk = Knit.CreateSignal(),
+		RenderAccessoryDelta = Knit.CreateSignal(),
 	},
 	Modules = RenderModules,
 	Teardown = {
 		Fields = {
 			{ Field = "_renderRuntimeService", Method = "Destroy" },
 			{ Field = "_renderRegistryService", Method = "Destroy" },
+			{ Field = "_renderAccessoryService", Method = "Destroy" },
 			{ Field = "_renderExportService", Method = "Destroy" },
 		},
 	},
@@ -89,6 +98,10 @@ end
 
 function RenderContext.Client:RequestRenderRegistryBootstrap(player: Player): boolean
 	return self.Server._renderRegistryService:HydratePlayer(player)
+end
+
+function RenderContext.Client:RequestRenderAccessoryBootstrap(player: Player): boolean
+	return self.Server._renderAccessoryService:HydratePlayer(player)
 end
 
 return RenderContext

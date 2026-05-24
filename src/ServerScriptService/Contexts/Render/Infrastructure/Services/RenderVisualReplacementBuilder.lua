@@ -45,6 +45,15 @@ local function _MoveChildrenToTrueVisualFolder(categoryRoot: Instance, targetFol
 	for _, child in ipairs(categoryRoot:GetChildren()) do
 		child.Parent = targetFolder
 	end
+
+	local handle = targetFolder:FindFirstChild("Handle")
+	if handle ~= nil and handle:IsA("BasePart") then
+		for _, descendant in ipairs(handle:GetDescendants()) do
+			if descendant:IsA("Weld") or descendant:IsA("WeldConstraint") or descendant:IsA("ManualWeld") then
+				descendant:Destroy()
+			end
+		end
+	end
 end
 
 local function _EnsureTrueVisualFolder(root: Folder, visualId: string): Folder

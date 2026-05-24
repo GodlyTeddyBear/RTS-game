@@ -3,7 +3,10 @@
 local CollectionService = game:GetService("CollectionService")
 
 export type TVisualReplacementServerBehavior = "DeleteChildren" | "MoveChildrenToTrueVisuals"
-export type TVisualReplacementClientBehavior = "ClientNoOp" | "ClientRestoreFromTrueVisuals"
+export type TVisualReplacementClientBehavior =
+	"ClientNoOp"
+	| "ClientRestoreFromTrueVisuals"
+	| "ClientRecreateAccessory"
 
 export type TVisualReplacementCategoryConfig = {
 	CategoryId: string,
@@ -22,13 +25,14 @@ RenderVisualReplacementConfig.HiddenFolderName = "Hidden"
 RenderVisualReplacementConfig.TrueVisualsFolderName = "RenderTrueVisuals"
 RenderVisualReplacementConfig.SourceAssetsRootName = "Assets"
 RenderVisualReplacementConfig.VisualReplacementTagPrefix = "RenderVisualReplacement:"
+RenderVisualReplacementConfig.VisualReplacementOwnerTagPrefix = "RenderVisualReplacementOwner:"
 
 RenderVisualReplacementConfig.Categories = table.freeze({
 	Accessory = table.freeze({
 		CategoryId = "Accessory",
 		MatchClassNames = table.freeze({ "Accessory" }),
 		ServerBehavior = "MoveChildrenToTrueVisuals" :: TVisualReplacementServerBehavior,
-		ClientBehavior = "ClientRestoreFromTrueVisuals" :: TVisualReplacementClientBehavior,
+		ClientBehavior = "ClientRecreateAccessory" :: TVisualReplacementClientBehavior,
 	}),
 } :: TCategoryConfigMap)
 
@@ -60,6 +64,24 @@ function RenderVisualReplacementConfig.GetVisualReplacementId(instance: Instance
 	return nil
 end
 
+function RenderVisualReplacementConfig.BuildVisualReplacementOwnerTag(ownerId: string): string
+	return RenderVisualReplacementConfig.VisualReplacementOwnerTagPrefix .. ownerId
+end
+
+function RenderVisualReplacementConfig.GetVisualReplacementOwnerId(instance: Instance): string?
+	local prefix = RenderVisualReplacementConfig.VisualReplacementOwnerTagPrefix
+	for _, tag in ipairs(CollectionService:GetTags(instance)) do
+		if string.sub(tag, 1, #prefix) == prefix then
+			local ownerId = string.sub(tag, #prefix + 1)
+			if ownerId ~= "" then
+				return ownerId
+			end
+		end
+	end
+
+	return nil
+end
+
 function RenderVisualReplacementConfig.SetVisualReplacementId(instance: Instance, visualId: string)
 	RenderVisualReplacementConfig.ClearVisualReplacementId(instance)
 	CollectionService:AddTag(instance, RenderVisualReplacementConfig.BuildVisualReplacementTag(visualId))
@@ -67,6 +89,20 @@ end
 
 function RenderVisualReplacementConfig.ClearVisualReplacementId(instance: Instance)
 	local prefix = RenderVisualReplacementConfig.VisualReplacementTagPrefix
+	for _, tag in ipairs(CollectionService:GetTags(instance)) do
+		if string.sub(tag, 1, #prefix) == prefix then
+			CollectionService:RemoveTag(instance, tag)
+		end
+	end
+end
+
+function RenderVisualReplacementConfig.SetVisualReplacementOwnerId(instance: Instance, ownerId: string)
+	RenderVisualReplacementConfig.ClearVisualReplacementOwnerId(instance)
+	CollectionService:AddTag(instance, RenderVisualReplacementConfig.BuildVisualReplacementOwnerTag(ownerId))
+end
+
+function RenderVisualReplacementConfig.ClearVisualReplacementOwnerId(instance: Instance)
+	local prefix = RenderVisualReplacementConfig.VisualReplacementOwnerTagPrefix
 	for _, tag in ipairs(CollectionService:GetTags(instance)) do
 		if string.sub(tag, 1, #prefix) == prefix then
 			CollectionService:RemoveTag(instance, tag)
@@ -90,6 +126,12 @@ function RenderVisualReplacementConfig.RequiresClientRestore(
 	categoryConfig: TVisualReplacementCategoryConfig
 ): boolean
 	return categoryConfig.ClientBehavior == "ClientRestoreFromTrueVisuals"
+end
+
+function RenderVisualReplacementConfig.UsesAccessoryReconstruction(
+	categoryConfig: TVisualReplacementCategoryConfig
+): boolean
+	return categoryConfig.ClientBehavior == "ClientRecreateAccessory"
 end
 
 function RenderVisualReplacementConfig.IsInAccessoryTree(instance: Instance): boolean
