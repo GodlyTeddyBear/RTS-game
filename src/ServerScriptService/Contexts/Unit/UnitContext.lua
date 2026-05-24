@@ -123,6 +123,7 @@ local UnitContext = Knit.CreateService({
 	Modules = UnitModules,
 	ExternalServices = {
 		{ Name = "CombatContext" },
+		{ Name = "TeamContext" },
 	},
 	Teardown = {
 		Before = "_BeforeDestroy",

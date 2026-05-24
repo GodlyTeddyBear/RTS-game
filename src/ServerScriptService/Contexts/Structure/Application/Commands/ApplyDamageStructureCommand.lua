@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -37,6 +38,7 @@ end
 
 function ApplyDamageStructureCommand:Start(registry: any, _name: string)
 	self._placementContext = registry:Get("PlacementContext")
+	self._teamContext = registry:Get("TeamContext")
 end
 
 function ApplyDamageStructureCommand:Execute(entity: any, amount: number): Result.Result<boolean>
@@ -60,8 +62,14 @@ function ApplyDamageStructureCommand:Execute(entity: any, amount: number): Resul
 			Entity = entity,
 		})
 
+		local identity = self._factory:GetIdentity(entity)
+		Ensure(identity ~= nil and type(identity.StructureId) == "string" and identity.StructureId ~= "", "EntityNotFound", Errors.ENTITY_NOT_FOUND, {
+			Entity = entity,
+		})
+
 		local didDie = self._factory:ApplyDamage(entity, amount)
 		if didDie then
+			Try(self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Structure", identity.StructureId)))
 			self._combatAdapterService:UnregisterActor(entity)
 			self._miningAdapterService:UnregisterActor(entity)
 			self._replicationService:UnregisterStructureEntity(entity)

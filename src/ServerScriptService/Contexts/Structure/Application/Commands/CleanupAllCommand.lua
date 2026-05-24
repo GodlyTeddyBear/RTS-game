@@ -4,9 +4,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
 
 local Ok = Result.Ok
+local Try = Result.Try
 
 --[=[
 	@class CleanupAllCommand
@@ -43,6 +45,10 @@ function CleanupAllCommand:Init(registry: any, _name: string)
 	})
 end
 
+function CleanupAllCommand:Start(registry: any, _name: string)
+	self._teamContext = registry:Get("TeamContext")
+end
+
 --[=[
 	Deletes every active structure entity.
 	@within CleanupAllCommand
@@ -51,6 +57,10 @@ end
 function CleanupAllCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
 		for _, entity in ipairs(self._factory:QueryActiveEntities()) do
+			local identity = self._factory:GetIdentity(entity)
+			if identity ~= nil and type(identity.StructureId) == "string" and identity.StructureId ~= "" then
+				Try(self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Structure", identity.StructureId)))
+			end
 			self._combatAdapterService:UnregisterActor(entity)
 			self._miningAdapterService:UnregisterActor(entity)
 			self._replicationService:UnregisterStructureEntity(entity)

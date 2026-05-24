@@ -5,10 +5,12 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
 local Ensure = Result.Ensure
+local Try = Result.Try
 
 local CleanupUnitsCommand = {}
 CleanupUnitsCommand.__index = CleanupUnitsCommand
@@ -28,6 +30,10 @@ function CleanupUnitsCommand:Init(registry: any, _name: string)
 	})
 end
 
+function CleanupUnitsCommand:Start(registry: any, _name: string)
+	self._teamContext = registry:Get("TeamContext")
+end
+
 function CleanupUnitsCommand:Execute(ownerKind: string?, ownerId: string?): Result.Result<boolean>
 	return Result.Catch(function()
 		local entities
@@ -40,6 +46,10 @@ function CleanupUnitsCommand:Execute(ownerKind: string?, ownerId: string?): Resu
 		end
 
 		for _, entity in ipairs(entities) do
+			local identity = self._entityFactory:GetIdentity(entity)
+			if identity ~= nil and type(identity.UnitGuid) == "string" and identity.UnitGuid ~= "" then
+				Try(self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Unit", identity.UnitGuid)))
+			end
 			self._combatAdapterService:UnregisterActor(entity)
 			self._replicationService:UnregisterUnitEntity(entity)
 			self._instanceFactory:DestroyInstance(entity)

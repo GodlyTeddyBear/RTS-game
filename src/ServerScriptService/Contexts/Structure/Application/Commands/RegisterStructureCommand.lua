@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 local StructureSpecs = require(script.Parent.Parent.Parent.StructureDomain.Specs.StructureSpecs)
@@ -50,6 +51,10 @@ function RegisterStructureCommand:Init(registry: any, _name: string)
 	})
 end
 
+function RegisterStructureCommand:Start(registry: any, _name: string)
+	self._teamContext = registry:Get("TeamContext")
+end
+
 --[=[
 	Validates the record and creates the structure entity.
 	@within RegisterStructureCommand
@@ -79,6 +84,12 @@ function RegisterStructureCommand:Execute(record: StructureRecord): Result.Resul
 		self._factory:SetModelRef(entity, model)
 		self._replicationService:RegisterStructureEntity(entity)
 		self._syncService:RegisterEntity(entity, model)
+		Try(
+			self._teamContext:AssignMemberToPlayerTeam(
+				resolved.OwnerUserId,
+				TeamTypes.BuildMemberHandle("Structure", tostring(resolved.InstanceId))
+			)
+		)
 
 		-- Emit a milestone for traceability when a structure becomes active.
 		Result.MentionSuccess("Structure:RegisterStructureCommand", "Registered structure entity", {

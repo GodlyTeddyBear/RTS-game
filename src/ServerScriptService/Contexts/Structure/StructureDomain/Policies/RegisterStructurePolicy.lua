@@ -87,6 +87,11 @@ function RegisterStructurePolicy:Check(record: StructureRecord): Result.Result<R
 		InstanceId = record.InstanceId,
 	})
 	Ensure(_isValidCoord(record.AnchorCoord), "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
+	Ensure(
+		type(record.OwnerUserId) == "number" and record.OwnerUserId > 0 and math.floor(record.OwnerUserId) == record.OwnerUserId,
+		"InvalidOwnerUserId",
+		Errors.INVALID_OWNER_USER_ID
+	)
 
 	local worldPos = _ExtractGroundWorldPos(record)
 	if worldPos == nil then
@@ -119,6 +124,7 @@ function RegisterStructurePolicy:Check(record: StructureRecord): Result.Result<R
 		InstanceId = record.InstanceId,
 		WorldPos = worldPos :: Vector3,
 		RotationQuarterTurns = record.RotationQuarterTurns,
+		OwnerUserId = record.OwnerUserId :: number,
 	})
 end
 

@@ -6,6 +6,7 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -37,6 +38,10 @@ function SpawnEnemy:Init(registry: any, _name: string)
 	})
 end
 
+function SpawnEnemy:Start(registry: any, _name: string)
+	self._teamContext = registry:Get("TeamContext")
+end
+
 function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: number): Result.Result<number>
 	local model: Model? = nil
 	local entity: number? = nil
@@ -53,6 +58,7 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 		self._entityFactory:SetModelRef(entity, model)
 		self._replicationService:RegisterEnemyEntity(entity)
 		self._syncService:RegisterEntity(entity, model)
+		Try(self._teamContext:AssignMemberToEnemyTeam(TeamTypes.BuildMemberHandle("Enemy", enemyId)))
 		self:_EmitGameEvent("Wave", "EnemySpawned", entity, role, waveNumber)
 
 		return Ok(entity)

@@ -153,6 +153,7 @@ local EnemyContext = Knit.CreateService({
 		{ Name = "CombatContext" },
 		{ Name = "StructureContext" },
 		{ Name = "BaseContext" },
+		{ Name = "TeamContext" },
 		{ Name = "WorldContext" },
 	},
 	Cache = {
