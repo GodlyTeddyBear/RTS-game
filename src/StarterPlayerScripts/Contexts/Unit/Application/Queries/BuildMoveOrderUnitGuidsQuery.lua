@@ -4,10 +4,6 @@ local UnitSelectionTypes = require(game:GetService("ReplicatedStorage").Contexts
 
 type TUnitSelectionState = UnitSelectionTypes.TUnitSelectionState
 
-local MOVABLE_UNIT_ROLES = table.freeze({
-	Builder = true,
-})
-
 local BuildMoveOrderUnitGuidsQuery = {}
 BuildMoveOrderUnitGuidsQuery.__index = BuildMoveOrderUnitGuidsQuery
 
@@ -25,10 +21,7 @@ function BuildMoveOrderUnitGuidsQuery:Execute(selectionState: TUnitSelectionStat
 			continue
 		end
 
-		local unitRole = root:GetAttribute("UnitRole")
-		if type(unitRole) == "string" and MOVABLE_UNIT_ROLES[unitRole] == true then
-			moveOrderUnitGuids[#moveOrderUnitGuids + 1] = unitGuid
-		end
+		moveOrderUnitGuids[#moveOrderUnitGuids + 1] = unitGuid
 	end
 
 	return moveOrderUnitGuids

@@ -17,6 +17,7 @@ function EnemyFactsResolverFactory.Create(dependencies: {
 				[NAVIGATION_GROUP] = {
 					BuildFacts = function(): { [string]: any }
 						local pathState = dependencies.EnemyEntityFactory:GetPathState(entity)
+						--print("Building facts")
 						return {
 							HasGoalTarget = pathState ~= nil and pathState.GoalPosition ~= nil,
 						}
@@ -43,7 +44,9 @@ function EnemyFactsResolverFactory.Create(dependencies: {
 
 						return {
 							ActorPosition = if position ~= nil then position.CFrame.Position else nil,
-							AttackRange = if role ~= nil and type(role.AttackRange) == "number" then role.AttackRange else nil,
+							AttackRange = if role ~= nil and type(role.AttackRange) == "number"
+								then role.AttackRange
+								else nil,
 						}
 					end,
 				},
@@ -64,12 +67,14 @@ function EnemyFactsResolverFactory.Create(dependencies: {
 			end
 
 			if cachedTargetState.TargetKind == "Structure" and cachedTargetState.TargetEntity ~= nil then
-				if not dependencies.TargetingResolver.IsTargetInRange(
-					actorPosition,
-					attackRange,
-					"Structure",
-					cachedTargetState.TargetEntity
-				) then
+				if
+					not dependencies.TargetingResolver.IsTargetInRange(
+						actorPosition,
+						attackRange,
+						"Structure",
+						cachedTargetState.TargetEntity
+					)
+				then
 					return nil
 				end
 
@@ -114,7 +119,8 @@ function EnemyFactsResolverFactory.Create(dependencies: {
 				return nil
 			end
 
-			local targetStructureEntity = dependencies.TargetingResolver.FindNearestStructureInRange(actorPosition, attackRange)
+			local targetStructureEntity =
+				dependencies.TargetingResolver.FindNearestStructureInRange(actorPosition, attackRange)
 			if targetStructureEntity ~= nil then
 				local _, targetPosition =
 					dependencies.TargetingResolver.ResolveTargetRaycastData("Structure", targetStructureEntity)

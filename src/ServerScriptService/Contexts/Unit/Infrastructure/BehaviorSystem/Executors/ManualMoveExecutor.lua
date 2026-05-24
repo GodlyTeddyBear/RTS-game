@@ -12,7 +12,7 @@ setmetatable(ManualMoveExecutor, BaseExecutor)
 
 function ManualMoveExecutor.new()
 	local self = BaseExecutor.new({
-		ActionId = "ManualMove",
+		ActionId = "Unit.ManualMove",
 		IsCommitted = false,
 		AutoCleanupOnComplete = true,
 	})
@@ -20,11 +20,13 @@ function ManualMoveExecutor.new()
 end
 
 function ManualMoveExecutor:CanStart(entity: number, _data: any?, services: any): (boolean, string?)
+	--print("can start manual move")
 	if not services.UnitEntityFactory:IsActive(entity) then
 		return false, "InactiveUnit"
 	end
 
 	local pathState = services.UnitEntityFactory:GetPathState(entity)
+	--print("Get path state", pathState)
 	if pathState == nil or pathState.GoalPosition == nil then
 		return false, "MissingGoalPosition"
 	end

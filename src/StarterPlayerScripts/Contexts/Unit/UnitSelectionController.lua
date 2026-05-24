@@ -24,8 +24,8 @@ local ResolveOwnedUnitSelectionFromCharacterClickQuery =
 local ResolveOwnedUnitSelectionQuery = require(script.Parent.Application.Queries.ResolveOwnedUnitSelectionQuery)
 local ResolveOwnedUnitSelectionByUnitGuidsQuery = require(script.Parent.Application.Queries.ResolveOwnedUnitSelectionByUnitGuidsQuery)
 local UnitSelectionAtom = require(script.Parent.Infrastructure.Persistence.UnitSelectionAtom)
+local UnitMoveOrderPreviewService = require(script.Parent.Infrastructure.Services.UnitMoveOrderPreviewService)
 local UnitSelectionMarqueeOverlayService = require(script.Parent.Infrastructure.Services.UnitSelectionMarqueeOverlayService)
-local UnitRemoteClient = require(script.Parent.Infrastructure.Services.UnitRemoteClient)
 local UnitSelectionRuntimeService = require(script.Parent.Infrastructure.Services.UnitSelectionRuntimeService)
 
 type TUnitSelectionState = UnitSelectionTypes.TUnitSelectionState
@@ -54,7 +54,7 @@ function UnitSelectionController:KnitInit()
 	self._refreshUnitSelectionCommand = RefreshUnitSelectionCommand.new()
 	self._updateMarqueePreviewStateCommand = UpdateMarqueePreviewStateCommand.new()
 	self._marqueeOverlayService = UnitSelectionMarqueeOverlayService.new()
-	self._unitRemoteClient = UnitRemoteClient.new()
+	self._moveOrderPreviewService = UnitMoveOrderPreviewService.new()
 	self._runtimeService = UnitSelectionRuntimeService.new()
 	self._isSelectionEnabled = false
 	self._isRunActive = false
@@ -71,6 +71,7 @@ function UnitSelectionController:KnitStart()
 	self._playerInputController = Knit.GetController("PlayerInputController")
 	self._placementCursorController = Knit.GetController("PlacementCursorController")
 	self._runController = Knit.GetController("RunController")
+	self._unitContext = Knit.GetService("UnitContext")
 	self._runAtom = self._runController:GetAtom()
 	self._deps = {
 		selectionAtom = self._selectionAtom,
@@ -80,7 +81,7 @@ function UnitSelectionController:KnitStart()
 		resolveOwnedUnitSelectionFromCharacterClickQuery = self._resolveOwnedUnitSelectionFromCharacterClickQuery,
 		resolveOwnedUnitSelectionQuery = self._resolveOwnedUnitSelectionQuery,
 		resolveOwnedUnitSelectionByUnitGuidsQuery = self._resolveOwnedUnitSelectionByUnitGuidsQuery,
-		unitRemoteClient = self._unitRemoteClient,
+		unitContext = self._unitContext,
 		runtimeService = self._runtimeService,
 		marqueeOverlayService = self._marqueeOverlayService,
 	}
@@ -98,7 +99,10 @@ function UnitSelectionController:KnitStart()
 		local resolvedTarget =
 			self._resolveOwnedUnitSelectionFromCharacterClickQuery:Execute(gestureEvent.MouseSnapshot)
 		if resolvedTarget == nil then
-			self._issueUnitMoveOrderCommand:Execute(self._deps, gestureEvent.MouseSnapshot)
+			local issuedMoveOrderPreview = self._issueUnitMoveOrderCommand:Execute(self._deps, gestureEvent.MouseSnapshot)
+			if issuedMoveOrderPreview ~= nil then
+				self._moveOrderPreviewService:ShowOrder(issuedMoveOrderPreview)
+			end
 			return
 		end
 
@@ -214,7 +218,11 @@ function UnitSelectionController:KnitStart()
 	end
 
 	self:_ApplyRunState(self:_GetCurrentRunState())
-	self._placementCursorController.PlacementModeChanged:Connect(function(_isActive: boolean)
+	self._placementCursorController.PlacementModeChanged:Connect(function(isActive: boolean)
+		if isActive then
+			self._moveOrderPreviewService:Clear()
+		end
+
 		self:_ApplyRunState(self:_GetCurrentRunState())
 	end)
 	self._runStateWatcherConnection = RunService.Heartbeat:Connect(function()
@@ -222,7 +230,6 @@ function UnitSelectionController:KnitStart()
 	end)
 
 	self._runtimeService:Start()
-	self._unitRemoteClient:Start()
 end
 
 function UnitSelectionController:GetAtom(): () -> TUnitSelectionState
@@ -291,6 +298,7 @@ function UnitSelectionController:_ApplyRunState(runState: RunState)
 
 	if wasRunActive and not self._isRunActive then
 		self._clearUnitSelectionCommand:Execute(self._deps)
+		self._moveOrderPreviewService:Clear()
 	end
 
 	self:_RefreshSelectionEnabledState()
@@ -320,6 +328,10 @@ function UnitSelectionController:Destroy()
 
 	if self._marqueeOverlayService ~= nil then
 		self._marqueeOverlayService:Destroy()
+	end
+
+	if self._moveOrderPreviewService ~= nil then
+		self._moveOrderPreviewService:Destroy()
 	end
 end
 

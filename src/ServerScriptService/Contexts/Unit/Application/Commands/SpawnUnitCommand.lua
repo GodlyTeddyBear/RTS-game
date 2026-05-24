@@ -34,7 +34,6 @@ function SpawnUnitCommand:Init(registry: any, _name: string)
 		_instanceFactory = "UnitInstanceFactory",
 		_replicationService = "UnitECSReplicationService",
 		_syncService = "UnitGameObjectSyncService",
-		_combatAdapterService = "UnitCombatAdapterService",
 	})
 end
 
@@ -63,7 +62,6 @@ function SpawnUnitCommand:Execute(request: SpawnUnitRequest): Result.Result<Spaw
 		self._entityFactory:SetModelRef(entity, model)
 		self._replicationService:RegisterUnitEntity(entity)
 		self._syncService:RegisterEntity(entity, model)
-		Try(self._combatAdapterService:RegisterActor(entity))
 
 		local unitHandle = TeamTypes.BuildMemberHandle("Unit", unitGuid)
 		if request.Faction == "Enemy" then

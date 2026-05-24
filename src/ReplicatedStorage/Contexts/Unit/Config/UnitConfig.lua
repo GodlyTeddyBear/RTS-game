@@ -13,7 +13,7 @@ UnitConfig.DEFAULT_UNIT_ID = "AllyGrunt"
 UnitConfig.Definitions = {
 	AllyGrunt = table.freeze({
 		UnitId = "AllyGrunt",
-		RuntimeProfileId = "Idle",
+		RuntimeProfileId = "Builder",
 		Role = "Combat",
 		DisplayName = "Ally Grunt",
 		MaxHp = 100,
@@ -21,6 +21,7 @@ UnitConfig.Definitions = {
 		ModelScale = Vector3.new(2.5, 5, 1.5),
 		ModelColor = Color3.fromRGB(88, 166, 255),
 		MaxConcurrentUnitsPerOwner = 5,
+		MovementMode = "Any",
 	} :: UnitDefinition),
 	Builder = table.freeze({
 		UnitId = "Builder",
@@ -32,6 +33,7 @@ UnitConfig.Definitions = {
 		ModelScale = Vector3.new(3, 5, 2),
 		ModelColor = Color3.fromRGB(255, 196, 92),
 		MaxConcurrentUnitsPerOwner = 3,
+		MovementMode = "Any",
 	} :: UnitDefinition),
 }
 

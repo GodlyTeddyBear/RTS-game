@@ -8,16 +8,30 @@ function UnitServiceProxyResolverFactory.Create(dependencies: {
 	GetRuntimeOwner: (() -> any)?,
 }): any
 	return table.freeze({
-		BuildFacts = function(entity: number): { [string]: any }
-			local pathState = dependencies.UnitEntityFactory:GetPathState(entity)
-			return {
-				HasGoalTarget = pathState ~= nil and pathState.GoalPosition ~= nil,
-			}
-		end,
 		BuildServices = function(entity: number, currentTime: number, tickId: number?): { [string]: any }
+			local unitEntityFactory = dependencies.UnitEntityFactory
 			local services = {
 				CurrentTime = currentTime,
-				UnitEntityFactory = dependencies.UnitEntityFactory,
+				UnitEntityFactory = {
+					ResolveRuntimeEntity = function(_proxy: any, _runtimeId: number): number
+						return entity
+					end,
+					IsActive = function(_proxy: any, _runtimeId: number): boolean
+						return unitEntityFactory:IsActive(entity)
+					end,
+					GetPathState = function(_proxy: any, _runtimeId: number)
+						return unitEntityFactory:GetPathState(entity)
+					end,
+					SetGoalPosition = function(_proxy: any, _runtimeId: number, goalPosition: Vector3)
+						unitEntityFactory:SetGoalPosition(entity, goalPosition)
+					end,
+					ClearGoalPosition = function(_proxy: any, _runtimeId: number)
+						unitEntityFactory:ClearGoalPosition(entity)
+					end,
+					SetPathMoving = function(_proxy: any, _runtimeId: number, isMoving: boolean)
+						unitEntityFactory:SetPathMoving(entity, isMoving)
+					end,
+				},
 			}
 
 			if dependencies.MovementProxyResolver ~= nil then

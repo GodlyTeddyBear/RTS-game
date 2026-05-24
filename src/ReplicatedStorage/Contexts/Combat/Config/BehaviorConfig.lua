@@ -20,6 +20,9 @@ BehaviorConfig.DEFAULTS_BY_ROLE = table.freeze({
 	Tank = table.freeze({
 		TickInterval = 0.2,
 	}),
+	Builder = table.freeze({
+		TickInterval = 0.2,
+	}),
 })
 
 --[=[

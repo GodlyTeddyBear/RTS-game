@@ -131,6 +131,15 @@ local UnitContext = Knit.CreateService({
 		{ Name = "CombatContext" },
 		{ Name = "TeamContext" },
 	},
+	Cache = {
+		World = "_world",
+		UnitComponents = {
+			Field = "_components",
+			From = "UnitComponentRegistry",
+			Method = "GetComponents",
+			Result = false,
+		},
+	},
 	Teardown = {
 		Before = "_BeforeDestroy",
 		Fields = {
@@ -182,7 +191,22 @@ end
 
 function UnitContext:SpawnUnit(request: SpawnUnitRequest): Result.Result<SpawnUnitResult>
 	return Catch(function()
-		return self._spawnUnitCommand:Execute(request)
+		local spawnResult = self._spawnUnitCommand:Execute(request)
+		if not spawnResult.success then
+			return spawnResult
+		end
+
+		local entity = spawnResult.value.Entity
+		local registerResult = self._combatAdapterService:RegisterActor(entity)
+		if not registerResult.success then
+			local cleanupResult = self._despawnUnitCommand:Execute(entity)
+			if not cleanupResult.success then
+				return cleanupResult
+			end
+			return registerResult
+		end
+
+		return spawnResult
 	end, "Unit:SpawnUnit")
 end
 
@@ -226,7 +250,19 @@ function UnitContext:GetEntityFactory(): Result.Result<any>
 	return Ok(self._entityFactory)
 end
 
+function UnitContext:GetWorld(): Result.Result<any>
+	return Ok(self._world)
+end
+
+function UnitContext:GetComponents(): Result.Result<any>
+	return Ok(self._components)
+end
+
 function UnitContext:GetInstanceFactory(): Result.Result<any>
+	return Ok(self._instanceFactory)
+end
+
+function UnitContext:GetModelFactory(): Result.Result<any>
 	return Ok(self._instanceFactory)
 end
 

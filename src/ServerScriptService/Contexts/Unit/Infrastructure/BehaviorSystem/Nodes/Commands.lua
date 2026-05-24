@@ -7,15 +7,17 @@ local AI = require(ServerStorage.Utilities.ContextUtilities.AI)
 local BehaviorSystem = AI.GetBehaviorSystem()
 
 local Commands = {
-	Idle = function()
+	UnitIdle = function()
 		return BehaviorSystem.Helpers.CreateCommandTask(function(task, context)
-			context.ActionFactory:SetPendingAction(context.Entity, "Idle", nil)
+			context.ActionFactory:SetPendingAction(context.Entity, "Unit.Idle", nil)
+
 			task:success()
 		end)
 	end,
-	ManualMove = function()
+	UnitManualMove = function()
 		return BehaviorSystem.Helpers.CreateCommandTask(function(task, context)
-			context.ActionFactory:SetPendingAction(context.Entity, "ManualMove", nil)
+			context.ActionFactory:SetPendingAction(context.Entity, "Unit.ManualMove", nil)
+
 			task:success()
 		end)
 	end,

@@ -10,13 +10,14 @@ setmetatable(IdleExecutor, BaseExecutor)
 
 function IdleExecutor.new()
 	local self = BaseExecutor.new({
-		ActionId = "Idle",
+		ActionId = "Unit.Idle",
 		IsCommitted = false,
 	})
 	return setmetatable(self, IdleExecutor)
 end
 
 function IdleExecutor:OnTick(_entity: number, _dt: number, _services: any): string
+	print("Idling")
 	return self:Running()
 end
 

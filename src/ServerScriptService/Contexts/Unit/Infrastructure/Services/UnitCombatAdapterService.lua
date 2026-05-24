@@ -7,13 +7,17 @@
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
+local AI = require(ServerStorage.Utilities.ContextUtilities.AI)
+local RuntimeFactCache = require(ServerStorage.Utilities.ContextUtilities.RuntimeFactCache)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local UnitConfig = require(ReplicatedStorage.Contexts.Unit.Config.UnitConfig)
 local Nodes = require(script.Parent.Parent.BehaviorSystem.Nodes)
 local Executors = require(script.Parent.Parent.BehaviorSystem.Executors)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 local UnitRuntimeProfiles = require(script.Parent.Parent.Runtime.Profiles.UnitRuntimeProfiles)
+local UnitFactsResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.UnitFactsResolverFactory)
 local UnitMovementProxyResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.UnitMovementProxyResolverFactory)
 local UnitServiceProxyResolverFactory = require(script.Parent.Parent.Runtime.Resolvers.UnitServiceProxyResolverFactory)
 
@@ -21,6 +25,14 @@ type UnitDefinition = UnitTypes.UnitDefinition
 
 local UnitCombatAdapterService = {}
 UnitCombatAdapterService.__index = UnitCombatAdapterService
+
+local UnitSemanticRequirements = table.freeze({
+	FactsDependOnPolling = false,
+	AttributesDependOnProjection = false,
+})
+local FACT_CACHE_REFRESH_INTERVAL_SECONDS = 0.2
+local FACT_GROUP_CACHE_REFRESH_INTERVAL_SECONDS = 1
+local CHEAP_FACT_GROUP_NAVIGATION = "Navigation"
 
 -- ── Public ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +45,8 @@ UnitCombatAdapterService.__index = UnitCombatAdapterService
 function UnitCombatAdapterService.new()
 	local self = setmetatable({}, UnitCombatAdapterService)
 	self._runtimeOwner = nil
+	self._cachedFactsByEntity = {}
+	self._cachedExecutorServicesByEntity = {}
 	return self
 end
 
@@ -63,6 +77,9 @@ function UnitCombatAdapterService:Start(registry: any, _name: string)
 	self._movementProxyResolver = UnitMovementProxyResolverFactory.Create({
 		MovementService = self._combatServices.MovementService,
 	})
+	self._factsResolver = UnitFactsResolverFactory.Create({
+		UnitEntityFactory = self._entityFactory,
+	})
 	self._serviceProxyResolver = UnitServiceProxyResolverFactory.Create({
 		UnitEntityFactory = self._entityFactory,
 		MovementProxyResolver = self._movementProxyResolver,
@@ -79,18 +96,20 @@ end
     @return Result.Result<boolean> -- Whether the actor type registration succeeded.
 ]=]
 function UnitCombatAdapterService:RegisterActorType(): Result.Result<boolean>
-	-- Unit actors use the shared combat contract because they do not need custom facts or executors.
-	return self._combatContext:RegisterActorType({
-		ActorType = "Unit",
-		Conditions = Nodes.Conditions,
-		Commands = Nodes.Commands,
-		Executors = Executors,
-		SemanticRequirements = {
-			FactsDependOnPolling = false,
-			AttributesDependOnProjection = false,
-		},
-		RuntimeOwner = self._runtimeOwner,
-	})
+	return Result.Catch(function()
+		AI.ValidateSemanticContract("Unit", UnitSemanticRequirements, nil, {
+			RuntimeOwner = self._runtimeOwner,
+		})
+
+		return self._combatContext:RegisterActorType({
+			ActorType = "Unit",
+			Conditions = Nodes.Conditions,
+			Commands = Nodes.Commands,
+			Executors = Executors,
+			SemanticRequirements = UnitSemanticRequirements,
+			RuntimeOwner = self._runtimeOwner,
+		})
+	end, "Unit:RegisterActorType")
 end
 
 -- Registers one unit entity as a runtime actor and builds its per-tick adapter hooks.
@@ -124,19 +143,22 @@ function UnitCombatAdapterService:RegisterActor(entity: number): Result.Result<s
 			GetActorLabel = function(): string?
 				return self:_BuildActorHandle(entity)
 			end,
-			-- Units do not contribute combat facts, so the behavior tree receives an empty snapshot.
 			BuildFacts = function(_currentTime: number): { [string]: any }
-				return self._serviceProxyResolver.BuildFacts(entity)
+				return self:_BuildFacts(entity, _currentTime)
 			end,
-			-- Expose the current time, tick id, and factory so the idle behavior can read unit state on demand.
 			BuildServices = function(currentTime: number, tickId: number?): { [string]: any }
-				return self._serviceProxyResolver.BuildServices(entity, currentTime, tickId)
+				return self:_BuildServices(entity, currentTime, tickId)
 			end,
 			OnCancel = function()
 				self._combatServices.MovementService:StopUnitMovement(entity)
 			end,
 			OnRemoved = function()
+				self:_ClearCachedFacts(entity)
+				self:_ClearCachedExecutorServices(entity)
 				self._combatServices.MovementService:StopUnitMovement(entity)
+			end,
+			OnActionStateChanged = function(_actionState: any)
+				self._entityFactory:MarkDirty(entity)
 			end,
 		},
 	})
@@ -150,10 +172,16 @@ end
     @return Result.Result<boolean> -- Whether the actor was removed successfully.
 ]=]
 function UnitCombatAdapterService:UnregisterActor(entity: number): Result.Result<boolean>
+	self:_ClearCachedFacts(entity)
+	self:_ClearCachedExecutorServices(entity)
 	if self._combatServices ~= nil then
 		self._combatServices.MovementService:StopUnitMovement(entity)
 	end
 	return self._combatContext:UnregisterCombatActor(self:_BuildActorHandle(entity))
+end
+
+function UnitCombatAdapterService:GetActorHandle(entity: number): string
+	return self:_BuildActorHandle(entity)
 end
 
 -- Stores the context that owns this adapter so callbacks can resolve back into it.
@@ -175,6 +203,86 @@ function UnitCombatAdapterService:_BuildActorHandle(entity: number): string
 		return "Unit:" .. identity.UnitGuid
 	end
 	return "Unit:" .. tostring(entity)
+end
+
+function UnitCombatAdapterService:_BuildFacts(entity: number, currentTime: number): { [string]: any }
+	self:_RefreshCheapFactGroupDirtiness(entity)
+	return RuntimeFactCache.Resolve(self._cachedFactsByEntity, entity, currentTime, {
+		DefaultCheapFactGroupRefreshIntervalSeconds = FACT_GROUP_CACHE_REFRESH_INTERVAL_SECONDS,
+		RefreshIntervalSeconds = FACT_CACHE_REFRESH_INTERVAL_SECONDS,
+		CheapFactGroups = self._factsResolver.BuildCheapFactGroups(entity),
+		ValidateCachedTarget = function(
+			cachedTargetState: {
+				TargetEntity: number?,
+				TargetKind: string?,
+				TargetPosition: Vector3?,
+			},
+			cheapFacts: { [string]: any }
+		): { TargetEntity: number?, TargetKind: string?, TargetPosition: Vector3? }?
+			return self._factsResolver.ValidateCachedTarget(cachedTargetState, cheapFacts)
+		end,
+		ReacquireTarget = function(
+			cheapFacts: { [string]: any }
+		): { TargetEntity: number?, TargetKind: string?, TargetPosition: Vector3? }?
+			return self._factsResolver.ReacquireTarget(cheapFacts)
+		end,
+		BuildFactSnapshot = function(
+			cheapFacts: { [string]: any },
+			targetState: {
+				TargetEntity: number?,
+				TargetKind: string?,
+				TargetPosition: Vector3?,
+			}
+		): { [string]: any }
+			return self._factsResolver.BuildFactSnapshot(cheapFacts, targetState)
+		end,
+	})
+end
+
+function UnitCombatAdapterService:_BuildServices(
+	entity: number,
+	currentTime: number,
+	tickId: number?
+): { [string]: any }
+	local cachedServices = self:_GetOrCreateCachedExecutorServices(entity)
+	cachedServices.CurrentTime = currentTime
+	cachedServices.TickId = if type(tickId) == "number" then tickId else nil
+	cachedServices.UnitContext = self._runtimeOwner
+	return cachedServices
+end
+
+function UnitCombatAdapterService:_RefreshCheapFactGroupDirtiness(entity: number)
+	local cacheRecord = RuntimeFactCache.GetRecord(self._cachedFactsByEntity, entity)
+	if cacheRecord == nil then
+		return
+	end
+
+	local pathState = self._entityFactory:GetPathState(entity)
+	local hasGoalTarget = pathState ~= nil and pathState.GoalPosition ~= nil
+	local navigationGroup = cacheRecord.CheapFactGroups[CHEAP_FACT_GROUP_NAVIGATION]
+	if navigationGroup ~= nil and navigationGroup.Facts.HasGoalTarget ~= hasGoalTarget then
+		RuntimeFactCache.MarkCheapFactGroupDirty(self._cachedFactsByEntity, entity, CHEAP_FACT_GROUP_NAVIGATION)
+	end
+end
+
+function UnitCombatAdapterService:_ClearCachedFacts(entity: number)
+	RuntimeFactCache.Clear(self._cachedFactsByEntity, entity)
+end
+
+function UnitCombatAdapterService:_ClearCachedExecutorServices(entity: number)
+	self._cachedExecutorServicesByEntity[entity] = nil
+end
+
+function UnitCombatAdapterService:_GetOrCreateCachedExecutorServices(entity: number): { [string]: any }
+	local cachedServices = self._cachedExecutorServicesByEntity[entity]
+	if cachedServices ~= nil then
+		return cachedServices
+	end
+
+	cachedServices = self._serviceProxyResolver.BuildServices(entity, 0, nil)
+	cachedServices.UnitContext = self._runtimeOwner
+	self._cachedExecutorServicesByEntity[entity] = cachedServices
+	return cachedServices
 end
 
 return UnitCombatAdapterService

@@ -4,11 +4,11 @@ local UnitBuilderBehavior = table.freeze({
 	Priority = {
 		{
 			Sequence = {
-				"HasGoalTarget",
-				"ManualMove",
+				"UnitHasGoalTarget",
+				"UnitManualMove",
 			},
 		},
-		"Idle",
+		"UnitIdle",
 	},
 })
 

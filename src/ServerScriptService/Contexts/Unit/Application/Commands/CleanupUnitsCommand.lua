@@ -24,14 +24,8 @@ end
 function CleanupUnitsCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_entityFactory = "UnitEntityFactory",
-		_instanceFactory = "UnitInstanceFactory",
-		_combatAdapterService = "UnitCombatAdapterService",
-		_replicationService = "UnitECSReplicationService",
+		_despawnUnitCommand = "DespawnUnitCommand",
 	})
-end
-
-function CleanupUnitsCommand:Start(registry: any, _name: string)
-	self._teamContext = registry:Get("TeamContext")
 end
 
 function CleanupUnitsCommand:Execute(ownerKind: string?, ownerId: string?): Result.Result<boolean>
@@ -46,17 +40,9 @@ function CleanupUnitsCommand:Execute(ownerKind: string?, ownerId: string?): Resu
 		end
 
 		for _, entity in ipairs(entities) do
-			local identity = self._entityFactory:GetIdentity(entity)
-			if identity ~= nil and type(identity.UnitGuid) == "string" and identity.UnitGuid ~= "" then
-				Try(self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Unit", identity.UnitGuid)))
-			end
-			self._combatAdapterService:UnregisterActor(entity)
-			self._replicationService:UnregisterUnitEntity(entity)
-			self._instanceFactory:DestroyInstance(entity)
-			self._entityFactory:DeleteEntity(entity)
+			Try(self._despawnUnitCommand:Execute(entity))
 		end
 
-		self._entityFactory:FlushPendingDeletes()
 		return Ok(true)
 	end, self:_Label())
 end

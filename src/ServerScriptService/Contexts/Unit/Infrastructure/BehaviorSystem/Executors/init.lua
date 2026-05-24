@@ -8,10 +8,10 @@ local function _GetActionId(moduleName: string): string
 		string.format("Unit executor module '%s' must end with '%s'", moduleName, EXECUTOR_SUFFIX)
 	)
 
-	local actionId = moduleName:sub(1, #moduleName - #EXECUTOR_SUFFIX)
-	assert(actionId ~= "", string.format("Unit executor module '%s' produced an empty action id", moduleName))
+	local baseActionId = moduleName:sub(1, #moduleName - #EXECUTOR_SUFFIX)
+	assert(baseActionId ~= "", string.format("Unit executor module '%s' produced an empty action id", moduleName))
 
-	return actionId
+	return string.format("Unit.%s", baseActionId)
 end
 
 local function _GetExecutorModules(): { ModuleScript }
@@ -20,7 +20,10 @@ local function _GetExecutorModules(): { ModuleScript }
 		if child.Name == "init" then
 			continue
 		end
-		assert(child:IsA("ModuleScript"), string.format("Unit executor child '%s' must be a ModuleScript", child.Name))
+		assert(
+			child:IsA("ModuleScript"),
+			string.format("Unit executor child '%s' must be a ModuleScript", child.Name)
+		)
 		table.insert(executorModules, child)
 	end
 
@@ -53,4 +56,11 @@ local function _BuildActionDefinitions(): { [string]: any }
 	return table.freeze(actionDefinitions)
 end
 
-return _BuildActionDefinitions()
+--[=[
+	@class UnitBehaviorExecutors
+	Discovers and registers the unit behavior executors exposed in this folder.
+	@server
+]=]
+local Executors = _BuildActionDefinitions()
+
+return Executors

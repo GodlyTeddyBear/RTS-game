@@ -6,7 +6,7 @@ local AI = require(ServerStorage.Utilities.ContextUtilities.AI)
 local BehaviorSystem = AI.GetBehaviorSystem()
 
 local Conditions = {
-	HasGoalTarget = function()
+	UnitHasGoalTarget = function()
 		return BehaviorSystem.Helpers.CreateConditionTask(function(task, context)
 			if context.Facts.HasGoalTarget then
 				task:success()

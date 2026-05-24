@@ -12,6 +12,7 @@ export type UnitDefinitionId = string
 export type UnitFaction = "Player" | "Enemy"
 export type UnitOwnerKind = "Player" | "PlayerBase" | "EnemyBase"
 export type UnitRole = "Combat" | "Builder"
+export type UnitMovementMode = "Path" | "Boids" | "Any"
 
 export type UnitDefinition = {
 	UnitId: UnitDefinitionId,
@@ -23,6 +24,7 @@ export type UnitDefinition = {
 	ModelScale: Vector3,
 	ModelColor: Color3,
 	MaxConcurrentUnitsPerOwner: number,
+	MovementMode: UnitMovementMode,
 }
 
 export type SpawnUnitRequest = {

@@ -190,9 +190,33 @@ function UnitEntityFactory:GetAnimationLooping(entity: number): AnimationLooping
 	return self:_Get(entity, self._components.AnimationLoopingComponent)
 end
 
+function UnitEntityFactory:SetAnimationPresentation(entity: number, animationState: string, isLooping: boolean)
+	self:RequireReady()
+
+	local currentAnimationState = self:GetAnimationState(entity)
+	local currentLooping = self:GetAnimationLooping(entity)
+	if currentAnimationState == animationState and currentLooping == isLooping then
+		return
+	end
+
+	self:_Set(entity, self._components.AnimationStateComponent, animationState)
+	self:_Set(entity, self._components.AnimationLoopingComponent, isLooping)
+	self:_Add(entity, self._components.DirtyTag)
+end
+
 function UnitEntityFactory:GetRole(entity: number): RoleComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.RoleComponent)
+end
+
+function UnitEntityFactory:MarkDirty(entity: number)
+	self:RequireReady()
+	self:_Add(entity, self._components.DirtyTag)
+end
+
+function UnitEntityFactory:IsDirty(entity: number): boolean
+	self:RequireReady()
+	return self:_Has(entity, self._components.DirtyTag)
 end
 
 function UnitEntityFactory:GetPathState(entity: number): PathStateComponent?
