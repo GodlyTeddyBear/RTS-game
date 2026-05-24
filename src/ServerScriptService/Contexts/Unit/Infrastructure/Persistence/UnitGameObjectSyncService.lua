@@ -4,12 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
 local BaseGameObjectSyncService = require(ServerStorage.Utilities.ECSUtilities.BaseGameObjectSyncService)
-local UnitConfig = require(ReplicatedStorage.Contexts.Unit.Config.UnitConfig)
-local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
-local UnitRuntimeProfiles = require(script.Parent.Parent.Runtime.Profiles.UnitRuntimeProfiles)
-
-type UnitDefinition = UnitTypes.UnitDefinition
 
 local UnitGameObjectSyncService = {}
 UnitGameObjectSyncService.__index = UnitGameObjectSyncService
@@ -76,20 +71,8 @@ function UnitGameObjectSyncService:_SyncEntity(entity: number, model: Model)
 	end
 
 	self:SetAttributeIfChanged(model, "Active", entityFactory:IsActive(entity))
-	local runtimeProfileId = "Idle"
-	if identity ~= nil then
-		local definition = UnitConfig.Definitions[identity.UnitId] :: UnitDefinition?
-		if definition ~= nil and type(definition.RuntimeProfileId) == "string" and definition.RuntimeProfileId ~= "" then
-			runtimeProfileId = definition.RuntimeProfileId
-		end
-	end
-
-	local animationState, isLooping = UnitRuntimeProfiles.ResolveAnimationState({
-		VariantId = runtimeProfileId,
-		CombatAction = nil,
-	})
-	self:SetAttributeIfChanged(model, "AnimationState", animationState)
-	self:SetAttributeIfChanged(model, "AnimationLooping", isLooping)
+	self:SetAttributeIfChanged(model, "AnimationState", entityFactory:GetAnimationState(entity))
+	self:SetAttributeIfChanged(model, "AnimationLooping", entityFactory:GetAnimationLooping(entity))
 end
 
 return UnitGameObjectSyncService

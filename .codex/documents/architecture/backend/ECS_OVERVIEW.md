@@ -46,7 +46,7 @@ Contexts/
 
 Important placement rule:
 
-- `Infrastructure/ECS/` holds the world service, component registry, entity factory, and ECS systems.
+- `Infrastructure/ECS/` holds the world service, component registry, entity factory, instance factory, and ECS systems.
 - `Infrastructure/Persistence/` holds runtime sync services and ProfileStore persistence services.
 - If a service mutates replicated runtime atoms or syncs ECS state into instances, it belongs in `Infrastructure/Persistence/`, not `Infrastructure/Services/`.
 

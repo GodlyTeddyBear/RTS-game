@@ -50,7 +50,7 @@ Canonical method and architecture references:
 - Add any context-specific error constants to `Errors.lua` when the new entity adds new failure paths.
 - Register new modules in `<Context>Context.lua` so `BaseContext` owns lifecycle and dependency resolution.
 - Keep module placement aligned with the existing context layout:
-  - `Infrastructure/ECS/` for world, components, entity factory, and systems
+  - `Infrastructure/ECS/` for world, components, entity factory, instance factory, and systems
   - `Infrastructure/Persistence/` for sync and persistence bridges
   - `Infrastructure/Services/` for runtime helpers, adapters, and non-persistence services
   - `Infrastructure/Runtime/` for profiles and resolver factories when the entity uses a shared runtime
@@ -193,6 +193,7 @@ ServerScriptService/Contexts/Structure/
       StructureComponentRegistry.lua
       StructureECSWorldService.lua
       StructureEntityFactory.lua
+      StructureInstanceFactory.lua
     Persistence/
       StructureGameObjectSyncService.lua
     Runtime/
@@ -205,7 +206,6 @@ ServerScriptService/Contexts/Structure/
         StructureMiningProxyResolverFactory.lua
         StructureFactoryProxyResolverFactory.lua
     Services/
-      StructureInstanceFactory.lua
       StructureCombatAdapterService.lua
       StructureMiningAdapterService.lua
       StructureTargetingSystem.lua

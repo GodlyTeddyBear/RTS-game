@@ -116,6 +116,7 @@ Contexts/
         PlayerComponentRegistry.lua
         PlayerEntityFactory.lua
         PlayerECSWorldService.lua
+        PlayerInstanceFactory.lua
       Persistence/
         PlayerGameObjectSyncService.lua
       Runtime/
@@ -125,11 +126,11 @@ Contexts/
           PlayerHitTargetResolverFactory.lua
           PlayerProjectileResolverFactory.lua
       Services/
-        PlayerInstanceFactory.lua
         PlayerCombatAdapterService.lua
 ```
 
 `Persistence/` owns projection and polling.
+`ECS/` owns ECS runtime instance-factory placement alongside the rest of the context-owned ECS runtime surface.
 `Services/` owns runtime helpers and adapter wiring.
 `Runtime/Profiles/` owns per-variant runtime selection and animation-state resolution.
 `Runtime/Resolvers/` owns callback tables and hit-resolution helpers.

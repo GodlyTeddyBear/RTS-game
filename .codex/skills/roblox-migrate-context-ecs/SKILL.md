@@ -21,7 +21,7 @@ description: Use when Codex needs to migrate an existing Roblox backend context 
 - `src/ServerScriptService/Contexts/Economy/Infrastructure/Persistence/EconomyPersistenceService.lua` for persistence-boundary expectations.
 - `src/ServerScriptService/Contexts/Commander/Infrastructure/ECS/` for BaseECS inheritance patterns.
 - `src/ServerStorage/Utilities/BaseGameObjectSyncService.lua`, `src/ServerScriptService/Contexts/Enemy/Infrastructure/Persistence/EnemyGameObjectSyncService.lua`, and `src/ServerScriptService/Contexts/Structure/Infrastructure/Persistence/StructureGameObjectSyncService.lua` for game-object sync inheritance patterns.
-- `src/ServerStorage/Utilities/BaseInstanceFactory.lua` and `src/ServerScriptService/Contexts/Enemy/Infrastructure/Services/EnemyInstanceFactory.lua` for runtime instance-factory inheritance patterns.
+- `src/ServerStorage/Utilities/BaseInstanceFactory.lua` and `src/ServerScriptService/Contexts/Enemy/Infrastructure/ECS/EnemyInstanceFactory.lua` for runtime instance-factory inheritance patterns.
 6. Follow `references/migrate-context-ecs.md` for the audit, migration, validation, and response contract.
 
 ---

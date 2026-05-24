@@ -43,7 +43,7 @@ Use this workflow to migrate one existing bounded context and its application, p
 - `src/ServerScriptService/Contexts/Enemy/Infrastructure/Persistence/EnemyGameObjectSyncService.lua`
 - `src/ServerScriptService/Contexts/Structure/Infrastructure/Persistence/StructureGameObjectSyncService.lua`
 - `src/ServerStorage/Utilities/BaseInstanceFactory.lua`
-- `src/ServerScriptService/Contexts/Enemy/Infrastructure/Services/EnemyInstanceFactory.lua`
+- `src/ServerScriptService/Contexts/Enemy/Infrastructure/ECS/EnemyInstanceFactory.lua`
 6. Audit the target context for manual `Registry.new(...)`, `WrapContext(...)`, `_InitModule(...)`, lifecycle ordering, cross-context `Knit.GetService(...)`, signals, persistence loader hooks, scheduler registrations, runtime instance binding tables, direct reveal/tag stamping, direct dependency assignment in commands/queries, ad-hoc profile-path traversal, and `Destroy()` cleanup.
 7. Convert context-owned modules to BaseContext service-table config.
 8. Convert application commands and queries to `BaseApplication`, `BaseCommand`, or `BaseQuery` when they currently duplicate dependency-resolution or game-event-resolution helpers.

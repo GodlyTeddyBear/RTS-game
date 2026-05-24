@@ -18,6 +18,8 @@ function UnitComponentRegistry:_RegisterComponents(_registry: any, _name: string
 	self:RegisterComponent("OwnershipComponent", "Unit.Ownership", "AUTHORITATIVE")
 	self:RegisterComponent("TransformComponent", "Unit.Transform", "AUTHORITATIVE")
 	self:RegisterComponent("HealthComponent", "Unit.Health", "AUTHORITATIVE")
+	self:RegisterComponent("AnimationStateComponent", "Unit.AnimationState", "AUTHORITATIVE")
+	self:RegisterComponent("AnimationLoopingComponent", "Unit.AnimationLooping", "AUTHORITATIVE")
 	self:RegisterComponent("RoleComponent", "Unit.Role", "AUTHORITATIVE")
 	self:RegisterComponent("LifetimeComponent", "Unit.Lifetime", "AUTHORITATIVE")
 	self:RegisterComponent("ModelRefComponent", "Unit.ModelRef", "AUTHORITATIVE")

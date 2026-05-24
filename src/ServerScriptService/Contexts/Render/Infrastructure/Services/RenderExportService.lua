@@ -6,8 +6,9 @@ local Workspace = game:GetService("Workspace")
 
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local RenderExportConfig = require(ReplicatedStorage.Contexts.Render.Config.RenderExportConfig)
-
-local EXPORTED_FOLDER_NAME = "Exported"
+local RenderVisualReplacementConfig =
+	require(ReplicatedStorage.Contexts.Render.Config.RenderVisualReplacementConfig)
+local RenderVisualReplacementBuilder = require(script.Parent.RenderVisualReplacementBuilder)
 
 local RenderExportService = {}
 RenderExportService.__index = RenderExportService
@@ -15,37 +16,45 @@ RenderExportService.__index = RenderExportService
 function RenderExportService.new()
 	local self = setmetatable({}, RenderExportService)
 	self._janitor = Janitor.new()
-	self._exportedFolder = nil
+	self._hiddenFolder = nil
+	self._trueVisualsRoot = nil
+	self._visualReplacementBuilder = RenderVisualReplacementBuilder.new()
 	return self
 end
 
 function RenderExportService:Init(_registry: any, _name: string)
+	self._trueVisualsRoot = self._visualReplacementBuilder:EnsureTrueVisualsRoot()
+	self:_PreprocessConfiguredAssets()
 end
 
 function RenderExportService:Start()
-	self._exportedFolder = self:_EnsureExportedFolder()
-	self:_ExportConfiguredFolders()
+	self._hiddenFolder = self:_EnsureHiddenFolder()
+	self:_HideConfiguredWorkspaceFolders()
 end
 
 function RenderExportService:Destroy()
-	self._exportedFolder = nil
+	self._trueVisualsRoot = nil
+	self._hiddenFolder = nil
 	self._janitor:Destroy()
 end
 
-function RenderExportService:_EnsureExportedFolder(): Folder
-	local exportedFolder = ServerStorage:FindFirstChild(EXPORTED_FOLDER_NAME)
-	if exportedFolder ~= nil then
-		assert(exportedFolder:IsA("Folder"), `RenderExportService: ServerStorage.{EXPORTED_FOLDER_NAME} must be a Folder`)
-		return exportedFolder
+function RenderExportService:_EnsureHiddenFolder(): Folder
+	local hiddenFolder = ServerStorage:FindFirstChild(RenderVisualReplacementConfig.HiddenFolderName)
+	if hiddenFolder ~= nil then
+		assert(
+			hiddenFolder:IsA("Folder"),
+			`RenderExportService: ServerStorage.{RenderVisualReplacementConfig.HiddenFolderName} must be a Folder`
+		)
+		return hiddenFolder
 	end
 
-	exportedFolder = Instance.new("Folder")
-	exportedFolder.Name = EXPORTED_FOLDER_NAME
-	exportedFolder.Parent = ServerStorage
-	return exportedFolder
+	hiddenFolder = Instance.new("Folder")
+	hiddenFolder.Name = RenderVisualReplacementConfig.HiddenFolderName
+	hiddenFolder.Parent = ServerStorage
+	return hiddenFolder
 end
 
-function RenderExportService:_ExportConfiguredFolders()
+function RenderExportService:_HideConfiguredWorkspaceFolders()
 	for _, folderName in ipairs(RenderExportConfig.FolderNames) do
 		local workspaceFolder = Workspace:FindFirstChild(folderName)
 		if workspaceFolder == nil or not workspaceFolder:IsA("Folder") then
@@ -53,25 +62,28 @@ function RenderExportService:_ExportConfiguredFolders()
 			continue
 		end
 
-		local targetName = self:_BuildUniqueExportName(folderName)
-		workspaceFolder.Name = targetName
-		workspaceFolder.Parent = self._exportedFolder
+		local existingHiddenFolder = self._hiddenFolder:FindFirstChild(workspaceFolder.Name)
+		if existingHiddenFolder ~= nil then
+			existingHiddenFolder:Destroy()
+		end
+
+		workspaceFolder.Parent = self._hiddenFolder
 	end
 end
 
-function RenderExportService:_BuildUniqueExportName(baseName: string): string
-	if self._exportedFolder:FindFirstChild(baseName) == nil then
-		return baseName
+function RenderExportService:_PreprocessConfiguredAssets()
+	local assetsRoot = ReplicatedStorage:FindFirstChild(RenderVisualReplacementConfig.SourceAssetsRootName)
+	if assetsRoot == nil or not assetsRoot:IsA("Folder") then
+		warn(
+			`RenderExportService: ReplicatedStorage.{RenderVisualReplacementConfig.SourceAssetsRootName} is missing`
+		)
+		return
 	end
 
-	local suffix = 1
-	while true do
-		local candidateName = `{baseName}_{suffix}`
-		if self._exportedFolder:FindFirstChild(candidateName) == nil then
-			return candidateName
-		end
-		suffix += 1
-	end
+	self._visualReplacementBuilder:PreprocessAssets({
+		AssetsRoot = assetsRoot,
+		TrueVisualsRoot = self._trueVisualsRoot,
+	})
 end
 
 return RenderExportService

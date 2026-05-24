@@ -59,6 +59,9 @@ export type HealthComponent = {
 	MaxHp: number,
 }
 
+export type AnimationStateComponent = string
+export type AnimationLoopingComponent = boolean
+
 export type RoleComponent = {
 	Role: UnitRole,
 	DisplayName: string,

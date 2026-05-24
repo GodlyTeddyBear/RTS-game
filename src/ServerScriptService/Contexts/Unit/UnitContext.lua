@@ -11,8 +11,9 @@ local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 local UnitECSWorldService = require(script.Parent.Infrastructure.ECS.UnitECSWorldService)
 local UnitComponentRegistry = require(script.Parent.Infrastructure.ECS.UnitComponentRegistry)
 local UnitEntityFactory = require(script.Parent.Infrastructure.ECS.UnitEntityFactory)
-local UnitInstanceFactory = require(script.Parent.Infrastructure.Services.UnitInstanceFactory)
+local UnitInstanceFactory = require(script.Parent.Infrastructure.ECS.UnitInstanceFactory)
 local UnitCombatAdapterService = require(script.Parent.Infrastructure.Services.UnitCombatAdapterService)
+local UnitECSReplicationService = require(script.Parent.Infrastructure.Persistence.UnitECSReplicationService)
 local UnitGameObjectSyncService = require(script.Parent.Infrastructure.Persistence.UnitGameObjectSyncService)
 local UnitSpawnPolicy = require(script.Parent.UnitDomain.Policies.UnitSpawnPolicy)
 
@@ -29,6 +30,12 @@ local Catch = Result.Catch
 local Ok = Result.Ok
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "ClientSignals",
+		Factory = function(service: any, _baseContext: any)
+			return service.Client
+		end,
+	},
 	{
 		Name = "UnitComponentRegistry",
 		Module = UnitComponentRegistry,
@@ -47,6 +54,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "UnitCombatAdapterService",
 		Module = UnitCombatAdapterService,
 		CacheAs = "_combatAdapterService",
+	},
+	{
+		Name = "UnitECSReplicationService",
+		Module = UnitECSReplicationService,
+		CacheAs = "_replicationService",
 	},
 	{
 		Name = "UnitGameObjectSyncService",
@@ -98,7 +110,12 @@ local UnitModules: BaseContext.TModuleLayers = {
 
 local UnitContext = Knit.CreateService({
 	Name = "UnitContext",
-	Client = {},
+	Client = {
+		UnitBootstrap = Knit.CreateSignal(),
+		UnitReliable = Knit.CreateSignal(),
+		UnitUnreliable = Knit.CreateSignal(),
+		UnitEntity = Knit.CreateSignal(),
+	},
 	WorldService = {
 		Name = "UnitECSWorldService",
 		Module = UnitECSWorldService,
@@ -127,6 +144,8 @@ end
 function UnitContext:KnitStart()
 	UnitBaseContext:KnitStart()
 	UnitBaseContext:RegisterSyncSystem("_syncService", nil, "UnitSync")
+	UnitBaseContext:RegisterMethodSystem("UnitSync", "_replicationService", "FlushReliable")
+	UnitBaseContext:RegisterMethodSystem("UnitSync", "_replicationService", "FlushUnreliable")
 	self._combatAdapterService:ConfigureRuntimeOwner(self)
 	local registerActorTypeResult = self._combatAdapterService:RegisterActorType()
 	if not registerActorTypeResult.success then
@@ -201,6 +220,10 @@ function UnitContext:GetGameObjectSyncService(): Result.Result<any>
 	return Ok(self._syncService)
 end
 
+function UnitContext:GetReplicationService(): Result.Result<any>
+	return Ok(self._replicationService)
+end
+
 function UnitContext:GetSchedulerBindingStatus(targetField: string): Result.Result<any>
 	return Ok(UnitBaseContext:GetSchedulerBindingStatus(targetField))
 end
@@ -233,6 +256,14 @@ function UnitContext:Destroy()
 			CauseMessage = destroyResult.message,
 		}, destroyResult.type)
 	end
+end
+
+function UnitContext.Client:RequestUnitReplication(player: Player): boolean
+	return self.Server._replicationService:HydratePlayer(player)
+end
+
+function UnitContext.Client:AcknowledgeUnitReplicationBootstrap(player: Player): boolean
+	return self.Server._replicationService:CompleteBootstrap(player)
 end
 
 return UnitContext

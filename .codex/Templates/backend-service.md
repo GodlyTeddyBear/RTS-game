@@ -306,6 +306,8 @@ return <Name>
 
 ## Infrastructure Instance Factory Example
 
+Place ECS-backed `*InstanceFactory` modules under `Infrastructure/ECS/`, not `Infrastructure/Services/`.
+
 ```lua
 --!strict
 

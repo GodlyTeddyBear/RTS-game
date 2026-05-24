@@ -15,6 +15,7 @@ local Workspace = game:GetService("Workspace")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
 local AnimateUnitModule = require(script.Parent.AnimateUnitModule)
+local UnitReplicationClient = require(script.Parent.Infrastructure.Persistence.UnitReplicationClient)
 
 local ANIMATED_UNIT_TAG = "CombatUnit"
 local UNITS_FOLDER_NAME = "Units"
@@ -54,6 +55,7 @@ function UnitAnimationController:KnitInit()
 	self._tagAddedConnection = nil :: RBXScriptConnection?
 	self._tagRemovedConnection = nil :: RBXScriptConnection?
 	self._combatService = nil
+	self._unitReplicationClient = UnitReplicationClient.new()
 end
 
 function UnitAnimationController:_TrackModel(model: Model)
@@ -90,7 +92,7 @@ function UnitAnimationController:_TrackModel(model: Model)
 		})
 	end
 
-	AnimateUnitModule.setup(model, buildContext())
+	AnimateUnitModule.setup(model, buildContext(), self._unitReplicationClient)
 		:andThen(function(cleanup)
 			local tracked = self._tracked[model]
 			if tracked == nil then
@@ -155,6 +157,8 @@ end
 
 function UnitAnimationController:KnitStart()
 	self._combatService = Knit.GetService("CombatContext")
+	self._unitReplicationClient:Init()
+	self._unitReplicationClient:Start()
 
 	self._tagAddedConnection = CollectionService:GetInstanceAddedSignal(ANIMATED_UNIT_TAG):Connect(function(instance)
 		if _IsUnitModel(instance) then
@@ -210,6 +214,11 @@ function UnitAnimationController:Destroy()
 
 	for model in self._tracked do
 		self:_UntrackModel(model)
+	end
+
+	if self._unitReplicationClient ~= nil then
+		self._unitReplicationClient:Destroy()
+		self._unitReplicationClient = nil
 	end
 end
 

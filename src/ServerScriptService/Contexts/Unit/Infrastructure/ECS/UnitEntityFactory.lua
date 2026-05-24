@@ -5,6 +5,7 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local BaseECSEntityFactory = require(ServerStorage.Utilities.ECSUtilities.BaseECSEntityFactory)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
+local UnitRuntimeProfiles = require(script.Parent.Parent.Runtime.Profiles.UnitRuntimeProfiles)
 
 type UnitDefinition = UnitTypes.UnitDefinition
 type SpawnUnitRequest = UnitTypes.SpawnUnitRequest
@@ -12,6 +13,8 @@ type IdentityComponent = UnitTypes.IdentityComponent
 type OwnershipComponent = UnitTypes.OwnershipComponent
 type TransformComponent = UnitTypes.TransformComponent
 type HealthComponent = UnitTypes.HealthComponent
+type AnimationStateComponent = UnitTypes.AnimationStateComponent
+type AnimationLoopingComponent = UnitTypes.AnimationLoopingComponent
 type RoleComponent = UnitTypes.RoleComponent
 type LifetimeComponent = UnitTypes.LifetimeComponent
 
@@ -38,6 +41,8 @@ function UnitEntityFactory:_OnInit(_registry: any, _name: string, _componentRegi
 			and self._components.OwnershipComponent ~= nil
 			and self._components.TransformComponent ~= nil
 			and self._components.HealthComponent ~= nil
+			and self._components.AnimationStateComponent ~= nil
+			and self._components.AnimationLoopingComponent ~= nil
 			and self._components.RoleComponent ~= nil
 			and self._components.LifetimeComponent ~= nil
 			and self._components.ModelRefComponent ~= nil
@@ -72,6 +77,13 @@ function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitReques
 		Hp = definition.MaxHp,
 		MaxHp = definition.MaxHp,
 	} :: HealthComponent)
+
+	local animationState, isLooping = UnitRuntimeProfiles.ResolveAnimationState({
+		VariantId = definition.RuntimeProfileId,
+		CombatAction = nil,
+	})
+	self:_Set(entity, self._components.AnimationStateComponent, animationState :: AnimationStateComponent)
+	self:_Set(entity, self._components.AnimationLoopingComponent, isLooping :: AnimationLoopingComponent)
 
 	self:_Set(entity, self._components.RoleComponent, {
 		Role = definition.Role,
@@ -119,6 +131,16 @@ end
 function UnitEntityFactory:GetHealth(entity: number): HealthComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.HealthComponent)
+end
+
+function UnitEntityFactory:GetAnimationState(entity: number): AnimationStateComponent?
+	self:RequireReady()
+	return self:_Get(entity, self._components.AnimationStateComponent)
+end
+
+function UnitEntityFactory:GetAnimationLooping(entity: number): AnimationLoopingComponent?
+	self:RequireReady()
+	return self:_Get(entity, self._components.AnimationLoopingComponent)
 end
 
 function UnitEntityFactory:GetRole(entity: number): RoleComponent?
