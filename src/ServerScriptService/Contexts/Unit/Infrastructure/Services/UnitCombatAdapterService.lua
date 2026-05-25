@@ -255,8 +255,7 @@ function UnitCombatAdapterService:_RefreshCheapFactGroupDirtiness(entity: number
 		return
 	end
 
-	local pathState = self._entityFactory:GetPathState(entity)
-	local hasGoalTarget = pathState ~= nil and pathState.GoalPosition ~= nil
+	local hasGoalTarget = self._entityFactory:HasActionableGoal(entity)
 	local navigationGroup = cacheRecord.CheapFactGroups[CHEAP_FACT_GROUP_NAVIGATION]
 	if navigationGroup ~= nil and navigationGroup.Facts.HasGoalTarget ~= hasGoalTarget then
 		RuntimeFactCache.MarkCheapFactGroupDirty(self._cachedFactsByEntity, entity, CHEAP_FACT_GROUP_NAVIGATION)

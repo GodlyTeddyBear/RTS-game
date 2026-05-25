@@ -61,18 +61,12 @@ function UnitGameObjectSyncService:_ClearDirty(entity: number)
 	end
 end
 
--- Copies authoritative ECS state onto the live unit model attributes and transform.
+-- Copies authoritative ECS state onto the live unit model attributes.
 function UnitGameObjectSyncService:_SyncEntity(entity: number, model: Model)
 	local entityFactory = self:GetEntityFactoryOrThrow()
-	local identity = entityFactory:GetIdentity(entity)
-	local transform = entityFactory:GetTransform(entity)
 	local health = entityFactory:GetHealth(entity)
 	local role = entityFactory:GetRole(entity)
 	local ownership = entityFactory:GetOwnership(entity)
-
-	if transform ~= nil then
-		ModelPlus.MoveToCFrame(model, transform.CFrame)
-	end
 
 	if health ~= nil then
 		self:SetAttributeIfChanged(model, "Health", health.Hp)
@@ -95,9 +89,9 @@ function UnitGameObjectSyncService:_SyncEntity(entity: number, model: Model)
 	self:SetAttributeIfChanged(model, "AnimationLooping", entityFactory:GetAnimationLooping(entity))
 end
 
--- Polls the model transform back into the entity so direct model movement remains authoritative.
+-- Polls the model transform back into the entity so live model movement remains authoritative.
 function UnitGameObjectSyncService:_PollEntity(entity: number, model: Model)
-	self:GetEntityFactoryOrThrow():SetTransform(entity, ModelPlus.GetPivot(model))
+	self:GetEntityFactoryOrThrow():UpdatePosition(entity, ModelPlus.GetPivot(model))
 end
 
 return UnitGameObjectSyncService

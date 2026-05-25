@@ -20,9 +20,8 @@ function UnitFactsResolverFactory.Create(dependencies: {
 			return {
 				[NAVIGATION_GROUP] = {
 					BuildFacts = function(): { [string]: any }
-						local pathState = dependencies.UnitEntityFactory:GetPathState(entity)
 						return {
-							HasGoalTarget = pathState ~= nil and pathState.GoalPosition ~= nil,
+							HasGoalTarget = dependencies.UnitEntityFactory:HasActionableGoal(entity),
 						}
 					end,
 				},

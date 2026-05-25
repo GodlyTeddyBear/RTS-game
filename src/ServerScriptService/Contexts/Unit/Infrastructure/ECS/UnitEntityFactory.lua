@@ -106,6 +106,8 @@ function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitReques
 	self:_Set(entity, self._components.PathStateComponent, {
 		GoalPosition = nil,
 		RequestedGoalPosition = nil,
+		GoalRevision = 0,
+		FailedGoalRevision = nil,
 		IsMoving = false,
 	} :: PathStateComponent)
 
@@ -162,18 +164,16 @@ function UnitEntityFactory:GetOwnership(entity: number): OwnershipComponent?
 	return self:_Get(entity, self._components.OwnershipComponent)
 end
 
--- Returns the current transform component for the entity.
+-- Returns the current derived transform snapshot for the entity.
 function UnitEntityFactory:GetTransform(entity: number): TransformComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.TransformComponent)
 end
 
--- Updates the authoritative transform and marks the entity dirty for sync.
-function UnitEntityFactory:SetTransform(entity: number, cframe: CFrame)
+-- Updates the derived transform snapshot from the live model position.
+function UnitEntityFactory:UpdatePosition(entity: number, cframe: CFrame)
 	self:RequireReady()
-	self:_Set(entity, self._components.TransformComponent, {
-		CFrame = cframe,
-	} :: TransformComponent)
+	self:SetTransformCFrame(entity, cframe)
 	self:_Add(entity, self._components.DirtyTag)
 end
 
@@ -266,6 +266,17 @@ function UnitEntityFactory:GetPathState(entity: number): PathStateComponent?
 	return self:_Get(entity, self._components.PathStateComponent)
 end
 
+-- Returns whether the unit still has a goal that should be retried by the behavior runtime.
+function UnitEntityFactory:HasActionableGoal(entity: number): boolean
+	self:RequireReady()
+	local state = self:GetPathState(entity)
+	if state == nil or state.GoalPosition == nil then
+		return false
+	end
+
+	return state.FailedGoalRevision ~= state.GoalRevision
+end
+
 -- Sets a new goal position and resets movement state so the behavior system can take over.
 function UnitEntityFactory:SetGoalPosition(entity: number, goalPosition: Vector3, requestedGoalPosition: Vector3?)
 	self:RequireReady()
@@ -277,6 +288,8 @@ function UnitEntityFactory:SetGoalPosition(entity: number, goalPosition: Vector3
 	self:_Set(entity, self._components.PathStateComponent, {
 		GoalPosition = goalPosition,
 		RequestedGoalPosition = if requestedGoalPosition ~= nil then requestedGoalPosition else goalPosition,
+		GoalRevision = state.GoalRevision + 1,
+		FailedGoalRevision = nil,
 		IsMoving = false,
 	} :: PathStateComponent)
 	self:_Add(entity, self._components.DirtyTag)
@@ -293,6 +306,29 @@ function UnitEntityFactory:ClearGoalPosition(entity: number)
 	self:_Set(entity, self._components.PathStateComponent, {
 		GoalPosition = nil,
 		RequestedGoalPosition = nil,
+		GoalRevision = state.GoalRevision,
+		FailedGoalRevision = nil,
+		IsMoving = false,
+	} :: PathStateComponent)
+	self:_Add(entity, self._components.DirtyTag)
+end
+
+-- Marks the current goal revision as failed so the behavior tree stops auto-retrying it.
+function UnitEntityFactory:MarkGoalFailedCurrentRevision(entity: number)
+	self:RequireReady()
+	local state = self:GetPathState(entity)
+	if state == nil or state.GoalPosition == nil then
+		return
+	end
+	if state.FailedGoalRevision == state.GoalRevision then
+		return
+	end
+
+	self:_Set(entity, self._components.PathStateComponent, {
+		GoalPosition = state.GoalPosition,
+		RequestedGoalPosition = state.RequestedGoalPosition,
+		GoalRevision = state.GoalRevision,
+		FailedGoalRevision = state.GoalRevision,
 		IsMoving = false,
 	} :: PathStateComponent)
 	self:_Add(entity, self._components.DirtyTag)
@@ -312,6 +348,8 @@ function UnitEntityFactory:SetPathMoving(entity: number, isMoving: boolean)
 	self:_Set(entity, self._components.PathStateComponent, {
 		GoalPosition = state.GoalPosition,
 		RequestedGoalPosition = state.RequestedGoalPosition,
+		GoalRevision = state.GoalRevision,
+		FailedGoalRevision = state.FailedGoalRevision,
 		IsMoving = isMoving,
 	} :: PathStateComponent)
 	self:_Add(entity, self._components.DirtyTag)

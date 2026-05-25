@@ -69,6 +69,7 @@ function ManualMoveExecutor:OnStart(entity: number, _data: any?, services: any)
 		services.MovementService:StartAdvance(entity, unitDefinition.MovementMode, pathState.GoalPosition)
 	if not started then
 		self:SetEntityValue(entity, START_FAILURE_REASON_KEY, if reason ~= nil then reason else "StartAdvanceFailed")
+		services.UnitEntityFactory:MarkGoalFailedCurrentRevision(entity)
 		services.MovementService:StopMovement(entity)
 		return
 	end
@@ -99,6 +100,8 @@ function ManualMoveExecutor:OnTick(entity: number, _dt: number, services: any): 
 	services.DeltaTime = _dt
 	local isDone, reason = services.MovementService:StepAdvance(entity, services)
 	if reason ~= nil then
+		services.UnitEntityFactory:MarkGoalFailedCurrentRevision(entity)
+		services.MovementService:StopMovement(entity)
 		return self:Fail(entity, reason)
 	end
 	if isDone then

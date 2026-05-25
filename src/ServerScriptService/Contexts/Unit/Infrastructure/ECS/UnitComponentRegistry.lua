@@ -25,7 +25,7 @@ end
 function UnitComponentRegistry:_RegisterComponents(_registry: any, _name: string)
 	self:RegisterComponent("IdentityComponent", "Unit.Identity", "AUTHORITATIVE")
 	self:RegisterComponent("OwnershipComponent", "Unit.Ownership", "AUTHORITATIVE")
-	self:RegisterComponent("TransformComponent", "Unit.Transform", "AUTHORITATIVE")
+	self:RegisterComponent("TransformComponent", "Unit.Transform", "DERIVED")
 	self:RegisterComponent("HealthComponent", "Unit.Health", "AUTHORITATIVE")
 	self:RegisterComponent("BaseMoveSpeedComponent", "Unit.BaseMoveSpeed", "AUTHORITATIVE")
 	self:RegisterComponent("CurrentMoveSpeedComponent", "Unit.CurrentMoveSpeed", "AUTHORITATIVE")

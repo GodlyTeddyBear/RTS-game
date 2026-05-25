@@ -31,6 +31,9 @@ function UnitServiceProxyResolverFactory.Create(dependencies: {
 					GetPathState = function(_proxy: any, _runtimeId: number)
 						return unitEntityFactory:GetPathState(entity)
 					end,
+					HasActionableGoal = function(_proxy: any, _runtimeId: number): boolean
+						return unitEntityFactory:HasActionableGoal(entity)
+					end,
 					GetIdentity = function(_proxy: any, _runtimeId: number)
 						return unitEntityFactory:GetIdentity(entity)
 					end,
@@ -39,6 +42,9 @@ function UnitServiceProxyResolverFactory.Create(dependencies: {
 					end,
 					ClearGoalPosition = function(_proxy: any, _runtimeId: number)
 						unitEntityFactory:ClearGoalPosition(entity)
+					end,
+					MarkGoalFailedCurrentRevision = function(_proxy: any, _runtimeId: number)
+						unitEntityFactory:MarkGoalFailedCurrentRevision(entity)
 					end,
 					SetPathMoving = function(_proxy: any, _runtimeId: number, isMoving: boolean)
 						unitEntityFactory:SetPathMoving(entity, isMoving)
