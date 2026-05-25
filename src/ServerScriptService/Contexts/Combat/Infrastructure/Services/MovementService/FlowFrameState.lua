@@ -9,6 +9,7 @@ local MovementTypes = require(script.Parent.Types)
 
 type TTableRecyclerHandle = TableRecycler.TTableRecyclerHandle
 type TFlowFrameStateHandle = MovementTypes.TFlowFrameStateHandle
+type TMovementActorKey = MovementTypes.TMovementActorKey
 type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
 type TNamedArrayMap = { [string]: { any } }
 
@@ -16,7 +17,7 @@ type TFlowFrameStateInternal = TFlowFrameStateHandle & {
 	_destroyed: boolean,
 	_recycler: TTableRecyclerHandle,
 	_entityCount: number,
-	_entityIds: { number },
+	_entityIds: { TMovementActorKey },
 	_goalGroupId: { number },
 	_flatPositionX: { number },
 	_flatPositionY: { number },
@@ -28,7 +29,7 @@ type TFlowFrameStateInternal = TFlowFrameStateHandle & {
 	_walkSpeed: { number },
 	_velAlpha: { number },
 	_isSettled: { boolean },
-	_snapshotEntityIds: { number },
+	_snapshotEntityIds: { TMovementActorKey },
 	_snapshotGoalGroupId: { number },
 	_snapshotGoalGroupCellRecordStartIndex: { number },
 	_snapshotGoalGroupCellRecordCount: { number },
@@ -434,7 +435,7 @@ function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHand
 		_destroyed = false,
 		_recycler = recycler,
 		_entityCount = 0,
-		_entityIds = namedArrays._entityIds :: { number },
+		_entityIds = namedArrays._entityIds :: { TMovementActorKey },
 		_goalGroupId = namedArrays._goalGroupId :: { number },
 		_flatPositionX = namedArrays._flatPositionX :: { number },
 		_flatPositionY = namedArrays._flatPositionY :: { number },
@@ -446,7 +447,7 @@ function FlowFrameState.new(recycler: TTableRecyclerHandle): TFlowFrameStateHand
 		_walkSpeed = namedArrays._walkSpeed :: { number },
 		_velAlpha = namedArrays._velAlpha :: { number },
 		_isSettled = namedArrays._isSettled :: { boolean },
-		_snapshotEntityIds = namedArrays._snapshotEntityIds :: { number },
+		_snapshotEntityIds = namedArrays._snapshotEntityIds :: { TMovementActorKey },
 		_snapshotGoalGroupId = namedArrays._snapshotGoalGroupId :: { number },
 		_snapshotGoalGroupCellRecordStartIndex = namedArrays._snapshotGoalGroupCellRecordStartIndex :: { number },
 		_snapshotGoalGroupCellRecordCount = namedArrays._snapshotGoalGroupCellRecordCount :: { number },
@@ -548,7 +549,7 @@ end
 ]=]
 function FlowFrameState:AddEntity(
 	goalKey: string,
-	entityId: number,
+	entityId: TMovementActorKey,
 	position: Vector3,
 	flowDirectionXZ: Vector2,
 	walkSpeed: number,
@@ -606,7 +607,7 @@ end
     @param entityIndex number -- Packed snapshot entity index.
     @return number? -- Entity id or `nil` when the index is out of range.
 ]=]
-function FlowFrameState:GetEntityId(entityIndex: number): number?
+function FlowFrameState:GetEntityId(entityIndex: number): TMovementActorKey?
 	return (self :: TFlowFrameStateInternal)._entityIds[entityIndex]
 end
 

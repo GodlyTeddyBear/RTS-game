@@ -70,12 +70,10 @@ end
 ]=]
 function UnitCombatAdapterService:Start(registry: any, _name: string)
 	self._combatContext = registry:Get("CombatContext")
-	self._instanceFactory = registry:Get("UnitInstanceFactory")
 	self._combatServices = self._combatContext:GetCombatRuntimeServices().value
-	self._combatServices.MovementService:ConfigureMovementEntityFactory(self._entityFactory)
-	self._combatServices.MovementService:ConfigureMovementInstanceFactory(self._instanceFactory)
 	self._movementProxyResolver = UnitMovementProxyResolverFactory.Create({
 		MovementService = self._combatServices.MovementService,
+		UnitEntityFactory = self._entityFactory,
 	})
 	self._factsResolver = UnitFactsResolverFactory.Create({
 		UnitEntityFactory = self._entityFactory,
@@ -150,12 +148,12 @@ function UnitCombatAdapterService:RegisterActor(entity: number): Result.Result<s
 				return self:_BuildServices(entity, currentTime, tickId)
 			end,
 			OnCancel = function()
-				self._combatServices.MovementService:StopMovement(entity)
+				self._movementProxyResolver.CreateProxy(entity):StopMovement(0)
 			end,
 			OnRemoved = function()
 				self:_ClearCachedFacts(entity)
 				self:_ClearCachedExecutorServices(entity)
-				self._combatServices.MovementService:StopMovement(entity)
+				self._movementProxyResolver.CreateProxy(entity):StopMovement(0)
 			end,
 			OnActionStateChanged = function(_actionState: any)
 				self._entityFactory:MarkDirty(entity)
@@ -175,7 +173,7 @@ function UnitCombatAdapterService:UnregisterActor(entity: number): Result.Result
 	self:_ClearCachedFacts(entity)
 	self:_ClearCachedExecutorServices(entity)
 	if self._combatServices ~= nil then
-		self._combatServices.MovementService:StopMovement(entity)
+		self._movementProxyResolver.CreateProxy(entity):StopMovement(0)
 	end
 	return self._combatContext:UnregisterCombatActor(self:_BuildActorHandle(entity))
 end

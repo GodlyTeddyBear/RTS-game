@@ -23,7 +23,8 @@ MovementService.__index = MovementService
 type EnemyMovementMode = MovementTypes.EnemyMovementMode
 type TFlowPipelineStateMachineConfig = StateMachine.TStateMachineConfig<TFlowPipelineState>
 type TCombatLoopServiceLike = MovementTypes.TCombatLoopServiceLike
-type TMovementEntityFactoryLike = MovementTypes.TMovementEntityFactoryLike
+type TMovementActorBinding = MovementTypes.TMovementActorBinding
+type TMovementActorKey = MovementTypes.TMovementActorKey
 type TFastFlowGridMapping = MovementTypes.TFastFlowGridMapping
 type TFastFlowPathfinder = MovementTypes.TFastFlowPathfinder
 type TFlowMovementState = MovementTypes.TFlowMovementState
@@ -109,66 +110,68 @@ require(script.FlowMovement)(MovementService)
 ]=]
 function MovementService.new()
 	local self = setmetatable({}, MovementService)
-	self._movementByEntity = {} :: { [number]: TMovementState }
+	self._movementBindingByActorKey = {} :: { [TMovementActorKey]: TMovementActorBinding }
+	self._movementByActorKey = {} :: { [TMovementActorKey]: TMovementState }
 	self._movementTempTableRecycler = nil
 	self._fastFlowPathfinder = nil
 	self._fastFlowMapping = nil
 	self._sharedFlowfieldsByGoalKey = {} :: { [string]: TSharedFlowfieldEntry }
-	self._flowGoalKeyByEntity = {} :: { [number]: string }
-	self._activeFlowEntitiesByGoalKey = {} :: { [string]: { [number]: boolean } }
-	self._flowSettledByEntity = {} :: { [number]: boolean }
-	self._flowActorRefsByEntity = {} :: { [number]: TFlowActorRefs }
-	self._flowVelocityByEntity = {} :: { [number]: Vector2 }
+	self._flowGoalKeyByActorKey = {} :: { [TMovementActorKey]: string }
+	self._activeFlowActorKeysByGoalKey = {} :: { [string]: { [TMovementActorKey]: boolean } }
+	self._flowSettledByActorKey = {} :: { [TMovementActorKey]: boolean }
+	self._flowActorRefsByActorKey = {} :: { [TMovementActorKey]: TFlowActorRefs }
+	self._flowVelocityByActorKey = {} :: { [TMovementActorKey]: Vector2 }
 	self._flowFrameSerial = 0
 	self._flowPipelineStateMachine = _CreateFlowPipelineStateMachine()
 	self._flowPipelineTickId = nil :: number?
-	self._flowInvalidReasonByEntity = {}
-	self._flowRecoveredOpenCellByEntity = {} :: { [number]: Vector2 }
+	self._flowInvalidReasonByActorKey = {}
+	self._flowRecoveredOpenCellByActorKey = {} :: { [TMovementActorKey]: Vector2 }
 	self._flowCurrentSessionUserId = nil :: number?
 	self._flowSeparationParallelRunner = nil
 	self._flowSeparationManagedJob = nil
 	self._flowFrameStateRecycler = nil
 	self._flowFrameState = nil
 	self._flowLatestParallelSolve = nil
-	self._flowReusableGoalKeyByEntity = {} :: { [number]: string }
-	self._flowReusableGoalPositionByEntity = {} :: { [number]: Vector3 }
-	self._flowReusableGoalWorldSampleByEntity = {} :: { [number]: Vector3 }
-	self._flowReusablePositionByEntity = {} :: { [number]: Vector3 }
-	self._flowReusableWalkSpeedByEntity = {} :: { [number]: number }
-	self._flowReusableIsSettledByEntity = {} :: { [number]: boolean }
-	self._flowPublishedVelocityByEntity = {} :: { [number]: Vector2 }
-	self._flowPublishedTouchedSettledNeighborByEntity = {} :: { [number]: boolean }
-	self._flowPublishedGoalKeyByEntity = {} :: { [number]: string }
-	self._flowPublishedGoalPositionByEntity = {} :: { [number]: Vector3 }
-	self._flowPublishedGoalWorldSampleByEntity = {} :: { [number]: Vector3 }
-	self._flowPublishedPositionByEntity = {} :: { [number]: Vector3 }
-	self._flowPublishedWalkSpeedByEntity = {} :: { [number]: number }
-	self._flowPublishedIsSettledByEntity = {} :: { [number]: boolean }
+	self._flowReusableGoalKeyByActorKey = {} :: { [TMovementActorKey]: string }
+	self._flowReusableGoalPositionByActorKey = {} :: { [TMovementActorKey]: Vector3 }
+	self._flowReusableGoalWorldSampleByActorKey = {} :: { [TMovementActorKey]: Vector3 }
+	self._flowReusablePositionByActorKey = {} :: { [TMovementActorKey]: Vector3 }
+	self._flowReusableWalkSpeedByActorKey = {} :: { [TMovementActorKey]: number }
+	self._flowReusableIsSettledByActorKey = {} :: { [TMovementActorKey]: boolean }
+	self._flowPublishedVelocityByActorKey = {} :: { [TMovementActorKey]: Vector2 }
+	self._flowPublishedTouchedSettledNeighborByActorKey = {} :: { [TMovementActorKey]: boolean }
+	self._flowPublishedGoalKeyByActorKey = {} :: { [TMovementActorKey]: string }
+	self._flowPublishedGoalPositionByActorKey = {} :: { [TMovementActorKey]: Vector3 }
+	self._flowPublishedGoalWorldSampleByActorKey = {} :: { [TMovementActorKey]: Vector3 }
+	self._flowPublishedPositionByActorKey = {} :: { [TMovementActorKey]: Vector3 }
+	self._flowPublishedWalkSpeedByActorKey = {} :: { [TMovementActorKey]: number }
+	self._flowPublishedIsSettledByActorKey = {} :: { [TMovementActorKey]: boolean }
 	self._flowRepresentativeStarts = {} :: { Vector3 }
 	self._flowPublishedSolve = {
 		TickId = 0,
-		VelocityByEntity = self._flowPublishedVelocityByEntity,
-		TouchedSettledNeighborByEntity = self._flowPublishedTouchedSettledNeighborByEntity,
-		GoalKeyByEntity = self._flowPublishedGoalKeyByEntity,
+		VelocityByEntity = self._flowPublishedVelocityByActorKey,
+		TouchedSettledNeighborByEntity = self._flowPublishedTouchedSettledNeighborByActorKey,
+		GoalKeyByEntity = self._flowPublishedGoalKeyByActorKey,
 	}
 	self._flowReusableFrameState = {
-		GoalKeyByEntity = self._flowReusableGoalKeyByEntity,
-		GoalPositionByEntity = self._flowReusableGoalPositionByEntity,
-		GoalWorldSampleByEntity = self._flowReusableGoalWorldSampleByEntity,
-		PositionByEntity = self._flowReusablePositionByEntity,
-		WalkSpeedByEntity = self._flowReusableWalkSpeedByEntity,
-		IsSettledByEntity = self._flowReusableIsSettledByEntity,
+		GoalKeyByEntity = self._flowReusableGoalKeyByActorKey,
+		GoalPositionByEntity = self._flowReusableGoalPositionByActorKey,
+		GoalWorldSampleByEntity = self._flowReusableGoalWorldSampleByActorKey,
+		PositionByEntity = self._flowReusablePositionByActorKey,
+		WalkSpeedByEntity = self._flowReusableWalkSpeedByActorKey,
+		IsSettledByEntity = self._flowReusableIsSettledByActorKey,
 	} :: TFlowPublishedFrameState
 	self._flowPublishedFrameState = {
-		GoalKeyByEntity = self._flowPublishedGoalKeyByEntity,
-		GoalPositionByEntity = self._flowPublishedGoalPositionByEntity,
-		GoalWorldSampleByEntity = self._flowPublishedGoalWorldSampleByEntity,
-		PositionByEntity = self._flowPublishedPositionByEntity,
-		WalkSpeedByEntity = self._flowPublishedWalkSpeedByEntity,
-		IsSettledByEntity = self._flowPublishedIsSettledByEntity,
+		GoalKeyByEntity = self._flowPublishedGoalKeyByActorKey,
+		GoalPositionByEntity = self._flowPublishedGoalPositionByActorKey,
+		GoalWorldSampleByEntity = self._flowPublishedGoalWorldSampleByActorKey,
+		PositionByEntity = self._flowPublishedPositionByActorKey,
+		WalkSpeedByEntity = self._flowPublishedWalkSpeedByActorKey,
+		IsSettledByEntity = self._flowPublishedIsSettledByActorKey,
 	} :: TFlowPublishedFrameState
 	self._flowDispatchedSeparationSnapshot = nil
-	self._flowDispatchedGoalKeyByEntity = nil
+	self._flowDispatchedActorKeys = nil :: { TMovementActorKey }?
+	self._flowDispatchedGoalKeyByActorKey = nil
 	self._flowDispatchedFrameState = nil :: TFlowPublishedFrameState?
 	self._flowStaticSharedMemory = nil :: SharedTable?
 	self._flowStaticSharedMemoryHandle = nil :: TSharedCompiledHandle?
@@ -201,17 +204,19 @@ function MovementService:Start()
 	self:_PrimeFlowSeparationParallelRuntime()
 end
 
---[=[
-    Wires the movement entity factory used to read and update movement state.
-    @within MovementService
-    @param movementEntityFactory any -- Entity factory used by movement resolution.
-]=]
-function MovementService:ConfigureMovementEntityFactory(movementEntityFactory: TMovementEntityFactoryLike)
-	self._movementEntityFactory = movementEntityFactory
+function MovementService:_RegisterMovementBinding(binding: TMovementActorBinding): TMovementActorKey
+	local actorKey = binding.ActorKey
+	self._movementBindingByActorKey[actorKey] = binding
+	return actorKey
 end
 
-function MovementService:ConfigureMovementInstanceFactory(movementInstanceFactory: any)
-	self._movementInstanceFactory = movementInstanceFactory
+function MovementService:_GetMovementBinding(actorKey: TMovementActorKey): TMovementActorBinding?
+	return self._movementBindingByActorKey[actorKey]
+end
+
+function MovementService:_GetMovementEntityId(actorKey: TMovementActorKey): number?
+	local binding = self:_GetMovementBinding(actorKey)
+	return if binding ~= nil then binding.EntityId else nil
 end
 
 --[=[
@@ -263,32 +268,33 @@ function MovementService:ResetFastFlowRuntime()
 
 	-- Drop every cached flow goal and published frame buffer.
 	table.clear(self._sharedFlowfieldsByGoalKey)
-	table.clear(self._flowGoalKeyByEntity)
-	table.clear(self._activeFlowEntitiesByGoalKey)
-	table.clear(self._flowSettledByEntity)
-	table.clear(self._flowVelocityByEntity)
-	table.clear(self._flowReusableGoalKeyByEntity)
-	table.clear(self._flowReusableGoalPositionByEntity)
-	table.clear(self._flowReusableGoalWorldSampleByEntity)
-	table.clear(self._flowReusablePositionByEntity)
-	table.clear(self._flowReusableWalkSpeedByEntity)
-	table.clear(self._flowReusableIsSettledByEntity)
-	table.clear(self._flowPublishedVelocityByEntity)
-	table.clear(self._flowPublishedTouchedSettledNeighborByEntity)
-	table.clear(self._flowPublishedGoalKeyByEntity)
-	table.clear(self._flowPublishedGoalPositionByEntity)
-	table.clear(self._flowPublishedGoalWorldSampleByEntity)
-	table.clear(self._flowPublishedPositionByEntity)
-	table.clear(self._flowPublishedWalkSpeedByEntity)
-	table.clear(self._flowPublishedIsSettledByEntity)
+	table.clear(self._flowGoalKeyByActorKey)
+	table.clear(self._activeFlowActorKeysByGoalKey)
+	table.clear(self._flowSettledByActorKey)
+	table.clear(self._flowVelocityByActorKey)
+	table.clear(self._flowReusableGoalKeyByActorKey)
+	table.clear(self._flowReusableGoalPositionByActorKey)
+	table.clear(self._flowReusableGoalWorldSampleByActorKey)
+	table.clear(self._flowReusablePositionByActorKey)
+	table.clear(self._flowReusableWalkSpeedByActorKey)
+	table.clear(self._flowReusableIsSettledByActorKey)
+	table.clear(self._flowPublishedVelocityByActorKey)
+	table.clear(self._flowPublishedTouchedSettledNeighborByActorKey)
+	table.clear(self._flowPublishedGoalKeyByActorKey)
+	table.clear(self._flowPublishedGoalPositionByActorKey)
+	table.clear(self._flowPublishedGoalWorldSampleByActorKey)
+	table.clear(self._flowPublishedPositionByActorKey)
+	table.clear(self._flowPublishedWalkSpeedByActorKey)
+	table.clear(self._flowPublishedIsSettledByActorKey)
 
 	-- Reset the pipeline bookkeeping and invalidate any stuck recovery state.
 	table.clear(self._flowRepresentativeStarts)
 	self._flowPipelineTickId = nil
-	table.clear(self._flowInvalidReasonByEntity)
-	table.clear(self._flowRecoveredOpenCellByEntity)
+	table.clear(self._flowInvalidReasonByActorKey)
+	table.clear(self._flowRecoveredOpenCellByActorKey)
 	self._flowLatestParallelSolve = nil
-	self._flowDispatchedGoalKeyByEntity = nil
+	self._flowDispatchedActorKeys = nil
+	self._flowDispatchedGoalKeyByActorKey = nil
 	self._flowDispatchedFrameState = nil
 	self._flowPreparedWorkerPayload = nil
 	self._flowDispatchPayload = nil
@@ -314,26 +320,27 @@ end
     @return string? -- Failure reason when movement could not start.
 ]=]
 function MovementService:StartAdvance(
-	entity: number,
+	binding: TMovementActorBinding,
 	movementMode: EnemyMovementMode,
 	goalPosition: Vector3?
 ): (boolean, string?)
+	local actorKey = self:_RegisterMovementBinding(binding)
 	-- Clear any previous movement before selecting the next runtime mode.
-	self:StopMovement(entity)
+	self:StopMovement(binding)
 
 	-- Validate caller-provided goal input before selecting the movement runtime.
 	if goalPosition == nil then
 		return false, "MissingGoalPosition"
 	end
 
-	local resolvedMode = self:_ResolveAdvanceMode(movementMode, goalPosition)
+	local resolvedMode = self:_ResolveAdvanceMode(actorKey, movementMode, goalPosition)
 	if not resolvedMode then
 		return false, "InvalidMovementMode"
 	end
 
 	-- Prefer shared-flow movement when the mode and configuration allow it.
 	if resolvedMode == "Flow" then
-		local flowResult = self:_StartFlow(entity, goalPosition)
+		local flowResult = self:_StartFlow(actorKey, goalPosition)
 		if flowResult.success then
 			return true, nil
 		end
@@ -343,7 +350,7 @@ function MovementService:StartAdvance(
 	end
 
 	-- Fall back to path movement when shared flow is unavailable.
-	if self:_StartPath(entity, goalPosition) then
+	if self:_StartPath(actorKey, goalPosition) then
 		return true, nil
 	end
 
@@ -358,18 +365,19 @@ end
     @return boolean -- Whether movement completed for the entity on this step.
     @return string? -- Failure reason when stepping fails.
 ]=]
-function MovementService:StepAdvance(entity: number, services: TFlowSchedulerServices?): (boolean, string?)
+function MovementService:StepAdvance(binding: TMovementActorBinding, services: TFlowSchedulerServices?): (boolean, string?)
+	local actorKey = self:_RegisterMovementBinding(binding)
 	return DebugPlus.profile(STEP_ADVANCE_PROFILE_TAG, function(): (boolean, string?)
-		local movementState = self._movementByEntity[entity]
+		local movementState = self._movementByActorKey[actorKey]
 		if not movementState then
 			return false, "MissingMovementState"
 		end
 
 		if movementState.Mode == "Path" then
 			-- Path movement only needs speed refresh and promise polling.
-			self:_ApplyCurrentMoveSpeed(entity)
+			self:_ApplyCurrentMoveSpeed(actorKey)
 
-			local status, reason = self:_TickPath(entity, movementState)
+			local status, reason = self:_TickPath(actorKey, movementState)
 			if status == "Fail" then
 				return false, reason
 			end
@@ -382,7 +390,7 @@ function MovementService:StepAdvance(entity: number, services: TFlowSchedulerSer
 		-- Flow movement runs through the separation pipeline before the per-entity solve.
 		local flowMovementState = movementState :: TFlowMovementState
 		return DebugPlus.profile(FLOW_STEP_ADVANCE_PROFILE_TAG, function(): (boolean, string?)
-			local stepResult = self:_StepFlowAdvance(entity, flowMovementState, services)
+			local stepResult = self:_StepFlowAdvance(actorKey, flowMovementState, services)
 			if stepResult.success then
 				local outcome = stepResult.value
 				if type(outcome) == "table" then
@@ -403,9 +411,10 @@ end
     @within MovementService
     @param entity number -- Entity id to stop.
 ]=]
-function MovementService:StopMovement(entity: number)
-	local movementState = self._movementByEntity[entity]
-	if not movementState and not self._flowGoalKeyByEntity[entity] then
+function MovementService:StopMovement(binding: TMovementActorBinding)
+	local actorKey = self:_RegisterMovementBinding(binding)
+	local movementState = self._movementByActorKey[actorKey]
+	if not movementState and not self._flowGoalKeyByActorKey[actorKey] then
 		return
 	end
 
@@ -416,11 +425,11 @@ function MovementService:StopMovement(entity: number)
 				promise:cancel()
 			end
 		else
-			self:_StopHumanoid(entity)
+			self:_StopHumanoid(actorKey)
 		end
 	end
 
-	self:_ClearMovementRuntimeState(entity)
+	self:_ClearMovementRuntimeState(actorKey)
 end
 
 --[=[
@@ -431,20 +440,23 @@ function MovementService:CleanupAll()
 	local entities = self:_AcquireMovementTempArray()
 	local success, err = xpcall(function()
 		-- Capture movement entities first so cleanup can mutate the live maps safely.
-		for entityId in self._movementByEntity do
-			table.insert(entities, entityId)
+		for actorKey in self._movementByActorKey do
+			table.insert(entities, actorKey)
 		end
 
 		-- Include entities that only exist in the flow goal map and no longer have movement state.
-		for entityId in self._flowGoalKeyByEntity do
-			if not self._movementByEntity[entityId] then
-				table.insert(entities, entityId)
+		for actorKey in self._flowGoalKeyByActorKey do
+			if not self._movementByActorKey[actorKey] then
+				table.insert(entities, actorKey)
 			end
 		end
 
 		-- Stop each entity through the public API so both path and flow branches unwind correctly.
-		for _, entityId in ipairs(entities) do
-			self:StopMovement(entityId)
+		for _, actorKey in ipairs(entities) do
+			local binding = self:_GetMovementBinding(actorKey)
+			if binding ~= nil then
+				self:StopMovement(binding)
+			end
 		end
 	end, function(message)
 		return debug.traceback(message, 2)
@@ -454,7 +466,8 @@ function MovementService:CleanupAll()
 		error(err, 0)
 	end
 
-	table.clear(self._flowActorRefsByEntity)
+	table.clear(self._flowActorRefsByActorKey)
+	table.clear(self._movementBindingByActorKey)
 	self:ResetFastFlowRuntime()
 end
 
@@ -533,23 +546,26 @@ function MovementService:_ResolveActiveSessionUserId(): number?
 end
 
 -- Clears the runtime movement state for one entity and unwires any live movement-side effects.
-function MovementService:_ClearMovementRuntimeState(entity: number)
-	local currentGoalKey = self._flowGoalKeyByEntity[entity]
-	self:_RemoveEntityFromActiveFlowGoal(entity, currentGoalKey)
-	self._movementByEntity[entity] = nil
-	self._flowVelocityByEntity[entity] = nil
-	self._flowSettledByEntity[entity] = nil
+function MovementService:_ClearMovementRuntimeState(actorKey: TMovementActorKey)
+	local currentGoalKey = self._flowGoalKeyByActorKey[actorKey]
+	self:_RemoveEntityFromActiveFlowGoal(actorKey, currentGoalKey)
+	self._movementByActorKey[actorKey] = nil
+	self._flowVelocityByActorKey[actorKey] = nil
+	self._flowSettledByActorKey[actorKey] = nil
 	self:_DetachSharedFlowfield(currentGoalKey)
-	self._flowGoalKeyByEntity[entity] = nil
-	self._flowInvalidReasonByEntity[entity] = nil
-	self._flowRecoveredOpenCellByEntity[entity] = nil
-	self:_InvalidateFlowActorRefs(entity)
-	local movementEntityFactory = self._movementEntityFactory
-	if movementEntityFactory ~= nil then
-		movementEntityFactory:SetPathMoving(entity, false)
+	self._flowGoalKeyByActorKey[actorKey] = nil
+	self._flowInvalidReasonByActorKey[actorKey] = nil
+	self._flowRecoveredOpenCellByActorKey[actorKey] = nil
+	self:_InvalidateFlowActorRefs(actorKey)
+	local binding = self:_GetMovementBinding(actorKey)
+	if binding ~= nil then
+		binding:SetPathMoving(false)
 	end
 	if self._lockOnService and type(self._lockOnService.SetBoidsFacingFlatForward) == "function" then
-		self._lockOnService:SetBoidsFacingFlatForward(entity, nil)
+		local entityId = self:_GetMovementEntityId(actorKey)
+		if entityId ~= nil then
+			self._lockOnService:SetBoidsFacingFlatForward(entityId, nil)
+		end
 	end
 end
 

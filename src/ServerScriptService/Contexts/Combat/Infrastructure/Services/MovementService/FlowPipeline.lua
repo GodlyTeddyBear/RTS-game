@@ -68,21 +68,22 @@ return function(MovementService: TMovementService)
 	function MovementService:_ReleaseFlowLatestParallelSolve()
 		self._flowLatestParallelSolve = nil
 		self._flowPublishedSolve.TickId = 0
-		table.clear(self._flowPublishedVelocityByEntity)
-		table.clear(self._flowPublishedTouchedSettledNeighborByEntity)
-		table.clear(self._flowPublishedGoalKeyByEntity)
-		table.clear(self._flowPublishedGoalPositionByEntity)
-		table.clear(self._flowPublishedGoalWorldSampleByEntity)
-		table.clear(self._flowPublishedPositionByEntity)
-		table.clear(self._flowPublishedWalkSpeedByEntity)
-		table.clear(self._flowPublishedIsSettledByEntity)
+		table.clear(self._flowPublishedVelocityByActorKey)
+		table.clear(self._flowPublishedTouchedSettledNeighborByActorKey)
+		table.clear(self._flowPublishedGoalKeyByActorKey)
+		table.clear(self._flowPublishedGoalPositionByActorKey)
+		table.clear(self._flowPublishedGoalWorldSampleByActorKey)
+		table.clear(self._flowPublishedPositionByActorKey)
+		table.clear(self._flowPublishedWalkSpeedByActorKey)
+		table.clear(self._flowPublishedIsSettledByActorKey)
 	end
 
 	-- Clears the dispatched flow snapshot, staged payload, and per-entity goal caches.
 	function MovementService:_ReleaseFlowDispatchedSeparationSnapshot()
 		self:_ReleaseFlowDispatchPayload()
 		self._flowDispatchedSeparationSnapshot = nil
-		self._flowDispatchedGoalKeyByEntity = nil
+		self._flowDispatchedActorKeys = nil
+		self._flowDispatchedGoalKeyByActorKey = nil
 		self._flowDispatchedFrameState = nil
 	end
 
@@ -366,16 +367,16 @@ return function(MovementService: TMovementService)
 
 		-- Validate that the completed result matches the snapshot we dispatched earlier.
 		local payload = managedResult.Payload :: TFlowSeparationDispatchPayload?
-		local entityIds = payload and payload.EntityIds
-		local goalKeyByEntity = self._flowDispatchedGoalKeyByEntity
+		local actorKeys = payload and payload.ActorKeys
+		local goalKeyByEntity = self._flowDispatchedGoalKeyByActorKey
 		local frameState = self._flowDispatchedFrameState :: TFlowPublishedFrameState?
 		local payloadMatchesDispatched = payload ~= nil and payload == self._flowDispatchPayload
-		local hasEntityIds = entityIds ~= nil
+		local hasActorKeys = actorKeys ~= nil
 		local hasGoalKeyByEntity = goalKeyByEntity ~= nil
 		local hasFrameState = frameState ~= nil
 		if
 			not payloadMatchesDispatched
-			or not hasEntityIds
+			or not hasActorKeys
 			or not hasGoalKeyByEntity
 			or not hasFrameState
 		then
@@ -385,7 +386,7 @@ return function(MovementService: TMovementService)
 				Errors.MOVEMENT_PARALLEL_RESULT_FAILED,
 				_BuildConsumeErrorData("Payload", {
 					PayloadMatchesDispatched = payloadMatchesDispatched,
-					HasEntityIds = hasEntityIds,
+					HasActorKeys = hasActorKeys,
 					HasGoalKeyByEntity = hasGoalKeyByEntity,
 					HasFrameState = hasFrameState,
 				})
@@ -393,18 +394,18 @@ return function(MovementService: TMovementService)
 		end
 
 		local resolvedPayload = payload :: TFlowSeparationDispatchPayload
-		local resolvedEntityIds = entityIds :: { number }
-		local resolvedGoalKeyByEntity = goalKeyByEntity :: { [number]: string }
+		local resolvedActorKeys = actorKeys :: { string }
+		local resolvedGoalKeyByEntity = goalKeyByEntity :: { [string]: string }
 		local resolvedFrameState = frameState :: TFlowPublishedFrameState
 
 		-- Publish the solve outputs into the reusable frame caches.
 		self:_ReleaseFlowLatestParallelSolve()
 
 		local velocityByEntity = self:_ApplyFlowVelocityRows(
-			resolvedEntityIds,
+			resolvedActorKeys,
 			managedResult.Rows :: { TFlowSeparationSolveRow },
-			self._flowPublishedVelocityByEntity,
-			self._flowPublishedTouchedSettledNeighborByEntity
+			self._flowPublishedVelocityByActorKey,
+			self._flowPublishedTouchedSettledNeighborByActorKey
 		)
 		local publishedVelocityCount = _CountEntries(velocityByEntity)
 		if publishedVelocityCount == 0 then
@@ -422,37 +423,37 @@ return function(MovementService: TMovementService)
 		end
 
 		-- Copy the per-entity goal, position, and settle state into published tables.
-		local publishedGoalKeyByEntity = self._flowPublishedGoalKeyByEntity
+		local publishedGoalKeyByEntity = self._flowPublishedGoalKeyByActorKey
 		table.clear(publishedGoalKeyByEntity)
 		for entityId, goalKey in resolvedGoalKeyByEntity do
 			publishedGoalKeyByEntity[entityId] = goalKey
 		end
 
-		local publishedGoalPositionByEntity = self._flowPublishedGoalPositionByEntity
+		local publishedGoalPositionByEntity = self._flowPublishedGoalPositionByActorKey
 		table.clear(publishedGoalPositionByEntity)
 		for entityId, goalPosition in resolvedFrameState.GoalPositionByEntity do
 			publishedGoalPositionByEntity[entityId] = goalPosition
 		end
 
-		local publishedGoalWorldSampleByEntity = self._flowPublishedGoalWorldSampleByEntity
+		local publishedGoalWorldSampleByEntity = self._flowPublishedGoalWorldSampleByActorKey
 		table.clear(publishedGoalWorldSampleByEntity)
 		for entityId, goalWorldSample in resolvedFrameState.GoalWorldSampleByEntity do
 			publishedGoalWorldSampleByEntity[entityId] = goalWorldSample
 		end
 
-		local publishedPositionByEntity = self._flowPublishedPositionByEntity
+		local publishedPositionByEntity = self._flowPublishedPositionByActorKey
 		table.clear(publishedPositionByEntity)
 		for entityId, position in resolvedFrameState.PositionByEntity do
 			publishedPositionByEntity[entityId] = position
 		end
 
-		local publishedWalkSpeedByEntity = self._flowPublishedWalkSpeedByEntity
+		local publishedWalkSpeedByEntity = self._flowPublishedWalkSpeedByActorKey
 		table.clear(publishedWalkSpeedByEntity)
 		for entityId, walkSpeed in resolvedFrameState.WalkSpeedByEntity do
 			publishedWalkSpeedByEntity[entityId] = walkSpeed
 		end
 
-		local publishedIsSettledByEntity = self._flowPublishedIsSettledByEntity
+		local publishedIsSettledByEntity = self._flowPublishedIsSettledByActorKey
 		table.clear(publishedIsSettledByEntity)
 		for entityId, isSettled in resolvedFrameState.IsSettledByEntity do
 			if isSettled then
@@ -477,7 +478,7 @@ return function(MovementService: TMovementService)
 			closeTryDispatchProfile()
 			return Ok(false)
 		end
-		if #payload.EntityIds < self:_GetFlowVelocityParallelMinEntityCount() then
+		if #payload.ActorKeys < self:_GetFlowVelocityParallelMinEntityCount() then
 			closeTryDispatchProfile()
 			return Ok(false)
 		end
@@ -556,17 +557,18 @@ return function(MovementService: TMovementService)
 				-- Build a new dispatch snapshot before handing work to the parallel runner.
 				local closeBuildSnapshotProfile =
 					DebugPlus.begin(PIPELINE_BUILDING_SNAPSHOT_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
-				local snapshot, goalKeyByEntity, frameState =
+				local snapshot, goalKeyByEntity, frameState, actorKeys =
 					self:_BuildFlowDispatchManagerPayload(tickId, self:_ResolveFlowDeltaTime(services))
 				closeBuildSnapshotProfile()
-				if not snapshot or not goalKeyByEntity or not frameState then
+				if not snapshot or not goalKeyByEntity or not frameState or not actorKeys then
 					_TransitionFlowPipeline(self, "Idle")
 					return
 				end
 
 				self:_ReleaseFlowDispatchedSeparationSnapshot()
 				self._flowDispatchedSeparationSnapshot = snapshot
-				self._flowDispatchedGoalKeyByEntity = goalKeyByEntity
+				self._flowDispatchedActorKeys = actorKeys
+				self._flowDispatchedGoalKeyByActorKey = goalKeyByEntity
 				self._flowDispatchedFrameState = frameState
 
 				_TransitionFlowPipeline(self, "PreparingSharedPacket")
@@ -608,13 +610,19 @@ return function(MovementService: TMovementService)
 				end
 
 				local managerPayload = snapshot :: TFlowSeparationManagerPayload
+				local actorKeys = self._flowDispatchedActorKeys
+				if not actorKeys then
+					self:_ReleaseFlowDispatchedSeparationSnapshot()
+					_TransitionFlowPipeline(self, "Idle")
+					return
+				end
 
 				local closePrepareRunRequestProfile =
 					DebugPlus.begin(PIPELINE_PREPARING_RUN_REQUEST_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 				local runRequest = self:_CreateFlowSeparationManagerRunRequest(managerPayload)
 				self._flowDispatchPayload =
 					self:_AssembleFlowSeparationDispatchPayload(
-						managerPayload.EntityIds,
+						actorKeys,
 						nil,
 						managerPayload,
 						runRequest

@@ -13,6 +13,7 @@ local MovementTypes = require(script.Parent.Types)
 local Errors = require(script.Parent.Parent.Parent.Parent.Errors)
 
 type TFlowSchedulerServices = MovementTypes.TFlowSchedulerServices
+type TMovementActorKey = MovementTypes.TMovementActorKey
 type TMovementService = MovementTypes.TMovementService
 type TFlowMovementState = MovementTypes.TFlowMovementState
 type TFlowPublishedFrameState = MovementTypes.TFlowPublishedFrameState
@@ -60,8 +61,8 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 	end
 
 	-- Returns the agent radius used by flow movement for one entity.
-	function MovementService:_GetFlowAgentRadiusStuds(entity: number): number
-		local agentParams = self:_GetAgentParams(entity)
+	function MovementService:_GetFlowAgentRadiusStuds(actorKey: TMovementActorKey): number
+		local agentParams = self:_GetAgentParams(actorKey)
 		local radius = agentParams.AgentRadius
 		if type(radius) == "number" and radius > 0 then
 			return radius
@@ -70,9 +71,9 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 	end
 
 	-- Starts flow movement for one entity and initializes its flow runtime state.
-	function MovementService:_StartFlow(entity: number, goalPosition: Vector3): Result.Result<boolean>
+	function MovementService:_StartFlow(actorKey: TMovementActorKey, goalPosition: Vector3): Result.Result<boolean>
 		-- Attach the entity to the shared flow goal before writing any runtime state.
-		local flowGoalResult = self:_AttachEntityToFlowGoal(entity, goalPosition, false, false)
+		local flowGoalResult = self:_AttachEntityToFlowGoal(actorKey, goalPosition, false, false)
 		if not flowGoalResult.success then
 			return flowGoalResult
 		end
@@ -90,13 +91,13 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 			RecoveryOpenCell = nil,
 			RecoveryMode = "None",
 		}
-		self._movementByEntity[entity] = movementState
-		self:_RefreshActiveFlowGoalMembership(entity, nil)
-		self._flowVelocityByEntity[entity] = Vector2.zero
+		self._movementByActorKey[actorKey] = movementState
+		self:_RefreshActiveFlowGoalMembership(actorKey, nil)
+		self._flowVelocityByActorKey[actorKey] = Vector2.zero
 
 		-- Prime actor references and capture an escape target if the entity spawned in a bad cell.
-		local rootPart = self:_GetEntityRootPart(entity)
-		self:_GetHumanoid(entity)
+		local rootPart = self:_GetEntityRootPart(actorKey)
+		self:_GetHumanoid(actorKey)
 		if rootPart then
 			local cellState, _, pathfinder, mapping = self:_ClassifyFlowCellState(rootPart.Position)
 			if self:_IsFlowCellStateInvalid(cellState) and pathfinder and mapping then
@@ -106,21 +107,22 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 					mapping
 				)
 				if openCell then
-					self:_SetLatchedInvalidCellEscape(entity, movementState, openCell, mapping, rootPart.Position.Y)
+					self:_SetLatchedInvalidCellEscape(actorKey, movementState, openCell, mapping, rootPart.Position.Y)
 				end
 			end
 		end
 
 		-- Mark the entity as path-moving only after the runtime state is fully initialized.
-		if self._movementEntityFactory ~= nil then
-			self._movementEntityFactory:SetPathMoving(entity, true)
+		local binding = self:_GetMovementBinding(actorKey)
+		if binding ~= nil then
+			binding:SetPathMoving(true)
 		end
 		return Ok(true)
 	end
 
 	-- Updates the stored flow goal when the target position changes.
 	function MovementService:_HandleFlowGoalChange(
-		entity: number,
+		actorKey: TMovementActorKey,
 		movementState: TFlowMovementState,
 		goalPosition: Vector3
 	): Result.Result<nil>
@@ -128,7 +130,7 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 			return Ok(nil)
 		end
 
-		local flowGoalResult = self:_AttachEntityToFlowGoal(entity, goalPosition, true, false)
+		local flowGoalResult = self:_AttachEntityToFlowGoal(actorKey, goalPosition, true, false)
 		if not flowGoalResult.success then
 			return flowGoalResult
 		end
@@ -139,8 +141,8 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		movementState.GoalSnapshot = goalPosition
 		movementState.GoalKey = goalKey
 		movementState.GoalWorldSample = goalWorldSample
-		self:_ClearFlowRecoveryState(entity, movementState)
-		self._flowVelocityByEntity[entity] = Vector2.zero
+		self:_ClearFlowRecoveryState(actorKey, movementState)
+		self._flowVelocityByActorKey[actorKey] = Vector2.zero
 		return Ok(nil)
 	end
 
@@ -230,7 +232,7 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 
 	-- Rebuilds flow inputs after recovery from a blocked or invalid cell.
 	function MovementService:_BuildRecoveredFlowAdvanceInput(
-		entity: number,
+		actorKey: TMovementActorKey,
 		movementState: TFlowMovementState,
 		goalPosition: Vector3,
 		position: Vector3,
@@ -241,7 +243,7 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		"Recovered" | "RetryLater" | "Fatal",
 		string?
 	)
-		local repairedDirectionResult = self:_RepairFlowDirectionXZ(entity, movementState, goalPosition, position)
+		local repairedDirectionResult = self:_RepairFlowDirectionXZ(actorKey, movementState, goalPosition, position)
 		if not repairedDirectionResult.success then
 			return nil, nil, "Fatal", repairedDirectionResult.type
 		end
@@ -269,7 +271,7 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 
 	-- Continues the latched invalid-cell escape without waiting for a new solve.
 	function MovementService:_TryContinueLatchedEscapeWithoutSolve(
-		entity: number,
+		actorKey: TMovementActorKey,
 		movementState: TFlowMovementState,
 		_reason: string
 	): boolean
@@ -277,12 +279,12 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 			return false
 		end
 
-		local position = self:_GetEntityPosition(entity)
+		local position = self:_GetEntityPosition(actorKey)
 		if not position then
 			return false
 		end
 
-		if self:_TryClearLatchedInvalidCellEscape(entity, movementState, position) then
+		if self:_TryClearLatchedInvalidCellEscape(actorKey, movementState, position) then
 			return false
 		end
 
@@ -291,24 +293,25 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 			return false
 		end
 
-		local walkSpeed = self:_ApplyCurrentMoveSpeed(entity)
+		local walkSpeed = self:_ApplyCurrentMoveSpeed(actorKey)
 		local flatDelta = Vector2.new(recoveryMoveTarget.X - position.X, recoveryMoveTarget.Z - position.Z)
 		local velocityXZ = flatDelta.Magnitude > 0 and flatDelta.Unit * walkSpeed or Vector2.zero
 		local sanitizedTarget = self:_SanitizeFlowMoveTarget(recoveryMoveTarget)
-		self._flowVelocityByEntity[entity] = velocityXZ
-		self:_IssueHumanoidMoveTo(entity, sanitizedTarget, velocityXZ)
-		if self._movementEntityFactory ~= nil then
-			self._movementEntityFactory:SetPathMoving(entity, sanitizedTarget ~= nil)
+		self._flowVelocityByActorKey[actorKey] = velocityXZ
+		self:_IssueHumanoidMoveTo(actorKey, sanitizedTarget, velocityXZ)
+		local binding = self:_GetMovementBinding(actorKey)
+		if binding ~= nil then
+			binding:SetPathMoving(sanitizedTarget ~= nil)
 		end
 		return true
 	end
 
 	-- Repairs shared-flow membership when the current goal key no longer matches the snapshot.
 	function MovementService:_TryRepairFlowGoalMembership(
-		entity: number,
+		actorKey: TMovementActorKey,
 		movementState: TFlowMovementState
 	): (boolean, string?)
-		local repairedGoalResult = self:_AttachEntityToFlowGoal(entity, movementState.GoalSnapshot, false, false)
+		local repairedGoalResult = self:_AttachEntityToFlowGoal(actorKey, movementState.GoalSnapshot, false, false)
 		if not repairedGoalResult.success then
 			return false, repairedGoalResult.type
 		end
@@ -323,7 +326,7 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 
 	-- Advances one entity through the flow pipeline and applies the solved movement output.
 	function MovementService:_StepFlowAdvance(
-		entity: number,
+		actorKey: TMovementActorKey,
 		movementState: TFlowMovementState,
 		services: TFlowSchedulerServices?
 	): Result.Result<MovementTypes.TFlowAdvanceStepResult>
@@ -331,16 +334,19 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		self:_AdvanceFlowPipeline(services)
 
 		-- Stop immediately when the pipeline has already marked the entity invalid.
-		local invalidReason = self._flowInvalidReasonByEntity[entity]
+		local invalidReason = self._flowInvalidReasonByActorKey[actorKey]
 		if invalidReason then
-			self:StopMovement(entity)
+			local binding = self:_GetMovementBinding(actorKey)
+			if binding ~= nil then
+				self:StopMovement(binding)
+			end
 			return Err(invalidReason, Errors.MOVEMENT_FLOW_RECOVER_FAILED)
 		end
 
 		-- If no solve is available yet, keep any latched escape moving and retry next tick.
 		local latestParallelSolve = Option.Wrap(self._flowLatestParallelSolve :: TFlowPublishedSolve?):UnwrapOr(nil)
 		if not latestParallelSolve then
-			if self:_TryContinueLatchedEscapeWithoutSolve(entity, movementState, "MissingLatestParallelSolve") then
+			if self:_TryContinueLatchedEscapeWithoutSolve(actorKey, movementState, "MissingLatestParallelSolve") then
 				return Ok({
 					IsDone = false,
 				})
@@ -351,7 +357,7 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		-- Read the published frame-state inputs for the current entity.
 		local frameState = Option.Wrap(self._flowPublishedFrameState :: TFlowPublishedFrameState?):UnwrapOr(nil)
 		if not frameState then
-			if self:_TryContinueLatchedEscapeWithoutSolve(entity, movementState, "MissingPublishedFrameState") then
+			if self:_TryContinueLatchedEscapeWithoutSolve(actorKey, movementState, "MissingPublishedFrameState") then
 				return Ok({
 					IsDone = false,
 				})
@@ -360,15 +366,15 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		end
 
 		-- Reject stale solve data when the published goal no longer matches the cached flow goal.
-		local goalKey = frameState.GoalKeyByEntity[entity]
-		local publishedGoalKey = latestParallelSolve.GoalKeyByEntity[entity]
+		local goalKey = frameState.GoalKeyByEntity[actorKey]
+		local publishedGoalKey = latestParallelSolve.GoalKeyByEntity[actorKey]
 		if not goalKey or not publishedGoalKey or publishedGoalKey ~= goalKey then
-			if self:_TryContinueLatchedEscapeWithoutSolve(entity, movementState, "GoalKeyMismatch") then
+			if self:_TryContinueLatchedEscapeWithoutSolve(actorKey, movementState, "GoalKeyMismatch") then
 				return Ok({
 					IsDone = false,
 				})
 			end
-			local repairedMembership, repairedReason = self:_TryRepairFlowGoalMembership(entity, movementState)
+			local repairedMembership, repairedReason = self:_TryRepairFlowGoalMembership(actorKey, movementState)
 			if repairedMembership then
 				return Ok({
 					IsDone = false,
@@ -381,12 +387,12 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		end
 
 		-- Collect the published movement inputs that were built during the dispatch snapshot.
-		local goalPosition = frameState.GoalPositionByEntity[entity]
-		local goalWorldSample = frameState.GoalWorldSampleByEntity[entity]
-		local position = frameState.PositionByEntity[entity]
-		local walkSpeed = frameState.WalkSpeedByEntity[entity]
+		local goalPosition = frameState.GoalPositionByEntity[actorKey]
+		local goalWorldSample = frameState.GoalWorldSampleByEntity[actorKey]
+		local position = frameState.PositionByEntity[actorKey]
+		local walkSpeed = frameState.WalkSpeedByEntity[actorKey]
 		if not goalPosition or not goalWorldSample or not position or not walkSpeed then
-			if self:_TryContinueLatchedEscapeWithoutSolve(entity, movementState, "MissingPublishedFlowInputs") then
+			if self:_TryContinueLatchedEscapeWithoutSolve(actorKey, movementState, "MissingPublishedFlowInputs") then
 				return Ok({
 					IsDone = false,
 				})
@@ -394,12 +400,12 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 			return Err("MissingPublishedFlowInputs", Errors.MOVEMENT_MISSING_PUBLISHED_INPUTS)
 		end
 
-		self:_TryClearLatchedInvalidCellEscape(entity, movementState, position)
+		self:_TryClearLatchedInvalidCellEscape(actorKey, movementState, position)
 
 		-- Read the solved flow velocity for the current entity from the latest parallel result.
-		local velocityXZ = latestParallelSolve.VelocityByEntity[entity]
+		local velocityXZ = latestParallelSolve.VelocityByEntity[actorKey]
 		if not velocityXZ then
-			if self:_TryContinueLatchedEscapeWithoutSolve(entity, movementState, "MissingPublishedVelocity") then
+			if self:_TryContinueLatchedEscapeWithoutSolve(actorKey, movementState, "MissingPublishedVelocity") then
 				return Ok({
 					IsDone = false,
 				})
@@ -413,9 +419,9 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 			goalWorldSample,
 			position,
 			walkSpeed,
-			frameState.IsSettledByEntity[entity] == true,
+			frameState.IsSettledByEntity[actorKey] == true,
 			velocityXZ,
-			latestParallelSolve.TouchedSettledNeighborByEntity[entity] == true
+			latestParallelSolve.TouchedSettledNeighborByEntity[actorKey] == true
 		)
 
 		if movementState.RecoveryMode == "EscapingInvalidCell" then
@@ -430,12 +436,13 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 
 		-- Clear movement when the entity has arrived at the goal.
 		if didArrive then
-			self._flowVelocityByEntity[entity] = Vector2.zero
-			self._flowSettledByEntity[entity] = nil
-			self:_ClearFlowRecoveryState(entity, movementState)
-			self:_StopHumanoid(entity)
-			if self._movementEntityFactory ~= nil then
-				self._movementEntityFactory:SetPathMoving(entity, false)
+			self._flowVelocityByActorKey[actorKey] = Vector2.zero
+			self._flowSettledByActorKey[actorKey] = nil
+			self:_ClearFlowRecoveryState(actorKey, movementState)
+			self:_StopHumanoid(actorKey)
+			local binding = self:_GetMovementBinding(actorKey)
+			if binding ~= nil then
+				binding:SetPathMoving(false)
 			end
 			return Ok({
 				IsDone = true,
@@ -447,25 +454,29 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		local isStalled =
 			self:_IsFlowAdvanceStalled(goalPosition, goalWorldSample, position, solvedVelocityXZ, moveTarget)
 		if mustRecoverInvalidCell or isStalled then
-			if frameState.IsSettledByEntity[entity] then
-				self._flowSettledByEntity[entity] = nil
-				self:_RefreshActiveFlowGoalMembership(entity, nil)
+			if frameState.IsSettledByEntity[actorKey] then
+				self._flowSettledByActorKey[actorKey] = nil
+				self:_RefreshActiveFlowGoalMembership(actorKey, nil)
 			end
 
 			local recoveredVelocityXZ, recoveredMoveTarget, recoveryStatus, recoveryReason =
-				self:_BuildRecoveredFlowAdvanceInput(entity, movementState, goalPosition, position, walkSpeed)
+				self:_BuildRecoveredFlowAdvanceInput(actorKey, movementState, goalPosition, position, walkSpeed)
 			if recoveryStatus == "Fatal" then
-				self:StopMovement(entity)
+				local binding = self:_GetMovementBinding(actorKey)
+				if binding ~= nil then
+					self:StopMovement(binding)
+				end
 				return Err(
 					if recoveryReason then recoveryReason else "FastFlowRecoverFailed",
 					Errors.MOVEMENT_FLOW_RECOVER_FAILED
 				)
 			end
 			if recoveryStatus == "RetryLater" then
-				self._flowVelocityByEntity[entity] = Vector2.zero
-				self:_StopHumanoid(entity)
-				if self._movementEntityFactory ~= nil then
-					self._movementEntityFactory:SetPathMoving(entity, false)
+				self._flowVelocityByActorKey[actorKey] = Vector2.zero
+				self:_StopHumanoid(actorKey)
+				local binding = self:_GetMovementBinding(actorKey)
+				if binding ~= nil then
+					binding:SetPathMoving(false)
 				end
 				return Ok({
 					IsDone = false,
@@ -479,15 +490,16 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 
 		-- Mark settled entities so the goal can exclude them from active flow membership.
 		if shouldSettle then
-			self._flowSettledByEntity[entity] = true
-			self:_RefreshActiveFlowGoalMembership(entity, movementState.GoalKey)
+			self._flowSettledByActorKey[actorKey] = true
+			self:_RefreshActiveFlowGoalMembership(actorKey, movementState.GoalKey)
 		end
 
 		-- Publish the final movement command to the humanoid and path-moving state.
-		self._flowVelocityByEntity[entity] = solvedVelocityXZ
-		self:_IssueHumanoidMoveTo(entity, moveTarget, solvedVelocityXZ)
-		if self._movementEntityFactory ~= nil then
-			self._movementEntityFactory:SetPathMoving(entity, moveTarget ~= nil)
+		self._flowVelocityByActorKey[actorKey] = solvedVelocityXZ
+		self:_IssueHumanoidMoveTo(actorKey, moveTarget, solvedVelocityXZ)
+		local binding = self:_GetMovementBinding(actorKey)
+		if binding ~= nil then
+			binding:SetPathMoving(moveTarget ~= nil)
 		end
 		return Ok({
 			IsDone = false,

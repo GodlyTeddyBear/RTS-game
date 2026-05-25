@@ -26,6 +26,7 @@ type TFlowSeparationSolveSnapshot = MovementTypes.TFlowSeparationSolveSnapshot
 type TFlowSeparationSolveRow = MovementTypes.TFlowSeparationSolveRow
 type TFlowSeparationWorkerPayload = MovementTypes.TFlowSeparationWorkerPayload
 type TMovementService = MovementTypes.TMovementService
+type TMovementActorKey = MovementTypes.TMovementActorKey
 type TTableRecyclerLike = MovementTypes.TTableRecyclerLike
 type TSharedCompiledHandle = MovementTypes.TSharedCompiledHandle
 type TSharedPacket = ParallelRunner.TSharedPacket
@@ -331,13 +332,13 @@ return function(MovementService: TMovementService)
 
 	-- Assembles the final managed-job payload once the staged worker payload and run request are ready.
 	function MovementService:_AssembleFlowSeparationDispatchPayload(
-		entityIds: { number },
+		actorKeys: { TMovementActorKey },
 		workerPayload: TFlowSeparationWorkerPayload?,
 		managerPayload: TFlowSeparationManagerPayload?,
 		runRequest: TFlowSeparationRunRequest
 	): TFlowSeparationDispatchPayload
 		return {
-			EntityIds = entityIds,
+			ActorKeys = actorKeys,
 			ManagerPayload = managerPayload,
 			WorkerPayload = workerPayload,
 			RunRequest = runRequest,
@@ -346,11 +347,11 @@ return function(MovementService: TMovementService)
 
 	-- Converts solver rows back into entity-indexed velocity and settled-neighbor maps.
 	function MovementService:_ApplyFlowVelocityRows(
-		entityIds: { number },
+		entityIds: { TMovementActorKey },
 		rows: { TFlowSeparationSolveRow },
-		velocityByEntity: { [number]: Vector2 }?,
-		touchedSettledNeighborByEntity: { [number]: boolean }?
-	): ({ [number]: Vector2 }, { [number]: boolean })
+		velocityByEntity: { [TMovementActorKey]: Vector2 }?,
+		touchedSettledNeighborByEntity: { [TMovementActorKey]: boolean }?
+	)
 		local closeApplyVelocityRowsProfile =
 			DebugPlus.begin(APPLY_VELOCITY_ROWS_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
 
@@ -398,28 +399,25 @@ return function(MovementService: TMovementService)
 	function MovementService:_BuildFlowDispatchManagerPayload(
 		tickId: number,
 		dt: number
-	): (
-		TFlowSeparationManagerPayload?,
-		{ [number]: string }?,
-		TFlowPublishedFrameState?
 	)
 		local closeBuildDispatchSnapshotProfile =
 			DebugPlus.begin(BUILD_DISPATCH_SNAPSHOT_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
-		table.clear(self._flowInvalidReasonByEntity)
+		table.clear(self._flowInvalidReasonByActorKey)
 
-		local goalKeyByEntity = self._flowReusableGoalKeyByEntity :: { [number]: string }
+		local goalKeyByEntity = self._flowReusableGoalKeyByActorKey :: { [TMovementActorKey]: string }
 		table.clear(goalKeyByEntity)
-		local goalPositionByEntity = self._flowReusableGoalPositionByEntity :: { [number]: Vector3 }
-		local goalWorldSampleByEntity = self._flowReusableGoalWorldSampleByEntity :: { [number]: Vector3 }
-		local positionByEntity = self._flowReusablePositionByEntity :: { [number]: Vector3 }
-		local walkSpeedByEntity = self._flowReusableWalkSpeedByEntity :: { [number]: number }
-		local isSettledByEntity = self._flowReusableIsSettledByEntity :: { [number]: boolean }
+		local goalPositionByEntity = self._flowReusableGoalPositionByActorKey :: { [TMovementActorKey]: Vector3 }
+		local goalWorldSampleByEntity = self._flowReusableGoalWorldSampleByActorKey :: { [TMovementActorKey]: Vector3 }
+		local positionByEntity = self._flowReusablePositionByActorKey :: { [TMovementActorKey]: Vector3 }
+		local walkSpeedByEntity = self._flowReusableWalkSpeedByActorKey :: { [TMovementActorKey]: number }
+		local isSettledByEntity = self._flowReusableIsSettledByActorKey :: { [TMovementActorKey]: boolean }
 		table.clear(goalPositionByEntity)
 		table.clear(goalWorldSampleByEntity)
 		table.clear(positionByEntity)
 		table.clear(walkSpeedByEntity)
 		table.clear(isSettledByEntity)
 
+		local actorKeys = {} :: { TMovementActorKey }
 		local entityIds = {} :: { number }
 		local goalKeys = {} :: { string }
 		local flatPositionX = {} :: { number }
@@ -433,11 +431,17 @@ return function(MovementService: TMovementService)
 		local velAlpha = {} :: { number }
 		local isSettled = {} :: { boolean }
 
-		for entity, movementState in self._movementByEntity do
+		for actorKey, movementState in self._movementByActorKey do
 			if movementState.Mode == "Flow" then
-				local frameStateResult = self:_ResolveFlowBuildFrameState(entity, movementState)
+				local entityId = self:_GetMovementEntityId(actorKey)
+				if entityId == nil then
+					self._flowInvalidReasonByActorKey[actorKey] = "MissingMovementEntityId"
+					continue
+				end
+
+				local frameStateResult = self:_ResolveFlowBuildFrameState(actorKey, movementState)
 				if not frameStateResult.success then
-					self._flowInvalidReasonByEntity[entity] = frameStateResult.type
+					self._flowInvalidReasonByActorKey[actorKey] = frameStateResult.type
 					continue
 				end
 
@@ -447,7 +451,8 @@ return function(MovementService: TMovementService)
 				end
 
 				local flatPosition = MovementMath.FlatXZ(framePayload.Position)
-				entityIds[#entityIds + 1] = entity
+				actorKeys[#actorKeys + 1] = actorKey
+				entityIds[#entityIds + 1] = entityId
 				goalKeys[#goalKeys + 1] = framePayload.GoalKey
 				flatPositionX[#flatPositionX + 1] = flatPosition.X
 				flatPositionY[#flatPositionY + 1] = flatPosition.Y
@@ -460,13 +465,13 @@ return function(MovementService: TMovementService)
 				velAlpha[#velAlpha + 1] = self:_GetFlowVelocityAlpha()
 				isSettled[#isSettled + 1] = framePayload.IsSettled
 
-				goalKeyByEntity[entity] = framePayload.GoalKey
-				goalPositionByEntity[entity] = framePayload.GoalPosition
-				goalWorldSampleByEntity[entity] = framePayload.GoalWorldSample
-				positionByEntity[entity] = framePayload.Position
-				walkSpeedByEntity[entity] = framePayload.WalkSpeed
+				goalKeyByEntity[actorKey] = framePayload.GoalKey
+				goalPositionByEntity[actorKey] = framePayload.GoalPosition
+				goalWorldSampleByEntity[actorKey] = framePayload.GoalWorldSample
+				positionByEntity[actorKey] = framePayload.Position
+				walkSpeedByEntity[actorKey] = framePayload.WalkSpeed
 				if framePayload.IsSettled then
-					isSettledByEntity[entity] = true
+					isSettledByEntity[actorKey] = true
 				end
 			end
 		end
@@ -533,45 +538,47 @@ return function(MovementService: TMovementService)
 				else 1e-4,
 			ClumpTouchPaddingStuds = self:_GetFlowClumpTouchPaddingStuds(),
 		} :: TFlowSeparationManagerPayload
+		self._flowDispatchedActorKeys = actorKeys
+		local frameState = self._flowReusableFrameState :: TFlowPublishedFrameState
 		closeBuildDispatchSnapshotProfile()
-		return managerPayload, goalKeyByEntity, self._flowReusableFrameState :: TFlowPublishedFrameState
+		return managerPayload, goalKeyByEntity, frameState, actorKeys
 	end
 
 	-- Resolves the frame inputs needed to build the dispatch snapshot for one flow entity.
 	function MovementService:_ResolveFlowBuildFrameState(
-		entity: number,
+		actorKey: TMovementActorKey,
 		movementState: TFlowMovementState
 	): Result.Result<MovementTypes.TFlowBuildFrameStatePayload>
-		local movementEntityFactory = self._movementEntityFactory
-		if movementEntityFactory == nil then
-			return Err("MissingMovementEntityFactory", Errors.MOVEMENT_MISSING_ENTITY_FACTORY)
+		local binding = self:_GetMovementBinding(actorKey)
+		if binding == nil then
+			return Err("MissingMovementBinding", Errors.MOVEMENT_MISSING_ENTITY_FACTORY)
 		end
 
-		local pathState = movementEntityFactory:GetPathState(entity)
+		local pathState = binding:GetPathState()
 		local goalPosition = pathState and pathState.GoalPosition or nil
 		if not goalPosition then
 			return Err("MissingGoalPosition", Errors.MOVEMENT_MISSING_GOAL_POSITION)
 		end
 
-		local handleGoalChangeResult = self:_HandleFlowGoalChange(entity, movementState, goalPosition)
+		local handleGoalChangeResult = self:_HandleFlowGoalChange(actorKey, movementState, goalPosition)
 		if not handleGoalChangeResult.success then
 			return handleGoalChangeResult
 		end
 
-		local position = self:_GetEntityPosition(entity)
+		local position = self:_GetEntityPosition(actorKey)
 		if not position then
 			return Err("MissingModelPosition", Errors.MOVEMENT_MISSING_MODEL_POSITION)
 		end
 
 		local flowDirectionXZ = Vector2.zero
-		local isSettled = self._flowSettledByEntity[entity] == true
+		local isSettled = self._flowSettledByActorKey[actorKey] == true
 		if not isSettled then
-			self:_TryClearLatchedInvalidCellEscape(entity, movementState, position)
+			self:_TryClearLatchedInvalidCellEscape(actorKey, movementState, position)
 			local sampledDirection = self:_SampleFlowDirectionXZ(movementState, position)
 			if sampledDirection then
 				flowDirectionXZ = sampledDirection
 			else
-				local repairResult = self:_RepairFlowDirectionXZ(entity, movementState, goalPosition, position)
+				local repairResult = self:_RepairFlowDirectionXZ(actorKey, movementState, goalPosition, position)
 				if not repairResult.success then
 					return repairResult
 				end
@@ -597,9 +604,9 @@ return function(MovementService: TMovementService)
 			GoalWorldSample = movementState.GoalWorldSample,
 			Position = position,
 			FlowDirectionXZ = flowDirectionXZ,
-			WalkSpeed = self:_ApplyCurrentMoveSpeed(entity),
-			Radius = self:_GetFlowAgentRadiusStuds(entity),
-			PreviousVelocityXZ = self._flowVelocityByEntity[entity] or Vector2.zero,
+			WalkSpeed = self:_ApplyCurrentMoveSpeed(actorKey),
+			Radius = self:_GetFlowAgentRadiusStuds(actorKey),
+			PreviousVelocityXZ = self._flowVelocityByActorKey[actorKey] or Vector2.zero,
 			IsSettled = isSettled,
 		})
 	end
@@ -629,23 +636,23 @@ return function(MovementService: TMovementService)
 		dt: number
 	): (
 		TFlowSeparationSolveSnapshot?,
-		{ [number]: string }?,
+		{ [TMovementActorKey]: string }?,
 		TFlowPublishedFrameState?
 	)
 		local closeBuildDispatchSnapshotProfile =
 			DebugPlus.begin(BUILD_DISPATCH_SNAPSHOT_PROFILE_TAG, MOVEMENT_PROFILING_ENABLED)
-		table.clear(self._flowInvalidReasonByEntity)
+		table.clear(self._flowInvalidReasonByActorKey)
 
 		local frameState = self:_GetOrCreateFlowFrameState()
 		frameState:Reset()
 
-		local goalKeyByEntity = self._flowReusableGoalKeyByEntity :: { [number]: string }
+		local goalKeyByEntity = self._flowReusableGoalKeyByActorKey :: { [TMovementActorKey]: string }
 		table.clear(goalKeyByEntity)
-		local goalPositionByEntity = self._flowReusableGoalPositionByEntity :: { [number]: Vector3 }
-		local goalWorldSampleByEntity = self._flowReusableGoalWorldSampleByEntity :: { [number]: Vector3 }
-		local positionByEntity = self._flowReusablePositionByEntity :: { [number]: Vector3 }
-		local walkSpeedByEntity = self._flowReusableWalkSpeedByEntity :: { [number]: number }
-		local isSettledByEntity = self._flowReusableIsSettledByEntity :: { [number]: boolean }
+		local goalPositionByEntity = self._flowReusableGoalPositionByActorKey :: { [TMovementActorKey]: Vector3 }
+		local goalWorldSampleByEntity = self._flowReusableGoalWorldSampleByActorKey :: { [TMovementActorKey]: Vector3 }
+		local positionByEntity = self._flowReusablePositionByActorKey :: { [TMovementActorKey]: Vector3 }
+		local walkSpeedByEntity = self._flowReusableWalkSpeedByActorKey :: { [TMovementActorKey]: number }
+		local isSettledByEntity = self._flowReusableIsSettledByActorKey :: { [TMovementActorKey]: boolean }
 		table.clear(goalPositionByEntity)
 		table.clear(goalWorldSampleByEntity)
 		table.clear(positionByEntity)
@@ -653,13 +660,13 @@ return function(MovementService: TMovementService)
 		table.clear(isSettledByEntity)
 
 		-- Resolve all valid flow entities into the frame-state SoA
-		for entity, movementState in self._movementByEntity do
+		for actorKey, movementState in self._movementByActorKey do
 			if movementState.Mode == "Flow" then
 				local goalKey, _goalPosition, _goalWorldSample, position, flowDirectionXZ, walkSpeed, radius, previousVelocityXZ, isSettled =
 					nil, nil, nil, nil, nil, nil, nil, nil, nil
-				local frameStateResult = self:_ResolveFlowBuildFrameState(entity, movementState)
+				local frameStateResult = self:_ResolveFlowBuildFrameState(actorKey, movementState)
 				if not frameStateResult.success then
-					self._flowInvalidReasonByEntity[entity] = frameStateResult.type
+					self._flowInvalidReasonByActorKey[actorKey] = frameStateResult.type
 					continue
 				end
 				local framePayload = frameStateResult.value
@@ -678,7 +685,7 @@ return function(MovementService: TMovementService)
 
 				local entityIndex = frameState:AddEntity(
 					goalKey,
-					entity,
+					actorKey,
 					position,
 					flowDirectionXZ,
 					walkSpeed,
@@ -687,13 +694,13 @@ return function(MovementService: TMovementService)
 					isSettled
 				)
 				frameState:SetVelAlpha(entityIndex, self:_GetFlowVelocityAlpha())
-				goalKeyByEntity[entity] = goalKey
-				goalPositionByEntity[entity] = _goalPosition
-				goalWorldSampleByEntity[entity] = _goalWorldSample
-				positionByEntity[entity] = position
-				walkSpeedByEntity[entity] = walkSpeed
+				goalKeyByEntity[actorKey] = goalKey
+				goalPositionByEntity[actorKey] = _goalPosition
+				goalWorldSampleByEntity[actorKey] = _goalWorldSample
+				positionByEntity[actorKey] = position
+				walkSpeedByEntity[actorKey] = walkSpeed
 				if isSettled then
-					isSettledByEntity[entity] = true
+					isSettledByEntity[actorKey] = true
 				end
 			end
 		end

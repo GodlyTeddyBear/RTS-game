@@ -12,6 +12,7 @@ local Errors = require(script.Parent.Parent.Parent.Parent.Errors)
 
 type TFastFlowGridMapping = MovementTypes.TFastFlowGridMapping
 type TFlowfieldLike = MovementTypes.TFlowfieldLike
+type TMovementActorKey = MovementTypes.TMovementActorKey
 type TMovementService = MovementTypes.TMovementService
 type TFlowRepairResult = MovementTypes.TFlowRepairResult
 type TSharedFlowfieldEntry = MovementTypes.TSharedFlowfieldEntry
@@ -25,8 +26,8 @@ local fromNilable = Result.fromNilable
 
 return function(MovementService: TMovementService)
 	-- Clears the latched recovery state when flow movement no longer needs an escape target.
-	function MovementService:_ClearFlowRecoveryState(entity: number, movementState: TFlowMovementState?)
-		self._flowRecoveredOpenCellByEntity[entity] = nil
+	function MovementService:_ClearFlowRecoveryState(actorKey: TMovementActorKey, movementState: TFlowMovementState?)
+		self._flowRecoveredOpenCellByActorKey[actorKey] = nil
 		if movementState then
 			movementState.RecoveryMoveTarget = nil
 			movementState.RecoveryOpenCell = nil
@@ -105,14 +106,14 @@ return function(MovementService: TMovementService)
 
 	-- Latches an open-cell escape target so the entity can move out of an invalid cell safely.
 	function MovementService:_SetLatchedInvalidCellEscape(
-		entity: number,
+		actorKey: TMovementActorKey,
 		movementState: TFlowMovementState,
 		openCell: Vector2,
 		mapping: TFastFlowGridMapping,
 		yLevel: number
 	): Vector3
 		local recoveryMoveTarget = FastFlowHelper.GridCellToWorldXZ(openCell, mapping, yLevel)
-		self._flowRecoveredOpenCellByEntity[entity] = openCell
+		self._flowRecoveredOpenCellByActorKey[actorKey] = openCell
 		movementState.RecoveryMoveTarget = recoveryMoveTarget
 		movementState.RecoveryOpenCell = openCell
 		movementState.RecoveryMode = "EscapingInvalidCell"
@@ -121,7 +122,7 @@ return function(MovementService: TMovementService)
 
 	-- Clears the latched escape when the entity reaches open space or the recovery target.
 	function MovementService:_TryClearLatchedInvalidCellEscape(
-		entity: number,
+		actorKey: TMovementActorKey,
 		movementState: TFlowMovementState,
 		position: Vector3
 	): boolean
@@ -134,7 +135,7 @@ return function(MovementService: TMovementService)
 		local reachedRecoveryTarget = recoveryMoveTarget
 			and MovementMath.XZDistance(position, recoveryMoveTarget) <= ESCAPE_TARGET_REACHED_EPSILON_STUDS
 		if cellState == "Open" or reachedRecoveryTarget then
-			self:_ClearFlowRecoveryState(entity, movementState)
+			self:_ClearFlowRecoveryState(actorKey, movementState)
 			return true
 		end
 
@@ -158,7 +159,7 @@ return function(MovementService: TMovementService)
 
 	-- Rebuilds an escape direction from the nearest open cell when the current cell is invalid.
 	function MovementService:_TryRecoverFlowDirectionFromOpenCell(
-		entity: number,
+		actorKey: TMovementActorKey,
 		movementState: TFlowMovementState,
 		position: Vector3,
 		pathfinder: MovementTypes.TFastFlowPathfinder,
@@ -178,7 +179,7 @@ return function(MovementService: TMovementService)
 			return nil
 		end
 
-		self:_SetLatchedInvalidCellEscape(entity, movementState, openCell, mapping, position.Y)
+		self:_SetLatchedInvalidCellEscape(actorKey, movementState, openCell, mapping, position.Y)
 		return openCellDirection
 	end
 
@@ -215,19 +216,19 @@ return function(MovementService: TMovementService)
 		local starts = self._flowRepresentativeStarts :: { Vector3 }
 		table.clear(starts)
 		local maxStarts = math.max(1, math.floor(config.RepresentativeStartCap or 8))
-		local activeEntities = self._activeFlowEntitiesByGoalKey[goalKey]
-		if not activeEntities then
+		local activeActorKeys = self._activeFlowActorKeysByGoalKey[goalKey]
+		if not activeActorKeys then
 			return nil
 		end
 
-		for entityId in activeEntities do
+		for actorKey in activeActorKeys do
 			if #starts >= maxStarts then
 				break
 			end
 
-			local movementState = self._movementByEntity[entityId]
-			if movementState and movementState.Mode == "Flow" and not self._flowSettledByEntity[entityId] then
-				local entityPosition = self:_GetEntityPosition(entityId)
+			local movementState = self._movementByActorKey[actorKey]
+			if movementState and movementState.Mode == "Flow" and not self._flowSettledByActorKey[actorKey] then
+				local entityPosition = self:_GetEntityPosition(actorKey)
 				if entityPosition then
 					table.insert(starts, entityPosition)
 				end
@@ -342,60 +343,60 @@ return function(MovementService: TMovementService)
 	end
 
 	-- Removes one entity from the active-member set for a shared flow goal.
-	function MovementService:_RemoveEntityFromActiveFlowGoal(entity: number, goalKey: string?)
+	function MovementService:_RemoveEntityFromActiveFlowGoal(actorKey: TMovementActorKey, goalKey: string?)
 		if not goalKey then
 			return
 		end
 
-		local activeEntities = self._activeFlowEntitiesByGoalKey[goalKey]
-		if not activeEntities then
+		local activeActorKeys = self._activeFlowActorKeysByGoalKey[goalKey]
+		if not activeActorKeys then
 			return
 		end
 
-		activeEntities[entity] = nil
-		if not next(activeEntities) then
-			self._activeFlowEntitiesByGoalKey[goalKey] = nil
+		activeActorKeys[actorKey] = nil
+		if not next(activeActorKeys) then
+			self._activeFlowActorKeysByGoalKey[goalKey] = nil
 		end
 	end
 
 	-- Adds one entity to the active-member set for a shared flow goal.
-	function MovementService:_AddEntityToActiveFlowGoal(entity: number, goalKey: string?)
+	function MovementService:_AddEntityToActiveFlowGoal(actorKey: TMovementActorKey, goalKey: string?)
 		if not goalKey then
 			return
 		end
 
-		local activeEntities = self._activeFlowEntitiesByGoalKey[goalKey]
-		if not activeEntities then
-			activeEntities = {}
-			self._activeFlowEntitiesByGoalKey[goalKey] = activeEntities
+		local activeActorKeys = self._activeFlowActorKeysByGoalKey[goalKey]
+		if not activeActorKeys then
+			activeActorKeys = {}
+			self._activeFlowActorKeysByGoalKey[goalKey] = activeActorKeys
 		end
 
-		activeEntities[entity] = true
+		activeActorKeys[actorKey] = true
 	end
 
 	-- Keeps the active-member set aligned with the entity's current flow membership state.
-	function MovementService:_RefreshActiveFlowGoalMembership(entity: number, previousGoalKey: string?)
-		local currentGoalKey = self._flowGoalKeyByEntity[entity]
+	function MovementService:_RefreshActiveFlowGoalMembership(actorKey: TMovementActorKey, previousGoalKey: string?)
+		local currentGoalKey = self._flowGoalKeyByActorKey[actorKey]
 		if previousGoalKey ~= currentGoalKey then
-			self:_RemoveEntityFromActiveFlowGoal(entity, previousGoalKey)
+			self:_RemoveEntityFromActiveFlowGoal(actorKey, previousGoalKey)
 		end
 
-		local movementState = self._movementByEntity[entity]
+		local movementState = self._movementByActorKey[actorKey]
 		local isActiveFlowMember = movementState ~= nil
 			and movementState.Mode == "Flow"
 			and currentGoalKey
-			and not self._flowSettledByEntity[entity]
+			and not self._flowSettledByActorKey[actorKey]
 
 		if isActiveFlowMember then
-			self:_AddEntityToActiveFlowGoal(entity, currentGoalKey)
+			self:_AddEntityToActiveFlowGoal(actorKey, currentGoalKey)
 		else
-			self:_RemoveEntityFromActiveFlowGoal(entity, currentGoalKey)
+			self:_RemoveEntityFromActiveFlowGoal(actorKey, currentGoalKey)
 		end
 	end
 
 	-- Attaches one entity to the shared flowfield entry for the resolved goal key.
-	function MovementService:_AttachEntityToSharedFlowfield(entity: number, goalKey: string)
-		local currentGoalKey = self._flowGoalKeyByEntity[entity]
+	function MovementService:_AttachEntityToSharedFlowfield(actorKey: TMovementActorKey, goalKey: string)
+		local currentGoalKey = self._flowGoalKeyByActorKey[actorKey]
 		if currentGoalKey == goalKey then
 			return
 		end
@@ -406,13 +407,13 @@ return function(MovementService: TMovementService)
 		if entry then
 			entry.RefCount += 1
 		end
-		self._flowGoalKeyByEntity[entity] = goalKey
-		self:_RefreshActiveFlowGoalMembership(entity, currentGoalKey)
+		self._flowGoalKeyByActorKey[actorKey] = goalKey
+		self:_RefreshActiveFlowGoalMembership(actorKey, currentGoalKey)
 	end
 
 	-- Resolves and attaches one entity to the shared flowfield for its goal position.
 	function MovementService:_AttachEntityToFlowGoal(
-		entity: number,
+		actorKey: TMovementActorKey,
 		goalPosition: Vector3,
 		forceRefresh: boolean?,
 		forceUnpruned: boolean?
@@ -425,8 +426,8 @@ return function(MovementService: TMovementService)
 		local goalKey = flowGoal.GoalKey
 		local goalWorldSample = flowGoal.GoalWorldSample
 
-		self:_AttachEntityToSharedFlowfield(entity, goalKey)
-		self._flowSettledByEntity[entity] = nil
+		self:_AttachEntityToSharedFlowfield(actorKey, goalKey)
+		self._flowSettledByActorKey[actorKey] = nil
 		return Ok({
 			GoalKey = goalKey,
 			GoalWorldSample = goalWorldSample,
@@ -446,7 +447,7 @@ return function(MovementService: TMovementService)
 
 	-- Repairs a flow direction by merging the live field or regenerating from the nearest open cell.
 	function MovementService:_RepairFlowDirectionXZ(
-		entity: number,
+		actorKey: TMovementActorKey,
 		movementState: TFlowMovementState,
 		goalPosition: Vector3,
 		position: Vector3
@@ -458,7 +459,7 @@ return function(MovementService: TMovementService)
 			local cellState = FastFlowHelper.ClassifyWorldXZCell(pathfinder, position, mapping)
 			if cellState == "Open" then
 				if movementState.RecoveryMode == "EscapingInvalidCell" then
-					self:_ClearFlowRecoveryState(entity, movementState)
+					self:_ClearFlowRecoveryState(actorKey, movementState)
 				end
 				local mergedFlowfield =
 					FastFlowHelper.MergeFlowfieldWorld(pathfinder, sharedEntry.Flowfield, position, mapping)
@@ -480,7 +481,7 @@ return function(MovementService: TMovementService)
 
 			-- Fall back to the nearest open cell when the live field cannot recover directly.
 			local openCellDirection =
-				self:_TryRecoverFlowDirectionFromOpenCell(entity, movementState, position, pathfinder, mapping)
+				self:_TryRecoverFlowDirectionFromOpenCell(actorKey, movementState, position, pathfinder, mapping)
 			if openCellDirection then
 				return Ok({
 					Direction = openCellDirection,
@@ -490,10 +491,10 @@ return function(MovementService: TMovementService)
 		end
 
 		-- Regenerate the shared goal when neither the live field nor an open cell can recover the direction.
-		local regeneratedGoal = self:_AttachEntityToFlowGoal(entity, goalPosition, true, true)
+		local regeneratedGoal = self:_AttachEntityToFlowGoal(actorKey, goalPosition, true, true)
 		if not regeneratedGoal.success then
 			return Err("FastFlowRecoverFailed", Errors.MOVEMENT_FLOW_RECOVER_FAILED, {
-				Entity = entity,
+				ActorKey = actorKey,
 				GoalKey = movementState.GoalKey,
 				CauseType = regeneratedGoal.type,
 				CauseMessage = regeneratedGoal.message,
@@ -517,7 +518,7 @@ return function(MovementService: TMovementService)
 
 		if pathfinder and mapping then
 			local openCellDirection =
-				self:_TryRecoverFlowDirectionFromOpenCell(entity, movementState, position, pathfinder, mapping)
+				self:_TryRecoverFlowDirectionFromOpenCell(actorKey, movementState, position, pathfinder, mapping)
 			if openCellDirection then
 				return Ok({
 					Direction = openCellDirection,

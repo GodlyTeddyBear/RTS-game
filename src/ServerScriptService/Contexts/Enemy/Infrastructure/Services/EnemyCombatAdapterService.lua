@@ -206,6 +206,7 @@ function EnemyCombatAdapterService:Start(registry: any, _name: string)
 	})
 	self._movementProxyResolver = EnemyMovementProxyResolverFactory.Create({
 		MovementService = self._combatServices.MovementService,
+		EnemyEntityFactory = self._entityFactory,
 	})
 	self._enemyFactoryProxyResolver = EnemyFactoryProxyResolverFactory.Create({
 		EnemyEntityFactory = self._entityFactory,
@@ -455,12 +456,12 @@ function EnemyCombatAdapterService:RegisterActor(entity: number): Result.Result<
 				return self:_BuildServices(entity, currentTime, tickId, frameContext)
 			end,
 			OnCancel = function()
-				self._combatServices.MovementService:StopMovement(entity)
+				self._movementProxyResolver.CreateProxy(entity):StopMovement(0)
 			end,
 			OnRemoved = function()
 				self:_ClearCachedFacts(entity)
 				self:_ClearCachedExecutorServices(entity)
-				self._combatServices.MovementService:StopMovement(entity)
+				self._movementProxyResolver.CreateProxy(entity):StopMovement(0)
 				self._combatServices.LockOnService:DetachConstraint(entity)
 			end,
 			OnActionStateChanged = function(_actionState: any)
@@ -549,8 +550,6 @@ function EnemyCombatAdapterService:_ConfigureCombatServices()
 
 		return whitelistInstances
 	end)
-	self._combatServices.MovementService:ConfigureMovementEntityFactory(self._entityFactory)
-	self._combatServices.MovementService:ConfigureMovementInstanceFactory(self._instanceFactory)
 	self._combatServices.StatusService:ConfigureEnemyEntityFactory(self._entityFactory)
 	self._combatServices.MovementService:ConfigureLockOnService(self._combatServices.LockOnService)
 	self._combatServices.MovementService:ConfigureFlowfieldDebugRenderer(function(
