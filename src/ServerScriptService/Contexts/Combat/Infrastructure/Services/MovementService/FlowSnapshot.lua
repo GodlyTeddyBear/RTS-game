@@ -560,7 +560,7 @@ return function(MovementService: TMovementService)
 			return Err("MissingGoalPosition", Errors.MOVEMENT_MISSING_GOAL_POSITION)
 		end
 
-		local handleGoalChangeResult = self:_HandleFlowGoalChange(actorKey, movementState, goalPosition)
+		local handleGoalChangeResult = self:_TransitionFlowRuntimeAdvance(actorKey, movementState, goalPosition)
 		if not handleGoalChangeResult.success then
 			return handleGoalChangeResult
 		end

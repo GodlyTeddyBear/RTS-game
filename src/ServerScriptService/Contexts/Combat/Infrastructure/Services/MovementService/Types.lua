@@ -28,6 +28,8 @@ export type TTableRecyclerLike = TableRecycler.TTableRecyclerHandle
 export type TPathPromiseLike = {
 	cancel: (self: TPathPromiseLike) -> (),
 	getStatus: (self: TPathPromiseLike) -> any,
+	andThen: (self: TPathPromiseLike, callback: (...any) -> ...any) -> TPathPromiseLike,
+	catch: (self: TPathPromiseLike, callback: (...any) -> ...any) -> TPathPromiseLike,
 }
 
 export type TAgentParams = {
@@ -104,7 +106,7 @@ export type TFlowPipelineStateMachineLike = {
 --[=[
     @type TFlowPipelineState
     @within Types
-    Flow pipeline state label used to drive the separation solve lifecycle.
+    Flow-only pipeline state label used to drive the staged separation solve lifecycle.
 ]=]
 export type TFlowPipelineState =
 	"Idle"
@@ -118,19 +120,25 @@ export type TFlowPipelineState =
 --[=[
     @interface TPathMovementState
     @within Types
-    Path-based movement runtime state tracked while a path promise is active.
+    Direct path runtime state tracked while a path promise is active.
     .Mode string -- Movement mode discriminator.
     .Promise any -- Running path promise owned by the path movement branch.
 ]=]
 export type TPathMovementState = {
 	Mode: "Path",
+	GoalSnapshot: Vector3,
+	Path: any,
 	Promise: TPathPromiseLike,
+	PendingPath: any?,
+	PendingPromise: TPathPromiseLike?,
+	PendingGoalSnapshot: Vector3?,
+	PendingTransitionId: number,
 }
 
 --[=[
     @interface TFlowMovementState
     @within Types
-    Flow-based movement runtime state tracked while an entity follows a shared flowfield.
+    Staged flow runtime state tracked while an entity follows a shared flowfield.
     .Mode string -- Movement mode discriminator.
     .GoalSnapshot Vector3 -- Last resolved goal position used to detect goal changes.
     .GoalKey string -- Shared flowfield key for the current goal.
@@ -669,8 +677,56 @@ export type TMovementService = {
 	_GetMinGroupSize: (self: TMovementService) -> number,
 	_CountFlowEligibleAtGoal: (self: TMovementService, actorKey: TMovementActorKey, goalPosition: Vector3) -> number,
 	_ResolveAdvanceMode: (self: TMovementService, actorKey: TMovementActorKey, movementMode: EnemyMovementMode, goalPosition: Vector3) -> ("Path" | "Flow")?,
-	_StartPath: (self: TMovementService, actorKey: TMovementActorKey, goalPosition: Vector3) -> boolean,
-	_TickPath: (self: TMovementService, actorKey: TMovementActorKey, movementState: TPathMovementState) -> ("Running" | "Success" | "Fail", string?),
+	_CanTransitionInCurrentRuntime: (
+		self: TMovementService,
+		movementState: TMovementState?,
+		resolvedMode: "Path" | "Flow"
+	) -> boolean,
+	_TransitionAdvanceInCurrentRuntime: (
+		self: TMovementService,
+		actorKey: TMovementActorKey,
+		movementState: TMovementState,
+		resolvedMode: "Path" | "Flow",
+		goalPosition: Vector3
+	) -> (boolean, string?),
+	_StartAdvanceInResolvedRuntime: (
+		self: TMovementService,
+		actorKey: TMovementActorKey,
+		resolvedMode: "Path" | "Flow",
+		requestedMode: EnemyMovementMode,
+		goalPosition: Vector3
+	) -> (boolean, string?),
+	_StepAdvanceInRuntime: (
+		self: TMovementService,
+		actorKey: TMovementActorKey,
+		movementState: TMovementState,
+		services: TFlowSchedulerServices?
+	) -> (boolean, string?),
+	_StopMovementInRuntime: (
+		self: TMovementService,
+		actorKey: TMovementActorKey,
+		movementState: TMovementState
+	) -> (),
+	_CreatePathServices: (self: TMovementService, actorKey: TMovementActorKey, binding: TMovementActorBinding) -> any,
+	_CreatePathRuntime: (self: TMovementService, actorKey: TMovementActorKey) -> (any?, TMovementActorBinding?),
+	_RunPathPromise: (self: TMovementService, path: any, goalPosition: Vector3, actorKey: TMovementActorKey) -> TPathPromiseLike,
+	_ClearPendingPathReplacement: (self: TMovementService, movementState: TPathMovementState, cancelPromise: boolean?) -> (),
+	_CommitPathReplacement: (
+		self: TMovementService,
+		actorKey: TMovementActorKey,
+		movementState: TPathMovementState,
+		transitionId: number
+	) -> boolean,
+	_RetargetPathInPlace: (
+		self: TMovementService,
+		actorKey: TMovementActorKey,
+		movementState: TPathMovementState,
+		goalPosition: Vector3
+	) -> (boolean, string?),
+	_StartPathRuntimeAdvance: (self: TMovementService, actorKey: TMovementActorKey, goalPosition: Vector3) -> boolean,
+	_TransitionPathRuntimeAdvance: (self: TMovementService, actorKey: TMovementActorKey, movementState: TPathMovementState, goalPosition: Vector3) -> (boolean, string?),
+	_StepPathRuntimeAdvance: (self: TMovementService, actorKey: TMovementActorKey, movementState: TPathMovementState) -> ("Running" | "Success" | "Fail", string?),
+	_StopPathRuntime: (self: TMovementService, movementState: TPathMovementState) -> (),
 	_ClearFlowRecoveryState: (self: TMovementService, actorKey: TMovementActorKey, movementState: TFlowMovementState?) -> (),
 	_IsFastFlowDebugEnabled: (self: TMovementService) -> boolean,
 	_ResolveFastFlowRuntime: (self: TMovementService) -> (TFastFlowPathfinder?, TFastFlowGridMapping?),
@@ -739,8 +795,8 @@ export type TMovementService = {
 	_GetFlowClumpRadiusStuds: (self: TMovementService) -> number,
 	_GetFlowClumpTouchPaddingStuds: (self: TMovementService) -> number,
 	_GetFlowAgentRadiusStuds: (self: TMovementService, actorKey: TMovementActorKey) -> number,
-	_StartFlow: (self: TMovementService, actorKey: TMovementActorKey, goalPosition: Vector3) -> Result.Result<boolean>,
-	_HandleFlowGoalChange: (self: TMovementService, actorKey: TMovementActorKey, movementState: TFlowMovementState, goalPosition: Vector3) -> Result.Result<nil>,
+	_StartFlowRuntimeAdvance: (self: TMovementService, actorKey: TMovementActorKey, goalPosition: Vector3) -> Result.Result<boolean>,
+	_TransitionFlowRuntimeAdvance: (self: TMovementService, actorKey: TMovementActorKey, movementState: TFlowMovementState, goalPosition: Vector3) -> Result.Result<nil>,
 	_SampleFlowDirectionXZ: (self: TMovementService, movementState: TFlowMovementState, position: Vector3) -> Vector2?,
 	_BuildFlowSolutionForInput: (self: TMovementService, goalPosition: Vector3, goalWorldSample: Vector3, position: Vector3, walkSpeed: number, isSettled: boolean, finalVelocityXZ: Vector2, touchedSettledNeighbor: boolean) -> (Vector2, Vector3?, boolean, boolean, boolean),
 	_IsFlowAdvanceStalled: (self: TMovementService, goalPosition: Vector3, goalWorldSample: Vector3, position: Vector3, velocityXZ: Vector2, moveTarget: Vector3?) -> boolean,
@@ -748,7 +804,8 @@ export type TMovementService = {
 	_BuildRecoveredFlowAdvanceInput: (self: TMovementService, actorKey: TMovementActorKey, movementState: TFlowMovementState, goalPosition: Vector3, position: Vector3, walkSpeed: number) -> (Vector2?, Vector3?, "Recovered" | "RetryLater" | "Fatal", string?),
 	_TryContinueLatchedEscapeWithoutSolve: (self: TMovementService, actorKey: TMovementActorKey, movementState: TFlowMovementState, reason: string) -> boolean,
 	_TryRepairFlowGoalMembership: (self: TMovementService, actorKey: TMovementActorKey, movementState: TFlowMovementState) -> (boolean, string?),
-	_StepFlowAdvance: (self: TMovementService, actorKey: TMovementActorKey, movementState: TFlowMovementState, services: TFlowSchedulerServices?) -> Result.Result<TFlowAdvanceStepResult>,
+	_StepFlowRuntimeAdvance: (self: TMovementService, actorKey: TMovementActorKey, movementState: TFlowMovementState, services: TFlowSchedulerServices?) -> Result.Result<TFlowAdvanceStepResult>,
+	_StopFlowRuntime: (self: TMovementService, actorKey: TMovementActorKey) -> (),
 }
 
 return table.freeze(MovementServiceTypes)

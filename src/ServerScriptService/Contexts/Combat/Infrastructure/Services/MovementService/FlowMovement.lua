@@ -25,8 +25,8 @@ local Ok = Result.Ok
 local Err = Result.Err
 
 return function(MovementService: TMovementService)
-	-- Returns the shared flow configuration table used by all flow movement helpers.
-function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConfig
+	-- Returns the shared flow configuration table used by the staged flow runtime.
+	function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConfig
 		return CombatMovementConfig.FLOW_SOFT_SEPARATION
 	end
 
@@ -70,8 +70,8 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		return 2
 	end
 
-	-- Starts flow movement for one entity and initializes its flow runtime state.
-	function MovementService:_StartFlow(actorKey: TMovementActorKey, goalPosition: Vector3): Result.Result<boolean>
+	-- Starts flow runtime movement for one entity and initializes its staged solve state.
+	function MovementService:_StartFlowRuntimeAdvance(actorKey: TMovementActorKey, goalPosition: Vector3): Result.Result<boolean>
 		-- Attach the entity to the shared flow goal before writing any runtime state.
 		local flowGoalResult = self:_AttachEntityToFlowGoal(actorKey, goalPosition, false, false)
 		if not flowGoalResult.success then
@@ -120,8 +120,8 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		return Ok(true)
 	end
 
-	-- Updates the stored flow goal when the target position changes.
-	function MovementService:_HandleFlowGoalChange(
+	-- Updates the stored flow runtime goal when the target position changes.
+	function MovementService:_TransitionFlowRuntimeAdvance(
 		actorKey: TMovementActorKey,
 		movementState: TFlowMovementState,
 		goalPosition: Vector3
@@ -137,12 +137,15 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		local flowGoal = flowGoalResult.value
 		local goalKey = flowGoal.GoalKey
 		local goalWorldSample = flowGoal.GoalWorldSample
+		local previousGoalKey = movementState.GoalKey
 
 		movementState.GoalSnapshot = goalPosition
 		movementState.GoalKey = goalKey
 		movementState.GoalWorldSample = goalWorldSample
 		self:_ClearFlowRecoveryState(actorKey, movementState)
-		self._flowVelocityByActorKey[actorKey] = Vector2.zero
+		if previousGoalKey ~= goalKey then
+			self._flowVelocityByActorKey[actorKey] = Vector2.zero
+		end
 		return Ok(nil)
 	end
 
@@ -324,8 +327,8 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		return true, nil
 	end
 
-	-- Advances one entity through the flow pipeline and applies the solved movement output.
-	function MovementService:_StepFlowAdvance(
+	-- Advances one entity through the staged flow runtime and applies the published solve.
+	function MovementService:_StepFlowRuntimeAdvance(
 		actorKey: TMovementActorKey,
 		movementState: TFlowMovementState,
 		services: TFlowSchedulerServices?
@@ -472,12 +475,6 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 				)
 			end
 			if recoveryStatus == "RetryLater" then
-				self._flowVelocityByActorKey[actorKey] = Vector2.zero
-				self:_StopHumanoid(actorKey)
-				local binding = self:_GetMovementBinding(actorKey)
-				if binding ~= nil then
-					binding:SetPathMoving(false)
-				end
 				return Ok({
 					IsDone = false,
 				})
@@ -504,5 +501,10 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		return Ok({
 			IsDone = false,
 		})
+	end
+
+	-- Stops the staged flow runtime for one actor without touching path runtime state.
+	function MovementService:_StopFlowRuntime(actorKey: TMovementActorKey)
+		self:_StopHumanoid(actorKey)
 	end
 end

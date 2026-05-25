@@ -531,7 +531,7 @@ return function(MovementService: TMovementService)
 		_TransitionFlowPipeline(self, "Idle")
 	end
 
-	-- Advances the flow pipeline once per scheduler tick.
+	-- Advances the staged flow runtime pipeline once per scheduler tick. Path runtime does not use these stages.
 	function MovementService:_AdvanceFlowPipeline(services: TFlowSchedulerServices?)
 		DebugPlus.profile(ADVANCE_PIPELINE_PROFILE_TAG, function()
 			local tickId = self:_ResolveFlowTickId(services)

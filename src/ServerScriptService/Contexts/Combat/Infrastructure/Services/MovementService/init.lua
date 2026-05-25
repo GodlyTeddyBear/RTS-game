@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BoidsConfig = require(ReplicatedStorage.Contexts.Combat.Config.BoidsConfig)
 local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local StateMachine = require(ReplicatedStorage.Utilities.StateMachine)
@@ -10,10 +11,10 @@ local MovementTypes = require(script.Types)
 
 --[=[
     @class MovementService
-    Owns combat movement orchestration for path and shared-flow movement modes.
+    Owns combat movement routing for path and shared-flow runtimes.
 
-    The service wires runtime dependencies, starts and stops entity movement,
-    and manages the flow pipeline that publishes separation solves to the frame step.
+    The service wires runtime dependencies, resolves the movement mode, and routes
+    each actor into either the direct path runtime or the staged flow runtime.
     @server
 ]=]
 local MovementService = {}
@@ -48,6 +49,7 @@ local MOVEMENT_PROFILING_ENABLED = DebugConfig.COMBAT_MOVEMENT_PROFILING
 local STEP_ADVANCE_PROFILE_TAG = "Combat:MovementService:StepAdvance"
 local FLOW_STEP_ADVANCE_PROFILE_TAG = "Combat:MovementService:Flow:StepAdvance"
 
+-- These stages belong only to the staged flow runtime. Direct path movement never enters this state machine.
 local FLOW_PIPELINE_TRANSITIONS: { [TFlowPipelineState]: { [TFlowPipelineState]: boolean } } = {
 	Idle = {
 		BuildingSnapshot = true,
@@ -102,6 +104,149 @@ require(script.FlowFrameState)
 require(script.FlowSnapshot)(MovementService)
 require(script.FlowPipeline)(MovementService)
 require(script.FlowMovement)(MovementService)
+
+-- Returns the minimum group size required before an "Any" mover can switch to flow.
+function MovementService:_GetMinGroupSize(): number
+	local configuredMinGroupSize = BoidsConfig.MinGroupSize
+	if type(configuredMinGroupSize) ~= "number" then
+		return 2
+	end
+
+	return math.max(1, math.floor(configuredMinGroupSize))
+end
+
+-- Checks whether one actor can use flow movement at the provided goal position.
+function MovementService:_CountFlowEligibleAtGoal(actorKey: TMovementActorKey, goalPosition: Vector3): number
+	local binding = self:_GetMovementBinding(actorKey)
+	if binding == nil then
+		return 0
+	end
+	return binding:CountFlowEligiblePeers(goalPosition)
+end
+
+-- Resolves which runtime should own the requested advance.
+function MovementService:_ResolveAdvanceMode(
+	actorKey: TMovementActorKey,
+	movementMode: EnemyMovementMode,
+	goalPosition: Vector3
+): ("Path" | "Flow")?
+	if movementMode == "Path" then
+		return "Path"
+	end
+
+	if movementMode == "Boids" then
+		return "Flow"
+	end
+
+	if movementMode == "Any" then
+		if self:_CountFlowEligibleAtGoal(actorKey, goalPosition) >= self:_GetMinGroupSize() then
+			return "Flow"
+		end
+		return "Path"
+	end
+
+	return nil
+end
+
+-- Returns whether the actor can remain inside its current runtime for the next goal.
+function MovementService:_CanTransitionInCurrentRuntime(
+	movementState: TMovementState?,
+	resolvedMode: "Path" | "Flow"
+): boolean
+	return movementState ~= nil and movementState.Mode == resolvedMode
+end
+
+-- Routes a same-runtime goal change to the owning runtime module.
+function MovementService:_TransitionAdvanceInCurrentRuntime(
+	actorKey: TMovementActorKey,
+	movementState: TMovementState,
+	resolvedMode: "Path" | "Flow",
+	goalPosition: Vector3
+): (boolean, string?)
+	if resolvedMode == "Path" then
+		return self:_TransitionPathRuntimeAdvance(actorKey, movementState :: MovementTypes.TPathMovementState, goalPosition)
+	end
+
+	local flowMovementState = movementState :: TFlowMovementState
+	local transitionResult = self:_TransitionFlowRuntimeAdvance(actorKey, flowMovementState, goalPosition)
+	if transitionResult.success then
+		return true, nil
+	end
+	return false, transitionResult.type
+end
+
+-- Starts movement inside the runtime selected by the router.
+function MovementService:_StartAdvanceInResolvedRuntime(
+	actorKey: TMovementActorKey,
+	resolvedMode: "Path" | "Flow",
+	requestedMode: EnemyMovementMode,
+	goalPosition: Vector3
+): (boolean, string?)
+	if resolvedMode == "Flow" then
+		local flowResult = self:_StartFlowRuntimeAdvance(actorKey, goalPosition)
+		if flowResult.success then
+			return true, nil
+		end
+		if requestedMode ~= "Any" or flowResult.type ~= "FastFlowNotConfigured" then
+			return false, flowResult.type
+		end
+	end
+
+	if self:_StartPathRuntimeAdvance(actorKey, goalPosition) then
+		return true, nil
+	end
+
+	return false, "PathStartFailed"
+end
+
+-- Advances the actor inside its owning runtime.
+function MovementService:_StepAdvanceInRuntime(
+	actorKey: TMovementActorKey,
+	movementState: TMovementState,
+	services: TFlowSchedulerServices?
+): (boolean, string?)
+	if movementState.Mode == "Path" then
+		-- Path runtime is direct: refresh speed and poll the active path run.
+		self:_ApplyCurrentMoveSpeed(actorKey)
+
+		local pathMovementState = movementState :: MovementTypes.TPathMovementState
+		local status, reason = self:_StepPathRuntimeAdvance(actorKey, pathMovementState)
+		if status == "Fail" then
+			return false, reason
+		end
+		if status == "Success" then
+			return true, nil
+		end
+		return false, nil
+	end
+
+	-- Flow runtime is staged: advance the solve pipeline, then consume/apply the latest publish.
+	local flowMovementState = movementState :: TFlowMovementState
+	return DebugPlus.profile(FLOW_STEP_ADVANCE_PROFILE_TAG, function(): (boolean, string?)
+		local stepResult = self:_StepFlowRuntimeAdvance(actorKey, flowMovementState, services)
+		if stepResult.success then
+			local outcome = stepResult.value
+			if type(outcome) == "table" then
+				return outcome.IsDone == true, nil
+			end
+			return false, nil
+		end
+		if stepResult.type == "FlowAdvancePending" then
+			return false, nil
+		end
+		return false, stepResult.type
+	end, MOVEMENT_PROFILING_ENABLED)
+end
+
+-- Stops the active runtime branch for one actor.
+function MovementService:_StopMovementInRuntime(actorKey: TMovementActorKey, movementState: TMovementState)
+	if movementState.Mode == "Path" then
+		self:_StopPathRuntime(movementState :: MovementTypes.TPathMovementState)
+		return
+	end
+
+	self:_StopFlowRuntime(actorKey)
+end
 
 --[=[
     Creates a new movement service with empty runtime caches and state tables.
@@ -325,9 +470,6 @@ function MovementService:StartAdvance(
 	goalPosition: Vector3?
 ): (boolean, string?)
 	local actorKey = self:_RegisterMovementBinding(binding)
-	-- Clear any previous movement before selecting the next runtime mode.
-	self:StopMovement(binding)
-
 	-- Validate caller-provided goal input before selecting the movement runtime.
 	if goalPosition == nil then
 		return false, "MissingGoalPosition"
@@ -338,23 +480,16 @@ function MovementService:StartAdvance(
 		return false, "InvalidMovementMode"
 	end
 
-	-- Prefer shared-flow movement when the mode and configuration allow it.
-	if resolvedMode == "Flow" then
-		local flowResult = self:_StartFlow(actorKey, goalPosition)
-		if flowResult.success then
-			return true, nil
-		end
-		if movementMode ~= "Any" or flowResult.type ~= "FastFlowNotConfigured" then
-			return false, flowResult.type
-		end
+	local movementState = self._movementByActorKey[actorKey]
+	if self:_CanTransitionInCurrentRuntime(movementState, resolvedMode) then
+		return self:_TransitionAdvanceInCurrentRuntime(actorKey, movementState :: TMovementState, resolvedMode, goalPosition)
 	end
 
-	-- Fall back to path movement when shared flow is unavailable.
-	if self:_StartPath(actorKey, goalPosition) then
-		return true, nil
+	if movementState ~= nil then
+		self:StopMovement(binding)
 	end
 
-	return false, "PathStartFailed"
+	return self:_StartAdvanceInResolvedRuntime(actorKey, resolvedMode, movementMode, goalPosition)
 end
 
 --[=[
@@ -373,36 +508,7 @@ function MovementService:StepAdvance(binding: TMovementActorBinding, services: T
 			return false, "MissingMovementState"
 		end
 
-		if movementState.Mode == "Path" then
-			-- Path movement only needs speed refresh and promise polling.
-			self:_ApplyCurrentMoveSpeed(actorKey)
-
-			local status, reason = self:_TickPath(actorKey, movementState)
-			if status == "Fail" then
-				return false, reason
-			end
-			if status == "Success" then
-				return true, nil
-			end
-			return false, nil
-		end
-
-		-- Flow movement runs through the separation pipeline before the per-entity solve.
-		local flowMovementState = movementState :: TFlowMovementState
-		return DebugPlus.profile(FLOW_STEP_ADVANCE_PROFILE_TAG, function(): (boolean, string?)
-			local stepResult = self:_StepFlowAdvance(actorKey, flowMovementState, services)
-			if stepResult.success then
-				local outcome = stepResult.value
-				if type(outcome) == "table" then
-					return outcome.IsDone == true, nil
-				end
-				return false, nil
-			end
-			if stepResult.type == "FlowAdvancePending" then
-				return false, nil
-			end
-			return false, stepResult.type
-		end, MOVEMENT_PROFILING_ENABLED)
+		return self:_StepAdvanceInRuntime(actorKey, movementState, services)
 	end, MOVEMENT_PROFILING_ENABLED)
 end
 
@@ -419,14 +525,7 @@ function MovementService:StopMovement(binding: TMovementActorBinding)
 	end
 
 	if movementState then
-		if movementState.Mode == "Path" then
-			local promise = movementState.Promise
-			if promise and type(promise.cancel) == "function" then
-				promise:cancel()
-			end
-		else
-			self:_StopHumanoid(actorKey)
-		end
+		self:_StopMovementInRuntime(actorKey, movementState)
 	end
 
 	self:_ClearMovementRuntimeState(actorKey)
