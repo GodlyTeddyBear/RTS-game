@@ -29,6 +29,7 @@ type BehaviorConfigComponent = UnitTypes.BehaviorConfigComponent
 type TargetComponent = UnitTypes.TargetComponent
 type LockOnComponent = UnitTypes.LockOnComponent
 type RoleComponent = UnitTypes.RoleComponent
+type BuilderAssignmentComponent = UnitTypes.BuilderAssignmentComponent
 type PathStateComponent = UnitTypes.PathStateComponent
 type LifetimeComponent = UnitTypes.LifetimeComponent
 
@@ -64,6 +65,7 @@ function UnitEntityFactory:_OnInit(_registry: any, _name: string, _componentRegi
 			and self._components.AnimationStateComponent ~= nil
 			and self._components.AnimationLoopingComponent ~= nil
 			and self._components.RoleComponent ~= nil
+			and self._components.BuilderAssignmentComponent ~= nil
 			and self._components.LifetimeComponent ~= nil
 			and self._components.ModelRefComponent ~= nil
 			and self._components.BehaviorTreeComponent ~= nil
@@ -153,6 +155,9 @@ function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitReques
 		DisplayName = definition.DisplayName,
 		MaxHp = definition.MaxHp,
 	} :: RoleComponent)
+	self:_Set(entity, self._components.BuilderAssignmentComponent, {
+		TargetStructureEntity = nil,
+	} :: BuilderAssignmentComponent)
 
 	if request.Lifetime ~= nil then
 		self:_Set(entity, self._components.LifetimeComponent, {
@@ -297,6 +302,31 @@ end
 function UnitEntityFactory:GetRole(entity: number): RoleComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.RoleComponent)
+end
+
+-- Returns the current builder-assigned structure entity, if any.
+function UnitEntityFactory:GetBuilderAssignment(entity: number): BuilderAssignmentComponent?
+	self:RequireReady()
+	return self:_Get(entity, self._components.BuilderAssignmentComponent)
+end
+
+-- Assigns one builder to a specific structure entity.
+function UnitEntityFactory:SetBuilderAssignment(entity: number, targetStructureEntity: number?)
+	self:RequireReady()
+	local currentAssignment = self:GetBuilderAssignment(entity)
+	if currentAssignment ~= nil and currentAssignment.TargetStructureEntity == targetStructureEntity then
+		return
+	end
+
+	self:_Set(entity, self._components.BuilderAssignmentComponent, {
+		TargetStructureEntity = targetStructureEntity,
+	} :: BuilderAssignmentComponent)
+	self:_Add(entity, self._components.DirtyTag)
+end
+
+-- Clears any current builder assignment.
+function UnitEntityFactory:ClearBuilderAssignment(entity: number)
+	self:SetBuilderAssignment(entity, nil)
 end
 
 -- Marks the unit as having reached its goal and removes it from the active query.

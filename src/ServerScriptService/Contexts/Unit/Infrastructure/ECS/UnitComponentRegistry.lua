@@ -33,6 +33,7 @@ function UnitComponentRegistry:_RegisterComponents(_registry: any, _name: string
 	self:RegisterComponent("AnimationStateComponent", "Unit.AnimationState", "AUTHORITATIVE")
 	self:RegisterComponent("AnimationLoopingComponent", "Unit.AnimationLooping", "AUTHORITATIVE")
 	self:RegisterComponent("RoleComponent", "Unit.Role", "AUTHORITATIVE")
+	self:RegisterComponent("BuilderAssignmentComponent", "Unit.BuilderAssignment", "AUTHORITATIVE")
 	self:RegisterComponent("LifetimeComponent", "Unit.Lifetime", "AUTHORITATIVE")
 	self:RegisterComponent("ModelRefComponent", "Unit.ModelRef", "AUTHORITATIVE")
 	self:RegisterComponent("BehaviorTreeComponent", "Unit.BehaviorTree", "AUTHORITATIVE")

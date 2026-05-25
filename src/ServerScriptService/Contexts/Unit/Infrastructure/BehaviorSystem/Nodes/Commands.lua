@@ -30,6 +30,13 @@ local Commands = {
 			task:success()
 		end)
 	end,
+	UnitBuildStructure = function()
+		return BehaviorSystem.Helpers.CreateCommandTask(function(task, context)
+			context.ActionFactory:SetPendingAction(context.Entity, "Unit.BuildStructure", nil)
+
+			task:success()
+		end)
+	end,
 }
 
 return table.freeze(Commands)

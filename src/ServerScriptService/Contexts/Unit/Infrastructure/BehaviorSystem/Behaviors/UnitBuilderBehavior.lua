@@ -15,6 +15,12 @@ local UnitBuilderBehavior = table.freeze({
 				"UnitManualMove",
 			},
 		},
+		{
+			Sequence = {
+				"UnitHasBuildableStructure",
+				"UnitBuildStructure",
+			},
+		},
 		"UnitIdle",
 	},
 })

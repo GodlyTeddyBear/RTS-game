@@ -159,6 +159,7 @@ function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord)
 		{
 			StructureId = structureId,
 			StructureType = record.StructureType,
+			OwnerUserId = record.OwnerUserId,
 		} :: TIdentityComponent
 	)
 	self:SetUniqueLookup("StructureId", structureId, entity)
@@ -597,6 +598,15 @@ function StructureEntityFactory:IsTargetable(entity: number?): boolean
 	return self:IsPlaced(entity)
 end
 
+function StructureEntityFactory:IsOwnedByUser(entity: number?, ownerUserId: number): boolean
+	if entity == nil then
+		return false
+	end
+
+	local identity = self:GetIdentity(entity)
+	return identity ~= nil and identity.OwnerUserId == ownerUserId
+end
+
 --[=[
 	Collects every active structure entity into an array.
 	@within StructureEntityFactory
@@ -616,6 +626,18 @@ end
 
 function StructureEntityFactory:QueryTargetableEntities(): { number }
 	return self:QueryPlacedEntities()
+end
+
+function StructureEntityFactory:QueryOwnedUnderConstructionEntities(ownerUserId: number): { number }
+	local entities = {}
+
+	for _, entity in ipairs(self:QueryPlacedEntities()) do
+		if self:IsUnderConstruction(entity) and self:IsOwnedByUser(entity, ownerUserId) then
+			table.insert(entities, entity)
+		end
+	end
+
+	return entities
 end
 
 --[=[

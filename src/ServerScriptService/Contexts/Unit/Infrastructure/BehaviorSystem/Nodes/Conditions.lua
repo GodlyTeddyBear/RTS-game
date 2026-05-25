@@ -24,6 +24,16 @@ local Conditions = {
 			task:fail()
 		end)
 	end,
+	UnitHasBuildableStructure = function()
+		return BehaviorSystem.Helpers.CreateConditionTask(function(task, context)
+			if context.Facts.HasBuildableStructure then
+				task:success()
+				return
+			end
+
+			task:fail()
+		end)
+	end,
 }
 
 return table.freeze(Conditions)

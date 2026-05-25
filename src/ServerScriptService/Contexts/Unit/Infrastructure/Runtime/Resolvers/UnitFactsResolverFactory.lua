@@ -14,6 +14,7 @@ local UnitFactsResolverFactory = {}
 -- Creates the fact resolver bundle for a single unit entity.
 function UnitFactsResolverFactory.Create(dependencies: {
 	UnitEntityFactory: any,
+	HasBuildableStructureForEntity: ((entity: number) -> boolean)?,
 }): any
 	return table.freeze({
 		BuildCheapFactGroups = function(entity: number): { [string]: { BuildFacts: () -> { [string]: any } } }
@@ -22,6 +23,9 @@ function UnitFactsResolverFactory.Create(dependencies: {
 					BuildFacts = function(): { [string]: any }
 						return {
 							HasGoalTarget = dependencies.UnitEntityFactory:HasActionableGoal(entity),
+							HasBuildableStructure = if dependencies.HasBuildableStructureForEntity ~= nil
+								then dependencies.HasBuildableStructureForEntity(entity)
+								else false,
 						}
 					end,
 				},
@@ -54,6 +58,7 @@ function UnitFactsResolverFactory.Create(dependencies: {
 		): { [string]: any }
 			return {
 				HasGoalTarget = cheapFacts.HasGoalTarget == true,
+				HasBuildableStructure = cheapFacts.HasBuildableStructure == true,
 			}
 		end,
 	})

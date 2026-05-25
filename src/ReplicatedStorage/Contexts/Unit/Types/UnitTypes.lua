@@ -23,6 +23,8 @@ export type UnitDefinition = {
 	DisplayName: string,
 	MaxHp: number,
 	MoveSpeed: number,
+	BuildWorkPerSecond: number?,
+	BuildRange: number?,
 	ModelScale: Vector3,
 	ModelColor: Color3,
 	MaxConcurrentUnitsPerOwner: number,
@@ -94,6 +96,10 @@ export type RoleComponent = {
 	Role: UnitRole,
 	DisplayName: string,
 	MaxHp: number,
+}
+
+export type BuilderAssignmentComponent = {
+	TargetStructureEntity: number?,
 }
 
 export type PathStateComponent = {

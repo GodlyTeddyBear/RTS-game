@@ -25,7 +25,7 @@ local BaseProfiles = BaseRuntimeProfileModule.new({
 			LoopingByAnimationState = {
 				Idle = true,
 			},
-			TickInterval = BehaviorConfig.DEFAULT.TickInterval,
+			TickInterval = BehaviorConfig.DEFAULTS_BY_ROLE.Builder.TickInterval,
 		}),
 	},
 	ResolveVariantId = function(input: {

@@ -105,6 +105,7 @@ export type TTransformComponent = {
 export type TIdentityComponent = {
 	StructureId: StructureId,
 	StructureType: StructureType,
+	OwnerUserId: number,
 }
 
 --[=[

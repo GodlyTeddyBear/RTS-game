@@ -146,18 +146,26 @@ end
 ]=]
 function UnitCombatAdapterService:Start(registry: any, _name: string)
 	self._combatContext = registry:Get("CombatContext")
+	self._structureContext = registry:Get("StructureContext")
 	self._worldContext = registry:Get("WorldContext")
 	self._combatServices = self._combatContext:GetCombatRuntimeServices().value
+	local structureEntityFactoryResult = self._structureContext:GetEntityFactory()
+	self._structureEntityFactory = if structureEntityFactoryResult.success then structureEntityFactoryResult.value else nil
 	self._movementProxyResolver = UnitMovementProxyResolverFactory.Create({
 		MovementService = self._combatServices.MovementService,
 		UnitEntityFactory = self._entityFactory,
 	})
 	self._factsResolver = UnitFactsResolverFactory.Create({
 		UnitEntityFactory = self._entityFactory,
+		HasBuildableStructureForEntity = function(entity: number): boolean
+			return self:_HasBuildableStructure(entity)
+		end,
 	})
 	self._serviceProxyResolver = UnitServiceProxyResolverFactory.Create({
 		UnitEntityFactory = self._entityFactory,
 		MovementProxyResolver = self._movementProxyResolver,
+		StructureContext = self._structureContext,
+		StructureEntityFactory = self._structureEntityFactory,
 		GetRuntimeOwner = function()
 			return self._runtimeOwner
 		end,
@@ -400,6 +408,24 @@ function UnitCombatAdapterService:_RefreshCheapFactGroupDirtiness(entity: number
 	if navigationGroup ~= nil and navigationGroup.Facts.HasGoalTarget ~= hasGoalTarget then
 		RuntimeFactCache.MarkCheapFactGroupDirty(self._cachedFactsByEntity, entity, CHEAP_FACT_GROUP_NAVIGATION)
 	end
+end
+
+function UnitCombatAdapterService:_HasBuildableStructure(entity: number): boolean
+	local cachedServices = self:_GetOrCreateCachedExecutorServices(entity)
+	local builderConstructionService = cachedServices.BuilderConstructionService
+	if builderConstructionService == nil then
+		return false
+	end
+
+	local assignedStructureEntity = builderConstructionService:GetAssignedStructureEntity(entity)
+	if
+		type(assignedStructureEntity) == "number"
+		and builderConstructionService:IsStructureBuildableForBuilder(entity, assignedStructureEntity)
+	then
+		return true
+	end
+
+	return type(builderConstructionService:FindNearestOwnedUnfinishedStructure(entity)) == "number"
 end
 
 function UnitCombatAdapterService:_ClearCachedFacts(entity: number)
