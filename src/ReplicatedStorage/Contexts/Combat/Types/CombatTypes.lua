@@ -1,8 +1,5 @@
 --!strict
 
-local ServerStorage = game:GetService("ServerStorage")
-local AIContractTypes = require(ServerStorage.Utilities.ContextUtilities.AI.ContractTypes)
-
 --[=[
 	@class CombatTypes
 	Defines shared combat runtime shapes used by the combat context.
@@ -22,6 +19,38 @@ export type CombatSessionLifecycleSnapshot = {
 	IsShutdownLocked: boolean,
 	HasLifecycleFailure: boolean,
 	FailureReason: string?,
+}
+
+export type TRuntimeBindingMethodStatus = {
+	MethodName: string,
+	HasMethod: boolean,
+	RegisteredPhases: { string },
+}
+
+export type TRuntimeBindingStatus = {
+	TargetField: string,
+	TargetExists: boolean,
+	Poll: TRuntimeBindingMethodStatus,
+	Sync: TRuntimeBindingMethodStatus,
+}
+
+export type TRuntimeBindingOwner = {
+	GetSchedulerBindingStatus: (self: TRuntimeBindingOwner, serviceField: string) -> any,
+}
+
+export type TRegistrationValidationOptions = {
+	RuntimeOwner: TRuntimeBindingOwner?,
+}
+
+export type TSemanticRequirements = {
+	FactsDependOnPolling: boolean?,
+	AttributesDependOnProjection: boolean?,
+}
+
+export type TRuntimeBinding = {
+	ServiceField: string,
+	PollPhase: string?,
+	SyncPhase: string?,
 }
 
 --[=[
@@ -74,8 +103,8 @@ export type CombatActorTypePayload = {
 	Commands: { [string]: (any?) -> any },
 	Executors: { [string]: any },
 	Hooks: { any }?,
-	SemanticRequirements: AIContractTypes.TSemanticRequirements?,
-	RuntimeBinding: AIContractTypes.TRuntimeBinding?,
+	SemanticRequirements: TSemanticRequirements?,
+	RuntimeBinding: TRuntimeBinding?,
 	RuntimeOwner: any?,
 }
 

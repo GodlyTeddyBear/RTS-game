@@ -39,6 +39,7 @@ export type TUnitReplicatedState = {
 	AnimationState: string?,
 	IsAnimationLooping: boolean?,
 	IsActive: boolean,
+	IsGoalReached: boolean,
 }
 
 local UnitReplicationClient = {}
@@ -76,12 +77,16 @@ function UnitReplicationClient:_BuildComponents(world: any, _replecsLibrary: any
 	local activeTag = world:entity()
 	_NameEntity(world, activeTag, "Unit.ActiveTag")
 
+	local goalReachedTag = world:entity()
+	_NameEntity(world, goalReachedTag, "Unit.GoalReachedTag")
+
 	return table.freeze({
 		IdentityComponent = identityComponent,
 		HealthComponent = healthComponent,
 		AnimationStateComponent = animationStateComponent,
 		AnimationLoopingComponent = animationLoopingComponent,
 		ActiveTag = activeTag,
+		GoalReachedTag = goalReachedTag,
 	})
 end
 
@@ -98,6 +103,7 @@ function UnitReplicationClient:_GetSharedSchema()
 		},
 		sharedTags = {
 			components.ActiveTag,
+			components.GoalReachedTag,
 		},
 	}
 end
@@ -214,6 +220,7 @@ function UnitReplicationClient:_RebuildUnitStateIndex()
 			AnimationState = if type(animationState) == "string" then animationState else nil,
 			IsAnimationLooping = if type(animationLooping) == "boolean" then animationLooping else nil,
 			IsActive = world:has(entity, components.ActiveTag),
+			IsGoalReached = world:has(entity, components.GoalReachedTag),
 		})
 
 		nextStateByGuid[unitGuid] = nextState
@@ -226,6 +233,7 @@ function UnitReplicationClient:_RebuildUnitStateIndex()
 			or previousState.AnimationState ~= nextState.AnimationState
 			or previousState.IsAnimationLooping ~= nextState.IsAnimationLooping
 			or previousState.IsActive ~= nextState.IsActive
+			or previousState.IsGoalReached ~= nextState.IsGoalReached
 		then
 			changedUnitGuids[unitGuid] = true
 		end

@@ -8,7 +8,6 @@
 ]=]
 local UnitTypes = {}
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local CombatTypes = require(ReplicatedStorage.Contexts.Combat.Types.CombatTypes)
 local ExecutorTypes = require(ReplicatedStorage.Contexts.Combat.Types.ExecutorTypes)
 
 export type UnitDefinitionId = string
@@ -79,6 +78,7 @@ export type BehaviorTreeComponent = ExecutorTypes.TBehaviorTreeComponent
 export type CombatActionComponent = ExecutorTypes.TCombatActionComponent
 export type AttackCooldownComponent = ExecutorTypes.TAttackCooldownComponent
 export type BehaviorConfigComponent = ExecutorTypes.TBehaviorConfigComponent
+export type CombatActionState = ExecutorTypes.TCombatActionState
 export type TargetKind = "Enemy" | "Structure" | "Base"
 export type TargetComponent = {
 	TargetEntity: number?,
@@ -108,7 +108,5 @@ export type LifetimeComponent = {
 	SpawnedAt: number,
 	ExpiresAt: number,
 }
-
-export type CombatActionState = CombatTypes.CombatActionState
 
 return table.freeze(UnitTypes)
