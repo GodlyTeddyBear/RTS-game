@@ -1,11 +1,9 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerStorage = game:GetService("ServerStorage")
 
 local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
-local FastFlowHelper = require(ServerStorage.Utilities.FastFlowHelper)
 local StateMachine = require(ReplicatedStorage.Utilities.StateMachine)
 local TableRecycler = require(ReplicatedStorage.Utilities.TableRecycler)
 local MovementTypes = require(script.Types)
@@ -25,7 +23,7 @@ MovementService.__index = MovementService
 type EnemyMovementMode = MovementTypes.EnemyMovementMode
 type TFlowPipelineStateMachineConfig = StateMachine.TStateMachineConfig<TFlowPipelineState>
 type TCombatLoopServiceLike = MovementTypes.TCombatLoopServiceLike
-type TEnemyEntityFactoryLike = MovementTypes.TEnemyEntityFactoryLike
+type TMovementEntityFactoryLike = MovementTypes.TMovementEntityFactoryLike
 type TFastFlowGridMapping = MovementTypes.TFastFlowGridMapping
 type TFastFlowPathfinder = MovementTypes.TFastFlowPathfinder
 type TFlowMovementState = MovementTypes.TFlowMovementState
@@ -103,7 +101,6 @@ require(script.FlowFrameState)
 require(script.FlowSnapshot)(MovementService)
 require(script.FlowPipeline)(MovementService)
 require(script.FlowMovement)(MovementService)
-require(script.UnitPathMovement)(MovementService)
 
 --[=[
     Creates a new movement service with empty runtime caches and state tables.
@@ -113,7 +110,6 @@ require(script.UnitPathMovement)(MovementService)
 function MovementService.new()
 	local self = setmetatable({}, MovementService)
 	self._movementByEntity = {} :: { [number]: TMovementState }
-	self._unitMovementByEntity = {}
 	self._movementTempTableRecycler = nil
 	self._fastFlowPathfinder = nil
 	self._fastFlowMapping = nil
@@ -122,7 +118,6 @@ function MovementService.new()
 	self._activeFlowEntitiesByGoalKey = {} :: { [string]: { [number]: boolean } }
 	self._flowSettledByEntity = {} :: { [number]: boolean }
 	self._flowActorRefsByEntity = {} :: { [number]: TFlowActorRefs }
-	self._unitActorRefsByEntity = {}
 	self._flowVelocityByEntity = {} :: { [number]: Vector2 }
 	self._flowFrameSerial = 0
 	self._flowPipelineStateMachine = _CreateFlowPipelineStateMachine()
@@ -184,8 +179,6 @@ function MovementService.new()
 	self._flowWallGridCache = nil
 	self._flowWallGridHalfSize = nil
 	self._flowWallGridWidth = nil
-	self._unitEntityFactory = nil
-	self._unitInstanceFactory = nil
 	return self
 end
 
@@ -209,24 +202,16 @@ function MovementService:Start()
 end
 
 --[=[
-    Wires the enemy entity factory used to read and update movement state.
+    Wires the movement entity factory used to read and update movement state.
     @within MovementService
-    @param enemyEntityFactory any -- Enemy entity factory used by movement resolution.
+    @param movementEntityFactory any -- Entity factory used by movement resolution.
 ]=]
-function MovementService:ConfigureEnemyEntityFactory(enemyEntityFactory: TEnemyEntityFactoryLike)
-	self._enemyEntityFactory = enemyEntityFactory
+function MovementService:ConfigureMovementEntityFactory(movementEntityFactory: TMovementEntityFactoryLike)
+	self._movementEntityFactory = movementEntityFactory
 end
 
-function MovementService:ConfigureEnemyInstanceFactory(enemyInstanceFactory: any)
-	self._enemyInstanceFactory = enemyInstanceFactory
-end
-
-function MovementService:ConfigureUnitEntityFactory(unitEntityFactory: any)
-	self._unitEntityFactory = unitEntityFactory
-end
-
-function MovementService:ConfigureUnitInstanceFactory(unitInstanceFactory: any)
-	self._unitInstanceFactory = unitInstanceFactory
+function MovementService:ConfigureMovementInstanceFactory(movementInstanceFactory: any)
+	self._movementInstanceFactory = movementInstanceFactory
 end
 
 --[=[
@@ -324,27 +309,31 @@ end
     @within MovementService
     @param entity number -- Entity id to start moving.
     @param movementMode EnemyMovementMode -- Requested movement mode from the caller.
+    @param goalPosition Vector3 -- Goal position to path toward.
     @return boolean -- Whether movement started successfully.
     @return string? -- Failure reason when movement could not start.
 ]=]
-function MovementService:StartAdvance(entity: number, movementMode: EnemyMovementMode): (boolean, string?)
+function MovementService:StartAdvance(
+	entity: number,
+	movementMode: EnemyMovementMode,
+	goalPosition: Vector3?
+): (boolean, string?)
 	-- Clear any previous movement before selecting the next runtime mode.
 	self:StopMovement(entity)
 
-	-- Resolve the target goal and confirm the requested movement mode is valid.
-	local pathState = self._enemyEntityFactory:GetPathState(entity)
-	if not pathState or not pathState.GoalPosition then
+	-- Validate caller-provided goal input before selecting the movement runtime.
+	if goalPosition == nil then
 		return false, "MissingGoalPosition"
 	end
 
-	local resolvedMode = self:_ResolveAdvanceMode(movementMode, pathState.GoalPosition)
+	local resolvedMode = self:_ResolveAdvanceMode(movementMode, goalPosition)
 	if not resolvedMode then
 		return false, "InvalidMovementMode"
 	end
 
 	-- Prefer shared-flow movement when the mode and configuration allow it.
 	if resolvedMode == "Flow" then
-		local flowResult = self:_StartFlow(entity, pathState.GoalPosition)
+		local flowResult = self:_StartFlow(entity, goalPosition)
 		if flowResult.success then
 			return true, nil
 		end
@@ -354,7 +343,7 @@ function MovementService:StartAdvance(entity: number, movementMode: EnemyMovemen
 	end
 
 	-- Fall back to path movement when shared flow is unavailable.
-	if self:_StartPath(entity, pathState.GoalPosition) then
+	if self:_StartPath(entity, goalPosition) then
 		return true, nil
 	end
 
@@ -440,7 +429,6 @@ end
 ]=]
 function MovementService:CleanupAll()
 	local entities = self:_AcquireMovementTempArray()
-	local unitEntities = self:_AcquireMovementTempArray()
 	local success, err = xpcall(function()
 		-- Capture movement entities first so cleanup can mutate the live maps safely.
 		for entityId in self._movementByEntity do
@@ -458,24 +446,15 @@ function MovementService:CleanupAll()
 		for _, entityId in ipairs(entities) do
 			self:StopMovement(entityId)
 		end
-
-		for entityId in self._unitMovementByEntity do
-			table.insert(unitEntities, entityId)
-		end
-		for _, entityId in ipairs(unitEntities) do
-			self:StopUnitMovement(entityId)
-		end
 	end, function(message)
 		return debug.traceback(message, 2)
 	end)
 	self:_ReleaseMovementTempArray(entities)
-	self:_ReleaseMovementTempArray(unitEntities)
 	if not success then
 		error(err, 0)
 	end
 
 	table.clear(self._flowActorRefsByEntity)
-	table.clear(self._unitActorRefsByEntity)
 	self:ResetFastFlowRuntime()
 end
 
@@ -565,7 +544,10 @@ function MovementService:_ClearMovementRuntimeState(entity: number)
 	self._flowInvalidReasonByEntity[entity] = nil
 	self._flowRecoveredOpenCellByEntity[entity] = nil
 	self:_InvalidateFlowActorRefs(entity)
-	self._enemyEntityFactory:SetPathMoving(entity, false)
+	local movementEntityFactory = self._movementEntityFactory
+	if movementEntityFactory ~= nil then
+		movementEntityFactory:SetPathMoving(entity, false)
+	end
 	if self._lockOnService and type(self._lockOnService.SetBoidsFacingFlatForward) == "function" then
 		self._lockOnService:SetBoidsFacingFlatForward(entity, nil)
 	end

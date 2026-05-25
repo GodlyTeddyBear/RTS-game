@@ -549,8 +549,8 @@ function EnemyCombatAdapterService:_ConfigureCombatServices()
 
 		return whitelistInstances
 	end)
-	self._combatServices.MovementService:ConfigureEnemyEntityFactory(self._entityFactory)
-	self._combatServices.MovementService:ConfigureEnemyInstanceFactory(self._instanceFactory)
+	self._combatServices.MovementService:ConfigureMovementEntityFactory(self._entityFactory)
+	self._combatServices.MovementService:ConfigureMovementInstanceFactory(self._instanceFactory)
 	self._combatServices.StatusService:ConfigureEnemyEntityFactory(self._entityFactory)
 	self._combatServices.MovementService:ConfigureLockOnService(self._combatServices.LockOnService)
 	self._combatServices.MovementService:ConfigureFlowfieldDebugRenderer(function(

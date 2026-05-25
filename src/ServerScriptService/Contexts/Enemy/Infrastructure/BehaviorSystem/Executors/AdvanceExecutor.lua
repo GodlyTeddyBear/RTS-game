@@ -47,6 +47,13 @@ function AdvanceExecutor:CanStart(entity: number, _data: any?, services: any): (
 end
 
 function AdvanceExecutor:OnStart(entity: number, _data: any?, services: any)
+	local pathState = services.EnemyEntityFactory:GetPathState(entity)
+	if pathState == nil or pathState.GoalPosition == nil then
+		self:SetEntityValue(entity, START_FAILURE_REASON_KEY, "MissingGoalPosition")
+		services.MovementService:StopMovement(entity)
+		return
+	end
+
 	local role = services.EnemyEntityFactory:GetRole(entity)
 	if role == nil then
 		self:SetEntityValue(entity, START_FAILURE_REASON_KEY, "MissingRole")
@@ -61,7 +68,7 @@ function AdvanceExecutor:OnStart(entity: number, _data: any?, services: any)
 		return
 	end
 
-	local started, reason = services.MovementService:StartAdvance(entity, roleConfig.MovementMode)
+	local started, reason = services.MovementService:StartAdvance(entity, roleConfig.MovementMode, pathState.GoalPosition)
 	if not started then
 		self:SetEntityValue(entity, START_FAILURE_REASON_KEY, if reason ~= nil then reason else "StartAdvanceFailed")
 		services.MovementService:StopMovement(entity)

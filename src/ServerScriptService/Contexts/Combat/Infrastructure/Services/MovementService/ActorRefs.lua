@@ -34,7 +34,7 @@ return function(MovementService: TMovementService)
 	function MovementService:_GetEntityModel(entity: number): Model?
 		local refs = self:_GetOrCreateFlowActorRefs(entity)
 		local resolvedModel = Option.Wrap(
-			if self._enemyInstanceFactory ~= nil then self._enemyInstanceFactory:GetInstance(entity) else nil
+			if self._movementInstanceFactory ~= nil then self._movementInstanceFactory:GetInstance(entity) else nil
 		):UnwrapOr(nil)
 		if refs.Model ~= resolvedModel then
 			refs.Model = resolvedModel
@@ -99,8 +99,8 @@ return function(MovementService: TMovementService)
 		local humanoid = self:_GetHumanoid(entity)
 		local refs = self:_GetOrCreateFlowActorRefs(entity)
 		local currentMoveSpeed = nil
-		if self._enemyEntityFactory and type(self._enemyEntityFactory.GetCurrentMoveSpeed) == "function" then
-			currentMoveSpeed = self._enemyEntityFactory:GetCurrentMoveSpeed(entity)
+		if self._movementEntityFactory and type(self._movementEntityFactory.GetCurrentMoveSpeed) == "function" then
+			currentMoveSpeed = self._movementEntityFactory:GetCurrentMoveSpeed(entity)
 		end
 
 		-- Read the authoritative combat speed first so the humanoid mirrors live gameplay state.

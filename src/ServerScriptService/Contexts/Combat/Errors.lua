@@ -29,6 +29,7 @@ Errors.ILLEGAL_SESSION_TRANSITION = "CombatContext: combat session state transit
 Errors.COMBAT_SESSION_INVARIANT_FAILED = "CombatContext: combat session lifecycle invariants are not satisfied"
 Errors.COMBAT_SESSION_MISSING = "CombatContext: combat session does not exist"
 Errors.MOVEMENT_MISSING_GOAL_POSITION = "CombatContext: movement goal position is missing"
+Errors.MOVEMENT_MISSING_ENTITY_FACTORY = "CombatContext: movement entity factory is missing"
 Errors.MOVEMENT_INVALID_MODE = "CombatContext: movement mode is invalid"
 Errors.MOVEMENT_MISSING_STATE = "CombatContext: movement state is missing"
 Errors.MOVEMENT_FLOW_NOT_CONFIGURED = "CombatContext: flow movement is not configured"

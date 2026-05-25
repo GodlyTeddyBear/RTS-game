@@ -112,7 +112,9 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		end
 
 		-- Mark the entity as path-moving only after the runtime state is fully initialized.
-		self._enemyEntityFactory:SetPathMoving(entity, true)
+		if self._movementEntityFactory ~= nil then
+			self._movementEntityFactory:SetPathMoving(entity, true)
+		end
 		return Ok(true)
 	end
 
@@ -295,7 +297,9 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		local sanitizedTarget = self:_SanitizeFlowMoveTarget(recoveryMoveTarget)
 		self._flowVelocityByEntity[entity] = velocityXZ
 		self:_IssueHumanoidMoveTo(entity, sanitizedTarget, velocityXZ)
-		self._enemyEntityFactory:SetPathMoving(entity, sanitizedTarget ~= nil)
+		if self._movementEntityFactory ~= nil then
+			self._movementEntityFactory:SetPathMoving(entity, sanitizedTarget ~= nil)
+		end
 		return true
 	end
 
@@ -430,7 +434,9 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 			self._flowSettledByEntity[entity] = nil
 			self:_ClearFlowRecoveryState(entity, movementState)
 			self:_StopHumanoid(entity)
-			self._enemyEntityFactory:SetPathMoving(entity, false)
+			if self._movementEntityFactory ~= nil then
+				self._movementEntityFactory:SetPathMoving(entity, false)
+			end
 			return Ok({
 				IsDone = true,
 			})
@@ -458,7 +464,9 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 			if recoveryStatus == "RetryLater" then
 				self._flowVelocityByEntity[entity] = Vector2.zero
 				self:_StopHumanoid(entity)
-				self._enemyEntityFactory:SetPathMoving(entity, false)
+				if self._movementEntityFactory ~= nil then
+					self._movementEntityFactory:SetPathMoving(entity, false)
+				end
 				return Ok({
 					IsDone = false,
 				})
@@ -478,7 +486,9 @@ function MovementService:_GetFlowConfig(): MovementTypes.TFlowSoftSeparationConf
 		-- Publish the final movement command to the humanoid and path-moving state.
 		self._flowVelocityByEntity[entity] = solvedVelocityXZ
 		self:_IssueHumanoidMoveTo(entity, moveTarget, solvedVelocityXZ)
-		self._enemyEntityFactory:SetPathMoving(entity, moveTarget ~= nil)
+		if self._movementEntityFactory ~= nil then
+			self._movementEntityFactory:SetPathMoving(entity, moveTarget ~= nil)
+		end
 		return Ok({
 			IsDone = false,
 		})

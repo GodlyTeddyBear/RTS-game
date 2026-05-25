@@ -542,7 +542,12 @@ return function(MovementService: TMovementService)
 		entity: number,
 		movementState: TFlowMovementState
 	): Result.Result<MovementTypes.TFlowBuildFrameStatePayload>
-		local pathState = self._enemyEntityFactory:GetPathState(entity)
+		local movementEntityFactory = self._movementEntityFactory
+		if movementEntityFactory == nil then
+			return Err("MissingMovementEntityFactory", Errors.MOVEMENT_MISSING_ENTITY_FACTORY)
+		end
+
+		local pathState = movementEntityFactory:GetPathState(entity)
 		local goalPosition = pathState and pathState.GoalPosition or nil
 		if not goalPosition then
 			return Err("MissingGoalPosition", Errors.MOVEMENT_MISSING_GOAL_POSITION)

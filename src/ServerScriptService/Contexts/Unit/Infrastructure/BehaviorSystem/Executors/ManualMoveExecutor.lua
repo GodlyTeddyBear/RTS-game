@@ -1,8 +1,10 @@
 --!strict
 
 local ServerStorage = game:GetService("ServerStorage")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BaseExecutor = require(ServerStorage.Utilities.ContextUtilities.BaseExecutor)
+local UnitConfig = require(ReplicatedStorage.Contexts.Unit.Config.UnitConfig)
 
 local START_FAILURE_REASON_KEY = "StartFailureReason"
 
@@ -35,13 +37,34 @@ function ManualMoveExecutor:CanStart(entity: number, _data: any?, services: any)
 end
 
 function ManualMoveExecutor:OnStart(entity: number, _data: any?, services: any)
-	local started, reason = services.MovementService:StartUnitMove(entity)
-	if not started then
-		self:SetEntityValue(entity, START_FAILURE_REASON_KEY, if reason ~= nil then reason else "StartUnitMoveFailed")
-		services.MovementService:StopUnitMovement(entity)
+	local pathState = services.UnitEntityFactory:GetPathState(entity)
+	if pathState == nil or pathState.GoalPosition == nil then
+		self:SetEntityValue(entity, START_FAILURE_REASON_KEY, "MissingGoalPosition")
+		services.MovementService:StopMovement(entity)
 		return
 	end
 
+	local identity = services.UnitEntityFactory:GetIdentity(entity)
+	if identity == nil then
+		self:SetEntityValue(entity, START_FAILURE_REASON_KEY, "MissingIdentity")
+		services.MovementService:StopMovement(entity)
+		return
+	end
+
+	local unitDefinition = UnitConfig.Definitions[identity.UnitId]
+	if unitDefinition == nil or unitDefinition.MovementMode == nil then
+		self:SetEntityValue(entity, START_FAILURE_REASON_KEY, "InvalidMovementMode")
+		services.MovementService:StopMovement(entity)
+		return
+	end
+
+	local started, reason =
+		services.MovementService:StartAdvance(entity, unitDefinition.MovementMode, pathState.GoalPosition)
+	if not started then
+		self:SetEntityValue(entity, START_FAILURE_REASON_KEY, if reason ~= nil then reason else "StartAdvanceFailed")
+		services.MovementService:StopMovement(entity)
+		return
+	end
 	self:ClearEntityValue(entity, START_FAILURE_REASON_KEY)
 end
 
@@ -64,7 +87,8 @@ function ManualMoveExecutor:OnTick(entity: number, _dt: number, services: any): 
 		return self:Fail(entity, startFailureReason)
 	end
 
-	local isDone, reason = services.MovementService:StepUnitMove(entity)
+	services.DeltaTime = _dt
+	local isDone, reason = services.MovementService:StepAdvance(entity, services)
 	if reason ~= nil then
 		return self:Fail(entity, reason)
 	end
@@ -77,18 +101,18 @@ end
 
 function ManualMoveExecutor:OnCancel(entity: number, services: any)
 	self:ClearEntityValue(entity, START_FAILURE_REASON_KEY)
-	services.MovementService:StopUnitMovement(entity)
+	services.MovementService:StopMovement(entity)
 end
 
 function ManualMoveExecutor:OnComplete(entity: number, services: any)
 	self:ClearEntityValue(entity, START_FAILURE_REASON_KEY)
 	services.UnitEntityFactory:ClearGoalPosition(entity)
-	services.MovementService:StopUnitMovement(entity)
+	services.MovementService:StopMovement(entity)
 end
 
 function ManualMoveExecutor:OnDeath(entity: number, services: any)
 	self:ClearEntityValue(entity, START_FAILURE_REASON_KEY)
-	services.MovementService:StopUnitMovement(entity)
+	services.MovementService:StopMovement(entity)
 end
 
 return ManualMoveExecutor

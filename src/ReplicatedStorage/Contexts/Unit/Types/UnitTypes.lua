@@ -7,12 +7,13 @@
 	@client
 ]=]
 local UnitTypes = {}
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 export type UnitDefinitionId = string
 export type UnitFaction = "Player" | "Enemy"
 export type UnitOwnerKind = "Player" | "PlayerBase" | "EnemyBase"
 export type UnitRole = "Combat" | "Builder"
-export type UnitMovementMode = "Path" | "Boids" | "Any"
+export type UnitMovementMode = "Any" | "Boids" | "Path"
 
 export type UnitDefinition = {
 	UnitId: UnitDefinitionId,

@@ -36,25 +36,26 @@ export type TAgentParams = {
 	AgentCanJump: boolean?,
 }
 
-export type TEnemyPathStateLike = {
+export type TMovementPathStateLike = {
 	GoalPosition: Vector3?,
 }
 
-export type TEnemyModelRefLike = {
+export type TMovementModelRefLike = {
 	Model: Model?,
 }
 
-export type TEnemyRoleLike = {
+export type TMovementRoleLike = {
 	Role: string,
 }
 
-export type TEnemyEntityFactoryLike = {
-	GetPathState: (self: TEnemyEntityFactoryLike, entity: number) -> TEnemyPathStateLike?,
-	SetPathMoving: (self: TEnemyEntityFactoryLike, entity: number, isMoving: boolean) -> (),
-	GetModelRef: (self: TEnemyEntityFactoryLike, entity: number) -> TEnemyModelRefLike?,
-	GetCurrentMoveSpeed: (self: TEnemyEntityFactoryLike, entity: number) -> number?,
-	GetRole: (self: TEnemyEntityFactoryLike, entity: number) -> TEnemyRoleLike?,
-	QueryAliveEntities: (self: TEnemyEntityFactoryLike) -> { number },
+export type TMovementEntityFactoryLike = {
+	GetPathState: (self: TMovementEntityFactoryLike, entity: number) -> TMovementPathStateLike?,
+	SetPathMoving: (self: TMovementEntityFactoryLike, entity: number, isMoving: boolean) -> (),
+	GetModelRef: (self: TMovementEntityFactoryLike, entity: number) -> TMovementModelRefLike?,
+	GetCurrentMoveSpeed: (self: TMovementEntityFactoryLike, entity: number) -> number?,
+	GetRole: (self: TMovementEntityFactoryLike, entity: number) -> TMovementRoleLike?,
+	QueryAliveEntities: ((self: TMovementEntityFactoryLike) -> { number })?,
+	QueryActiveEntities: ((self: TMovementEntityFactoryLike) -> { number })?,
 }
 
 export type TLockOnServiceLike = {
@@ -573,7 +574,8 @@ export type TFlowSeparationWorkerRequest = {
 export type TMovementService = {
 	_registry: TRegistryLike?,
 	_combatLoopService: TCombatLoopServiceLike?,
-	_enemyEntityFactory: TEnemyEntityFactoryLike,
+	_movementEntityFactory: TMovementEntityFactoryLike?,
+	_movementInstanceFactory: any?,
 	_lockOnService: TLockOnServiceLike?,
 	_fastFlowPathfinder: TFastFlowPathfinder?,
 	_fastFlowMapping: TFastFlowGridMapping?,
@@ -629,13 +631,19 @@ export type TMovementService = {
 	_flowWallGridWidth: number?,
 	Init: (self: TMovementService, registry: TRegistryLike, name: string) -> (),
 	Start: (self: TMovementService) -> (),
-	ConfigureEnemyEntityFactory: (self: TMovementService, enemyEntityFactory: TEnemyEntityFactoryLike) -> (),
+	ConfigureMovementEntityFactory: (self: TMovementService, movementEntityFactory: TMovementEntityFactoryLike) -> (),
+	ConfigureMovementInstanceFactory: (self: TMovementService, movementInstanceFactory: any) -> (),
 	ConfigureLockOnService: (self: TMovementService, lockOnService: TLockOnServiceLike) -> (),
 	ConfigureFastFlow: (self: TMovementService, pathfinder: TFastFlowPathfinder?, mapping: TFastFlowGridMapping?) -> (),
 	ConfigureFlowfieldDebugRenderer: (self: TMovementService, renderer: TFlowfieldDebugRenderer?) -> (),
 	FinalizeAdvanceFrame: (self: TMovementService) -> (),
 	ResetFastFlowRuntime: (self: TMovementService) -> (),
-	StartAdvance: (self: TMovementService, entity: number, movementMode: EnemyMovementMode) -> (boolean, string?),
+	StartAdvance: (
+		self: TMovementService,
+		entity: number,
+		movementMode: EnemyMovementMode,
+		goalPosition: Vector3?
+	) -> (boolean, string?),
 	StepAdvance: (self: TMovementService, entity: number, services: TFlowSchedulerServices?) -> (boolean, string?),
 	StopMovement: (self: TMovementService, entity: number) -> (),
 	CleanupAll: (self: TMovementService) -> (),

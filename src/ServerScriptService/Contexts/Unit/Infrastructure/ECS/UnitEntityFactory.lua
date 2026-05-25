@@ -123,6 +123,16 @@ function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitReques
 	return entity
 end
 
+function UnitEntityFactory:SetModelRef(entity: number, model: Model)
+	BaseECSEntityFactory.SetModelRef(self, entity, model)
+	self:_Add(entity, self._components.DirtyTag)
+end
+
+function UnitEntityFactory:GetModelRef(entity: number): { Model: Model }?
+	self:RequireReady()
+	return BaseECSEntityFactory.GetModelRef(self, entity)
+end
+
 function UnitEntityFactory:GetIdentity(entity: number): IdentityComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.IdentityComponent)

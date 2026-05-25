@@ -17,7 +17,7 @@ function IdleExecutor.new()
 end
 
 function IdleExecutor:OnTick(_entity: number, _dt: number, _services: any): string
-	print("Idling")
+	--print("Idling")
 	return self:Running()
 end
 

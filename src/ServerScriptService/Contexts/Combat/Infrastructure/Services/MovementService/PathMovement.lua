@@ -20,7 +20,11 @@ local GOAL_POSITION_EPSILON = 0.01
 return function(MovementService: TMovementService)
 	-- Resolves the enemy role name so movement can look up role-specific pathing params.
 	function MovementService:_GetRoleName(entity: number): string?
-		local role = self._enemyEntityFactory:GetRole(entity)
+		local movementEntityFactory = self._movementEntityFactory
+		if movementEntityFactory == nil then
+			return nil
+		end
+		local role = movementEntityFactory:GetRole(entity)
 		return role and role.Role or nil
 	end
 
@@ -49,7 +53,11 @@ return function(MovementService: TMovementService)
 
 	-- Checks whether one entity can use flow movement at the provided goal position.
 	function MovementService:_CanEntityUseFlowAtGoal(entity: number, goalPosition: Vector3): boolean
-		local pathState = self._enemyEntityFactory:GetPathState(entity)
+		local movementEntityFactory = self._movementEntityFactory
+		if movementEntityFactory == nil then
+			return false
+		end
+		local pathState = movementEntityFactory:GetPathState(entity)
 		if not pathState or not pathState.GoalPosition then
 			return false
 		end
@@ -59,7 +67,7 @@ return function(MovementService: TMovementService)
 		end
 
 		local roleName = self:_GetRoleName(entity)
-		local roleConfig = roleName and EnemyConfig.Roles[roleName] or nil
+		local roleConfig = if roleName ~= nil then (EnemyConfig.Roles :: any)[roleName] else nil
 		if not roleConfig then
 			return false
 		end
@@ -69,8 +77,20 @@ return function(MovementService: TMovementService)
 
 	-- Counts how many alive entities near the goal are eligible to share the flow runtime.
 	function MovementService:_CountFlowEligibleAtGoal(goalPosition: Vector3): number
+		local movementEntityFactory = self._movementEntityFactory
+		if movementEntityFactory == nil then
+			return 0
+		end
+
+		local queryAliveEntities = movementEntityFactory.QueryAliveEntities
+		local queryActiveEntities = movementEntityFactory.QueryActiveEntities
+		local queryEntities = if type(queryAliveEntities) == "function"
+			then queryAliveEntities(movementEntityFactory)
+			elseif type(queryActiveEntities) == "function"
+			then queryActiveEntities(movementEntityFactory)
+			else {}
 		local groupSize = 0
-		for _, aliveEntity in ipairs(self._enemyEntityFactory:QueryAliveEntities()) do
+		for _, aliveEntity in ipairs(queryEntities) do
 			if self:_CanEntityUseFlowAtGoal(aliveEntity, goalPosition) then
 				groupSize += 1
 			end
@@ -89,7 +109,10 @@ return function(MovementService: TMovementService)
 		end
 
 		if movementMode == "Any" then
-			return (self:_CountFlowEligibleAtGoal(goalPosition) >= self:_GetMinGroupSize()) and "Flow" or "Path"
+			if self:_CountFlowEligibleAtGoal(goalPosition) >= self:_GetMinGroupSize() then
+				return "Flow"
+			end
+			return "Path"
 		end
 
 		return nil
@@ -97,8 +120,13 @@ return function(MovementService: TMovementService)
 
 	-- Starts the pathfinding promise for one entity and marks it as path-moving.
 	function MovementService:_StartPath(entity: number, goalPosition: Vector3): boolean
+		local movementEntityFactory = self._movementEntityFactory
+		if movementEntityFactory == nil then
+			return false
+		end
+
 		local path = PathfindingHelper.CreatePath(entity, {
-			EnemyEntityFactory = self._enemyEntityFactory,
+			EntityFactory = movementEntityFactory,
 		}, self:_GetAgentParams(entity), CombatMovementConfig.PATHFINDING)
 		if not path then
 			return false
@@ -108,7 +136,7 @@ return function(MovementService: TMovementService)
 			Mode = "Path",
 			Promise = PathfindingHelper.RunPath(path, goalPosition, entity, CombatMovementConfig.PATHFINDING),
 		}
-		self._enemyEntityFactory:SetPathMoving(entity, true)
+		movementEntityFactory:SetPathMoving(entity, true)
 		return true
 	end
 
@@ -126,7 +154,10 @@ return function(MovementService: TMovementService)
 		end
 
 		self._movementByEntity[entity] = nil
-		self._enemyEntityFactory:SetPathMoving(entity, false)
+		local movementEntityFactory = self._movementEntityFactory
+		if movementEntityFactory ~= nil then
+			movementEntityFactory:SetPathMoving(entity, false)
+		end
 
 		if status == Promise.Status.Resolved then
 			return "Success", nil

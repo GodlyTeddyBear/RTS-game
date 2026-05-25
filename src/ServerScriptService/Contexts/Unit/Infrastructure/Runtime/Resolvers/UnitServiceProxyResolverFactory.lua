@@ -22,6 +22,9 @@ function UnitServiceProxyResolverFactory.Create(dependencies: {
 					GetPathState = function(_proxy: any, _runtimeId: number)
 						return unitEntityFactory:GetPathState(entity)
 					end,
+					GetIdentity = function(_proxy: any, _runtimeId: number)
+						return unitEntityFactory:GetIdentity(entity)
+					end,
 					SetGoalPosition = function(_proxy: any, _runtimeId: number, goalPosition: Vector3)
 						unitEntityFactory:SetGoalPosition(entity, goalPosition)
 					end,

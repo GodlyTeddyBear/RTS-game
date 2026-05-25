@@ -8,8 +8,13 @@ function EnemyMovementProxyResolverFactory.Create(dependencies: {
 	return table.freeze({
 		CreateProxy = function(entity: number): any
 			return {
-				StartAdvance = function(_proxy: any, _runtimeId: number, movementMode: any): (boolean, string?)
-					return dependencies.MovementService:StartAdvance(entity, movementMode)
+				StartAdvance = function(
+					_proxy: any,
+					_runtimeId: number,
+					movementMode: any,
+					goalPosition: Vector3?
+				): (boolean, string?)
+					return dependencies.MovementService:StartAdvance(entity, movementMode, goalPosition)
 				end,
 				StepAdvance = function(_proxy: any, _runtimeId: number, services: any?): (boolean, string?)
 					return dependencies.MovementService:StepAdvance(entity, services)
