@@ -10,7 +10,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
-local BaseECSEntityFactory = require(ServerStorage.Utilities.ECSUtilities.BaseECSEntityFactory)
+local CombatECSEntityFactory = require(ServerStorage.Utilities.ECSUtilities.CombatECSEntityFactory)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 local UnitRuntimeProfiles = require(script.Parent.Parent.Runtime.Profiles.UnitRuntimeProfiles)
 
@@ -23,13 +23,18 @@ type HealthComponent = UnitTypes.HealthComponent
 type MoveSpeedComponent = UnitTypes.MoveSpeedComponent
 type AnimationStateComponent = UnitTypes.AnimationStateComponent
 type AnimationLoopingComponent = UnitTypes.AnimationLoopingComponent
+type CombatActionComponent = UnitTypes.CombatActionComponent
+type AttackCooldownComponent = UnitTypes.AttackCooldownComponent
+type BehaviorConfigComponent = UnitTypes.BehaviorConfigComponent
+type TargetComponent = UnitTypes.TargetComponent
+type LockOnComponent = UnitTypes.LockOnComponent
 type RoleComponent = UnitTypes.RoleComponent
 type PathStateComponent = UnitTypes.PathStateComponent
 type LifetimeComponent = UnitTypes.LifetimeComponent
 
 local UnitEntityFactory = {}
 UnitEntityFactory.__index = UnitEntityFactory
-setmetatable(UnitEntityFactory, { __index = BaseECSEntityFactory })
+setmetatable(UnitEntityFactory, { __index = CombatECSEntityFactory })
 
 local function _ownerKey(ownerKind: string, ownerId: string): string
 	return ownerKind .. ":" .. ownerId
@@ -37,7 +42,7 @@ end
 
 -- Creates the unit entity factory with the unit namespace and no instantiated entities yet.
 function UnitEntityFactory.new()
-	return setmetatable(BaseECSEntityFactory.new("Unit"), UnitEntityFactory)
+	return setmetatable(CombatECSEntityFactory.new("Unit"), UnitEntityFactory)
 end
 
 -- Binds the unit component registry used to create and mutate unit entities.
@@ -61,8 +66,15 @@ function UnitEntityFactory:_OnInit(_registry: any, _name: string, _componentRegi
 			and self._components.RoleComponent ~= nil
 			and self._components.LifetimeComponent ~= nil
 			and self._components.ModelRefComponent ~= nil
+			and self._components.BehaviorTreeComponent ~= nil
+			and self._components.CombatActionComponent ~= nil
+			and self._components.AttackCooldownComponent ~= nil
+			and self._components.BehaviorConfigComponent ~= nil
+			and self._components.TargetComponent ~= nil
+			and self._components.LockOnComponent ~= nil
 			and self._components.ActiveTag ~= nil
-			and self._components.DirtyTag ~= nil,
+			and self._components.DirtyTag ~= nil
+			and self._components.GoalReachedTag ~= nil,
 		"UnitEntityFactory: missing UnitComponentRegistry components"
 	)
 	self:_ConfigureSpatialComponents("ModelRefComponent", "TransformComponent")
@@ -103,6 +115,7 @@ function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitReques
 	self:_Set(entity, self._components.CurrentMoveSpeedComponent, {
 		Value = definition.MoveSpeed,
 	} :: MoveSpeedComponent)
+	local runtimeProfile = UnitRuntimeProfiles.GetByVariant(definition.RuntimeProfileId)
 	self:_Set(entity, self._components.PathStateComponent, {
 		GoalPosition = nil,
 		RequestedGoalPosition = nil,
@@ -110,6 +123,23 @@ function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitReques
 		FailedGoalRevision = nil,
 		IsMoving = false,
 	} :: PathStateComponent)
+	self:_Set(entity, self._components.CombatActionComponent, self:BuildDefaultCombatAction() :: CombatActionComponent)
+	self:_Set(entity, self._components.AttackCooldownComponent, {
+		Cooldown = 0,
+		LastAttackTime = 0,
+	} :: AttackCooldownComponent)
+	self:_Set(entity, self._components.BehaviorConfigComponent, {
+		TickInterval = runtimeProfile.TickInterval,
+	} :: BehaviorConfigComponent)
+	self:_Set(entity, self._components.TargetComponent, {
+		TargetEntity = nil,
+		TargetKind = "Enemy",
+	} :: TargetComponent)
+	self:_Set(entity, self._components.LockOnComponent, {
+		Attachment0 = nil,
+		Attachment1 = nil,
+		Constraint = nil,
+	} :: LockOnComponent)
 
 	local animationState, isLooping = UnitRuntimeProfiles.ResolveAnimationState({
 		VariantId = definition.RuntimeProfileId,
@@ -142,14 +172,14 @@ end
 
 -- Stores the spawned model reference and marks the entity dirty so the model sync path can pick it up.
 function UnitEntityFactory:SetModelRef(entity: number, model: Model)
-	BaseECSEntityFactory.SetModelRef(self, entity, model)
+	CombatECSEntityFactory.SetModelRef(self, entity, model)
 	self:_Add(entity, self._components.DirtyTag)
 end
 
 -- Returns the model reference bound to the entity, if one has been assigned.
 function UnitEntityFactory:GetModelRef(entity: number): { Model: Model }?
 	self:RequireReady()
-	return BaseECSEntityFactory.GetModelRef(self, entity)
+	return CombatECSEntityFactory.GetModelRef(self, entity)
 end
 
 -- Returns the identity component for the entity so other systems can read unit metadata.
@@ -181,6 +211,27 @@ end
 function UnitEntityFactory:GetHealth(entity: number): HealthComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.HealthComponent)
+end
+
+-- Returns the combat cooldown component used by future unit attack executors.
+function UnitEntityFactory:GetAttackCooldown(entity: number): AttackCooldownComponent?
+	self:RequireReady()
+	return self:_Get(entity, self._components.AttackCooldownComponent)
+end
+
+-- Updates the last attack timestamp while preserving the configured cooldown.
+function UnitEntityFactory:SetLastAttackTime(entity: number, lastAttackTime: number)
+	self:RequireReady()
+	local attackCooldown = self:GetAttackCooldown(entity)
+	if attackCooldown == nil then
+		return
+	end
+
+	self:_Set(entity, self._components.AttackCooldownComponent, {
+		Cooldown = attackCooldown.Cooldown,
+		LastAttackTime = lastAttackTime,
+	} :: AttackCooldownComponent)
+	self:_Add(entity, self._components.DirtyTag)
 end
 
 -- Returns the configured base move speed for the entity.
@@ -248,6 +299,22 @@ function UnitEntityFactory:GetRole(entity: number): RoleComponent?
 	return self:_Get(entity, self._components.RoleComponent)
 end
 
+-- Marks the unit as having reached its goal and removes it from the active query.
+function UnitEntityFactory:MarkGoalReached(entity: number)
+	self:RequireReady()
+	self:_Remove(entity, self._components.ActiveTag)
+	self:_Add(entity, self._components.GoalReachedTag)
+	self:_Add(entity, self._components.DirtyTag)
+end
+
+-- Restores the active tag and clears the goal-reached marker.
+function UnitEntityFactory:ClearGoalReached(entity: number)
+	self:RequireReady()
+	self:_Remove(entity, self._components.GoalReachedTag)
+	self:_Add(entity, self._components.ActiveTag)
+	self:_Add(entity, self._components.DirtyTag)
+end
+
 -- Marks the entity dirty so the sync layer re-emits it on the next pass.
 function UnitEntityFactory:MarkDirty(entity: number)
 	self:RequireReady()
@@ -264,6 +331,67 @@ end
 function UnitEntityFactory:GetPathState(entity: number): PathStateComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.PathStateComponent)
+end
+
+-- Returns the current target payload used by future combat-capable unit behaviors.
+function UnitEntityFactory:GetTarget(entity: number): TargetComponent?
+	self:RequireReady()
+	return self:_Get(entity, self._components.TargetComponent)
+end
+
+-- Updates the target payload for one unit entity.
+function UnitEntityFactory:SetTarget(entity: number, targetEntity: number?, targetKind: "Enemy" | "Structure" | "Base")
+	self:RequireReady()
+	self:_Set(entity, self._components.TargetComponent, {
+		TargetEntity = targetEntity,
+		TargetKind = targetKind,
+	} :: TargetComponent)
+	self:_Add(entity, self._components.DirtyTag)
+end
+
+-- Clears the current unit target, defaulting back to enemy-facing target kind.
+function UnitEntityFactory:ClearTarget(entity: number)
+	self:RequireReady()
+	self:_Set(entity, self._components.TargetComponent, {
+		TargetEntity = nil,
+		TargetKind = "Enemy",
+	} :: TargetComponent)
+	self:_Add(entity, self._components.DirtyTag)
+end
+
+-- Returns the current lock-on constraint payload, if any.
+function UnitEntityFactory:GetLockOn(entity: number): LockOnComponent?
+	self:RequireReady()
+	return self:_Get(entity, self._components.LockOnComponent)
+end
+
+-- Stores lock-on attachments and constraint refs for one unit.
+function UnitEntityFactory:SetLockOn(
+	entity: number,
+	lockOn: {
+		Attachment0: Attachment?,
+		Attachment1: Attachment?,
+		Constraint: AlignOrientation?,
+	}
+)
+	self:RequireReady()
+	self:_Set(entity, self._components.LockOnComponent, {
+		Attachment0 = lockOn.Attachment0,
+		Attachment1 = lockOn.Attachment1,
+		Constraint = lockOn.Constraint,
+	} :: LockOnComponent)
+	self:_Add(entity, self._components.DirtyTag)
+end
+
+-- Clears lock-on refs for one unit.
+function UnitEntityFactory:ClearLockOn(entity: number)
+	self:RequireReady()
+	self:_Set(entity, self._components.LockOnComponent, {
+		Attachment0 = nil,
+		Attachment1 = nil,
+		Constraint = nil,
+	} :: LockOnComponent)
+	self:_Add(entity, self._components.DirtyTag)
 end
 
 -- Returns whether the unit still has a goal that should be retried by the behavior runtime.
@@ -373,10 +501,26 @@ function UnitEntityFactory:IsActive(entity: number): boolean
 	return self:_Exists(entity) and self:_Has(entity, self._components.ActiveTag)
 end
 
+-- Returns the current derived transform snapshot through the same name Enemy uses.
+function UnitEntityFactory:GetPosition(entity: number): TransformComponent?
+	return self:GetTransform(entity)
+end
+
+-- Returns the current world cframe used for death/cleanup projection paths.
+function UnitEntityFactory:GetDeathCFrame(entity: number): CFrame?
+	return self:GetEntityCFrame(entity)
+end
+
 -- Returns every active unit entity tracked by the unit ECS world.
 function UnitEntityFactory:QueryActiveEntities(): { number }
 	self:RequireReady()
 	return self:CollectQuery(self._components.ActiveTag)
+end
+
+-- Returns every goal-reached unit entity tracked by the unit ECS world.
+function UnitEntityFactory:QueryGoalReachedEntities(): { number }
+	self:RequireReady()
+	return self:CollectQuery(self._components.GoalReachedTag)
 end
 
 -- Returns every unit entity owned by the requested owner bucket.

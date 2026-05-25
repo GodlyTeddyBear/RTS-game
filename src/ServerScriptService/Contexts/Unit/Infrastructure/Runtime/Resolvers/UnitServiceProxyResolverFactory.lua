@@ -37,6 +37,18 @@ function UnitServiceProxyResolverFactory.Create(dependencies: {
 					GetIdentity = function(_proxy: any, _runtimeId: number)
 						return unitEntityFactory:GetIdentity(entity)
 					end,
+					GetPosition = function(_proxy: any, _runtimeId: number)
+						return unitEntityFactory:GetPosition(entity)
+					end,
+					GetAttackCooldown = function(_proxy: any, _runtimeId: number)
+						return unitEntityFactory:GetAttackCooldown(entity)
+					end,
+					GetCombatAction = function(_proxy: any, _runtimeId: number)
+						return unitEntityFactory:GetCombatAction(entity)
+					end,
+					GetBehaviorConfig = function(_proxy: any, _runtimeId: number)
+						return unitEntityFactory:GetBehaviorConfig(entity)
+					end,
 					SetGoalPosition = function(_proxy: any, _runtimeId: number, goalPosition: Vector3)
 						unitEntityFactory:SetGoalPosition(entity, goalPosition)
 					end,
@@ -45,6 +57,47 @@ function UnitServiceProxyResolverFactory.Create(dependencies: {
 					end,
 					MarkGoalFailedCurrentRevision = function(_proxy: any, _runtimeId: number)
 						unitEntityFactory:MarkGoalFailedCurrentRevision(entity)
+					end,
+					SetTarget = function(
+						_proxy: any,
+						_runtimeId: number,
+						targetEntity: number?,
+						targetKind: "Enemy" | "Structure" | "Base"
+					)
+						unitEntityFactory:SetTarget(entity, targetEntity, targetKind)
+					end,
+					ClearTarget = function(_proxy: any, _runtimeId: number)
+						unitEntityFactory:ClearTarget(entity)
+					end,
+					SetLastAttackTime = function(_proxy: any, _runtimeId: number, lastAttackTime: number)
+						unitEntityFactory:SetLastAttackTime(entity, lastAttackTime)
+					end,
+					PromoteToCommitted = function(_proxy: any, _runtimeId: number)
+						unitEntityFactory:PromoteToCommitted(entity)
+					end,
+					SetCombatAction = function(_proxy: any, _runtimeId: number, action: any)
+						unitEntityFactory:SetCombatAction(entity, action)
+					end,
+					ClearAction = function(_proxy: any, _runtimeId: number)
+						unitEntityFactory:ClearAction(entity)
+					end,
+					SetBehaviorConfig = function(_proxy: any, _runtimeId: number, config: { TickInterval: number })
+						unitEntityFactory:SetBehaviorConfig(entity, config)
+					end,
+					GetLockOn = function(_proxy: any, _runtimeId: number)
+						return unitEntityFactory:GetLockOn(entity)
+					end,
+					SetLockOn = function(_proxy: any, _runtimeId: number, lockOn: any)
+						unitEntityFactory:SetLockOn(entity, lockOn)
+					end,
+					ClearLockOn = function(_proxy: any, _runtimeId: number)
+						unitEntityFactory:ClearLockOn(entity)
+					end,
+					MarkGoalReached = function(_proxy: any, _runtimeId: number)
+						unitEntityFactory:MarkGoalReached(entity)
+					end,
+					ClearGoalReached = function(_proxy: any, _runtimeId: number)
+						unitEntityFactory:ClearGoalReached(entity)
 					end,
 					SetPathMoving = function(_proxy: any, _runtimeId: number, isMoving: boolean)
 						unitEntityFactory:SetPathMoving(entity, isMoving)

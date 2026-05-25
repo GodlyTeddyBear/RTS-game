@@ -139,6 +139,7 @@ local UnitContext = Knit.CreateService({
 	ExternalServices = {
 		{ Name = "CombatContext" },
 		{ Name = "TeamContext" },
+		{ Name = "WorldContext" },
 	},
 	Cache = {
 		World = "_world",
@@ -294,6 +295,12 @@ end
 
 function UnitContext:GetReplicationService(): Result.Result<any>
 	return Ok(self._replicationService)
+end
+
+function UnitContext:WarmFastFlowForRun(): Result.Result<boolean>
+	return Catch(function()
+		return Ok(self._combatAdapterService:WarmFastFlowForRun())
+	end, "Unit:WarmFastFlowForRun")
 end
 
 function UnitContext:GetSchedulerBindingStatus(targetField: string): Result.Result<any>

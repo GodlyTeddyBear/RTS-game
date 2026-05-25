@@ -35,9 +35,16 @@ function UnitComponentRegistry:_RegisterComponents(_registry: any, _name: string
 	self:RegisterComponent("RoleComponent", "Unit.Role", "AUTHORITATIVE")
 	self:RegisterComponent("LifetimeComponent", "Unit.Lifetime", "AUTHORITATIVE")
 	self:RegisterComponent("ModelRefComponent", "Unit.ModelRef", "AUTHORITATIVE")
+	self:RegisterComponent("BehaviorTreeComponent", "Unit.BehaviorTree", "AUTHORITATIVE")
+	self:RegisterComponent("CombatActionComponent", "Unit.CombatAction", "AUTHORITATIVE")
+	self:RegisterComponent("AttackCooldownComponent", "Unit.AttackCooldown", "AUTHORITATIVE")
+	self:RegisterComponent("BehaviorConfigComponent", "Unit.BehaviorConfig", "AUTHORITATIVE")
+	self:RegisterComponent("TargetComponent", "Unit.Target", "AUTHORITATIVE")
+	self:RegisterComponent("LockOnComponent", "Unit.LockOn", "AUTHORITATIVE")
 
 	self:RegisterTag("ActiveTag", "Unit.ActiveTag")
 	self:RegisterTag("DirtyTag", "Unit.DirtyTag")
+	self:RegisterTag("GoalReachedTag", "Unit.GoalReachedTag")
 end
 
 return UnitComponentRegistry

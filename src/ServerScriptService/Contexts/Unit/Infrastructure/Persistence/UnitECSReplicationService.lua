@@ -51,6 +51,7 @@ function UnitECSReplicationService:_GetSharedSchema()
 		},
 		sharedTags = {
 			components.ActiveTag,
+			components.GoalReachedTag,
 		},
 	}
 end
@@ -72,6 +73,7 @@ function UnitECSReplicationService:RegisterUnitEntity(entity: number)
 	self:RegisterReliableComponent(entity, components.AnimationStateComponent)
 	self:RegisterReliableComponent(entity, components.AnimationLoopingComponent)
 	self:RegisterReliableComponent(entity, components.ActiveTag)
+	self:RegisterReliableComponent(entity, components.GoalReachedTag)
 end
 
 -- Stops replicating the requested unit entity.
