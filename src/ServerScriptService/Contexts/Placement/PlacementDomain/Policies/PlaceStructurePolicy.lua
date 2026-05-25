@@ -78,7 +78,7 @@ function PlaceStructurePolicy:Check(
 ): Result.Result<PlacementDecision>
 	-- Run state gates the whole feature, so it is the first live lookup.
 	local runState = Try(self._runContext:GetState())
-	Ensure(PlacementSpecs.IsPrepState(runState), "NotPrepState", Errors.NOT_PREP_STATE, {
+	Ensure(PlacementSpecs.CanPlaceInRunState(runState), "NotActiveRunState", Errors.NOT_ACTIVE_RUN_STATE, {
 		state = runState,
 	})
 

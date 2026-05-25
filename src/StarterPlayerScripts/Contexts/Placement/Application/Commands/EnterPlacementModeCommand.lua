@@ -13,6 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PlacementFootprintResolver = require(ReplicatedStorage.Contexts.Placement.PlacementFootprintResolver)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
+local CanPlaceInRunState = require(script.Parent.Parent.CanPlaceInRunState)
 
 type GridCoord = PlacementTypes.GridCoord
 
@@ -68,9 +69,9 @@ function EnterPlacementModeCommand:Execute(state: any, deps: any, structureType:
 		self._exitPlacementModeCommand:Execute(state, deps)
 	end
 
-	-- Placement mode is only available during the prep phase.
+	-- Placement mode is only available while the run is in an active build-allowed phase.
 	local runState = deps.runAtom()
-	if runState.State ~= "Prep" then
+	if not CanPlaceInRunState(runState.State) then
 		return
 	end
 

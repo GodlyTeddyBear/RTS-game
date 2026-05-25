@@ -18,9 +18,17 @@ type SpecialTileRequirementMode = "AtLeastOneTile" | "AllTiles"
 ]=]
 local PlacementSpecs = {}
 
--- Prep is the only state that allows new placements.
-function PlacementSpecs.IsPrepState(state: RunState): boolean
-	return state == "Prep"
+local ACTIVE_PLACEMENT_STATES: { [RunState]: boolean } = table.freeze({
+	Prep = true,
+	Wave = true,
+	Resolution = true,
+	Climax = true,
+	Endless = true,
+})
+
+-- Placements stay available for the full active run lifecycle, but not lobby or run-end states.
+function PlacementSpecs.CanPlaceInRunState(state: RunState): boolean
+	return ACTIVE_PLACEMENT_STATES[state] == true
 end
 
 -- Config lookup is the authoritative source for whether a structure can be placed at all.

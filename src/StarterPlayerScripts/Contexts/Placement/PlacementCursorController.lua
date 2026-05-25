@@ -21,6 +21,7 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 local PlacementFootprintResolver = require(ReplicatedStorage.Contexts.Placement.PlacementFootprintResolver)
+local CanPlaceInRunState = require(script.Parent.Application.CanPlaceInRunState)
 
 local PlacementCursorGridService = require(script.Parent.Infrastructure.Services.PlacementCursorGridService)
 local PlacementGhostModel = require(script.Parent.Infrastructure.PlacementGhostModel)
@@ -235,7 +236,7 @@ function PlacementCursorController:_OnRenderStepped()
 	local runState = self._runAtom()
 	if runState.State ~= self._runState then
 		self._runState = runState.State
-		if runState.State ~= "Prep" then
+		if not CanPlaceInRunState(runState.State) then
 			self:ExitPlacementMode()
 			return
 		end

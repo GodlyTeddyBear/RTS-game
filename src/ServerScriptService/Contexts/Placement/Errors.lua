@@ -9,7 +9,7 @@ local Errors = {}
 
 Errors.INVALID_REQUEST_COORD = "PlacementContext: invalid placement coordinates in request"
 Errors.INVALID_REQUEST_STRUCTURE_TYPE = "PlacementContext: invalid structure type in request"
-Errors.NOT_PREP_STATE = "PlacementContext: placement only allowed during Prep phase"
+Errors.NOT_ACTIVE_RUN_STATE = "PlacementContext: placement only allowed during active run phases"
 Errors.UNKNOWN_STRUCTURE_TYPE = "PlacementContext: structure type not in config"
 Errors.INVALID_COST_MAP = "PlacementContext: structure cost map is missing or malformed"
 Errors.INVALID_COORD = "PlacementContext: grid coordinate is invalid or out of bounds"

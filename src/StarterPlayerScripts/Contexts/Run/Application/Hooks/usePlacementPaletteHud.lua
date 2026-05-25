@@ -17,6 +17,7 @@ local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.Plac
 local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.StructureConfig)
 local RunTypes = require(ReplicatedStorage.Contexts.Run.Types.RunTypes)
 local EconomyTypes = require(ReplicatedStorage.Contexts.Economy.Types.EconomyTypes)
+local CanPlaceInRunState = require(script.Parent.Parent.Parent.Parent.Placement.Application.CanPlaceInRunState)
 local ResourceHudViewModel = require(script.Parent.Parent.ViewModels.ResourceHudViewModel)
 
 -- [Types]
@@ -215,7 +216,7 @@ local function usePlacementPaletteHud(): { isVisible: boolean, structures: { TSt
 	end
 
 	return table.freeze({
-		isVisible = runState.State == "Prep",
+		isVisible = CanPlaceInRunState(runState.State),
 		structures = table.freeze(structures),
 	})
 end
