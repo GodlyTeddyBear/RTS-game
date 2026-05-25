@@ -18,6 +18,7 @@ Working plans and **phase checklists** for the RTS project. The living design sp
 | [Phase5/Phase5Plan.md](Phase5/Phase5Plan.md) | **Meta progression** — unlocks, loadouts, profile versioning, horizontal set. |
 | [Phase5/Phase5CompletionChecklist.md](Phase5/Phase5CompletionChecklist.md) | Pass/fail checkboxes for Phase 5. |
 | [ContentPlan.md](ContentPlan.md) | **Full v1 content matrix** - structures, enemies, rewards, mutators, and meta unlocks. |
+| [EntityContextReference.md](EntityContextReference.md) | ECS kernel reference for a centralized `EntityContext`, feature-context registration, and sync boundaries. |
 | [Phase6/Phase6Plan.md](Phase6/Phase6Plan.md) | **Polish + ship prep** — perf, telemetry, UX pass, bug bash, release/rollback, content-complete. |
 | [Phase6/Phase6CompletionChecklist.md](Phase6/Phase6CompletionChecklist.md) | Pass/fail checkboxes for Phase 6 (ship gate). |
 | [Phase7/Phase7Plan.md](Phase7/Phase7Plan.md) | **Co-op product phase** — session, scaling, disconnect/rejoin, anti-grief, co-op UI (after stable solo). |

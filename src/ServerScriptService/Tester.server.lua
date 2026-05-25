@@ -10,13 +10,14 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 local TestEZ = require(ReplicatedStorage.Packages.Testez)
 
 -- Constants
-local RUN_TESTS = false
+local RUN_TESTS = true
 local BANNER_WIDTH = 70
 local REPORTER = TestEZ.Reporters.TextReporter
 local SPEC_NAME_FILTERS = {
 	-- "BaseECSReplicationClient",
 	-- "ActorRegistryBase",
-	"TeamService",
+	--"TeamService",
+	--"StateMachine",
 }
 local TEST_CONTAINERS = {
 	ReplicatedStorage,
