@@ -1,5 +1,12 @@
 --!strict
 
+--[=[
+    @class CleanupUnitsCommand
+    Removes all units, or all units owned by a specific owner bucket, by delegating to the despawn command.
+
+    @server
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
@@ -21,6 +28,7 @@ function CleanupUnitsCommand.new()
 	return setmetatable(self, CleanupUnitsCommand)
 end
 
+-- Resolves the entity factory and despawn command used to identify and remove target units.
 function CleanupUnitsCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_entityFactory = "UnitEntityFactory",
@@ -28,8 +36,10 @@ function CleanupUnitsCommand:Init(registry: any, _name: string)
 	})
 end
 
+-- Selects either a specific owner's units or every active unit and despawns them one by one.
 function CleanupUnitsCommand:Execute(ownerKind: string?, ownerId: string?): Result.Result<boolean>
 	return Result.Catch(function()
+		-- Switch between owner-scoped cleanup and full cleanup based on whether an owner was supplied.
 		local entities
 		if ownerKind ~= nil or ownerId ~= nil then
 			Ensure(type(ownerKind) == "string" and ownerKind ~= "", "InvalidOwnerKind", Errors.INVALID_OWNER_KIND)
@@ -39,6 +49,7 @@ function CleanupUnitsCommand:Execute(ownerKind: string?, ownerId: string?): Resu
 			entities = self._entityFactory:QueryActiveEntities()
 		end
 
+		-- Despawn each matching entity through the normal teardown path so every dependency is cleaned up consistently.
 		for _, entity in ipairs(entities) do
 			Try(self._despawnUnitCommand:Execute(entity))
 		end

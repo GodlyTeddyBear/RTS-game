@@ -1,5 +1,13 @@
 --!strict
 
+--[=[
+    @class UnitContext
+    Owns the server-side unit application, domain, and infrastructure wiring for spawning, movement, cleanup, and replication.
+
+    Flow: Initialize context services -> register ECS sync and replication -> serve commands and queries -> cleanup on run end or shutdown.
+    @server
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
@@ -30,6 +38,7 @@ type SpawnUnitResult = UnitTypes.SpawnUnitResult
 local Catch = Result.Catch
 local Ok = Result.Ok
 
+-- Infrastructure modules are cached into the context so application commands can resolve the concrete ECS services they need.
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
 		Name = "ClientSignals",
@@ -151,14 +160,17 @@ local UnitContext = Knit.CreateService({
 
 local UnitBaseContext = BaseContext.new(UnitContext)
 
+-- Initializes the base context state and prepares the teardown connections.
 function UnitContext:KnitInit()
 	UnitBaseContext:KnitInit()
 	self._runEndedConnection = nil :: any
 	self._playerRemovingConnection = nil :: any
 end
 
+-- Registers the ECS sync surface, replication hooks, and cleanup listeners that keep the unit context authoritative.
 function UnitContext:KnitStart()
 	UnitBaseContext:KnitStart()
+	-- Register unit ECS sync before any gameplay events can mutate units.
 	UnitBaseContext:RegisterPollSystem("_syncService", nil, "UnitSync")
 	UnitBaseContext:RegisterSyncSystem("_syncService", nil, "UnitSync")
 	UnitBaseContext:RegisterMethodSystem("UnitSync", "_replicationService", "FlushReliable")
@@ -180,15 +192,18 @@ function UnitContext:KnitStart()
 		)
 	end
 
+	-- Clear all units when the run ends so the next run starts from a clean world state.
 	UnitBaseContext:OnContextEvent("Run", "RunEnded", function()
 		self:_OnRunEnded()
 	end, "_runEndedConnection")
 
+	-- Clean up any player-owned units immediately when the owning player leaves.
 	UnitBaseContext:OnPlayerRemoving(function(player: Player)
 		self:CleanupOwner("Player", tostring(player.UserId))
 	end, "_playerRemovingConnection")
 end
 
+-- Spawns a unit, registers it for combat and replication, and rolls back the entity if any step fails.
 function UnitContext:SpawnUnit(request: SpawnUnitRequest): Result.Result<SpawnUnitResult>
 	return Catch(function()
 		local spawnResult = self._spawnUnitCommand:Execute(request)
@@ -210,42 +225,49 @@ function UnitContext:SpawnUnit(request: SpawnUnitRequest): Result.Result<SpawnUn
 	end, "Unit:SpawnUnit")
 end
 
+-- Despawns a single unit entity through the command layer.
 function UnitContext:DespawnUnit(entity: number): Result.Result<boolean>
 	return Catch(function()
 		return self._despawnUnitCommand:Execute(entity)
 	end, "Unit:DespawnUnit")
 end
 
+-- Removes every unit owned by the requested owner bucket.
 function UnitContext:CleanupOwner(ownerKind: string, ownerId: string): Result.Result<boolean>
 	return Catch(function()
 		return self._cleanupUnitsCommand:Execute(ownerKind, ownerId)
 	end, "Unit:CleanupOwner")
 end
 
+-- Removes every active unit regardless of owner.
 function UnitContext:CleanupAll(): Result.Result<boolean>
 	return Catch(function()
 		return self._cleanupUnitsCommand:Execute(nil, nil)
 	end, "Unit:CleanupAll")
 end
 
+-- Validates and forwards a move-order request to the application command layer.
 function UnitContext:IssueMoveOrder(player: Player, request: UnitTypes.IssueMoveOrderRequest): Result.Result<number>
 	return Catch(function()
 		return self._issueUnitMoveOrderCommand:Execute(player, request)
 	end, "Unit:IssueMoveOrder")
 end
 
+-- Returns all active unit entity ids.
 function UnitContext:GetActiveUnits(): Result.Result<{ number }>
 	return Catch(function()
 		return self._getActiveUnitsQuery:Execute()
 	end, "Unit:GetActiveUnits")
 end
 
+-- Returns the current count of active units owned by the requested owner bucket.
 function UnitContext:GetOwnerUnitCount(ownerKind: string, ownerId: string): Result.Result<number>
 	return Catch(function()
 		return self._getOwnerUnitCountQuery:Execute(ownerKind, ownerId)
 	end, "Unit:GetOwnerUnitCount")
 end
 
+-- Exposes the cached ECS factories and services to other server systems.
 function UnitContext:GetEntityFactory(): Result.Result<any>
 	return Ok(self._entityFactory)
 end
@@ -278,6 +300,7 @@ function UnitContext:GetSchedulerBindingStatus(targetField: string): Result.Resu
 	return Ok(UnitBaseContext:GetSchedulerBindingStatus(targetField))
 end
 
+-- Cleans up all units after the run ends and reports the failure if teardown does not succeed.
 function UnitContext:_OnRunEnded()
 	local result = self:CleanupAll()
 	if not result.success then
@@ -288,6 +311,7 @@ function UnitContext:_OnRunEnded()
 	end
 end
 
+-- Ensures the unit world is empty before the service tears down.
 function UnitContext:_BeforeDestroy()
 	local result = self:CleanupAll()
 	if not result.success then
@@ -298,6 +322,7 @@ function UnitContext:_BeforeDestroy()
 	end
 end
 
+-- Delegates to the base context teardown and reports any shutdown failure.
 function UnitContext:Destroy()
 	local destroyResult = UnitBaseContext:Destroy()
 	if not destroyResult.success then
@@ -308,14 +333,17 @@ function UnitContext:Destroy()
 	end
 end
 
+-- Hydrates the unit replication stream for the requesting player.
 function UnitContext.Client:RequestUnitReplication(player: Player): boolean
 	return self.Server._replicationService:HydratePlayer(player)
 end
 
+-- Marks the replication bootstrap as complete so the server can switch to steady-state updates.
 function UnitContext.Client:AcknowledgeUnitReplicationBootstrap(player: Player): boolean
 	return self.Server._replicationService:CompleteBootstrap(player)
 end
 
+-- Accepts a client move-order request, forwards it to the server command, and reports whether any units were updated.
 function UnitContext.Client:IssueMoveOrder(player: Player, request: UnitTypes.IssueMoveOrderRequest): boolean
 	local result = self.Server:IssueMoveOrder(player, request)
 	return result.success and result.value > 0

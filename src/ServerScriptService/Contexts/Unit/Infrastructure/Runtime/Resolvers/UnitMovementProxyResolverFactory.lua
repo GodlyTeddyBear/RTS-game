@@ -1,5 +1,12 @@
 --!strict
 
+--[=[
+    @class UnitMovementProxyResolverFactory
+    Builds behavior-runtime movement proxies that translate unit AI movement requests into ECS updates.
+
+    @server
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
@@ -8,11 +15,13 @@ local UnitConfig = require(ReplicatedStorage.Contexts.Unit.Config.UnitConfig)
 local UnitMovementProxyResolverFactory = {}
 local GOAL_POSITION_EPSILON = 0.01
 
+-- Creates the movement proxy bundle used by unit behaviors and AI movement tasks.
 function UnitMovementProxyResolverFactory.Create(dependencies: {
 	MovementService: any,
 	UnitEntityFactory: any,
-}): any
+	}): any
 	return table.freeze({
+		-- Builds the proxy surface used by movement executors for a single unit entity.
 		CreateProxy = function(entity: number): any
 			local unitEntityFactory = dependencies.UnitEntityFactory
 			local binding = {
@@ -31,6 +40,7 @@ function UnitMovementProxyResolverFactory.Create(dependencies: {
 					return unitEntityFactory:GetCurrentMoveSpeed(self.EntityId)
 				end,
 				GetAgentParams = function(self: any)
+					-- Resolve movement tuning from the unit definition so pathing uses the correct agent profile.
 					local identity = unitEntityFactory:GetIdentity(self.EntityId)
 					local unitId = if identity ~= nil then identity.UnitId else nil
 					local definition = if type(unitId) == "string" then UnitConfig.Definitions[unitId] else nil
@@ -39,6 +49,7 @@ function UnitMovementProxyResolverFactory.Create(dependencies: {
 					return if config ~= nil then config else CombatMovementConfig.DEFAULT_AGENT_PARAMS
 				end,
 				CountFlowEligiblePeers = function(self: any, goalPosition: Vector3): number
+					-- Count nearby peers that share the same goal so flow-based movement can adjust its formation size.
 					local groupSize = 0
 					for _, candidateEntity in ipairs(unitEntityFactory:QueryActiveEntities()) do
 						local pathState = unitEntityFactory:GetPathState(candidateEntity)

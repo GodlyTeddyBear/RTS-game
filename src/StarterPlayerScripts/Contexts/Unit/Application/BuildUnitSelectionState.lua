@@ -1,5 +1,13 @@
 --!strict
 
+--[=[
+    @class BuildUnitSelectionState
+    Builds the immutable unit selection snapshot consumed by the client unit-selection controller.
+
+    Owns normalization of selected records, control groups, marquee preview state, and primary selection fallback.
+    @client
+]=]
+
 local UnitSelectionTypes = require(game:GetService("ReplicatedStorage").Contexts.Unit.Types.UnitSelectionTypes)
 
 type TSelectableUnitRecord = UnitSelectionTypes.TSelectableUnitRecord
@@ -20,6 +28,7 @@ type TBuildUnitSelectionStateOptions = {
 	PreviewUnitGuids: { string }?,
 }
 
+-- Checks whether a preferred primary unit still exists in the current selection set.
 local function _ContainsGuid(unitGuids: { string }, unitGuid: string): boolean
 	for _, guid in ipairs(unitGuids) do
 		if guid == unitGuid then
@@ -30,6 +39,7 @@ local function _ContainsGuid(unitGuids: { string }, unitGuid: string): boolean
 	return false
 end
 
+-- Freezes control-group tables defensively so the selection atom cannot be mutated from the outside.
 local function _FreezeControlGroupsBySlot(controlGroupsBySlot: TControlGroupsBySlot?): TControlGroupsBySlot
 	if controlGroupsBySlot == nil or next(controlGroupsBySlot) == nil then
 		return EMPTY_CONTROL_GROUPS
@@ -44,7 +54,15 @@ local function _FreezeControlGroupsBySlot(controlGroupsBySlot: TControlGroupsByS
 	return table.freeze(nextControlGroupsBySlot)
 end
 
+--[=[
+    Builds the immutable unit selection snapshot consumed by the client controller and runtime services.
+
+    @within BuildUnitSelectionState
+    @param options TBuildUnitSelectionStateOptions -- Selection records and preserved state slices.
+    @return TUnitSelectionState -- Frozen selection snapshot.
+]=]
 local function BuildUnitSelectionState(options: TBuildUnitSelectionStateOptions): TUnitSelectionState
+	-- Collect the selected units and the live roots that still remain in the world.
 	local selectedUnitGuids = table.create(#options.Records)
 	local selectedRootsByGuid = {}
 
@@ -53,6 +71,7 @@ local function BuildUnitSelectionState(options: TBuildUnitSelectionStateOptions)
 		selectedRootsByGuid[record.UnitGuid] = record.Root
 	end
 
+	-- Keep the preferred primary selection only if it still belongs to the current records.
 	local preferredPrimaryUnitGuid = options.PreferredPrimaryUnitGuid
 	local nextPrimaryUnitGuid = nil
 	if preferredPrimaryUnitGuid ~= nil and _ContainsGuid(selectedUnitGuids, preferredPrimaryUnitGuid) then
@@ -64,6 +83,7 @@ local function BuildUnitSelectionState(options: TBuildUnitSelectionStateOptions)
 	local previewUnitGuids = options.PreviewUnitGuids
 	local nextPreviewUnitGuids = if previewUnitGuids ~= nil and #previewUnitGuids > 0 then table.freeze(table.clone(previewUnitGuids)) else EMPTY_GUIDS
 
+	-- Freeze each slice so downstream consumers read a stable selection snapshot.
 	return table.freeze({
 		SelectedUnitGuids = if #selectedUnitGuids > 0 then table.freeze(selectedUnitGuids) else EMPTY_GUIDS,
 		SelectedRootsByGuid = if next(selectedRootsByGuid) ~= nil then table.freeze(selectedRootsByGuid) else EMPTY_ROOTS_BY_GUID,

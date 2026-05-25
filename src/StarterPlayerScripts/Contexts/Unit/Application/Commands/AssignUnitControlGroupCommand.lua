@@ -1,15 +1,24 @@
 --!strict
 
+--[=[
+    @class AssignUnitControlGroupCommand
+    Stores the current selection into a numbered control-group slot.
+
+    @client
+]=]
+
 local BuildUnitSelectionState = require(script.Parent.Parent.BuildUnitSelectionState)
 
 local AssignUnitControlGroupCommand = {}
 AssignUnitControlGroupCommand.__index = AssignUnitControlGroupCommand
 
+-- Creates a command that can persist the current selection into a hotkey slot.
 function AssignUnitControlGroupCommand.new()
 	local self = setmetatable({}, AssignUnitControlGroupCommand)
 	return self
 end
 
+-- Copies the current control-group table, updates the requested slot, and preserves the rest of the visible selection state.
 function AssignUnitControlGroupCommand:Execute(deps: any, slot: number)
 	local currentState = deps.selectionAtom()
 	local nextControlGroupsBySlot = {}

@@ -1,9 +1,17 @@
 --!strict
 
+--[=[
+    @class UnitFactsResolverFactory
+    Builds the cached fact resolvers used by the unit behavior system to evaluate movement-related conditions.
+
+    @server
+]=]
+
 local NAVIGATION_GROUP = "Navigation"
 
 local UnitFactsResolverFactory = {}
 
+-- Creates the fact resolver bundle for a single unit entity.
 function UnitFactsResolverFactory.Create(dependencies: {
 	UnitEntityFactory: any,
 }): any
@@ -13,7 +21,6 @@ function UnitFactsResolverFactory.Create(dependencies: {
 				[NAVIGATION_GROUP] = {
 					BuildFacts = function(): { [string]: any }
 						local pathState = dependencies.UnitEntityFactory:GetPathState(entity)
-						--print(pathState, "build fact")
 						return {
 							HasGoalTarget = pathState ~= nil and pathState.GoalPosition ~= nil,
 						}
@@ -28,12 +35,14 @@ function UnitFactsResolverFactory.Create(dependencies: {
 				TargetPosition: Vector3?,
 			},
 			_cheapFacts: { [string]: any }
-		): { TargetEntity: number?, TargetKind: string?, TargetPosition: Vector3? }?
+			): { TargetEntity: number?, TargetKind: string?, TargetPosition: Vector3? }?
+			-- The unit behavior currently does not cache targets between ticks, so there is nothing to validate here.
 			return nil
 		end,
 		ReacquireTarget = function(
 			_cheapFacts: { [string]: any }
 		): { TargetEntity: number?, TargetKind: string?, TargetPosition: Vector3? }?
+			-- The unit behavior does not reacquire targets from cheap facts in this profile.
 			return nil
 		end,
 		BuildFactSnapshot = function(

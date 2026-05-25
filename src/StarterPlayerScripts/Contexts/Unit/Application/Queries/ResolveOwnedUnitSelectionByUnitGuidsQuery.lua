@@ -1,5 +1,12 @@
 --!strict
 
+--[=[
+    @class ResolveOwnedUnitSelectionByUnitGuidsQuery
+    Resolves owned unit records from a list of unit GUIDs by scanning the tagged unit instances.
+
+    @client
+]=]
+
 local CollectionService = game:GetService("CollectionService")
 
 local UnitSelectionTypes = require(game:GetService("ReplicatedStorage").Contexts.Unit.Types.UnitSelectionTypes)
@@ -11,18 +18,21 @@ local UNIT_TAG = "CombatUnit"
 local ResolveOwnedUnitSelectionByUnitGuidsQuery = {}
 ResolveOwnedUnitSelectionByUnitGuidsQuery.__index = ResolveOwnedUnitSelectionByUnitGuidsQuery
 
+-- Creates a query that reuses the base owned-selection resolver for GUID lookups.
 function ResolveOwnedUnitSelectionByUnitGuidsQuery.new(resolveOwnedUnitSelectionQuery: any)
 	local self = setmetatable({}, ResolveOwnedUnitSelectionByUnitGuidsQuery)
 	self._resolveOwnedUnitSelectionQuery = resolveOwnedUnitSelectionQuery
 	return self
 end
 
+-- Resolves only the tagged units that match the requested GUIDs and removes duplicates from the result.
 function ResolveOwnedUnitSelectionByUnitGuidsQuery:Execute(unitGuids: { string }?): { TSelectableUnitRecord }
 	if unitGuids == nil or #unitGuids == 0 then
 		return table.freeze({})
 	end
 
 	local rootsByUnitGuid = {}
+	-- Build a root index from the live tagged units before filtering to the requested GUIDs.
 	for _, taggedInstance in ipairs(CollectionService:GetTagged(UNIT_TAG)) do
 		local record = self._resolveOwnedUnitSelectionQuery:Execute(taggedInstance)
 		if record ~= nil then

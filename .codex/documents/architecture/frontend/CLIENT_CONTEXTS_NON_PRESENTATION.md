@@ -13,6 +13,7 @@ Defines the structure and dependency rules for client context modules that own r
 - Layer intent matches server-side separation:
   - Application owns orchestration and use-case flow.
   - Infrastructure owns technical IO and runtime clients.
+- See [DDD.md](DDD.md) for the matching client-context structure.
 - Canonical method contract:
   - [../../methods/frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md](../../methods/frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md)
 

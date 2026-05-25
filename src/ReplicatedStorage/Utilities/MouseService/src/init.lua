@@ -1,6 +1,7 @@
 --!strict
 
 local Enums = require(script.Enums)
+local Ground = require(script.Ground)
 local Manager = require(script.Manager)
 local Types = require(script.Types)
 
@@ -53,6 +54,30 @@ local MouseService = {
 
 function MouseService.new(config: Types.TMouseManagerConfig?): Types.TMouseManager
 	return Manager.new(config)
+end
+
+function MouseService.ResolveHitFromSnapshot(mouseSnapshot: Types.TMouseSnapshot): RaycastResult?
+	if type(mouseSnapshot) ~= "table" then
+		return nil
+	end
+
+	return mouseSnapshot.Hit
+end
+
+function MouseService.ResolveWorldPointFromSnapshot(mouseSnapshot: Types.TMouseSnapshot): Vector3?
+	local hit = MouseService.ResolveHitFromSnapshot(mouseSnapshot)
+	if hit == nil then
+		return nil
+	end
+
+	return hit.Position
+end
+
+function MouseService.ResolveGroundPointFromSnapshot(
+	mouseSnapshot: Types.TMouseSnapshot,
+	baseExclude: { Instance }?
+): Vector3?
+	return Ground.ResolveGroundPointFromSnapshot(mouseSnapshot, baseExclude)
 end
 
 return table.freeze(MouseService)

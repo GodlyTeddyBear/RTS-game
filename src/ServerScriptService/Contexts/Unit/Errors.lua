@@ -1,5 +1,12 @@
 --!strict
 
+--[=[
+    @class Errors
+    Stable error identifiers used by the unit context to report invalid requests and lifecycle failures.
+
+    @server
+]=]
+
 local Errors = {}
 
 Errors.INVALID_REQUEST = "UnitContext: spawn request is invalid"

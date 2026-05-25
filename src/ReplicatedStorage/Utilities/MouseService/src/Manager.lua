@@ -18,6 +18,7 @@ local Resolver = require(script.Parent.Resolver)
 local Selection = require(script.Parent.Selection)
 local Signals = require(script.Parent.Signals)
 local Types = require(script.Parent.Types)
+local Ground = require(script.Parent.Ground)
 
 type TMouseDragRequest = Types.TMouseDragRequest
 type TMouseDragSnapshot = Types.TMouseDragSnapshot
@@ -146,9 +147,53 @@ function Manager:ResolveSnapshot(request: TMouseRequest?): Result.Result<TMouseS
 	return Result.Ok(snapshot)
 end
 
+function Manager:ResolveHitFromScreenPoint(
+	screenPoint: Vector2,
+	request: TMouseRequest?
+): Result.Result<RaycastResult?>
+	local aliveResult = Policies.CheckServiceAlive(self)
+	if not aliveResult.success then
+		return aliveResult
+	end
+
+	local runtimeResult = Policies.CheckClientRuntime(request)
+	if not runtimeResult.success then
+		return runtimeResult
+	end
+
+	local requestWithScreenPoint = Options.CreateRequest(request)
+	requestWithScreenPoint.ScreenPoint = screenPoint
+
+	local requestResult = Policies.CheckRequest(requestWithScreenPoint)
+	if not requestResult.success then
+		return requestResult
+	end
+
+	local resolvedRequest = Options.ResolveRequest(self._config, requestWithScreenPoint)
+	local cameraResult = Policies.CheckCamera(Resolver.ResolveCamera(resolvedRequest), resolvedRequest)
+	if not cameraResult.success then
+		return cameraResult
+	end
+
+	local resolvedRaycast = Resolver.ResolveHitFromScreenPoint(screenPoint, cameraResult.value, resolvedRequest)
+	return Result.Ok(resolvedRaycast.Hit)
+end
+
+function Manager:ResolveHit(request: TMouseRequest?): Result.Result<RaycastResult?>
+	return self:ResolveSnapshot(request):andThen(function(snapshot: TMouseSnapshot)
+		return Result.Ok(snapshot.Hit)
+	end)
+end
+
 function Manager:ResolveWorldPoint(request: TMouseRequest?): Result.Result<Vector3?>
 	return self:ResolveSnapshot(request):andThen(function(snapshot: TMouseSnapshot)
 		return Result.Ok(snapshot.WorldPoint)
+	end)
+end
+
+function Manager:ResolveGroundPoint(request: TMouseRequest?): Result.Result<Vector3?>
+	return self:ResolveSnapshot(request):andThen(function(snapshot: TMouseSnapshot)
+		return Result.Ok(Ground.ResolveGroundPointFromSnapshot(snapshot))
 	end)
 end
 

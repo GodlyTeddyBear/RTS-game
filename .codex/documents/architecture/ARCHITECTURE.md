@@ -34,6 +34,7 @@ Conventions for splitting large data files (configs, event registries, dialogue 
 Client-side architecture: React, Charm atoms, feature slices, Atomic Design, hooks.
 
 - [frontend/FRONTEND.md](frontend/FRONTEND.md) - Overview, project structure, key principles
+- [frontend/DDD.md](frontend/DDD.md) - DDD-style controller, application, and infrastructure context structure
 - [frontend/LAYERS.md](frontend/LAYERS.md) - Infrastructure, Application, Presentation layers
 - [frontend/COMPONENTS.md](frontend/COMPONENTS.md) - Atomic Design: Atoms, Molecules, Organisms, Templates
 - [frontend/HOOKS.md](frontend/HOOKS.md) - Read/write hook separation, ViewModels, Selectors

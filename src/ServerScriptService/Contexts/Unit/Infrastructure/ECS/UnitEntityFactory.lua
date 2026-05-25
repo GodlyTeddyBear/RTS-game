@@ -1,5 +1,12 @@
 --!strict
 
+--[=[
+    @class UnitEntityFactory
+    Owns authoritative unit ECS entities, indexed lookup helpers, and unit-specific component mutations.
+
+    @server
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
@@ -28,14 +35,17 @@ local function _ownerKey(ownerKind: string, ownerId: string): string
 	return ownerKind .. ":" .. ownerId
 end
 
+-- Creates the unit entity factory with the unit namespace and no instantiated entities yet.
 function UnitEntityFactory.new()
 	return setmetatable(BaseECSEntityFactory.new("Unit"), UnitEntityFactory)
 end
 
+-- Binds the unit component registry used to create and mutate unit entities.
 function UnitEntityFactory:_GetComponentRegistryName(): string
 	return "UnitComponentRegistry"
 end
 
+-- Verifies the component registry before wiring the spatial indexes and lookup buckets the unit context depends on.
 function UnitEntityFactory:_OnInit(_registry: any, _name: string, _componentRegistry: any)
 	assert(
 		self._components ~= nil
@@ -60,10 +70,12 @@ function UnitEntityFactory:_OnInit(_registry: any, _name: string, _componentRegi
 	self:RegisterUniqueLookupIndex("UnitGuid")
 end
 
+-- Creates a new authoritative unit entity and seeds every ECS component that describes the unit.
 function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitRequest, definition: UnitDefinition, now: number): number
 	self:RequireReady()
 	local entity = self:_CreateEntity()
 
+	-- Seed identity and ownership first so lookup indexes can resolve the entity immediately.
 	self:_Set(entity, self._components.IdentityComponent, {
 		UnitGuid = unitGuid,
 		UnitId = request.UnitId,
@@ -75,6 +87,7 @@ function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitReques
 		OwnerId = request.OwnerId,
 	} :: OwnershipComponent)
 
+	-- Apply the initial transform, health, movement, animation, and role state from the spawn definition.
 	self:_Set(entity, self._components.TransformComponent, {
 		CFrame = request.SpawnCFrame,
 	} :: TransformComponent)
@@ -115,6 +128,7 @@ function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitReques
 		} :: LifetimeComponent)
 	end
 
+	-- Mark the entity active and dirty so sync and replication can discover it on the next flush.
 	self:_Add(entity, self._components.ActiveTag)
 	self:_Add(entity, self._components.DirtyTag)
 	self:SetBucketLookup("OwnerKey", _ownerKey(request.OwnerKind, request.OwnerId), entity)
@@ -123,31 +137,37 @@ function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitReques
 	return entity
 end
 
+-- Stores the spawned model reference and marks the entity dirty so the model sync path can pick it up.
 function UnitEntityFactory:SetModelRef(entity: number, model: Model)
 	BaseECSEntityFactory.SetModelRef(self, entity, model)
 	self:_Add(entity, self._components.DirtyTag)
 end
 
+-- Returns the model reference bound to the entity, if one has been assigned.
 function UnitEntityFactory:GetModelRef(entity: number): { Model: Model }?
 	self:RequireReady()
 	return BaseECSEntityFactory.GetModelRef(self, entity)
 end
 
+-- Returns the identity component for the entity so other systems can read unit metadata.
 function UnitEntityFactory:GetIdentity(entity: number): IdentityComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.IdentityComponent)
 end
 
+-- Returns the ownership component for the entity so cleanup and move-order logic can validate ownership.
 function UnitEntityFactory:GetOwnership(entity: number): OwnershipComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.OwnershipComponent)
 end
 
+-- Returns the current transform component for the entity.
 function UnitEntityFactory:GetTransform(entity: number): TransformComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.TransformComponent)
 end
 
+-- Updates the authoritative transform and marks the entity dirty for sync.
 function UnitEntityFactory:SetTransform(entity: number, cframe: CFrame)
 	self:RequireReady()
 	self:_Set(entity, self._components.TransformComponent, {
@@ -156,23 +176,27 @@ function UnitEntityFactory:SetTransform(entity: number, cframe: CFrame)
 	self:_Add(entity, self._components.DirtyTag)
 end
 
+-- Returns the health component so combat and sync systems can read current health values.
 function UnitEntityFactory:GetHealth(entity: number): HealthComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.HealthComponent)
 end
 
+-- Returns the configured base move speed for the entity.
 function UnitEntityFactory:GetBaseMoveSpeed(entity: number): number?
 	self:RequireReady()
 	local moveSpeed = self:_Get(entity, self._components.BaseMoveSpeedComponent)
 	return if moveSpeed ~= nil then moveSpeed.Value else nil
 end
 
+-- Returns the current move speed after temporary modifiers have been applied.
 function UnitEntityFactory:GetCurrentMoveSpeed(entity: number): number?
 	self:RequireReady()
 	local moveSpeed = self:_Get(entity, self._components.CurrentMoveSpeedComponent)
 	return if moveSpeed ~= nil then moveSpeed.Value else nil
 end
 
+-- Updates the current move speed only when it changes so the dirty tag is not churned unnecessarily.
 function UnitEntityFactory:SetCurrentMoveSpeed(entity: number, speed: number)
 	self:RequireReady()
 	if type(speed) ~= "number" then
@@ -190,16 +214,19 @@ function UnitEntityFactory:SetCurrentMoveSpeed(entity: number, speed: number)
 	self:_Add(entity, self._components.DirtyTag)
 end
 
+-- Returns the animation state component for replication and client animation playback.
 function UnitEntityFactory:GetAnimationState(entity: number): AnimationStateComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.AnimationStateComponent)
 end
 
+-- Returns the animation looping state for replication and client animation playback.
 function UnitEntityFactory:GetAnimationLooping(entity: number): AnimationLoopingComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.AnimationLoopingComponent)
 end
 
+-- Updates animation presentation only when the requested state differs from the current one.
 function UnitEntityFactory:SetAnimationPresentation(entity: number, animationState: string, isLooping: boolean)
 	self:RequireReady()
 
@@ -214,26 +241,31 @@ function UnitEntityFactory:SetAnimationPresentation(entity: number, animationSta
 	self:_Add(entity, self._components.DirtyTag)
 end
 
+-- Returns the role component used by gameplay and sync logic.
 function UnitEntityFactory:GetRole(entity: number): RoleComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.RoleComponent)
 end
 
+-- Marks the entity dirty so the sync layer re-emits it on the next pass.
 function UnitEntityFactory:MarkDirty(entity: number)
 	self:RequireReady()
 	self:_Add(entity, self._components.DirtyTag)
 end
 
+-- Reports whether the entity currently carries the dirty tag.
 function UnitEntityFactory:IsDirty(entity: number): boolean
 	self:RequireReady()
 	return self:_Has(entity, self._components.DirtyTag)
 end
 
+-- Returns the path state used by movement and behavior systems.
 function UnitEntityFactory:GetPathState(entity: number): PathStateComponent?
 	self:RequireReady()
 	return self:_Get(entity, self._components.PathStateComponent)
 end
 
+-- Sets a new goal position and resets movement state so the behavior system can take over.
 function UnitEntityFactory:SetGoalPosition(entity: number, goalPosition: Vector3)
 	self:RequireReady()
 	local state = self:GetPathState(entity)
@@ -248,6 +280,7 @@ function UnitEntityFactory:SetGoalPosition(entity: number, goalPosition: Vector3
 	self:_Add(entity, self._components.DirtyTag)
 end
 
+-- Clears the movement goal while preserving the entity's other state.
 function UnitEntityFactory:ClearGoalPosition(entity: number)
 	self:RequireReady()
 	local state = self:GetPathState(entity)
@@ -262,6 +295,7 @@ function UnitEntityFactory:ClearGoalPosition(entity: number)
 	self:_Add(entity, self._components.DirtyTag)
 end
 
+-- Updates whether the movement system is actively advancing the unit.
 function UnitEntityFactory:SetPathMoving(entity: number, isMoving: boolean)
 	self:RequireReady()
 	local state = self:GetPathState(entity)
@@ -279,6 +313,7 @@ function UnitEntityFactory:SetPathMoving(entity: number, isMoving: boolean)
 	self:_Add(entity, self._components.DirtyTag)
 end
 
+-- Returns the lifetime component when the unit was spawned with a finite lifetime.
 function UnitEntityFactory:GetLifetime(entity: number): LifetimeComponent?
 	self:RequireReady()
 	if not self:_Exists(entity) then
@@ -290,30 +325,36 @@ function UnitEntityFactory:GetLifetime(entity: number): LifetimeComponent?
 	return self:_Get(entity, self._components.LifetimeComponent)
 end
 
+-- Reports whether the entity is still active and available for gameplay systems.
 function UnitEntityFactory:IsActive(entity: number): boolean
 	self:RequireReady()
 	return self:_Exists(entity) and self:_Has(entity, self._components.ActiveTag)
 end
 
+-- Returns every active unit entity tracked by the unit ECS world.
 function UnitEntityFactory:QueryActiveEntities(): { number }
 	self:RequireReady()
 	return self:CollectQuery(self._components.ActiveTag)
 end
 
+-- Returns every unit entity owned by the requested owner bucket.
 function UnitEntityFactory:QueryOwnerEntities(ownerKind: string, ownerId: string): { number }
 	self:RequireReady()
 	return self:QueryBucketLookup("OwnerKey", _ownerKey(ownerKind, ownerId))
 end
 
+-- Finds the entity that owns the requested unit GUID, if one exists.
 function UnitEntityFactory:GetEntityByUnitGuid(unitGuid: string): number?
 	self:RequireReady()
 	return self:FindEntityByUniqueLookup("UnitGuid", unitGuid)
 end
 
+-- Returns the number of active units in the requested owner bucket.
 function UnitEntityFactory:GetOwnerUnitCount(ownerKind: string, ownerId: string): number
 	return self:GetBucketLookupCount("OwnerKey", _ownerKey(ownerKind, ownerId))
 end
 
+-- Removes the entity's active and dirty tags and schedules the entity for destruction.
 function UnitEntityFactory:DeleteEntity(entity: number?): boolean
 	self:RequireReady()
 	if entity == nil or not self:_Exists(entity) then
@@ -333,6 +374,7 @@ function UnitEntityFactory:DeleteEntity(entity: number?): boolean
 	return true
 end
 
+-- Deletes every entity in the requested owner bucket.
 function UnitEntityFactory:DeleteOwnerUnits(ownerKind: string, ownerId: string): number
 	local deletedCount = 0
 	for _, entity in ipairs(self:QueryOwnerEntities(ownerKind, ownerId)) do
@@ -343,6 +385,7 @@ function UnitEntityFactory:DeleteOwnerUnits(ownerKind: string, ownerId: string):
 	return deletedCount
 end
 
+-- Deletes every active unit entity regardless of owner.
 function UnitEntityFactory:DeleteAll(): number
 	local deletedCount = 0
 	for _, entity in ipairs(self:QueryActiveEntities()) do
@@ -353,6 +396,7 @@ function UnitEntityFactory:DeleteAll(): number
 	return deletedCount
 end
 
+-- Flushes any queued entity destructions after a cleanup pass.
 function UnitEntityFactory:FlushPendingDeletes(): boolean
 	self:RequireReady()
 	return self:FlushDestructionQueue()

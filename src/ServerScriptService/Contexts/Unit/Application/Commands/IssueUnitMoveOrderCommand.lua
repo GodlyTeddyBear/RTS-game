@@ -1,5 +1,12 @@
 --!strict
 
+--[=[
+    @class IssueUnitMoveOrderCommand
+    Validates a manual move-order request and applies the destination to each eligible unit entity.
+
+    @server
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
@@ -25,19 +32,23 @@ local function _IsValidDestination(destination: Vector3): boolean
 	return _IsFiniteNumber(destination.X) and _IsFiniteNumber(destination.Y) and _IsFiniteNumber(destination.Z)
 end
 
+-- Resolves the entity factory used to look up and mutate the targeted unit entities.
 function IssueUnitMoveOrderCommand.new()
 	local self = BaseCommand.new("Unit", "IssueUnitMoveOrder")
 	return setmetatable(self, IssueUnitMoveOrderCommand)
 end
 
+-- Binds the entity factory dependency required to inspect active units and update path goals.
 function IssueUnitMoveOrderCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_entityFactory = "UnitEntityFactory",
 	})
 end
 
+-- Validates the request and assigns the requested destination to every eligible owned builder unit.
 function IssueUnitMoveOrderCommand:Execute(player: Player, request: IssueMoveOrderRequest): Result.Result<number>
 	return Result.Catch(function()
+		-- Validate the outer request shape before reading fields from it.
 		Ensure(type(request) == "table", "InvalidMoveOrderRequest", Errors.INVALID_MOVE_ORDER_REQUEST)
 		Ensure(typeof(player) == "Instance" and player:IsA("Player"), "InvalidPlayer", Errors.INVALID_OWNER_ID)
 		Ensure(type(request.UnitGuids) == "table" and #request.UnitGuids > 0, "InvalidUnitGuids", Errors.INVALID_UNIT_GUIDS)
@@ -47,6 +58,7 @@ function IssueUnitMoveOrderCommand:Execute(player: Player, request: IssueMoveOrd
 		local ownerId = tostring(player.UserId)
 		local issuedCount = 0
 
+		-- Visit each candidate unit and only issue orders to live, owned builder entities.
 		for _, unitGuid in ipairs(request.UnitGuids) do
 			if type(unitGuid) ~= "string" or unitGuid == "" then
 				continue

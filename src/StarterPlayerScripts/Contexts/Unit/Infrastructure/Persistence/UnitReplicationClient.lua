@@ -1,5 +1,13 @@
 --!strict
 
+--[=[
+    @class UnitReplicationClient
+    Maintains the client-side replicated unit ECS surface and exposes per-unit state snapshots to the animation layer.
+
+    Owns the transport hookup, replicated-state index, and change notifications for unit replication on the client.
+    @client
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GoodSignal = require(ReplicatedStorage.Packages.Goodsignal)
@@ -12,6 +20,17 @@ local StashPlus = require(ReplicatedStorage.Utilities.StashPlus)
 type TBootstrapPayload = BaseECSReplicationClient.TBootstrapPayload
 type TReplicationPacketPayload = BaseECSReplicationClient.TReplicationPacketPayload
 
+--[=[
+    @interface TUnitReplicatedState
+    @within UnitReplicationClient
+    .UnitGuid string -- Stable GUID for the replicated unit.
+    .UnitId string -- Unit definition identifier.
+    .CurrentHealth number -- Current replicated health value.
+    .MaxHealth number -- Maximum replicated health value.
+    .AnimationState string? -- Current animation state name, if one is set.
+    .IsAnimationLooping boolean? -- Whether the current animation should loop, if known.
+    .IsActive boolean -- Whether the active-tag is currently present.
+]=]
 export type TUnitReplicatedState = {
 	UnitGuid: string,
 	UnitId: string,
@@ -26,10 +45,12 @@ local UnitReplicationClient = {}
 UnitReplicationClient.__index = UnitReplicationClient
 setmetatable(UnitReplicationClient, { __index = BaseECSReplicationClient })
 
+-- Names a replicated entity or component so the ECS surface stays readable in debugging tools.
 local function _NameEntity(world: any, entity: any, name: string)
 	world:set(entity, JECS.Name, name)
 end
 
+-- Creates the client replication wrapper with the Unit namespace and an empty state index.
 function UnitReplicationClient.new()
 	local self = setmetatable(BaseECSReplicationClient.new("Unit"), UnitReplicationClient)
 	self.StateChanged = GoodSignal.new()
@@ -38,6 +59,7 @@ function UnitReplicationClient.new()
 	return self
 end
 
+-- Builds the ECS component set used by the unit replication surface.
 function UnitReplicationClient:_BuildComponents(world: any, _replecsLibrary: any)
 	local identityComponent = world:component()
 	_NameEntity(world, identityComponent, "Unit.Identity")
@@ -63,6 +85,7 @@ function UnitReplicationClient:_BuildComponents(world: any, _replecsLibrary: any
 	})
 end
 
+-- Returns the shared ECS schema exposed by the client replication surface.
 function UnitReplicationClient:_GetSharedSchema()
 	local components = self:GetComponentsOrThrow()
 
@@ -79,31 +102,37 @@ function UnitReplicationClient:_GetSharedSchema()
 	}
 end
 
+-- Rebuilds the GUID index after the replicated surface is wired up.
 function UnitReplicationClient:_RegisterReplicatedSurface()
 	self:_RebuildUnitStateIndex()
 end
 
+-- Rebuilds the snapshot index after bootstrap payloads are processed so listeners see the latest unit state.
 function UnitReplicationClient:HandleBootstrap(payload: TBootstrapPayload): boolean
 	local handled = BaseECSReplicationClient.HandleBootstrap(self, payload)
 	self:_RebuildUnitStateIndex()
 	return handled
 end
 
+-- Rebuilds the snapshot index after reliable packets are applied.
 function UnitReplicationClient:HandleReliable(payload: TReplicationPacketPayload)
 	BaseECSReplicationClient.HandleReliable(self, payload)
 	self:_RebuildUnitStateIndex()
 end
 
+-- Rebuilds the snapshot index after unreliable packets are applied.
 function UnitReplicationClient:HandleUnreliable(payload: TReplicationPacketPayload)
 	BaseECSReplicationClient.HandleUnreliable(self, payload)
 	self:_RebuildUnitStateIndex()
 end
 
+-- Rebuilds the snapshot index after entity-level packets are applied.
 function UnitReplicationClient:HandleEntity(payload: TReplicationPacketPayload)
 	BaseECSReplicationClient.HandleEntity(self, payload)
 	self:_RebuildUnitStateIndex()
 end
 
+-- Connects the unit-context transport events to the replication client.
 function UnitReplicationClient:_ConnectTransport()
 	self._unitContext = Knit.GetService("UnitContext")
 	local stash = StashPlus.new()
@@ -124,24 +153,29 @@ function UnitReplicationClient:_ConnectTransport()
 	return stash
 end
 
+-- Requests replication from the unit context once transport setup is complete.
 function UnitReplicationClient:_OnStart()
 	assert(self._unitContext ~= nil, "UnitReplicationClient: missing UnitContext")
 	self._unitContext:RequestUnitReplication()
 end
 
+-- Acknowledges bootstrap completion so the server knows the client is ready for steady-state updates.
 function UnitReplicationClient:_OnBootstrapCompleted()
 	assert(self._unitContext ~= nil, "UnitReplicationClient: missing UnitContext")
 	self._unitContext:AcknowledgeUnitReplicationBootstrap()
 end
 
+-- Returns the latest replicated state for the requested unit GUID.
 function UnitReplicationClient:GetUnitState(unitGuid: string): TUnitReplicatedState?
 	return self._unitStateByGuid[unitGuid]
 end
 
+-- Subscribes listeners to unit state changes so animation can react to the replication stream.
 function UnitReplicationClient:ObserveUnitStateChanged(callback: (unitGuid: string) -> ())
 	return self.StateChanged:Connect(callback)
 end
 
+-- Disconnects transport listeners and clears the cached unit state index.
 function UnitReplicationClient:Destroy()
 	if self.StateChanged ~= nil then
 		self.StateChanged:DisconnectAll()
@@ -152,6 +186,7 @@ function UnitReplicationClient:Destroy()
 	table.clear(self._unitStateByGuid)
 end
 
+-- Rebuilds the cached GUID index and fires change notifications for any unit whose snapshot changed.
 function UnitReplicationClient:_RebuildUnitStateIndex()
 	local world = self:GetWorldOrThrow()
 	local components = self:GetComponentsOrThrow()
@@ -159,6 +194,7 @@ function UnitReplicationClient:_RebuildUnitStateIndex()
 	local changedUnitGuids = {}
 	local previousStateByGuid = self._unitStateByGuid
 
+	-- Build the next state index from the current ECS query result.
 	for entity, identity, health in world:query(components.IdentityComponent, components.HealthComponent):iter() do
 		if type(identity) ~= "table" or type(identity.UnitGuid) ~= "string" or type(identity.UnitId) ~= "string" then
 			continue
@@ -195,6 +231,7 @@ function UnitReplicationClient:_RebuildUnitStateIndex()
 		end
 	end
 
+	-- Mark removals as changes too so observers can drop stale references immediately.
 	for unitGuid in previousStateByGuid do
 		if nextStateByGuid[unitGuid] == nil then
 			changedUnitGuids[unitGuid] = true

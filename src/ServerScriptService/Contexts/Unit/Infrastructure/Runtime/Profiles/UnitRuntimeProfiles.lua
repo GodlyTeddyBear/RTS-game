@@ -1,5 +1,12 @@
 --!strict
 
+--[=[
+    @class UnitRuntimeProfiles
+    Resolves the runtime profile definitions used to drive server-side unit behavior and animation state.
+
+    @server
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
@@ -34,10 +41,12 @@ local BaseProfiles = BaseRuntimeProfileModule.new({
 
 local UnitRuntimeProfiles = {}
 
+-- Returns the runtime profile for the requested unit variant.
 function UnitRuntimeProfiles.GetByVariant(variantId: string)
 	return BaseProfiles:GetByVariant(variantId)
 end
 
+-- Resolves the animation state and looping flag for the requested unit runtime profile.
 function UnitRuntimeProfiles.ResolveAnimationState(input: {
 	VariantId: string?,
 	CombatAction: any,

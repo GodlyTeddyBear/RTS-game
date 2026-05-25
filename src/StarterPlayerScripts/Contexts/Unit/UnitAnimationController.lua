@@ -1,12 +1,14 @@
 --!strict
 
---[[
-	Module: UnitAnimationController
-	Purpose: Tracks replicated unit models on the client and attaches animation drivers as they appear.
-	Used In System: Started by Knit on the client and driven by CollectionService tags and the Workspace unit folder.
-	High-Level Flow: Track tagged or foldered unit models -> attach animation setup -> untrack on removal.
-	Boundaries: Owns client unit animation attachment only; does not own unit spawning, replication, or model creation.
-]]
+--[=[
+    @class UnitAnimationController
+    Tracks replicated unit models on the client and attaches animation drivers as they appear.
+
+    Started by Knit on the client and driven by `CollectionService` tags and the `Workspace` unit folder.
+    Flow: Track tagged or foldered unit models -> attach animation setup -> untrack on removal.
+    Owns client unit animation attachment only; does not own unit spawning, replication, or model creation.
+    @client
+]=]
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -29,6 +31,7 @@ local UnitAnimationController = Knit.CreateController({
 	Name = "UnitAnimationController",
 })
 
+-- Treats only valid replicated unit models as trackable animation targets.
 local function _IsUnitModel(instance: Instance): boolean
 	if not instance:IsA("Model") then
 		return false
@@ -38,6 +41,7 @@ local function _IsUnitModel(instance: Instance): boolean
 	return type(unitGuid) == "string" and unitGuid ~= ""
 end
 
+-- Builds the actor handle used by the shared animation controller when it needs to resolve the unit's runtime identity.
 local function _BuildUnitActorHandle(model: Model): string?
 	local unitGuid = model:GetAttribute("UnitGuid")
 	if type(unitGuid) == "string" and unitGuid ~= "" then
@@ -47,6 +51,11 @@ local function _BuildUnitActorHandle(model: Model): string?
 	return nil
 end
 
+--[=[
+    Initializes the controller's tracked-model registry and replication client.
+
+    @within UnitAnimationController
+]=]
 function UnitAnimationController:KnitInit()
 	self._tracked = {} :: { [Model]: TTrackedEntry }
 	self._unitsFolderConnectionAdded = nil :: RBXScriptConnection?
@@ -58,6 +67,7 @@ function UnitAnimationController:KnitInit()
 	self._unitReplicationClient = UnitReplicationClient.new()
 end
 
+-- Attaches animation setup to a unit model and tears it back down if the model leaves the world or setup fails.
 function UnitAnimationController:_TrackModel(model: Model)
 	if self._tracked[model] ~= nil then
 		return
@@ -69,12 +79,14 @@ function UnitAnimationController:_TrackModel(model: Model)
 	}
 	self._tracked[model] = entry
 
+	-- Stop tracking as soon as the model leaves the world so the animation driver cannot hold stale references.
 	entry.AncestryConnection = model.AncestryChanged:Connect(function(_, parent)
 		if parent == nil then
 			self:_UntrackModel(model)
 		end
 	end)
 
+	-- Build the animation context lazily so each tracked model can resolve its own actor identity on demand.
 	local function buildContext(): any
 		local combatService = self._combatService
 		local base = {
@@ -92,6 +104,7 @@ function UnitAnimationController:_TrackModel(model: Model)
 		})
 	end
 
+	-- If setup succeeds, cache the cleanup handle; if it fails, remove the model from tracking immediately.
 	AnimateUnitModule.setup(model, buildContext(), self._unitReplicationClient)
 		:andThen(function(cleanup)
 			local tracked = self._tracked[model]
@@ -109,6 +122,7 @@ function UnitAnimationController:_TrackModel(model: Model)
 		end)
 end
 
+-- Disconnects signals and cleanup handles for a tracked model before removing it from the active registry.
 function UnitAnimationController:_UntrackModel(model: Model)
 	local entry = self._tracked[model]
 	if entry == nil then
@@ -128,6 +142,7 @@ function UnitAnimationController:_UntrackModel(model: Model)
 	self._tracked[model] = nil
 end
 
+-- Subscribes to a folder of unit models and performs an initial sweep so pre-existing children also animate.
 function UnitAnimationController:_ConnectUnitsFolder(unitsFolder: Folder)
 	if self._unitsFolderConnectionAdded ~= nil then
 		self._unitsFolderConnectionAdded:Disconnect()
@@ -155,23 +170,31 @@ function UnitAnimationController:_ConnectUnitsFolder(unitsFolder: Folder)
 	end
 end
 
+--[=[
+    Starts replication, listens for tagged unit models, and watches for the unit folder to appear under Workspace.
+
+    @within UnitAnimationController
+]=]
 function UnitAnimationController:KnitStart()
 	self._combatService = Knit.GetService("CombatContext")
 	self._unitReplicationClient:Init()
 	self._unitReplicationClient:Start()
 
+	-- Track tagged models as soon as they are registered.
 	self._tagAddedConnection = CollectionService:GetInstanceAddedSignal(ANIMATED_UNIT_TAG):Connect(function(instance)
 		if _IsUnitModel(instance) then
 			self:_TrackModel(instance :: Model)
 		end
 	end)
 
+	-- Untrack tagged models once the tag is removed.
 	self._tagRemovedConnection = CollectionService:GetInstanceRemovedSignal(ANIMATED_UNIT_TAG):Connect(function(instance)
 		if instance:IsA("Model") then
 			self:_UntrackModel(instance)
 		end
 	end)
 
+	-- Catch any units that were tagged before this controller finished starting.
 	for _, instance in CollectionService:GetTagged(ANIMATED_UNIT_TAG) do
 		if _IsUnitModel(instance) then
 			self:_TrackModel(instance :: Model)
@@ -190,6 +213,11 @@ function UnitAnimationController:KnitStart()
 	end)
 end
 
+--[=[
+    Cleans up listeners, tracked models, and the unit replication client when the controller is destroyed.
+
+    @within UnitAnimationController
+]=]
 function UnitAnimationController:Destroy()
 	if self._tagAddedConnection ~= nil then
 		self._tagAddedConnection:Disconnect()

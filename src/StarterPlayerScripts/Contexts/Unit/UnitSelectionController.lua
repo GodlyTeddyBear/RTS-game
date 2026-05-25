@@ -1,5 +1,14 @@
 --!strict
 
+--[=[
+    @class UnitSelectionController
+    Owns the client-side unit selection flow, input binding, and runtime selection state transitions.
+
+    Flow: Resolve dependencies -> bind selection inputs -> react to runtime events -> keep selection state and overlays in sync.
+    Owns orchestration only; does not own selection math, target resolution, or overlay rendering details.
+    @client
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -35,6 +44,11 @@ local UnitSelectionController = Knit.CreateController({
 	Name = "UnitSelectionController",
 })
 
+--[=[
+    Initializes the controller's atom, commands, queries, services, and runtime state flags.
+
+    @within UnitSelectionController
+]=]
 function UnitSelectionController:KnitInit()
 	self._selectionAtom = UnitSelectionAtom()
 	self._resolveOwnedUnitSelectionQuery = ResolveOwnedUnitSelectionQuery.new()
@@ -67,6 +81,11 @@ function UnitSelectionController:KnitInit()
 	self._inputUnbinds = {}
 end
 
+--[=[
+    Wires the controller to the player input, run state, and runtime selection signals.
+
+    @within UnitSelectionController
+]=]
 function UnitSelectionController:KnitStart()
 	self._playerInputController = Knit.GetController("PlayerInputController")
 	self._placementCursorController = Knit.GetController("PlacementCursorController")
@@ -86,6 +105,7 @@ function UnitSelectionController:KnitStart()
 		marqueeOverlayService = self._marqueeOverlayService,
 	}
 
+	-- Route single clicks through the selection, clear, and move-order command paths.
 	self._runtimeService.SingleSelectionRequested:Connect(function(gestureEvent: any)
 		if not self._isSelectionEnabled then
 			return
@@ -113,10 +133,12 @@ function UnitSelectionController:KnitStart()
 		)
 	end)
 
+	-- Keep marquee preview state and overlay visibility in sync with the runtime gesture stream.
 	self._runtimeService.MarqueePreviewChanged:Connect(function(snapshot: any)
 		self._updateMarqueePreviewStateCommand:Execute(self._deps, snapshot)
 	end)
 
+	-- Commit marquee selections only when selection mode is active.
 	self._runtimeService.MarqueeSelectionRequested:Connect(function(previewTargets: { any }?)
 		if not self._isSelectionEnabled then
 			return
@@ -129,10 +151,12 @@ function UnitSelectionController:KnitStart()
 		)
 	end)
 
+	-- Clear the overlay when the runtime cancels marquee mode.
 	self._runtimeService.MarqueeCancelled:Connect(function()
 		self._updateMarqueePreviewStateCommand:Execute(self._deps, nil)
 	end)
 
+	-- Rebuild the selection from the runtime snapshot whenever invalidation drops stale entries.
 	self._runtimeService.SelectionInvalidated:Connect(function(previousSnapshot: any)
 		self._refreshUnitSelectionCommand:Execute(self._deps, previousSnapshot)
 	end)
@@ -199,6 +223,7 @@ function UnitSelectionController:KnitStart()
 		end)
 	)
 
+	-- Bind the recall hotkeys after the modifier handlers so control-group assignment can reuse the same keys.
 	for slot = 0, 9 do
 		table.insert(
 			self._inputUnbinds,
@@ -232,18 +257,22 @@ function UnitSelectionController:KnitStart()
 	self._runtimeService:Start()
 end
 
+-- Returns the atom that backs the controller's selection snapshot.
 function UnitSelectionController:GetAtom(): () -> TUnitSelectionState
 	return self._selectionAtom
 end
 
+-- Returns the currently selected unit GUIDs for other client contexts that need read-only access.
 function UnitSelectionController:GetSelectedUnitGuids(): { string }
 	return self._selectionAtom().SelectedUnitGuids
 end
 
+-- Clears the current selection without changing the controller's mode flags.
 function UnitSelectionController:ClearSelection()
 	self._clearUnitSelectionCommand:Execute(self._deps)
 end
 
+-- Enables or disables selection input while preserving the rest of the runtime state.
 function UnitSelectionController:_SetSelectionEnabled(isEnabled: boolean)
 	self._isSelectionEnabled = isEnabled
 	self._runtimeService:SetSelectionEnabled(isEnabled)
@@ -258,14 +287,17 @@ function UnitSelectionController:_SetSelectionEnabled(isEnabled: boolean)
 	self._isControlGroupModifierActive = false
 end
 
+-- Recomputes whether selection input should be active and mirrors that state into the runtime service.
 function UnitSelectionController:_RefreshSelectionEnabledState()
 	self:_SetSelectionEnabled(self:_ShouldEnableSelection())
 end
 
+-- Selection is only active while the run is live, selection mode is on, and placement mode is inactive.
 function UnitSelectionController:_ShouldEnableSelection(): boolean
 	return self._isRunActive and self._isSelectionModeEnabled and not self._placementCursorController:IsActive()
 end
 
+-- Toggles selection mode and clears the current selection when leaving the mode.
 function UnitSelectionController:_ToggleSelectionMode()
 	self._isSelectionModeEnabled = not self._isSelectionModeEnabled
 
@@ -276,6 +308,7 @@ function UnitSelectionController:_ToggleSelectionMode()
 	self:_RefreshSelectionEnabledState()
 end
 
+-- Polls the run atom and only reapplies state when the observed run phase changes.
 function UnitSelectionController:_ObserveRunStateChanges()
 	local currentRunState = self:_GetCurrentRunState()
 	if currentRunState == self._lastObservedRunState then
@@ -285,11 +318,13 @@ function UnitSelectionController:_ObserveRunStateChanges()
 	self:_ApplyRunState(currentRunState)
 end
 
+-- Reads the current run phase from the run atom.
 function UnitSelectionController:_GetCurrentRunState(): RunState
 	local runState = self._runAtom()
 	return runState.State
 end
 
+-- Mirrors the run phase into local flags and clears selection when a live run ends.
 function UnitSelectionController:_ApplyRunState(runState: RunState)
 	local wasRunActive = self._isRunActive
 
@@ -304,6 +339,7 @@ function UnitSelectionController:_ApplyRunState(runState: RunState)
 	self:_RefreshSelectionEnabledState()
 end
 
+-- Treats the active gameplay phases as the only phases where unit selection should be live.
 function UnitSelectionController:_IsRunActive(runState: RunState): boolean
 	return runState == "Prep"
 		or runState == "Wave"
@@ -312,6 +348,11 @@ function UnitSelectionController:_IsRunActive(runState: RunState): boolean
 		or runState == "Endless"
 end
 
+--[=[
+    Disconnects controller bindings and destroys the runtime services it owns.
+
+    @within UnitSelectionController
+]=]
 function UnitSelectionController:Destroy()
 	for _, unbind in ipairs(self._inputUnbinds) do
 		unbind()

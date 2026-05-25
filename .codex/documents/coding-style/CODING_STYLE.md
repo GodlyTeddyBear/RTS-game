@@ -8,5 +8,5 @@ Read these for any coding-style work:
 2. [READABILITY.md](READABILITY.md)
 3. [IMMUTABILITY.md](IMMUTABILITY.md)
 4. [LUAU_TYPES.md](LUAU_TYPES.md)
-5. [MOONWAVE.md](MOONWAVE.md)
-
+5. [OPTION_VS_NIL.md](OPTION_VS_NIL.md)
+6. [MOONWAVE.md](MOONWAVE.md)

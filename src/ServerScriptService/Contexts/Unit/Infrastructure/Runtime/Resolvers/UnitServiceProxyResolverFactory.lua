@@ -1,13 +1,22 @@
 --!strict
 
+--[=[
+    @class UnitServiceProxyResolverFactory
+    Builds the runtime service proxies that let unit behaviors talk back to unit ECS and movement services.
+
+    @server
+]=]
+
 local UnitServiceProxyResolverFactory = {}
 
+-- Creates the proxy bundle used by the behavior runtime to interact with unit ECS and optional movement services.
 function UnitServiceProxyResolverFactory.Create(dependencies: {
 	UnitEntityFactory: any,
 	MovementProxyResolver: any?,
 	GetRuntimeOwner: (() -> any)?,
-}): any
+	}): any
 	return table.freeze({
+		-- Builds the per-entity runtime service surface consumed by behavior executors.
 		BuildServices = function(entity: number, currentTime: number, tickId: number?): { [string]: any }
 			local unitEntityFactory = dependencies.UnitEntityFactory
 			local services = {

@@ -128,16 +128,17 @@ Read these when relevant:
 Read in this order:
 
 1. [architecture/frontend/FRONTEND.md](architecture/frontend/FRONTEND.md)
-2. [architecture/frontend/LAYERS.md](architecture/frontend/LAYERS.md)
-3. [architecture/frontend/CLIENT_CONTEXTS_NON_PRESENTATION.md](architecture/frontend/CLIENT_CONTEXTS_NON_PRESENTATION.md) when the work touches controllers or non-render client contexts
-4. [architecture/frontend/HOOKS.md](architecture/frontend/HOOKS.md)
-5. [architecture/frontend/COMPONENTS.md](architecture/frontend/COMPONENTS.md)
-6. [architecture/frontend/DESIGN.md](architecture/frontend/DESIGN.md)
-7. [architecture/frontend/UDIM_LAYOUT_RULES.md](architecture/frontend/UDIM_LAYOUT_RULES.md)
-8. [architecture/frontend/DEPENDENCY_RULES.md](architecture/frontend/DEPENDENCY_RULES.md)
-9. [coding-style/CODING_STYLE.md](coding-style/CODING_STYLE.md)
-10. [coding-style/READABILITY.md](coding-style/READABILITY.md)
-11. [architecture/backend/UTILITY_USE.md](architecture/backend/UTILITY_USE.md) when frontend code may fit `Orient`, `SpatialQuery`, `ModelPlus`, or `PlacementPlus` instead of custom equivalents
+2. [architecture/frontend/DDD.md](architecture/frontend/DDD.md) when you need the client-context DDD structure
+3. [architecture/frontend/LAYERS.md](architecture/frontend/LAYERS.md)
+4. [architecture/frontend/CLIENT_CONTEXTS_NON_PRESENTATION.md](architecture/frontend/CLIENT_CONTEXTS_NON_PRESENTATION.md) when the work touches controllers or non-render client contexts
+5. [architecture/frontend/HOOKS.md](architecture/frontend/HOOKS.md)
+6. [architecture/frontend/COMPONENTS.md](architecture/frontend/COMPONENTS.md)
+7. [architecture/frontend/DESIGN.md](architecture/frontend/DESIGN.md)
+8. [architecture/frontend/UDIM_LAYOUT_RULES.md](architecture/frontend/UDIM_LAYOUT_RULES.md)
+9. [architecture/frontend/DEPENDENCY_RULES.md](architecture/frontend/DEPENDENCY_RULES.md)
+10. [coding-style/CODING_STYLE.md](coding-style/CODING_STYLE.md)
+11. [coding-style/READABILITY.md](coding-style/READABILITY.md)
+12. [architecture/backend/UTILITY_USE.md](architecture/backend/UTILITY_USE.md) when frontend code may fit `Orient`, `SpatialQuery`, `ModelPlus`, or `PlacementPlus` instead of custom equivalents
 
 Read these when relevant:
 

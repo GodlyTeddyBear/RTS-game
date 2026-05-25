@@ -1,5 +1,12 @@
 --!strict
 
+--[=[
+    @class UnitBehaviorExecutors
+    Discovers and registers the unit behavior executors exposed in this folder.
+
+    @server
+]=]
+
 local EXECUTOR_SUFFIX = "Executor"
 
 local function _GetActionId(moduleName: string): string
@@ -38,6 +45,7 @@ local function _BuildActionDefinitions(): { [string]: any }
 	local actionDefinitions = {}
 
 	for _, executorModuleScript: ModuleScript in ipairs(_GetExecutorModules()) do
+		-- Convert each executor module into a behavior-system action definition.
 		local actionId = _GetActionId(executorModuleScript.Name)
 		assert(actionDefinitions[actionId] == nil, string.format("Unit action '%s' is registered twice", actionId))
 
@@ -56,11 +64,6 @@ local function _BuildActionDefinitions(): { [string]: any }
 	return table.freeze(actionDefinitions)
 end
 
---[=[
-	@class UnitBehaviorExecutors
-	Discovers and registers the unit behavior executors exposed in this folder.
-	@server
-]=]
 local Executors = _BuildActionDefinitions()
 
 return Executors

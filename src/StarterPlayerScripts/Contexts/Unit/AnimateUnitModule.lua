@@ -1,11 +1,13 @@
 --!strict
 
---[[
-	Module: AnimateUnitModule
-	Purpose: Bridges replicated unit models to the shared client animation driver preset.
-	Used In System: Called by UnitAnimationController when a replicated unit model becomes trackable.
-	Boundaries: Owns animation driver setup only; does not own model discovery, tracking, or cleanup lifecycle.
-]]
+--[=[
+    @class AnimateUnitModule
+    Bridges replicated unit models to the shared client animation driver preset.
+
+    Called by `UnitAnimationController` when a replicated unit model becomes trackable.
+    Owns animation driver setup only; does not own model discovery, tracking, or cleanup lifecycle.
+    @client
+]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -20,6 +22,7 @@ local DEFAULT_ANIMATION_LOOPING = true
 
 type TAnimationStateSource = Types.TAnimationStateSource
 
+-- Resolves the shared animation controller lazily so the module only pays the lookup cost when a unit is actually tracked.
 local function _GetAnimationController()
 	if animationController == nil then
 		animationController = Knit.GetController("AnimationController")
@@ -28,6 +31,7 @@ local function _GetAnimationController()
 	return animationController
 end
 
+-- Builds a per-unit animation state source that reads replicated unit state and falls back to stable defaults.
 local function _CreateUnitStateSource(model: Model, unitReplicationClient: any): TAnimationStateSource?
 	if unitReplicationClient == nil then
 		return nil
@@ -90,6 +94,15 @@ local function _CreateUnitStateSource(model: Model, unitReplicationClient: any):
 	})
 end
 
+--[=[
+    Attaches the shared animation driver to a replicated unit model.
+
+    @within AnimateUnitModule
+    @param model Model -- Replicated unit model to animate.
+    @param context any -- Context forwarded to the shared animation controller.
+    @param unitReplicationClient any -- Client used to read replicated unit animation state.
+    @return any -- Cleanup handle returned by the shared animation controller.
+]=]
 function AnimateUnitModule.setup(model: Model, context: any, unitReplicationClient: any)
 	return _GetAnimationController():Setup(model, "CombatNPC", context, {
 		StateSource = _CreateUnitStateSource(model, unitReplicationClient),

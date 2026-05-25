@@ -1,5 +1,12 @@
 --!strict
 
+--[=[
+    @class UnitMoveOrderPreviewService
+    Owns the client-side move-order preview visuals that show unit paths toward the issued destination.
+
+    @client
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -34,6 +41,7 @@ type TTrackedUnit = {
 local UnitMoveOrderPreviewService = {}
 UnitMoveOrderPreviewService.__index = UnitMoveOrderPreviewService
 
+-- Ensures the preview folder exists so visual objects have a stable parent.
 local function _EnsurePreviewFolder(): Folder
 	local existingFolder = Workspace:FindFirstChild(DESTINATION_FOLDER_NAME)
 	if existingFolder ~= nil and existingFolder:IsA("Folder") then
@@ -46,6 +54,7 @@ local function _EnsurePreviewFolder(): Folder
 	return folder
 end
 
+-- Resolves the current root position for live arrival checks and beam updates.
 local function _ResolveRootPosition(root: Instance): Vector3?
 	if root.Parent == nil then
 		return nil
@@ -62,6 +71,7 @@ local function _ResolveRootPosition(root: Instance): Vector3?
 	return nil
 end
 
+-- Resolves the beam origin near the ground so the preview lines read cleanly from the unit's base.
 local function _ResolveBeamOrigin(root: Instance): Vector3?
 	if root.Parent == nil then
 		return nil
@@ -79,6 +89,7 @@ local function _ResolveBeamOrigin(root: Instance): Vector3?
 	return _ResolveRootPosition(root)
 end
 
+-- Builds the destination ring that anchors the preview destination in the world.
 local function _BuildDestinationMarker(destination: Vector3, parent: Instance): Part
 	local radiusPart = Instance.new("Part")
 	radiusPart.Name = DESTINATION_MARKER_NAME
@@ -98,6 +109,7 @@ local function _BuildDestinationMarker(destination: Vector3, parent: Instance): 
 	return radiusPart
 end
 
+-- Creates the preview service with empty visual state and a reusable preview folder.
 function UnitMoveOrderPreviewService.new()
 	local self = setmetatable({}, UnitMoveOrderPreviewService)
 	self._previewFolder = _EnsurePreviewFolder()
@@ -108,6 +120,7 @@ function UnitMoveOrderPreviewService.new()
 	return self
 end
 
+-- Shows a move-order preview for the requested payload and starts the render loop when at least one beam is valid.
 function UnitMoveOrderPreviewService:ShowOrder(payload: TMoveOrderPreviewPayload)
 	self:Clear()
 
@@ -151,6 +164,7 @@ function UnitMoveOrderPreviewService:ShowOrder(payload: TMoveOrderPreviewPayload
 	self:_StartRenderLoop()
 end
 
+-- Clears all preview visuals and stops the render loop.
 function UnitMoveOrderPreviewService:Clear()
 	self:_StopRenderLoop()
 
@@ -167,14 +181,17 @@ function UnitMoveOrderPreviewService:Clear()
 	self._destination = nil
 end
 
+-- Clears the preview so destroy remains a single cleanup path.
 function UnitMoveOrderPreviewService:Destroy()
 	self:Clear()
 end
 
+-- Builds a stable beam identifier for each tracked unit GUID.
 function UnitMoveOrderPreviewService:_BuildBeamId(unitGuid: string): string
 	return `UnitMovePreview_{unitGuid}`
 end
 
+-- Starts the render loop only when the preview actually has something to animate.
 function UnitMoveOrderPreviewService:_StartRenderLoop()
 	if self._renderConnection ~= nil then
 		return
@@ -185,6 +202,7 @@ function UnitMoveOrderPreviewService:_StartRenderLoop()
 	end)
 end
 
+-- Stops the render loop when the preview is cleared or all tracked units have arrived.
 function UnitMoveOrderPreviewService:_StopRenderLoop()
 	if self._renderConnection == nil then
 		return
@@ -194,6 +212,7 @@ function UnitMoveOrderPreviewService:_StopRenderLoop()
 	self._renderConnection = nil
 end
 
+-- Creates or updates the beam visualizer and reparents its parts under the preview folder.
 function UnitMoveOrderPreviewService:_UpsertBeam(beamId: string, origin: Vector3, destination: Vector3)
 	local direction = destination - origin
 	VectorViz:CreateVisualiser(beamId, origin, direction, {
@@ -211,6 +230,7 @@ function UnitMoveOrderPreviewService:_UpsertBeam(beamId: string, origin: Vector3
 	visualObject.Visualisers.Attachment1.Parent = self._previewFolder
 end
 
+-- Removes a tracked unit and its beam when the unit disappears or reaches the destination.
 function UnitMoveOrderPreviewService:_RemoveTrackedUnit(unitGuid: string)
 	local trackedUnit = self._trackedUnitsByGuid[unitGuid]
 	if trackedUnit == nil then
@@ -221,6 +241,7 @@ function UnitMoveOrderPreviewService:_RemoveTrackedUnit(unitGuid: string)
 	self._trackedUnitsByGuid[unitGuid] = nil
 end
 
+-- Treats a unit as arrived once it is close enough to the destination to stop drawing the preview beam.
 function UnitMoveOrderPreviewService:_HasUnitArrived(root: Instance, destination: Vector3): boolean
 	local rootPosition = _ResolveRootPosition(root)
 	if rootPosition == nil then
@@ -230,6 +251,7 @@ function UnitMoveOrderPreviewService:_HasUnitArrived(root: Instance, destination
 	return (rootPosition - destination).Magnitude <= ARRIVAL_RADIUS
 end
 
+-- Repositions beams while the preview is alive and clears everything once the last tracked unit is done.
 function UnitMoveOrderPreviewService:_OnRenderStepped()
 	local destination = self._destination
 	if destination == nil then

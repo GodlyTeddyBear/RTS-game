@@ -75,6 +75,7 @@ This file is the repo-level policy entry point for Codex.
 | [.codex/documents/AGENT_RULES.md](.codex/documents/AGENT_RULES.md) | Behavioral rules for Codex in this project. |
 | [.codex/documents/coding-style/CODING_STYLE.md](.codex/documents/coding-style/CODING_STYLE.md) | Navigation hub for coding-style docs. |
 | [.codex/documents/coding-style/CODING_STYLE_GUIDE.md](.codex/documents/coding-style/CODING_STYLE_GUIDE.md) | Core coding-style rules for naming, types, tables, structure, and React API style. |
+| [.codex/documents/coding-style/OPTION_VS_NIL.md](.codex/documents/coding-style/OPTION_VS_NIL.md) | Prefer `Option` over raw `nil` for optional values that need debugging context. |
 | [.codex/documents/methods/PLAN_DEVELOPMENT.md](.codex/documents/methods/PLAN_DEVELOPMENT.md) | Standard output contract and rubric gates for GDD and implementation planning. |
 | [.codex/documents/methods/backend/CONTEXT_BOUNDARIES.md](.codex/documents/methods/backend/CONTEXT_BOUNDARIES.md) | Context boundary categories, Catch ownership, and bridge-only rules. |
 | [.codex/documents/methods/backend/BASE_APPLICATION_CONTRACTS.md](.codex/documents/methods/backend/BASE_APPLICATION_CONTRACTS.md) | BaseApplication/BaseCommand/BaseQuery contracts for constructor identity, dependency resolution, and event-name resolution boundaries. |
@@ -88,6 +89,7 @@ This file is the repo-level policy entry point for Codex.
 | [.codex/documents/methods/frontend/CONTROLLER_INFRA_CONTRACTS.md](.codex/documents/methods/frontend/CONTROLLER_INFRA_CONTRACTS.md) | Frontend controller side-effect and infrastructure boundary contracts. |
 | [.codex/documents/methods/frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md](.codex/documents/methods/frontend/CLIENT_CONTEXT_NON_PRESENTATION_CONTRACTS.md) | Client context method contracts for non-render controller, application, and infrastructure boundaries. |
 | [.codex/documents/architecture/frontend/CLIENT_CONTEXTS_NON_PRESENTATION.md](.codex/documents/architecture/frontend/CLIENT_CONTEXTS_NON_PRESENTATION.md) | Non-render client context architecture for controllers, application commands and queries, and infrastructure runtime boundaries. |
+| [.codex/documents/architecture/frontend/DDD.md](.codex/documents/architecture/frontend/DDD.md) | Frontend DDD-style controller, application, and infrastructure context structure. |
 | [.codex/documents/methods/ECS/COMPONENT_RULES.md](.codex/documents/methods/ECS/COMPONENT_RULES.md) | ECS component rules for pure data, authority labels, frozen registries, and tags. |
 | [.codex/documents/methods/ECS/ENTITY_FACTORY_RULES.md](.codex/documents/methods/ECS/ENTITY_FACTORY_RULES.md) | Entity factory rules for JECS mutation surface, typed accessors, and deferred destruction. |
 | [.codex/documents/methods/ECS/SYSTEM_RULES.md](.codex/documents/methods/ECS/SYSTEM_RULES.md) | System rules for statelessness, read/write declaration, and single-owner behavior. |

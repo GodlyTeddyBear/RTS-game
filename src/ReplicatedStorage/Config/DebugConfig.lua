@@ -29,4 +29,6 @@ return table.freeze({
 	PARALLEL_QUERY_PROFILING = true, -- Enables ParallelQuery DebugPlus scopes on coarse runner and managed-job paths (testing only)
 	AI_RUNTIME_PROFILING = false, -- Enables shared AI runtime phase timing logs (testing only)
 	AI_RUNTIME_PROFILING_LOG_INTERVAL_SECONDS = 1, -- Minimum seconds between AI runtime profile logs
+	MOUSE_SERVICE_CURSOR_DEBUG = false, -- Enables temporary ray visualization for MouseService cursor resolution (testing only)
+	MOUSE_SERVICE_CURSOR_DEBUG_DURATION_SECONDS = 0.15, -- Lifetime of MouseService cursor debug rays in seconds
 })

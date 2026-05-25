@@ -71,13 +71,16 @@ export type TResolvedMouseRequest = {
 
 export type TMouseSnapshot = {
 	Source: TMouseSnapshotSource,
+	-- ScreenPoint is a 2D viewport-space cursor coordinate used to build the world ray.
 	ScreenPoint: Vector2,
 	Camera: Camera,
 	RayOrigin: Vector3,
 	RayDirection: Vector3,
 	RayLength: number,
 	Hit: RaycastResult?,
+	-- WorldPoint is the direct raycast hit position, not a gameplay-specific ground destination.
 	WorldPoint: Vector3?,
+	-- ProjectedWorldPoint is the projection of WorldPoint onto ProjectionPlane when one is supplied.
 	ProjectedWorldPoint: Vector3?,
 	ResolvedTarget: SelectionPlus.TResolvedSelectionTarget?,
 }
@@ -398,7 +401,15 @@ export type TMouseManager = {
 	DragCancelled: TMouseDragEndedSignal,
 
 	ResolveSnapshot: (self: TMouseManager, request: TMouseRequest?) -> Result.Result<TMouseSnapshot>,
+	-- ResolveHitFromScreenPoint performs an explicit screen-space raycast and returns the direct world hit only.
+	ResolveHitFromScreenPoint: (
+		self: TMouseManager,
+		screenPoint: Vector2,
+		request: TMouseRequest?
+	) -> Result.Result<RaycastResult?>,
+	ResolveHit: (self: TMouseManager, request: TMouseRequest?) -> Result.Result<RaycastResult?>,
 	ResolveWorldPoint: (self: TMouseManager, request: TMouseRequest?) -> Result.Result<Vector3?>,
+	ResolveGroundPoint: (self: TMouseManager, request: TMouseRequest?) -> Result.Result<Vector3?>,
 	ResolveTarget: (self: TMouseManager, request: TMouseRequest?) -> Result.Result<SelectionPlus.TResolvedSelectionTarget?>,
 	SetSelection: (self: TMouseManager, channelName: string, request: TMouseSelectionRequest?) -> Result.Result<TMouseSelectionSnapshot>,
 	SetSelectionFromCurrentMouse: (

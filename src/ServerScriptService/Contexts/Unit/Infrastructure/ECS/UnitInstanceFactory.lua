@@ -1,5 +1,12 @@
 --!strict
 
+--[=[
+    @class UnitInstanceFactory
+    Builds and prepares server-owned unit models for the unit ECS entity factory.
+
+    @server
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -36,6 +43,7 @@ setmetatable(UnitInstanceFactory, { __index = BaseInstanceFactory })
 
 local UNIT_TAG = "CombatUnit"
 
+-- Ensures the model carries a folder reference to the shared animations asset folder used by client animation setup.
 local function _EnsureAnimationsFolderValue(model: Model, animationsFolder: Folder?)
 	local animationsFolderRef = model:FindFirstChild("AnimationsFolder")
 	if animationsFolderRef ~= nil and not animationsFolderRef:IsA("ObjectValue") then
@@ -54,16 +62,19 @@ local function _EnsureAnimationsFolderValue(model: Model, animationsFolder: Fold
 	end
 end
 
+-- Creates the instance factory with the unit namespace and no cached animation folder yet.
 function UnitInstanceFactory.new()
 	local self = setmetatable(BaseInstanceFactory.new("Unit"), UnitInstanceFactory)
 	self._animationsFolder = nil :: Folder?
 	return self
 end
 
+-- Reports the workspace folder name where live unit models should be parented.
 function UnitInstanceFactory:_GetWorkspaceFolderName(): string
 	return "Units"
 end
 
+-- Builds a unit asset registry from the shared `Assets/Units` folder when one exists.
 function UnitInstanceFactory:_CreateAssetRegistry(assetsRoot: Folder): any
 	local unitsFolder = assetsRoot:FindFirstChild("Units")
 	if unitsFolder ~= nil and unitsFolder:IsA("Folder") then
@@ -72,6 +83,7 @@ function UnitInstanceFactory:_CreateAssetRegistry(assetsRoot: Folder): any
 	return nil
 end
 
+-- Caches the shared animations folder so newly created models can expose it to the client.
 function UnitInstanceFactory:_OnInit(_registry: any, _name: string)
 	local assetsRoot = ReplicatedStorage:FindFirstChild("Assets")
 	if assetsRoot == nil or not assetsRoot:IsA("Folder") then
@@ -84,12 +96,14 @@ function UnitInstanceFactory:_OnInit(_registry: any, _name: string)
 	end
 end
 
+-- Looks up the configured unit definition so fallback model creation stays consistent with gameplay data.
 function UnitInstanceFactory:_GetDefinition(unitId: string): UnitDefinition
 	local definition = UnitConfig.Definitions[unitId]
 	assert(definition ~= nil, "Unknown unit id: " .. tostring(unitId))
 	return definition
 end
 
+-- Creates a minimal fallback model when no asset-backed unit model is available.
 function UnitInstanceFactory:_CreateFallbackModel(unitId: string, unitGuid: string): Model
 	local definition = self:_GetDefinition(unitId)
 
@@ -116,6 +130,7 @@ function UnitInstanceFactory:_CreateFallbackModel(unitId: string, unitGuid: stri
 	return model
 end
 
+-- Returns either an asset-backed unit model or a fallback model for the requested unit definition.
 function UnitInstanceFactory:_CreateInstanceForEntity(_entityId: number, options: TCreateUnitInstanceOptions): Instance
 	local assetRegistry = self:_GetAssetRegistry()
 	if assetRegistry ~= nil then
@@ -128,6 +143,7 @@ function UnitInstanceFactory:_CreateInstanceForEntity(_entityId: number, options
 	return self:_CreateFallbackModel(options.UnitId, options.UnitGuid)
 end
 
+-- Normalizes the model, animation metadata, and collision state before the model is revealed in the world.
 function UnitInstanceFactory:_PrepareInstance(instance: Instance, _entityId: number, options: TCreateUnitInstanceOptions)
 	assert(instance:IsA("Model"), "UnitInstanceFactory requires Model instances")
 
@@ -164,6 +180,7 @@ function UnitInstanceFactory:_PrepareInstance(instance: Instance, _entityId: num
 	EntityCollisionService:ApplyModel(model)
 end
 
+-- Builds the reveal payload so the server can expose the unit attributes and tags to clients.
 function UnitInstanceFactory:_BuildRevealIdentityOptions(
 	_entityId: number,
 	_instance: Instance,
@@ -177,6 +194,7 @@ function UnitInstanceFactory:_BuildRevealIdentityOptions(
 	}
 end
 
+-- Exposes the spawn-time unit metadata as replicated attributes on the model.
 function UnitInstanceFactory:_BuildRevealAttributes(
 	_entityId: number,
 	_instance: Instance,
@@ -191,6 +209,7 @@ function UnitInstanceFactory:_BuildRevealAttributes(
 	}
 end
 
+-- Tags every unit model so client contexts can discover it through collection-service tracking.
 function UnitInstanceFactory:_BuildRevealTags(
 	_entityId: number,
 	_instance: Instance,
@@ -201,6 +220,7 @@ function UnitInstanceFactory:_BuildRevealTags(
 	}
 end
 
+-- Creates and returns the bound model for the requested unit entity.
 function UnitInstanceFactory:CreateUnitInstance(
 	entity: number,
 	unitId: string,

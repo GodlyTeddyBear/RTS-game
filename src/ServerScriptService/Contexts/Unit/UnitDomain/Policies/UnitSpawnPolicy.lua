@@ -1,5 +1,12 @@
 --!strict
 
+--[=[
+    @class UnitSpawnPolicy
+    Validates unit spawn requests against configuration and owner capacity limits.
+
+    @server
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
@@ -20,10 +27,12 @@ function UnitSpawnPolicy.new()
 	return setmetatable({}, UnitSpawnPolicy)
 end
 
+-- Resolves the entity factory needed to enforce the per-owner concurrency limit.
 function UnitSpawnPolicy:Init(registry: any, _name: string)
 	self._entityFactory = registry:Get("UnitEntityFactory")
 end
 
+-- Validates the spawn request and returns the resolved unit definition when all policy checks pass.
 function UnitSpawnPolicy:Check(request: SpawnUnitRequest): Result.Result<UnitDefinition>
 	return Result.Catch(function()
 		Ensure(type(request) == "table", "InvalidRequest", Errors.INVALID_REQUEST)
