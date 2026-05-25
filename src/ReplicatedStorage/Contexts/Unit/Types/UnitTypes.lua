@@ -82,6 +82,7 @@ export type RoleComponent = {
 
 export type PathStateComponent = {
 	GoalPosition: Vector3?,
+	RequestedGoalPosition: Vector3?,
 	IsMoving: boolean,
 }
 

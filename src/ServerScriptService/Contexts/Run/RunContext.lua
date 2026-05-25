@@ -641,10 +641,11 @@ function RunContext:_OnStateChanged(newState: RunState, previousState: RunState)
 	})
 
 	-- The idle-to-prep transition is the canonical run-start lifecycle hook.
-	if previousState == "Idle" and newState == "Prep" then
+	if newState == "Prep" and (previousState == "Idle" or previousState == "RunEnd") then
 		Result.MentionEvent("RunContext:RunStart", "Prep entered from idle", {
 			WaveNumber = self._machine:GetWaveNumber(),
 		})
+		GameEvents.Bus:Emit(GameEvents.Events.Run.RunStarted)
 	end
 
 	-- Terminal cleanup hooks will be attached here as downstream systems are implemented.

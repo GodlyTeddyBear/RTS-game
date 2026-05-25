@@ -12,10 +12,13 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
+local Workspace = game:GetService("Workspace")
 local SimplePath = require(ServerStorage.Utilities.SimplePath)
 local Promise = require(ReplicatedStorage.Packages.Promise)
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
+local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local WorldConfig = require(ReplicatedStorage.Contexts.World.Config.WorldConfig)
 
 -- ── Constants ────────────────────────────────────────────────────────────────
 
@@ -32,6 +35,7 @@ local DEFAULT_PATH_OPTIONS = {
 	RetryComputationErrors = false,
 	ReconcileTargetYOnWaypointFailure = false,
 	MaxTargetYReconcileAttempts = 0,
+	RawTargetPosition = nil,
 }
 
 local COMPUTATION_ERROR_RETRY_COUNT = 1
@@ -205,6 +209,53 @@ local function _GetPathComputationSnapshot(path: any): { StatusName: string, Way
 	}
 end
 
+local function _BuildGroundNormalizationExclude(options: { [string]: any }?): { Instance }
+	local excludedInstances = {}
+
+	if options ~= nil then
+		local extraExcludedInstances = options.ExcludeInstances
+		if type(extraExcludedInstances) == "table" then
+			for _, instance in ipairs(extraExcludedInstances) do
+				if typeof(instance) == "Instance" then
+					table.insert(excludedInstances, instance)
+				end
+			end
+		end
+
+		local excludedFolderNames = options.ExcludedFolderNames
+		if type(excludedFolderNames) == "table" then
+			for _, folderName in ipairs(excludedFolderNames) do
+				if type(folderName) ~= "string" or folderName == "" then
+					continue
+				end
+
+				local folder = Workspace:FindFirstChild(folderName)
+				if folder ~= nil then
+					table.insert(excludedInstances, folder)
+				end
+			end
+		end
+	end
+
+	return excludedInstances
+end
+
+local function _BuildGroundNormalizationQueryOptions(excludedInstances: { Instance }): any
+	return SpatialQuery.CreateRaycastOptions({
+		FilterType = Enum.RaycastFilterType.Exclude,
+		FilterDescendantsInstances = excludedInstances,
+		RespectCanCollide = true,
+	})
+end
+
+local function _IsGroundNormalizationHitAccepted(hit: RaycastResult, minimumUpDot: number): boolean
+	if hit.Instance.Name == WorldConfig.GRID_PART_NAME then
+		return false
+	end
+
+	return hit.Normal:Dot(Vector3.yAxis) >= minimumUpDot
+end
+
 -- Detects the computation-failure shape that can be recovered by Y reconciliation.
 local function _isWaypointComputationFailure(snapshot: { StatusName: string, WaypointCount: number? }): boolean
 	return snapshot.StatusName == "NoPath" or (snapshot.WaypointCount ~= nil and snapshot.WaypointCount < 2)
@@ -259,6 +310,7 @@ local function _buildPathFailure(
 	fallbackReason: string,
 	entity: any?,
 	targetPosition: Vector3?,
+	rawTargetPosition: Vector3?,
 	useLastError: boolean?
 ): { [string]: any }
 	local lastError = fallbackReason
@@ -272,7 +324,7 @@ local function _buildPathFailure(
 		type = "PathError",
 		message = lastError,
 		Entity = entity,
-	}, _buildPositionDebug("StartPosition", startPosition), _buildPositionDebug("TargetPosition", targetPosition))
+	}, _buildPositionDebug("StartPosition", startPosition), _buildPositionDebug("TargetPosition", targetPosition), _buildPositionDebug("RawTargetPosition", rawTargetPosition))
 end
 
 -- Validates that the entity can provide a live model and primary part for path creation.
@@ -393,6 +445,43 @@ function PathfindingHelper.CreatePath(
 	return path
 end
 
+function PathfindingHelper.NormalizeGroundTarget(
+	targetPosition: Vector3,
+	options: { [string]: any }?
+): Vector3?
+	if typeof(targetPosition) ~= "Vector3" then
+		return nil
+	end
+
+	local heightOffset = if options ~= nil and type(options.HeightOffset) == "number" then options.HeightOffset else 0
+	local rayLength = if options ~= nil and type(options.RayLength) == "number" then options.RayLength else 0
+	local minimumUpDot = if options ~= nil and type(options.MinimumUpDot) == "number" then options.MinimumUpDot else 0.5
+	if rayLength <= 0 then
+		return nil
+	end
+
+	local rayOrigin = Vector3.new(targetPosition.X, targetPosition.Y + heightOffset, targetPosition.Z)
+	local rayDirection = Vector3.new(0, -rayLength, 0)
+	local excludedInstances = _BuildGroundNormalizationExclude(options)
+
+	while true do
+		local hit = SpatialQuery.Raycast(
+			rayOrigin,
+			rayDirection,
+			_BuildGroundNormalizationQueryOptions(excludedInstances)
+		)
+		if hit == nil then
+			return nil
+		end
+
+		if _IsGroundNormalizationHitAccepted(hit, minimumUpDot) then
+			return hit.Position
+		end
+
+		table.insert(excludedInstances, hit.Instance)
+	end
+end
+
 --[=[
     Computes path waypoints for the supplied target without starting `SimplePath` movement.
     @within PathfindingHelper
@@ -428,7 +517,7 @@ function PathfindingHelper.ComputeWaypoints(
 	end
 
 	local activeTargetPosition = targetPosition
-	local originalTargetPosition = targetPosition
+	local originalTargetPosition = _resolvePathOption(options, "RawTargetPosition") or targetPosition
 	local latestReconciledTargetPosition = nil :: Vector3?
 	local computationErrorRetries = 0
 	local targetYReconcileAttempts = 0
@@ -594,7 +683,7 @@ function PathfindingHelper.RunPath(path: any, targetPosition: Vector3, entity: a
 		local retryThread: thread? = nil
 		local computationErrorRetries = 0
 		local targetYReconcileAttempts = 0
-		local originalTargetPosition = targetPosition
+		local originalTargetPosition = _resolvePathOption(options, "RawTargetPosition") or targetPosition
 		local activeTargetPosition = targetPosition
 		local latestReconciledTargetPosition = nil :: Vector3?
 
@@ -720,7 +809,13 @@ function PathfindingHelper.RunPath(path: any, targetPosition: Vector3, entity: a
 
 		currentJanitor:Add(path.Error:Connect(function(errorType)
 			local snapshot = _GetPathComputationSnapshot(path)
-			local failure = _buildPathFailure(path, tostring(errorType or "PathError"), entity, activeTargetPosition)
+			local failure = _buildPathFailure(
+				path,
+				tostring(errorType or "PathError"),
+				entity,
+				activeTargetPosition,
+				originalTargetPosition
+			)
 			local isComputationError = failure.message == SimplePath.ErrorType.ComputationError
 			local maxReconcileAttempts = tonumber(_resolvePathOption(options, "MaxTargetYReconcileAttempts")) or 0
 			-- Only reconcile Y when the path failed to compute a viable waypoint set.
@@ -779,7 +874,7 @@ function PathfindingHelper.RunPath(path: any, targetPosition: Vector3, entity: a
 
 		-- A blocked path settles as a failure because the caller needs a fresh route decision.
 		currentJanitor:Add(path.Blocked:Connect(function()
-			local failure = _buildPathFailure(path, "PathBlocked", entity, targetPosition, false)
+			local failure = _buildPathFailure(path, "PathBlocked", entity, targetPosition, originalTargetPosition, false)
 			cleanup()
 			reject(failure)
 		end))

@@ -40,6 +40,7 @@ export type TAgentParams = {
 
 export type TMovementPathStateLike = {
 	GoalPosition: Vector3?,
+	RequestedGoalPosition: Vector3?,
 }
 
 export type TMovementModelRefLike = {

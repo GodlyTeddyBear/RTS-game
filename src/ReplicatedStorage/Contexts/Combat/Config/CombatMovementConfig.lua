@@ -64,6 +64,16 @@ CombatMovementConfig.PATHFINDING = table.freeze({
 	MaxTargetYReconcileAttempts = 2,
 })
 
+CombatMovementConfig.GOAL_NORMALIZATION = table.freeze({
+	HeightOffset = 1024,
+	RayLength = 4096,
+	MinimumUpDot = 0.5,
+	ExcludedFolderNames = table.freeze({
+		"Units",
+		"Placements",
+	}),
+})
+
 --[=[
 	@prop FASTFLOW_VISUALIZATION table
 	@within CombatMovementConfig

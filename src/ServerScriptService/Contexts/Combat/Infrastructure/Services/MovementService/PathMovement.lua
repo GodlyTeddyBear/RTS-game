@@ -82,7 +82,13 @@ return function(MovementService: TMovementService)
 	function MovementService:_RunPathPromise(path: any, goalPosition: Vector3, actorKey: TMovementActorKey): MovementTypes.TPathPromiseLike
 		local binding = _GetBinding(self, actorKey)
 		local entityId = if binding ~= nil then binding.EntityId else actorKey
-		return PathfindingHelper.RunPath(path, goalPosition, entityId, CombatMovementConfig.PATHFINDING)
+		local pathState = if binding ~= nil then binding:GetPathState() else nil
+		local options = _ClonePathfindingOptions({
+			RawTargetPosition = if pathState ~= nil and pathState.RequestedGoalPosition ~= nil
+				then pathState.RequestedGoalPosition
+				else goalPosition,
+		})
+		return PathfindingHelper.RunPath(path, goalPosition, entityId, options)
 	end
 
 	-- Clears any warmed replacement path state, optionally cancelling the pending compute promise first.
@@ -167,6 +173,9 @@ return function(MovementService: TMovementService)
 			return true, nil
 		end
 
+		local binding = _GetBinding(self, actorKey)
+		local pathState = if binding ~= nil then binding:GetPathState() else nil
+
 		local nextTransitionId = movementState.PendingTransitionId + 1
 		local computePromise = PathfindingHelper.ComputeWaypointsPromise(
 			replacementPath,
@@ -174,6 +183,9 @@ return function(MovementService: TMovementService)
 			self:_GetMovementEntityId(actorKey),
 			_ClonePathfindingOptions({
 				RetainPathAfterWaypointCompute = true,
+				RawTargetPosition = if pathState ~= nil and pathState.RequestedGoalPosition ~= nil
+					then pathState.RequestedGoalPosition
+					else goalPosition,
 			})
 		)
 

@@ -105,6 +105,7 @@ function UnitEntityFactory:CreateUnit(unitGuid: string, request: SpawnUnitReques
 	} :: MoveSpeedComponent)
 	self:_Set(entity, self._components.PathStateComponent, {
 		GoalPosition = nil,
+		RequestedGoalPosition = nil,
 		IsMoving = false,
 	} :: PathStateComponent)
 
@@ -266,7 +267,7 @@ function UnitEntityFactory:GetPathState(entity: number): PathStateComponent?
 end
 
 -- Sets a new goal position and resets movement state so the behavior system can take over.
-function UnitEntityFactory:SetGoalPosition(entity: number, goalPosition: Vector3)
+function UnitEntityFactory:SetGoalPosition(entity: number, goalPosition: Vector3, requestedGoalPosition: Vector3?)
 	self:RequireReady()
 	local state = self:GetPathState(entity)
 	if state == nil then
@@ -275,6 +276,7 @@ function UnitEntityFactory:SetGoalPosition(entity: number, goalPosition: Vector3
 
 	self:_Set(entity, self._components.PathStateComponent, {
 		GoalPosition = goalPosition,
+		RequestedGoalPosition = if requestedGoalPosition ~= nil then requestedGoalPosition else goalPosition,
 		IsMoving = false,
 	} :: PathStateComponent)
 	self:_Add(entity, self._components.DirtyTag)
@@ -290,6 +292,7 @@ function UnitEntityFactory:ClearGoalPosition(entity: number)
 
 	self:_Set(entity, self._components.PathStateComponent, {
 		GoalPosition = nil,
+		RequestedGoalPosition = nil,
 		IsMoving = false,
 	} :: PathStateComponent)
 	self:_Add(entity, self._components.DirtyTag)
@@ -308,6 +311,7 @@ function UnitEntityFactory:SetPathMoving(entity: number, isMoving: boolean)
 
 	self:_Set(entity, self._components.PathStateComponent, {
 		GoalPosition = state.GoalPosition,
+		RequestedGoalPosition = state.RequestedGoalPosition,
 		IsMoving = isMoving,
 	} :: PathStateComponent)
 	self:_Add(entity, self._components.DirtyTag)

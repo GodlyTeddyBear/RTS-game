@@ -78,20 +78,16 @@ end
 	@within CombatLoopService
 	Begins a combat session and transitions it from `Inactive` to `Starting`.
 	@param userId number -- User id that owns the combat session.
-	@param waveNumber number -- Wave number to store on the session.
-	@param isEndless boolean -- Whether the session is part of endless mode.
 ]=]
 function CombatLoopService:BeginSession(
-	userId: number,
-	waveNumber: number,
-	isEndless: boolean
+	userId: number
 ): Result.Result<CombatSessionState>
 	return Result.Catch(function()
 		local machine = CombatSessionStateMachine.new()
 		local record: CombatSessionRecord = {
 			Machine = machine,
-			WaveNumber = waveNumber,
-			IsEndless = isEndless,
+			WaveNumber = 0,
+			IsEndless = false,
 			IsPaused = false,
 			IsShutdownLocked = false,
 			HasLifecycleFailure = false,
@@ -263,18 +259,27 @@ end
 
 --[=[
 	@within CombatLoopService
-	Updates the current wave number for an active combat session.
+	Updates the current wave metadata for an active combat session.
 	@param userId number -- User id whose session should update.
 	@param waveNumber number -- New wave number to store on the session.
+	@param isEndless boolean -- Whether the current wave is in endless mode.
 ]=]
-function CombatLoopService:SetCurrentWaveNumber(userId: number, waveNumber: number)
-	local record = self.ActiveCombats[userId]
-	if not record then
-		return
-	end
+function CombatLoopService:SetWaveContext(
+	userId: number,
+	waveNumber: number,
+	isEndless: boolean
+): Result.Result<boolean>
+	return Result.Catch(function()
+		local record = self.ActiveCombats[userId]
+		if not record then
+			return Ok(false)
+		end
 
-	-- Update the stored wave in place so snapshots and future callbacks stay aligned.
-	record.WaveNumber = waveNumber
+		-- Update the stored wave metadata in place so snapshots and callbacks stay aligned.
+		record.WaveNumber = waveNumber
+		record.IsEndless = isEndless
+		return Ok(true)
+	end, "CombatLoopService:SetWaveContext")
 end
 
 --[=[

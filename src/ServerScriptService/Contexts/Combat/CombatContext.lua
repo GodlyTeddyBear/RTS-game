@@ -29,6 +29,7 @@ local RegisterActorTypeCommand = require(script.Parent.Application.Commands.Regi
 local RegisterCombatActorCommand = require(script.Parent.Application.Commands.RegisterCombatActorCommand)
 local UnregisterCombatActorCommand = require(script.Parent.Application.Commands.UnregisterCombatActorCommand)
 local NotifyActorRemovedCommand = require(script.Parent.Application.Commands.NotifyActorRemovedCommand)
+local UpdateCombatWaveContextCommand = require(script.Parent.Application.Commands.UpdateCombatWaveContextCommand)
 
 type CombatActorTypePayload = CombatTypes.CombatActorTypePayload
 type CombatActorPayload = CombatTypes.CombatActorPayload
@@ -119,6 +120,11 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		CacheAs = "_unregisterCombatActorCommand",
 	},
 	{
+		Name = "UpdateCombatWaveContextCommand",
+		Module = UpdateCombatWaveContextCommand,
+		CacheAs = "_updateCombatWaveContextCommand",
+	},
+	{
 		Name = "NotifyActorRemovedCommand",
 		Module = NotifyActorRemovedCommand,
 		CacheAs = "_notifyActorRemovedCommand",
@@ -144,8 +150,8 @@ local CombatContext = Knit.CreateService({
 	Teardown = {
 		Before = "_BeforeDestroy",
 		Fields = {
+			{ Field = "_runStartedConnection", Method = "Disconnect" },
 			{ Field = "_runWaveStartedConnection", Method = "Disconnect" },
-			{ Field = "_runWaveEndedConnection", Method = "Disconnect" },
 			{ Field = "_runEndedConnection", Method = "Disconnect" },
 			{ Field = "_playerRemovingConnection", Method = "Disconnect" },
 			{ Field = "_animationCallbackConnection", Method = "Disconnect" },
@@ -170,8 +176,8 @@ local combatEvaluateEnemyMoveSpeedEffectsProfileTag = "Combat.Scheduler.CombatTi
 function CombatContext:KnitInit()
 	CombatBaseContext:KnitInit()
 
+	self._runStartedConnection = nil :: any
 	self._runWaveStartedConnection = nil :: any
-	self._runWaveEndedConnection = nil :: any
 	self._runEndedConnection = nil :: any
 	self._playerRemovingConnection = nil :: any
 	self._animationCallbackConnection = nil :: any
@@ -211,13 +217,13 @@ function CombatContext:KnitStart()
 		end, schedulerProfilingEnabled)
 	end)
 
+	CombatBaseContext:OnContextEvent("Run", "RunStarted", function()
+		self:_OnRunStarted()
+	end, "_runStartedConnection")
+
 	CombatBaseContext:OnContextEvent("Run", "WaveStarted", function(waveNumber: number, isEndless: boolean)
 		self:_OnRunWaveStarted(waveNumber, isEndless)
 	end, "_runWaveStartedConnection")
-
-	CombatBaseContext:OnContextEvent("Run", "WaveEnded", function(_waveNumber: number)
-		self:_OnRunWaveEnded()
-	end, "_runWaveEndedConnection")
 
 	CombatBaseContext:OnContextEvent("Run", "RunEnded", function()
 		self:_OnRunEnded()
@@ -234,15 +240,30 @@ function CombatContext:KnitStart()
 	)
 end
 
-function CombatContext:_OnRunWaveStarted(waveNumber: number, isEndless: boolean)
+function CombatContext:_OnRunStarted()
 	Catch(function()
-		Result.MentionEvent("Combat:OnRunWaveStarted", "Received run wave start", {
-			WaveNumber = waveNumber,
-			IsEndless = isEndless,
+		Result.MentionEvent("Combat:OnRunStarted", "Received run start", {
 			RuntimeStarted = self._combatActorRegistryService:IsRuntimeStarted(),
 			ActorTypeCount = #self._combatActorRegistryService:GetActorTypePayloads(),
 		})
-		Try(self._startCombatCommand:Execute(waveNumber, isEndless))
+		Try(self._startCombatCommand:Execute())
+		return Ok(nil)
+	end, "Combat:OnRunStarted")
+end
+
+function CombatContext:_OnRunWaveStarted(waveNumber: number, isEndless: boolean)
+	Catch(function()
+		local primaryPlayer = Players:GetPlayers()[1]
+		if primaryPlayer == nil then
+			return Ok(nil)
+		end
+
+		Result.MentionEvent("Combat:OnRunWaveStarted", "Received run wave start", {
+			WaveNumber = waveNumber,
+			IsEndless = isEndless,
+			PrimaryPlayerUserId = primaryPlayer.UserId,
+		})
+		Try(self._updateCombatWaveContextCommand:Execute(primaryPlayer.UserId, waveNumber, isEndless))
 		return Ok(nil)
 	end, "Combat:OnRunWaveStarted")
 end
@@ -252,13 +273,6 @@ function CombatContext:_OnRunEnded()
 		Try(self._endCombatCommand:Execute())
 		return Ok(nil)
 	end, "Combat:OnRunEnded")
-end
-
-function CombatContext:_OnRunWaveEnded()
-	Catch(function()
-		Try(self._endCombatCommand:Execute())
-		return Ok(nil)
-	end, "Combat:OnRunWaveEnded")
 end
 
 function CombatContext:_OnPlayerRemoving(_player: Player)

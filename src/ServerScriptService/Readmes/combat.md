@@ -41,7 +41,7 @@ Unit / Structure / Enemy context starts
       -> compiled immediately if runtime is active
 
 Run starts
-  -> CombatContext receives WaveStarted
+  -> CombatContext receives RunStarted
   -> StartCombat starts the runtime if needed
   -> CombatLoopService creates the active session
   -> queued actor payloads are compiled into runtime records
@@ -58,7 +58,7 @@ EnemyContext spawns enemy
       -> CombatContext.RegisterCombatActor
       -> if runtime not started, queue payload
 
-CombatContext starts combat on wave start
+CombatContext starts combat on run start
   -> StartCombat
   -> CombatBehaviorRuntimeService.StartRuntime
   -> queued enemy actor payloads are compiled into behavior trees
@@ -94,13 +94,17 @@ If target dies
 
 ```text
 Run begins
-  -> RunContext emits WaveStarted
-  -> CombatContext._OnRunWaveStarted
+  -> RunContext emits RunStarted
+  -> CombatContext._OnRunStarted
   -> StartCombat executes
-      -> validates wave number
       -> finds primary player
       -> starts combat runtime if needed
       -> creates active combat session for that player
+
+Wave begins
+  -> RunContext emits WaveStarted
+  -> CombatContext._OnRunWaveStarted
+  -> active combat session wave metadata updates
 
 Combat runtime comes up
   -> CombatBehaviorRuntimeService.StartRuntime
@@ -142,7 +146,7 @@ Entity death or despawn
   -> sync state is flushed
 
 Run ends
-  -> RunContext emits WaveEnded or RunEnded
+  -> RunContext emits RunEnded
   -> CombatContext ends combat
   -> EndCombat clears hitboxes, hit resolution, lock-on, movement, projectiles
   -> combat session is removed from CombatLoopService

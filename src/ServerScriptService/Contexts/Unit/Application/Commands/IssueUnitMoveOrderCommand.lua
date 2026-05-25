@@ -11,6 +11,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
+local PathfindingHelper = require(ServerStorage.Utilities.PathfindingHelper)
+local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 local Errors = require(script.Parent.Parent.Parent.Errors)
@@ -54,6 +56,13 @@ function IssueUnitMoveOrderCommand:Execute(player: Player, request: IssueMoveOrd
 		Ensure(type(request.UnitGuids) == "table" and #request.UnitGuids > 0, "InvalidUnitGuids", Errors.INVALID_UNIT_GUIDS)
 		Ensure(typeof(request.Destination) == "Vector3", "InvalidMoveDestination", Errors.INVALID_MOVE_DESTINATION)
 		Ensure(_IsValidDestination(request.Destination), "InvalidMoveDestination", Errors.INVALID_MOVE_DESTINATION)
+		local normalizedDestination =
+			PathfindingHelper.NormalizeGroundTarget(request.Destination, CombatMovementConfig.GOAL_NORMALIZATION)
+		Ensure(
+			typeof(normalizedDestination) == "Vector3" and _IsValidDestination(normalizedDestination :: Vector3),
+			"InvalidMoveDestination",
+			Errors.INVALID_MOVE_DESTINATION
+		)
 
 		local ownerId = tostring(player.UserId)
 		local issuedCount = 0
@@ -79,7 +88,7 @@ function IssueUnitMoveOrderCommand:Execute(player: Player, request: IssueMoveOrd
 				continue
 			end
 
-			self._entityFactory:SetGoalPosition(entity, request.Destination)
+			self._entityFactory:SetGoalPosition(entity, normalizedDestination :: Vector3, request.Destination)
 			issuedCount += 1
 		end
 

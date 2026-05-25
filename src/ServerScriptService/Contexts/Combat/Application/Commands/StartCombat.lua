@@ -29,19 +29,15 @@ function StartCombat:Init(registry: any, _name: string)
 	})
 end
 
-function StartCombat:Execute(waveNumber: number, isEndless: boolean): Result.Result<boolean>
+function StartCombat:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
-		-- Validate the start request and resolve the combat owner first.
-		Ensure(waveNumber > 0, "InvalidWaveNumber", Errors.INVALID_WAVE_NUMBER)
-
+		-- Resolve the combat owner before binding the session to the run lifecycle.
 		local primaryPlayer = Players:GetPlayers()[1]
 		Ensure(primaryPlayer ~= nil, "MissingPrimaryPlayer", Errors.MISSING_PRIMARY_PLAYER)
 
 		local runtimeStarted = self._actorRegistryService:IsRuntimeStarted()
 		local actorTypePayloads = self._actorRegistryService:GetActorTypePayloads()
 		Result.MentionEvent("Combat:StartCombat", "Processing combat start request", {
-			WaveNumber = waveNumber,
-			IsEndless = isEndless,
 			PrimaryPlayerUserId = primaryPlayer.UserId,
 			RuntimeStarted = runtimeStarted,
 			ActorTypeCount = #actorTypePayloads,
@@ -52,7 +48,7 @@ function StartCombat:Execute(waveNumber: number, isEndless: boolean): Result.Res
 		end
 
 		-- Reserve the session before touching the shared runtime.
-		Try(self._loopService:BeginSession(primaryPlayer.UserId, waveNumber, isEndless))
+		Try(self._loopService:BeginSession(primaryPlayer.UserId))
 
 		-- Start the runtime only when this session needs to own it.
 		if not runtimeStarted then
@@ -61,8 +57,6 @@ function StartCombat:Execute(waveNumber: number, isEndless: boolean): Result.Res
 				Try(self._loopService:MarkSessionFailed(primaryPlayer.UserId, startResult.message))
 				Try(self._loopService:ClearSession(primaryPlayer.UserId))
 				Result.MentionError("Combat:StartCombat", "Combat runtime failed to start", {
-					WaveNumber = waveNumber,
-					IsEndless = isEndless,
 					PrimaryPlayerUserId = primaryPlayer.UserId,
 					ActorTypeCount = #actorTypePayloads,
 					CauseType = startResult.type,

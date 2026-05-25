@@ -158,6 +158,11 @@ local function _ResolveOwnerBounds(targetContainer: Instance, fallbackSize: Vect
 	}
 end
 
+local function _ResetPivot(object: Model)
+	local centerCFrame = object:GetBoundingBox()
+	object.WorldPivot = centerCFrame
+end
+
 local function _ResolveTrimMode(trimModeValue: string): TTrimAxisMode
 	if trimModeValue == "TrimNorthSouth" then
 		return "TrimNorthSouth"
@@ -381,6 +386,16 @@ end
 local function Generate(parameters: TGenerationParams<TWallAttributes>, targetContainer: Instance)
 	local attributes = parameters.Attributes
 	local _random = Random.new(attributes.RandomSeed)
+	local ownerInstance = targetContainer.Parent
+	local ownerBoundsBefore: TOwnerBounds? = nil
+	if ownerInstance ~= nil and ownerInstance:IsA("Model") then
+		local ownerCFrameBefore, ownerSizeBefore = ownerInstance:GetBoundingBox()
+		ownerBoundsBefore = {
+			CFrame = ownerCFrameBefore,
+			Size = ownerSizeBefore,
+		}
+	end
+
 	local ownerBounds = _ResolveOwnerBounds(targetContainer, parameters.Size)
 	local ownerSize = ownerBounds.Size
 	local ownerCFrame = ownerBounds.CFrame
@@ -401,6 +416,13 @@ local function Generate(parameters: TGenerationParams<TWallAttributes>, targetCo
 	for _, sideDefinition in ipairs(sideDefinitions) do
 		if sideDefinition.Enabled then
 			_CreateWallPart(root, attributes, ownerCFrame, sideDefinition, trimStates[sideDefinition.Key], wallHeight)
+		end
+	end
+
+	if ownerInstance ~= nil and ownerInstance:IsA("Model") and ownerBoundsBefore ~= nil then
+		local ownerCFrameAfter, ownerSizeAfter = ownerInstance:GetBoundingBox()
+		if ownerCFrameAfter ~= ownerBoundsBefore.CFrame or ownerSizeAfter ~= ownerBoundsBefore.Size then
+			_ResetPivot(ownerInstance)
 		end
 	end
 end
