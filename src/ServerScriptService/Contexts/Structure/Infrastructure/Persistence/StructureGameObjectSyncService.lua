@@ -100,7 +100,7 @@ function StructureGameObjectSyncService:_GetInstanceFactoryName(): string?
 end
 
 function StructureGameObjectSyncService:_QueryAllEntities(): { number }
-	return self:GetEntityFactoryOrThrow():QueryActiveEntities()
+	return self:GetEntityFactoryOrThrow():QueryPlacedEntities()
 end
 
 function StructureGameObjectSyncService:_GetDirtyTag(): any?
@@ -118,6 +118,10 @@ function StructureGameObjectSyncService:_SyncEntity(entity: number, model: Model
 	local factory = self:GetEntityFactoryOrThrow()
 	local identity = factory:GetIdentity(entity)
 	local health = factory:GetHealth(entity)
+	local constructionProgress = factory:GetConstructionProgress(entity)
+	local constructionState = factory:GetConstructionState(entity)
+	local buildPercent = factory:GetConstructionPercent(entity)
+	local isUnderConstruction = constructionState == "UnderConstruction"
 
 	if identity ~= nil then
 		self:SetAttributeIfChanged(model, "StructureId", identity.StructureId)
@@ -128,6 +132,12 @@ function StructureGameObjectSyncService:_SyncEntity(entity: number, model: Model
 		self:SetAttributeIfChanged(model, "Health", health.Current)
 		self:SetAttributeIfChanged(model, "MaxHealth", health.Max)
 	end
+	if constructionProgress ~= nil then
+		self:SetAttributeIfChanged(model, "BuildWork", constructionProgress.CurrentWork)
+		self:SetAttributeIfChanged(model, "BuildWorkRequired", constructionProgress.RequiredWork)
+	end
+	self:SetAttributeIfChanged(model, "BuildState", constructionState)
+	self:SetAttributeIfChanged(model, "BuildPercent", buildPercent)
 
 	local structureType = if identity ~= nil then identity.StructureType else nil
 	local runtimeProfileId = nil :: string?
@@ -139,25 +149,32 @@ function StructureGameObjectSyncService:_SyncEntity(entity: number, model: Model
 	end
 
 	local combatAction = nil
-	if runtimeProfileId == "Extract" then
-		combatAction = _ResolveMiningRuntimeAction(self, entity) or factory:GetCombatAction(entity)
-	elseif runtimeProfileId == "Passive" then
-		combatAction = factory:GetCombatAction(entity)
-	else
-		combatAction = _ResolveCombatRuntimeAction(self, entity) or factory:GetCombatAction(entity)
-	end
-
 	local targetEnemyEntity = nil
-	if runtimeProfileId ~= "Passive" then
-		targetEnemyEntity = _ResolveRuntimeTargetEnemyEntity(combatAction) or factory:GetTarget(entity)
+	local nextAnimationState = "Idle"
+	local isAnimationLooping = true
+	local targetEnemyId = nil
+
+	if not isUnderConstruction then
+		if runtimeProfileId == "Extract" then
+			combatAction = _ResolveMiningRuntimeAction(self, entity) or factory:GetCombatAction(entity)
+		elseif runtimeProfileId == "Passive" then
+			combatAction = factory:GetCombatAction(entity)
+		else
+			combatAction = _ResolveCombatRuntimeAction(self, entity) or factory:GetCombatAction(entity)
+		end
+
+		if runtimeProfileId ~= "Passive" then
+			targetEnemyEntity = _ResolveRuntimeTargetEnemyEntity(combatAction) or factory:GetTarget(entity)
+		end
+
+		nextAnimationState, isAnimationLooping = StructureRuntimeProfiles.ResolveAnimationState({
+			VariantId = runtimeProfileId,
+			StructureType = structureType,
+			CombatAction = combatAction,
+		})
+		targetEnemyId = self:_ResolveTargetEnemyId(targetEnemyEntity)
 	end
 
-	local nextAnimationState, isAnimationLooping = StructureRuntimeProfiles.ResolveAnimationState({
-		VariantId = runtimeProfileId,
-		StructureType = structureType,
-		CombatAction = combatAction,
-	})
-	local targetEnemyId = self:_ResolveTargetEnemyId(targetEnemyEntity)
 	factory:SetAnimationPresentation(entity, nextAnimationState, isAnimationLooping)
 	factory:SetTargetEnemyIdPresentation(entity, targetEnemyId)
 

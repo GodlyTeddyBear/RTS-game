@@ -59,14 +59,14 @@ end
 	Validates the record and creates the structure entity.
 	@within RegisterStructureCommand
 	@param record StructureRecord -- The placement record to register.
-	@return Result.Result<number?> -- The ECS entity id for combat structures, or nil for non-combat placements.
+	@return Result.Result<number> -- The ECS entity id for the placed structure.
 ]=]
-function RegisterStructureCommand:Execute(record: StructureRecord): Result.Result<number?>
+function RegisterStructureCommand:Execute(record: StructureRecord): Result.Result<number>
 	return Result.Catch(function()
 		Ensure(type(record) == "table", "InvalidPlacementRecord", Errors.INVALID_PLACEMENT_RECORD)
 
 		if not StructureSpecs.IsValidStructureType(record.StructureType) then
-			return Ok(nil)
+			return Result.Err("UnknownStructureType", Errors.UNKNOWN_STRUCTURE_TYPE)
 		end
 
 		-- Resolve the canonical structure data before mutating the ECS world.

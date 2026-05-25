@@ -43,18 +43,21 @@ function StructureECSReplicationService:_GetSharedSchema()
 		sharedComponents = {
 			components.IdentityComponent,
 			components.HealthComponent,
+			components.ConstructionProgressComponent,
 			components.AnimationStateComponent,
 			components.AnimationLoopingComponent,
 			components.TargetEnemyIdComponent,
 		},
 		sharedTags = {
+			components.PlacedTag,
+			components.UnderConstructionTag,
 			components.ActiveTag,
 		},
 	}
 end
 
 function StructureECSReplicationService:_RegisterReplicatedSurface(_registry: any)
-	for _, entity in ipairs(self:GetEntityFactoryOrThrow():QueryActiveEntities()) do
+	for _, entity in ipairs(self:GetEntityFactoryOrThrow():QueryPlacedEntities()) do
 		self:RegisterStructureEntity(entity)
 	end
 end
@@ -65,9 +68,12 @@ function StructureECSReplicationService:RegisterStructureEntity(entity: number)
 	self:RegisterNetworkedEntity(entity)
 	self:RegisterReliableComponent(entity, components.IdentityComponent)
 	self:RegisterReliableComponent(entity, components.HealthComponent)
+	self:RegisterReliableComponent(entity, components.ConstructionProgressComponent)
 	self:RegisterReliableComponent(entity, components.AnimationStateComponent)
 	self:RegisterReliableComponent(entity, components.AnimationLoopingComponent)
 	self:RegisterReliableComponent(entity, components.TargetEnemyIdComponent)
+	self:RegisterReliableComponent(entity, components.PlacedTag)
+	self:RegisterReliableComponent(entity, components.UnderConstructionTag)
 	self:RegisterReliableComponent(entity, components.ActiveTag)
 end
 

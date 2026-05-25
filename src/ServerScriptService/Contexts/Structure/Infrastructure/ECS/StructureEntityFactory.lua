@@ -12,6 +12,8 @@ type TStructureConfig = StructureTypes.TStructureConfig
 type TAttackStatsComponent = StructureTypes.TAttackStatsComponent
 type TAttackCooldownComponent = StructureTypes.TAttackCooldownComponent
 type THealthComponent = StructureTypes.THealthComponent
+type TConstructionProgressComponent = StructureTypes.TConstructionProgressComponent
+type ConstructionState = StructureTypes.ConstructionState
 type TIdentityComponent = StructureTypes.TIdentityComponent
 type TInstanceRefComponent = StructureTypes.TInstanceRefComponent
 type ResolvedStructureRecord = StructureTypes.ResolvedStructureRecord
@@ -52,6 +54,7 @@ function StructureEntityFactory:_OnInit(_registry: any, _name: string, _componen
 			and self._components.AttackStatsComponent ~= nil
 			and self._components.AttackCooldownComponent ~= nil
 			and self._components.HealthComponent ~= nil
+			and self._components.ConstructionProgressComponent ~= nil
 			and self._components.TargetComponent ~= nil
 			and self._components.BehaviorTreeComponent ~= nil
 			and self._components.CombatActionComponent ~= nil
@@ -62,6 +65,8 @@ function StructureEntityFactory:_OnInit(_registry: any, _name: string, _componen
 			and self._components.AnimationStateComponent ~= nil
 			and self._components.AnimationLoopingComponent ~= nil
 			and self._components.TargetEnemyIdComponent ~= nil
+			and self._components.PlacedTag ~= nil
+			and self._components.UnderConstructionTag ~= nil
 			and self._components.ActiveTag ~= nil
 			and self._components.DirtyTag ~= nil,
 		"StructureEntityFactory: missing StructureComponentRegistry components"
@@ -120,6 +125,14 @@ function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord)
 			Max = structureConfig.MaxHealth,
 		} :: THealthComponent
 	)
+	self:_Set(
+		entity,
+		components.ConstructionProgressComponent,
+		{
+			CurrentWork = 0,
+			RequiredWork = structureConfig.BuildWorkRequired,
+		} :: TConstructionProgressComponent
+	)
 
 	-- Store a nil target until the targeting system resolves a nearby enemy.
 	self:_Set(entity, components.TargetComponent, {
@@ -153,8 +166,10 @@ function StructureEntityFactory:CreateStructure(record: ResolvedStructureRecord)
 	self:_Set(entity, components.AnimationLoopingComponent, true)
 	self:_Set(entity, components.TargetEnemyIdComponent, nil)
 
-	-- Mark the entity active so queries and systems can pick it up this frame.
-	self:_Add(entity, components.ActiveTag)
+	-- Mark the entity placed immediately, but keep it inert until construction completes.
+	self:_Add(entity, components.PlacedTag)
+	self:_Add(entity, components.UnderConstructionTag)
+	self:_Add(entity, components.DirtyTag)
 	return entity
 end
 
@@ -262,6 +277,70 @@ function StructureEntityFactory:GetHealth(entity: number?): THealthComponent?
 	local components = self:GetComponentsOrThrow()
 
 	return self:_Get(entity, components.HealthComponent)
+end
+
+function StructureEntityFactory:GetConstructionProgress(entity: number?): TConstructionProgressComponent?
+	if entity == nil then
+		return nil
+	end
+
+	local components = self:GetComponentsOrThrow()
+
+	return self:_Get(entity, components.ConstructionProgressComponent)
+end
+
+function StructureEntityFactory:GetConstructionPercent(entity: number?): number
+	local progress = self:GetConstructionProgress(entity)
+	if progress == nil or progress.RequiredWork <= 0 then
+		return 0
+	end
+
+	return math.clamp((progress.CurrentWork / progress.RequiredWork) * 100, 0, 100)
+end
+
+function StructureEntityFactory:GetConstructionState(entity: number?): ConstructionState
+	if self:IsUnderConstruction(entity) then
+		return "UnderConstruction"
+	end
+
+	return "Completed"
+end
+
+function StructureEntityFactory:AdvanceConstructionWork(
+	entity: number?,
+	workAmount: number
+): TConstructionProgressComponent?
+	if entity == nil then
+		return nil
+	end
+
+	local currentProgress = self:GetConstructionProgress(entity)
+	if currentProgress == nil then
+		return nil
+	end
+
+	local components = self:GetComponentsOrThrow()
+	local nextProgress = {
+		CurrentWork = math.min(currentProgress.RequiredWork, currentProgress.CurrentWork + workAmount),
+		RequiredWork = currentProgress.RequiredWork,
+	} :: TConstructionProgressComponent
+
+	self:_Set(entity, components.ConstructionProgressComponent, nextProgress)
+	self:MarkDirty(entity)
+	return nextProgress
+end
+
+function StructureEntityFactory:ActivateStructure(entity: number?)
+	if entity == nil or self:IsActive(entity) then
+		return
+	end
+
+	local components = self:GetComponentsOrThrow()
+	if self:_Has(entity, components.UnderConstructionTag) then
+		self:_Remove(entity, components.UnderConstructionTag)
+	end
+	self:_Add(entity, components.ActiveTag)
+	self:MarkDirty(entity)
 end
 
 --[=[
@@ -444,7 +523,7 @@ function StructureEntityFactory:GetEntityByModel(model: Model): number?
 		)
 	end
 
-	for _, entity in ipairs(self:QueryActiveEntities()) do
+	for _, entity in ipairs(self:QueryPlacedEntities()) do
 		local modelRef = self:GetModelRef(entity)
 		if modelRef ~= nil and modelRef.Model == model then
 			return entity
@@ -460,7 +539,7 @@ end
 
 ---@deprecated prefer runtime association caches instead of entity-factory instance-id scans.
 function StructureEntityFactory:GetEntityByInstanceId(instanceId: number): number?
-	for _, entity in ipairs(self:QueryActiveEntities()) do
+	for _, entity in ipairs(self:QueryPlacedEntities()) do
 		local instanceRef = self:GetInstanceRef(entity)
 		if instanceRef ~= nil and instanceRef.InstanceId == instanceId then
 			return entity
@@ -494,6 +573,30 @@ function StructureEntityFactory:IsActive(entity: number?): boolean
 	return self:_Has(entity, components.ActiveTag)
 end
 
+function StructureEntityFactory:IsPlaced(entity: number?): boolean
+	if entity == nil then
+		return false
+	end
+
+	local components = self:GetComponentsOrThrow()
+
+	return self:_Has(entity, components.PlacedTag)
+end
+
+function StructureEntityFactory:IsUnderConstruction(entity: number?): boolean
+	if entity == nil then
+		return false
+	end
+
+	local components = self:GetComponentsOrThrow()
+
+	return self:_Has(entity, components.UnderConstructionTag)
+end
+
+function StructureEntityFactory:IsTargetable(entity: number?): boolean
+	return self:IsPlaced(entity)
+end
+
 --[=[
 	Collects every active structure entity into an array.
 	@within StructureEntityFactory
@@ -503,6 +606,16 @@ function StructureEntityFactory:QueryActiveEntities(): { number }
 	local components = self:GetComponentsOrThrow()
 
 	return self:CollectQuery(components.ActiveTag)
+end
+
+function StructureEntityFactory:QueryPlacedEntities(): { number }
+	local components = self:GetComponentsOrThrow()
+
+	return self:CollectQuery(components.PlacedTag)
+end
+
+function StructureEntityFactory:QueryTargetableEntities(): { number }
+	return self:QueryPlacedEntities()
 end
 
 --[=[
@@ -516,8 +629,17 @@ function StructureEntityFactory:DeleteEntity(entity: number?)
 	end
 
 	local components = self:GetComponentsOrThrow()
+	if self:_Has(entity, components.PlacedTag) then
+		self:_Remove(entity, components.PlacedTag)
+	end
+	if self:_Has(entity, components.UnderConstructionTag) then
+		self:_Remove(entity, components.UnderConstructionTag)
+	end
 	if self:_Has(entity, components.ActiveTag) then
 		self:_Remove(entity, components.ActiveTag)
+	end
+	if self:_Has(entity, components.DirtyTag) then
+		self:_Remove(entity, components.DirtyTag)
 	end
 
 	self:ClearUniqueLookup("StructureId", entity)
@@ -529,7 +651,7 @@ end
 	@within StructureEntityFactory
 ]=]
 function StructureEntityFactory:DeleteAll()
-	for _, entity in ipairs(self:QueryActiveEntities()) do
+	for _, entity in ipairs(self:QueryPlacedEntities()) do
 		self:DeleteEntity(entity)
 	end
 end

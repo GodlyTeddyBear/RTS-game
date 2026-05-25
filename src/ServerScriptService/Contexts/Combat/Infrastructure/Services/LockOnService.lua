@@ -243,7 +243,7 @@ function LockOnService:UpdateAll(entities: { number })
 				_setHumanoidAutoRotate(humanoid, true)
 				continue
 			end
-			if not self._structureEntityFactory:IsActive(targetEntity) then
+			if not self._structureEntityFactory:IsTargetable(targetEntity) then
 				constraint.Enabled = false
 				_setHumanoidAutoRotate(humanoid, true)
 				continue

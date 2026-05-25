@@ -532,7 +532,7 @@ function EnemyCombatAdapterService:_ConfigureCombatServices()
 	): { Instance }
 		local whitelistInstances = {} :: { Instance }
 
-		for _, structureEntity in ipairs(self._structureEntityFactory:QueryActiveEntities()) do
+		for _, structureEntity in ipairs(self._structureEntityFactory:QueryTargetableEntities()) do
 			local structureModel = self._structureInstanceFactory:GetInstance(structureEntity)
 			if structureModel ~= nil and structureModel.Parent ~= nil and structureModel ~= attackerModel then
 				table.insert(whitelistInstances, structureModel)

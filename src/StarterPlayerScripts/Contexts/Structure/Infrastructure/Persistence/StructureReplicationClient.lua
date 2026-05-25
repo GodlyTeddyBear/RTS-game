@@ -26,9 +26,15 @@ export type TStructureReplicatedState = {
 	StructureType: string,
 	CurrentHealth: number,
 	MaxHealth: number,
+	CurrentBuildWork: number,
+	RequiredBuildWork: number,
+	BuildPercent: number,
+	BuildState: "UnderConstruction" | "Completed",
 	AnimationState: string?,
 	IsAnimationLooping: boolean?,
 	TargetEnemyId: string?,
+	IsPlaced: boolean,
+	IsUnderConstruction: boolean,
 	IsActive: boolean,
 }
 
@@ -55,6 +61,9 @@ function StructureReplicationClient:_BuildComponents(world: any, _replecsLibrary
 	local healthComponent = world:component()
 	_NameEntity(world, healthComponent, "Structure.Health")
 
+	local constructionProgressComponent = world:component()
+	_NameEntity(world, constructionProgressComponent, "Structure.ConstructionProgress")
+
 	local animationStateComponent = world:component()
 	_NameEntity(world, animationStateComponent, "Structure.AnimationState")
 
@@ -64,15 +73,24 @@ function StructureReplicationClient:_BuildComponents(world: any, _replecsLibrary
 	local targetEnemyIdComponent = world:component()
 	_NameEntity(world, targetEnemyIdComponent, "Structure.TargetEnemyId")
 
+	local placedTag = world:entity()
+	_NameEntity(world, placedTag, "Structure.PlacedTag")
+
+	local underConstructionTag = world:entity()
+	_NameEntity(world, underConstructionTag, "Structure.UnderConstructionTag")
+
 	local activeTag = world:entity()
 	_NameEntity(world, activeTag, "Structure.ActiveTag")
 
 	return table.freeze({
 		IdentityComponent = identityComponent,
 		HealthComponent = healthComponent,
+		ConstructionProgressComponent = constructionProgressComponent,
 		AnimationStateComponent = animationStateComponent,
 		AnimationLoopingComponent = animationLoopingComponent,
 		TargetEnemyIdComponent = targetEnemyIdComponent,
+		PlacedTag = placedTag,
+		UnderConstructionTag = underConstructionTag,
 		ActiveTag = activeTag,
 	})
 end
@@ -84,11 +102,14 @@ function StructureReplicationClient:_GetSharedSchema()
 		sharedComponents = {
 			components.IdentityComponent,
 			components.HealthComponent,
+			components.ConstructionProgressComponent,
 			components.AnimationStateComponent,
 			components.AnimationLoopingComponent,
 			components.TargetEnemyIdComponent,
 		},
 		sharedTags = {
+			components.PlacedTag,
+			components.UnderConstructionTag,
 			components.ActiveTag,
 		},
 	}
@@ -174,11 +195,18 @@ function StructureReplicationClient:_RebuildStructureStateIndex()
 	local changedStructureIds = {}
 	local previousStateById = self._structureStateById
 
-	for entity, identity, health in world:query(components.IdentityComponent, components.HealthComponent):iter() do
+	for
+		entity, identity, health, constructionProgress in world
+			:query(components.IdentityComponent, components.HealthComponent, components.ConstructionProgressComponent)
+			:iter()
+	do
 		if type(identity) ~= "table" or type(identity.StructureId) ~= "string" or type(identity.StructureType) ~= "string" then
 			continue
 		end
 		if type(health) ~= "table" then
+			continue
+		end
+		if type(constructionProgress) ~= "table" then
 			continue
 		end
 
@@ -186,15 +214,27 @@ function StructureReplicationClient:_RebuildStructureStateIndex()
 		local animationState = world:get(entity, components.AnimationStateComponent)
 		local animationLooping = world:get(entity, components.AnimationLoopingComponent)
 		local targetEnemyId = world:get(entity, components.TargetEnemyIdComponent)
+		local currentBuildWork = constructionProgress.CurrentWork or 0
+		local requiredBuildWork = constructionProgress.RequiredWork or 0
+		local buildPercent = if requiredBuildWork > 0
+			then math.clamp((currentBuildWork / requiredBuildWork) * 100, 0, 100)
+			else 0
+		local isUnderConstruction = world:has(entity, components.UnderConstructionTag)
 
 		local nextState = table.freeze({
 			StructureId = structureId,
 			StructureType = identity.StructureType,
 			CurrentHealth = health.Current or 0,
 			MaxHealth = health.Max or 0,
+			CurrentBuildWork = currentBuildWork,
+			RequiredBuildWork = requiredBuildWork,
+			BuildPercent = buildPercent,
+			BuildState = if isUnderConstruction then "UnderConstruction" else "Completed",
 			AnimationState = if type(animationState) == "string" then animationState else nil,
 			IsAnimationLooping = if type(animationLooping) == "boolean" then animationLooping else nil,
 			TargetEnemyId = if type(targetEnemyId) == "string" and targetEnemyId ~= "" then targetEnemyId else nil,
+			IsPlaced = world:has(entity, components.PlacedTag),
+			IsUnderConstruction = isUnderConstruction,
 			IsActive = world:has(entity, components.ActiveTag),
 		})
 
@@ -205,9 +245,15 @@ function StructureReplicationClient:_RebuildStructureStateIndex()
 			or previousState.StructureType ~= nextState.StructureType
 			or previousState.CurrentHealth ~= nextState.CurrentHealth
 			or previousState.MaxHealth ~= nextState.MaxHealth
+			or previousState.CurrentBuildWork ~= nextState.CurrentBuildWork
+			or previousState.RequiredBuildWork ~= nextState.RequiredBuildWork
+			or previousState.BuildPercent ~= nextState.BuildPercent
+			or previousState.BuildState ~= nextState.BuildState
 			or previousState.AnimationState ~= nextState.AnimationState
 			or previousState.IsAnimationLooping ~= nextState.IsAnimationLooping
 			or previousState.TargetEnemyId ~= nextState.TargetEnemyId
+			or previousState.IsPlaced ~= nextState.IsPlaced
+			or previousState.IsUnderConstruction ~= nextState.IsUnderConstruction
 			or previousState.IsActive ~= nextState.IsActive
 		then
 			changedStructureIds[structureId] = true

@@ -80,7 +80,7 @@ local function _isTargetInRange(entity: number, targetStructure: number, service
 end
 
 local function _validateTargetStructure(entity: number, targetStructure: number, services: any): (boolean, string?)
-	if not services.StructureEntityFactory:IsActive(targetStructure) then
+	if not services.StructureEntityFactory:IsTargetable(targetStructure) then
 		return false, "InactiveTargetStructure"
 	end
 
@@ -148,7 +148,7 @@ function AttackStructureExecutor:CanContinue(entity: number, services: any): (bo
 		{
 			Reason = "InactiveTargetStructure",
 			Check = function(_guardEntity: number, guardServices: any): boolean
-				return guardServices.StructureEntityFactory:IsActive(targetStructure)
+				return guardServices.StructureEntityFactory:IsTargetable(targetStructure)
 			end,
 		},
 		{

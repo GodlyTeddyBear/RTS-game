@@ -17,7 +17,7 @@ function EnemyMeleeResolverFactory.Create(dependencies: {
 			return dependencies.BaseEntityFactory:IsActive()
 		end,
 		IsStructureActive = function(structureEntity: number): boolean
-			return dependencies.StructureEntityFactory:IsActive(structureEntity)
+			return dependencies.StructureEntityFactory:IsTargetable(structureEntity)
 		end,
 		ApplyBaseDamage = function(damage: number): Result.Result<boolean>
 			return dependencies.BaseContext:ApplyDamage(damage)

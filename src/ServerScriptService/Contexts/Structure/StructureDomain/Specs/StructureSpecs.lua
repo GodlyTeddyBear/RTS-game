@@ -49,4 +49,8 @@ function StructureSpecs.HasValidInstanceId(instanceId: any): boolean
 	return type(instanceId) == "number" and instanceId > 0 and math.floor(instanceId) == instanceId
 end
 
+function StructureSpecs.HasValidConstructionWorkAmount(workAmount: any): boolean
+	return type(workAmount) == "number" and workAmount > 0 and workAmount == workAmount and workAmount < math.huge
+end
+
 return table.freeze(StructureSpecs)

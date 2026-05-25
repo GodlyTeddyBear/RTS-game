@@ -28,6 +28,8 @@ export type StructureType =
 ]=]
 export type StructureId = string
 
+export type ConstructionState = "UnderConstruction" | "Completed"
+
 --[=[
 	@interface TAttackStatsComponent
 	@within StructureTypes
@@ -59,6 +61,11 @@ export type TAttackCooldownComponent = {
 export type THealthComponent = {
 	Current: number,
 	Max: number,
+}
+
+export type TConstructionProgressComponent = {
+	CurrentWork: number,
+	RequiredWork: number,
 }
 
 --[=[
@@ -105,6 +112,7 @@ export type TIdentityComponent = {
 	@within StructureTypes
 	.DisplayName string -- Player-facing structure name used by placement and combat UI.
 	.MaxHealth number -- Maximum hit points for the structure.
+	.BuildWorkRequired number -- Total construction work required before the structure becomes operational.
 	.RuntimeProfileId "Attack" | "Extract" | "Passive" | "Stasis" -- Runtime profile that determines the behavior tree.
 	.AttackRange number? -- Optional attack range in studs.
 	.AttackDamage number? -- Optional attack damage.
@@ -116,6 +124,7 @@ export type TIdentityComponent = {
 export type TStructureConfig = {
 	DisplayName: string,
 	MaxHealth: number,
+	BuildWorkRequired: number,
 	RuntimeProfileId: "Attack" | "Extract" | "Passive" | "Stasis",
 	AttackRange: number?,
 	AttackDamage: number?,
@@ -153,6 +162,12 @@ export type StructureAttackPayload = {
 	targetEntity: number,
 	damage: number,
 	structureType: StructureType,
+}
+
+export type TConstructionContributionResult = {
+	Completed: boolean,
+	Percent: number,
+	JustCompleted: boolean,
 }
 
 return table.freeze(StructureTypes)

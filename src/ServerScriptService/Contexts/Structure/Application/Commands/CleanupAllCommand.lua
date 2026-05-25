@@ -56,13 +56,15 @@ end
 ]=]
 function CleanupAllCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
-		for _, entity in ipairs(self._factory:QueryActiveEntities()) do
+		for _, entity in ipairs(self._factory:QueryPlacedEntities()) do
 			local identity = self._factory:GetIdentity(entity)
 			if identity ~= nil and type(identity.StructureId) == "string" and identity.StructureId ~= "" then
 				Try(self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Structure", identity.StructureId)))
 			end
-			self._combatAdapterService:UnregisterActor(entity)
-			self._miningAdapterService:UnregisterActor(entity)
+			if self._factory:IsActive(entity) then
+				self._combatAdapterService:UnregisterActor(entity)
+				self._miningAdapterService:UnregisterActor(entity)
+			end
 			self._replicationService:UnregisterStructureEntity(entity)
 		end
 

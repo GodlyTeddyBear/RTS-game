@@ -35,6 +35,8 @@ function StructureComponentRegistry:_RegisterComponents(_registry: any, _name: s
 	self:RegisterComponent("AttackCooldownComponent", "Structure.AttackCooldown", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] runtime health for destructible structures.
 	self:RegisterComponent("HealthComponent", "Structure.Health", "AUTHORITATIVE")
+	-- [AUTHORITATIVE] construction work progress before the structure becomes operational.
+	self:RegisterComponent("ConstructionProgressComponent", "Structure.ConstructionProgress", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] current enemy target entity id.
 	self:RegisterComponent("TargetComponent", "Structure.Target", "AUTHORITATIVE")
 	-- [AUTHORITATIVE] assigned combat behavior tree and tick timing.
@@ -55,6 +57,8 @@ function StructureComponentRegistry:_RegisterComponents(_registry: any, _name: s
 	self:RegisterComponent("AnimationLoopingComponent", "Structure.AnimationLooping", "DERIVED")
 	-- [DERIVED] replicated enemy id used by the client aim layer.
 	self:RegisterComponent("TargetEnemyIdComponent", "Structure.TargetEnemyId", "DERIVED")
+	self:RegisterTag("PlacedTag", "Structure.PlacedTag")
+	self:RegisterTag("UnderConstructionTag", "Structure.UnderConstructionTag")
 	self:RegisterTag("ActiveTag", "Structure.ActiveTag")
 	self:RegisterTag("DirtyTag", "Structure.DirtyTag")
 end

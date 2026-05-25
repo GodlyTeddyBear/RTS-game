@@ -17,6 +17,7 @@ StructureConfig.STRUCTURES = table.freeze({
 	SentryTurret = table.freeze({
 		DisplayName = "Sentry Turret",
 		MaxHealth = 100,
+		BuildWorkRequired = 100,
 		RuntimeProfileId = "Attack",
 		AttackRange = 90,
 		AttackDamage = 15,
@@ -35,11 +36,13 @@ StructureConfig.STRUCTURES = table.freeze({
 	Extractor = table.freeze({
 		DisplayName = "Extractor",
 		MaxHealth = 140,
+		BuildWorkRequired = 100,
 		RuntimeProfileId = "Extract",
 	}),
 	StasisField = table.freeze({
 		DisplayName = "Stasis Field",
 		MaxHealth = 140,
+		BuildWorkRequired = 100,
 		RuntimeProfileId = "Stasis",
 		-- Aura radius in studs used to detect enemies inside the field.
 		StasisRadius = 18,
@@ -49,16 +52,19 @@ StructureConfig.STRUCTURES = table.freeze({
 	ArcPylon = table.freeze({
 		DisplayName = "Arc Pylon",
 		MaxHealth = 140,
+		BuildWorkRequired = 100,
 		RuntimeProfileId = "Passive",
 	}),
 	BulwarkProjector = table.freeze({
 		DisplayName = "Bulwark Projector",
 		MaxHealth = 140,
+		BuildWorkRequired = 100,
 		RuntimeProfileId = "Passive",
 	}),
 	RelayBeacon = table.freeze({
 		DisplayName = "Relay Beacon",
 		MaxHealth = 140,
+		BuildWorkRequired = 100,
 		RuntimeProfileId = "Passive",
 	}),
 })

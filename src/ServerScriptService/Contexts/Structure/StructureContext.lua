@@ -29,6 +29,7 @@ local StructureGameObjectSyncService = require(script.Parent.Infrastructure.Pers
 local StructureECSReplicationService = require(script.Parent.Infrastructure.Persistence.StructureECSReplicationService)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
 local RegisterStructureCommand = require(script.Parent.Application.Commands.RegisterStructureCommand)
+local AdvanceConstructionCommand = require(script.Parent.Application.Commands.AdvanceConstructionCommand)
 local ApplyDamageStructureCommand = require(script.Parent.Application.Commands.ApplyDamageStructureCommand)
 local CleanupAllCommand = require(script.Parent.Application.Commands.CleanupAllCommand)
 local GetActiveStructuresQuery = require(script.Parent.Application.Queries.GetActiveStructuresQuery)
@@ -106,6 +107,11 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		Name = "RegisterStructureCommand",
 		Module = RegisterStructureCommand,
 		CacheAs = "_registerStructureCommand",
+	},
+	{
+		Name = "AdvanceConstructionCommand",
+		Module = AdvanceConstructionCommand,
+		CacheAs = "_advanceConstructionCommand",
 	},
 	{
 		Name = "ApplyDamageStructureCommand",
@@ -273,27 +279,28 @@ end
 -- Registers a structure record with the ECS world through the application command stack.
 function StructureContext:_RegisterStructure(record: StructureRecord): Result.Result<number?>
 	return Catch(function()
-		local registerResult = self._registerStructureCommand:Execute(record)
-		if not registerResult.success then
-			return registerResult
-		end
-		if registerResult.value ~= nil then
-			if self._combatAdapterService:ShouldRegisterActor(registerResult.value) then
-				local combatResult = self._combatAdapterService:RegisterActor(registerResult.value)
-				if not combatResult.success then
-					return combatResult
-				end
-			end
-
-			if self._miningAdapterService:ShouldRegisterActor(registerResult.value) then
-				local miningResult = self._miningAdapterService:RegisterActor(registerResult.value)
-				if not miningResult.success then
-					return miningResult
-				end
-			end
-		end
-		return registerResult
+		return self._registerStructureCommand:Execute(record)
 	end, "Structure:RegisterStructure")
+end
+
+function StructureContext:_RegisterOperationalRuntime(entity: number): Result.Result<boolean>
+	return Catch(function()
+		if self._combatAdapterService:ShouldRegisterActor(entity) then
+			local combatResult = self._combatAdapterService:RegisterActor(entity)
+			if not combatResult.success then
+				return combatResult
+			end
+		end
+
+		if self._miningAdapterService:ShouldRegisterActor(entity) then
+			local miningResult = self._miningAdapterService:RegisterActor(entity)
+			if not miningResult.success then
+				return miningResult
+			end
+		end
+
+		return Ok(true)
+	end, "Structure:RegisterOperationalRuntime")
 end
 
 -- Clears every active structure entity from the isolated world.
@@ -347,6 +354,28 @@ end
 ]=]
 function StructureContext:GetEntityFactory(): Result.Result<any>
 	return Ok(self._entityFactory)
+end
+
+function StructureContext:ContributeConstruction(
+	entity: number,
+	workAmount: number,
+	_contributorMeta: any?
+): Result.Result<StructureTypes.TConstructionContributionResult>
+	return Catch(function()
+		local contributionResult = self._advanceConstructionCommand:Execute(entity, workAmount)
+		if not contributionResult.success then
+			return contributionResult
+		end
+
+		if contributionResult.value.JustCompleted then
+			local runtimeResult = self:_RegisterOperationalRuntime(entity)
+			if not runtimeResult.success then
+				return runtimeResult
+			end
+		end
+
+		return contributionResult
+	end, "Structure:ContributeConstruction")
 end
 
 function StructureContext:ResolveMiningExtractorActor(instanceId: number): Result.Result<boolean>

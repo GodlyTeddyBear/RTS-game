@@ -48,7 +48,7 @@ function ApplyDamageStructureCommand:Execute(entity: any, amount: number): Resul
 			Amount = amount,
 			Entity = entity,
 		})
-		Ensure(self._factory:IsActive(entity), "EntityNotFound", Errors.ENTITY_NOT_FOUND, {
+		Ensure(self._factory:IsPlaced(entity), "EntityNotFound", Errors.ENTITY_NOT_FOUND, {
 			Entity = entity,
 		})
 
@@ -70,8 +70,10 @@ function ApplyDamageStructureCommand:Execute(entity: any, amount: number): Resul
 		local didDie = self._factory:ApplyDamage(entity, amount)
 		if didDie then
 			Try(self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Structure", identity.StructureId)))
-			self._combatAdapterService:UnregisterActor(entity)
-			self._miningAdapterService:UnregisterActor(entity)
+			if self._factory:IsActive(entity) then
+				self._combatAdapterService:UnregisterActor(entity)
+				self._miningAdapterService:UnregisterActor(entity)
+			end
 			self._replicationService:UnregisterStructureEntity(entity)
 			self._instanceFactory:DestroyInstance(entity)
 			self._factory:ClearModelRef(entity)
