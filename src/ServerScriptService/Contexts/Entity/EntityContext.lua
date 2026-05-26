@@ -8,6 +8,10 @@ local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local EntityLifecycleStateMachine = require(script.Parent.Infrastructure.Services.EntityLifecycleStateMachine)
+local EntityStartupStateService = require(script.Parent.Infrastructure.Services.EntityStartupStateService)
+local EntityRuntimeSchedulerService = require(script.Parent.Infrastructure.Services.EntityRuntimeSchedulerService)
+local EntityAICallbackAdapterService = require(script.Parent.Infrastructure.Services.EntityAICallbackAdapterService)
+local EntityRevealService = require(script.Parent.Infrastructure.Services.EntityRevealService)
 local EntityAIActorTypeRegistry = require(script.Parent.Infrastructure.AI.EntityAIActorTypeRegistry)
 local EntityAIEntityRegistry = require(script.Parent.Infrastructure.AI.EntityAIEntityRegistry)
 local EntityCombatAIRuntimeBridge = require(script.Parent.Infrastructure.AI.EntityCombatAIRuntimeBridge)
@@ -21,16 +25,13 @@ local EntityReplicationRegistry = require(script.Parent.Infrastructure.Persisten
 local EntityReplicationService = require(script.Parent.Infrastructure.Persistence.EntityReplicationService)
 local EntityRuntimeSyncService = require(script.Parent.Infrastructure.Persistence.EntityRuntimeSyncService)
 local EntitySyncContributorRegistry = require(script.Parent.Infrastructure.Persistence.EntitySyncContributorRegistry)
-local EntityRuntimeParticipationService = require(script.Parent.Infrastructure.Runtime.EntityRuntimeParticipationService)
-local EntityRuntimeSnapshotBuilder = require(script.Parent.Infrastructure.Runtime.EntityRuntimeSnapshotBuilder)
-local EntityRevealService = require(script.Parent.Infrastructure.Services.EntityRevealService)
+local EntityRuntimeParticipationService =
+	require(script.Parent.Infrastructure.Services.EntityRuntimeParticipationService)
+local EntityRuntimeSnapshotBuilder = require(script.Parent.Infrastructure.Services.EntityRuntimeSnapshotBuilder)
 
 local EntityValidationService = require(script.Parent.EntityDomain.Services.EntityValidationService)
-local EntityAIActionStateService = require(script.Parent.EntityDomain.Services.EntityAIActionStateService)
 local EntityLifecyclePolicy = require(script.Parent.EntityDomain.Policies.EntityLifecyclePolicy)
 local EntityReadinessPolicy = require(script.Parent.EntityDomain.Policies.EntityReadinessPolicy)
-
-local EntityKernelService = require(script.Parent.Application.Services.EntityKernelService)
 
 local InitCommand = require(script.Parent.Application.Commands.InitCommand)
 local StartCommand = require(script.Parent.Application.Commands.StartCommand)
@@ -68,7 +69,8 @@ local FlushEntityReplicationReliableCommand =
 	require(script.Parent.Application.Commands.FlushEntityReplicationReliableCommand)
 local FlushEntityReplicationUnreliableCommand =
 	require(script.Parent.Application.Commands.FlushEntityReplicationUnreliableCommand)
-local FlushEntityReplicationEntityCommand = require(script.Parent.Application.Commands.FlushEntityReplicationEntityCommand)
+local FlushEntityReplicationEntityCommand =
+	require(script.Parent.Application.Commands.FlushEntityReplicationEntityCommand)
 local RegisterAIActorTypeCommand = require(script.Parent.Application.Commands.RegisterAIActorTypeCommand)
 local RegisterAIEntityCommand = require(script.Parent.Application.Commands.RegisterAIEntityCommand)
 local UnregisterAIEntityCommand = require(script.Parent.Application.Commands.UnregisterAIEntityCommand)
@@ -93,15 +95,7 @@ local GetAIRegistrationQuery = require(script.Parent.Application.Queries.GetAIRe
 
 local Catch = Result.Catch
 
-local function commandSpec(name: string, module: any, cacheAs: string): BaseContext.TModuleSpec
-	return {
-		Name = name,
-		Module = module,
-		CacheAs = cacheAs,
-	}
-end
-
-local function querySpec(name: string, module: any, cacheAs: string): BaseContext.TModuleSpec
+local function moduleSpec(name: string, module: any, cacheAs: string): BaseContext.TModuleSpec
 	return {
 		Name = name,
 		Module = module,
@@ -117,198 +111,125 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		end,
 	},
 	{
-		Name = "EntityLifecycleStateMachine",
-		Module = EntityLifecycleStateMachine,
-		CacheAs = "_lifecycle",
+		Name = "EntityContextService",
+		Factory = function(service: any, _baseContext: any)
+			return service
+		end,
 	},
 	{
-		Name = "EntitySchemaRegistry",
-		Module = EntitySchemaRegistry,
-		CacheAs = "_schemaRegistry",
+		Name = "EntityBaseContext",
+		Factory = function(_service: any, baseContext: any)
+			return baseContext
+		end,
 	},
+	moduleSpec("EntityLifecycleStateMachine", EntityLifecycleStateMachine, "_lifecycle"),
+	moduleSpec("EntityStartupStateService", EntityStartupStateService, "_startupState"),
+	moduleSpec("EntitySchemaRegistry", EntitySchemaRegistry, "_schemaRegistry"),
+	moduleSpec("EntityEntityFactory", EntityEntityFactory, "_entityFactory"),
+	moduleSpec("EntityInstanceBindingRegistry", EntityInstanceBindingRegistry, "_instanceBindingRegistry"),
+	moduleSpec("EntityRevealService", EntityRevealService, "_revealService"),
+	moduleSpec("EntityRuntimeSnapshotBuilder", EntityRuntimeSnapshotBuilder, "_runtimeSnapshotBuilder"),
+	moduleSpec("EntityRuntimeParticipationService", EntityRuntimeParticipationService, "_runtimeParticipation"),
+	moduleSpec("EntityInstanceBindingService", EntityInstanceBindingService, "_instanceBindingService"),
+	moduleSpec("EntityRuntimeSyncService", EntityRuntimeSyncService, "_runtimeSyncService"),
+	moduleSpec("EntitySyncContributorRegistry", EntitySyncContributorRegistry, "_syncContributorRegistry"),
+	moduleSpec("EntityReplicationRegistry", EntityReplicationRegistry, "_replicationRegistry"),
+	moduleSpec("EntityReplicationService", EntityReplicationService, "_replicationService"),
+	moduleSpec("EntityAIActorTypeRegistry", EntityAIActorTypeRegistry, "_aiActorTypeRegistry"),
+	moduleSpec("EntityAIEntityRegistry", EntityAIEntityRegistry, "_aiEntityRegistry"),
+	moduleSpec("EntityCombatAIRuntimeBridge", EntityCombatAIRuntimeBridge, "_combatAIRuntimeBridge"),
+	moduleSpec("EntitySystemRegistry", EntitySystemRegistry, "_systemRegistry"),
 	{
-		Name = "EntityEntityFactory",
-		Module = EntityEntityFactory,
-		CacheAs = "_entityFactory",
+		Name = "EntityRuntimeSchedulerService",
+		Factory = function(service: any, baseContext: any)
+			return EntityRuntimeSchedulerService.new(baseContext, service)
+		end,
+		CacheAs = "_runtimeScheduler",
 	},
-	{
-		Name = "EntityInstanceBindingRegistry",
-		Module = EntityInstanceBindingRegistry,
-		CacheAs = "_instanceBindingRegistry",
-	},
-	{
-		Name = "EntityRevealService",
-		Module = EntityRevealService,
-		CacheAs = "_revealService",
-	},
-	{
-		Name = "EntityRuntimeSnapshotBuilder",
-		Module = EntityRuntimeSnapshotBuilder,
-		CacheAs = "_runtimeSnapshotBuilder",
-	},
-	{
-		Name = "EntityRuntimeParticipationService",
-		Module = EntityRuntimeParticipationService,
-		CacheAs = "_runtimeParticipation",
-	},
-	{
-		Name = "EntityInstanceBindingService",
-		Module = EntityInstanceBindingService,
-		CacheAs = "_instanceBindingService",
-	},
-	{
-		Name = "EntityRuntimeSyncService",
-		Module = EntityRuntimeSyncService,
-		CacheAs = "_runtimeSyncService",
-	},
-	{
-		Name = "EntitySyncContributorRegistry",
-		Module = EntitySyncContributorRegistry,
-		CacheAs = "_syncContributorRegistry",
-	},
-	{
-		Name = "EntityReplicationRegistry",
-		Module = EntityReplicationRegistry,
-		CacheAs = "_replicationRegistry",
-	},
-	{
-		Name = "EntityReplicationService",
-		Module = EntityReplicationService,
-		CacheAs = "_replicationService",
-	},
-	{
-		Name = "EntityAIActorTypeRegistry",
-		Module = EntityAIActorTypeRegistry,
-		CacheAs = "_aiActorTypeRegistry",
-	},
-	{
-		Name = "EntityAIEntityRegistry",
-		Module = EntityAIEntityRegistry,
-		CacheAs = "_aiEntityRegistry",
-	},
-	{
-		Name = "EntityCombatAIRuntimeBridge",
-		Module = EntityCombatAIRuntimeBridge,
-		CacheAs = "_combatAIRuntimeBridge",
-	},
-	{
-		Name = "EntitySystemRegistry",
-		Module = EntitySystemRegistry,
-		CacheAs = "_systemRegistry",
-	},
+	moduleSpec("EntityAICallbackAdapterService", EntityAICallbackAdapterService, "_aiCallbackAdapterService"),
 }
 
 local DomainModules: { BaseContext.TModuleSpec } = {
-	{
-		Name = "EntityValidationService",
-		Module = EntityValidationService,
-	},
-	{
-		Name = "EntityAIActionStateService",
-		Module = EntityAIActionStateService,
-	},
-	{
-		Name = "EntityLifecyclePolicy",
-		Module = EntityLifecyclePolicy,
-	},
-	{
-		Name = "EntityReadinessPolicy",
-		Module = EntityReadinessPolicy,
-	},
+	{ Name = "EntityValidationService", Module = EntityValidationService },
+	{ Name = "EntityLifecyclePolicy", Module = EntityLifecyclePolicy },
+	{ Name = "EntityReadinessPolicy", Module = EntityReadinessPolicy },
 }
 
 local ApplicationModules: { BaseContext.TModuleSpec } = {
-	{
-		Name = "EntityKernelService",
-		Factory = function(service: any, baseContext: any)
-			return EntityKernelService.new(baseContext, service)
-		end,
-		CacheAs = "_kernelService",
-	},
-	commandSpec("InitCommand", InitCommand, "_initCommand"),
-	commandSpec("StartCommand", StartCommand, "_startCommand"),
-	commandSpec("DestroyCommand", DestroyCommand, "_destroyCommand"),
-	commandSpec("RunOperationalProofCommand", RunOperationalProofCommand, "_runOperationalProofCommand"),
-	commandSpec("RegisterFeatureSchemaCommand", RegisterFeatureSchemaCommand, "_registerFeatureSchemaCommand"),
-	commandSpec("RegisterSystemCommand", RegisterSystemCommand, "_registerSystemCommand"),
-	commandSpec("CreateEntityCommand", CreateEntityCommand, "_createEntityCommand"),
-	commandSpec("DestroyEntityCommand", DestroyEntityCommand, "_destroyEntityCommand"),
-	commandSpec("MarkForDestructionCommand", MarkForDestructionCommand, "_markForDestructionCommand"),
-	commandSpec("FlushDestructionQueueCommand", FlushDestructionQueueCommand, "_flushDestructionQueueCommand"),
-	commandSpec("SetCommand", SetCommand, "_setCommand"),
-	commandSpec("AddCommand", AddCommand, "_addCommand"),
-	commandSpec("RemoveCommand", RemoveCommand, "_removeCommand"),
-	commandSpec("TickPhaseCommand", TickPhaseCommand, "_tickPhaseCommand"),
-	commandSpec("TickAllCommand", TickAllCommand, "_tickAllCommand"),
-	commandSpec("RegisterInstanceBindingCommand", RegisterInstanceBindingCommand, "_registerInstanceBindingCommand"),
-	commandSpec("EnableRuntimeBindingCommand", EnableRuntimeBindingCommand, "_enableRuntimeBindingCommand"),
-	commandSpec("EnableRuntimeSyncCommand", EnableRuntimeSyncCommand, "_enableRuntimeSyncCommand"),
-	commandSpec(
-		"EnableRuntimeReplicationCommand",
-		EnableRuntimeReplicationCommand,
-		"_enableRuntimeReplicationCommand"
-	),
-	commandSpec("RegisterRuntimeEntityCommand", RegisterRuntimeEntityCommand, "_registerRuntimeEntityCommand"),
-	commandSpec("UnregisterRuntimeEntityCommand", UnregisterRuntimeEntityCommand, "_unregisterRuntimeEntityCommand"),
-	commandSpec("BindEntityInstanceCommand", BindEntityInstanceCommand, "_bindEntityInstanceCommand"),
-	commandSpec("UnbindEntityInstanceCommand", UnbindEntityInstanceCommand, "_unbindEntityInstanceCommand"),
-	commandSpec("QueueEntityBindCommand", QueueEntityBindCommand, "_queueEntityBindCommand"),
-	commandSpec("FlushBindQueueCommand", FlushBindQueueCommand, "_flushBindQueueCommand"),
-	commandSpec("RegisterSyncContributorCommand", RegisterSyncContributorCommand, "_registerSyncContributorCommand"),
-	commandSpec(
+	moduleSpec("InitCommand", InitCommand, "_initCommand"),
+	moduleSpec("StartCommand", StartCommand, "_startCommand"),
+	moduleSpec("DestroyCommand", DestroyCommand, "_destroyCommand"),
+	moduleSpec("RunOperationalProofCommand", RunOperationalProofCommand, "_runOperationalProofCommand"),
+	moduleSpec("RegisterFeatureSchemaCommand", RegisterFeatureSchemaCommand, "_registerFeatureSchemaCommand"),
+	moduleSpec("RegisterSystemCommand", RegisterSystemCommand, "_registerSystemCommand"),
+	moduleSpec("CreateEntityCommand", CreateEntityCommand, "_createEntityCommand"),
+	moduleSpec("DestroyEntityCommand", DestroyEntityCommand, "_destroyEntityCommand"),
+	moduleSpec("MarkForDestructionCommand", MarkForDestructionCommand, "_markForDestructionCommand"),
+	moduleSpec("FlushDestructionQueueCommand", FlushDestructionQueueCommand, "_flushDestructionQueueCommand"),
+	moduleSpec("SetCommand", SetCommand, "_setCommand"),
+	moduleSpec("AddCommand", AddCommand, "_addCommand"),
+	moduleSpec("RemoveCommand", RemoveCommand, "_removeCommand"),
+	moduleSpec("TickPhaseCommand", TickPhaseCommand, "_tickPhaseCommand"),
+	moduleSpec("TickAllCommand", TickAllCommand, "_tickAllCommand"),
+	moduleSpec("RegisterInstanceBindingCommand", RegisterInstanceBindingCommand, "_registerInstanceBindingCommand"),
+	moduleSpec("EnableRuntimeBindingCommand", EnableRuntimeBindingCommand, "_enableRuntimeBindingCommand"),
+	moduleSpec("EnableRuntimeSyncCommand", EnableRuntimeSyncCommand, "_enableRuntimeSyncCommand"),
+	moduleSpec("EnableRuntimeReplicationCommand", EnableRuntimeReplicationCommand, "_enableRuntimeReplicationCommand"),
+	moduleSpec("RegisterRuntimeEntityCommand", RegisterRuntimeEntityCommand, "_registerRuntimeEntityCommand"),
+	moduleSpec("UnregisterRuntimeEntityCommand", UnregisterRuntimeEntityCommand, "_unregisterRuntimeEntityCommand"),
+	moduleSpec("BindEntityInstanceCommand", BindEntityInstanceCommand, "_bindEntityInstanceCommand"),
+	moduleSpec("UnbindEntityInstanceCommand", UnbindEntityInstanceCommand, "_unbindEntityInstanceCommand"),
+	moduleSpec("QueueEntityBindCommand", QueueEntityBindCommand, "_queueEntityBindCommand"),
+	moduleSpec("FlushBindQueueCommand", FlushBindQueueCommand, "_flushBindQueueCommand"),
+	moduleSpec("RegisterSyncContributorCommand", RegisterSyncContributorCommand, "_registerSyncContributorCommand"),
+	moduleSpec(
 		"RegisterReplicationSurfaceCommand",
 		RegisterReplicationSurfaceCommand,
 		"_registerReplicationSurfaceCommand"
 	),
-	commandSpec("RunRuntimeSyncCommand", RunRuntimeSyncCommand, "_runRuntimeSyncCommand"),
-	commandSpec("RunRuntimePollCommand", RunRuntimePollCommand, "_runRuntimePollCommand"),
-	commandSpec("HydrateEntityReplicationCommand", HydrateEntityReplicationCommand, "_hydrateEntityReplicationCommand"),
-	commandSpec(
+	moduleSpec("RunRuntimeSyncCommand", RunRuntimeSyncCommand, "_runRuntimeSyncCommand"),
+	moduleSpec("RunRuntimePollCommand", RunRuntimePollCommand, "_runRuntimePollCommand"),
+	moduleSpec("HydrateEntityReplicationCommand", HydrateEntityReplicationCommand, "_hydrateEntityReplicationCommand"),
+	moduleSpec(
 		"CompleteEntityReplicationBootstrapCommand",
 		CompleteEntityReplicationBootstrapCommand,
 		"_completeEntityReplicationBootstrapCommand"
 	),
-	commandSpec(
+	moduleSpec(
 		"FlushEntityReplicationReliableCommand",
 		FlushEntityReplicationReliableCommand,
 		"_flushEntityReplicationReliableCommand"
 	),
-	commandSpec(
+	moduleSpec(
 		"FlushEntityReplicationUnreliableCommand",
 		FlushEntityReplicationUnreliableCommand,
 		"_flushEntityReplicationUnreliableCommand"
 	),
-	commandSpec(
+	moduleSpec(
 		"FlushEntityReplicationEntityCommand",
 		FlushEntityReplicationEntityCommand,
 		"_flushEntityReplicationEntityCommand"
 	),
-	commandSpec("RegisterAIActorTypeCommand", RegisterAIActorTypeCommand, "_registerAIActorTypeCommand"),
-	commandSpec("RegisterAIEntityCommand", RegisterAIEntityCommand, "_registerAIEntityCommand"),
-	commandSpec("UnregisterAIEntityCommand", UnregisterAIEntityCommand, "_unregisterAIEntityCommand"),
-	querySpec("GetLifecycleStateQuery", GetLifecycleStateQuery, "_getLifecycleStateQuery"),
-	querySpec("GetReadinessStatusQuery", GetReadinessStatusQuery, "_getReadinessStatusQuery"),
-	querySpec("GetRegistrationStatusQuery", GetRegistrationStatusQuery, "_getRegistrationStatusQuery"),
-	querySpec("RunAcceptanceCheckQuery", RunAcceptanceCheckQuery, "_runAcceptanceCheckQuery"),
-	querySpec("GetEntityValueQuery", GetEntityValueQuery, "_getEntityValueQuery"),
-	querySpec("HasEntityKeyQuery", HasEntityKeyQuery, "_hasEntityKeyQuery"),
-	querySpec("QueryEntitiesQuery", QueryEntitiesQuery, "_queryEntitiesQuery"),
-	querySpec("GetWorldQuery", GetWorldQuery, "_getWorldQuery"),
-	querySpec("GetFeatureComponentsQuery", GetFeatureComponentsQuery, "_getFeatureComponentsQuery"),
-	querySpec("GetEntityFactoryQuery", GetEntityFactoryQuery, "_getEntityFactoryQuery"),
-	querySpec("GetBoundInstanceQuery", GetBoundInstanceQuery, "_getBoundInstanceQuery"),
-	querySpec("GetBoundEntityQuery", GetBoundEntityQuery, "_getBoundEntityQuery"),
-	querySpec("BuildRuntimeSnapshotQuery", BuildRuntimeSnapshotQuery, "_buildRuntimeSnapshotQuery"),
-	querySpec("GetSyncContributorQuery", GetSyncContributorQuery, "_getSyncContributorQuery"),
-	querySpec("GetReplicationSurfaceQuery", GetReplicationSurfaceQuery, "_getReplicationSurfaceQuery"),
-	querySpec("GetAIActorHandleQuery", GetAIActorHandleQuery, "_getAIActorHandleQuery"),
-	querySpec("GetAIRegistrationQuery", GetAIRegistrationQuery, "_getAIRegistrationQuery"),
-}
-
-local EntityModules: BaseContext.TModuleLayers = {
-	Infrastructure = InfrastructureModules,
-	Domain = DomainModules,
-	Application = ApplicationModules,
+	moduleSpec("RegisterAIActorTypeCommand", RegisterAIActorTypeCommand, "_registerAIActorTypeCommand"),
+	moduleSpec("RegisterAIEntityCommand", RegisterAIEntityCommand, "_registerAIEntityCommand"),
+	moduleSpec("UnregisterAIEntityCommand", UnregisterAIEntityCommand, "_unregisterAIEntityCommand"),
+	moduleSpec("GetLifecycleStateQuery", GetLifecycleStateQuery, "_getLifecycleStateQuery"),
+	moduleSpec("GetReadinessStatusQuery", GetReadinessStatusQuery, "_getReadinessStatusQuery"),
+	moduleSpec("GetRegistrationStatusQuery", GetRegistrationStatusQuery, "_getRegistrationStatusQuery"),
+	moduleSpec("RunAcceptanceCheckQuery", RunAcceptanceCheckQuery, "_runAcceptanceCheckQuery"),
+	moduleSpec("GetEntityValueQuery", GetEntityValueQuery, "_getEntityValueQuery"),
+	moduleSpec("HasEntityKeyQuery", HasEntityKeyQuery, "_hasEntityKeyQuery"),
+	moduleSpec("QueryEntitiesQuery", QueryEntitiesQuery, "_queryEntitiesQuery"),
+	moduleSpec("GetWorldQuery", GetWorldQuery, "_getWorldQuery"),
+	moduleSpec("GetFeatureComponentsQuery", GetFeatureComponentsQuery, "_getFeatureComponentsQuery"),
+	moduleSpec("GetEntityFactoryQuery", GetEntityFactoryQuery, "_getEntityFactoryQuery"),
+	moduleSpec("GetBoundInstanceQuery", GetBoundInstanceQuery, "_getBoundInstanceQuery"),
+	moduleSpec("GetBoundEntityQuery", GetBoundEntityQuery, "_getBoundEntityQuery"),
+	moduleSpec("BuildRuntimeSnapshotQuery", BuildRuntimeSnapshotQuery, "_buildRuntimeSnapshotQuery"),
+	moduleSpec("GetSyncContributorQuery", GetSyncContributorQuery, "_getSyncContributorQuery"),
+	moduleSpec("GetReplicationSurfaceQuery", GetReplicationSurfaceQuery, "_getReplicationSurfaceQuery"),
+	moduleSpec("GetAIActorHandleQuery", GetAIActorHandleQuery, "_getAIActorHandleQuery"),
+	moduleSpec("GetAIRegistrationQuery", GetAIRegistrationQuery, "_getAIRegistrationQuery"),
 }
 
 local EntityContext = Knit.CreateService({
@@ -324,7 +245,11 @@ local EntityContext = Knit.CreateService({
 		Module = EntityECSWorldService,
 		CacheAs = "_worldService",
 	},
-	Modules = EntityModules,
+	Modules = {
+		Infrastructure = InfrastructureModules,
+		Domain = DomainModules,
+		Application = ApplicationModules,
+	},
 	StartOrder = { "Infrastructure", "Domain", "Application" },
 	ExternalServices = {
 		{ Name = "CombatContext", CacheAs = "_combatContext" },
@@ -334,95 +259,299 @@ local EntityContext = Knit.CreateService({
 
 local EntityBaseContext = BaseContext.new(EntityContext)
 
-local function delegate(fieldName: string, label: string)
-	return function(self: any, ...: any)
-		return Catch(function()
-			return self[fieldName]:Execute(...)
-		end, label)
-	end
-end
-
 function EntityContext:KnitInit()
 	EntityBaseContext:KnitInit()
-
 	local initResult = self:Init()
 	if not initResult.success then
-		error(("EntityContext failed to initialize: [%s] %s"):format(tostring(initResult.type), tostring(initResult.message)))
+		error(
+			("EntityContext failed to initialize: [%s] %s"):format(
+				tostring(initResult.type),
+				tostring(initResult.message)
+			)
+		)
 	end
 end
 
 function EntityContext:KnitStart()
 	EntityBaseContext:KnitStart()
-
 	local startResult = self:Start()
 	if not startResult.success then
-		error(("EntityContext failed to start: [%s] %s"):format(tostring(startResult.type), tostring(startResult.message)))
+		error(
+			("EntityContext failed to start: [%s] %s"):format(tostring(startResult.type), tostring(startResult.message))
+		)
 	end
 end
 
-EntityContext.Init = delegate("_initCommand", "EntityContext:Init")
-EntityContext.Start = delegate("_startCommand", "EntityContext:Start")
-EntityContext.Destroy = delegate("_destroyCommand", "EntityContext:Destroy")
-EntityContext.RunOperationalProof = delegate("_runOperationalProofCommand", "EntityContext:RunOperationalProof")
-EntityContext.RegisterFeatureSchema = delegate("_registerFeatureSchemaCommand", "EntityContext:RegisterFeatureSchema")
-EntityContext.RegisterSystem = delegate("_registerSystemCommand", "EntityContext:RegisterSystem")
-EntityContext.CreateEntity = delegate("_createEntityCommand", "EntityContext:CreateEntity")
-EntityContext.DestroyEntity = delegate("_destroyEntityCommand", "EntityContext:DestroyEntity")
-EntityContext.MarkForDestruction = delegate("_markForDestructionCommand", "EntityContext:MarkForDestruction")
-EntityContext.FlushDestructionQueue = delegate("_flushDestructionQueueCommand", "EntityContext:FlushDestructionQueue")
-EntityContext.Set = delegate("_setCommand", "EntityContext:Set")
-EntityContext.Add = delegate("_addCommand", "EntityContext:Add")
-EntityContext.Remove = delegate("_removeCommand", "EntityContext:Remove")
-EntityContext.TickPhase = delegate("_tickPhaseCommand", "EntityContext:TickPhase")
-EntityContext.TickAll = delegate("_tickAllCommand", "EntityContext:TickAll")
-EntityContext.RegisterInstanceBinding = delegate("_registerInstanceBindingCommand", "EntityContext:RegisterInstanceBinding")
-EntityContext.EnableRuntimeBinding = delegate("_enableRuntimeBindingCommand", "EntityContext:EnableRuntimeBinding")
-EntityContext.EnableRuntimeSync = delegate("_enableRuntimeSyncCommand", "EntityContext:EnableRuntimeSync")
-EntityContext.EnableRuntimeReplication =
-	delegate("_enableRuntimeReplicationCommand", "EntityContext:EnableRuntimeReplication")
-EntityContext.RegisterRuntimeEntity = delegate("_registerRuntimeEntityCommand", "EntityContext:RegisterRuntimeEntity")
-EntityContext.UnregisterRuntimeEntity =
-	delegate("_unregisterRuntimeEntityCommand", "EntityContext:UnregisterRuntimeEntity")
-EntityContext.BindEntityInstance = delegate("_bindEntityInstanceCommand", "EntityContext:BindEntityInstance")
-EntityContext.UnbindEntityInstance = delegate("_unbindEntityInstanceCommand", "EntityContext:UnbindEntityInstance")
-EntityContext.QueueEntityBind = delegate("_queueEntityBindCommand", "EntityContext:QueueEntityBind")
-EntityContext.FlushBindQueue = delegate("_flushBindQueueCommand", "EntityContext:FlushBindQueue")
-EntityContext.RegisterSyncContributor = delegate("_registerSyncContributorCommand", "EntityContext:RegisterSyncContributor")
-EntityContext.RegisterReplicationSurface =
-	delegate("_registerReplicationSurfaceCommand", "EntityContext:RegisterReplicationSurface")
-EntityContext.RunRuntimeSync = delegate("_runRuntimeSyncCommand", "EntityContext:RunRuntimeSync")
-EntityContext.RunRuntimePoll = delegate("_runRuntimePollCommand", "EntityContext:RunRuntimePoll")
-EntityContext.HydrateEntityReplication = delegate("_hydrateEntityReplicationCommand", "EntityContext:HydrateEntityReplication")
-EntityContext.CompleteEntityReplicationBootstrap = delegate(
-	"_completeEntityReplicationBootstrapCommand",
-	"EntityContext:CompleteEntityReplicationBootstrap"
-)
-EntityContext.FlushEntityReplicationReliable =
-	delegate("_flushEntityReplicationReliableCommand", "EntityContext:FlushEntityReplicationReliable")
-EntityContext.FlushEntityReplicationUnreliable =
-	delegate("_flushEntityReplicationUnreliableCommand", "EntityContext:FlushEntityReplicationUnreliable")
-EntityContext.FlushEntityReplicationEntity =
-	delegate("_flushEntityReplicationEntityCommand", "EntityContext:FlushEntityReplicationEntity")
-EntityContext.RegisterAIActorType = delegate("_registerAIActorTypeCommand", "EntityContext:RegisterAIActorType")
-EntityContext.RegisterAIEntity = delegate("_registerAIEntityCommand", "EntityContext:RegisterAIEntity")
-EntityContext.UnregisterAIEntity = delegate("_unregisterAIEntityCommand", "EntityContext:UnregisterAIEntity")
-EntityContext.GetLifecycleState = delegate("_getLifecycleStateQuery", "EntityContext:GetLifecycleState")
-EntityContext.GetReadinessStatus = delegate("_getReadinessStatusQuery", "EntityContext:GetReadinessStatus")
-EntityContext.GetRegistrationStatus = delegate("_getRegistrationStatusQuery", "EntityContext:GetRegistrationStatus")
-EntityContext.RunAcceptanceCheck = delegate("_runAcceptanceCheckQuery", "EntityContext:RunAcceptanceCheck")
-EntityContext.Get = delegate("_getEntityValueQuery", "EntityContext:Get")
-EntityContext.Has = delegate("_hasEntityKeyQuery", "EntityContext:Has")
-EntityContext.Query = delegate("_queryEntitiesQuery", "EntityContext:Query")
-EntityContext.GetWorld = delegate("_getWorldQuery", "EntityContext:GetWorld")
-EntityContext.GetFeatureComponents = delegate("_getFeatureComponentsQuery", "EntityContext:GetFeatureComponents")
-EntityContext.GetEntityFactory = delegate("_getEntityFactoryQuery", "EntityContext:GetEntityFactory")
-EntityContext.GetBoundInstance = delegate("_getBoundInstanceQuery", "EntityContext:GetBoundInstance")
-EntityContext.GetBoundEntity = delegate("_getBoundEntityQuery", "EntityContext:GetBoundEntity")
-EntityContext.BuildRuntimeSnapshot = delegate("_buildRuntimeSnapshotQuery", "EntityContext:BuildRuntimeSnapshot")
-EntityContext.GetSyncContributor = delegate("_getSyncContributorQuery", "EntityContext:GetSyncContributor")
-EntityContext.GetReplicationSurface = delegate("_getReplicationSurfaceQuery", "EntityContext:GetReplicationSurface")
-EntityContext.GetAIActorHandle = delegate("_getAIActorHandleQuery", "EntityContext:GetAIActorHandle")
-EntityContext.GetAIRegistration = delegate("_getAIRegistrationQuery", "EntityContext:GetAIRegistration")
+function EntityContext:Init()
+	return Catch(function()
+		return self._initCommand:Execute()
+	end, "EntityContext:Init")
+end
+function EntityContext:Start()
+	return Catch(function()
+		return self._startCommand:Execute()
+	end, "EntityContext:Start")
+end
+function EntityContext:Destroy()
+	return Catch(function()
+		return self._destroyCommand:Execute()
+	end, "EntityContext:Destroy")
+end
+function EntityContext:RunOperationalProof()
+	return Catch(function()
+		return self._runOperationalProofCommand:Execute()
+	end, "EntityContext:RunOperationalProof")
+end
+function EntityContext:RegisterFeatureSchema(featureName: string, schema: any)
+	return Catch(function()
+		return self._registerFeatureSchemaCommand:Execute(featureName, schema)
+	end, "EntityContext:RegisterFeatureSchema")
+end
+function EntityContext:RegisterSystem(phaseName: string, systemSpec: any)
+	return Catch(function()
+		return self._registerSystemCommand:Execute(phaseName, systemSpec)
+	end, "EntityContext:RegisterSystem")
+end
+function EntityContext:CreateEntity(archetypeName: string, payload: any?)
+	return Catch(function()
+		return self._createEntityCommand:Execute(archetypeName, payload)
+	end, "EntityContext:CreateEntity")
+end
+function EntityContext:DestroyEntity(entity: number)
+	return Catch(function()
+		return self._destroyEntityCommand:Execute(entity)
+	end, "EntityContext:DestroyEntity")
+end
+function EntityContext:MarkForDestruction(entity: number)
+	return Catch(function()
+		return self._markForDestructionCommand:Execute(entity)
+	end, "EntityContext:MarkForDestruction")
+end
+function EntityContext:FlushDestructionQueue()
+	return Catch(function()
+		return self._flushDestructionQueueCommand:Execute()
+	end, "EntityContext:FlushDestructionQueue")
+end
+function EntityContext:Set(entity: number, key: string, value: any, featureName: string?)
+	return Catch(function()
+		return self._setCommand:Execute(entity, key, value, featureName)
+	end, "EntityContext:Set")
+end
+function EntityContext:Add(entity: number, key: string, featureName: string?)
+	return Catch(function()
+		return self._addCommand:Execute(entity, key, featureName)
+	end, "EntityContext:Add")
+end
+function EntityContext:Remove(entity: number, key: string, featureName: string?)
+	return Catch(function()
+		return self._removeCommand:Execute(entity, key, featureName)
+	end, "EntityContext:Remove")
+end
+function EntityContext:TickPhase(phaseName: string)
+	return Catch(function()
+		return self._tickPhaseCommand:Execute(phaseName)
+	end, "EntityContext:TickPhase")
+end
+function EntityContext:TickAll()
+	return Catch(function()
+		return self._tickAllCommand:Execute()
+	end, "EntityContext:TickAll")
+end
+function EntityContext:RegisterInstanceBinding(featureName: string, binding: any)
+	return Catch(function()
+		return self._registerInstanceBindingCommand:Execute(featureName, binding)
+	end, "EntityContext:RegisterInstanceBinding")
+end
+function EntityContext:EnableRuntimeBinding(featureName: string)
+	return Catch(function()
+		return self._enableRuntimeBindingCommand:Execute(featureName)
+	end, "EntityContext:EnableRuntimeBinding")
+end
+function EntityContext:EnableRuntimeSync(featureName: string)
+	return Catch(function()
+		return self._enableRuntimeSyncCommand:Execute(featureName)
+	end, "EntityContext:EnableRuntimeSync")
+end
+function EntityContext:EnableRuntimeReplication(featureName: string)
+	return Catch(function()
+		return self._enableRuntimeReplicationCommand:Execute(featureName)
+	end, "EntityContext:EnableRuntimeReplication")
+end
+function EntityContext:RegisterRuntimeEntity(entity: number)
+	return Catch(function()
+		return self._registerRuntimeEntityCommand:Execute(entity)
+	end, "EntityContext:RegisterRuntimeEntity")
+end
+function EntityContext:UnregisterRuntimeEntity(entity: number)
+	return Catch(function()
+		return self._unregisterRuntimeEntityCommand:Execute(entity)
+	end, "EntityContext:UnregisterRuntimeEntity")
+end
+function EntityContext:BindEntityInstance(entity: number)
+	return Catch(function()
+		return self._bindEntityInstanceCommand:Execute(entity)
+	end, "EntityContext:BindEntityInstance")
+end
+function EntityContext:UnbindEntityInstance(entity: number)
+	return Catch(function()
+		return self._unbindEntityInstanceCommand:Execute(entity)
+	end, "EntityContext:UnbindEntityInstance")
+end
+function EntityContext:QueueEntityBind(entity: number)
+	return Catch(function()
+		return self._queueEntityBindCommand:Execute(entity)
+	end, "EntityContext:QueueEntityBind")
+end
+function EntityContext:FlushBindQueue()
+	return Catch(function()
+		return self._flushBindQueueCommand:Execute()
+	end, "EntityContext:FlushBindQueue")
+end
+function EntityContext:RegisterSyncContributor(featureName: string, payload: any)
+	return Catch(function()
+		return self._registerSyncContributorCommand:Execute(featureName, payload)
+	end, "EntityContext:RegisterSyncContributor")
+end
+function EntityContext:RegisterReplicationSurface(featureName: string, payload: any)
+	return Catch(function()
+		return self._registerReplicationSurfaceCommand:Execute(featureName, payload)
+	end, "EntityContext:RegisterReplicationSurface")
+end
+function EntityContext:RunRuntimeSync()
+	return Catch(function()
+		return self._runRuntimeSyncCommand:Execute()
+	end, "EntityContext:RunRuntimeSync")
+end
+function EntityContext:RunRuntimePoll()
+	return Catch(function()
+		return self._runRuntimePollCommand:Execute()
+	end, "EntityContext:RunRuntimePoll")
+end
+function EntityContext:HydrateEntityReplication(player: Player)
+	return Catch(function()
+		return self._hydrateEntityReplicationCommand:Execute(player)
+	end, "EntityContext:HydrateEntityReplication")
+end
+function EntityContext:CompleteEntityReplicationBootstrap(player: Player)
+	return Catch(function()
+		return self._completeEntityReplicationBootstrapCommand:Execute(player)
+	end, "EntityContext:CompleteEntityReplicationBootstrap")
+end
+function EntityContext:FlushEntityReplicationReliable()
+	return Catch(function()
+		return self._flushEntityReplicationReliableCommand:Execute()
+	end, "EntityContext:FlushEntityReplicationReliable")
+end
+function EntityContext:FlushEntityReplicationUnreliable()
+	return Catch(function()
+		return self._flushEntityReplicationUnreliableCommand:Execute()
+	end, "EntityContext:FlushEntityReplicationUnreliable")
+end
+function EntityContext:FlushEntityReplicationEntity(entity: number)
+	return Catch(function()
+		return self._flushEntityReplicationEntityCommand:Execute(entity)
+	end, "EntityContext:FlushEntityReplicationEntity")
+end
+function EntityContext:RegisterAIActorType(payload: any)
+	return Catch(function()
+		return self._registerAIActorTypeCommand:Execute(payload)
+	end, "EntityContext:RegisterAIActorType")
+end
+function EntityContext:RegisterAIEntity(entity: number, actorType: string)
+	return Catch(function()
+		return self._registerAIEntityCommand:Execute(entity, actorType)
+	end, "EntityContext:RegisterAIEntity")
+end
+function EntityContext:UnregisterAIEntity(entity: number)
+	return Catch(function()
+		return self._unregisterAIEntityCommand:Execute(entity)
+	end, "EntityContext:UnregisterAIEntity")
+end
+function EntityContext:GetLifecycleState()
+	return Catch(function()
+		return self._getLifecycleStateQuery:Execute()
+	end, "EntityContext:GetLifecycleState")
+end
+function EntityContext:GetReadinessStatus()
+	return Catch(function()
+		return self._getReadinessStatusQuery:Execute()
+	end, "EntityContext:GetReadinessStatus")
+end
+function EntityContext:GetRegistrationStatus()
+	return Catch(function()
+		return self._getRegistrationStatusQuery:Execute()
+	end, "EntityContext:GetRegistrationStatus")
+end
+function EntityContext:RunAcceptanceCheck()
+	return Catch(function()
+		return self._runAcceptanceCheckQuery:Execute()
+	end, "EntityContext:RunAcceptanceCheck")
+end
+function EntityContext:Get(entity: number, key: string, featureName: string?)
+	return Catch(function()
+		return self._getEntityValueQuery:Execute(entity, key, featureName)
+	end, "EntityContext:Get")
+end
+function EntityContext:Has(entity: number, key: string, featureName: string?)
+	return Catch(function()
+		return self._hasEntityKeyQuery:Execute(entity, key, featureName)
+	end, "EntityContext:Has")
+end
+function EntityContext:Query(querySpec: any)
+	return Catch(function()
+		return self._queryEntitiesQuery:Execute(querySpec)
+	end, "EntityContext:Query")
+end
+function EntityContext:GetWorld()
+	return Catch(function()
+		return self._getWorldQuery:Execute()
+	end, "EntityContext:GetWorld")
+end
+function EntityContext:GetFeatureComponents(featureName: string)
+	return Catch(function()
+		return self._getFeatureComponentsQuery:Execute(featureName)
+	end, "EntityContext:GetFeatureComponents")
+end
+function EntityContext:GetEntityFactory()
+	return Catch(function()
+		return self._getEntityFactoryQuery:Execute()
+	end, "EntityContext:GetEntityFactory")
+end
+function EntityContext:GetBoundInstance(entity: number)
+	return Catch(function()
+		return self._getBoundInstanceQuery:Execute(entity)
+	end, "EntityContext:GetBoundInstance")
+end
+function EntityContext:GetBoundEntity(instance: Instance)
+	return Catch(function()
+		return self._getBoundEntityQuery:Execute(instance)
+	end, "EntityContext:GetBoundEntity")
+end
+function EntityContext:BuildRuntimeSnapshot(entity: number)
+	return Catch(function()
+		return self._buildRuntimeSnapshotQuery:Execute(entity)
+	end, "EntityContext:BuildRuntimeSnapshot")
+end
+function EntityContext:GetSyncContributor(featureName: string)
+	return Catch(function()
+		return self._getSyncContributorQuery:Execute(featureName)
+	end, "EntityContext:GetSyncContributor")
+end
+function EntityContext:GetReplicationSurface(featureName: string)
+	return Catch(function()
+		return self._getReplicationSurfaceQuery:Execute(featureName)
+	end, "EntityContext:GetReplicationSurface")
+end
+function EntityContext:GetAIActorHandle(entity: number)
+	return Catch(function()
+		return self._getAIActorHandleQuery:Execute(entity)
+	end, "EntityContext:GetAIActorHandle")
+end
+function EntityContext:GetAIRegistration(entity: number)
+	return Catch(function()
+		return self._getAIRegistrationQuery:Execute(entity)
+	end, "EntityContext:GetAIRegistration")
+end
 
 function EntityContext.Client:RequestEntityReplication(player: Player): boolean
 	local result = self.Server:HydrateEntityReplication(player)

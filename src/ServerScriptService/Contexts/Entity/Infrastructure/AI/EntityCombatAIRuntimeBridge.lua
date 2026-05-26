@@ -64,7 +64,8 @@ end
 function EntityCombatAIRuntimeBridge:RegisterAIEntity(
 	entityContext: any,
 	entity: number,
-	compiledActorType: any
+	compiledActorType: any,
+	aiCallbackAdapterService: any?
 ): Result.Result<any>
 	return Result.Catch(function()
 		local readyResult = self:ValidateReady()
@@ -143,12 +144,22 @@ function EntityCombatAIRuntimeBridge:RegisterAIEntity(
 			IsCleanedUp = false,
 		}
 
+		if aiCallbackAdapterService == nil then
+			_CleanupResolvers(entity, factsResolver, servicesResolver)
+			return Result.Err("InvalidAIRegistration", Errors.INVALID_AI_REGISTRATION, {
+				Entity = entity,
+				ActorType = compiledActorType.ActorType,
+				RuntimeKind = compiledActorType.RuntimeKind,
+				Reason = "MissingCallbackAdapterService",
+			})
+		end
+
 		local registerResult = self._combatContext:RegisterCombatActor({
 			ActorType = compiledActorType.ActorType,
 			ActorHandle = actorHandle,
 			BehaviorDefinition = profile.BehaviorDefinition,
 			TickInterval = profile.TickInterval,
-			Adapter = entityContext:_BuildCombatAIActorAdapter(registration),
+			Adapter = aiCallbackAdapterService:BuildAdapter(entityContext, registration),
 		})
 		if not registerResult.success then
 			_CleanupResolvers(entity, factsResolver, servicesResolver)
