@@ -74,80 +74,6 @@ local DEFAULT_DEPENDENCY_CONTRACT: TResolverDependencyContract = table.freeze({
 	DeclaredDependencies = table.freeze({ "EntityContext", "RuntimeServices" }),
 })
 
-local function _DeepClone(value: any): any
-	if type(value) ~= "table" then
-		return value
-	end
-
-	local clone = {}
-	for key, nestedValue in pairs(value) do
-		clone[key] = _DeepClone(nestedValue)
-	end
-	return clone
-end
-
-local function _CompileDependencyContract(
-	dependencyContract: TResolverDependencyContract?
-): Result.Result<TResolverDependencyContract>
-	if dependencyContract == nil then
-		return Result.Ok(DEFAULT_DEPENDENCY_CONTRACT)
-	end
-
-	if type(dependencyContract) ~= "table" then
-		return Result.Err("InvalidAIActorType", Errors.INVALID_AI_ACTOR_TYPE, {
-			Reason = "InvalidDependencyContract",
-		})
-	end
-
-	if dependencyContract.DependencyMode ~= "EntityContextOnly" then
-		return Result.Err("InvalidAIActorType", Errors.INVALID_AI_ACTOR_TYPE, {
-			Reason = "UnsupportedDependencyMode",
-			DependencyMode = dependencyContract.DependencyMode,
-		})
-	end
-
-	if dependencyContract.AllowsRuntimeServices ~= nil and type(dependencyContract.AllowsRuntimeServices) ~= "boolean" then
-		return Result.Err("InvalidAIActorType", Errors.INVALID_AI_ACTOR_TYPE, {
-			Reason = "InvalidAllowsRuntimeServices",
-		})
-	end
-
-	local declaredDependencies = dependencyContract.DeclaredDependencies
-	if declaredDependencies ~= nil then
-		if type(declaredDependencies) ~= "table" then
-			return Result.Err("InvalidAIActorType", Errors.INVALID_AI_ACTOR_TYPE, {
-				Reason = "InvalidDeclaredDependencies",
-			})
-		end
-
-		for _, dependencyName in ipairs(declaredDependencies) do
-			if dependencyName ~= "EntityContext" and dependencyName ~= "RuntimeServices" then
-				return Result.Err("InvalidAIActorType", Errors.INVALID_AI_ACTOR_TYPE, {
-					Reason = "UnsupportedDeclaredDependency",
-					DependencyName = dependencyName,
-				})
-			end
-
-			if dependencyName == "RuntimeServices" and dependencyContract.AllowsRuntimeServices == false then
-				return Result.Err("InvalidAIActorType", Errors.INVALID_AI_ACTOR_TYPE, {
-					Reason = "RuntimeServicesDependencyNotAllowed",
-				})
-			end
-		end
-	end
-
-	local allowsRuntimeServices = dependencyContract.AllowsRuntimeServices ~= false
-	local fallbackDependencies = if allowsRuntimeServices
-		then { "EntityContext", "RuntimeServices" }
-		else { "EntityContext" }
-
-	return Result.Ok(table.freeze({
-		DependencyMode = dependencyContract.DependencyMode,
-		AllowsRuntimeServices = allowsRuntimeServices,
-		DeclaredDependencies = table.freeze(_DeepClone(declaredDependencies or fallbackDependencies)),
-	}))
-end
-
 function EntityAIActorTypeRegistry.new()
 	local self = setmetatable({}, EntityAIActorTypeRegistry)
 	self._compiledByKey = {}
@@ -168,32 +94,8 @@ function EntityAIActorTypeRegistry:RegisterActorType(
 			})
 		end
 
-		if type(payload) ~= "table" then
+		if type(payload) ~= "table" or payload.RuntimeKind ~= "Combat" or type(payload.ActorType) ~= "string" or payload.ActorType == "" then
 			return Result.Err("InvalidAIActorType", Errors.INVALID_AI_ACTOR_TYPE, {})
-		end
-
-		if payload.RuntimeKind ~= "Combat" then
-			return Result.Err("UnsupportedAIRuntimeKind", Errors.UNSUPPORTED_AI_RUNTIME_KIND, {
-				RuntimeKind = payload.RuntimeKind,
-			})
-		end
-
-		if type(payload.ActorType) ~= "string" or payload.ActorType == "" then
-			return Result.Err("InvalidAIActorType", Errors.INVALID_AI_ACTOR_TYPE, {})
-		end
-
-		if
-			type(payload.Conditions) ~= "table"
-			or type(payload.Commands) ~= "table"
-			or type(payload.Executors) ~= "table"
-			or type(payload.ResolveProfile) ~= "function"
-			or type(payload.BuildActorHandle) ~= "function"
-			or type(payload.IsEntityActive) ~= "function"
-		then
-			return Result.Err("InvalidAIActorType", Errors.INVALID_AI_ACTOR_TYPE, {
-				ActorType = payload.ActorType,
-				RuntimeKind = payload.RuntimeKind,
-			})
 		end
 
 		local actorTypeKey = _BuildActorTypeKey(payload.RuntimeKind, payload.ActorType)
@@ -202,11 +104,6 @@ function EntityAIActorTypeRegistry:RegisterActorType(
 				ActorType = payload.ActorType,
 				RuntimeKind = payload.RuntimeKind,
 			})
-		end
-
-		local dependencyContractResult = _CompileDependencyContract(payload.DependencyContract)
-		if not dependencyContractResult.success then
-			return dependencyContractResult
 		end
 
 		local compiledActorType: TCompiledEntityAIActorType = table.freeze({
@@ -228,7 +125,7 @@ function EntityAIActorTypeRegistry:RegisterActorType(
 			OnActionResult = payload.OnActionResult,
 			OnActionStateChanged = payload.OnActionStateChanged,
 			GetActorLabel = payload.GetActorLabel,
-			DependencyContract = dependencyContractResult.value,
+			DependencyContract = payload.DependencyContract or DEFAULT_DEPENDENCY_CONTRACT,
 		})
 
 		self._compiledByKey[actorTypeKey] = compiledActorType

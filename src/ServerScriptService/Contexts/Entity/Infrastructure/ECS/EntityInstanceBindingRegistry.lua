@@ -6,22 +6,6 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
-local function _ValidateCallback(binding: any, key: string, isRequired: boolean): Result.Result<boolean>
-	local value = binding[key]
-	if value == nil and not isRequired then
-		return Result.Ok(true)
-	end
-
-	if type(value) ~= "function" then
-		return Result.Err("InvalidInstanceBinding", Errors.INVALID_INSTANCE_BINDING, {
-			Key = key,
-			IsRequired = isRequired,
-		})
-	end
-
-	return Result.Ok(true)
-end
-
 local EntityInstanceBindingRegistry = {}
 EntityInstanceBindingRegistry.__index = EntityInstanceBindingRegistry
 
@@ -36,7 +20,7 @@ function EntityInstanceBindingRegistry:Init(_registry: any, _name: string)
 	return
 end
 
-function EntityInstanceBindingRegistry:RegisterBinding(featureName: string, binding: any): Result.Result<any>
+	function EntityInstanceBindingRegistry:RegisterBinding(featureName: string, binding: any): Result.Result<any>
 	return Result.Catch(function()
 		if self._isRegistrationClosed then
 			return Result.Err("InvalidInstanceBinding", Errors.INVALID_INSTANCE_BINDING, {
@@ -62,28 +46,6 @@ function EntityInstanceBindingRegistry:RegisterBinding(featureName: string, bind
 				FeatureName = featureName,
 				Reason = "FeatureNameMismatch",
 			})
-		end
-
-		local requiredResolveAsset = _ValidateCallback(binding, "ResolveAsset", true)
-		if not requiredResolveAsset.success then
-			return requiredResolveAsset
-		end
-
-		local optionalKeys = {
-			"BuildActorKind",
-			"ResolveParentFolder",
-			"PrepareInstance",
-			"BuildRevealAttributes",
-			"BuildRevealTags",
-			"BuildRevealClearAttributes",
-			"BuildName",
-		}
-
-		for _, key in ipairs(optionalKeys) do
-			local callbackResult = _ValidateCallback(binding, key, false)
-			if not callbackResult.success then
-				return callbackResult
-			end
 		end
 
 		local compiledBinding = table.freeze({

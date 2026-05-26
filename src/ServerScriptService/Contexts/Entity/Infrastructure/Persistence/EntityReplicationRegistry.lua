@@ -6,12 +6,6 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
-local OPTIONAL_CALLBACKS = {
-	"RegisterEntity",
-	"UnregisterEntity",
-	"BuildSchema",
-}
-
 local EntityReplicationRegistry = {}
 EntityReplicationRegistry.__index = EntityReplicationRegistry
 
@@ -58,16 +52,6 @@ function EntityReplicationRegistry:RegisterReplicationSurface(featureName: strin
 			return Result.Err("DuplicateReplicationSurface", Errors.DUPLICATE_REPLICATION_SURFACE, {
 				FeatureName = featureName,
 			})
-		end
-
-		for _, key in ipairs(OPTIONAL_CALLBACKS) do
-			local callback = payload[key]
-			if callback ~= nil and type(callback) ~= "function" then
-				return Result.Err("InvalidReplicationSurface", Errors.INVALID_REPLICATION_SURFACE, {
-					FeatureName = featureName,
-					Key = key,
-				})
-			end
 		end
 
 		local compiledSurface = table.freeze({

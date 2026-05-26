@@ -6,14 +6,6 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
-local OPTIONAL_CALLBACKS = {
-	"SyncAll",
-	"SyncEntity",
-	"PollEntity",
-	"QuerySyncEntities",
-	"QueryPollEntities",
-}
-
 local EntitySyncContributorRegistry = {}
 EntitySyncContributorRegistry.__index = EntitySyncContributorRegistry
 
@@ -54,16 +46,6 @@ function EntitySyncContributorRegistry:RegisterSyncContributor(featureName: stri
 			return Result.Err("DuplicateSyncContributor", Errors.DUPLICATE_SYNC_CONTRIBUTOR, {
 				FeatureName = featureName,
 			})
-		end
-
-		for _, key in ipairs(OPTIONAL_CALLBACKS) do
-			local callback = payload[key]
-			if callback ~= nil and type(callback) ~= "function" then
-				return Result.Err("InvalidSyncContributor", Errors.INVALID_SYNC_CONTRIBUTOR, {
-					FeatureName = featureName,
-					Key = key,
-				})
-			end
 		end
 
 		local compiledContributor = table.freeze({
