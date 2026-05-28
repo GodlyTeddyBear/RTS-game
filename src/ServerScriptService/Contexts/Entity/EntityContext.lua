@@ -33,10 +33,18 @@ local EntityPreDestroyCleanupRegistry = require(script.Parent.Infrastructure.Ser
 local EntityValidationService = require(script.Parent.EntityDomain.Services.EntityValidationService)
 local EntityLifecyclePolicy = require(script.Parent.EntityDomain.Policies.EntityLifecyclePolicy)
 local EntityReadinessPolicy = require(script.Parent.EntityDomain.Policies.EntityReadinessPolicy)
+local EntityRuntimeParticipationPolicy = require(script.Parent.EntityDomain.Policies.EntityRuntimeParticipationPolicy)
 
 local InitCommand = require(script.Parent.Application.Commands.InitCommand)
 local StartCommand = require(script.Parent.Application.Commands.StartCommand)
 local FinalizeStartupCommand = require(script.Parent.Application.Commands.FinalizeStartupCommand)
+local CompileECSKernelCommand = require(script.Parent.Application.Commands.CompileECSKernelCommand)
+local FinalizeRuntimeRegistrationCommand = require(script.Parent.Application.Commands.FinalizeRuntimeRegistrationCommand)
+local FinalizeAIRegistrationCommand = require(script.Parent.Application.Commands.FinalizeAIRegistrationCommand)
+local HandleStartupFailureCommand = require(script.Parent.Application.Commands.HandleStartupFailureCommand)
+local PrepareRuntimeEntityForRemovalCommand =
+	require(script.Parent.Application.Commands.PrepareRuntimeEntityForRemovalCommand)
+local ShutdownRuntimeExecutionCommand = require(script.Parent.Application.Commands.ShutdownRuntimeExecutionCommand)
 local DestroyCommand = require(script.Parent.Application.Commands.DestroyCommand)
 local RunOperationalProofCommand = require(script.Parent.Application.Commands.RunOperationalProofCommand)
 local RegisterFeatureSchemaCommand = require(script.Parent.Application.Commands.RegisterFeatureSchemaCommand)
@@ -157,12 +165,27 @@ local DomainModules: { BaseContext.TModuleSpec } = {
 	{ Name = "EntityValidationService", Module = EntityValidationService },
 	{ Name = "EntityLifecyclePolicy", Module = EntityLifecyclePolicy },
 	{ Name = "EntityReadinessPolicy", Module = EntityReadinessPolicy },
+	{ Name = "EntityRuntimeParticipationPolicy", Module = EntityRuntimeParticipationPolicy },
 }
 
 local ApplicationModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("InitCommand", InitCommand, "_initCommand"),
-	moduleSpec("StartCommand", StartCommand, "_startCommand"),
+	moduleSpec("CompileECSKernelCommand", CompileECSKernelCommand, "_compileECSKernelCommand"),
+	moduleSpec(
+		"FinalizeRuntimeRegistrationCommand",
+		FinalizeRuntimeRegistrationCommand,
+		"_finalizeRuntimeRegistrationCommand"
+	),
+	moduleSpec("FinalizeAIRegistrationCommand", FinalizeAIRegistrationCommand, "_finalizeAIRegistrationCommand"),
+	moduleSpec(
+		"PrepareRuntimeEntityForRemovalCommand",
+		PrepareRuntimeEntityForRemovalCommand,
+		"_prepareRuntimeEntityForRemovalCommand"
+	),
+	moduleSpec("ShutdownRuntimeExecutionCommand", ShutdownRuntimeExecutionCommand, "_shutdownRuntimeExecutionCommand"),
+	moduleSpec("HandleStartupFailureCommand", HandleStartupFailureCommand, "_handleStartupFailureCommand"),
 	moduleSpec("FinalizeStartupCommand", FinalizeStartupCommand, "_finalizeStartupCommand"),
+	moduleSpec("StartCommand", StartCommand, "_startCommand"),
 	moduleSpec("DestroyCommand", DestroyCommand, "_destroyCommand"),
 	moduleSpec("RunOperationalProofCommand", RunOperationalProofCommand, "_runOperationalProofCommand"),
 	moduleSpec("RegisterFeatureSchemaCommand", RegisterFeatureSchemaCommand, "_registerFeatureSchemaCommand"),
@@ -301,11 +324,6 @@ function EntityContext:Start()
 	return Catch(function()
 		return self._startCommand:Execute()
 	end, "EntityContext:Start")
-end
-function EntityContext:_EnsureRuntimeStarted()
-	return Catch(function()
-		return self._finalizeStartupCommand:Execute()
-	end, "EntityContext:EnsureRuntimeStarted")
 end
 function EntityContext:Destroy()
 	return Catch(function()

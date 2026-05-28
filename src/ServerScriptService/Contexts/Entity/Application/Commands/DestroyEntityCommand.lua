@@ -28,6 +28,7 @@ function DestroyEntityCommand:Init(registry: any, _name: string)
 		_unregisterAIEntityCommand = "UnregisterAIEntityCommand",
 		_entityContext = "EntityContextService",
 		_preDestroyCleanupRegistry = "EntityPreDestroyCleanupRegistry",
+		_prepareRuntimeEntityForRemovalCommand = "PrepareRuntimeEntityForRemovalCommand",
 	})
 end
 
@@ -41,7 +42,7 @@ function DestroyEntityCommand:Execute(entity: number): Result.Result<boolean>
 			return lifecycleResult
 		end
 
-		local prepareResult = EntityOperationSupport.PrepareRuntimeEntityForRemoval(self, entity, true)
+		local prepareResult = self._prepareRuntimeEntityForRemovalCommand:Execute(entity, true)
 		if not prepareResult.success then
 			return prepareResult
 		end

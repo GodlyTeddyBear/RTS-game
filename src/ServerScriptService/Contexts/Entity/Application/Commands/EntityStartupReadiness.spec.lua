@@ -20,9 +20,10 @@ local function createRegistry(values: { [string]: any })
 end
 
 return function()
-	describe("Entity deferred startup", function()
-		it("binds the scheduler without closing ECS registration during Start", function()
+	describe("Entity startup readiness", function()
+		it("finalizes startup before binding the scheduler", function()
 			local schedulerBound = false
+			local finalized = false
 			local lifecycle = {
 				GetState = function()
 					return "RegisteringECS"
@@ -34,47 +35,43 @@ return function()
 			}
 			local runtimeScheduler = {
 				BindSchedulerTick = function()
+					expect(finalized).to.equal(true)
 					schedulerBound = true
 				end,
 			}
-			local validationService = {}
-
-			local command = StartCommand.new()
-			command:Init(createRegistry({
-				EntityLifecycleStateMachine = lifecycle,
-				EntityValidationService = validationService,
-				EntityStartupStateService = startupState,
-				EntityRuntimeSchedulerService = runtimeScheduler,
-			}), "StartCommand")
-
-			local result = command:Execute()
-
-			expect(result.success).to.equal(true)
-			expect(schedulerBound).to.equal(true)
-			expect(lifecycle:GetState()).to.equal("RegisteringECS")
-		end)
-
-		it("finalizes Entity startup before running ECS phases", function()
-			local lifecycleState = "RegisteringECS"
-			local finalizeCalled = false
-			local phasesRan = false
-			local synced = false
-			local polled = false
-
-			local baseContext = {
-				RegisterSchedulerSystem = function() end,
-			}
-			local entityContext = {
-				_EnsureRuntimeStarted = function()
-					finalizeCalled = true
-					lifecycleState = "Running"
+			local finalizeStartupCommand = {
+				Execute = function()
+					finalized = true
 					return {
 						success = true,
 						value = true,
 					}
 				end,
 			}
-			local scheduler = EntityRuntimeSchedulerService.new(baseContext, entityContext)
+
+			local command = StartCommand.new()
+			command:Init(createRegistry({
+				EntityLifecycleStateMachine = lifecycle,
+				EntityValidationService = {},
+				EntityStartupStateService = startupState,
+				EntityRuntimeSchedulerService = runtimeScheduler,
+				FinalizeStartupCommand = finalizeStartupCommand,
+			}), "StartCommand")
+
+			local result = command:Execute()
+
+			expect(result.success).to.equal(true)
+			expect(finalized).to.equal(true)
+			expect(schedulerBound).to.equal(true)
+		end)
+
+		it("does not finalize startup from the scheduler tick", function()
+			local lifecycleState = "RegisteringECS"
+			local phasesRan = false
+
+			local scheduler = EntityRuntimeSchedulerService.new({
+				RegisterSchedulerSystem = function() end,
+			}, {})
 			scheduler:Init(createRegistry({
 				EntityLifecycleStateMachine = {
 					GetState = function()
@@ -105,14 +102,12 @@ return function()
 				},
 				EntityRuntimeSyncService = {
 					RunRuntimeSync = function()
-						synced = true
 						return {
 							success = true,
 							value = true,
 						}
 					end,
 					RunRuntimePoll = function()
-						polled = true
 						return {
 							success = true,
 							value = true,
@@ -137,10 +132,7 @@ return function()
 
 			scheduler:RunScheduledTick()
 
-			expect(finalizeCalled).to.equal(true)
-			expect(phasesRan).to.equal(true)
-			expect(synced).to.equal(true)
-			expect(polled).to.equal(true)
+			expect(phasesRan).to.equal(false)
 		end)
 	end)
 end

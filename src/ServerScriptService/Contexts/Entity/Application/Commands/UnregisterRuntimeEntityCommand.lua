@@ -25,6 +25,7 @@ function UnregisterRuntimeEntityCommand:Init(registry: any, _name: string)
 		_lifecycle = "EntityLifecycleStateMachine",
 		_instanceBindingService = "EntityInstanceBindingService",
 		_replicationService = "EntityReplicationService",
+		_prepareRuntimeEntityForRemovalCommand = "PrepareRuntimeEntityForRemovalCommand",
 	})
 end
 
@@ -38,7 +39,7 @@ function UnregisterRuntimeEntityCommand:Execute(entity: number): Result.Result<a
 			return lifecycleResult
 		end
 
-		return EntityOperationSupport.PrepareRuntimeEntityForRemoval(self, entity, true)
+		return self._prepareRuntimeEntityForRemovalCommand:Execute(entity, true)
 	end, self:_Label())
 end
 

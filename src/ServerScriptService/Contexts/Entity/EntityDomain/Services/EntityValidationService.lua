@@ -334,6 +334,7 @@ function EntityValidationService:ValidateAIActorTypePayload(payload: any): Resul
 	return Result.Ok(table.freeze({
 		RuntimeKind = payload.RuntimeKind,
 		ActorType = payload.ActorType,
+		Source = if payload.Source == "Proof" then "Proof" else "Adopter",
 		Conditions = payload.Conditions,
 		Commands = payload.Commands,
 		Executors = payload.Executors,

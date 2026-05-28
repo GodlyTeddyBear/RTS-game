@@ -23,6 +23,7 @@ function BindEntityInstanceCommand:Init(registry: any, _name: string)
 		_replicationService = "EntityReplicationService",
 		_instanceBindingService = "EntityInstanceBindingService",
 		_runtimeParticipation = "EntityRuntimeParticipationService",
+		_runtimeParticipationPolicy = "EntityRuntimeParticipationPolicy",
 	})
 end
 
@@ -35,7 +36,11 @@ function BindEntityInstanceCommand:Execute(entity: number): Result.Result<any>
 			return lifecycleResult
 		end
 
-		local participationResult = EntityOperationSupport.RequireRuntimeBindingParticipation(self._runtimeParticipation, entity)
+		local participationResult = EntityOperationSupport.RequireRuntimeBindingParticipation(
+			self._runtimeParticipationPolicy,
+			self._runtimeParticipation,
+			entity
+		)
 		if not participationResult.success then
 			return participationResult
 		end

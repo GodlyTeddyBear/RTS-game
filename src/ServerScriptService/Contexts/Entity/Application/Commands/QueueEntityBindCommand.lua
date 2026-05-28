@@ -21,6 +21,7 @@ function QueueEntityBindCommand:Init(registry: any, _name: string)
 		_instanceBindingService = "EntityInstanceBindingService",
 		_validationService = "EntityValidationService",
 		_runtimeParticipation = "EntityRuntimeParticipationService",
+		_runtimeParticipationPolicy = "EntityRuntimeParticipationPolicy",
 	})
 end
 
@@ -33,7 +34,11 @@ function QueueEntityBindCommand:Execute(entity: number): Result.Result<any>
 			return lifecycleResult
 		end
 
-		local participationResult = EntityOperationSupport.RequireRuntimeBindingParticipation(self._runtimeParticipation, entity)
+		local participationResult = EntityOperationSupport.RequireRuntimeBindingParticipation(
+			self._runtimeParticipationPolicy,
+			self._runtimeParticipation,
+			entity
+		)
 		if not participationResult.success then
 			return participationResult
 		end

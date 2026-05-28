@@ -35,7 +35,13 @@ function RegisterAIActorTypeCommand:Execute(payload: any): Result.Result<boolean
 			return lifecycleResult
 		end
 
-		local compiledActorTypeResult = self._validationService:ValidateAIActorTypePayload(payload)
+		local adopterPayload = payload
+		if type(payload) == "table" then
+			adopterPayload = table.clone(payload)
+			adopterPayload.Source = "Adopter"
+		end
+
+		local compiledActorTypeResult = self._validationService:ValidateAIActorTypePayload(adopterPayload)
 		if not compiledActorTypeResult.success then
 			return compiledActorTypeResult
 		end

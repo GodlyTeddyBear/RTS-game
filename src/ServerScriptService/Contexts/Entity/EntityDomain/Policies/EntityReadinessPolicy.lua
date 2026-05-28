@@ -48,8 +48,11 @@ function EntityReadinessPolicy:BuildStatus(input: any): any
 			BridgeReady = input.AIBridgeReady and input.AIBridgeStatus.Ready,
 			Ready = input.AIActorTypesReady and input.AIBridgeReady,
 			ActorTypeCount = input.AIActorTypeRegistryStatus.ActorTypeCount,
+			ProofActorTypeCount = input.AIActorTypeRegistryStatus.ProofActorTypeCount,
+			AdopterActorTypeCount = input.AIActorTypeRegistryStatus.AdopterActorTypeCount,
 			ActorTypesRequired = true,
-			StartupGateSatisfied = input.AIActorTypeRegistryStatus.ActorTypeCount > 0,
+			StartupGateSatisfied = input.AIActorTypeRegistryStatus.StartupGateSatisfied,
+			AdoptionGateSatisfied = input.AIActorTypeRegistryStatus.AdoptionGateSatisfied,
 			RuntimeRegistrationCount = input.AIEntityRegistryStatus.RegistrationCount,
 			ResolverDependencyMode = input.AIActorTypeRegistryStatus.DependencyMode,
 			AllowsRuntimeServices = input.AIActorTypeRegistryStatus.AllowsRuntimeServices,
@@ -119,6 +122,12 @@ function EntityReadinessPolicy:BuildAcceptance(status: any): any
 		addBlockingGap("MissingRequiredAIActorType", Errors.MISSING_REQUIRED_AI_ACTOR_TYPE, {
 			ActorTypeCount = status.AI.ActorTypeCount,
 			ActorTypesRequired = status.AI.ActorTypesRequired,
+		})
+	end
+	if not status.AI.AdoptionGateSatisfied then
+		addBlockingGap("MissingAdopterAIActorType", "EntityContext has no adopter-provided AI actor types", {
+			ProofActorTypeCount = status.AI.ProofActorTypeCount,
+			AdopterActorTypeCount = status.AI.AdopterActorTypeCount,
 		})
 	end
 	if not status.AI.BridgeReady then

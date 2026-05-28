@@ -72,62 +72,6 @@ function EntityOperationSupport.OnRuntimeEntityBound(
 	return Result.Ok(true)
 end
 
-function EntityOperationSupport.PrepareRuntimeEntityForRemoval(input: any, entity: number, unregisterRuntimeEntity: boolean)
-	return Result.Catch(function()
-		local cleanupRegistry = input._preDestroyCleanupRegistry
-		if cleanupRegistry ~= nil then
-			local cleanupResult = cleanupRegistry:Run(entity)
-			if not cleanupResult.success then
-				return cleanupResult
-			end
-		end
-
-		input._instanceBindingService:ClearQueuedBind(entity)
-
-		local runtimeFeatureName = input._runtimeParticipation:GetFeatureName(entity)
-		if runtimeFeatureName ~= nil and input._runtimeParticipation:IsFeatureEnabled("Replication", runtimeFeatureName) then
-			local unregisterReplicationResult = input._replicationService:UnregisterRuntimeEntity(input._entityContext, entity)
-			if not unregisterReplicationResult.success then
-				return unregisterReplicationResult
-			end
-		end
-
-		local unbindResult = input._instanceBindingService:UnbindEntityInstance(entity)
-		if not unbindResult.success then
-			return unbindResult
-		end
-
-		local aiRegistration = input._aiEntityRegistry:GetAIRegistration(entity)
-		if aiRegistration ~= nil then
-			local unregisterAIResult = input._unregisterAIEntityCommand:Execute(entity)
-			if not unregisterAIResult.success then
-				return unregisterAIResult
-			end
-		end
-
-		if unregisterRuntimeEntity then
-			local unregisterRuntimeResult = input._runtimeParticipation:UnregisterRuntimeEntity(entity)
-			if not unregisterRuntimeResult.success then
-				return unregisterRuntimeResult
-			end
-		end
-
-		return Result.Ok(true)
-	end, "EntityOperationSupport:PrepareRuntimeEntityForRemoval")
-end
-
-function EntityOperationSupport.ShutdownRuntimeExecution(input: any)
-	for _, entity in ipairs(input._aiEntityRegistry:CollectRegisteredEntities()) do
-		input._unregisterAIEntityCommand:Execute(entity)
-	end
-
-	for _, entity in ipairs(input._runtimeParticipation:CollectRuntimeEntities()) do
-		EntityOperationSupport.PrepareRuntimeEntityForRemoval(input, entity, true)
-	end
-
-	input._instanceBindingService:DestroyAll()
-end
-
 function EntityOperationSupport.FlushPendingDestructionDuringShutdown(entityFactory: any)
 	local flushResult = entityFactory:FlushDestroyQueue()
 	if flushResult.success then
@@ -142,25 +86,11 @@ function EntityOperationSupport.FlushPendingDestructionDuringShutdown(entityFact
 end
 
 function EntityOperationSupport.RequireRuntimeBindingParticipation(
+	runtimeParticipationPolicy: any,
 	runtimeParticipation: any,
 	entity: number
 ): Result.Result<boolean>
-	local featureName = runtimeParticipation:GetFeatureName(entity)
-	if featureName == nil then
-		return Result.Err("UnknownRuntimeEntity", Errors.UNKNOWN_RUNTIME_ENTITY, {
-			Entity = entity,
-		})
-	end
-
-	if not runtimeParticipation:IsFeatureEnabled("Binding", featureName) then
-		return Result.Err("FeatureRuntimeNotEnabled", Errors.FEATURE_RUNTIME_NOT_ENABLED, {
-			Entity = entity,
-			FeatureName = featureName,
-			Mode = "Binding",
-		})
-	end
-
-	return Result.Ok(true)
+	return runtimeParticipationPolicy:RequireBindingParticipation(runtimeParticipation, entity)
 end
 
 return table.freeze(EntityOperationSupport)

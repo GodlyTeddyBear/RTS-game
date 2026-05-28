@@ -7,53 +7,50 @@ local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplica
 local Result = require(ReplicatedStorage.Utilities.Result)
 local EntityOperationSupport = require(script.Parent.Parent.Support.EntityOperationSupport)
 
-local DestroyCommand = {}
-DestroyCommand.__index = DestroyCommand
-setmetatable(DestroyCommand, BaseCommand)
+local HandleStartupFailureCommand = {}
+HandleStartupFailureCommand.__index = HandleStartupFailureCommand
+setmetatable(HandleStartupFailureCommand, BaseCommand)
 
-function DestroyCommand.new()
-	local self = BaseCommand.new("Entity", "Destroy")
-	return setmetatable(self, DestroyCommand)
+function HandleStartupFailureCommand.new()
+	local self = BaseCommand.new("Entity", "HandleStartupFailure")
+	return setmetatable(self, HandleStartupFailureCommand)
 end
 
-function DestroyCommand:Init(registry: any, _name: string)
+function HandleStartupFailureCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_lifecycle = "EntityLifecycleStateMachine",
+		_startupState = "EntityStartupStateService",
+		_runtimeScheduler = "EntityRuntimeSchedulerService",
 		_entityFactory = "EntityEntityFactory",
 		_instanceBindingService = "EntityInstanceBindingService",
 		_runtimeParticipation = "EntityRuntimeParticipationService",
 		_replicationService = "EntityReplicationService",
 		_aiEntityRegistry = "EntityAIEntityRegistry",
 		_unregisterAIEntityCommand = "UnregisterAIEntityCommand",
-		_runtimeScheduler = "EntityRuntimeSchedulerService",
-		_baseContext = "EntityBaseContext",
 		_entityContext = "EntityContextService",
 		_preDestroyCleanupRegistry = "EntityPreDestroyCleanupRegistry",
 		_shutdownRuntimeExecutionCommand = "ShutdownRuntimeExecutionCommand",
 	})
 end
 
-function DestroyCommand:Execute(): Result.Result<boolean>
+function HandleStartupFailureCommand:Execute(failureResult: Result.Result<any>): Result.Result<any>
 	return Result.Catch(function()
+		self._startupState:SetLastStartupFailure(failureResult)
+		self._runtimeScheduler:StopRuntimeTick()
+
 		local currentState = self._lifecycle:GetState()
 		if currentState ~= "ShuttingDown" and currentState ~= "Destroyed" then
 			self._lifecycle:BeginShutdown()
 		end
 
 		if self._lifecycle:GetState() == "ShuttingDown" then
-			self._runtimeScheduler:StopRuntimeTick()
 			self._shutdownRuntimeExecutionCommand:Execute()
 			EntityOperationSupport.FlushPendingDestructionDuringShutdown(self._entityFactory)
 			self._lifecycle:MarkDestroyed()
 		end
 
-		local destroyResult = self._baseContext:Destroy()
-		if not destroyResult.success then
-			return destroyResult
-		end
-
-		return Result.Ok(true)
+		return failureResult
 	end, self:_Label())
 end
 
-return DestroyCommand
+return HandleStartupFailureCommand

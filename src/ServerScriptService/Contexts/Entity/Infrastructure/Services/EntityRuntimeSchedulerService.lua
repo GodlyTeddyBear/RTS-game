@@ -43,15 +43,6 @@ end
 
 function EntityRuntimeSchedulerService:RunScheduledTick()
 	if self._lifecycle:GetState() ~= "Running" then
-		local startupResult = self._entityContext:_EnsureRuntimeStarted()
-		if not startupResult.success then
-			self._runtimeTickActive = false
-			self:_MentionTickFailure("Entity startup finalization failed", startupResult)
-			return
-		end
-	end
-
-	if self._lifecycle:GetState() ~= "Running" then
 		self._runtimeTickActive = false
 		return
 	end

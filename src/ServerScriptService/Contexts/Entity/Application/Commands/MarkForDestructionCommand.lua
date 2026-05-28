@@ -27,6 +27,7 @@ function MarkForDestructionCommand:Init(registry: any, _name: string)
 		_runtimeParticipation = "EntityRuntimeParticipationService",
 		_unregisterAIEntityCommand = "UnregisterAIEntityCommand",
 		_preDestroyCleanupRegistry = "EntityPreDestroyCleanupRegistry",
+		_prepareRuntimeEntityForRemovalCommand = "PrepareRuntimeEntityForRemovalCommand",
 	})
 end
 
@@ -40,7 +41,7 @@ function MarkForDestructionCommand:Execute(entity: number): Result.Result<any>
 			return lifecycleResult
 		end
 
-		local prepareResult = EntityOperationSupport.PrepareRuntimeEntityForRemoval(self, entity, false)
+		local prepareResult = self._prepareRuntimeEntityForRemovalCommand:Execute(entity, false)
 		if not prepareResult.success then
 			return prepareResult
 		end

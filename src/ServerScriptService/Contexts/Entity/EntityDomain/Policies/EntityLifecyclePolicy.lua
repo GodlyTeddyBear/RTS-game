@@ -65,9 +65,11 @@ end
 
 function EntityLifecyclePolicy:ValidateAIReady(aiActorTypeRegistry: any, combatAIRuntimeBridge: any): Result.Err?
 	local actorTypeStatus = aiActorTypeRegistry:GetStatus()
-	if actorTypeStatus.ActorTypeCount <= 0 then
+	if not actorTypeStatus.StartupGateSatisfied then
 		return Result.Err("MissingRequiredAIActorType", Errors.MISSING_REQUIRED_AI_ACTOR_TYPE, {
 			ActorTypeCount = actorTypeStatus.ActorTypeCount,
+			ProofActorTypeCount = actorTypeStatus.ProofActorTypeCount,
+			AdopterActorTypeCount = actorTypeStatus.AdopterActorTypeCount,
 		})
 	end
 

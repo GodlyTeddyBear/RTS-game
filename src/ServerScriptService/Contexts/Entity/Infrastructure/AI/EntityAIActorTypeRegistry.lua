@@ -20,6 +20,7 @@ type TResolverDependencyContract = {
 export type TEntityAIActorTypePayload = {
 	RuntimeKind: "Combat",
 	ActorType: string,
+	Source: "Proof" | "Adopter"?,
 	Conditions: { [string]: any },
 	Commands: { [string]: any },
 	Executors: { [string]: any },
@@ -42,6 +43,7 @@ export type TEntityAIActorTypePayload = {
 export type TCompiledEntityAIActorType = {
 	RuntimeKind: "Combat",
 	ActorType: string,
+	Source: "Proof" | "Adopter",
 	Conditions: { [string]: any },
 	Commands: { [string]: any },
 	Executors: { [string]: any },
@@ -109,6 +111,7 @@ function EntityAIActorTypeRegistry:RegisterActorType(
 		local compiledActorType: TCompiledEntityAIActorType = table.freeze({
 			RuntimeKind = payload.RuntimeKind,
 			ActorType = payload.ActorType,
+			Source = if payload.Source == "Proof" then "Proof" else "Adopter",
 			Conditions = payload.Conditions,
 			Commands = payload.Commands,
 			Executors = payload.Executors,
@@ -163,11 +166,18 @@ end
 
 function EntityAIActorTypeRegistry:GetStatus(): any
 	local actorTypeCount = 0
+	local proofActorTypeCount = 0
+	local adopterActorTypeCount = 0
 	local dependencyMode: string = DEFAULT_DEPENDENCY_CONTRACT.DependencyMode
 	local allowsRuntimeServices = false
 
-	for _ in pairs(self._compiledByKey) do
+	for _, compiledActorType in pairs(self._compiledByKey) do
 		actorTypeCount += 1
+		if compiledActorType.Source == "Proof" then
+			proofActorTypeCount += 1
+		else
+			adopterActorTypeCount += 1
+		end
 	end
 
 	for _, compiledActorType in pairs(self._compiledByKey) do
@@ -183,6 +193,10 @@ function EntityAIActorTypeRegistry:GetStatus(): any
 	return table.freeze({
 		RegistrationClosed = self._isRegistrationClosed,
 		ActorTypeCount = actorTypeCount,
+		ProofActorTypeCount = proofActorTypeCount,
+		AdopterActorTypeCount = adopterActorTypeCount,
+		StartupGateSatisfied = actorTypeCount > 0,
+		AdoptionGateSatisfied = adopterActorTypeCount > 0,
 		DependencyMode = dependencyMode,
 		AllowsRuntimeServices = allowsRuntimeServices,
 	})
