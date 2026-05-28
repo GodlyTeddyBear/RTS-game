@@ -56,7 +56,7 @@ function FinalizeRuntimeRegistrationCommand:Execute(): Result.Result<boolean>
 			return runtimeReadyResult
 		end
 
-		return self._lifecycle:MarkReadyForAIRegistration()
+		return self._lifecycle:StartRunning()
 	end, self:_Label())
 end
 

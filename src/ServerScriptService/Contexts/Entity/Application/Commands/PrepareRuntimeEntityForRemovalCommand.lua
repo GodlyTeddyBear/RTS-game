@@ -21,8 +21,6 @@ function PrepareRuntimeEntityForRemovalCommand:Init(registry: any, _name: string
 		_runtimeParticipation = "EntityRuntimeParticipationService",
 		_runtimeParticipationPolicy = "EntityRuntimeParticipationPolicy",
 		_replicationService = "EntityReplicationService",
-		_aiEntityRegistry = "EntityAIEntityRegistry",
-		_unregisterAIEntityCommand = "UnregisterAIEntityCommand",
 		_entityContext = "EntityContextService",
 		_preDestroyCleanupRegistry = "EntityPreDestroyCleanupRegistry",
 	})
@@ -50,14 +48,6 @@ function PrepareRuntimeEntityForRemovalCommand:Execute(
 		local unbindResult = self._instanceBindingService:UnbindEntityInstance(entity)
 		if not unbindResult.success then
 			return unbindResult
-		end
-
-		local aiRegistration = self._aiEntityRegistry:GetAIRegistration(entity)
-		if aiRegistration ~= nil then
-			local unregisterAIResult = self._unregisterAIEntityCommand:Execute(entity)
-			if not unregisterAIResult.success then
-				return unregisterAIResult
-			end
 		end
 
 		if unregisterRuntimeEntity then

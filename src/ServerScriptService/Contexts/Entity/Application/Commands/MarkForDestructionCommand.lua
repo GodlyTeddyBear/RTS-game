@@ -23,9 +23,7 @@ function MarkForDestructionCommand:Init(registry: any, _name: string)
 		_instanceBindingService = "EntityInstanceBindingService",
 		_replicationService = "EntityReplicationService",
 		_entityContext = "EntityContextService",
-		_aiEntityRegistry = "EntityAIEntityRegistry",
 		_runtimeParticipation = "EntityRuntimeParticipationService",
-		_unregisterAIEntityCommand = "UnregisterAIEntityCommand",
 		_preDestroyCleanupRegistry = "EntityPreDestroyCleanupRegistry",
 		_prepareRuntimeEntityForRemovalCommand = "PrepareRuntimeEntityForRemovalCommand",
 	})

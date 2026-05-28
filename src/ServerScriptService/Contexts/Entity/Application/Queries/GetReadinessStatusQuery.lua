@@ -27,12 +27,9 @@ function GetReadinessStatusQuery:Init(registry: any, _name: string)
 		_instanceBindingRegistry = "EntityInstanceBindingRegistry",
 		_syncContributorRegistry = "EntitySyncContributorRegistry",
 		_replicationRegistry = "EntityReplicationRegistry",
-		_combatAIRuntimeBridge = "EntityCombatAIRuntimeBridge",
 		_replicationService = "EntityReplicationService",
 		_instanceBindingService = "EntityInstanceBindingService",
 		_runtimeParticipation = "EntityRuntimeParticipationService",
-		_aiActorTypeRegistry = "EntityAIActorTypeRegistry",
-		_aiEntityRegistry = "EntityAIEntityRegistry",
 	})
 end
 

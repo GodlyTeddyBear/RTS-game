@@ -35,15 +35,6 @@ local Errors = table.freeze({
 	INVALID_REPLICATION_SURFACE = "Entity replication surface payload is invalid",
 	UNKNOWN_REPLICATION_SURFACE = "Entity replication surface is not registered",
 	UNSUPPORTED_REPLICATION_FEATURE = "Entity replication surface is not supported for this feature",
-	UNSUPPORTED_AI_RUNTIME_KIND = "Entity AI runtime kind is not supported",
-	INVALID_AI_ACTOR_TYPE = "Entity AI actor type payload is invalid",
-	DUPLICATE_AI_ACTOR_TYPE = "Entity AI actor type is already registered",
-	INVALID_AI_PROFILE = "Entity AI profile resolution is invalid",
-	UNKNOWN_AI_ACTOR_TYPE = "Entity AI actor type is not registered",
-	INVALID_AI_REGISTRATION = "Entity AI registration payload is invalid",
-	DUPLICATE_AI_ENTITY_REGISTRATION = "Entity AI entity is already registered",
-	AI_RUNTIME_BRIDGE_UNAVAILABLE = "Entity AI runtime bridge is unavailable",
-	MISSING_REQUIRED_AI_ACTOR_TYPE = "EntityContext requires at least one AI actor type before startup",
 	OPERATIONAL_PROOF_FAILED = "EntityContext operational proof failed",
 })
 

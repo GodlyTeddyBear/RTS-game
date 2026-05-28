@@ -27,8 +27,6 @@ function BuildRuntimeSnapshotQuery:Execute(entity: number): Result.Result<any>
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(nil, "BuildRuntimeSnapshot", self._lifecycle:GetState(), {
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",
-			"ReadyForAIRegistration",
-			"RegisteringAI",
 			"Running",
 			"ShuttingDown",
 		})

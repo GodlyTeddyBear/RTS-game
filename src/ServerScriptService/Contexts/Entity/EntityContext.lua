@@ -10,11 +10,7 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 local EntityLifecycleStateMachine = require(script.Parent.Infrastructure.Services.EntityLifecycleStateMachine)
 local EntityStartupStateService = require(script.Parent.Infrastructure.Services.EntityStartupStateService)
 local EntityRuntimeSchedulerService = require(script.Parent.Infrastructure.Services.EntityRuntimeSchedulerService)
-local EntityAICallbackAdapterService = require(script.Parent.Infrastructure.Services.EntityAICallbackAdapterService)
 local EntityRevealService = require(script.Parent.Infrastructure.Services.EntityRevealService)
-local EntityAIActorTypeRegistry = require(script.Parent.Infrastructure.AI.EntityAIActorTypeRegistry)
-local EntityAIEntityRegistry = require(script.Parent.Infrastructure.AI.EntityAIEntityRegistry)
-local EntityCombatAIRuntimeBridge = require(script.Parent.Infrastructure.AI.EntityCombatAIRuntimeBridge)
 local EntityECSWorldService = require(script.Parent.Infrastructure.ECS.EntityECSWorldService)
 local EntityEntityFactory = require(script.Parent.Infrastructure.ECS.EntityEntityFactory)
 local EntityInstanceBindingRegistry = require(script.Parent.Infrastructure.ECS.EntityInstanceBindingRegistry)
@@ -40,7 +36,6 @@ local StartCommand = require(script.Parent.Application.Commands.StartCommand)
 local FinalizeStartupCommand = require(script.Parent.Application.Commands.FinalizeStartupCommand)
 local CompileECSKernelCommand = require(script.Parent.Application.Commands.CompileECSKernelCommand)
 local FinalizeRuntimeRegistrationCommand = require(script.Parent.Application.Commands.FinalizeRuntimeRegistrationCommand)
-local FinalizeAIRegistrationCommand = require(script.Parent.Application.Commands.FinalizeAIRegistrationCommand)
 local HandleStartupFailureCommand = require(script.Parent.Application.Commands.HandleStartupFailureCommand)
 local PrepareRuntimeEntityForRemovalCommand =
 	require(script.Parent.Application.Commands.PrepareRuntimeEntityForRemovalCommand)
@@ -82,9 +77,6 @@ local FlushEntityReplicationUnreliableCommand =
 	require(script.Parent.Application.Commands.FlushEntityReplicationUnreliableCommand)
 local FlushEntityReplicationEntityCommand =
 	require(script.Parent.Application.Commands.FlushEntityReplicationEntityCommand)
-local RegisterAIActorTypeCommand = require(script.Parent.Application.Commands.RegisterAIActorTypeCommand)
-local RegisterAIEntityCommand = require(script.Parent.Application.Commands.RegisterAIEntityCommand)
-local UnregisterAIEntityCommand = require(script.Parent.Application.Commands.UnregisterAIEntityCommand)
 
 local GetLifecycleStateQuery = require(script.Parent.Application.Queries.GetLifecycleStateQuery)
 local GetReadinessStatusQuery = require(script.Parent.Application.Queries.GetReadinessStatusQuery)
@@ -101,8 +93,6 @@ local GetBoundEntityQuery = require(script.Parent.Application.Queries.GetBoundEn
 local BuildRuntimeSnapshotQuery = require(script.Parent.Application.Queries.BuildRuntimeSnapshotQuery)
 local GetSyncContributorQuery = require(script.Parent.Application.Queries.GetSyncContributorQuery)
 local GetReplicationSurfaceQuery = require(script.Parent.Application.Queries.GetReplicationSurfaceQuery)
-local GetAIActorHandleQuery = require(script.Parent.Application.Queries.GetAIActorHandleQuery)
-local GetAIRegistrationQuery = require(script.Parent.Application.Queries.GetAIRegistrationQuery)
 
 local Catch = Result.Catch
 
@@ -147,9 +137,6 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("EntitySyncContributorRegistry", EntitySyncContributorRegistry, "_syncContributorRegistry"),
 	moduleSpec("EntityReplicationRegistry", EntityReplicationRegistry, "_replicationRegistry"),
 	moduleSpec("EntityReplicationService", EntityReplicationService, "_replicationService"),
-	moduleSpec("EntityAIActorTypeRegistry", EntityAIActorTypeRegistry, "_aiActorTypeRegistry"),
-	moduleSpec("EntityAIEntityRegistry", EntityAIEntityRegistry, "_aiEntityRegistry"),
-	moduleSpec("EntityCombatAIRuntimeBridge", EntityCombatAIRuntimeBridge, "_combatAIRuntimeBridge"),
 	moduleSpec("EntitySystemRegistry", EntitySystemRegistry, "_systemRegistry"),
 	{
 		Name = "EntityRuntimeSchedulerService",
@@ -158,7 +145,6 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		end,
 		CacheAs = "_runtimeScheduler",
 	},
-	moduleSpec("EntityAICallbackAdapterService", EntityAICallbackAdapterService, "_aiCallbackAdapterService"),
 }
 
 local DomainModules: { BaseContext.TModuleSpec } = {
@@ -176,7 +162,6 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		FinalizeRuntimeRegistrationCommand,
 		"_finalizeRuntimeRegistrationCommand"
 	),
-	moduleSpec("FinalizeAIRegistrationCommand", FinalizeAIRegistrationCommand, "_finalizeAIRegistrationCommand"),
 	moduleSpec(
 		"PrepareRuntimeEntityForRemovalCommand",
 		PrepareRuntimeEntityForRemovalCommand,
@@ -243,9 +228,6 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		FlushEntityReplicationEntityCommand,
 		"_flushEntityReplicationEntityCommand"
 	),
-	moduleSpec("RegisterAIActorTypeCommand", RegisterAIActorTypeCommand, "_registerAIActorTypeCommand"),
-	moduleSpec("RegisterAIEntityCommand", RegisterAIEntityCommand, "_registerAIEntityCommand"),
-	moduleSpec("UnregisterAIEntityCommand", UnregisterAIEntityCommand, "_unregisterAIEntityCommand"),
 	moduleSpec("GetLifecycleStateQuery", GetLifecycleStateQuery, "_getLifecycleStateQuery"),
 	moduleSpec("GetReadinessStatusQuery", GetReadinessStatusQuery, "_getReadinessStatusQuery"),
 	moduleSpec("GetRegistrationStatusQuery", GetRegistrationStatusQuery, "_getRegistrationStatusQuery"),
@@ -261,8 +243,6 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("BuildRuntimeSnapshotQuery", BuildRuntimeSnapshotQuery, "_buildRuntimeSnapshotQuery"),
 	moduleSpec("GetSyncContributorQuery", GetSyncContributorQuery, "_getSyncContributorQuery"),
 	moduleSpec("GetReplicationSurfaceQuery", GetReplicationSurfaceQuery, "_getReplicationSurfaceQuery"),
-	moduleSpec("GetAIActorHandleQuery", GetAIActorHandleQuery, "_getAIActorHandleQuery"),
-	moduleSpec("GetAIRegistrationQuery", GetAIRegistrationQuery, "_getAIRegistrationQuery"),
 }
 
 local EntityContext = Knit.CreateService({
@@ -284,9 +264,6 @@ local EntityContext = Knit.CreateService({
 		Application = ApplicationModules,
 	},
 	StartOrder = { "Infrastructure", "Domain", "Application" },
-	ExternalServices = {
-		{ Name = "CombatContext", CacheAs = "_combatContext" },
-	},
 	Teardown = {},
 })
 
@@ -324,6 +301,11 @@ function EntityContext:Start()
 	return Catch(function()
 		return self._startCommand:Execute()
 	end, "EntityContext:Start")
+end
+function EntityContext:_EnsureRuntimeStarted()
+	return Catch(function()
+		return self._finalizeStartupCommand:Execute()
+	end, "EntityContext:_EnsureRuntimeStarted")
 end
 function EntityContext:Destroy()
 	return Catch(function()
@@ -490,21 +472,6 @@ function EntityContext:FlushEntityReplicationEntity(entity: number)
 		return self._flushEntityReplicationEntityCommand:Execute(entity)
 	end, "EntityContext:FlushEntityReplicationEntity")
 end
-function EntityContext:RegisterAIActorType(payload: any)
-	return Catch(function()
-		return self._registerAIActorTypeCommand:Execute(payload)
-	end, "EntityContext:RegisterAIActorType")
-end
-function EntityContext:RegisterAIEntity(entity: number, actorType: string)
-	return Catch(function()
-		return self._registerAIEntityCommand:Execute(entity, actorType)
-	end, "EntityContext:RegisterAIEntity")
-end
-function EntityContext:UnregisterAIEntity(entity: number)
-	return Catch(function()
-		return self._unregisterAIEntityCommand:Execute(entity)
-	end, "EntityContext:UnregisterAIEntity")
-end
 function EntityContext:GetLifecycleState()
 	return Catch(function()
 		return self._getLifecycleStateQuery:Execute()
@@ -579,16 +546,6 @@ function EntityContext:GetReplicationSurface(featureName: string)
 	return Catch(function()
 		return self._getReplicationSurfaceQuery:Execute(featureName)
 	end, "EntityContext:GetReplicationSurface")
-end
-function EntityContext:GetAIActorHandle(entity: number)
-	return Catch(function()
-		return self._getAIActorHandleQuery:Execute(entity)
-	end, "EntityContext:GetAIActorHandle")
-end
-function EntityContext:GetAIRegistration(entity: number)
-	return Catch(function()
-		return self._getAIRegistrationQuery:Execute(entity)
-	end, "EntityContext:GetAIRegistration")
 end
 
 function EntityContext.Client:RequestEntityReplication(player: Player): boolean

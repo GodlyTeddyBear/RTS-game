@@ -26,18 +26,6 @@ function EntityPayloadSpecs.HasMatchingFeatureName(payload: any, featureName: st
 	return type(payload) == "table" and payload.FeatureName == featureName
 end
 
-function EntityPayloadSpecs.IsSupportedAIRuntimeKind(value: any): boolean
-	return value == "Combat"
-end
-
-function EntityPayloadSpecs.IsSupportedDependencyMode(value: any): boolean
-	return value == "EntityContextOnly"
-end
-
-function EntityPayloadSpecs.IsSupportedDeclaredDependency(value: any): boolean
-	return value == "EntityContext" or value == "RuntimeServices"
-end
-
 function EntityPayloadSpecs.IsValidQuerySpec(value: any): boolean
 	if type(value) == "string" then
 		return value ~= ""

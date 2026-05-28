@@ -23,7 +23,6 @@ function FinalizeStartupCommand:Init(registry: any, _name: string)
 		_startupState = "EntityStartupStateService",
 		_compileECSKernelCommand = "CompileECSKernelCommand",
 		_finalizeRuntimeRegistrationCommand = "FinalizeRuntimeRegistrationCommand",
-		_finalizeAIRegistrationCommand = "FinalizeAIRegistrationCommand",
 		_handleStartupFailureCommand = "HandleStartupFailureCommand",
 	})
 end
@@ -39,8 +38,6 @@ function FinalizeStartupCommand:Execute(): Result.Result<boolean>
 				"CompilingECS",
 				"ReadyForRuntimeRegistration",
 				"RegisteringRuntime",
-				"ReadyForAIRegistration",
-				"RegisteringAI",
 				"Running",
 			}
 		)
@@ -61,11 +58,6 @@ function FinalizeStartupCommand:Execute(): Result.Result<boolean>
 		local runtimeResult = self._finalizeRuntimeRegistrationCommand:Execute()
 		if not runtimeResult.success then
 			return self._handleStartupFailureCommand:Execute(runtimeResult)
-		end
-
-		local aiResult = self._finalizeAIRegistrationCommand:Execute()
-		if not aiResult.success then
-			return self._handleStartupFailureCommand:Execute(aiResult)
 		end
 
 		self._startupState:ClearLastStartupFailure()

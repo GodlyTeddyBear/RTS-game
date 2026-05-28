@@ -4,8 +4,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
 
-local Errors = require(script.Parent.Parent.Parent.Errors)
-
 local EntityLifecyclePolicy = {}
 EntityLifecyclePolicy.__index = EntityLifecyclePolicy
 
@@ -58,29 +56,6 @@ function EntityLifecyclePolicy:ValidateRuntimeBridgeReady(
 	local replicationResult = replicationRegistry:ValidateReady()
 	if not replicationResult.success then
 		return replicationResult
-	end
-
-	return nil
-end
-
-function EntityLifecyclePolicy:ValidateAIReady(aiActorTypeRegistry: any, combatAIRuntimeBridge: any): Result.Err?
-	local actorTypeStatus = aiActorTypeRegistry:GetStatus()
-	if not actorTypeStatus.StartupGateSatisfied then
-		return Result.Err("MissingRequiredAIActorType", Errors.MISSING_REQUIRED_AI_ACTOR_TYPE, {
-			ActorTypeCount = actorTypeStatus.ActorTypeCount,
-			ProofActorTypeCount = actorTypeStatus.ProofActorTypeCount,
-			AdopterActorTypeCount = actorTypeStatus.AdopterActorTypeCount,
-		})
-	end
-
-	local actorTypeRegistryResult = aiActorTypeRegistry:ValidateReady()
-	if not actorTypeRegistryResult.success then
-		return actorTypeRegistryResult
-	end
-
-	local aiBridgeResult = combatAIRuntimeBridge:ValidateReady()
-	if not aiBridgeResult.success then
-		return aiBridgeResult
 	end
 
 	return nil

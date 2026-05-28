@@ -10,8 +10,6 @@ type EntityLifecycleState =
 	| "CompilingECS"
 	| "ReadyForRuntimeRegistration"
 	| "RegisteringRuntime"
-	| "ReadyForAIRegistration"
-	| "RegisteringAI"
 	| "Running"
 	| "ShuttingDown"
 	| "Destroyed"
@@ -30,19 +28,10 @@ local LEGAL_TRANSITIONS: StateMachine.TStateMachineTransitionMap<EntityLifecycle
 	},
 	ReadyForRuntimeRegistration = {
 		RegisteringRuntime = true,
-		ReadyForAIRegistration = true,
-		ShuttingDown = true,
-	},
-	RegisteringRuntime = {
-		ReadyForAIRegistration = true,
-		ShuttingDown = true,
-	},
-	ReadyForAIRegistration = {
-		RegisteringAI = true,
 		Running = true,
 		ShuttingDown = true,
 	},
-	RegisteringAI = {
+	RegisteringRuntime = {
 		Running = true,
 		ShuttingDown = true,
 	},
@@ -102,14 +91,6 @@ end
 
 function EntityLifecycleStateMachine:BeginRuntimeRegistration()
 	return self._machine:Transition("RegisteringRuntime")
-end
-
-function EntityLifecycleStateMachine:MarkReadyForAIRegistration()
-	return self._machine:Transition("ReadyForAIRegistration")
-end
-
-function EntityLifecycleStateMachine:BeginAIRegistration()
-	return self._machine:Transition("RegisteringAI")
 end
 
 function EntityLifecycleStateMachine:StartRunning()

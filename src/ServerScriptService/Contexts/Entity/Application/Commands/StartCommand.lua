@@ -22,7 +22,6 @@ function StartCommand:Init(registry: any, _name: string)
 		_validationService = "EntityValidationService",
 		_startupState = "EntityStartupStateService",
 		_runtimeScheduler = "EntityRuntimeSchedulerService",
-		_finalizeStartupCommand = "FinalizeStartupCommand",
 	})
 end
 
@@ -34,27 +33,11 @@ function StartCommand:Execute(): Result.Result<boolean>
 				"CompilingECS",
 				"ReadyForRuntimeRegistration",
 				"RegisteringRuntime",
-				"ReadyForAIRegistration",
-				"RegisteringAI",
 				"Running",
 			})
 		if not lifecycleResult.success then
 			self._startupState:SetLastStartupFailure(lifecycleResult)
 			return lifecycleResult
-		end
-
-		local finalizeResult = self._finalizeStartupCommand:Execute()
-		if not finalizeResult.success then
-			return finalizeResult
-		end
-
-		local runningResult =
-			EntityOperationSupport.RequireLifecycleStates(self._validationService, "Start", self._lifecycle:GetState(), {
-				"Running",
-			})
-		if not runningResult.success then
-			self._startupState:SetLastStartupFailure(runningResult)
-			return runningResult
 		end
 
 		self._runtimeScheduler:BindSchedulerTick()

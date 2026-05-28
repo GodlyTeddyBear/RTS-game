@@ -23,8 +23,6 @@ function DestroyCommand:Init(registry: any, _name: string)
 		_instanceBindingService = "EntityInstanceBindingService",
 		_runtimeParticipation = "EntityRuntimeParticipationService",
 		_replicationService = "EntityReplicationService",
-		_aiEntityRegistry = "EntityAIEntityRegistry",
-		_unregisterAIEntityCommand = "UnregisterAIEntityCommand",
 		_runtimeScheduler = "EntityRuntimeSchedulerService",
 		_baseContext = "EntityBaseContext",
 		_entityContext = "EntityContextService",

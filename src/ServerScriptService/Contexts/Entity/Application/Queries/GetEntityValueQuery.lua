@@ -28,8 +28,6 @@ function GetEntityValueQuery:Execute(entity: number, key: string, featureName: s
 			"RegisteringECS",
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",
-			"ReadyForAIRegistration",
-			"RegisteringAI",
 			"Running",
 			"ShuttingDown",
 		})

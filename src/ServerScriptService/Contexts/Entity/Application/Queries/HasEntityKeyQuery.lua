@@ -29,8 +29,6 @@ function HasEntityKeyQuery:Execute(entity: number, key: string, featureName: str
 			"RegisteringECS",
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",
-			"ReadyForAIRegistration",
-			"RegisteringAI",
 			"Running",
 			"ShuttingDown",
 		})

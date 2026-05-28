@@ -59,49 +59,6 @@ local EntityCoreSchema = {
 				Model = nil,
 			},
 		},
-		AIActorType = {
-			ECSName = "Entity.AIActorType",
-			Authority = "AUTHORITATIVE",
-			Default = {
-				RuntimeKind = "Combat",
-				ActorType = "",
-			},
-		},
-		AIRuntimeProfile = {
-			ECSName = "Entity.AIRuntimeProfile",
-			Authority = "AUTHORITATIVE",
-			Default = {
-				RuntimeProfileId = "",
-				TickInterval = 0,
-			},
-		},
-		AIActionState = {
-			ECSName = "Entity.AIActionState",
-			Authority = "DERIVED",
-			Default = {
-				Status = "Idle",
-				ActionName = nil,
-				StartedAt = nil,
-				UpdatedAt = nil,
-				ErrorCode = nil,
-			},
-		},
-		AIBehaviorConfig = {
-			ECSName = "Entity.AIBehaviorConfig",
-			Authority = "AUTHORITATIVE",
-			Default = {
-				BehaviorDefinition = nil,
-				TickInterval = 0,
-			},
-		},
-		AIRegistration = {
-			ECSName = "Entity.AIRegistration",
-			Authority = "AUTHORITATIVE",
-			Default = {
-				ActorHandle = "",
-				RegisteredAt = 0,
-			},
-		},
 	},
 	Tags = {
 		ActiveTag = {},
@@ -140,33 +97,6 @@ local EntityCoreSchema = {
 			Extends = "Core",
 			Components = {
 				Lifetime = true,
-			},
-		},
-		AIActor = {
-			Extends = "Actor",
-			Components = {
-				AIActorType = true,
-				AIRuntimeProfile = true,
-				AIBehaviorConfig = true,
-				AIRegistration = true,
-			},
-		},
-		AITargetable = {
-			Extends = "Targetable",
-			Components = {
-				AIActorType = true,
-				AIRuntimeProfile = true,
-				AIBehaviorConfig = true,
-				AIRegistration = true,
-			},
-		},
-		AIActive = {
-			Extends = "AIActor",
-			Components = {
-				AIActionState = true,
-			},
-			Tags = {
-				ActiveTag = true,
 			},
 		},
 	},

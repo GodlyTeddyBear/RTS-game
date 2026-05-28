@@ -29,8 +29,6 @@ function QueryEntitiesQuery:Execute(querySpec: any): Result.Result<any>
 			"RegisteringECS",
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",
-			"ReadyForAIRegistration",
-			"RegisteringAI",
 			"Running",
 			"ShuttingDown",
 		})

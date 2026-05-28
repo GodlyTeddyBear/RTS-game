@@ -16,11 +16,6 @@ type TClientEntityRecord = {
 	Lifetime: any?,
 	Target: any?,
 	ModelRef: any?,
-	AIActorType: any?,
-	AIRuntimeProfile: any?,
-	AIActionState: any?,
-	AIBehaviorConfig: any?,
-	AIRegistration: any?,
 	Tags: { [string]: boolean },
 	Components: { [string]: any },
 }
@@ -33,11 +28,6 @@ local SHARED_FIELD_KEYS = table.freeze({
 	Lifetime = "Lifetime",
 	Target = "Target",
 	ModelRef = "ModelRef",
-	AIActorType = "AIActorType",
-	AIRuntimeProfile = "AIRuntimeProfile",
-	AIActionState = "AIActionState",
-	AIBehaviorConfig = "AIBehaviorConfig",
-	AIRegistration = "AIRegistration",
 })
 
 local function _DeepClone(value: any): any
@@ -320,11 +310,6 @@ function ClientEntityIndexService:_BuildRecord(
 		Lifetime = nil,
 		Target = nil,
 		ModelRef = nil,
-		AIActorType = nil,
-		AIRuntimeProfile = nil,
-		AIActionState = nil,
-		AIBehaviorConfig = nil,
-		AIRegistration = nil,
 		Tags = {},
 		Components = {},
 	}

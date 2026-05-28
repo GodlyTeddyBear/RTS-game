@@ -25,8 +25,6 @@ function HandleStartupFailureCommand:Init(registry: any, _name: string)
 		_instanceBindingService = "EntityInstanceBindingService",
 		_runtimeParticipation = "EntityRuntimeParticipationService",
 		_replicationService = "EntityReplicationService",
-		_aiEntityRegistry = "EntityAIEntityRegistry",
-		_unregisterAIEntityCommand = "UnregisterAIEntityCommand",
 		_entityContext = "EntityContextService",
 		_preDestroyCleanupRegistry = "EntityPreDestroyCleanupRegistry",
 		_shutdownRuntimeExecutionCommand = "ShutdownRuntimeExecutionCommand",

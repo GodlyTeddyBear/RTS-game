@@ -30,8 +30,6 @@ function GetFeatureComponentsQuery:Execute(featureName: string): Result.Result<a
 			"CompilingECS",
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",
-			"ReadyForAIRegistration",
-			"RegisteringAI",
 			"Running",
 			"ShuttingDown",
 		})

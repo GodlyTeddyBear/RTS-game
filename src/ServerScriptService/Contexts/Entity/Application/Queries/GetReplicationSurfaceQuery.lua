@@ -27,8 +27,6 @@ function GetReplicationSurfaceQuery:Execute(featureName: string): Result.Result<
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(nil, "GetReplicationSurface", self._lifecycle:GetState(), {
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",
-			"ReadyForAIRegistration",
-			"RegisteringAI",
 			"Running",
 			"ShuttingDown",
 		})

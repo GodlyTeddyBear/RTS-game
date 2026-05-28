@@ -31,17 +31,12 @@ function RunOperationalProofCommand:Init(registry: any, _name: string)
 		_instanceBindingRegistry = "EntityInstanceBindingRegistry",
 		_syncContributorRegistry = "EntitySyncContributorRegistry",
 		_replicationRegistry = "EntityReplicationRegistry",
-		_combatAIRuntimeBridge = "EntityCombatAIRuntimeBridge",
 		_replicationService = "EntityReplicationService",
 		_instanceBindingService = "EntityInstanceBindingService",
 		_runtimeParticipation = "EntityRuntimeParticipationService",
-		_aiActorTypeRegistry = "EntityAIActorTypeRegistry",
-		_aiEntityRegistry = "EntityAIEntityRegistry",
 		_createEntityCommand = "CreateEntityCommand",
 		_destroyEntityCommand = "DestroyEntityCommand",
 		_registerRuntimeEntityCommand = "RegisterRuntimeEntityCommand",
-		_registerAIEntityCommand = "RegisterAIEntityCommand",
-		_unregisterAIEntityCommand = "UnregisterAIEntityCommand",
 		_bindEntityInstanceCommand = "BindEntityInstanceCommand",
 		_hydrateEntityReplicationCommand = "HydrateEntityReplicationCommand",
 		_completeEntityReplicationBootstrapCommand = "CompleteEntityReplicationBootstrapCommand",
@@ -60,16 +55,13 @@ function RunOperationalProofCommand:Execute(): Result.Result<any>
 		local proofResult = {
 			Lifecycle = { InitPassed = true, StartPassed = self._lifecycle:GetState() == "Running", ShutdownPassed = false },
 			Runtime = { BindPassed = false, ReplicationBootstrapPassed = false, CleanupPassed = false },
-			AI = { ActorTypeRegistrationPassed = false, ActorEntityRegistrationPassed = false, UnregisterPassed = false },
 			Acceptance = { Passed = false, BlockingGaps = {} },
 		}
 
 		local proofEntity = nil
-		local aiRegistered = false
 		local runtimeRegistered = false
 		local bindResult = Result.Ok(nil)
 		local registerRuntimeResult = Result.Ok(false)
-		local aiRegistrationResult = Result.Ok("")
 
 		local function readiness()
 			return EntityOperationSupport.BuildReadinessStatus(self)
@@ -80,7 +72,6 @@ function RunOperationalProofCommand:Execute(): Result.Result<any>
 			local cleanupPassed = readinessStatus.Runtime.PendingBindCount == 0
 				and readinessStatus.Runtime.BoundEntityCount == 0
 				and readinessStatus.Runtime.RuntimeEntityCount == 0
-				and readinessStatus.AI.RuntimeRegistrationCount == 0
 			proofResult.Runtime.CleanupPassed = cleanupPassed
 			proofResult.Lifecycle.ShutdownPassed = cleanupPassed
 			if not cleanupPassed then
@@ -98,29 +89,9 @@ function RunOperationalProofCommand:Execute(): Result.Result<any>
 			if proofEntity == nil then
 				return
 			end
-			if aiRegistered then
-				self._unregisterAIEntityCommand:Execute(proofEntity)
-				aiRegistered = false
-				proofResult.AI.UnregisterPassed = true
-			end
 			self._destroyEntityCommand:Execute(proofEntity)
 			runtimeRegistered = false
 			proofEntity = nil
-		end
-
-		local readinessStatus = readiness()
-		proofResult.AI.ActorTypeRegistrationPassed = self._aiActorTypeRegistry:GetCompiledActorType("Combat", EntityProofRuntimeConfig.ActorType) ~= nil
-			and readinessStatus.AI.StartupGateSatisfied
-			and readinessStatus.AI.ActorTypesClosed
-		if not proofResult.AI.ActorTypeRegistrationPassed then
-			proofResult.Acceptance.BlockingGaps = {
-				{
-					Code = "OperationalProofActorTypeMissing",
-					Message = Errors.MISSING_REQUIRED_AI_ACTOR_TYPE,
-					Details = readinessStatus.AI,
-				},
-			}
-			return Result.Ok(finalizeAndReturn())
 		end
 
 		local createResult = self._createEntityCommand:Execute(EntityProofRuntimeConfig.ArchetypeName, {
@@ -147,10 +118,6 @@ function RunOperationalProofCommand:Execute(): Result.Result<any>
 		bindResult = self._bindEntityInstanceCommand:Execute(proofEntity)
 		proofResult.Runtime.BindPassed = bindResult.success and bindResult.value ~= nil
 
-		aiRegistrationResult = self._registerAIEntityCommand:Execute(proofEntity, EntityProofRuntimeConfig.ActorType)
-		aiRegistered = aiRegistrationResult.success
-		proofResult.AI.ActorEntityRegistrationPassed = aiRegistrationResult.success
-
 		local primaryPlayer = Players:GetPlayers()[1]
 		if primaryPlayer ~= nil then
 			local hydrateResult = self._hydrateEntityReplicationCommand:Execute(primaryPlayer)
@@ -167,9 +134,6 @@ function RunOperationalProofCommand:Execute(): Result.Result<any>
 		end
 		if not runtimeRegistered and registerRuntimeResult.message ~= nil then
 			table.insert(proofResult.Acceptance.BlockingGaps, { Code = "OperationalProofRuntimeRegistrationFailed", Message = registerRuntimeResult.message, Details = registerRuntimeResult.data })
-		end
-		if not proofResult.AI.ActorEntityRegistrationPassed and aiRegistrationResult.message ~= nil then
-			table.insert(proofResult.Acceptance.BlockingGaps, { Code = "OperationalProofAIRegistrationFailed", Message = aiRegistrationResult.message, Details = aiRegistrationResult.data })
 		end
 		if not proofResult.Runtime.ReplicationBootstrapPassed then
 			table.insert(proofResult.Acceptance.BlockingGaps, {

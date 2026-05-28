@@ -28,8 +28,6 @@ function AddCommand:Execute(entity: number, key: string, featureName: string?): 
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(self._validationService, "Add", self._lifecycle:GetState(), {
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",
-			"ReadyForAIRegistration",
-			"RegisteringAI",
 			"Running",
 		})
 		if not lifecycleResult.success then

@@ -29,8 +29,6 @@ function GetLifecycleStateQuery:Execute(): Result.Result<any>
 			"CompilingECS",
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",
-			"ReadyForAIRegistration",
-			"RegisteringAI",
 			"Running",
 			"ShuttingDown",
 		})

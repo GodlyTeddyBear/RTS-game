@@ -27,8 +27,6 @@ function GetSyncContributorQuery:Execute(featureName: string): Result.Result<any
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(nil, "GetSyncContributor", self._lifecycle:GetState(), {
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",
-			"ReadyForAIRegistration",
-			"RegisteringAI",
 			"Running",
 			"ShuttingDown",
 		})

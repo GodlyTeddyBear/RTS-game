@@ -18,9 +18,7 @@ end
 function UnregisterRuntimeEntityCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_entityContext = "EntityContextService",
-		_unregisterAIEntityCommand = "UnregisterAIEntityCommand",
 		_validationService = "EntityValidationService",
-		_aiEntityRegistry = "EntityAIEntityRegistry",
 		_runtimeParticipation = "EntityRuntimeParticipationService",
 		_lifecycle = "EntityLifecycleStateMachine",
 		_instanceBindingService = "EntityInstanceBindingService",

@@ -48,8 +48,6 @@ function InitCommand:Execute(): Result.Result<boolean>
 			"CompilingECS",
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",
-			"ReadyForAIRegistration",
-			"RegisteringAI",
 			"Running",
 		})
 	end, self:_Label())

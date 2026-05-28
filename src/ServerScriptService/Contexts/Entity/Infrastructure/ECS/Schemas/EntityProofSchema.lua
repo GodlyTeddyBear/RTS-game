@@ -6,7 +6,7 @@ local EntityProofSchema = {
 	Tags = {},
 	Archetypes = {
 		ProofActor = {
-			Extends = "Entity.AIActive",
+			Extends = "Entity.Actor",
 			Components = {},
 			Tags = {},
 		},

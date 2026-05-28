@@ -1,7 +1,5 @@
 --!strict
 
-local Errors = require(script.Parent.Parent.Parent.Errors)
-
 local EntityReadinessPolicy = {}
 EntityReadinessPolicy.__index = EntityReadinessPolicy
 
@@ -42,20 +40,6 @@ function EntityReadinessPolicy:BuildStatus(input: any): any
 			EnabledFeatures = input.RuntimeParticipationStatus.EnabledFeatures,
 			BoundEntityCount = input.InstanceBindingServiceStatus.BoundEntityCount,
 			PendingBindCount = input.InstanceBindingServiceStatus.PendingBindCount,
-		},
-		AI = {
-			ActorTypesClosed = input.AIActorTypeRegistryStatus.RegistrationClosed,
-			BridgeReady = input.AIBridgeReady and input.AIBridgeStatus.Ready,
-			Ready = input.AIActorTypesReady and input.AIBridgeReady,
-			ActorTypeCount = input.AIActorTypeRegistryStatus.ActorTypeCount,
-			ProofActorTypeCount = input.AIActorTypeRegistryStatus.ProofActorTypeCount,
-			AdopterActorTypeCount = input.AIActorTypeRegistryStatus.AdopterActorTypeCount,
-			ActorTypesRequired = true,
-			StartupGateSatisfied = input.AIActorTypeRegistryStatus.StartupGateSatisfied,
-			AdoptionGateSatisfied = input.AIActorTypeRegistryStatus.AdoptionGateSatisfied,
-			RuntimeRegistrationCount = input.AIEntityRegistryStatus.RegistrationCount,
-			ResolverDependencyMode = input.AIActorTypeRegistryStatus.DependencyMode,
-			AllowsRuntimeServices = input.AIActorTypeRegistryStatus.AllowsRuntimeServices,
 		},
 		Execution = {
 			SchedulerBound = input.SchedulerBound,
@@ -115,28 +99,6 @@ function EntityReadinessPolicy:BuildAcceptance(status: any): any
 		addBlockingGap("RuntimeNotReady", "Entity runtime bridge validation has not passed")
 	end
 
-	if not status.AI.ActorTypesClosed then
-		addBlockingGap("AIRegistrationOpen", "Entity AI actor type registration is still open")
-	end
-	if not status.AI.StartupGateSatisfied then
-		addBlockingGap("MissingRequiredAIActorType", Errors.MISSING_REQUIRED_AI_ACTOR_TYPE, {
-			ActorTypeCount = status.AI.ActorTypeCount,
-			ActorTypesRequired = status.AI.ActorTypesRequired,
-		})
-	end
-	if not status.AI.AdoptionGateSatisfied then
-		addBlockingGap("MissingAdopterAIActorType", "EntityContext has no adopter-provided AI actor types", {
-			ProofActorTypeCount = status.AI.ProofActorTypeCount,
-			AdopterActorTypeCount = status.AI.AdopterActorTypeCount,
-		})
-	end
-	if not status.AI.BridgeReady then
-		addBlockingGap("AIBridgeNotReady", "Entity AI runtime bridge is not ready")
-	end
-	if status.AI.ResolverDependencyMode ~= "EntityContextOnly" then
-		addBlockingGap("InvalidResolverDependencyMode", "Entity AI resolver contract is not EntityContextOnly")
-	end
-
 	if not status.Execution.SchedulerBound then
 		addBlockingGap("SchedulerNotBound", "Entity scheduler tick has not been bound")
 	end
@@ -164,11 +126,6 @@ function EntityReadinessPolicy:BuildAcceptance(status: any): any
 		if status.Runtime.RuntimeEntityCount > 0 then
 			addBlockingGap("RuntimeEntityCleanup", "EntityContext still has runtime-participating entities", {
 				RuntimeEntityCount = status.Runtime.RuntimeEntityCount,
-			})
-		end
-		if status.AI.RuntimeRegistrationCount > 0 then
-			addBlockingGap("AIRegistrationCleanup", "EntityContext still has registered AI runtime entities", {
-				RuntimeRegistrationCount = status.AI.RuntimeRegistrationCount,
 			})
 		end
 	end

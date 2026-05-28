@@ -27,11 +27,6 @@ local SHARED_FIELD_KEYS = {
 	Lifetime = "Lifetime",
 	Target = "Target",
 	ModelRef = "ModelRef",
-	AIActorType = "AIActorType",
-	AIRuntimeProfile = "AIRuntimeProfile",
-	AIActionState = "AIActionState",
-	AIBehaviorConfig = "AIBehaviorConfig",
-	AIRegistration = "AIRegistration",
 }
 
 local EntityRuntimeSnapshotBuilder = {}
@@ -89,11 +84,6 @@ function EntityRuntimeSnapshotBuilder:BuildSnapshot(entity: number): Result.Resu
 			Lifetime = nil,
 			Target = nil,
 			ModelRef = nil,
-			AIActorType = nil,
-			AIRuntimeProfile = nil,
-			AIActionState = nil,
-			AIBehaviorConfig = nil,
-			AIRegistration = nil,
 			FeatureData = featureData,
 		}
 

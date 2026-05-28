@@ -28,8 +28,6 @@ function CreateEntityCommand:Execute(archetypeName: string, payload: { [string]:
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(self._validationService, "CreateEntity", self._lifecycle:GetState(), {
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",
-			"ReadyForAIRegistration",
-			"RegisteringAI",
 			"Running",
 		})
 		if not lifecycleResult.success then
