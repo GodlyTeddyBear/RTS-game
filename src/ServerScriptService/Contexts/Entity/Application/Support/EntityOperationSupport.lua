@@ -74,6 +74,14 @@ end
 
 function EntityOperationSupport.PrepareRuntimeEntityForRemoval(input: any, entity: number, unregisterRuntimeEntity: boolean)
 	return Result.Catch(function()
+		local cleanupRegistry = input._preDestroyCleanupRegistry
+		if cleanupRegistry ~= nil then
+			local cleanupResult = cleanupRegistry:Run(entity)
+			if not cleanupResult.success then
+				return cleanupResult
+			end
+		end
+
 		input._instanceBindingService:ClearQueuedBind(entity)
 
 		local runtimeFeatureName = input._runtimeParticipation:GetFeatureName(entity)

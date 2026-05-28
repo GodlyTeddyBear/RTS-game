@@ -27,6 +27,7 @@ function DestroyEntityCommand:Init(registry: any, _name: string)
 		_aiEntityRegistry = "EntityAIEntityRegistry",
 		_unregisterAIEntityCommand = "UnregisterAIEntityCommand",
 		_entityContext = "EntityContextService",
+		_preDestroyCleanupRegistry = "EntityPreDestroyCleanupRegistry",
 	})
 end
 

@@ -28,6 +28,7 @@ local EntitySyncContributorRegistry = require(script.Parent.Infrastructure.Persi
 local EntityRuntimeParticipationService =
 	require(script.Parent.Infrastructure.Services.EntityRuntimeParticipationService)
 local EntityRuntimeSnapshotBuilder = require(script.Parent.Infrastructure.Services.EntityRuntimeSnapshotBuilder)
+local EntityPreDestroyCleanupRegistry = require(script.Parent.Infrastructure.Services.EntityPreDestroyCleanupRegistry)
 
 local EntityValidationService = require(script.Parent.EntityDomain.Services.EntityValidationService)
 local EntityLifecyclePolicy = require(script.Parent.EntityDomain.Policies.EntityLifecyclePolicy)
@@ -35,6 +36,7 @@ local EntityReadinessPolicy = require(script.Parent.EntityDomain.Policies.Entity
 
 local InitCommand = require(script.Parent.Application.Commands.InitCommand)
 local StartCommand = require(script.Parent.Application.Commands.StartCommand)
+local FinalizeStartupCommand = require(script.Parent.Application.Commands.FinalizeStartupCommand)
 local DestroyCommand = require(script.Parent.Application.Commands.DestroyCommand)
 local RunOperationalProofCommand = require(script.Parent.Application.Commands.RunOperationalProofCommand)
 local RegisterFeatureSchemaCommand = require(script.Parent.Application.Commands.RegisterFeatureSchemaCommand)
@@ -59,6 +61,7 @@ local UnbindEntityInstanceCommand = require(script.Parent.Application.Commands.U
 local QueueEntityBindCommand = require(script.Parent.Application.Commands.QueueEntityBindCommand)
 local FlushBindQueueCommand = require(script.Parent.Application.Commands.FlushBindQueueCommand)
 local RegisterSyncContributorCommand = require(script.Parent.Application.Commands.RegisterSyncContributorCommand)
+local RegisterPreDestroyCleanupCommand = require(script.Parent.Application.Commands.RegisterPreDestroyCleanupCommand)
 local RegisterReplicationSurfaceCommand = require(script.Parent.Application.Commands.RegisterReplicationSurfaceCommand)
 local RunRuntimeSyncCommand = require(script.Parent.Application.Commands.RunRuntimeSyncCommand)
 local RunRuntimePollCommand = require(script.Parent.Application.Commands.RunRuntimePollCommand)
@@ -129,6 +132,7 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("EntityInstanceBindingRegistry", EntityInstanceBindingRegistry, "_instanceBindingRegistry"),
 	moduleSpec("EntityRevealService", EntityRevealService, "_revealService"),
 	moduleSpec("EntityRuntimeSnapshotBuilder", EntityRuntimeSnapshotBuilder, "_runtimeSnapshotBuilder"),
+	moduleSpec("EntityPreDestroyCleanupRegistry", EntityPreDestroyCleanupRegistry, "_preDestroyCleanupRegistry"),
 	moduleSpec("EntityRuntimeParticipationService", EntityRuntimeParticipationService, "_runtimeParticipation"),
 	moduleSpec("EntityInstanceBindingService", EntityInstanceBindingService, "_instanceBindingService"),
 	moduleSpec("EntityRuntimeSyncService", EntityRuntimeSyncService, "_runtimeSyncService"),
@@ -158,6 +162,7 @@ local DomainModules: { BaseContext.TModuleSpec } = {
 local ApplicationModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("InitCommand", InitCommand, "_initCommand"),
 	moduleSpec("StartCommand", StartCommand, "_startCommand"),
+	moduleSpec("FinalizeStartupCommand", FinalizeStartupCommand, "_finalizeStartupCommand"),
 	moduleSpec("DestroyCommand", DestroyCommand, "_destroyCommand"),
 	moduleSpec("RunOperationalProofCommand", RunOperationalProofCommand, "_runOperationalProofCommand"),
 	moduleSpec("RegisterFeatureSchemaCommand", RegisterFeatureSchemaCommand, "_registerFeatureSchemaCommand"),
@@ -182,6 +187,11 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("QueueEntityBindCommand", QueueEntityBindCommand, "_queueEntityBindCommand"),
 	moduleSpec("FlushBindQueueCommand", FlushBindQueueCommand, "_flushBindQueueCommand"),
 	moduleSpec("RegisterSyncContributorCommand", RegisterSyncContributorCommand, "_registerSyncContributorCommand"),
+	moduleSpec(
+		"RegisterPreDestroyCleanupCommand",
+		RegisterPreDestroyCleanupCommand,
+		"_registerPreDestroyCleanupCommand"
+	),
 	moduleSpec(
 		"RegisterReplicationSurfaceCommand",
 		RegisterReplicationSurfaceCommand,
@@ -291,6 +301,11 @@ function EntityContext:Start()
 	return Catch(function()
 		return self._startCommand:Execute()
 	end, "EntityContext:Start")
+end
+function EntityContext:_EnsureRuntimeStarted()
+	return Catch(function()
+		return self._finalizeStartupCommand:Execute()
+	end, "EntityContext:EnsureRuntimeStarted")
 end
 function EntityContext:Destroy()
 	return Catch(function()
@@ -411,6 +426,11 @@ function EntityContext:RegisterSyncContributor(featureName: string, payload: any
 	return Catch(function()
 		return self._registerSyncContributorCommand:Execute(featureName, payload)
 	end, "EntityContext:RegisterSyncContributor")
+end
+function EntityContext:RegisterPreDestroyCleanup(payload: any)
+	return Catch(function()
+		return self._registerPreDestroyCleanupCommand:Execute(payload)
+	end, "EntityContext:RegisterPreDestroyCleanup")
 end
 function EntityContext:RegisterReplicationSurface(featureName: string, payload: any)
 	return Catch(function()

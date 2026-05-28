@@ -28,6 +28,7 @@ function DestroyCommand:Init(registry: any, _name: string)
 		_runtimeScheduler = "EntityRuntimeSchedulerService",
 		_baseContext = "EntityBaseContext",
 		_entityContext = "EntityContextService",
+		_preDestroyCleanupRegistry = "EntityPreDestroyCleanupRegistry",
 	})
 end
 

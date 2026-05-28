@@ -26,6 +26,7 @@ function MarkForDestructionCommand:Init(registry: any, _name: string)
 		_aiEntityRegistry = "EntityAIEntityRegistry",
 		_runtimeParticipation = "EntityRuntimeParticipationService",
 		_unregisterAIEntityCommand = "UnregisterAIEntityCommand",
+		_preDestroyCleanupRegistry = "EntityPreDestroyCleanupRegistry",
 	})
 end
 
