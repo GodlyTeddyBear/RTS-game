@@ -149,8 +149,6 @@ function UnitCombatAdapterService:Start(registry: any, _name: string)
 	self._structureContext = registry:Get("StructureContext")
 	self._worldContext = registry:Get("WorldContext")
 	self._combatServices = self._combatContext:GetCombatRuntimeServices().value
-	local structureEntityFactoryResult = self._structureContext:GetEntityFactory()
-	self._structureEntityFactory = if structureEntityFactoryResult.success then structureEntityFactoryResult.value else nil
 	self._movementProxyResolver = UnitMovementProxyResolverFactory.Create({
 		MovementService = self._combatServices.MovementService,
 		UnitEntityFactory = self._entityFactory,
@@ -165,7 +163,6 @@ function UnitCombatAdapterService:Start(registry: any, _name: string)
 		UnitEntityFactory = self._entityFactory,
 		MovementProxyResolver = self._movementProxyResolver,
 		StructureContext = self._structureContext,
-		StructureEntityFactory = self._structureEntityFactory,
 		GetRuntimeOwner = function()
 			return self._runtimeOwner
 		end,

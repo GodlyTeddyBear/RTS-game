@@ -34,6 +34,7 @@ local StructureAnimationController = Knit.CreateController({
 
 local ENEMIES_FOLDER_NAME = "Enemies"
 local ANIMATED_ENEMY_TAG = "AnimatedEnemy"
+local ANIMATED_STRUCTURE_TAG = "AnimatedStructure"
 
 local function _IsStructureModel(instance: Instance): boolean
 	return instance:IsA("Model") and type(instance:GetAttribute("PlacementInstanceId")) == "number"
@@ -72,6 +73,8 @@ function StructureAnimationController:KnitInit()
 	self._placementsFolderConnectionAdded = nil :: RBXScriptConnection?
 	self._placementsFolderConnectionRemoved = nil :: RBXScriptConnection?
 	self._workspaceChildAddedConnection = nil :: RBXScriptConnection?
+	self._animatedStructureAddedConnection = nil :: RBXScriptConnection?
+	self._animatedStructureRemovedConnection = nil :: RBXScriptConnection?
 	self._combatService = nil
 	self._structureReplicationClient = StructureReplicationClient.new()
 end
@@ -264,6 +267,22 @@ function StructureAnimationController:KnitStart()
 			self:_ConnectPlacementsFolder(child)
 		end
 	end)
+
+	self._animatedStructureAddedConnection = CollectionService:GetInstanceAddedSignal(ANIMATED_STRUCTURE_TAG):Connect(function(instance)
+		if _IsStructureModel(instance) then
+			self:_TrackModel(instance :: Model)
+		end
+	end)
+	self._animatedStructureRemovedConnection = CollectionService:GetInstanceRemovedSignal(ANIMATED_STRUCTURE_TAG):Connect(function(instance)
+		if instance:IsA("Model") then
+			self:_UntrackModel(instance)
+		end
+	end)
+	for _, instance in ipairs(CollectionService:GetTagged(ANIMATED_STRUCTURE_TAG)) do
+		if _IsStructureModel(instance) then
+			self:_TrackModel(instance :: Model)
+		end
+	end
 end
 
 function StructureAnimationController:Destroy()
@@ -278,6 +297,14 @@ function StructureAnimationController:Destroy()
 	if self._workspaceChildAddedConnection ~= nil then
 		self._workspaceChildAddedConnection:Disconnect()
 		self._workspaceChildAddedConnection = nil
+	end
+	if self._animatedStructureAddedConnection ~= nil then
+		self._animatedStructureAddedConnection:Disconnect()
+		self._animatedStructureAddedConnection = nil
+	end
+	if self._animatedStructureRemovedConnection ~= nil then
+		self._animatedStructureRemovedConnection:Disconnect()
+		self._animatedStructureRemovedConnection = nil
 	end
 
 	for model in self._tracked do

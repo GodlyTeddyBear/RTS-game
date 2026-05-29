@@ -3,20 +3,15 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
+local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
-local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
-local Ok = Result.Ok
 local Ensure = Result.Ensure
+local Ok = Result.Ok
 local Try = Result.Try
 
---[=[
-	@class ApplyDamageStructureCommand
-	Applies damage to a structure and disables it when health reaches zero.
-	@server
-]=]
 local ApplyDamageStructureCommand = {}
 ApplyDamageStructureCommand.__index = ApplyDamageStructureCommand
 setmetatable(ApplyDamageStructureCommand, BaseCommand)
@@ -28,11 +23,8 @@ end
 
 function ApplyDamageStructureCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
-		_factory = "StructureEntityFactory",
-		_instanceFactory = "StructureInstanceFactory",
-		_combatAdapterService = "StructureCombatAdapterService",
-		_miningAdapterService = "StructureMiningAdapterService",
-		_replicationService = "StructureECSReplicationService",
+		_entityContext = "EntityContext",
+		_readService = "StructureEntityReadService",
 	})
 end
 
@@ -48,44 +40,34 @@ function ApplyDamageStructureCommand:Execute(entity: any, amount: number): Resul
 			Amount = amount,
 			Entity = entity,
 		})
-		Ensure(self._factory:IsPlaced(entity), "EntityNotFound", Errors.ENTITY_NOT_FOUND, {
+		Ensure(self._readService:IsPlaced(entity), "EntityNotFound", Errors.ENTITY_NOT_FOUND, { Entity = entity })
+
+		local health = self._readService:GetHealth(entity)
+		Ensure(type(health) == "table", "EntityNotFound", Errors.ENTITY_NOT_FOUND, { Entity = entity })
+		local identity = self._readService:GetIdentity(entity)
+		Ensure(type(identity) == "table" and type(identity.EntityId) == "string", "EntityNotFound", Errors.ENTITY_NOT_FOUND, {
 			Entity = entity,
 		})
+		local sourcePlacement = self._readService:GetSourcePlacement(entity)
 
-		local instanceRef = self._factory:GetInstanceRef(entity)
-		Ensure(instanceRef ~= nil, "EntityNotFound", Errors.ENTITY_NOT_FOUND, {
-			Entity = entity,
-		})
+		local nextHp = math.max(0, health.Current - amount)
+		Try(self._entityContext:Set(entity, "Health", {
+			Current = nextHp,
+			Max = health.Max,
+		}, "Entity"))
+		Try(self._entityContext:Add(entity, "DirtyTag", "Entity"))
 
-		local health = self._factory:GetHealth(entity)
-		Ensure(health ~= nil, "EntityNotFound", Errors.ENTITY_NOT_FOUND, {
-			Entity = entity,
-		})
-
-		local identity = self._factory:GetIdentity(entity)
-		Ensure(identity ~= nil and type(identity.StructureId) == "string" and identity.StructureId ~= "", "EntityNotFound", Errors.ENTITY_NOT_FOUND, {
-			Entity = entity,
-		})
-
-		local didDie = self._factory:ApplyDamage(entity, amount)
-		if didDie then
-			Try(self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Structure", identity.StructureId)))
-			if self._factory:IsActive(entity) then
-				self._combatAdapterService:UnregisterActor(entity)
-				self._miningAdapterService:UnregisterActor(entity)
-			end
-			self._replicationService:UnregisterStructureEntity(entity)
-			self._instanceFactory:DestroyInstance(entity)
-			self._factory:ClearModelRef(entity)
-			self._factory:DeleteEntity(entity)
-			Try(self._placementContext:DestroyStructureInstance(instanceRef.InstanceId))
-			return Ok(true)
+		if nextHp > 0 then
+			return Ok(false)
 		end
 
-		return Ok(false)
+		Try(self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Structure", identity.EntityId)))
+		if type(sourcePlacement) == "table" and type(sourcePlacement.InstanceId) == "number" then
+			Try(self._placementContext:DestroyStructureInstance(sourcePlacement.InstanceId))
+		end
+		Try(self._entityContext:DestroyEntity(entity))
+		return Ok(true)
 	end, "Structure:ApplyDamageStructureCommand")
 end
 
 return ApplyDamageStructureCommand
-
-

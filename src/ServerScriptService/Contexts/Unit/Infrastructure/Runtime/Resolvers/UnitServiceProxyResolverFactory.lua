@@ -9,7 +9,6 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 local UnitConfig = require(ReplicatedStorage.Contexts.Unit.Config.UnitConfig)
 
 local UnitServiceProxyResolverFactory = {}
@@ -43,7 +42,6 @@ function UnitServiceProxyResolverFactory.Create(dependencies: {
 	UnitEntityFactory: any,
 	MovementProxyResolver: any?,
 	StructureContext: any?,
-	StructureEntityFactory: any?,
 	GetRuntimeOwner: (() -> any)?,
 	}): any
 	return table.freeze({
@@ -51,7 +49,6 @@ function UnitServiceProxyResolverFactory.Create(dependencies: {
 		BuildServices = function(entity: number, currentTime: number, tickId: number?): { [string]: any }
 			local unitEntityFactory = dependencies.UnitEntityFactory
 			local structureContext = dependencies.StructureContext
-			local structureEntityFactory = dependencies.StructureEntityFactory
 			local services = {
 				CurrentTime = currentTime,
 				UnitEntityFactory = {
@@ -169,14 +166,15 @@ function UnitServiceProxyResolverFactory.Create(dependencies: {
 					unitEntityFactory:ClearBuilderAssignment(entity)
 				end,
 				GetStructurePosition = function(_proxy: any, _runtimeId: number, structureEntity: number): Vector3?
-					if structureEntityFactory == nil then
+					if structureContext == nil then
 						return nil
 					end
 
-					return structureEntityFactory:GetPosition(structureEntity)
+					local result = structureContext:GetStructurePosition(structureEntity)
+					return if result.success then result.value else nil
 				end,
 				IsStructureBuildableForBuilder = function(_proxy: any, _runtimeId: number, structureEntity: number): boolean
-					if structureEntityFactory == nil then
+					if structureContext == nil then
 						return false
 					end
 					if services.BuilderConstructionService:GetBuildWorkPerSecond(entity) == nil then
@@ -191,12 +189,15 @@ function UnitServiceProxyResolverFactory.Create(dependencies: {
 						return false
 					end
 
-					return structureEntityFactory:IsPlaced(structureEntity)
-						and structureEntityFactory:IsUnderConstruction(structureEntity)
-						and structureEntityFactory:IsOwnedByUser(structureEntity, ownerUserId)
+					local transform = unitEntityFactory:GetPosition(entity)
+					local builderPosition = if transform ~= nil then transform.CFrame.Position else nil
+					local buildRange = services.BuilderConstructionService:GetBuildRange(entity)
+					local result =
+						structureContext:IsStructureBuildableForBuilder(structureEntity, ownerUserId, builderPosition, buildRange)
+					return result.success and result.value == true
 				end,
 				FindNearestOwnedUnfinishedStructure = function(_proxy: any, _runtimeId: number): number?
-					if structureEntityFactory == nil then
+					if structureContext == nil then
 						return nil
 					end
 					if services.BuilderConstructionService:GetBuildWorkPerSecond(entity) == nil then
@@ -217,27 +218,12 @@ function UnitServiceProxyResolverFactory.Create(dependencies: {
 						return nil
 					end
 
-					local candidateEntities = structureEntityFactory:QueryOwnedUnderConstructionEntities(ownerUserId)
-					local candidatePositions = {}
-					local candidateEntityByIndex = {}
-
-					for _, candidateEntity in ipairs(candidateEntities) do
-						local candidatePosition = structureEntityFactory:GetPosition(candidateEntity)
-						if candidatePosition ~= nil then
-							table.insert(candidatePositions, candidatePosition)
-							candidateEntityByIndex[#candidatePositions] = candidateEntity
-						end
-					end
-
-					local nearestIndex = SpatialQuery.FindNearestPosition(builderPosition, candidatePositions)
-					if nearestIndex == nil then
-						return nil
-					end
-
-					return candidateEntityByIndex[nearestIndex]
+					local result =
+						structureContext:FindNearestOwnedUnfinishedStructure(ownerUserId, builderPosition, services.BuilderConstructionService:GetBuildRange(entity))
+					return if result.success then result.value else nil
 				end,
 				IsBuilderWithinBuildRange = function(_proxy: any, _runtimeId: number, structureEntity: number): boolean
-					if structureEntityFactory == nil then
+					if structureContext == nil then
 						return false
 					end
 
@@ -248,12 +234,9 @@ function UnitServiceProxyResolverFactory.Create(dependencies: {
 
 					local transform = unitEntityFactory:GetPosition(entity)
 					local builderPosition = if transform ~= nil then transform.CFrame.Position else nil
-					local structurePosition = structureEntityFactory:GetPosition(structureEntity)
-					if builderPosition == nil or structurePosition == nil then
-						return false
-					end
-
-					return SpatialQuery.IsWithinRange(builderPosition, structurePosition, buildRange)
+					local result =
+						structureContext:IsStructureBuildableForBuilder(structureEntity, _ResolveBuilderOwnerUserId(unitEntityFactory, entity) or -1, builderPosition, buildRange)
+					return result.success and result.value == true
 				end,
 				ContributeToStructure = function(_proxy: any, _runtimeId: number, structureEntity: number, dt: number)
 					if structureContext == nil then

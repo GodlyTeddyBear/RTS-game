@@ -1,33 +1,24 @@
 --!strict
 
---[[
-	Module: StructureContext
-	Purpose: Owns server-authoritative structure registration, cleanup, and combat scheduling.
-	Used In System: Started by Knit on the server and invoked by placement and run-lifecycle callbacks.
-	High-Level Flow: Register infrastructure -> initialize ECS and commands -> bridge placement and run events -> schedule targeting and attacks.
-	Boundaries: Owns structure orchestration only; does not own placement validation, enemy selection, or client presentation.
-]]
-
--- [Dependencies]
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 local ServerStorage = game:GetService("ServerStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
+local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
-local Result = require(ReplicatedStorage.Utilities.Result)
+local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
+local Result = require(ReplicatedStorage.Utilities.Result)
+local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.StructureConfig)
 local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.StructureTypes)
+local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
 
-local StructureECSWorldService = require(script.Parent.Infrastructure.ECS.StructureECSWorldService)
-local StructureComponentRegistry = require(script.Parent.Infrastructure.ECS.StructureComponentRegistry)
-local StructureEntityFactory = require(script.Parent.Infrastructure.ECS.StructureEntityFactory)
-local StructureInstanceFactory = require(script.Parent.Infrastructure.ECS.StructureInstanceFactory)
-local StructureCombatAdapterService = require(script.Parent.Infrastructure.Services.StructureCombatAdapterService)
-local StructureMiningAdapterService = require(script.Parent.Infrastructure.Services.StructureMiningAdapterService)
-local StructureGameObjectSyncService = require(script.Parent.Infrastructure.Persistence.StructureGameObjectSyncService)
-local StructureECSReplicationService = require(script.Parent.Infrastructure.Persistence.StructureECSReplicationService)
+local StructureEntityReadService = require(script.Parent.Infrastructure.Entity.StructureEntityReadService)
+local StructureEntitySchema = require(script.Parent.Infrastructure.Entity.StructureEntitySchema)
+local StructureActionExecutionSystem = require(script.Parent.Infrastructure.Entity.StructureActionExecutionSystem)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
+local StructureAIProfiles = require(script.Parent.Parent.AI.Config.Profiles.StructureAIProfiles)
 local RegisterStructureCommand = require(script.Parent.Application.Commands.RegisterStructureCommand)
 local AdvanceConstructionCommand = require(script.Parent.Application.Commands.AdvanceConstructionCommand)
 local ApplyDamageStructureCommand = require(script.Parent.Application.Commands.ApplyDamageStructureCommand)
@@ -39,135 +30,83 @@ local Catch = Result.Catch
 local Ok = Result.Ok
 
 type StructureRecord = PlacementTypes.StructureRecord
-type StructureAttackPayload = StructureTypes.StructureAttackPayload
 type RunState = "Idle" | "Prep" | "Wave" | "Resolution" | "Climax" | "Endless" | "RunEnd"
+
+local ANIMATED_STRUCTURE_TAG = "AnimatedStructure"
+
+local function moduleSpec(name: string, module: any, cacheAs: string?): BaseContext.TModuleSpec
+	return {
+		Name = name,
+		Module = module,
+		CacheAs = cacheAs,
+	}
+end
+
+local function ensureAnimationsFolderValue(model: Model, animationsFolder: Folder?)
+	local animationsFolderRef = model:FindFirstChild("AnimationsFolder")
+	if animationsFolderRef ~= nil and not animationsFolderRef:IsA("ObjectValue") then
+		animationsFolderRef:Destroy()
+		animationsFolderRef = nil
+	end
+
+	if animationsFolderRef == nil then
+		animationsFolderRef = Instance.new("ObjectValue")
+		animationsFolderRef.Name = "AnimationsFolder"
+		animationsFolderRef.Parent = model
+	end
+
+	if animationsFolder ~= nil then
+		(animationsFolderRef :: ObjectValue).Value = animationsFolder
+	end
+end
+
+local function ensureHumanoid(model: Model)
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if humanoid == nil then
+		humanoid = Instance.new("Humanoid")
+		humanoid.Parent = model
+	end
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+end
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
-		Name = "ClientSignals",
+		Name = "StructureEntityReadService",
 		Factory = function(service: any, _baseContext: any)
-			return service.Client
+			return StructureEntityReadService.new(service._entityContext)
 		end,
-	},
-	{
-		Name = "StructureComponentRegistry",
-		Module = StructureComponentRegistry,
-	},
-	{
-		Name = "StructureEntityFactory",
-		Module = StructureEntityFactory,
-		CacheAs = "_entityFactory",
-	},
-	{
-		Name = "StructureInstanceFactory",
-		Module = StructureInstanceFactory,
-		CacheAs = "_instanceFactory",
-	},
-	{
-		Name = "StructureCombatAdapterService",
-		Module = StructureCombatAdapterService,
-		CacheAs = "_combatAdapterService",
-	},
-	{
-		Name = "StructureMiningAdapterService",
-		Module = StructureMiningAdapterService,
-		CacheAs = "_miningAdapterService",
-	},
-	{
-		Name = "StructureGameObjectSyncService",
-		Module = StructureGameObjectSyncService,
-		CacheAs = "_gameObjectSyncService",
-	},
-	{
-		Name = "StructureECSReplicationService",
-		Module = StructureECSReplicationService,
-		CacheAs = "_replicationService",
-	},
-	{
-		Name = "OnStructureAttacked",
-		Factory = function(service: any, _baseContext: any)
-			service._structureAttackedSignal = Instance.new("BindableEvent")
-			service.StructureAttacked = service._structureAttackedSignal.Event
-			return function(payload: StructureAttackPayload)
-				service._structureAttackedSignal:Fire(payload)
-			end
-		end,
+		CacheAs = "_structureReadService",
 	},
 }
 
 local DomainModules: { BaseContext.TModuleSpec } = {
-	{
-		Name = "RegisterStructurePolicy",
-		Module = RegisterStructurePolicy,
-	},
+	moduleSpec("RegisterStructurePolicy", RegisterStructurePolicy),
 }
 
 local ApplicationModules: { BaseContext.TModuleSpec } = {
-	{
-		Name = "RegisterStructureCommand",
-		Module = RegisterStructureCommand,
-		CacheAs = "_registerStructureCommand",
-	},
-	{
-		Name = "AdvanceConstructionCommand",
-		Module = AdvanceConstructionCommand,
-		CacheAs = "_advanceConstructionCommand",
-	},
-	{
-		Name = "ApplyDamageStructureCommand",
-		Module = ApplyDamageStructureCommand,
-		CacheAs = "_applyDamageStructureCommand",
-	},
-	{
-		Name = "CleanupAllCommand",
-		Module = CleanupAllCommand,
-		CacheAs = "_cleanupAllCommand",
-	},
-	{
-		Name = "GetActiveStructuresQuery",
-		Module = GetActiveStructuresQuery,
-		CacheAs = "_getActiveStructuresQuery",
-	},
-	{
-		Name = "GetStructureCountQuery",
-		Module = GetStructureCountQuery,
-		CacheAs = "_getStructureCountQuery",
-	},
+	moduleSpec("RegisterStructureCommand", RegisterStructureCommand, "_registerStructureCommand"),
+	moduleSpec("AdvanceConstructionCommand", AdvanceConstructionCommand, "_advanceConstructionCommand"),
+	moduleSpec("ApplyDamageStructureCommand", ApplyDamageStructureCommand, "_applyDamageStructureCommand"),
+	moduleSpec("CleanupAllCommand", CleanupAllCommand, "_cleanupAllCommand"),
+	moduleSpec("GetActiveStructuresQuery", GetActiveStructuresQuery, "_getActiveStructuresQuery"),
+	moduleSpec("GetStructureCountQuery", GetStructureCountQuery, "_getStructureCountQuery"),
 }
 
-local StructureModules: BaseContext.TModuleLayers = {
-	Infrastructure = InfrastructureModules,
-	Domain = DomainModules,
-	Application = ApplicationModules,
-}
-
--- [Public API]
-
---[=[
-	@class StructureContext
-	Owns the server-authoritative structure combat layer and ECS lifecycle.
-	@server
-]=]
 local StructureContext = Knit.CreateService({
 	Name = "StructureContext",
-	Client = {
-		StructureBootstrap = Knit.CreateSignal(),
-		StructureReliable = Knit.CreateSignal(),
-		StructureUnreliable = Knit.CreateSignal(),
-		StructureEntity = Knit.CreateSignal(),
+	Client = {},
+	Modules = {
+		Infrastructure = InfrastructureModules,
+		Domain = DomainModules,
+		Application = ApplicationModules,
 	},
-	WorldService = {
-		Name = "StructureECSWorldService",
-		Module = StructureECSWorldService,
-	},
-	Modules = StructureModules,
 	ExternalServices = {
-		{ Name = "WorldContext" },
-		{ Name = "EnemyContext" },
-		{ Name = "EntityContext" },
-		{ Name = "CombatContext" },
-		{ Name = "MiningContext" },
-		{ Name = "TeamContext" },
+		{ Name = "AIContext", CacheAs = "_aiContext" },
+		{ Name = "EntityContext", CacheAs = "_entityContext" },
+		{ Name = "EnemyContext", CacheAs = "_enemyContext" },
+		{ Name = "CombatContext", CacheAs = "_combatContext" },
+		{ Name = "MiningContext", CacheAs = "_miningContext" },
+		{ Name = "TeamContext", CacheAs = "_teamContext" },
 		{ Name = "RunContext", CacheAs = "_runContext" },
 		{ Name = "PlacementContext", CacheAs = "_placementContext" },
 	},
@@ -176,77 +115,42 @@ local StructureContext = Knit.CreateService({
 		Fields = {
 			{ Field = "_structurePlacedConnection", Method = "Disconnect" },
 			{ Field = "_runStateChangedConnection", Method = "Disconnect" },
-			{ Field = "_structureAttackedSignal", Method = "Destroy" },
 		},
 	},
 })
 
 local StructureBaseContext = BaseContext.new(StructureContext)
 
---[=[
-	@prop StructureAttacked RBXScriptSignal
-	@within StructureContext
-	Fires when a structure schedules an attack for CombatContext to resolve.
-]=]
-StructureContext.StructureAttacked = nil
-
---[=[
-	Initializes the structure registry, commands, ECS world, and attack signal.
-	@within StructureContext
-]=]
 function StructureContext:KnitInit()
 	StructureBaseContext:KnitInit()
 	self._structurePlacedConnection = nil :: RBXScriptConnection?
 	self._runStateChangedConnection = nil :: RBXScriptConnection?
+	self._structureAssetRegistry = nil :: any
+	self._animationsFolder = nil :: Folder?
+	self:_InitializeStructureAssets()
 end
 
---[=[
-	Wires the placement bridge, run cleanup hook, and Heartbeat systems.
-	@within StructureContext
-]=]
 function StructureContext:KnitStart()
 	StructureBaseContext:KnitStart()
-	StructureBaseContext:RegisterMethodSystem("CombatTick", "_entityFactory", "FlushPendingDeletes")
-	StructureBaseContext:RegisterSyncSystem("_gameObjectSyncService", "SyncAll", "StructureSync")
-	StructureBaseContext:RegisterMethodSystem("StructureSync", "_replicationService", "FlushReliable")
-	StructureBaseContext:RegisterMethodSystem("StructureSync", "_replicationService", "FlushUnreliable")
-	self._combatAdapterService:ConfigureRuntimeOwner(self)
-	local registerActorTypeResult = self._combatAdapterService:RegisterActorType()
-	if not registerActorTypeResult.success then
-		Result.MentionError("Structure:KnitStart", "Failed to register structure combat actor type", {
-			CauseType = registerActorTypeResult.type,
-			CauseMessage = registerActorTypeResult.message,
-			Details = registerActorTypeResult.data,
-		}, registerActorTypeResult.type)
-		error(
-			string.format(
-				"StructureContext failed to register combat actor type on April 30, 2026 startup path: [%s] %s",
-				tostring(registerActorTypeResult.type),
-				tostring(registerActorTypeResult.message)
-			)
-		)
+
+	local entityResult = self:_RegisterEntityInfrastructure()
+	if not entityResult.success then
+		error(("StructureContext failed to register Entity infrastructure: [%s] %s"):format(
+			tostring(entityResult.type),
+			tostring(entityResult.message)
+		))
 	end
 
-	self._miningAdapterService:ConfigureRuntimeOwner(self)
-	local registerMiningActorTypeResult = self._miningAdapterService:RegisterActorType()
-	if not registerMiningActorTypeResult.success then
-		Result.MentionError("Structure:KnitStart", "Failed to register structure mining actor type", {
-			CauseType = registerMiningActorTypeResult.type,
-			CauseMessage = registerMiningActorTypeResult.message,
-			Details = registerMiningActorTypeResult.data,
-		}, registerMiningActorTypeResult.type)
-		error(
-			string.format(
-				"StructureContext failed to register mining actor type on May 1, 2026 startup path: [%s] %s",
-				tostring(registerMiningActorTypeResult.type),
-				tostring(registerMiningActorTypeResult.message)
-			)
-		)
+	local aiResult = self:_RegisterAIContracts()
+	if not aiResult.success then
+		error(("StructureContext failed to register AI contracts: [%s] %s"):format(
+			tostring(aiResult.type),
+			tostring(aiResult.message)
+		))
 	end
 
-	-- Register new placements as ECS entities as soon as PlacementContext announces them.
 	self._structurePlacedConnection = self._placementContext.StructurePlaced:Connect(function(record: StructureRecord)
-		local result = self:_RegisterStructure(record)
+		local result = self:RegisterStructure(record)
 		if not result.success then
 			Result.MentionError("Structure:OnStructurePlaced", "Failed to register structure", {
 				CauseType = result.type,
@@ -257,7 +161,6 @@ function StructureContext:KnitStart()
 		end
 	end)
 
-	-- Tear down all structures when the run ends so the next session starts clean.
 	self._runStateChangedConnection = self._runContext.StateChanged:Connect(function(newState: RunState, previousState: RunState)
 		local isRunEndCleanup = newState == "RunEnd"
 		local isFreshRunStartCleanup = previousState == "Idle" and newState == "Prep"
@@ -265,7 +168,7 @@ function StructureContext:KnitStart()
 			return
 		end
 
-		local result = self:_CleanupAll()
+		local result = self:CleanupAll()
 		if not result.success then
 			Result.MentionError("Structure:OnRunEnd", "Failed to cleanup structures", {
 				CauseType = result.type,
@@ -275,86 +178,440 @@ function StructureContext:KnitStart()
 	end)
 end
 
--- [Private Helpers]
-
--- Registers a structure record with the ECS world through the application command stack.
-function StructureContext:_RegisterStructure(record: StructureRecord): Result.Result<number?>
+function StructureContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 	return Catch(function()
-		return self._registerStructureCommand:Execute(record)
-	end, "Structure:RegisterStructure")
+		local schemaResult = self._entityContext:RegisterFeatureSchema("Structure", StructureEntitySchema)
+		if not schemaResult.success then
+			return schemaResult
+		end
+
+		local bindingResult = self._entityContext:RegisterInstanceBinding("Structure", {
+			FeatureName = "Structure",
+			ResolveAsset = function(_entityContext: any, snapshot: any): Instance
+				local stats = snapshot.FeatureData.Stats or {}
+				return self:_BuildStructureModel(stats.StructureType)
+			end,
+			PrepareInstance = function(_entityContext: any, instance: Instance, snapshot: any)
+				if not instance:IsA("Model") then
+					return
+				end
+				self:_PrepareStructureModel(instance :: Model, snapshot)
+			end,
+			BuildRevealAttributes = function(_entityContext: any, snapshot: any)
+				local identity = snapshot.Identity or {}
+				local stats = snapshot.FeatureData.Stats or {}
+				local sourcePlacement = snapshot.FeatureData.SourcePlacement or {}
+				return {
+					PlacementInstanceId = sourcePlacement.InstanceId,
+					StructureId = identity.EntityId,
+					StructureType = stats.StructureType or identity.DefinitionId,
+				}
+			end,
+			BuildRevealTags = function()
+				return {
+					[ANIMATED_STRUCTURE_TAG] = true,
+				}
+			end,
+			BuildName = function(_entityContext: any, snapshot: any)
+				local identity = snapshot.Identity or {}
+				local stats = snapshot.FeatureData.Stats or {}
+				return ("%s_%s"):format(tostring(stats.StructureType or "Structure"), tostring(identity.EntityId))
+			end,
+		})
+		if not bindingResult.success then
+			return bindingResult
+		end
+
+		local syncResult = self._entityContext:RegisterSyncContributor("Structure", {
+			FeatureName = "Structure",
+			QuerySyncEntities = function(entityContext: any): { number }
+				local queryResult = entityContext:Query({
+					FeatureName = "Structure",
+					Keys = { "PlacedTag" },
+				})
+				return if queryResult.success then queryResult.value else {}
+			end,
+			SyncEntity = function(entityContext: any, entity: number, model: Model)
+				self:_SyncStructureEntity(entityContext, entity, model)
+			end,
+		})
+		if not syncResult.success then
+			return syncResult
+		end
+
+		local replicationResult = self._entityContext:RegisterReplicationSurface("Structure", {
+			FeatureName = "Structure",
+			BuildSchema = function(entityContext: any): any
+				local entityComponentsResult = entityContext:GetFeatureComponents("Entity")
+				local structureComponentsResult = entityContext:GetFeatureComponents("Structure")
+				assert(entityComponentsResult.success, "Structure replication surface missing Entity compiled components")
+				assert(structureComponentsResult.success, "Structure replication surface missing Structure compiled components")
+
+				return {
+					sharedComponents = {
+						entityComponentsResult.value.Identity,
+						entityComponentsResult.value.Health,
+						structureComponentsResult.value.Construction,
+						structureComponentsResult.value.AnimationState,
+						structureComponentsResult.value.AnimationLooping,
+						structureComponentsResult.value.TargetEnemyId,
+					},
+					sharedTags = {
+						structureComponentsResult.value.PlacedTag,
+						structureComponentsResult.value.UnderConstructionTag,
+						structureComponentsResult.value.OperationalTag,
+					},
+				}
+			end,
+		})
+		if not replicationResult.success then
+			return replicationResult
+		end
+
+		return self._entityContext:RegisterSystem("Execute", {
+			Name = "StructureActionExecutionSystem",
+			Phase = "Execute",
+			Reads = {
+				"Structure.Stats",
+				"Structure.Construction",
+				"Structure.OperationalTag",
+				"Entity.Target",
+				"AI.ActionIntent",
+				"AI.ActionState",
+			},
+			Writes = {
+				"Structure.Stats",
+				"Structure.AnimationState",
+				"Structure.AnimationLooping",
+				"Structure.TargetEnemyId",
+				"Entity.Target",
+				"Entity.DirtyTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return StructureActionExecutionSystem.new(entityFactory, {
+					EntityContext = self._entityContext,
+					EnemyContext = self._enemyContext,
+					CombatContext = self._combatContext,
+					MiningContext = self._miningContext,
+				})
+			end,
+		})
+	end, "StructureContext:RegisterEntityInfrastructure")
 end
 
-function StructureContext:_RegisterOperationalRuntime(entity: number): Result.Result<boolean>
+function StructureContext:_RegisterAIContracts(): Result.Result<boolean>
 	return Catch(function()
-		if self._combatAdapterService:ShouldRegisterActor(entity) then
-			local combatResult = self._combatAdapterService:RegisterActor(entity)
-			if not combatResult.success then
-				return combatResult
+		local function acceptDuplicate(result: Result.Result<any>, duplicateType: string): Result.Result<boolean>
+			if result.success or result.type == duplicateType then
+				return Ok(true)
+			end
+			return result
+		end
+
+		local evaluations = {
+			{
+				EvaluationId = "StructureIsOperational",
+				Evaluate = function(context: any): boolean
+					return type(context) == "table"
+						and type(context.Facts) == "table"
+						and context.Facts.StructureOperational == true
+				end,
+			},
+			{
+				EvaluationId = "StructureCanAttack",
+				Evaluate = function(context: any): boolean
+					return type(context) == "table"
+						and type(context.Facts) == "table"
+						and context.Facts.StructureOperational == true
+						and type(context.Facts.TargetEntity) == "number"
+				end,
+			},
+		}
+		for _, evaluation in ipairs(evaluations) do
+			local result = acceptDuplicate(self._aiContext:RegisterEvaluation(evaluation), "DuplicateEvaluation")
+			if not result.success then
+				return result
 			end
 		end
 
-		if self._miningAdapterService:ShouldRegisterActor(entity) then
-			local miningResult = self._miningAdapterService:RegisterActor(entity)
-			if not miningResult.success then
-				return miningResult
+		local actions = {
+			{
+				ActionId = "StructureIdle",
+				ProduceIntent = function(_context: any): any
+					return {
+						Data = {
+							Reason = "Idle",
+						},
+					}
+				end,
+			},
+			{
+				ActionId = "StructureAttack",
+				ProduceIntent = function(context: any): any
+					local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
+					return {
+						TargetEntity = facts.TargetEntity,
+						Data = facts.AttackData,
+					}
+				end,
+			},
+			{
+				ActionId = "StructureExtract",
+				ProduceIntent = function(context: any): any
+					local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
+					return {
+						Data = facts.ExtractData,
+					}
+				end,
+			},
+			{
+				ActionId = "StructureStasis",
+				ProduceIntent = function(context: any): any
+					local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
+					return {
+						Data = facts.StasisData,
+					}
+				end,
+			},
+		}
+		for _, action in ipairs(actions) do
+			local result = acceptDuplicate(self._aiContext:RegisterActionDefinition(action), "DuplicateActionDefinition")
+			if not result.success then
+				return result
+			end
+		end
+
+		local behaviorPayloads = {
+			{
+				DefinitionId = "StructureIdleBehavior",
+				Definition = "StructureIdle",
+			},
+			{
+				DefinitionId = "StructureAttackBehavior",
+				Definition = {
+					Priority = {
+						{
+							Sequence = {
+								"StructureCanAttack",
+								"StructureAttack",
+							},
+						},
+						"StructureIdle",
+					},
+				},
+			},
+			{
+				DefinitionId = "StructureExtractBehavior",
+				Definition = {
+					Priority = {
+						{
+							Sequence = {
+								"StructureIsOperational",
+								"StructureExtract",
+							},
+						},
+						"StructureIdle",
+					},
+				},
+			},
+			{
+				DefinitionId = "StructureStasisBehavior",
+				Definition = {
+					Priority = {
+						{
+							Sequence = {
+								"StructureIsOperational",
+								"StructureStasis",
+							},
+						},
+						"StructureIdle",
+					},
+				},
+			},
+		}
+		for _, behaviorPayload in ipairs(behaviorPayloads) do
+			local result = acceptDuplicate(self._aiContext:RegisterBehaviorDefinition(behaviorPayload), "DuplicateBehaviorDefinition")
+			if not result.success then
+				return result
+			end
+		end
+
+		local providerResult = acceptDuplicate(self._aiContext:RegisterFactProvider({
+			ProviderId = "StructureFacts",
+			BuildFacts = function(context: any): any
+				return self:_BuildStructureFacts(context)
+			end,
+		}), "DuplicateFactProvider")
+		if not providerResult.success then
+			return providerResult
+		end
+
+		for _, profilePayload in pairs(StructureAIProfiles) do
+			local result = acceptDuplicate(self._aiContext:RegisterProfile(profilePayload), "DuplicateProfile")
+			if not result.success then
+				return result
 			end
 		end
 
 		return Ok(true)
-	end, "Structure:RegisterOperationalRuntime")
+	end, "StructureContext:RegisterAIContracts")
 end
 
--- Clears every active structure entity from the isolated world.
-function StructureContext:_CleanupAll(): Result.Result<boolean>
+function StructureContext:_InitializeStructureAssets()
+	local assetsRoot = ReplicatedStorage:FindFirstChild("Assets")
+	if assetsRoot == nil or not assetsRoot:IsA("Folder") then
+		return
+	end
+
+	local structuresFolder = assetsRoot:FindFirstChild("Structures")
+	if structuresFolder ~= nil and structuresFolder:IsA("Folder") then
+		self._structureAssetRegistry = AssetFetcher.CreateStructureRegistry(structuresFolder)
+	end
+
+	local animationsFolder = assetsRoot:FindFirstChild("Animations")
+	if animationsFolder ~= nil and animationsFolder:IsA("Folder") then
+		self._animationsFolder = animationsFolder
+	end
+end
+
+function StructureContext:_BuildStructureModel(structureType: string?): Model
+	local resolvedType = if type(structureType) == "string" and structureType ~= "" then structureType else "SentryTurret"
+	if self._structureAssetRegistry ~= nil then
+		local model = self._structureAssetRegistry:GetStructureModel(resolvedType)
+		if model ~= nil then
+			return model
+		end
+	end
+
+	local model = Instance.new("Model")
+	model.Name = resolvedType
+	local rootPart = Instance.new("Part")
+	rootPart.Name = "Primary"
+	rootPart.Size = Vector3.new(4, 4, 4)
+	rootPart.Anchored = true
+	rootPart.CanCollide = false
+	rootPart.Parent = model
+	model.PrimaryPart = rootPart
+	return model
+end
+
+function StructureContext:_PrepareStructureModel(model: Model, snapshot: any)
+	local identity = snapshot.Identity or {}
+	local stats = snapshot.FeatureData.Stats or {}
+	local sourcePlacement = snapshot.FeatureData.SourcePlacement or {}
+	local structureType = if type(stats.StructureType) == "string" and stats.StructureType ~= "" then stats.StructureType else "Structure"
+	local structureId = if type(identity.EntityId) == "string" and identity.EntityId ~= "" then identity.EntityId else tostring(sourcePlacement.InstanceId)
+
+	model.Name = ("%s_%s"):format(structureType, structureId)
+	model:SetAttribute("PlacementInstanceId", sourcePlacement.InstanceId)
+	model:SetAttribute("StructureId", structureId)
+	model:SetAttribute("StructureType", structureType)
+	ensureHumanoid(model)
+	ensureAnimationsFolderValue(model, self._animationsFolder)
+	model:SetAttribute("AnimationState", model:GetAttribute("AnimationState") or "Idle")
+	model:SetAttribute("AnimationLooping", if model:GetAttribute("AnimationLooping") == nil then true else model:GetAttribute("AnimationLooping"))
+
+	if sourcePlacement.RotationQuarterTurns ~= 0 then
+		ModelPlus.RotateYaw(model, math.rad((sourcePlacement.RotationQuarterTurns or 0) * 90))
+	end
+	if typeof(sourcePlacement.WorldPos) == "Vector3" then
+		ModelPlus.MoveBottomAligned(model, sourcePlacement.WorldPos)
+	end
+
+	EntityCollisionService:ApplyStructureModel(model)
+end
+
+function StructureContext:_SyncStructureEntity(entityContext: any, entity: number, model: Model)
+	local identity = self:_ReadEntityValue(entityContext, entity, "Identity", "Entity")
+	local health = self:_ReadEntityValue(entityContext, entity, "Health", "Entity")
+	local construction = self:_ReadEntityValue(entityContext, entity, "Construction", "Structure")
+	local stats = self:_ReadEntityValue(entityContext, entity, "Stats", "Structure")
+	local transform = self:_ReadEntityValue(entityContext, entity, "Transform", "Entity")
+	local animationState = self:_ReadEntityValue(entityContext, entity, "AnimationState", "Structure")
+	local animationLooping = self:_ReadEntityValue(entityContext, entity, "AnimationLooping", "Structure")
+	local targetEnemyId = self:_ReadEntityValue(entityContext, entity, "TargetEnemyId", "Structure")
+
+	if type(identity) == "table" then
+		model:SetAttribute("StructureId", identity.EntityId)
+		model:SetAttribute("StructureType", identity.DefinitionId)
+	end
+	if type(stats) == "table" then
+		model:SetAttribute("StructureType", stats.StructureType)
+	end
+	if type(health) == "table" then
+		model:SetAttribute("Health", health.Current)
+		model:SetAttribute("MaxHealth", health.Max)
+	end
+	if type(construction) == "table" then
+		model:SetAttribute("CurrentBuildWork", construction.CurrentWork)
+		model:SetAttribute("RequiredBuildWork", construction.RequiredWork)
+	end
+	if type(animationState) == "string" then
+		model:SetAttribute("AnimationState", animationState)
+	end
+	if type(animationLooping) == "boolean" then
+		model:SetAttribute("AnimationLooping", animationLooping)
+	end
+	model:SetAttribute("TargetEnemyId", if type(targetEnemyId) == "string" and targetEnemyId ~= "" then targetEnemyId else nil)
+	if type(transform) == "table" and typeof(transform.CFrame) == "CFrame" then
+		model:PivotTo(transform.CFrame)
+	end
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if humanoid ~= nil and type(health) == "table" then
+		humanoid.MaxHealth = health.Max or humanoid.MaxHealth
+		humanoid.Health = health.Current or humanoid.Health
+	end
+end
+
+function StructureContext:_ReadEntityValue(entityContext: any, entity: number, key: string, featureName: string): any
+	local result = entityContext:Get(entity, key, featureName)
+	return if result.success then result.value else nil
+end
+
+function StructureContext:_BuildStructureFacts(context: any): any
+	if type(context) ~= "table" or type(context.Entity) ~= "number" then
+		return {}
+	end
+	local entity = context.Entity
+	if not self._structureReadService:IsPlaced(entity) then
+		return {}
+	end
+
+	local stats = self._structureReadService:GetStats(entity)
+	local position = self._structureReadService:GetPosition(entity)
+	local isOperational = self._structureReadService:IsOperational(entity)
+	local facts = {
+		StructureOperational = isOperational,
+		StructureStats = stats,
+	}
+
+	if type(stats) == "table" and stats.RuntimeProfileId == "Attack" and position ~= nil then
+		local nearestResult = self._enemyContext:GetNearestAliveEnemy(position, stats.AttackRange or 0)
+		local nearest = if nearestResult.success then nearestResult.value else nil
+		if type(nearest) == "table" then
+			facts.TargetEntity = nearest.Entity
+			facts.AttackData = {
+				TargetPosition = nearest.CFrame.Position,
+			}
+		end
+	elseif type(stats) == "table" and stats.RuntimeProfileId == "Extract" then
+		facts.ExtractData = {
+			StructureEntity = entity,
+		}
+	elseif type(stats) == "table" and stats.RuntimeProfileId == "Stasis" then
+		facts.StasisData = {
+			StructureEntity = entity,
+		}
+	end
+
+	return facts
+end
+
+function StructureContext:RegisterStructure(record: StructureRecord): Result.Result<number>
 	return Catch(function()
-		return self._cleanupAllCommand:Execute()
-	end, "Structure:CleanupAll")
-end
-
--- [Public API]
-
---[=[
-	Returns the active structure entities.
-	@within StructureContext
-	@return Result.Result<{ number }> -- The active structure entity ids.
-]=]
-function StructureContext:GetActiveStructures(): Result.Result<{ number }>
-	return Catch(function()
-		return Ok(self._getActiveStructuresQuery:Execute())
-	end, "Structure:GetActiveStructures")
-end
-
---[=[
-	Returns the current active structure count.
-	@within StructureContext
-	@return Result.Result<number> -- The active structure count.
-]=]
-function StructureContext:GetStructureCount(): Result.Result<number>
-	return Catch(function()
-		return Ok(self._getStructureCountQuery:Execute())
-	end, "Structure:GetStructureCount")
-end
-
---[=[
-	Applies damage to a structure entity and disables it if it dies.
-	@within StructureContext
-	@param entity any -- Structure entity id.
-	@param amount number -- Positive damage amount.
-	@return Result.Result<boolean> -- Whether the damage killed the structure.
-]=]
-function StructureContext:ApplyDamage(entity: any, amount: number): Result.Result<boolean>
-	return Catch(function()
-		return self._applyDamageStructureCommand:Execute(entity, amount)
-	end, "Structure:ApplyDamage")
-end
-
---[=[
-	Returns the structure entity factory for server-side bridge consumers.
-	@within StructureContext
-	@return Result.Result<any> -- Structure entity factory.
-]=]
-function StructureContext:GetEntityFactory(): Result.Result<any>
-	return Ok(self._entityFactory)
+		return self._registerStructureCommand:Execute(record)
+	end, "Structure:RegisterStructure")
 end
 
 function StructureContext:ContributeConstruction(
@@ -363,43 +620,65 @@ function StructureContext:ContributeConstruction(
 	_contributorMeta: any?
 ): Result.Result<StructureTypes.TConstructionContributionResult>
 	return Catch(function()
-		local contributionResult = self._advanceConstructionCommand:Execute(entity, workAmount)
-		if not contributionResult.success then
-			return contributionResult
-		end
-
-		if contributionResult.value.JustCompleted then
-			local runtimeResult = self:_RegisterOperationalRuntime(entity)
-			if not runtimeResult.success then
-				return runtimeResult
-			end
-		end
-
-		return contributionResult
+		return self._advanceConstructionCommand:Execute(entity, workAmount)
 	end, "Structure:ContributeConstruction")
 end
 
-function StructureContext:ResolveMiningExtractorActor(instanceId: number): Result.Result<boolean>
+function StructureContext:ApplyDamage(entity: any, amount: number): Result.Result<boolean>
 	return Catch(function()
-		return self._miningAdapterService:ResolvePendingActor(instanceId)
-	end, "Structure:ResolveMiningExtractorActor")
+		return self._applyDamageStructureCommand:Execute(entity, amount)
+	end, "Structure:ApplyDamage")
 end
 
-function StructureContext:GetInstanceFactory(): Result.Result<any>
-	return Ok(self._instanceFactory)
+function StructureContext:CleanupAll(): Result.Result<boolean>
+	return Catch(function()
+		return self._cleanupAllCommand:Execute()
+	end, "Structure:CleanupAll")
 end
 
---[=[
-	Returns the structure model sync service for cross-context runtime cleanup.
-	@within StructureContext
-	@return Result.Result<any> -- Structure game object sync service.
-]=]
-function StructureContext:GetGameObjectSyncService(): Result.Result<any>
-	return Ok(self._gameObjectSyncService)
+function StructureContext:GetActiveStructures(): Result.Result<{ number }>
+	return Catch(function()
+		return Ok(self._getActiveStructuresQuery:Execute())
+	end, "Structure:GetActiveStructures")
 end
 
-function StructureContext:GetReplicationService(): Result.Result<any>
-	return Ok(self._replicationService)
+function StructureContext:GetStructureCount(): Result.Result<number>
+	return Catch(function()
+		return Ok(self._getStructureCountQuery:Execute())
+	end, "Structure:GetStructureCount")
+end
+
+function StructureContext:GetStructurePosition(entity: number): Result.Result<Vector3?>
+	return Ok(self._structureReadService:GetPosition(entity))
+end
+
+function StructureContext:IsStructureBuildableForBuilder(
+	entity: number,
+	ownerUserId: number,
+	builderPosition: Vector3?,
+	buildRange: number?
+): Result.Result<boolean>
+	return Catch(function()
+		if typeof(builderPosition) ~= "Vector3" or type(buildRange) ~= "number" then
+			return Ok(false)
+		end
+		local structurePosition = self._structureReadService:GetPosition(entity)
+		return Ok(
+			self._structureReadService:IsPlaced(entity)
+				and self._structureReadService:IsUnderConstruction(entity)
+				and self._structureReadService:IsOwnedByUser(entity, ownerUserId)
+				and structurePosition ~= nil
+				and (structurePosition - builderPosition).Magnitude <= buildRange
+		)
+	end, "Structure:IsStructureBuildableForBuilder")
+end
+
+function StructureContext:FindNearestOwnedUnfinishedStructure(
+	ownerUserId: number,
+	position: Vector3,
+	maxRange: number
+): Result.Result<number?>
+	return Ok(self._structureReadService:FindNearestOwnedUnfinishedStructure(ownerUserId, position, maxRange))
 end
 
 function StructureContext:GetSchedulerBindingStatus(targetField: string): Result.Result<any>
@@ -407,8 +686,7 @@ function StructureContext:GetSchedulerBindingStatus(targetField: string): Result
 end
 
 function StructureContext:_BeforeDestroy()
-	-- Run cleanup first so entity deletion still has access to live collaborators.
-	local cleanupResult = self:_CleanupAll()
+	local cleanupResult = self:CleanupAll()
 	if not cleanupResult.success then
 		Result.MentionError("Structure:Destroy", "Cleanup failed during destroy", {
 			CauseType = cleanupResult.type,
@@ -417,10 +695,6 @@ function StructureContext:_BeforeDestroy()
 	end
 end
 
---[=[
-	Disconnects listeners and cleans up the isolated world.
-	@within StructureContext
-]=]
 function StructureContext:Destroy()
 	local destroyResult = StructureBaseContext:Destroy()
 	if not destroyResult.success then
@@ -429,14 +703,6 @@ function StructureContext:Destroy()
 			CauseMessage = destroyResult.message,
 		}, destroyResult.type)
 	end
-end
-
-function StructureContext.Client:RequestStructureReplication(player: Player): boolean
-	return self.Server._replicationService:HydratePlayer(player)
-end
-
-function StructureContext.Client:AcknowledgeStructureReplicationBootstrap(player: Player): boolean
-	return self.Server._replicationService:CompleteBootstrap(player)
 end
 
 return StructureContext

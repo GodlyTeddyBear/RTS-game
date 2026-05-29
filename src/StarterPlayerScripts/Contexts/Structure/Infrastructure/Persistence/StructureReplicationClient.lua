@@ -1,25 +1,9 @@
 --!strict
 
---[=[
-    @class StructureReplicationClient
-    Structure-context client replication adapter that extends the shared ECS
-    client base, connects to `StructureContext`, and rebuilds a typed structure
-    state index after each replicated packet so gameplay code can observe
-    structure updates without reading model attributes directly.
-    @client
-]=]
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GoodSignal = require(ReplicatedStorage.Packages.Goodsignal)
-require(ReplicatedStorage.Utilities.Replecs)
-local JECS = require(ReplicatedStorage.Packages.JECS)
-local Knit = require(ReplicatedStorage.Packages.Knit)
-local BaseECSReplicationClient = require(ReplicatedStorage.Utilities.BaseECSReplicationClient)
-local StashPlus = require(ReplicatedStorage.Utilities.StashPlus)
-
-type TBootstrapPayload = BaseECSReplicationClient.TBootstrapPayload
-type TReplicationPacketPayload = BaseECSReplicationClient.TReplicationPacketPayload
+local EntityReplicationClient = require(script.Parent.Parent.Parent.Parent.Entity.Infrastructure.Persistence.EntityReplicationClient)
 
 export type TStructureReplicatedState = {
 	StructureId: string,
@@ -40,134 +24,35 @@ export type TStructureReplicatedState = {
 
 local StructureReplicationClient = {}
 StructureReplicationClient.__index = StructureReplicationClient
-setmetatable(StructureReplicationClient, { __index = BaseECSReplicationClient })
 
-local function _NameEntity(world: any, entity: any, name: string)
-	world:set(entity, JECS.Name, name)
-end
+local IDENTITY_ECS_NAME = "Entity.Identity"
+local HEALTH_ECS_NAME = "Entity.Health"
+local CONSTRUCTION_ECS_NAME = "Structure.Construction"
+local ANIMATION_STATE_ECS_NAME = "Structure.AnimationState"
+local ANIMATION_LOOPING_ECS_NAME = "Structure.AnimationLooping"
+local TARGET_ENEMY_ID_ECS_NAME = "Structure.TargetEnemyId"
+local PLACED_TAG_ECS_NAME = "Structure.PlacedTag"
+local UNDER_CONSTRUCTION_TAG_ECS_NAME = "Structure.UnderConstructionTag"
+local OPERATIONAL_TAG_ECS_NAME = "Structure.OperationalTag"
 
 function StructureReplicationClient.new()
-	local self = setmetatable(BaseECSReplicationClient.new("Structure"), StructureReplicationClient)
+	local self = setmetatable({}, StructureReplicationClient)
 	self.StateChanged = GoodSignal.new()
-	self._structureContext = nil
+	self._entityReplicationClient = EntityReplicationClient.new()
 	self._structureStateById = {}
+	self._stateConnection = nil
 	return self
 end
 
-function StructureReplicationClient:_BuildComponents(world: any, _replecsLibrary: any)
-	local identityComponent = world:component()
-	_NameEntity(world, identityComponent, "Structure.Identity")
-
-	local healthComponent = world:component()
-	_NameEntity(world, healthComponent, "Structure.Health")
-
-	local constructionProgressComponent = world:component()
-	_NameEntity(world, constructionProgressComponent, "Structure.ConstructionProgress")
-
-	local animationStateComponent = world:component()
-	_NameEntity(world, animationStateComponent, "Structure.AnimationState")
-
-	local animationLoopingComponent = world:component()
-	_NameEntity(world, animationLoopingComponent, "Structure.AnimationLooping")
-
-	local targetEnemyIdComponent = world:component()
-	_NameEntity(world, targetEnemyIdComponent, "Structure.TargetEnemyId")
-
-	local placedTag = world:entity()
-	_NameEntity(world, placedTag, "Structure.PlacedTag")
-
-	local underConstructionTag = world:entity()
-	_NameEntity(world, underConstructionTag, "Structure.UnderConstructionTag")
-
-	local activeTag = world:entity()
-	_NameEntity(world, activeTag, "Structure.ActiveTag")
-
-	return table.freeze({
-		IdentityComponent = identityComponent,
-		HealthComponent = healthComponent,
-		ConstructionProgressComponent = constructionProgressComponent,
-		AnimationStateComponent = animationStateComponent,
-		AnimationLoopingComponent = animationLoopingComponent,
-		TargetEnemyIdComponent = targetEnemyIdComponent,
-		PlacedTag = placedTag,
-		UnderConstructionTag = underConstructionTag,
-		ActiveTag = activeTag,
-	})
+function StructureReplicationClient:Init()
+	self._entityReplicationClient:Init()
 end
 
-function StructureReplicationClient:_GetSharedSchema()
-	local components = self:GetComponentsOrThrow()
-
-	return {
-		sharedComponents = {
-			components.IdentityComponent,
-			components.HealthComponent,
-			components.ConstructionProgressComponent,
-			components.AnimationStateComponent,
-			components.AnimationLoopingComponent,
-			components.TargetEnemyIdComponent,
-		},
-		sharedTags = {
-			components.PlacedTag,
-			components.UnderConstructionTag,
-			components.ActiveTag,
-		},
-	}
-end
-
-function StructureReplicationClient:_RegisterReplicatedSurface()
-	self:_RebuildStructureStateIndex()
-end
-
-function StructureReplicationClient:HandleBootstrap(payload: TBootstrapPayload): boolean
-	local handled = BaseECSReplicationClient.HandleBootstrap(self, payload)
-	self:_RebuildStructureStateIndex()
-	return handled
-end
-
-function StructureReplicationClient:HandleReliable(payload: TReplicationPacketPayload)
-	BaseECSReplicationClient.HandleReliable(self, payload)
-	self:_RebuildStructureStateIndex()
-end
-
-function StructureReplicationClient:HandleUnreliable(payload: TReplicationPacketPayload)
-	BaseECSReplicationClient.HandleUnreliable(self, payload)
-	self:_RebuildStructureStateIndex()
-end
-
-function StructureReplicationClient:HandleEntity(payload: TReplicationPacketPayload)
-	BaseECSReplicationClient.HandleEntity(self, payload)
-	self:_RebuildStructureStateIndex()
-end
-
-function StructureReplicationClient:_ConnectTransport()
-	self._structureContext = Knit.GetService("StructureContext")
-	local stash = StashPlus.new()
-
-	stash:AddConnection(self._structureContext.StructureBootstrap:Connect(function(payload)
-		self:HandleBootstrap(payload)
-	end))
-	stash:AddConnection(self._structureContext.StructureReliable:Connect(function(payload)
-		self:HandleReliable(payload)
-	end))
-	stash:AddConnection(self._structureContext.StructureUnreliable:Connect(function(payload)
-		self:HandleUnreliable(payload)
-	end))
-	stash:AddConnection(self._structureContext.StructureEntity:Connect(function(payload)
-		self:HandleEntity(payload)
-	end))
-
-	return stash
-end
-
-function StructureReplicationClient:_OnStart()
-	assert(self._structureContext ~= nil, "StructureReplicationClient: missing StructureContext")
-	self._structureContext:RequestStructureReplication()
-end
-
-function StructureReplicationClient:_OnBootstrapCompleted()
-	assert(self._structureContext ~= nil, "StructureReplicationClient: missing StructureContext")
-	self._structureContext:AcknowledgeStructureReplicationBootstrap()
+function StructureReplicationClient:Start()
+	self._entityReplicationClient:Start()
+	self._stateConnection = self._entityReplicationClient:ObserveStateChanged(function()
+		self:_RebuildStructureStateIndex()
+	end)
 end
 
 function StructureReplicationClient:GetStructureState(structureId: string): TStructureReplicatedState?
@@ -179,51 +64,56 @@ function StructureReplicationClient:ObserveStructureStateChanged(callback: (stru
 end
 
 function StructureReplicationClient:Destroy()
+	if self._stateConnection ~= nil then
+		self._stateConnection:Disconnect()
+		self._stateConnection = nil
+	end
 	if self.StateChanged ~= nil then
 		self.StateChanged:DisconnectAll()
 	end
 
-	BaseECSReplicationClient.Destroy(self)
-	self._structureContext = nil
+	self._entityReplicationClient:Destroy()
 	table.clear(self._structureStateById)
 end
 
 function StructureReplicationClient:_RebuildStructureStateIndex()
-	local world = self:GetWorldOrThrow()
-	local components = self:GetComponentsOrThrow()
+	local world = self._entityReplicationClient:GetWorldOrThrow()
+	local components = self._entityReplicationClient:GetComponentsOrThrow()
+	local byECSName = components.ByECSName or {}
+	local identityComponent = byECSName[IDENTITY_ECS_NAME]
+	local healthComponent = byECSName[HEALTH_ECS_NAME]
+	local constructionComponent = byECSName[CONSTRUCTION_ECS_NAME]
+	if identityComponent == nil or healthComponent == nil or constructionComponent == nil then
+		self._structureStateById = {}
+		return
+	end
+
 	local nextStateById = {}
 	local changedStructureIds = {}
 	local previousStateById = self._structureStateById
 
-	for
-		entity, identity, health, constructionProgress in world
-			:query(components.IdentityComponent, components.HealthComponent, components.ConstructionProgressComponent)
-			:iter()
-	do
-		if type(identity) ~= "table" or type(identity.StructureId) ~= "string" or type(identity.StructureType) ~= "string" then
+	for entity, identity, health, construction in world:query(identityComponent, healthComponent, constructionComponent):iter() do
+		if type(identity) ~= "table" or identity.EntityKind ~= "Structure" or type(identity.EntityId) ~= "string" then
 			continue
 		end
-		if type(health) ~= "table" then
-			continue
-		end
-		if type(constructionProgress) ~= "table" then
+		if type(health) ~= "table" or type(construction) ~= "table" then
 			continue
 		end
 
-		local structureId = identity.StructureId
-		local animationState = world:get(entity, components.AnimationStateComponent)
-		local animationLooping = world:get(entity, components.AnimationLoopingComponent)
-		local targetEnemyId = world:get(entity, components.TargetEnemyIdComponent)
-		local currentBuildWork = constructionProgress.CurrentWork or 0
-		local requiredBuildWork = constructionProgress.RequiredWork or 0
+		local structureId = identity.EntityId
+		local animationState = self:_GetOptional(world, entity, byECSName[ANIMATION_STATE_ECS_NAME])
+		local animationLooping = self:_GetOptional(world, entity, byECSName[ANIMATION_LOOPING_ECS_NAME])
+		local targetEnemyId = self:_GetOptional(world, entity, byECSName[TARGET_ENEMY_ID_ECS_NAME])
+		local currentBuildWork = construction.CurrentWork or 0
+		local requiredBuildWork = construction.RequiredWork or 0
 		local buildPercent = if requiredBuildWork > 0
 			then math.clamp((currentBuildWork / requiredBuildWork) * 100, 0, 100)
 			else 0
-		local isUnderConstruction = world:has(entity, components.UnderConstructionTag)
+		local isUnderConstruction = self:_HasOptional(world, entity, byECSName[UNDER_CONSTRUCTION_TAG_ECS_NAME])
 
 		local nextState = table.freeze({
 			StructureId = structureId,
-			StructureType = identity.StructureType,
+			StructureType = identity.DefinitionId or "Structure",
 			CurrentHealth = health.Current or 0,
 			MaxHealth = health.Max or 0,
 			CurrentBuildWork = currentBuildWork,
@@ -233,13 +123,12 @@ function StructureReplicationClient:_RebuildStructureStateIndex()
 			AnimationState = if type(animationState) == "string" then animationState else nil,
 			IsAnimationLooping = if type(animationLooping) == "boolean" then animationLooping else nil,
 			TargetEnemyId = if type(targetEnemyId) == "string" and targetEnemyId ~= "" then targetEnemyId else nil,
-			IsPlaced = world:has(entity, components.PlacedTag),
+			IsPlaced = self:_HasOptional(world, entity, byECSName[PLACED_TAG_ECS_NAME]),
 			IsUnderConstruction = isUnderConstruction,
-			IsActive = world:has(entity, components.ActiveTag),
+			IsActive = self:_HasOptional(world, entity, byECSName[OPERATIONAL_TAG_ECS_NAME]),
 		})
 
 		nextStateById[structureId] = nextState
-
 		local previousState = previousStateById[structureId]
 		if previousState == nil
 			or previousState.StructureType ~= nextState.StructureType
@@ -267,10 +156,17 @@ function StructureReplicationClient:_RebuildStructureStateIndex()
 	end
 
 	self._structureStateById = nextStateById
-
 	for structureId in changedStructureIds do
 		self.StateChanged:Fire(structureId)
 	end
+end
+
+function StructureReplicationClient:_GetOptional(world: any, entity: any, componentId: any): any
+	return if componentId ~= nil then world:get(entity, componentId) else nil
+end
+
+function StructureReplicationClient:_HasOptional(world: any, entity: any, tagId: any): boolean
+	return tagId ~= nil and world:has(entity, tagId)
 end
 
 return StructureReplicationClient

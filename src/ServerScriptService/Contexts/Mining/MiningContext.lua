@@ -278,11 +278,6 @@ function MiningContext:_RegisterExtractor(record: StructureRecord): Result.Resul
 
 		self._extractorEntitiesByInstanceId[record.InstanceId] = registerResult.value
 
-		local resolveResult = self._structureContext:ResolveMiningExtractorActor(record.InstanceId)
-		if not resolveResult.success then
-			return resolveResult
-		end
-
 		return registerResult
 	end, "Mining:RegisterExtractor")
 end

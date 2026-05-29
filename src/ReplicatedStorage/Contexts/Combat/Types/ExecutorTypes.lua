@@ -77,7 +77,6 @@ export type TBehaviorConfigComponent = {
 	@within ExecutorTypes
 	Shared runtime services passed into combat executors.
 	.EnemyEntityFactory any -- Combat enemy entity access facade.
-	.StructureEntityFactory any -- Combat structure entity access facade.
 	.BaseEntityFactory any -- Combat base entity access facade.
 	.CombatPerceptionService any -- Shared target range authority for combat target checks.
 	.EnemyContext any -- Enemy context public damage API.
@@ -95,7 +94,6 @@ export type TBehaviorConfigComponent = {
 ]=]
 export type TExecutorServices = {
 	EnemyEntityFactory: any,
-	StructureEntityFactory: any,
 	BaseEntityFactory: any,
 	CombatPerceptionService: any,
 	EnemyContext: any,

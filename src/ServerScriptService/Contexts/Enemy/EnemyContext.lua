@@ -535,18 +535,13 @@ function EnemyContext:_ResolveNearestStructureInRange(position: Vector3, attackR
 		return nil, nil
 	end
 
-	local structureFactoryResult = self._structureContext:GetEntityFactory()
-	if not structureFactoryResult.success then
-		return nil, nil
-	end
-
-	local structureFactory = structureFactoryResult.value
 	local nearestEntity = nil :: number?
 	local nearestPosition = nil :: Vector3?
 	local nearestDistance = attackRange
 
 	for _, structureEntity in ipairs(structuresResult.value) do
-		local structurePosition = structureFactory:GetPosition(structureEntity)
+		local positionResult = self._structureContext:GetStructurePosition(structureEntity)
+		local structurePosition = if positionResult.success then positionResult.value else nil
 		if structurePosition ~= nil then
 			local distance = (structurePosition - position).Magnitude
 			if distance <= nearestDistance then
