@@ -8,10 +8,10 @@ local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.Stru
 local StructureActionExecutionSystem = {}
 StructureActionExecutionSystem.__index = StructureActionExecutionSystem
 
-local ACTION_ATTACK = "StructureAttack"
-local ACTION_EXTRACT = "StructureExtract"
-local ACTION_STASIS = "StructureStasis"
-local ACTION_IDLE = "StructureIdle"
+local ACTION_ATTACK = "Attack"
+local ACTION_EXTRACT = "Extract"
+local ACTION_STASIS = "Stasis"
+local ACTION_IDLE = "Idle"
 
 function StructureActionExecutionSystem.new(entityFactory: any, dependencies: any)
 	local self = setmetatable({}, StructureActionExecutionSystem)

@@ -10,7 +10,6 @@ local BasicActions = require(script.Parent.Parent.Parent.Config.Actions.BasicAct
 local BasicBehaviors = require(script.Parent.Parent.Parent.Config.Behaviors.BasicBehaviors)
 local BasicEvaluations = require(script.Parent.Parent.Parent.Config.Evaluations.BasicEvaluations)
 local BasicFactProviders = require(script.Parent.Parent.Parent.Config.Facts.BasicFactProviders)
-local BasicAIProfiles = require(script.Parent.Parent.Parent.Config.Profiles.BasicAIProfiles)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local SeedBuiltInAIDefinitionsCommand = {}
@@ -54,7 +53,7 @@ function SeedBuiltInAIDefinitionsCommand:Execute(): Result.Result<boolean>
 			return seedResult
 		end
 
-		return self:_SeedProfiles()
+		return Result.Ok(true)
 	end, self:_Label())
 end
 
@@ -123,24 +122,6 @@ function SeedBuiltInAIDefinitionsCommand:_SeedBehaviors(): Result.Result<boolean
 			local result = self._behaviorRegistry:RegisterDefinition(payload)
 			if not result.success then
 				return self:_BuildSeedFailure("BehaviorDefinition", definitionId, result)
-			end
-		end
-	end
-
-	return Result.Ok(true)
-end
-
-function SeedBuiltInAIDefinitionsCommand:_SeedProfiles(): Result.Result<boolean>
-	for profileId, payload in pairs(BasicAIProfiles) do
-		local idResult = self:_RequireCatalogId("Profile", profileId, payload, "ProfileId")
-		if not idResult.success then
-			return idResult
-		end
-
-		if self._profileRegistry:GetProfile(payload.ProfileId) == nil then
-			local result = self._profileRegistry:RegisterProfile(payload)
-			if not result.success then
-				return self:_BuildSeedFailure("Profile", profileId, result)
 			end
 		end
 	end

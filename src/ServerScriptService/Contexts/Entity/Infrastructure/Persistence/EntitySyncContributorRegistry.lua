@@ -55,6 +55,9 @@ function EntitySyncContributorRegistry:RegisterSyncContributor(featureName: stri
 			PollEntity = payload.PollEntity,
 			QuerySyncEntities = payload.QuerySyncEntities,
 			QueryPollEntities = payload.QueryPollEntities,
+			BuildRuntimeAttributes = payload.BuildRuntimeAttributes,
+			BuildHumanoidProperties = payload.BuildHumanoidProperties,
+			BuildTransformProjection = payload.BuildTransformProjection,
 		})
 
 		self._contributorsByFeature[featureName] = compiledContributor

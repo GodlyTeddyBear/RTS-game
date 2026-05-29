@@ -10,9 +10,9 @@ local UnitConfig = require(ReplicatedStorage.Contexts.Unit.Config.UnitConfig)
 local UnitActionExecutionSystem = {}
 UnitActionExecutionSystem.__index = UnitActionExecutionSystem
 
-local ACTION_IDLE = "UnitIdle"
-local ACTION_MANUAL_MOVE = "UnitManualMove"
-local ACTION_BUILD_STRUCTURE = "UnitBuildStructure"
+local ACTION_IDLE = "Idle"
+local ACTION_MANUAL_MOVE = "ManualMove"
+local ACTION_BUILD_STRUCTURE = "BuildStructure"
 
 function UnitActionExecutionSystem.new(entityFactory: any, dependencies: any)
 	local self = setmetatable({}, UnitActionExecutionSystem)

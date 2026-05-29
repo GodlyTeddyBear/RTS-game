@@ -41,6 +41,94 @@ local BasicActions = {
 			Description = "Template action that emits an attack intent from target facts.",
 		},
 	},
+
+	Advance = {
+		ActionId = "Advance",
+		ProduceIntent = function(context: any): any
+			local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
+
+			return {
+				Data = cloneTable(facts.AdvanceData),
+			}
+		end,
+		Metadata = {
+			Description = "Template action that emits movement or advance intent data.",
+		},
+	},
+
+	ManualMove = {
+		ActionId = "ManualMove",
+		ProduceIntent = function(context: any): any
+			local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
+
+			return {
+				Data = cloneTable(facts.MoveData),
+			}
+		end,
+		Metadata = {
+			Description = "Template action that emits manual movement intent data.",
+		},
+	},
+
+	BuildStructure = {
+		ActionId = "BuildStructure",
+		ProduceIntent = function(context: any): any
+			local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
+
+			return {
+				TargetEntity = facts.BuildTargetEntity,
+				Data = cloneTable(facts.BuildData),
+			}
+		end,
+		Metadata = {
+			Description = "Template action that emits builder construction intent data.",
+		},
+	},
+
+	Extract = {
+		ActionId = "Extract",
+		ProduceIntent = function(context: any): any
+			local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
+
+			return {
+				Data = cloneTable(facts.ExtractData),
+			}
+		end,
+		Metadata = {
+			Description = "Template action that emits extraction intent data.",
+		},
+	},
+
+	Stasis = {
+		ActionId = "Stasis",
+		ProduceIntent = function(context: any): any
+			local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
+
+			return {
+				Data = cloneTable(facts.StasisData),
+			}
+		end,
+		Metadata = {
+			Description = "Template action that emits stasis intent data.",
+		},
+	},
+
+	EngageEnemy = {
+		ActionId = "EngageEnemy",
+		ProduceIntent = function(context: any): any
+			local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
+
+			return {
+				TargetEntity = facts.TargetEntity,
+				Data = {
+					TargetPosition = facts.TargetPosition,
+				},
+			}
+		end,
+		Metadata = {
+			Description = "Template action that emits enemy engagement intent data.",
+		},
+	},
 }
 
 return table.freeze(BasicActions)

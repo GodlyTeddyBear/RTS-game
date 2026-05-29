@@ -3,10 +3,10 @@
 local EnemyAIProfiles = {
 	EnemySwarmAI = {
 		ProfileId = "EnemySwarmAI",
-		DefinitionId = "EnemyTargetOrAdvance",
+		DefinitionId = "AttackOrAdvance",
 		TickInterval = 0.15,
-		InitialBehaviorId = "EnemyAdvance",
-		InitialNodePath = { "EnemyAdvance" },
+		InitialBehaviorId = "Advance",
+		InitialNodePath = { "Advance" },
 		Blackboard = {},
 		Metadata = {
 			Description = "Enemy AI profile for Swarm enemies.",
@@ -16,10 +16,10 @@ local EnemyAIProfiles = {
 
 	EnemyTankAI = {
 		ProfileId = "EnemyTankAI",
-		DefinitionId = "EnemyTargetOrAdvance",
+		DefinitionId = "AttackOrAdvance",
 		TickInterval = 0.15,
-		InitialBehaviorId = "EnemyAdvance",
-		InitialNodePath = { "EnemyAdvance" },
+		InitialBehaviorId = "Advance",
+		InitialNodePath = { "Advance" },
 		Blackboard = {},
 		Metadata = {
 			Description = "Enemy AI profile for Tank enemies.",

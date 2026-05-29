@@ -10,7 +10,7 @@ local SummonConfig = require(ReplicatedStorage.Contexts.Summon.Config.SummonConf
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 
 local SummonActionExecutionSystem = require(script.Parent.Infrastructure.Entity.SummonActionExecutionSystem)
-local SummonAIProfiles = require(script.Parent.Parent.AI.Config.Profiles.SummonAIProfiles)
+local SummonAIProfiles = require(script.Parent.Config.AIProfiles)
 local SummonEntityReadService = require(script.Parent.Infrastructure.Entity.SummonEntityReadService)
 local SummonEntitySchema = require(script.Parent.Infrastructure.Entity.SummonEntitySchema)
 local CleanupSummonsCommand = require(script.Parent.Application.Commands.CleanupSummonsCommand)
@@ -193,10 +193,23 @@ function SummonContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 				})
 				return if queryResult.success then queryResult.value else {}
 			end,
-			SyncEntity = function(entityContext: any, entity: number, instance: Instance)
-				if instance:IsA("BasePart") then
-					self:_SyncSummonDrone(entityContext, entity, instance)
-				end
+			BuildRuntimeAttributes = function(entityContext: any, entity: number)
+				local identity = self:_ReadEntityValue(entityContext, entity, "Identity", "Entity")
+				local ownership = self:_ReadEntityValue(entityContext, entity, "Ownership", "Entity")
+				local kind = self:_ReadEntityValue(entityContext, entity, "Kind", "Summon")
+				local targetEnemyId = self:_ReadEntityValue(entityContext, entity, "TargetEnemyId", "Summon")
+
+				return {
+					SummonId = if type(identity) == "table" then identity.EntityId else nil,
+					SummonKind = if type(kind) == "table" then kind.Kind else nil,
+					OwnerKind = if type(ownership) == "table" then ownership.OwnerKind else nil,
+					OwnerId = if type(ownership) == "table" then ownership.OwnerId else nil,
+					TargetEnemyId = if type(targetEnemyId) == "string" then targetEnemyId else nil,
+				}
+			end,
+			BuildTransformProjection = function(entityContext: any, entity: number)
+				local transform = self:_ReadEntityValue(entityContext, entity, "Transform", "Entity")
+				return if type(transform) == "table" then transform.CFrame else nil
 			end,
 		})
 		if not syncResult.success then
@@ -241,76 +254,6 @@ function SummonContext:_RegisterAIContracts(): Result.Result<boolean>
 			return result
 		end
 
-		local evaluationResult = acceptDuplicate(self._aiContext:RegisterEvaluation({
-			EvaluationId = "SummonHasEnemyTarget",
-			Evaluate = function(context: any): boolean
-				return type(context) == "table"
-					and type(context.Facts) == "table"
-					and context.Facts.SummonHasEnemyTarget == true
-			end,
-		}), "DuplicateEvaluation")
-		if not evaluationResult.success then
-			return evaluationResult
-		end
-
-		local engageActionResult = acceptDuplicate(self._aiContext:RegisterActionDefinition({
-			ActionId = "SummonEngageEnemy",
-			ProduceIntent = function(context: any): any
-				local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
-				return {
-					TargetEntity = facts.SummonTargetEnemyEntity,
-					Data = {
-						TargetPosition = facts.SummonTargetPosition,
-					},
-				}
-			end,
-		}), "DuplicateActionDefinition")
-		if not engageActionResult.success then
-			return engageActionResult
-		end
-
-		local idleActionResult = acceptDuplicate(self._aiContext:RegisterActionDefinition({
-			ActionId = "SummonIdle",
-			ProduceIntent = function(_context: any): any
-				return {
-					Data = {
-						Reason = "Idle",
-					},
-				}
-			end,
-		}), "DuplicateActionDefinition")
-		if not idleActionResult.success then
-			return idleActionResult
-		end
-
-		local behaviorResult = acceptDuplicate(self._aiContext:RegisterBehaviorDefinition({
-			DefinitionId = "SummonSwarmDroneBehavior",
-			Definition = {
-				Priority = {
-					{
-						Sequence = {
-							"SummonHasEnemyTarget",
-							"SummonEngageEnemy",
-						},
-					},
-					"SummonIdle",
-				},
-			},
-		}), "DuplicateBehaviorDefinition")
-		if not behaviorResult.success then
-			return behaviorResult
-		end
-
-		local providerResult = acceptDuplicate(self._aiContext:RegisterFactProvider({
-			ProviderId = "SummonFacts",
-			BuildFacts = function(context: any): any
-				return self:_BuildSummonFacts(context)
-			end,
-		}), "DuplicateFactProvider")
-		if not providerResult.success then
-			return providerResult
-		end
-
 		for _, profilePayload in pairs(SummonAIProfiles) do
 			local profileResult = acceptDuplicate(self._aiContext:RegisterProfile(profilePayload), "DuplicateProfile")
 			if not profileResult.success then
@@ -320,57 +263,6 @@ function SummonContext:_RegisterAIContracts(): Result.Result<boolean>
 
 		return Ok(true)
 	end, "SummonContext:RegisterAIContracts")
-end
-
-function SummonContext:_SyncSummonDrone(entityContext: any, entity: number, part: BasePart)
-	local identity = self:_ReadEntityValue(entityContext, entity, "Identity", "Entity")
-	local ownership = self:_ReadEntityValue(entityContext, entity, "Ownership", "Entity")
-	local transform = self:_ReadEntityValue(entityContext, entity, "Transform", "Entity")
-	local kind = self:_ReadEntityValue(entityContext, entity, "Kind", "Summon")
-	local targetEnemyId = self:_ReadEntityValue(entityContext, entity, "TargetEnemyId", "Summon")
-
-	if type(identity) == "table" then
-		part:SetAttribute("SummonId", identity.EntityId)
-	end
-	if type(ownership) == "table" then
-		part:SetAttribute("OwnerKind", ownership.OwnerKind)
-		part:SetAttribute("OwnerId", ownership.OwnerId)
-	end
-	if type(kind) == "table" then
-		part:SetAttribute("SummonKind", kind.Kind)
-	end
-	part:SetAttribute("TargetEnemyId", if type(targetEnemyId) == "string" then targetEnemyId else nil)
-	if type(transform) == "table" and typeof(transform.CFrame) == "CFrame" then
-		part.CFrame = transform.CFrame
-	end
-end
-
-function SummonContext:_BuildSummonFacts(context: any): any
-	if type(context) ~= "table" or type(context.Entity) ~= "number" then
-		return {}
-	end
-
-	local entity = context.Entity
-	local kind = self._summonReadService:GetIdentity(entity)
-	local currentCFrame = self._summonReadService:GetCFrame(entity)
-	local combatProfile = self._summonReadService:GetCombatProfile(entity)
-	if type(kind) ~= "table" or currentCFrame == nil or type(combatProfile) ~= "table" then
-		return {}
-	end
-
-	local targetResult = self._enemyContext:GetNearestAliveEnemy(currentCFrame.Position, combatProfile.AcquireRange or 0)
-	local target = if targetResult.success then targetResult.value else nil
-	if type(target) ~= "table" or type(target.Entity) ~= "number" or typeof(target.CFrame) ~= "CFrame" then
-		return {
-			SummonHasEnemyTarget = false,
-		}
-	end
-
-	return {
-		SummonHasEnemyTarget = true,
-		SummonTargetEnemyEntity = target.Entity,
-		SummonTargetPosition = target.CFrame.Position,
-	}
 end
 
 function SummonContext:_ReadEntityValue(entityContext: any, entity: number, key: string, featureName: string): any

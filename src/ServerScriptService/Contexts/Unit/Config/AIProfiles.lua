@@ -3,10 +3,10 @@
 local UnitAIProfiles = {
 	UnitBuilderAI = {
 		ProfileId = "UnitBuilderAI",
-		DefinitionId = "UnitBuilderBehavior",
+		DefinitionId = "MoveBuildIdle",
 		TickInterval = 0.15,
-		InitialBehaviorId = "UnitIdle",
-		InitialNodePath = { "UnitIdle" },
+		InitialBehaviorId = "Idle",
+		InitialNodePath = { "Idle" },
 		Blackboard = {},
 		Metadata = {
 			Description = "Unit AI profile for manual movement, builder construction, and idle fallback.",

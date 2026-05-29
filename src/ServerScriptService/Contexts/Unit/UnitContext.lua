@@ -17,7 +17,7 @@ local UnitEntityReadService = require(script.Parent.Infrastructure.Entity.UnitEn
 local UnitEntitySchema = require(script.Parent.Infrastructure.Entity.UnitEntitySchema)
 local UnitMovementRuntimeService = require(script.Parent.Infrastructure.Entity.UnitMovementRuntimeService)
 local UnitActionExecutionSystem = require(script.Parent.Infrastructure.Entity.UnitActionExecutionSystem)
-local UnitAIProfiles = require(script.Parent.Parent.AI.Config.Profiles.UnitAIProfiles)
+local UnitAIProfiles = require(script.Parent.Config.AIProfiles)
 local UnitSpawnPolicy = require(script.Parent.UnitDomain.Policies.UnitSpawnPolicy)
 
 local SpawnUnitCommand = require(script.Parent.Application.Commands.SpawnUnitCommand)
@@ -217,8 +217,37 @@ function UnitContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 				})
 				return if queryResult.success then queryResult.value else {}
 			end,
-			SyncEntity = function(entityContext: any, entity: number, model: Model)
-				self:_SyncUnitEntity(entityContext, entity, model)
+			BuildRuntimeAttributes = function(entityContext: any, entity: number)
+				local identity = self:_ReadEntityValue(entityContext, entity, "Identity", "Entity")
+				local ownership = self:_ReadEntityValue(entityContext, entity, "Ownership", "Entity")
+				local health = self:_ReadEntityValue(entityContext, entity, "Health", "Entity")
+				local role = self:_ReadEntityValue(entityContext, entity, "Role", "Unit")
+				local animationState = self:_ReadEntityValue(entityContext, entity, "AnimationState", "Unit")
+				local animationLooping = self:_ReadEntityValue(entityContext, entity, "AnimationLooping", "Unit")
+
+				return {
+					UnitGuid = if type(identity) == "table" then identity.EntityId else nil,
+					UnitId = if type(identity) == "table" then identity.DefinitionId else nil,
+					Faction = if type(ownership) == "table" then ownership.Faction else nil,
+					OwnerKind = if type(ownership) == "table" then ownership.OwnerKind else nil,
+					OwnerId = if type(ownership) == "table" then ownership.OwnerId else nil,
+					UnitRole = if type(role) == "table" then role.Role else nil,
+					UnitDisplayName = if type(role) == "table" then role.DisplayName else nil,
+					Health = if type(health) == "table" then health.Current else nil,
+					MaxHealth = if type(health) == "table" then health.Max else nil,
+					AnimationState = if type(animationState) == "string" then animationState else nil,
+					AnimationLooping = if type(animationLooping) == "boolean" then animationLooping else nil,
+				}
+			end,
+			BuildHumanoidProperties = function(entityContext: any, entity: number)
+				local health = self:_ReadEntityValue(entityContext, entity, "Health", "Entity")
+				local currentMoveSpeed = self:_ReadEntityValue(entityContext, entity, "CurrentMoveSpeed", "Unit")
+
+				return {
+					MaxHealth = if type(health) == "table" then health.Max else nil,
+					Health = if type(health) == "table" then health.Current else nil,
+					WalkSpeed = if type(currentMoveSpeed) == "table" then currentMoveSpeed.Value else nil,
+				}
 			end,
 			PollEntity = function(entityContext: any, entity: number, model: Model)
 				entityContext:Set(entity, "Transform", {
@@ -298,101 +327,6 @@ function UnitContext:_RegisterAIContracts(): Result.Result<boolean>
 			return result
 		end
 
-		local evaluations = {
-			{
-				EvaluationId = "UnitHasGoalTarget",
-				Evaluate = function(context: any): boolean
-					return type(context) == "table" and type(context.Facts) == "table" and context.Facts.UnitHasGoalTarget == true
-				end,
-			},
-			{
-				EvaluationId = "UnitHasBuildableStructure",
-				Evaluate = function(context: any): boolean
-					return type(context) == "table"
-						and type(context.Facts) == "table"
-						and context.Facts.UnitHasBuildableStructure == true
-				end,
-			},
-		}
-		for _, evaluation in ipairs(evaluations) do
-			local result = acceptDuplicate(self._aiContext:RegisterEvaluation(evaluation), "DuplicateEvaluation")
-			if not result.success then
-				return result
-			end
-		end
-
-		local actions = {
-			{
-				ActionId = "UnitIdle",
-				ProduceIntent = function(_context: any): any
-					return {
-						Data = {
-							Reason = "Idle",
-						},
-					}
-				end,
-			},
-			{
-				ActionId = "UnitManualMove",
-				ProduceIntent = function(context: any): any
-					local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
-					return {
-						Data = facts.UnitMoveData,
-					}
-				end,
-			},
-			{
-				ActionId = "UnitBuildStructure",
-				ProduceIntent = function(context: any): any
-					local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
-					return {
-						TargetEntity = facts.UnitBuildTargetEntity,
-						Data = facts.UnitBuildData,
-					}
-				end,
-			},
-		}
-		for _, action in ipairs(actions) do
-			local result = acceptDuplicate(self._aiContext:RegisterActionDefinition(action), "DuplicateActionDefinition")
-			if not result.success then
-				return result
-			end
-		end
-
-		local behaviorResult = acceptDuplicate(self._aiContext:RegisterBehaviorDefinition({
-			DefinitionId = "UnitBuilderBehavior",
-			Definition = {
-				Priority = {
-					{
-						Sequence = {
-							"UnitHasGoalTarget",
-							"UnitManualMove",
-						},
-					},
-					{
-						Sequence = {
-							"UnitHasBuildableStructure",
-							"UnitBuildStructure",
-						},
-					},
-					"UnitIdle",
-				},
-			},
-		}), "DuplicateBehaviorDefinition")
-		if not behaviorResult.success then
-			return behaviorResult
-		end
-
-		local providerResult = acceptDuplicate(self._aiContext:RegisterFactProvider({
-			ProviderId = "UnitFacts",
-			BuildFacts = function(context: any): any
-				return self:_BuildUnitFacts(context)
-			end,
-		}), "DuplicateFactProvider")
-		if not providerResult.success then
-			return providerResult
-		end
-
 		for _, profilePayload in pairs(UnitAIProfiles) do
 			local profileResult = acceptDuplicate(self._aiContext:RegisterProfile(profilePayload), "DuplicateProfile")
 			if not profileResult.success then
@@ -457,7 +391,6 @@ end
 
 function UnitContext:_PrepareUnitModel(model: Model, snapshot: any)
 	local identity = snapshot.Identity or {}
-	local ownership = snapshot.Ownership or {}
 	local unitId = if type(identity.DefinitionId) == "string" and identity.DefinitionId ~= ""
 		then identity.DefinitionId
 		else UnitConfig.DEFAULT_UNIT_ID
@@ -466,11 +399,6 @@ function UnitContext:_PrepareUnitModel(model: Model, snapshot: any)
 	assert(definition ~= nil, "Unknown unit id: " .. tostring(unitId))
 
 	model.Name = "Unit_" .. unitId .. "_" .. unitGuid
-	model:SetAttribute("UnitGuid", unitGuid)
-	model:SetAttribute("UnitId", unitId)
-	model:SetAttribute("Faction", ownership.Faction)
-	model:SetAttribute("OwnerKind", ownership.OwnerKind)
-	model:SetAttribute("OwnerId", ownership.OwnerId)
 	ensureAnimationsFolderValue(model, self._animationsFolder)
 
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
@@ -492,120 +420,11 @@ function UnitContext:_PrepareUnitModel(model: Model, snapshot: any)
 
 	assert(model.PrimaryPart ~= nil, "Unit model missing PrimaryPart: " .. model.Name)
 	model.PrimaryPart.Anchored = false
-	model:SetAttribute("AnimationState", model:GetAttribute("AnimationState") or "Idle")
-	model:SetAttribute("AnimationLooping", if model:GetAttribute("AnimationLooping") == nil then true else model:GetAttribute("AnimationLooping"))
-
 	local transform = snapshot.Transform
 	if type(transform) == "table" and typeof(transform.CFrame) == "CFrame" then
 		ModelPlus.MoveToCFrame(model, transform.CFrame)
 	end
 	EntityCollisionService:ApplyModel(model)
-end
-
-function UnitContext:_SyncUnitEntity(entityContext: any, entity: number, model: Model)
-	local identity = self:_ReadEntityValue(entityContext, entity, "Identity", "Entity")
-	local ownership = self:_ReadEntityValue(entityContext, entity, "Ownership", "Entity")
-	local health = self:_ReadEntityValue(entityContext, entity, "Health", "Entity")
-	local role = self:_ReadEntityValue(entityContext, entity, "Role", "Unit")
-	local currentMoveSpeed = self:_ReadEntityValue(entityContext, entity, "CurrentMoveSpeed", "Unit")
-	local animationState = self:_ReadEntityValue(entityContext, entity, "AnimationState", "Unit")
-	local animationLooping = self:_ReadEntityValue(entityContext, entity, "AnimationLooping", "Unit")
-
-	if type(identity) == "table" then
-		model:SetAttribute("UnitGuid", identity.EntityId)
-		model:SetAttribute("UnitId", identity.DefinitionId)
-	end
-	if type(ownership) == "table" then
-		model:SetAttribute("Faction", ownership.Faction)
-		model:SetAttribute("OwnerKind", ownership.OwnerKind)
-		model:SetAttribute("OwnerId", ownership.OwnerId)
-	end
-	if type(role) == "table" then
-		model:SetAttribute("UnitRole", role.Role)
-		model:SetAttribute("UnitDisplayName", role.DisplayName)
-	end
-	if type(health) == "table" then
-		model:SetAttribute("Health", health.Current)
-		model:SetAttribute("MaxHealth", health.Max)
-	end
-	if type(animationState) == "string" then
-		model:SetAttribute("AnimationState", animationState)
-	end
-	if type(animationLooping) == "boolean" then
-		model:SetAttribute("AnimationLooping", animationLooping)
-	end
-
-	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	if humanoid ~= nil then
-		if type(health) == "table" and type(health.Max) == "number" then
-			humanoid.MaxHealth = health.Max
-			humanoid.Health = health.Current
-		end
-		if type(currentMoveSpeed) == "table" and type(currentMoveSpeed.Value) == "number" then
-			humanoid.WalkSpeed = currentMoveSpeed.Value
-		end
-	end
-end
-
-function UnitContext:_BuildUnitFacts(context: any): any
-	if type(context) ~= "table" or type(context.Entity) ~= "number" then
-		return {}
-	end
-
-	local entity = context.Entity
-	local role = self._unitReadService:GetRole(entity)
-	if type(role) ~= "table" then
-		return {}
-	end
-
-	local pathState = self._unitReadService:GetPathState(entity)
-	local hasGoalTarget = type(pathState) == "table"
-		and pathState.GoalPosition ~= nil
-		and pathState.FailedGoalRevision ~= pathState.GoalRevision
-	local buildTargetEntity = self:_ResolveBuildTargetFact(entity)
-
-	return {
-		UnitHasGoalTarget = hasGoalTarget == true,
-		UnitMoveData = {
-			GoalPosition = if type(pathState) == "table" then pathState.GoalPosition else nil,
-		},
-		UnitHasBuildableStructure = type(buildTargetEntity) == "number",
-		UnitBuildTargetEntity = buildTargetEntity,
-		UnitBuildData = {
-			TargetStructureEntity = buildTargetEntity,
-		},
-	}
-end
-
-function UnitContext:_ResolveBuildTargetFact(entity: number): number?
-	local role = self._unitReadService:GetRole(entity)
-	if type(role) ~= "table" or type(role.BuildWorkPerSecond) ~= "number" or type(role.BuildRange) ~= "number" then
-		return nil
-	end
-
-	local ownership = self._unitReadService:GetOwnership(entity)
-	if type(ownership) ~= "table" or ownership.OwnerKind ~= "Player" then
-		return nil
-	end
-
-	local ownerUserId = tonumber(ownership.OwnerId)
-	local cframe = self._unitReadService:GetEntityCFrame(entity)
-	if ownerUserId == nil or cframe == nil then
-		return nil
-	end
-
-	local assignment = self._unitReadService:GetBuilderAssignment(entity)
-	local assignedEntity = if type(assignment) == "table" then assignment.TargetStructureEntity else nil
-	if type(assignedEntity) == "number" then
-		local assignedResult =
-			self._structureContext:IsStructureBuildableForBuilder(assignedEntity, ownerUserId, cframe.Position, role.BuildRange)
-		if assignedResult.success and assignedResult.value == true then
-			return assignedEntity
-		end
-	end
-
-	local result = self._structureContext:FindNearestOwnedUnfinishedStructure(ownerUserId, cframe.Position, math.huge)
-	return if result.success then result.value else nil
 end
 
 function UnitContext:_ReadEntityValue(entityContext: any, entity: number, key: string, featureName: string): any

@@ -23,6 +23,9 @@ local SYNC_OPTIONAL_CALLBACKS = {
 	"PollEntity",
 	"QuerySyncEntities",
 	"QueryPollEntities",
+	"BuildRuntimeAttributes",
+	"BuildHumanoidProperties",
+	"BuildTransformProjection",
 }
 
 local REPLICATION_OPTIONAL_CALLBACKS = {
@@ -167,6 +170,9 @@ function EntityValidationService:ValidateSyncContributor(featureName: string, pa
 		PollEntity = payload.PollEntity,
 		QuerySyncEntities = payload.QuerySyncEntities,
 		QueryPollEntities = payload.QueryPollEntities,
+		BuildRuntimeAttributes = payload.BuildRuntimeAttributes,
+		BuildHumanoidProperties = payload.BuildHumanoidProperties,
+		BuildTransformProjection = payload.BuildTransformProjection,
 	}))
 end
 

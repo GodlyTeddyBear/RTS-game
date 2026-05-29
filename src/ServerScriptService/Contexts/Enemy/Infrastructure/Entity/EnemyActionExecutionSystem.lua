@@ -14,6 +14,8 @@ local GOAL_REACHED_DISTANCE = 4
 local ATTACK_ANIMATION_STATE = "Attack"
 local MOVE_ANIMATION_STATE = "Walk"
 local IDLE_ANIMATION_STATE = "Idle"
+local ACTION_ATTACK = "Attack"
+local ACTION_ADVANCE = "Advance"
 
 function EnemyActionExecutionSystem.new(entityFactory: any, dependencies: any)
 	local self = setmetatable({}, EnemyActionExecutionSystem)
@@ -61,12 +63,12 @@ function EnemyActionExecutionSystem:_RunEntity(entity: number, now: number, delt
 	local actionId = if type(actionIntent) == "table" and type(actionIntent.ActionId) == "string" then actionIntent.ActionId else nil
 	local data = if type(actionIntent) == "table" and type(actionIntent.Data) == "table" then actionIntent.Data else nil
 
-	if type(actionState) == "table" and actionState.Status == AISharedContract.ActionStatus.Running and actionId == "EnemyAttack" then
+	if type(actionState) == "table" and actionState.Status == AISharedContract.ActionStatus.Running and actionId == ACTION_ATTACK then
 		self:_RunAttack(entity, role, attackCooldown, currentCFrame, targetState, actionIntent, data, now)
 		return
 	end
 
-	if type(actionState) == "table" and actionState.Status == AISharedContract.ActionStatus.Running and actionId == "EnemyAdvance" then
+	if type(actionState) == "table" and actionState.Status == AISharedContract.ActionStatus.Running and actionId == ACTION_ADVANCE then
 		self:_SetTarget(entity, nil, nil)
 		self:_RunAdvance(entity, role, pathState, currentMoveSpeed, currentCFrame, data, deltaTime)
 		return
@@ -159,12 +161,6 @@ function EnemyActionExecutionSystem:_RunAdvance(
 		IsMoving = true,
 	})
 	self:_SetAnimation(entity, MOVE_ANIMATION_STATE, true)
-
-	local boundInstanceResult = self._entityContext:GetBoundInstance(entity)
-	local boundInstance = if boundInstanceResult.success then boundInstanceResult.value else nil
-	if boundInstance ~= nil and boundInstance:IsA("Model") then
-		boundInstance:PivotTo(nextCFrame)
-	end
 
 	if (goalPosition - nextPosition).Magnitude <= GOAL_REACHED_DISTANCE then
 		self._baseContext:ApplyDamage(role.Damage)

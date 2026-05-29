@@ -37,15 +37,23 @@ function EntityRuntimeSyncService:RunRuntimeSync(entityContext: any): Result.Res
 
 			for _, entity in ipairs(self:_ResolveEntitiesForSync(entityContext, featureName, contributor)) do
 				local boundInstance = self._bindingService:GetBoundInstance(entity)
-				if boundInstance == nil or not boundInstance:IsA("Model") or boundInstance.Parent == nil then
+				if boundInstance == nil or boundInstance.Parent == nil then
 					continue
 				end
+
+				self:_ApplyProjection(contributor, entityContext, entity, boundInstance)
 
 				if type(contributor.SyncEntity) == "function" then
 					local didSync = pcall(contributor.SyncEntity, entityContext, entity, boundInstance)
 					if didSync then
 						syncedCount += 1
 					end
+				elseif
+					type(contributor.BuildRuntimeAttributes) == "function"
+					or type(contributor.BuildHumanoidProperties) == "function"
+					or type(contributor.BuildTransformProjection) == "function"
+				then
+					syncedCount += 1
 				end
 			end
 		end
@@ -66,7 +74,7 @@ function EntityRuntimeSyncService:RunRuntimePoll(entityContext: any): Result.Res
 
 			for _, entity in ipairs(self:_ResolveEntitiesForPoll(entityContext, featureName, contributor)) do
 				local boundInstance = self._bindingService:GetBoundInstance(entity)
-				if boundInstance == nil or not boundInstance:IsA("Model") or boundInstance.Parent == nil then
+				if boundInstance == nil or boundInstance.Parent == nil then
 					continue
 				end
 
@@ -93,6 +101,70 @@ function EntityRuntimeSyncService:_ResolveEntitiesForSync(entityContext: any, fe
 	end
 
 	return self._runtimeParticipation:CollectRuntimeEntitiesForFeature(featureName)
+end
+
+function EntityRuntimeSyncService:_ApplyProjection(contributor: any, entityContext: any, entity: number, instance: Instance)
+	self:_ApplyRuntimeAttributes(contributor, entityContext, entity, instance)
+	self:_ApplyHumanoidProperties(contributor, entityContext, entity, instance)
+	self:_ApplyTransformProjection(contributor, entityContext, entity, instance)
+end
+
+function EntityRuntimeSyncService:_ApplyRuntimeAttributes(contributor: any, entityContext: any, entity: number, instance: Instance)
+	if type(contributor.BuildRuntimeAttributes) ~= "function" then
+		return
+	end
+
+	local didBuild, attributes = pcall(contributor.BuildRuntimeAttributes, entityContext, entity, instance)
+	if not didBuild or type(attributes) ~= "table" then
+		return
+	end
+
+	for attributeName, value in pairs(attributes) do
+		if type(attributeName) == "string" then
+			instance:SetAttribute(attributeName, value)
+		end
+	end
+end
+
+function EntityRuntimeSyncService:_ApplyHumanoidProperties(contributor: any, entityContext: any, entity: number, instance: Instance)
+	if type(contributor.BuildHumanoidProperties) ~= "function" then
+		return
+	end
+
+	local humanoid = if instance:IsA("Model") then instance:FindFirstChildOfClass("Humanoid") else nil
+	if humanoid == nil then
+		return
+	end
+
+	local didBuild, properties = pcall(contributor.BuildHumanoidProperties, entityContext, entity, instance)
+	if not didBuild or type(properties) ~= "table" then
+		return
+	end
+
+	for propertyName, value in pairs(properties) do
+		if type(propertyName) == "string" then
+			pcall(function()
+				(humanoid :: any)[propertyName] = value
+			end)
+		end
+	end
+end
+
+function EntityRuntimeSyncService:_ApplyTransformProjection(contributor: any, entityContext: any, entity: number, instance: Instance)
+	if type(contributor.BuildTransformProjection) ~= "function" then
+		return
+	end
+
+	local didBuild, cframe = pcall(contributor.BuildTransformProjection, entityContext, entity, instance)
+	if not didBuild or typeof(cframe) ~= "CFrame" then
+		return
+	end
+
+	if instance:IsA("Model") then
+		instance:PivotTo(cframe)
+	elseif instance:IsA("BasePart") then
+		instance.CFrame = cframe
+	end
 end
 
 function EntityRuntimeSyncService:_ResolveEntitiesForPoll(entityContext: any, featureName: string, contributor: any): { number }

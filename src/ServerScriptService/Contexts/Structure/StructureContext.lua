@@ -18,7 +18,7 @@ local StructureEntityReadService = require(script.Parent.Infrastructure.Entity.S
 local StructureEntitySchema = require(script.Parent.Infrastructure.Entity.StructureEntitySchema)
 local StructureActionExecutionSystem = require(script.Parent.Infrastructure.Entity.StructureActionExecutionSystem)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
-local StructureAIProfiles = require(script.Parent.Parent.AI.Config.Profiles.StructureAIProfiles)
+local StructureAIProfiles = require(script.Parent.Config.AIProfiles)
 local RegisterStructureCommand = require(script.Parent.Application.Commands.RegisterStructureCommand)
 local AdvanceConstructionCommand = require(script.Parent.Application.Commands.AdvanceConstructionCommand)
 local ApplyDamageStructureCommand = require(script.Parent.Application.Commands.ApplyDamageStructureCommand)
@@ -231,8 +231,40 @@ function StructureContext:_RegisterEntityInfrastructure(): Result.Result<boolean
 				})
 				return if queryResult.success then queryResult.value else {}
 			end,
-			SyncEntity = function(entityContext: any, entity: number, model: Model)
-				self:_SyncStructureEntity(entityContext, entity, model)
+			BuildRuntimeAttributes = function(entityContext: any, entity: number)
+				local identity = self:_ReadEntityValue(entityContext, entity, "Identity", "Entity")
+				local health = self:_ReadEntityValue(entityContext, entity, "Health", "Entity")
+				local construction = self:_ReadEntityValue(entityContext, entity, "Construction", "Structure")
+				local stats = self:_ReadEntityValue(entityContext, entity, "Stats", "Structure")
+				local animationState = self:_ReadEntityValue(entityContext, entity, "AnimationState", "Structure")
+				local animationLooping = self:_ReadEntityValue(entityContext, entity, "AnimationLooping", "Structure")
+				local targetEnemyId = self:_ReadEntityValue(entityContext, entity, "TargetEnemyId", "Structure")
+
+				return {
+					StructureId = if type(identity) == "table" then identity.EntityId else nil,
+					StructureType = if type(stats) == "table"
+						then stats.StructureType
+						else if type(identity) == "table" then identity.DefinitionId else nil,
+					Health = if type(health) == "table" then health.Current else nil,
+					MaxHealth = if type(health) == "table" then health.Max else nil,
+					CurrentBuildWork = if type(construction) == "table" then construction.CurrentWork else nil,
+					RequiredBuildWork = if type(construction) == "table" then construction.RequiredWork else nil,
+					AnimationState = if type(animationState) == "string" then animationState else nil,
+					AnimationLooping = if type(animationLooping) == "boolean" then animationLooping else nil,
+					TargetEnemyId = if type(targetEnemyId) == "string" and targetEnemyId ~= "" then targetEnemyId else nil,
+				}
+			end,
+			BuildHumanoidProperties = function(entityContext: any, entity: number)
+				local health = self:_ReadEntityValue(entityContext, entity, "Health", "Entity")
+
+				return {
+					MaxHealth = if type(health) == "table" then health.Max else nil,
+					Health = if type(health) == "table" then health.Current else nil,
+				}
+			end,
+			BuildTransformProjection = function(entityContext: any, entity: number)
+				local transform = self:_ReadEntityValue(entityContext, entity, "Transform", "Entity")
+				return if type(transform) == "table" then transform.CFrame else nil
 			end,
 		})
 		if not syncResult.success then
@@ -308,144 +340,6 @@ function StructureContext:_RegisterAIContracts(): Result.Result<boolean>
 			return result
 		end
 
-		local evaluations = {
-			{
-				EvaluationId = "StructureIsOperational",
-				Evaluate = function(context: any): boolean
-					return type(context) == "table"
-						and type(context.Facts) == "table"
-						and context.Facts.StructureOperational == true
-				end,
-			},
-			{
-				EvaluationId = "StructureCanAttack",
-				Evaluate = function(context: any): boolean
-					return type(context) == "table"
-						and type(context.Facts) == "table"
-						and context.Facts.StructureOperational == true
-						and type(context.Facts.TargetEntity) == "number"
-				end,
-			},
-		}
-		for _, evaluation in ipairs(evaluations) do
-			local result = acceptDuplicate(self._aiContext:RegisterEvaluation(evaluation), "DuplicateEvaluation")
-			if not result.success then
-				return result
-			end
-		end
-
-		local actions = {
-			{
-				ActionId = "StructureIdle",
-				ProduceIntent = function(_context: any): any
-					return {
-						Data = {
-							Reason = "Idle",
-						},
-					}
-				end,
-			},
-			{
-				ActionId = "StructureAttack",
-				ProduceIntent = function(context: any): any
-					local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
-					return {
-						TargetEntity = facts.TargetEntity,
-						Data = facts.AttackData,
-					}
-				end,
-			},
-			{
-				ActionId = "StructureExtract",
-				ProduceIntent = function(context: any): any
-					local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
-					return {
-						Data = facts.ExtractData,
-					}
-				end,
-			},
-			{
-				ActionId = "StructureStasis",
-				ProduceIntent = function(context: any): any
-					local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
-					return {
-						Data = facts.StasisData,
-					}
-				end,
-			},
-		}
-		for _, action in ipairs(actions) do
-			local result = acceptDuplicate(self._aiContext:RegisterActionDefinition(action), "DuplicateActionDefinition")
-			if not result.success then
-				return result
-			end
-		end
-
-		local behaviorPayloads = {
-			{
-				DefinitionId = "StructureIdleBehavior",
-				Definition = "StructureIdle",
-			},
-			{
-				DefinitionId = "StructureAttackBehavior",
-				Definition = {
-					Priority = {
-						{
-							Sequence = {
-								"StructureCanAttack",
-								"StructureAttack",
-							},
-						},
-						"StructureIdle",
-					},
-				},
-			},
-			{
-				DefinitionId = "StructureExtractBehavior",
-				Definition = {
-					Priority = {
-						{
-							Sequence = {
-								"StructureIsOperational",
-								"StructureExtract",
-							},
-						},
-						"StructureIdle",
-					},
-				},
-			},
-			{
-				DefinitionId = "StructureStasisBehavior",
-				Definition = {
-					Priority = {
-						{
-							Sequence = {
-								"StructureIsOperational",
-								"StructureStasis",
-							},
-						},
-						"StructureIdle",
-					},
-				},
-			},
-		}
-		for _, behaviorPayload in ipairs(behaviorPayloads) do
-			local result = acceptDuplicate(self._aiContext:RegisterBehaviorDefinition(behaviorPayload), "DuplicateBehaviorDefinition")
-			if not result.success then
-				return result
-			end
-		end
-
-		local providerResult = acceptDuplicate(self._aiContext:RegisterFactProvider({
-			ProviderId = "StructureFacts",
-			BuildFacts = function(context: any): any
-				return self:_BuildStructureFacts(context)
-			end,
-		}), "DuplicateFactProvider")
-		if not providerResult.success then
-			return providerResult
-		end
-
 		for _, profilePayload in pairs(StructureAIProfiles) do
 			local result = acceptDuplicate(self._aiContext:RegisterProfile(profilePayload), "DuplicateProfile")
 			if not result.success then
@@ -503,13 +397,8 @@ function StructureContext:_PrepareStructureModel(model: Model, snapshot: any)
 	local structureId = if type(identity.EntityId) == "string" and identity.EntityId ~= "" then identity.EntityId else tostring(sourcePlacement.InstanceId)
 
 	model.Name = ("%s_%s"):format(structureType, structureId)
-	model:SetAttribute("PlacementInstanceId", sourcePlacement.InstanceId)
-	model:SetAttribute("StructureId", structureId)
-	model:SetAttribute("StructureType", structureType)
 	ensureHumanoid(model)
 	ensureAnimationsFolderValue(model, self._animationsFolder)
-	model:SetAttribute("AnimationState", model:GetAttribute("AnimationState") or "Idle")
-	model:SetAttribute("AnimationLooping", if model:GetAttribute("AnimationLooping") == nil then true else model:GetAttribute("AnimationLooping"))
 
 	if sourcePlacement.RotationQuarterTurns ~= 0 then
 		ModelPlus.RotateYaw(model, math.rad((sourcePlacement.RotationQuarterTurns or 0) * 90))
@@ -521,91 +410,9 @@ function StructureContext:_PrepareStructureModel(model: Model, snapshot: any)
 	EntityCollisionService:ApplyStructureModel(model)
 end
 
-function StructureContext:_SyncStructureEntity(entityContext: any, entity: number, model: Model)
-	local identity = self:_ReadEntityValue(entityContext, entity, "Identity", "Entity")
-	local health = self:_ReadEntityValue(entityContext, entity, "Health", "Entity")
-	local construction = self:_ReadEntityValue(entityContext, entity, "Construction", "Structure")
-	local stats = self:_ReadEntityValue(entityContext, entity, "Stats", "Structure")
-	local transform = self:_ReadEntityValue(entityContext, entity, "Transform", "Entity")
-	local animationState = self:_ReadEntityValue(entityContext, entity, "AnimationState", "Structure")
-	local animationLooping = self:_ReadEntityValue(entityContext, entity, "AnimationLooping", "Structure")
-	local targetEnemyId = self:_ReadEntityValue(entityContext, entity, "TargetEnemyId", "Structure")
-
-	if type(identity) == "table" then
-		model:SetAttribute("StructureId", identity.EntityId)
-		model:SetAttribute("StructureType", identity.DefinitionId)
-	end
-	if type(stats) == "table" then
-		model:SetAttribute("StructureType", stats.StructureType)
-	end
-	if type(health) == "table" then
-		model:SetAttribute("Health", health.Current)
-		model:SetAttribute("MaxHealth", health.Max)
-	end
-	if type(construction) == "table" then
-		model:SetAttribute("CurrentBuildWork", construction.CurrentWork)
-		model:SetAttribute("RequiredBuildWork", construction.RequiredWork)
-	end
-	if type(animationState) == "string" then
-		model:SetAttribute("AnimationState", animationState)
-	end
-	if type(animationLooping) == "boolean" then
-		model:SetAttribute("AnimationLooping", animationLooping)
-	end
-	model:SetAttribute("TargetEnemyId", if type(targetEnemyId) == "string" and targetEnemyId ~= "" then targetEnemyId else nil)
-	if type(transform) == "table" and typeof(transform.CFrame) == "CFrame" then
-		model:PivotTo(transform.CFrame)
-	end
-
-	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	if humanoid ~= nil and type(health) == "table" then
-		humanoid.MaxHealth = health.Max or humanoid.MaxHealth
-		humanoid.Health = health.Current or humanoid.Health
-	end
-end
-
 function StructureContext:_ReadEntityValue(entityContext: any, entity: number, key: string, featureName: string): any
 	local result = entityContext:Get(entity, key, featureName)
 	return if result.success then result.value else nil
-end
-
-function StructureContext:_BuildStructureFacts(context: any): any
-	if type(context) ~= "table" or type(context.Entity) ~= "number" then
-		return {}
-	end
-	local entity = context.Entity
-	if not self._structureReadService:IsPlaced(entity) then
-		return {}
-	end
-
-	local stats = self._structureReadService:GetStats(entity)
-	local position = self._structureReadService:GetPosition(entity)
-	local isOperational = self._structureReadService:IsOperational(entity)
-	local facts = {
-		StructureOperational = isOperational,
-		StructureStats = stats,
-	}
-
-	if type(stats) == "table" and stats.RuntimeProfileId == "Attack" and position ~= nil then
-		local nearestResult = self._enemyContext:GetNearestAliveEnemy(position, stats.AttackRange or 0)
-		local nearest = if nearestResult.success then nearestResult.value else nil
-		if type(nearest) == "table" then
-			facts.TargetEntity = nearest.Entity
-			facts.AttackData = {
-				TargetPosition = nearest.CFrame.Position,
-			}
-		end
-	elseif type(stats) == "table" and stats.RuntimeProfileId == "Extract" then
-		facts.ExtractData = {
-			StructureEntity = entity,
-		}
-	elseif type(stats) == "table" and stats.RuntimeProfileId == "Stasis" then
-		facts.StasisData = {
-			StructureEntity = entity,
-		}
-	end
-
-	return facts
 end
 
 function StructureContext:RegisterStructure(record: StructureRecord): Result.Result<number>

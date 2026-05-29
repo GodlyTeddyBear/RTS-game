@@ -11,7 +11,7 @@ local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 local SummonActionExecutionSystem = {}
 SummonActionExecutionSystem.__index = SummonActionExecutionSystem
 
-local ACTION_ENGAGE_ENEMY = "SummonEngageEnemy"
+local ACTION_ENGAGE_ENEMY = "EngageEnemy"
 local RUNNING_STATUSES = {
 	[AISharedContract.ActionStatus.Requested] = true,
 	[AISharedContract.ActionStatus.Running] = true,
@@ -131,11 +131,6 @@ function SummonActionExecutionSystem:_SetTransform(entity: number, cframe: CFram
 		CFrame = cframe,
 	}, "Entity")
 	self:_MarkDirty(entity)
-
-	local boundPart = self._summonReadService:GetBoundPart(entity)
-	if boundPart ~= nil then
-		boundPart.CFrame = cframe
-	end
 end
 
 function SummonActionExecutionSystem:_SetTargetEnemyId(entity: number, enemyId: string?)

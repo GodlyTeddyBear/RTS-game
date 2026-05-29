@@ -3,10 +3,10 @@
 local SummonAIProfiles = {
 	SummonSwarmDroneAI = {
 		ProfileId = "SummonSwarmDroneAI",
-		DefinitionId = "SummonSwarmDroneBehavior",
+		DefinitionId = "EngageEnemyOrIdle",
 		TickInterval = 0.1,
-		InitialBehaviorId = "SummonIdle",
-		InitialNodePath = { "SummonIdle" },
+		InitialBehaviorId = "Idle",
+		InitialNodePath = { "Idle" },
 		Blackboard = {},
 		Metadata = {
 			Description = "Summon AI profile for swarm drones.",

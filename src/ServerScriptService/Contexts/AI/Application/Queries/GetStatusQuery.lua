@@ -10,7 +10,6 @@ local BasicActions = require(script.Parent.Parent.Parent.Config.Actions.BasicAct
 local BasicBehaviors = require(script.Parent.Parent.Parent.Config.Behaviors.BasicBehaviors)
 local BasicEvaluations = require(script.Parent.Parent.Parent.Config.Evaluations.BasicEvaluations)
 local BasicFactProviders = require(script.Parent.Parent.Parent.Config.Facts.BasicFactProviders)
-local BasicAIProfiles = require(script.Parent.Parent.Parent.Config.Profiles.BasicAIProfiles)
 
 local GetStatusQuery = {}
 GetStatusQuery.__index = GetStatusQuery
@@ -53,7 +52,6 @@ function GetStatusQuery:Execute(
 				ActionCount = self:_CountEntries(BasicActions),
 				FactProviderCount = self:_CountEntries(BasicFactProviders),
 				BehaviorDefinitionCount = self:_CountEntries(BasicBehaviors),
-				ProfileCount = self:_CountEntries(BasicAIProfiles),
 			}),
 		}))
 	end, self:_Label())

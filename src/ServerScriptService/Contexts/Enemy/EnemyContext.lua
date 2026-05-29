@@ -15,7 +15,7 @@ local EnemyEntityReadService = require(script.Parent.Infrastructure.Entity.Enemy
 local EnemyEntitySchema = require(script.Parent.Infrastructure.Entity.EnemyEntitySchema)
 local EnemyActionExecutionSystem = require(script.Parent.Infrastructure.Entity.EnemyActionExecutionSystem)
 local EnemySpawnPolicy = require(script.Parent.EnemyDomain.Policies.EnemySpawnPolicy)
-local EnemyAIProfiles = require(script.Parent.Parent.AI.Config.Profiles.EnemyAIProfiles)
+local EnemyAIProfiles = require(script.Parent.Config.AIProfiles)
 
 local SpawnEnemyCommand = require(script.Parent.Application.Commands.SpawnEnemy)
 local DespawnEnemyCommand = require(script.Parent.Application.Commands.DespawnEnemy)
@@ -54,6 +54,11 @@ local function moduleSpec(name: string, module: any, cacheAs: string?): BaseCont
 		Module = module,
 		CacheAs = cacheAs,
 	}
+end
+
+local function readEntityValue(entityContext: any, entity: number, key: string, featureName: string): any
+	local result = entityContext:Get(entity, key, featureName)
+	return if result.success then result.value else nil
 end
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
@@ -219,8 +224,38 @@ function EnemyContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 				end
 				return queryResult.value
 			end,
-			SyncEntity = function(entityContext: any, entity: number, model: Model)
-				self:_SyncEnemyEntity(entityContext, entity, model)
+			BuildRuntimeAttributes = function(entityContext: any, entity: number)
+				local identity = readEntityValue(entityContext, entity, "Identity", "Entity")
+				local health = readEntityValue(entityContext, entity, "Health", "Entity")
+				local role = readEntityValue(entityContext, entity, "Role", "Enemy")
+				local moveSpeed = readEntityValue(entityContext, entity, "CurrentMoveSpeed", "Enemy")
+				local animationState = readEntityValue(entityContext, entity, "AnimationState", "Enemy")
+				local animationLooping = readEntityValue(entityContext, entity, "AnimationLooping", "Enemy")
+
+				return {
+					EnemyId = if type(identity) == "table" then identity.EntityId else nil,
+					EnemyRole = if type(role) == "table" then role.Role else nil,
+					WaveNumber = if type(role) == "table" then role.WaveNumber else nil,
+					Health = if type(health) == "table" then health.Current else nil,
+					MaxHealth = if type(health) == "table" then health.Max else nil,
+					CurrentMoveSpeed = if type(moveSpeed) == "table" then moveSpeed.Value else nil,
+					AnimationState = if type(animationState) == "string" then animationState else nil,
+					AnimationLooping = if type(animationLooping) == "boolean" then animationLooping else nil,
+				}
+			end,
+			BuildHumanoidProperties = function(entityContext: any, entity: number)
+				local health = readEntityValue(entityContext, entity, "Health", "Entity")
+				local moveSpeed = readEntityValue(entityContext, entity, "CurrentMoveSpeed", "Enemy")
+
+				return {
+					MaxHealth = if type(health) == "table" then health.Max else nil,
+					Health = if type(health) == "table" then health.Current else nil,
+					WalkSpeed = if type(moveSpeed) == "table" then moveSpeed.Value else nil,
+				}
+			end,
+			BuildTransformProjection = function(entityContext: any, entity: number)
+				local transform = readEntityValue(entityContext, entity, "Transform", "Entity")
+				return if type(transform) == "table" then transform.CFrame else nil
 			end,
 		})
 		if not syncResult.success then
@@ -295,88 +330,6 @@ end
 
 function EnemyContext:_RegisterAIContracts(): Result.Result<boolean>
 	return Catch(function()
-		local evaluationResult = self._aiContext:RegisterEvaluation({
-			EvaluationId = "EnemyHasAttackTarget",
-			Evaluate = function(context: any): boolean
-				return type(context) == "table"
-					and type(context.Facts) == "table"
-					and type(context.Facts.AttackTargetKind) == "string"
-			end,
-			Metadata = {
-				Description = "Enemy evaluation that passes when a structure or base target is in range.",
-			},
-		})
-		if not evaluationResult.success and evaluationResult.type ~= "DuplicateEvaluation" then
-			return evaluationResult
-		end
-
-		local actionResult = self._aiContext:RegisterActionDefinition({
-			ActionId = "EnemyAttack",
-			ProduceIntent = function(context: any): any
-				local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
-				return {
-					TargetEntity = if type(facts.TargetEntity) == "number" then facts.TargetEntity else nil,
-					Data = facts.AttackData,
-				}
-			end,
-			Metadata = {
-				Description = "Enemy attack intent producer.",
-			},
-		})
-		if not actionResult.success and actionResult.type ~= "DuplicateActionDefinition" then
-			return actionResult
-		end
-
-		actionResult = self._aiContext:RegisterActionDefinition({
-			ActionId = "EnemyAdvance",
-			ProduceIntent = function(context: any): any
-				local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
-				return {
-					Data = facts.AdvanceData,
-				}
-			end,
-			Metadata = {
-				Description = "Enemy move intent producer.",
-			},
-		})
-		if not actionResult.success and actionResult.type ~= "DuplicateActionDefinition" then
-			return actionResult
-		end
-
-		local behaviorResult = self._aiContext:RegisterBehaviorDefinition({
-			DefinitionId = "EnemyTargetOrAdvance",
-			Definition = {
-				Priority = {
-					{
-						Sequence = {
-							"EnemyHasAttackTarget",
-							"EnemyAttack",
-						},
-					},
-					"EnemyAdvance",
-				},
-			},
-			Metadata = {
-				Description = "Enemy behavior that attacks when a target is in range and advances otherwise.",
-			},
-		})
-		if not behaviorResult.success and behaviorResult.type ~= "DuplicateBehaviorDefinition" then
-			return behaviorResult
-		end
-
-		local providerResult = self._aiContext:RegisterFactProvider({
-			ProviderId = "EnemyCombatFacts",
-			BuildFacts = function(context: any): any
-				return self:_BuildEnemyFacts(context)
-			end,
-			Metadata = {
-				Description = "Enemy fact provider that resolves structure/base targets and goal movement.",
-			},
-		})
-		if not providerResult.success and providerResult.type ~= "DuplicateFactProvider" then
-			return providerResult
-		end
-
 		for _, profilePayload in pairs(EnemyAIProfiles) do
 			local profileResult = self._aiContext:RegisterProfile(profilePayload)
 			if not profileResult.success and profileResult.type ~= "DuplicateProfile" then
@@ -476,136 +429,6 @@ function EnemyContext:_PrepareEnemyModel(model: Model, role: string?, enemyId: s
 	assert(model.PrimaryPart ~= nil, "Enemy model missing PrimaryPart: " .. model.Name)
 	model.PrimaryPart.Anchored = true
 	EntityCollisionService:ApplyModel(model)
-end
-
-function EnemyContext:_BuildEnemyFacts(context: any): any
-	if type(context) ~= "table" or type(context.Entity) ~= "number" then
-		return {}
-	end
-
-	local entity = context.Entity
-	local role = self._enemyEntityReadService:GetRole(entity)
-	local transform = self._enemyEntityReadService:GetEntityCFrame(entity)
-	if type(role) ~= "table" or transform == nil then
-		return {}
-	end
-
-	local baseTargetResult = self._baseContext:GetBaseTargetCFrame()
-	local baseTargetCFrame = if baseTargetResult.success then baseTargetResult.value else nil
-	local advanceData = {
-		GoalPosition = if baseTargetCFrame ~= nil then baseTargetCFrame.Position else nil,
-	}
-
-	local nearestStructureEntity, nearestStructurePosition = self:_ResolveNearestStructureInRange(
-		transform.Position,
-		role.AttackRange
-	)
-	if nearestStructureEntity ~= nil and nearestStructurePosition ~= nil then
-		return {
-			TargetEntity = nearestStructureEntity,
-			AttackTargetKind = "Structure",
-			AttackData = {
-				TargetKind = "Structure",
-				TargetPosition = nearestStructurePosition,
-			},
-			AdvanceData = advanceData,
-		}
-	end
-
-	if baseTargetCFrame ~= nil and (baseTargetCFrame.Position - transform.Position).Magnitude <= role.AttackRange then
-		return {
-			TargetEntity = nil,
-			AttackTargetKind = "Base",
-			AttackData = {
-				TargetKind = "Base",
-				TargetPosition = baseTargetCFrame.Position,
-			},
-			AdvanceData = advanceData,
-		}
-	end
-
-	return {
-		AdvanceData = advanceData,
-	}
-end
-
-function EnemyContext:_ResolveNearestStructureInRange(position: Vector3, attackRange: number): (number?, Vector3?)
-	local structuresResult = self._structureContext:GetActiveStructures()
-	if not structuresResult.success then
-		return nil, nil
-	end
-
-	local nearestEntity = nil :: number?
-	local nearestPosition = nil :: Vector3?
-	local nearestDistance = attackRange
-
-	for _, structureEntity in ipairs(structuresResult.value) do
-		local positionResult = self._structureContext:GetStructurePosition(structureEntity)
-		local structurePosition = if positionResult.success then positionResult.value else nil
-		if structurePosition ~= nil then
-			local distance = (structurePosition - position).Magnitude
-			if distance <= nearestDistance then
-				nearestEntity = structureEntity
-				nearestPosition = structurePosition
-				nearestDistance = distance
-			end
-		end
-	end
-
-	return nearestEntity, nearestPosition
-end
-
-function EnemyContext:_SyncEnemyEntity(entityContext: any, entity: number, model: Model)
-	local identityResult = entityContext:Get(entity, "Identity", "Entity")
-	local healthResult = entityContext:Get(entity, "Health", "Entity")
-	local roleResult = entityContext:Get(entity, "Role", "Enemy")
-	local transformResult = entityContext:Get(entity, "Transform", "Entity")
-	local moveSpeedResult = entityContext:Get(entity, "CurrentMoveSpeed", "Enemy")
-	local animationStateResult = entityContext:Get(entity, "AnimationState", "Enemy")
-	local animationLoopingResult = entityContext:Get(entity, "AnimationLooping", "Enemy")
-
-	local identity = if identityResult.success then identityResult.value else nil
-	local health = if healthResult.success then healthResult.value else nil
-	local role = if roleResult.success then roleResult.value else nil
-	local transform = if transformResult.success then transformResult.value else nil
-	local moveSpeed = if moveSpeedResult.success then moveSpeedResult.value else nil
-	local animationState = if animationStateResult.success then animationStateResult.value else nil
-	local animationLooping = if animationLoopingResult.success then animationLoopingResult.value else nil
-
-	if type(identity) == "table" then
-		model:SetAttribute("EnemyId", identity.EntityId)
-	end
-	if type(role) == "table" then
-		model:SetAttribute("EnemyRole", role.Role)
-		model:SetAttribute("WaveNumber", role.WaveNumber)
-	end
-	if type(health) == "table" then
-		model:SetAttribute("Health", health.Current)
-		model:SetAttribute("MaxHealth", health.Max)
-	end
-	if type(moveSpeed) == "table" then
-		model:SetAttribute("CurrentMoveSpeed", moveSpeed.Value)
-	end
-	if type(animationState) == "string" then
-		model:SetAttribute("AnimationState", animationState)
-	end
-	if type(animationLooping) == "boolean" then
-		model:SetAttribute("AnimationLooping", animationLooping)
-	end
-	if type(transform) == "table" and typeof(transform.CFrame) == "CFrame" then
-		model:PivotTo(transform.CFrame)
-	end
-
-	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	if humanoid ~= nil then
-		if type(health) == "table" and type(health.Max) == "number" then
-			humanoid.MaxHealth = health.Max
-			humanoid.Health = health.Current
-		end
-		if type(moveSpeed) == "table" and type(moveSpeed.Value) == "number" then
-			humanoid.WalkSpeed = moveSpeed.Value
-		end
-	end
 end
 
 function EnemyContext:_OnWaveSpawnEnemy(role: string, spawnCFrame: CFrame, waveNumber: number)
