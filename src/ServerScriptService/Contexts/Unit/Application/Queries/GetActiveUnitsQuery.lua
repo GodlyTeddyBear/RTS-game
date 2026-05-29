@@ -1,12 +1,5 @@
 --!strict
 
---[=[
-    @class GetActiveUnitsQuery
-    Returns the active unit entities tracked by the unit entity factory.
-
-    @server
-]=]
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
@@ -24,16 +17,14 @@ function GetActiveUnitsQuery.new()
 	return setmetatable(self, GetActiveUnitsQuery)
 end
 
--- Reads the active entity bucket directly so callers receive the current authoritative unit ids.
 function GetActiveUnitsQuery:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
-		_entityFactory = "UnitEntityFactory",
+		_unitReadService = "UnitEntityReadService",
 	})
 end
 
--- Returns the current set of active unit entities without additional filtering.
 function GetActiveUnitsQuery:Execute(): Result.Result<{ number }>
-	return Ok(self._entityFactory:QueryActiveEntities())
+	return Ok(self._unitReadService:QueryActiveEntities())
 end
 
 return GetActiveUnitsQuery

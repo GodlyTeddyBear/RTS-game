@@ -7,8 +7,6 @@
 	@client
 ]=]
 local UnitTypes = {}
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ExecutorTypes = require(ReplicatedStorage.Contexts.Combat.Types.ExecutorTypes)
 
 export type UnitDefinitionId = string
 export type UnitFaction = "Player" | "Enemy"
@@ -66,8 +64,8 @@ export type TransformComponent = {
 }
 
 export type HealthComponent = {
-	Hp: number,
-	MaxHp: number,
+	Current: number,
+	Max: number,
 }
 
 export type MoveSpeedComponent = {
@@ -76,16 +74,6 @@ export type MoveSpeedComponent = {
 
 export type AnimationStateComponent = string
 export type AnimationLoopingComponent = boolean
-export type BehaviorTreeComponent = ExecutorTypes.TBehaviorTreeComponent
-export type CombatActionComponent = ExecutorTypes.TCombatActionComponent
-export type AttackCooldownComponent = ExecutorTypes.TAttackCooldownComponent
-export type BehaviorConfigComponent = ExecutorTypes.TBehaviorConfigComponent
-export type CombatActionState = ExecutorTypes.TCombatActionState
-export type TargetKind = "Enemy" | "Structure" | "Base"
-export type TargetComponent = {
-	TargetEntity: number?,
-	TargetKind: TargetKind,
-}
 export type LockOnComponent = {
 	Attachment0: Attachment?,
 	Attachment1: Attachment?,
@@ -96,6 +84,10 @@ export type RoleComponent = {
 	Role: UnitRole,
 	DisplayName: string,
 	MaxHp: number,
+	UnitId: UnitDefinitionId,
+	MovementMode: UnitMovementMode,
+	BuildWorkPerSecond: number?,
+	BuildRange: number?,
 }
 
 export type BuilderAssignmentComponent = {

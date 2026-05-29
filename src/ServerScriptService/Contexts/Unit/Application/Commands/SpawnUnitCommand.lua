@@ -1,18 +1,10 @@
 --!strict
 
---[=[
-    @class SpawnUnitCommand
-    Validates a spawn request, creates the unit entity and model, and registers the spawned unit with sync and team services.
-
-    @server
-]=]
-
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
-local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
@@ -29,54 +21,112 @@ local SpawnUnitCommand = {}
 SpawnUnitCommand.__index = SpawnUnitCommand
 setmetatable(SpawnUnitCommand, BaseCommand)
 
+local function _ResolveAIProfileId(runtimeProfileId: string): string
+	return "Unit" .. runtimeProfileId .. "AI"
+end
+
 function SpawnUnitCommand.new()
 	local self = BaseCommand.new("Unit", "SpawnUnit")
 	return setmetatable(self, SpawnUnitCommand)
 end
 
--- Resolves the unit dependencies the command needs before any spawn can be attempted.
 function SpawnUnitCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_spawnPolicy = "UnitSpawnPolicy",
-		_entityFactory = "UnitEntityFactory",
-		_instanceFactory = "UnitInstanceFactory",
-		_replicationService = "UnitECSReplicationService",
-		_syncService = "UnitGameObjectSyncService",
 	})
 end
 
--- Caches the team context used to assign the spawned unit to the appropriate team bucket.
 function SpawnUnitCommand:Start(registry: any, _name: string)
+	self._aiContext = registry:Get("AIContext")
+	self._entityContext = registry:Get("EntityContext")
 	self._teamContext = registry:Get("TeamContext")
 end
 
--- Spawns the unit entity, creates the model, links replication, and rolls back if any step fails.
 function SpawnUnitCommand:Execute(request: SpawnUnitRequest): Result.Result<SpawnUnitResult>
 	local entity: number? = nil
+	local unitGuid: string? = nil
 
 	return Result.Catch(function()
-		-- Validate the request and allocate the authoritative entity first.
 		local definition = Try(self._spawnPolicy:Check(request))
-		local unitGuid = HttpService:GenerateGUID(false)
+		unitGuid = HttpService:GenerateGUID(false)
+		local now = os.clock()
 
-		-- Create the entity and model as one atomic server-side spawn operation.
-		entity = self._entityFactory:CreateUnit(unitGuid, request, definition, os.clock())
-		local model = self._instanceFactory:CreateUnitInstance(
-			entity,
-			request.UnitId,
-			unitGuid,
-			request.Faction,
-			request.OwnerKind,
-			request.OwnerId
-		)
+		entity = Try(self._entityContext:CreateEntity("Unit.Actor", {
+			Identity = {
+				EntityId = unitGuid,
+				EntityKind = "Unit",
+				DefinitionId = request.UnitId,
+			},
+			Ownership = {
+				Faction = request.Faction,
+				OwnerKind = request.OwnerKind,
+				OwnerId = request.OwnerId,
+			},
+			Health = {
+				Current = definition.MaxHp,
+				Max = definition.MaxHp,
+			},
+			Transform = {
+				CFrame = request.SpawnCFrame,
+			},
+			Role = {
+				Role = definition.Role,
+				DisplayName = definition.DisplayName,
+				MaxHp = definition.MaxHp,
+				UnitId = definition.UnitId,
+				MovementMode = definition.MovementMode,
+				BuildWorkPerSecond = definition.BuildWorkPerSecond,
+				BuildRange = definition.BuildRange,
+			},
+			BaseMoveSpeed = {
+				Value = definition.MoveSpeed,
+			},
+			CurrentMoveSpeed = {
+				Value = definition.MoveSpeed,
+			},
+			PathState = {
+				GoalPosition = nil,
+				RequestedGoalPosition = nil,
+				GoalRevision = 0,
+				FailedGoalRevision = nil,
+				IsMoving = false,
+			},
+			BuilderAssignment = {
+				TargetStructureEntity = nil,
+			},
+			AnimationState = "Idle",
+			AnimationLooping = true,
+			LockOn = {
+				Attachment0 = nil,
+				Attachment1 = nil,
+				Constraint = nil,
+			},
+		}))
 
-		-- Place the model, bind it back to the entity, and register replication/sync only after creation succeeds.
-		ModelPlus.MoveToCFrame(model, request.SpawnCFrame)
-		self._entityFactory:SetModelRef(entity, model)
-		self._replicationService:RegisterUnitEntity(entity)
-		self._syncService:RegisterEntity(entity, model)
+		if request.Lifetime ~= nil then
+			Try(self._entityContext:Set(entity, "Lifetime", {
+				SpawnedAt = now,
+				ExpiresAt = now + request.Lifetime,
+			}, "Entity"))
+		end
 
-		-- Assign the new unit to the team bucket that matches its faction or owner kind.
+		Try(self._aiContext:SetupEntityAIFromProfile(entity, _ResolveAIProfileId(definition.RuntimeProfileId), {
+			TickInterval = 0.15,
+		}))
+
+		Try(self._entityContext:EnableRuntimeBinding("Unit"))
+		Try(self._entityContext:EnableRuntimeSync("Unit"))
+		Try(self._entityContext:EnableRuntimeReplication("Unit"))
+		Try(self._entityContext:RegisterRuntimeEntity(entity))
+		Try(self._entityContext:FlushBindQueue())
+
+		local boundInstanceResult = self._entityContext:GetBoundInstance(entity)
+		local boundInstance = if boundInstanceResult.success then boundInstanceResult.value else nil
+		Ensure(boundInstance ~= nil and boundInstance:IsA("Model"), "SpawnModelFailed", Errors.SPAWN_MODEL_FAILED)
+		Try(self._entityContext:Set(entity, "ModelRef", {
+			Model = boundInstance,
+		}, "Entity"))
+
 		local unitHandle = TeamTypes.BuildMemberHandle("Unit", unitGuid)
 		if request.Faction == "Enemy" then
 			Try(self._teamContext:AssignMemberToEnemyTeam(unitHandle))
@@ -94,9 +144,7 @@ function SpawnUnitCommand:Execute(request: SpawnUnitRequest): Result.Result<Spaw
 		})
 	end, self:_Label(), function()
 		if entity ~= nil then
-			self._instanceFactory:DestroyInstance(entity)
-			self._entityFactory:DeleteEntity(entity)
-			self._entityFactory:FlushPendingDeletes()
+			self._entityContext:DestroyEntity(entity)
 		end
 	end)
 end

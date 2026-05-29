@@ -27,9 +27,9 @@ function UnitSpawnPolicy.new()
 	return setmetatable({}, UnitSpawnPolicy)
 end
 
--- Resolves the entity factory needed to enforce the per-owner concurrency limit.
+-- Resolves the entity read service needed to enforce the per-owner concurrency limit.
 function UnitSpawnPolicy:Init(registry: any, _name: string)
-	self._entityFactory = registry:Get("UnitEntityFactory")
+	self._unitReadService = registry:Get("UnitEntityReadService")
 end
 
 -- Validates the spawn request and returns the resolved unit definition when all policy checks pass.
@@ -52,7 +52,7 @@ function UnitSpawnPolicy:Check(request: SpawnUnitRequest): Result.Result<UnitDef
 			UnitId = request.UnitId,
 		})
 
-		local currentCount = self._entityFactory:GetOwnerUnitCount(request.OwnerKind, request.OwnerId)
+		local currentCount = self._unitReadService:GetOwnerUnitCount(request.OwnerKind, request.OwnerId)
 		Ensure(currentCount < definition.MaxConcurrentUnitsPerOwner, "MaxConcurrentReached", Errors.MAX_CONCURRENT_REACHED, {
 			OwnerKind = request.OwnerKind,
 			OwnerId = request.OwnerId,

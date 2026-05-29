@@ -98,6 +98,7 @@ local EquipmentContext = Knit.CreateService({
 	Modules = EquipmentModules,
 	ExternalServices = {
 		{ Name = "InventoryContext" },
+		{ Name = "EntityContext" },
 		{ Name = "UnitContext" },
 		{ Name = "EnemyContext" },
 		{ Name = "StructureContext" },
