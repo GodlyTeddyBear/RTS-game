@@ -66,9 +66,9 @@ function StructureTargetingSystem:Tick()
 	-- Cache enemy positions up front to avoid repeated factory reads inside the structure loop.
 	local enemyPositionByEntity: { [number]: Vector3 } = {}
 	for _, enemyEntity in ipairs(aliveEnemiesResult.value) do
-		local position = self._enemyEntityFactory:GetPosition(enemyEntity)
-		if position and position.CFrame then
-			enemyPositionByEntity[enemyEntity] = position.CFrame.Position
+		local enemyCFrame = self._enemyEntityFactory:GetEntityCFrame(enemyEntity)
+		if enemyCFrame ~= nil then
+			enemyPositionByEntity[enemyEntity] = enemyCFrame.Position
 		end
 	end
 

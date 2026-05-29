@@ -18,11 +18,11 @@ function GetEnemyCountQuery.new()
 end
 
 function GetEnemyCountQuery:Init(registry: any, _name: string)
-	self:_RequireDependency(registry, "_entityFactory", "EnemyEntityFactory")
+	self:_RequireDependency(registry, "_enemyEntityReadService", "EnemyEntityReadService")
 end
 
 function GetEnemyCountQuery:Execute(): number
-	return #self._entityFactory:QueryAliveEntities()
+	return #self._enemyEntityReadService:QueryAliveEntities()
 end
 
 return GetEnemyCountQuery

@@ -54,7 +54,6 @@ function ProjectileService.new()
 	self._registry = nil
 	self._enemyContext = nil
 	self._enemyEntityFactory = nil
-	self._enemyInstanceFactory = nil
 	self._structureEntityFactory = nil
 	self._connections = {} :: { RBXScriptConnection }
 	self._activeCasts = {} :: { [string]: any }

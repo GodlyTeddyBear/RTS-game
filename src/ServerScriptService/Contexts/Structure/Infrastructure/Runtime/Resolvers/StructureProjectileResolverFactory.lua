@@ -6,7 +6,7 @@ function StructureProjectileResolverFactory.Create(dependencies: {
 	StructureInstanceFactory: any,
 	EnemyContext: any,
 	EnemyEntityFactory: any,
-	EnemyInstanceFactory: any,
+	EntityContext: any,
 }): any
 	return table.freeze({
 		ResolveStructureModel = function(structureEntity: number): Model?
@@ -17,12 +17,8 @@ function StructureProjectileResolverFactory.Create(dependencies: {
 			return dependencies.EnemyEntityFactory:GetEntityCFrame(enemyEntity)
 		end,
 		ResolveEnemyEntity = function(hitPart: Instance): number?
-			local model = hitPart:FindFirstAncestorOfClass("Model")
-			if model == nil then
-				return nil
-			end
-
-			return dependencies.EnemyInstanceFactory:ResolveEntity(model)
+			local entityResult = dependencies.EntityContext:GetBoundEntity(hitPart)
+			return if entityResult.success and type(entityResult.value) == "number" then entityResult.value else nil
 		end,
 		IsEnemyAlive = function(enemyEntity: number): boolean
 			return dependencies.EnemyEntityFactory:IsAlive(enemyEntity)

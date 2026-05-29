@@ -3,23 +3,22 @@
 local StructureHitTargetResolverFactory = {}
 
 function StructureHitTargetResolverFactory.Create(dependencies: {
-	EnemyInstanceFactory: any,
+	EntityContext: any,
+	EnemyEntityFactory: any,
 }): any
 	return table.freeze({
 		ResolveHitTarget = function(hitPart: BasePart): any?
-			local model = hitPart:FindFirstAncestorOfClass("Model")
-			if model == nil then
+			local entityResult = dependencies.EntityContext:GetBoundEntity(hitPart)
+			if not entityResult.success or type(entityResult.value) ~= "number" then
 				return nil
 			end
-
-			local enemyEntity = dependencies.EnemyInstanceFactory:ResolveEntity(model)
-			if enemyEntity == nil then
+			if not dependencies.EnemyEntityFactory:IsAlive(entityResult.value) then
 				return nil
 			end
 
 			return {
 				Kind = "Enemy",
-				Entity = enemyEntity,
+				Entity = entityResult.value,
 			}
 		end,
 	})

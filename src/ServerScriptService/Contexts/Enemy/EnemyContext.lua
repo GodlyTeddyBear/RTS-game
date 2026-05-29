@@ -1,28 +1,21 @@
 --!strict
 
---[[
-	Module: EnemyContext
-	Purpose: Owns the authoritative enemy ECS world, spawn and despawn use-cases, and run-lifecycle cleanup.
-	Used In System: Started by Knit on the server and called by combat, wave, and shutdown event handlers.
-	High-Level Flow: Register infrastructure -> initialize ECS modules -> expose commands and queries -> clean up on run end.
-	Boundaries: Owns enemy orchestration only; does not own combat targeting, wave composition, or client animation.
-]]
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
+local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
+local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
 
-local EnemyECSWorldService = require(script.Parent.Infrastructure.ECS.EnemyECSWorldService)
-local EnemyComponentRegistry = require(script.Parent.Infrastructure.ECS.EnemyComponentRegistry)
-local EnemyEntityFactory = require(script.Parent.Infrastructure.ECS.EnemyEntityFactory)
-local EnemyInstanceFactory = require(script.Parent.Infrastructure.ECS.EnemyInstanceFactory)
-local EnemyCombatAdapterService = require(script.Parent.Infrastructure.Services.EnemyCombatAdapterService)
-local EnemyGameObjectSyncService = require(script.Parent.Infrastructure.Persistence.EnemyGameObjectSyncService)
-local EnemyECSReplicationService = require(script.Parent.Infrastructure.Persistence.EnemyECSReplicationService)
+local EnemyEntityReadService = require(script.Parent.Infrastructure.Entity.EnemyEntityReadService)
+local EnemyEntitySchema = require(script.Parent.Infrastructure.Entity.EnemyEntitySchema)
+local EnemyActionExecutionSystem = require(script.Parent.Infrastructure.Entity.EnemyActionExecutionSystem)
 local EnemySpawnPolicy = require(script.Parent.EnemyDomain.Policies.EnemySpawnPolicy)
+local EnemyAIProfiles = require(script.Parent.Parent.AI.Config.Profiles.EnemyAIProfiles)
 
 local SpawnEnemyCommand = require(script.Parent.Application.Commands.SpawnEnemy)
 local DespawnEnemyCommand = require(script.Parent.Application.Commands.DespawnEnemy)
@@ -35,135 +28,74 @@ local GetNearestAliveEnemyQuery = require(script.Parent.Application.Queries.GetN
 
 local Catch = Result.Catch
 local Ok = Result.Ok
+local ANIMATED_ENEMY_TAG = "AnimatedEnemy"
 
--- [Dependencies]
+local function _EnsureAnimationsFolderValue(model: Model, animationsFolder: Folder?)
+	local animationsFolderRef = model:FindFirstChild("AnimationsFolder")
+	if animationsFolderRef ~= nil and not animationsFolderRef:IsA("ObjectValue") then
+		animationsFolderRef:Destroy()
+		animationsFolderRef = nil
+	end
+
+	if animationsFolderRef == nil then
+		animationsFolderRef = Instance.new("ObjectValue")
+		animationsFolderRef.Name = "AnimationsFolder"
+		animationsFolderRef.Parent = model
+	end
+
+	if animationsFolder ~= nil then
+		(animationsFolderRef :: ObjectValue).Value = animationsFolder
+	end
+end
+
+local function moduleSpec(name: string, module: any, cacheAs: string?): BaseContext.TModuleSpec
+	return {
+		Name = name,
+		Module = module,
+		CacheAs = cacheAs,
+	}
+end
+
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
-		Name = "ClientSignals",
+		Name = "EnemyEntityReadService",
 		Factory = function(service: any, _baseContext: any)
-			return service.Client
+			return EnemyEntityReadService.new(service._entityContext)
 		end,
-	},
-	{
-		Name = "EnemyComponentRegistry",
-		Module = EnemyComponentRegistry,
-	},
-	{
-		Name = "EnemyEntityFactory",
-		Module = EnemyEntityFactory,
-		CacheAs = "_entityFactory",
-	},
-	{
-		Name = "EnemyInstanceFactory",
-		Module = EnemyInstanceFactory,
-		CacheAs = "_instanceFactory",
-	},
-	{
-		Name = "EnemyCombatAdapterService",
-		Module = EnemyCombatAdapterService,
-		CacheAs = "_combatAdapterService",
-	},
-	{
-		Name = "EnemyECSReplicationService",
-		Module = EnemyECSReplicationService,
-		CacheAs = "_replicationService",
-	},
-	{
-		Name = "EnemyGameObjectSyncService",
-		Module = EnemyGameObjectSyncService,
-		CacheAs = "_syncService",
+		CacheAs = "_enemyEntityReadService",
 	},
 }
 
 local DomainModules: { BaseContext.TModuleSpec } = {
-	{
-		Name = "EnemySpawnPolicy",
-		Module = EnemySpawnPolicy,
-	},
+	moduleSpec("EnemySpawnPolicy", EnemySpawnPolicy),
 }
 
 local ApplicationModules: { BaseContext.TModuleSpec } = {
-	{
-		Name = "SpawnEnemyCommand",
-		Module = SpawnEnemyCommand,
-		CacheAs = "_spawnEnemyCommand",
-	},
-	{
-		Name = "DespawnEnemyCommand",
-		Module = DespawnEnemyCommand,
-		CacheAs = "_despawnEnemyCommand",
-	},
-	{
-		Name = "ApplyDamageEnemyCommand",
-		Module = ApplyDamageEnemyCommand,
-		CacheAs = "_applyDamageEnemyCommand",
-	},
-	{
-		Name = "HandleGoalReachedCommand",
-		Module = HandleGoalReachedCommand,
-		CacheAs = "_handleGoalReachedCommand",
-	},
-	{
-		Name = "CleanupAllEnemiesCommand",
-		Module = CleanupAllEnemiesCommand,
-		CacheAs = "_cleanupAllEnemiesCommand",
-	},
-	{
-		Name = "GetAliveEnemiesQuery",
-		Module = GetAliveEnemiesQuery,
-		CacheAs = "_getAliveEnemiesQuery",
-	},
-	{
-		Name = "GetEnemyCountQuery",
-		Module = GetEnemyCountQuery,
-		CacheAs = "_getEnemyCountQuery",
-	},
-	{
-		Name = "GetNearestAliveEnemyQuery",
-		Module = GetNearestAliveEnemyQuery,
-		CacheAs = "_getNearestAliveEnemyQuery",
-	},
+	moduleSpec("SpawnEnemyCommand", SpawnEnemyCommand, "_spawnEnemyCommand"),
+	moduleSpec("DespawnEnemyCommand", DespawnEnemyCommand, "_despawnEnemyCommand"),
+	moduleSpec("ApplyDamageEnemyCommand", ApplyDamageEnemyCommand, "_applyDamageEnemyCommand"),
+	moduleSpec("HandleGoalReachedCommand", HandleGoalReachedCommand, "_handleGoalReachedCommand"),
+	moduleSpec("CleanupAllEnemiesCommand", CleanupAllEnemiesCommand, "_cleanupAllEnemiesCommand"),
+	moduleSpec("GetAliveEnemiesQuery", GetAliveEnemiesQuery, "_getAliveEnemiesQuery"),
+	moduleSpec("GetEnemyCountQuery", GetEnemyCountQuery, "_getEnemyCountQuery"),
+	moduleSpec("GetNearestAliveEnemyQuery", GetNearestAliveEnemyQuery, "_getNearestAliveEnemyQuery"),
 }
 
-local EnemyModules: BaseContext.TModuleLayers = {
-	Infrastructure = InfrastructureModules,
-	Domain = DomainModules,
-	Application = ApplicationModules,
-}
-
---[=[
-	@class EnemyContext
-	Orchestrates the authoritative enemy lane stack for spawn, model sync, and cleanup.
-	@server
-]=]
 local EnemyContext = Knit.CreateService({
 	Name = "EnemyContext",
-	Client = {
-		EnemyBootstrap = Knit.CreateSignal(),
-		EnemyReliable = Knit.CreateSignal(),
-		EnemyUnreliable = Knit.CreateSignal(),
-		EnemyEntity = Knit.CreateSignal(),
+	Client = {},
+	Modules = {
+		Infrastructure = InfrastructureModules,
+		Domain = DomainModules,
+		Application = ApplicationModules,
 	},
-	WorldService = {
-		Name = "EnemyECSWorldService",
-		Module = EnemyECSWorldService,
-	},
-	Modules = EnemyModules,
 	ExternalServices = {
-		{ Name = "CombatContext" },
-		{ Name = "StructureContext" },
-		{ Name = "BaseContext" },
-		{ Name = "TeamContext" },
-		{ Name = "WorldContext" },
-	},
-	Cache = {
-		World = "_world",
-		EnemyComponents = {
-			Field = "_components",
-			From = "EnemyComponentRegistry",
-			Method = "GetComponents",
-			Result = false,
-		},
+		{ Name = "AIContext", CacheAs = "_aiContext" },
+		{ Name = "EntityContext", CacheAs = "_entityContext" },
+		{ Name = "StructureContext", CacheAs = "_structureContext" },
+		{ Name = "BaseContext", CacheAs = "_baseContext" },
+		{ Name = "TeamContext", CacheAs = "_teamContext" },
+		{ Name = "WorldContext", CacheAs = "_worldContext" },
 	},
 	Teardown = {
 		Before = "_BeforeDestroy",
@@ -177,47 +109,35 @@ local EnemyContext = Knit.CreateService({
 
 local EnemyBaseContext = BaseContext.new(EnemyContext)
 
--- [Public API]
-
---[=[
-	@within EnemyContext
-	Registers the enemy world, services, commands, and queries.
-]=]
 function EnemyContext:KnitInit()
 	EnemyBaseContext:KnitInit()
 	self._spawnConnection = nil :: any
 	self._waveEndedConnection = nil :: any
 	self._runEndedConnection = nil :: any
+	self._enemyAssetRegistry = nil :: any
+	self._animationsFolder = nil :: Folder?
+	self:_InitializeEnemyAssets()
 end
 
---[=[
-	@within EnemyContext
-	Wires the sync scheduler and run event handlers after initialization has completed.
-]=]
 function EnemyContext:KnitStart()
 	EnemyBaseContext:KnitStart()
-	EnemyBaseContext:RegisterPollSystem("_syncService", nil, "EnemySync")
-	EnemyBaseContext:RegisterSyncSystem("_syncService", nil, "EnemySync")
-	EnemyBaseContext:RegisterMethodSystem("EnemySync", "_replicationService", "FlushReliable")
-	EnemyBaseContext:RegisterMethodSystem("EnemySync", "_replicationService", "FlushUnreliable")
-	self._combatAdapterService:ConfigureRuntimeOwner(self)
-	local registerActorTypeResult = self._combatAdapterService:RegisterActorType()
-	if not registerActorTypeResult.success then
-		Result.MentionError("Enemy:KnitStart", "Failed to register enemy combat actor type", {
-			CauseType = registerActorTypeResult.type,
-			CauseMessage = registerActorTypeResult.message,
-			Details = registerActorTypeResult.data,
-		}, registerActorTypeResult.type)
-		error(
-			string.format(
-				"EnemyContext failed to register combat actor type on April 30, 2026 startup path: [%s] %s",
-				tostring(registerActorTypeResult.type),
-				tostring(registerActorTypeResult.message)
-			)
-		)
+
+	local registrationResult = self:_RegisterEntityInfrastructure()
+	if not registrationResult.success then
+		error(("EnemyContext failed to register Entity infrastructure: [%s] %s"):format(
+			tostring(registrationResult.type),
+			tostring(registrationResult.message)
+		))
 	end
 
-	-- Forward wave spawns into the spawn command so the context owns the creation path.
+	local aiResult = self:_RegisterAIContracts()
+	if not aiResult.success then
+		error(("EnemyContext failed to register AI contracts: [%s] %s"):format(
+			tostring(aiResult.type),
+			tostring(aiResult.message)
+		))
+	end
+
 	EnemyBaseContext:OnContextEvent(
 		"Wave",
 		"SpawnEnemy",
@@ -227,18 +147,472 @@ function EnemyContext:KnitStart()
 		"_spawnConnection"
 	)
 
-	-- Clean up all enemies when a wave ends so phase skips do not leave stale enemy state behind.
-	EnemyBaseContext:OnContextEvent("Run", "WaveEnded", function(_waveNumber: number)
+	EnemyBaseContext:OnContextEvent("Run", "WaveEnded", function()
 		self:_OnWaveEnded()
 	end, "_waveEndedConnection")
 
-	-- Clean up all enemies when the run ends so no stale entities survive the lifecycle boundary.
 	EnemyBaseContext:OnContextEvent("Run", "RunEnded", function()
 		self:_OnRunEnded()
 	end, "_runEndedConnection")
 end
 
--- Wraps the wave spawn event in the enemy spawn use-case and reports failures through Result logging.
+function EnemyContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
+	return Catch(function()
+		local schemaResult = self._entityContext:RegisterFeatureSchema("Enemy", EnemyEntitySchema)
+		if not schemaResult.success then
+			return schemaResult
+		end
+
+		local bindingResult = self._entityContext:RegisterInstanceBinding("Enemy", {
+			FeatureName = "Enemy",
+			ResolveAsset = function(_entityContext: any, snapshot: any): Instance
+				local identity = snapshot.Identity or {}
+				local role = snapshot.FeatureData.Role or {}
+				return self:_BuildEnemyModel(role.Role, identity.EntityId)
+			end,
+			PrepareInstance = function(_entityContext: any, instance: Instance, snapshot: any)
+				if not instance:IsA("Model") then
+					return
+				end
+
+				local role = snapshot.FeatureData.Role or {}
+				self:_PrepareEnemyModel(instance :: Model, role.Role, snapshot.Identity and snapshot.Identity.EntityId)
+
+				local transform = snapshot.Transform
+				if type(transform) == "table" and typeof(transform.CFrame) == "CFrame" then
+					instance:PivotTo(transform.CFrame)
+				end
+			end,
+			BuildRevealAttributes = function(_entityContext: any, snapshot: any)
+				local identity = snapshot.Identity or {}
+				local role = snapshot.FeatureData.Role or {}
+				return {
+					EnemyId = identity.EntityId,
+					EnemyRole = role.Role,
+					WaveNumber = role.WaveNumber,
+				}
+			end,
+			BuildRevealTags = function()
+				return {
+					[ANIMATED_ENEMY_TAG] = true,
+				}
+			end,
+			BuildName = function(_entityContext: any, snapshot: any)
+				local identity = snapshot.Identity or {}
+				local role = snapshot.FeatureData.Role or {}
+				return string.format("Enemy_%s_%s", tostring(role.Role), tostring(identity.EntityId))
+			end,
+		})
+		if not bindingResult.success then
+			return bindingResult
+		end
+
+		local syncResult = self._entityContext:RegisterSyncContributor("Enemy", {
+			FeatureName = "Enemy",
+			QuerySyncEntities = function(entityContext: any): { number }
+				local queryResult = entityContext:Query({
+					FeatureName = "Enemy",
+					Keys = { "Role" },
+				})
+				if not queryResult.success then
+					return {}
+				end
+				return queryResult.value
+			end,
+			SyncEntity = function(entityContext: any, entity: number, model: Model)
+				self:_SyncEnemyEntity(entityContext, entity, model)
+			end,
+		})
+		if not syncResult.success then
+			return syncResult
+		end
+
+		local replicationResult = self._entityContext:RegisterReplicationSurface("Enemy", {
+			FeatureName = "Enemy",
+			BuildSchema = function(entityContext: any): any
+				local entityComponentsResult = entityContext:GetFeatureComponents("Entity")
+				local enemyComponentsResult = entityContext:GetFeatureComponents("Enemy")
+				assert(entityComponentsResult.success, "Enemy replication surface missing Entity compiled components")
+				assert(enemyComponentsResult.success, "Enemy replication surface missing Enemy compiled components")
+
+				return {
+					sharedComponents = {
+						entityComponentsResult.value.Identity,
+						entityComponentsResult.value.Health,
+						enemyComponentsResult.value.Role,
+						enemyComponentsResult.value.CurrentMoveSpeed,
+						enemyComponentsResult.value.AnimationState,
+						enemyComponentsResult.value.AnimationLooping,
+					},
+					sharedTags = {
+						enemyComponentsResult.value.AliveTag,
+						enemyComponentsResult.value.GoalReachedTag,
+					},
+				}
+			end,
+		})
+		if not replicationResult.success then
+			return replicationResult
+		end
+
+		local systemResult = self._entityContext:RegisterSystem("Cleanup", {
+			Name = "EnemyActionExecutionSystem",
+			Phase = "Cleanup",
+			Reads = {
+				"Enemy.Role",
+				"Enemy.PathState",
+				"Enemy.AttackCooldown",
+				"Entity.Transform",
+				"Entity.Target",
+				"AI.ActionState",
+				"AI.ActionIntent",
+			},
+			Writes = {
+				"Entity.Transform",
+				"Enemy.PathState",
+				"Enemy.AttackCooldown",
+				"Enemy.CurrentMoveSpeed",
+				"Enemy.AnimationState",
+				"Enemy.AnimationLooping",
+				"Enemy.AliveTag",
+				"Enemy.GoalReachedTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return EnemyActionExecutionSystem.new(entityFactory, {
+					EntityContext = self._entityContext,
+					BaseContext = self._baseContext,
+					StructureContext = self._structureContext,
+				})
+			end,
+		})
+		if not systemResult.success then
+			return systemResult
+		end
+
+		return Ok(true)
+	end, "EnemyContext:RegisterEntityInfrastructure")
+end
+
+function EnemyContext:_RegisterAIContracts(): Result.Result<boolean>
+	return Catch(function()
+		local evaluationResult = self._aiContext:RegisterEvaluation({
+			EvaluationId = "EnemyHasAttackTarget",
+			Evaluate = function(context: any): boolean
+				return type(context) == "table"
+					and type(context.Facts) == "table"
+					and type(context.Facts.AttackTargetKind) == "string"
+			end,
+			Metadata = {
+				Description = "Enemy evaluation that passes when a structure or base target is in range.",
+			},
+		})
+		if not evaluationResult.success and evaluationResult.type ~= "DuplicateEvaluation" then
+			return evaluationResult
+		end
+
+		local actionResult = self._aiContext:RegisterActionDefinition({
+			ActionId = "EnemyAttack",
+			ProduceIntent = function(context: any): any
+				local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
+				return {
+					TargetEntity = if type(facts.TargetEntity) == "number" then facts.TargetEntity else nil,
+					Data = facts.AttackData,
+				}
+			end,
+			Metadata = {
+				Description = "Enemy attack intent producer.",
+			},
+		})
+		if not actionResult.success and actionResult.type ~= "DuplicateActionDefinition" then
+			return actionResult
+		end
+
+		actionResult = self._aiContext:RegisterActionDefinition({
+			ActionId = "EnemyAdvance",
+			ProduceIntent = function(context: any): any
+				local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
+				return {
+					Data = facts.AdvanceData,
+				}
+			end,
+			Metadata = {
+				Description = "Enemy move intent producer.",
+			},
+		})
+		if not actionResult.success and actionResult.type ~= "DuplicateActionDefinition" then
+			return actionResult
+		end
+
+		local behaviorResult = self._aiContext:RegisterBehaviorDefinition({
+			DefinitionId = "EnemyTargetOrAdvance",
+			Definition = {
+				Priority = {
+					{
+						Sequence = {
+							"EnemyHasAttackTarget",
+							"EnemyAttack",
+						},
+					},
+					"EnemyAdvance",
+				},
+			},
+			Metadata = {
+				Description = "Enemy behavior that attacks when a target is in range and advances otherwise.",
+			},
+		})
+		if not behaviorResult.success and behaviorResult.type ~= "DuplicateBehaviorDefinition" then
+			return behaviorResult
+		end
+
+		local providerResult = self._aiContext:RegisterFactProvider({
+			ProviderId = "EnemyCombatFacts",
+			BuildFacts = function(context: any): any
+				return self:_BuildEnemyFacts(context)
+			end,
+			Metadata = {
+				Description = "Enemy fact provider that resolves structure/base targets and goal movement.",
+			},
+		})
+		if not providerResult.success and providerResult.type ~= "DuplicateFactProvider" then
+			return providerResult
+		end
+
+		for _, profilePayload in pairs(EnemyAIProfiles) do
+			local profileResult = self._aiContext:RegisterProfile(profilePayload)
+			if not profileResult.success and profileResult.type ~= "DuplicateProfile" then
+				return profileResult
+			end
+		end
+
+		return Ok(true)
+	end, "EnemyContext:RegisterAIContracts")
+end
+
+function EnemyContext:_InitializeEnemyAssets()
+	local assetsRoot = ReplicatedStorage:FindFirstChild("Assets")
+	if assetsRoot == nil or not assetsRoot:IsA("Folder") then
+		return
+	end
+
+	local enemiesFolder = assetsRoot:FindFirstChild("Enemies")
+	if enemiesFolder ~= nil and enemiesFolder:IsA("Folder") then
+		self._enemyAssetRegistry = AssetFetcher.CreateEnemyRegistry(enemiesFolder)
+	end
+
+	local animationsFolder = assetsRoot:FindFirstChild("Animations")
+	if animationsFolder ~= nil and animationsFolder:IsA("Folder") then
+		self._animationsFolder = animationsFolder
+	end
+end
+
+function EnemyContext:_BuildEnemyModel(role: string?, enemyId: string?): Model
+	local resolvedRole = if type(role) == "string" and role ~= "" then role else "Swarm"
+	local resolvedEnemyId = if type(enemyId) == "string" and enemyId ~= "" then enemyId else tostring(os.clock())
+
+	if self._enemyAssetRegistry ~= nil then
+		local assetModel = self._enemyAssetRegistry:GetEnemyModel(resolvedRole)
+		if assetModel ~= nil then
+			return assetModel
+		end
+	end
+
+	return self:_CreateFallbackEnemyModel(resolvedRole, resolvedEnemyId)
+end
+
+function EnemyContext:_CreateFallbackEnemyModel(role: string, enemyId: string): Model
+	local roleConfig = EnemyConfig.Roles[role]
+	assert(roleConfig ~= nil, "Unknown enemy role: " .. tostring(role))
+
+	local model = Instance.new("Model")
+	model.Name = "Enemy_" .. role .. "_" .. enemyId
+
+	local rootPart = Instance.new("Part")
+	rootPart.Name = "HumanoidRootPart"
+	rootPart.Size = roleConfig.ModelScale
+	rootPart.Color = roleConfig.ModelColor
+	rootPart.Material = Enum.Material.SmoothPlastic
+	rootPart.Anchored = true
+	rootPart.CanCollide = false
+	rootPart.Parent = model
+
+	local humanoid = Instance.new("Humanoid")
+	humanoid.MaxHealth = roleConfig.MaxHp
+	humanoid.Health = roleConfig.MaxHp
+	humanoid.WalkSpeed = roleConfig.MoveSpeed
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	humanoid.Parent = model
+
+	model.PrimaryPart = rootPart
+	return model
+end
+
+function EnemyContext:_PrepareEnemyModel(model: Model, role: string?, enemyId: string?)
+	local resolvedRole = if type(role) == "string" and role ~= "" then role else "Swarm"
+	local resolvedEnemyId = if type(enemyId) == "string" and enemyId ~= "" then enemyId else tostring(os.clock())
+	local roleConfig = EnemyConfig.Roles[resolvedRole]
+	assert(roleConfig ~= nil, "Unknown enemy role: " .. tostring(resolvedRole))
+
+	model.Name = "Enemy_" .. resolvedRole .. "_" .. resolvedEnemyId
+	_EnsureAnimationsFolderValue(model, self._animationsFolder)
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if humanoid == nil then
+		humanoid = Instance.new("Humanoid")
+		humanoid.Parent = model
+	end
+
+	humanoid.MaxHealth = roleConfig.MaxHp
+	humanoid.Health = roleConfig.MaxHp
+	humanoid.WalkSpeed = roleConfig.MoveSpeed
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+
+	if model.PrimaryPart == nil then
+		local rootPart = model:FindFirstChild("HumanoidRootPart")
+		if rootPart ~= nil and rootPart:IsA("BasePart") then
+			model.PrimaryPart = rootPart
+		end
+	end
+
+	assert(model.PrimaryPart ~= nil, "Enemy model missing PrimaryPart: " .. model.Name)
+	model.PrimaryPart.Anchored = true
+	EntityCollisionService:ApplyModel(model)
+end
+
+function EnemyContext:_BuildEnemyFacts(context: any): any
+	if type(context) ~= "table" or type(context.Entity) ~= "number" then
+		return {}
+	end
+
+	local entity = context.Entity
+	local role = self._enemyEntityReadService:GetRole(entity)
+	local transform = self._enemyEntityReadService:GetEntityCFrame(entity)
+	if type(role) ~= "table" or transform == nil then
+		return {}
+	end
+
+	local baseTargetResult = self._baseContext:GetBaseTargetCFrame()
+	local baseTargetCFrame = if baseTargetResult.success then baseTargetResult.value else nil
+	local advanceData = {
+		GoalPosition = if baseTargetCFrame ~= nil then baseTargetCFrame.Position else nil,
+	}
+
+	local nearestStructureEntity, nearestStructurePosition = self:_ResolveNearestStructureInRange(
+		transform.Position,
+		role.AttackRange
+	)
+	if nearestStructureEntity ~= nil and nearestStructurePosition ~= nil then
+		return {
+			TargetEntity = nearestStructureEntity,
+			AttackTargetKind = "Structure",
+			AttackData = {
+				TargetKind = "Structure",
+				TargetPosition = nearestStructurePosition,
+			},
+			AdvanceData = advanceData,
+		}
+	end
+
+	if baseTargetCFrame ~= nil and (baseTargetCFrame.Position - transform.Position).Magnitude <= role.AttackRange then
+		return {
+			TargetEntity = nil,
+			AttackTargetKind = "Base",
+			AttackData = {
+				TargetKind = "Base",
+				TargetPosition = baseTargetCFrame.Position,
+			},
+			AdvanceData = advanceData,
+		}
+	end
+
+	return {
+		AdvanceData = advanceData,
+	}
+end
+
+function EnemyContext:_ResolveNearestStructureInRange(position: Vector3, attackRange: number): (number?, Vector3?)
+	local structuresResult = self._structureContext:GetActiveStructures()
+	if not structuresResult.success then
+		return nil, nil
+	end
+
+	local structureFactoryResult = self._structureContext:GetEntityFactory()
+	if not structureFactoryResult.success then
+		return nil, nil
+	end
+
+	local structureFactory = structureFactoryResult.value
+	local nearestEntity = nil :: number?
+	local nearestPosition = nil :: Vector3?
+	local nearestDistance = attackRange
+
+	for _, structureEntity in ipairs(structuresResult.value) do
+		local structurePosition = structureFactory:GetPosition(structureEntity)
+		if structurePosition ~= nil then
+			local distance = (structurePosition - position).Magnitude
+			if distance <= nearestDistance then
+				nearestEntity = structureEntity
+				nearestPosition = structurePosition
+				nearestDistance = distance
+			end
+		end
+	end
+
+	return nearestEntity, nearestPosition
+end
+
+function EnemyContext:_SyncEnemyEntity(entityContext: any, entity: number, model: Model)
+	local identityResult = entityContext:Get(entity, "Identity", "Entity")
+	local healthResult = entityContext:Get(entity, "Health", "Entity")
+	local roleResult = entityContext:Get(entity, "Role", "Enemy")
+	local transformResult = entityContext:Get(entity, "Transform", "Entity")
+	local moveSpeedResult = entityContext:Get(entity, "CurrentMoveSpeed", "Enemy")
+	local animationStateResult = entityContext:Get(entity, "AnimationState", "Enemy")
+	local animationLoopingResult = entityContext:Get(entity, "AnimationLooping", "Enemy")
+
+	local identity = if identityResult.success then identityResult.value else nil
+	local health = if healthResult.success then healthResult.value else nil
+	local role = if roleResult.success then roleResult.value else nil
+	local transform = if transformResult.success then transformResult.value else nil
+	local moveSpeed = if moveSpeedResult.success then moveSpeedResult.value else nil
+	local animationState = if animationStateResult.success then animationStateResult.value else nil
+	local animationLooping = if animationLoopingResult.success then animationLoopingResult.value else nil
+
+	if type(identity) == "table" then
+		model:SetAttribute("EnemyId", identity.EntityId)
+	end
+	if type(role) == "table" then
+		model:SetAttribute("EnemyRole", role.Role)
+		model:SetAttribute("WaveNumber", role.WaveNumber)
+	end
+	if type(health) == "table" then
+		model:SetAttribute("Health", health.Current)
+		model:SetAttribute("MaxHealth", health.Max)
+	end
+	if type(moveSpeed) == "table" then
+		model:SetAttribute("CurrentMoveSpeed", moveSpeed.Value)
+	end
+	if type(animationState) == "string" then
+		model:SetAttribute("AnimationState", animationState)
+	end
+	if type(animationLooping) == "boolean" then
+		model:SetAttribute("AnimationLooping", animationLooping)
+	end
+	if type(transform) == "table" and typeof(transform.CFrame) == "CFrame" then
+		model:PivotTo(transform.CFrame)
+	end
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if humanoid ~= nil then
+		if type(health) == "table" and type(health.Max) == "number" then
+			humanoid.MaxHealth = health.Max
+			humanoid.Health = health.Current
+		end
+		if type(moveSpeed) == "table" and type(moveSpeed.Value) == "number" then
+			humanoid.WalkSpeed = moveSpeed.Value
+		end
+	end
+end
+
 function EnemyContext:_OnWaveSpawnEnemy(role: string, spawnCFrame: CFrame, waveNumber: number)
 	local result = self:SpawnEnemy(role, spawnCFrame, waveNumber)
 	if not result.success then
@@ -251,7 +625,6 @@ function EnemyContext:_OnWaveSpawnEnemy(role: string, spawnCFrame: CFrame, waveN
 	end
 end
 
--- Wraps the run-ended event in the enemy cleanup use-case and reports failures through Result logging.
 function EnemyContext:_OnRunEnded()
 	local result = self:CleanupAll()
 	if not result.success then
@@ -262,7 +635,6 @@ function EnemyContext:_OnRunEnded()
 	end
 end
 
--- Wraps the wave-ended event in the enemy cleanup use-case and reports failures through Result logging.
 function EnemyContext:_OnWaveEnded()
 	local result = self:CleanupAll()
 	if not result.success then
@@ -273,175 +645,56 @@ function EnemyContext:_OnWaveEnded()
 	end
 end
 
---[=[
-	@within EnemyContext
-	Spawns a new enemy entity and its replicated model for the supplied wave.
-	@param role string -- Enemy role configured for the wave group.
-	@param spawnCFrame CFrame -- World transform to spawn the enemy at.
-	@param waveNumber number -- Wave that requested the spawn.
-	@return Result.Result<number> -- Enemy entity id when spawn succeeds.
-]=]
 function EnemyContext:SpawnEnemy(role: string, spawnCFrame: CFrame, waveNumber: number): Result.Result<number>
 	return Catch(function()
-		local spawnResult = self._spawnEnemyCommand:Execute(role, spawnCFrame, waveNumber)
-		if not spawnResult.success then
-			return spawnResult
-		end
-
-		local registerResult = self._combatAdapterService:RegisterActor(spawnResult.value)
-		if not registerResult.success then
-			return registerResult
-		end
-
-		return spawnResult
+		return self._spawnEnemyCommand:Execute(role, spawnCFrame, waveNumber)
 	end, "Enemy:SpawnEnemy")
 end
 
---[=[
-	@within EnemyContext
-	Despawns an enemy entity and releases any associated model resources.
-	@param entity any -- Enemy entity id to remove.
-	@return Result.Result<boolean> -- Whether the despawn completed successfully.
-]=]
 function EnemyContext:DespawnEnemy(entity: any): Result.Result<boolean>
 	return Catch(function()
 		return self._despawnEnemyCommand:Execute(entity)
 	end, "Enemy:DespawnEnemy")
 end
 
---[=[
-	@within EnemyContext
-	Applies damage to an enemy entity and resolves death side effects when health reaches zero.
-	@param entity any -- Enemy entity id to damage.
-	@param amount number -- Positive damage amount to apply.
-	@return Result.Result<boolean> -- Whether the damage killed the enemy.
-]=]
 function EnemyContext:ApplyDamage(entity: any, amount: number): Result.Result<boolean>
 	return Catch(function()
 		return self._applyDamageEnemyCommand:Execute(entity, amount)
 	end, "Enemy:ApplyDamage")
 end
 
---[=[
-	@within EnemyContext
-	Handles the enemy reaching its goal by applying base damage and despawning the entity.
-	@param entity any -- Enemy entity id that completed its advance path.
-	@return Result.Result<boolean> -- Whether the goal-reach flow completed successfully.
-]=]
 function EnemyContext:HandleGoalReached(entity: any): Result.Result<boolean>
 	return Catch(function()
 		return self._handleGoalReachedCommand:Execute(entity)
 	end, "Enemy:HandleGoalReached")
 end
 
---[=[
-	@within EnemyContext
-	Rebuilds FastFlow against the current runtime map geometry before a run begins.
-	@return Result.Result<boolean> -- Whether FastFlow was configured successfully for the current run.
-]=]
 function EnemyContext:WarmFastFlowForRun(): Result.Result<boolean>
-	return Catch(function()
-		return Ok(self._combatAdapterService:WarmFastFlowForRun())
-	end, "Enemy:WarmFastFlowForRun")
+	return Ok(false)
 end
 
---[=[
-	@within EnemyContext
-	Returns the current alive enemy entity list.
-	@return Result.Result<{ any }> -- Live enemy entities in the enemy world.
-]=]
 function EnemyContext:GetAliveEnemies(): Result.Result<{ any }>
 	return Catch(function()
-		return self._getAliveEnemiesQuery:Execute()
+		return Ok(self._getAliveEnemiesQuery:Execute())
 	end, "Enemy:GetAliveEnemies")
 end
 
---[=[
-	@within EnemyContext
-	Returns the current enemy entity count.
-	@return Result.Result<number> -- Number of live enemy entities.
-]=]
 function EnemyContext:GetEnemyCount(): Result.Result<number>
 	return Catch(function()
-		return self._getEnemyCountQuery:Execute()
+		return Ok(self._getEnemyCountQuery:Execute())
 	end, "Enemy:GetEnemyCount")
 end
 
---[=[
-	@within EnemyContext
-	Returns the nearest alive enemy to a world position within a search radius.
-	@param position Vector3 -- Search origin.
-	@param maxRange number -- Maximum search distance in studs.
-	@return Result.Result<{ Entity: number, CFrame: CFrame }?> -- Closest enemy payload or `nil`.
-]=]
 function EnemyContext:GetNearestAliveEnemy(position: Vector3, maxRange: number): Result.Result<{ Entity: number, CFrame: CFrame }?>
 	return Catch(function()
 		return Ok(self._getNearestAliveEnemyQuery:Execute(position, maxRange))
 	end, "Enemy:GetNearestAliveEnemy")
 end
 
---[=[
-	@within EnemyContext
-	Returns the authoritative enemy ECS world for other contexts that need it.
-	@return Result.Result<any> -- Enemy ECS world instance.
-]=]
-function EnemyContext:GetWorld(): Result.Result<any>
-	return Ok(self._world)
-end
-
---[=[
-	@within EnemyContext
-	Returns the enemy component registry for bridge-only consumers.
-	@return Result.Result<any> -- Enemy component registry.
-]=]
-function EnemyContext:GetComponents(): Result.Result<any>
-	return Ok(self._components)
-end
-
---[=[
-	@within EnemyContext
-	Returns the enemy entity factory for other server contexts that need it.
-	@return Result.Result<any> -- Enemy entity factory.
-]=]
 function EnemyContext:GetEntityFactory(): Result.Result<any>
-	return Ok(self._entityFactory)
+	return Ok(self._enemyEntityReadService)
 end
 
---[=[
-	@within EnemyContext
-	Returns the enemy model factory for other server contexts that need it.
-	@return Result.Result<any> -- Enemy instance factory.
-]=]
-function EnemyContext:GetInstanceFactory(): Result.Result<any>
-	return Ok(self._instanceFactory)
-end
-
-function EnemyContext:GetModelFactory(): Result.Result<any>
-	return Ok(self._instanceFactory)
-end
-
---[=[
-	@within EnemyContext
-	Returns the enemy game object sync service used by other server contexts.
-	@return Result.Result<any> -- Enemy game object sync service.
-]=]
-function EnemyContext:GetGameObjectSyncService(): Result.Result<any>
-	return Ok(self._syncService)
-end
-
-function EnemyContext:GetReplicationService(): Result.Result<any>
-	return Ok(self._replicationService)
-end
-
-function EnemyContext:GetSchedulerBindingStatus(targetField: string): Result.Result<any>
-	return Ok(EnemyBaseContext:GetSchedulerBindingStatus(targetField))
-end
-
---[=[
-	@within EnemyContext
-	Cleans up all live enemy entities and their replicated models.
-	@return Result.Result<boolean> -- Whether cleanup completed successfully.
-]=]
 function EnemyContext:CleanupAll(): Result.Result<boolean>
 	return Catch(function()
 		return self._cleanupAllEnemiesCommand:Execute()
@@ -449,7 +702,6 @@ function EnemyContext:CleanupAll(): Result.Result<boolean>
 end
 
 function EnemyContext:_BeforeDestroy()
-	-- Clear live enemies before disconnecting listeners so no later callback sees stale entities.
 	local cleanupResult = self:CleanupAll()
 	if not cleanupResult.success then
 		Result.MentionError("Enemy:Destroy", "Cleanup failed during destroy", {
@@ -459,10 +711,6 @@ function EnemyContext:_BeforeDestroy()
 	end
 end
 
---[=[
-	@within EnemyContext
-	Stops enemy event listeners and clears remaining enemies during shutdown.
-]=]
 function EnemyContext:Destroy()
 	local destroyResult = EnemyBaseContext:Destroy()
 	if not destroyResult.success then
@@ -471,14 +719,6 @@ function EnemyContext:Destroy()
 			CauseMessage = destroyResult.message,
 		}, destroyResult.type)
 	end
-end
-
-function EnemyContext.Client:RequestEnemyReplication(player: Player): boolean
-	return self.Server._replicationService:HydratePlayer(player)
-end
-
-function EnemyContext.Client:AcknowledgeEnemyReplicationBootstrap(player: Player): boolean
-	return self.Server._replicationService:CompleteBootstrap(player)
 end
 
 return EnemyContext

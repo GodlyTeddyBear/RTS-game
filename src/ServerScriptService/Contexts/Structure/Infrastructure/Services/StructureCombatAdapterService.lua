@@ -117,13 +117,13 @@ end
 function StructureCombatAdapterService:Start(registry: any, _name: string)
 	self._combatContext = registry:Get("CombatContext")
 	self._enemyContext = registry:Get("EnemyContext")
+	self._entityContext = registry:Get("EntityContext")
 	self._enemyEntityFactory = self._enemyContext:GetEntityFactory().value
-	self._enemyInstanceFactory = self._enemyContext:GetInstanceFactory().value
 	self._instanceFactory = registry:Get("StructureInstanceFactory")
 	self._combatServices = self._combatContext:GetCombatRuntimeServices().value
 	self._targetingResolver = StructureTargetingResolverFactory.Create({
 		EnemyEntityFactory = self._enemyEntityFactory,
-		EnemyInstanceFactory = self._enemyInstanceFactory,
+		EntityContext = self._entityContext,
 	})
 	self._factsResolver = StructureFactsResolverFactory.Create({
 		StructureEntityFactory = self._entityFactory,
@@ -293,7 +293,8 @@ function StructureCombatAdapterService:_ConfigureCombatServices()
 
 	-- Install shared hit validation before any structure actor asks for melee or projectile checks.
 	local hitTargetResolver = StructureHitTargetResolverFactory.Create({
-		EnemyInstanceFactory = self._enemyInstanceFactory,
+		EntityContext = self._entityContext,
+		EnemyEntityFactory = self._enemyEntityFactory,
 	})
 
 	self._combatServices.HitboxService:RegisterTargetResolver(function(hitPart: BasePart): any?
@@ -307,7 +308,8 @@ function StructureCombatAdapterService:_ConfigureCombatServices()
 		local whitelistInstances = {} :: { Instance }
 
 		for _, enemyEntity in ipairs(self._enemyEntityFactory:QueryAliveEntities()) do
-			local enemyModel = self._enemyInstanceFactory:GetInstance(enemyEntity)
+			local boundInstanceResult = self._entityContext:GetBoundInstance(enemyEntity)
+			local enemyModel = if boundInstanceResult.success then boundInstanceResult.value else nil
 			if enemyModel ~= nil and enemyModel.Parent ~= nil and enemyModel ~= attackerModel then
 				table.insert(whitelistInstances, enemyModel)
 			end
@@ -322,7 +324,7 @@ function StructureCombatAdapterService:_ConfigureCombatServices()
 			StructureInstanceFactory = self._instanceFactory,
 			EnemyContext = self._enemyContext,
 			EnemyEntityFactory = self._enemyEntityFactory,
-			EnemyInstanceFactory = self._enemyInstanceFactory,
+			EntityContext = self._entityContext,
 		})
 	)
 

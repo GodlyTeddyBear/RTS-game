@@ -1,6 +1,5 @@
 --!strict
 
-local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Orient = require(ReplicatedStorage.Utilities.Orient)
@@ -43,14 +42,12 @@ end
 
 function LockOnService:ConfigureFactories(
 	enemyEntityFactory: any,
-	enemyInstanceFactory: any,
 	structureEntityFactory: any,
 	structureInstanceFactory: any,
 	baseEntityFactory: any,
 	baseInstanceFactory: any
 )
 	self._enemyEntityFactory = enemyEntityFactory
-	self._enemyInstanceFactory = enemyInstanceFactory
 	self._structureEntityFactory = structureEntityFactory
 	self._structureInstanceFactory = structureInstanceFactory
 	self._baseEntityFactory = baseEntityFactory
@@ -81,9 +78,8 @@ local function _setHumanoidAutoRotate(humanoid: Humanoid?, enabled: boolean)
 	end
 end
 
-function LockOnService:_GetHumanoid(entity: number): Humanoid?
-	local model = if self._enemyInstanceFactory ~= nil then self._enemyInstanceFactory:GetInstance(entity) else nil
-	return if model ~= nil then model:FindFirstChildWhichIsA("Humanoid") else nil
+function LockOnService:_GetHumanoid(_entity: number): Humanoid?
+	return nil
 end
 
 --[=[
@@ -97,41 +93,7 @@ function LockOnService:AttachConstraint(entity: number)
 		return
 	end
 
-	local model = if self._enemyInstanceFactory ~= nil then self._enemyInstanceFactory:GetInstance(entity) else nil
-	if model == nil or not model:IsA("Model") then
-		return
-	end
-
-	local primaryPart = model.PrimaryPart
-	if primaryPart == nil then
-		return
-	end
-
-	local attachment0 = Instance.new("Attachment")
-	attachment0.Name = "LockOnAttachment0"
-	attachment0.Parent = primaryPart
-
-	local attachment1 = Instance.new("Attachment")
-	attachment1.Name = "LockOnAttachment1"
-	attachment1.Parent = Workspace.Terrain
-
-	local constraint = Instance.new("AlignOrientation")
-	constraint.Name = "LockOnConstraint"
-	constraint.Attachment0 = attachment0
-	constraint.Attachment1 = attachment1
-	constraint.AlignType = Enum.AlignType.AllAxes
-	constraint.RigidityEnabled = false
-	constraint.MaxAngularVelocity = math.huge
-	constraint.MaxTorque = math.huge
-	constraint.Responsiveness = 200
-	constraint.Enabled = false
-	constraint.Parent = primaryPart
-
-	self._enemyEntityFactory:SetLockOn(entity, {
-		Attachment0 = attachment0,
-		Attachment1 = attachment1,
-		Constraint = constraint,
-	})
+	return
 end
 
 --[=[

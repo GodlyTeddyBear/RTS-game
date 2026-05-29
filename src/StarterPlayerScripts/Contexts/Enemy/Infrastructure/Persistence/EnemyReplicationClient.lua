@@ -1,25 +1,9 @@
 --!strict
 
---[=[
-    @class EnemyReplicationClient
-    Enemy-context client replication adapter that extends the shared ECS
-    client base, connects to `EnemyContext`, and rebuilds a typed enemy state
-    index after each replicated packet so gameplay code can observe enemy
-    updates without reading the ECS world directly.
-    @client
-]=]
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GoodSignal = require(ReplicatedStorage.Packages.Goodsignal)
-require(ReplicatedStorage.Utilities.Replecs)
-local JECS = require(ReplicatedStorage.Packages.JECS)
-local Knit = require(ReplicatedStorage.Packages.Knit)
-local BaseECSReplicationClient = require(ReplicatedStorage.Utilities.BaseECSReplicationClient)
-local StashPlus = require(ReplicatedStorage.Utilities.StashPlus)
-
-type TBootstrapPayload = BaseECSReplicationClient.TBootstrapPayload
-type TReplicationPacketPayload = BaseECSReplicationClient.TReplicationPacketPayload
+local EntityReplicationClient = require(script.Parent.Parent.Parent.Parent.Entity.Infrastructure.Persistence.EntityReplicationClient)
 
 export type TEnemyReplicatedState = {
 	EnemyId: string,
@@ -36,225 +20,100 @@ export type TEnemyReplicatedState = {
 
 local EnemyReplicationClient = {}
 EnemyReplicationClient.__index = EnemyReplicationClient
-setmetatable(EnemyReplicationClient, { __index = BaseECSReplicationClient })
 
--- Keeps the ECS entity name assignment in one place so component setup stays readable.
-local function _NameEntity(world: any, entity: any, name: string)
-	world:set(entity, JECS.Name, name)
-end
+local IDENTITY_ECS_NAME = "Entity.Identity"
+local HEALTH_ECS_NAME = "Entity.Health"
+local ROLE_ECS_NAME = "Enemy.Role"
+local MOVE_SPEED_ECS_NAME = "Enemy.CurrentMoveSpeed"
+local ANIMATION_STATE_ECS_NAME = "Enemy.AnimationState"
+local ANIMATION_LOOPING_ECS_NAME = "Enemy.AnimationLooping"
+local ALIVE_TAG_ECS_NAME = "Enemy.AliveTag"
+local GOAL_REACHED_TAG_ECS_NAME = "Enemy.GoalReachedTag"
 
---- Creates the enemy replication client.
---- @within EnemyReplicationClient
---- @return EnemyReplicationClient -- The new client instance.
 function EnemyReplicationClient.new()
-	local self = setmetatable(BaseECSReplicationClient.new("Enemy"), EnemyReplicationClient)
+	local self = setmetatable({}, EnemyReplicationClient)
 	self.StateChanged = GoodSignal.new()
-	self._enemyContext = nil
+	self._entityReplicationClient = EntityReplicationClient.new()
 	self._enemyStateById = {}
+	self._stateConnection = nil
 	return self
 end
 
---- Builds the enemy ECS components and tags used by the client mirror world.
---- @within EnemyReplicationClient
---- @param world any -- The client mirror world.
-function EnemyReplicationClient:_BuildComponents(world: any, _replecsLibrary: any)
-	local identityComponent = world:component()
-	_NameEntity(world, identityComponent, "Enemy.Identity")
-
-	local healthComponent = world:component()
-	_NameEntity(world, healthComponent, "Enemy.Health")
-
-	local currentMoveSpeedComponent = world:component()
-	_NameEntity(world, currentMoveSpeedComponent, "Enemy.CurrentMoveSpeed")
-
-	local roleComponent = world:component()
-	_NameEntity(world, roleComponent, "Enemy.Role")
-
-	local animationStateComponent = world:component()
-	_NameEntity(world, animationStateComponent, "Enemy.AnimationState")
-
-	local animationLoopingComponent = world:component()
-	_NameEntity(world, animationLoopingComponent, "Enemy.AnimationLooping")
-
-	local aliveTag = world:entity()
-	_NameEntity(world, aliveTag, "Enemy.AliveTag")
-
-	local goalReachedTag = world:entity()
-	_NameEntity(world, goalReachedTag, "Enemy.GoalReachedTag")
-
-	return table.freeze({
-		IdentityComponent = identityComponent,
-		HealthComponent = healthComponent,
-		CurrentMoveSpeedComponent = currentMoveSpeedComponent,
-		RoleComponent = roleComponent,
-		AnimationStateComponent = animationStateComponent,
-		AnimationLoopingComponent = animationLoopingComponent,
-		AliveTag = aliveTag,
-		GoalReachedTag = goalReachedTag,
-	})
+function EnemyReplicationClient:Init()
+	self._entityReplicationClient:Init()
 end
 
---- Declares the enemy shared schema that should be mirrored from the server.
---- @within EnemyReplicationClient
---- @return BaseECSReplicationClient.TSharedSchema -- The enemy shared schema.
-function EnemyReplicationClient:_GetSharedSchema()
-	local components = self:GetComponentsOrThrow()
-
-	return {
-		sharedComponents = {
-			components.IdentityComponent,
-			components.HealthComponent,
-			components.CurrentMoveSpeedComponent,
-			components.RoleComponent,
-			components.AnimationStateComponent,
-			components.AnimationLoopingComponent,
-		},
-		sharedTags = {
-			components.AliveTag,
-			components.GoalReachedTag,
-		},
-	}
+function EnemyReplicationClient:Start()
+	self._entityReplicationClient:Start()
+	self._stateConnection = self._entityReplicationClient:ObserveStateChanged(function()
+		self:_RebuildEnemyStateIndex()
+	end)
 end
 
---- Rebuilds the typed enemy state index after the mirror world changes.
---- @within EnemyReplicationClient
-function EnemyReplicationClient:_RegisterReplicatedSurface()
-	self:_RebuildEnemyStateIndex()
-end
-
---- Applies an atomic bootstrap packet and then rebuilds the enemy state index.
---- @within EnemyReplicationClient
---- @param payload TBootstrapPayload -- The bootstrap packet from the server.
---- @return boolean -- True when the bootstrap packet was handled.
-function EnemyReplicationClient:HandleBootstrap(payload: TBootstrapPayload): boolean
-	local handled = BaseECSReplicationClient.HandleBootstrap(self, payload)
-	self:_RebuildEnemyStateIndex()
-	return handled
-end
-
---- Applies a reliable packet and refreshes the enemy state index.
---- @within EnemyReplicationClient
---- @param payload TReplicationPacketPayload -- The reliable packet from the server.
-function EnemyReplicationClient:HandleReliable(payload: TReplicationPacketPayload)
-	BaseECSReplicationClient.HandleReliable(self, payload)
-	self:_RebuildEnemyStateIndex()
-end
-
---- Applies an unreliable packet and refreshes the enemy state index.
---- @within EnemyReplicationClient
---- @param payload TReplicationPacketPayload -- The unreliable packet from the server.
-function EnemyReplicationClient:HandleUnreliable(payload: TReplicationPacketPayload)
-	BaseECSReplicationClient.HandleUnreliable(self, payload)
-	self:_RebuildEnemyStateIndex()
-end
-
---- Applies an entity-scoped packet and refreshes the enemy state index.
---- @within EnemyReplicationClient
---- @param payload TReplicationPacketPayload -- The entity packet from the server.
-function EnemyReplicationClient:HandleEntity(payload: TReplicationPacketPayload)
-	BaseECSReplicationClient.HandleEntity(self, payload)
-	self:_RebuildEnemyStateIndex()
-end
-
---- Connects the client to `EnemyContext` replication signals.
---- @within EnemyReplicationClient
-function EnemyReplicationClient:_ConnectTransport()
-	self._enemyContext = Knit.GetService("EnemyContext")
-	local stash = StashPlus.new()
-
-	stash:AddConnection(self._enemyContext.EnemyBootstrap:Connect(function(payload)
-		self:HandleBootstrap(payload)
-	end))
-	stash:AddConnection(self._enemyContext.EnemyReliable:Connect(function(payload)
-		self:HandleReliable(payload)
-	end))
-	stash:AddConnection(self._enemyContext.EnemyUnreliable:Connect(function(payload)
-		self:HandleUnreliable(payload)
-	end))
-	stash:AddConnection(self._enemyContext.EnemyEntity:Connect(function(payload)
-		self:HandleEntity(payload)
-	end))
-
-	return stash
-end
-
---- Requests enemy replication once the transport is connected.
---- @within EnemyReplicationClient
-function EnemyReplicationClient:_OnStart()
-	assert(self._enemyContext ~= nil, "EnemyReplicationClient: missing EnemyContext")
-	self._enemyContext:RequestEnemyReplication()
-end
-
---- Acknowledges the bootstrap once the full enemy snapshot has been applied.
---- @within EnemyReplicationClient
-function EnemyReplicationClient:_OnBootstrapCompleted()
-	assert(self._enemyContext ~= nil, "EnemyReplicationClient: missing EnemyContext")
-	self._enemyContext:AcknowledgeEnemyReplicationBootstrap()
-end
-
---- Returns the cached replicated state for a single enemy id.
---- @within EnemyReplicationClient
---- @param enemyId string -- The stable enemy id from replication.
---- @return TEnemyReplicatedState? -- The cached enemy state, if present.
 function EnemyReplicationClient:GetEnemyState(enemyId: string): TEnemyReplicatedState?
 	return self._enemyStateById[enemyId]
 end
 
---- Subscribes to enemy state change notifications.
---- @within EnemyReplicationClient
---- @param callback (enemyId: string) -> () -- Called whenever one enemy state changes.
 function EnemyReplicationClient:ObserveEnemyStateChanged(callback: (enemyId: string) -> ())
 	return self.StateChanged:Connect(callback)
 end
 
---- Disconnects enemy observers and clears the cached replication state.
---- @within EnemyReplicationClient
 function EnemyReplicationClient:Destroy()
+	if self._stateConnection ~= nil then
+		self._stateConnection:Disconnect()
+		self._stateConnection = nil
+	end
+
 	if self.StateChanged ~= nil then
 		self.StateChanged:DisconnectAll()
 	end
 
-	BaseECSReplicationClient.Destroy(self)
-	self._enemyContext = nil
+	self._entityReplicationClient:Destroy()
 	table.clear(self._enemyStateById)
 end
 
--- Rebuilds the enemy index in phases: collect entities, compare to the previous cache, then fire change notifications.
 function EnemyReplicationClient:_RebuildEnemyStateIndex()
-	local world = self:GetWorldOrThrow()
-	local components = self:GetComponentsOrThrow()
+	local world = self._entityReplicationClient:GetWorldOrThrow()
+	local components = self._entityReplicationClient:GetComponentsOrThrow()
+	local byECSName = components.ByECSName or {}
 	local nextStateById = {}
 	local changedEnemyIds = {}
 	local previousStateById = self._enemyStateById
 
-	-- Read the current replicated state for every alive enemy entity.
-	for entity, identity, health in world:query(components.IdentityComponent, components.HealthComponent):iter() do
-		if type(identity) ~= "table" or type(identity.EnemyId) ~= "string" then
+	local identityComponent = byECSName[IDENTITY_ECS_NAME]
+	local healthComponent = byECSName[HEALTH_ECS_NAME]
+	if identityComponent == nil or healthComponent == nil then
+		self._enemyStateById = {}
+		return
+	end
+
+	for entity, identity, health in world:query(identityComponent, healthComponent):iter() do
+		if type(identity) ~= "table" or identity.EntityKind ~= "Enemy" or type(identity.EntityId) ~= "string" then
 			continue
 		end
 		if type(health) ~= "table" then
 			continue
 		end
 
-		local enemyId = identity.EnemyId
-		local currentMoveSpeed = world:get(entity, components.CurrentMoveSpeedComponent)
-		local roleState = world:get(entity, components.RoleComponent)
-		local animationState = world:get(entity, components.AnimationStateComponent)
-		local animationLooping = world:get(entity, components.AnimationLoopingComponent)
-		local roleName = if type(roleState) == "table" and type(roleState.Role) == "string"
-			then roleState.Role
-			else identity.Role
+		local enemyId = identity.EntityId
+		local roleState = self:_GetOptional(world, entity, byECSName[ROLE_ECS_NAME])
+		local moveSpeedState = self:_GetOptional(world, entity, byECSName[MOVE_SPEED_ECS_NAME])
+		local animationState = self:_GetOptional(world, entity, byECSName[ANIMATION_STATE_ECS_NAME])
+		local animationLooping = self:_GetOptional(world, entity, byECSName[ANIMATION_LOOPING_ECS_NAME])
+		local hasAliveTag = self:_HasOptional(world, entity, byECSName[ALIVE_TAG_ECS_NAME])
+		local hasGoalReachedTag = self:_HasOptional(world, entity, byECSName[GOAL_REACHED_TAG_ECS_NAME])
+
 		local nextState = table.freeze({
 			EnemyId = enemyId,
-			Role = roleName,
-			WaveNumber = identity.WaveNumber,
+			Role = if type(roleState) == "table" then roleState.Role else identity.DefinitionId,
+			WaveNumber = if type(roleState) == "table" then roleState.WaveNumber else nil,
 			CurrentHealth = health.Current or 0,
 			MaxHealth = health.Max or 0,
-			CurrentMoveSpeed = if type(currentMoveSpeed) == "table" then currentMoveSpeed.Value else nil,
+			CurrentMoveSpeed = if type(moveSpeedState) == "table" then moveSpeedState.Value else nil,
 			AnimationState = if type(animationState) == "string" then animationState else nil,
 			IsAnimationLooping = if type(animationLooping) == "boolean" then animationLooping else nil,
-			IsAlive = world:has(entity, components.AliveTag),
-			IsGoalReached = world:has(entity, components.GoalReachedTag),
+			IsAlive = hasAliveTag,
+			IsGoalReached = hasGoalReachedTag,
 		})
 
 		nextStateById[enemyId] = nextState
@@ -275,7 +134,6 @@ function EnemyReplicationClient:_RebuildEnemyStateIndex()
 		end
 	end
 
-	-- Mark enemies that disappeared entirely since the previous rebuild.
 	for enemyId in previousStateById do
 		if nextStateById[enemyId] == nil then
 			changedEnemyIds[enemyId] = true
@@ -284,10 +142,25 @@ function EnemyReplicationClient:_RebuildEnemyStateIndex()
 
 	self._enemyStateById = nextStateById
 
-	-- Notify observers after the cache swap so readers always see a coherent snapshot.
 	for enemyId in changedEnemyIds do
 		self.StateChanged:Fire(enemyId)
 	end
+end
+
+function EnemyReplicationClient:_GetOptional(world: any, entity: any, componentId: any): any
+	if componentId == nil then
+		return nil
+	end
+
+	return world:get(entity, componentId)
+end
+
+function EnemyReplicationClient:_HasOptional(world: any, entity: any, tagId: any): boolean
+	if tagId == nil then
+		return false
+	end
+
+	return world:has(entity, tagId)
 end
 
 return EnemyReplicationClient

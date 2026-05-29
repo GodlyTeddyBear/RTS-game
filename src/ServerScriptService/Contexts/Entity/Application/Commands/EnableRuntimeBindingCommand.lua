@@ -30,6 +30,7 @@ function EnableRuntimeBindingCommand:Execute(featureName: string): Result.Result
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(self._validationService, "EnableRuntimeBinding", self._lifecycle:GetState(), {
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",
+			"Running",
 		})
 		if not lifecycleResult.success then
 			return lifecycleResult

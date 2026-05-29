@@ -4,9 +4,9 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
-local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
+local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
@@ -31,10 +31,8 @@ end
 function SpawnEnemy:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_spawnPolicy = "EnemySpawnPolicy",
-		_entityFactory = "EnemyEntityFactory",
-		_instanceFactory = "EnemyInstanceFactory",
-		_replicationService = "EnemyECSReplicationService",
-		_syncService = "EnemyGameObjectSyncService",
+		_entityContext = "EntityContext",
+		_aiContext = "AIContext",
 	})
 end
 
@@ -43,31 +41,92 @@ function SpawnEnemy:Start(registry: any, _name: string)
 end
 
 function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: number): Result.Result<number>
-	local model: Model? = nil
 	local entity: number? = nil
+	local enemyId: string? = nil
+	local teamAssigned = false
 
 	return Result.Catch(function()
 		Try(self._spawnPolicy:Check(role, spawnCFrame))
 		Ensure(waveNumber > 0, "InvalidWaveNumber", Errors.INVALID_WAVE_NUMBER)
 
-		local enemyId = HttpService:GenerateGUID(false)
-		entity = self._entityFactory:CreateEnemy(enemyId, role, spawnCFrame, waveNumber)
-		model = self._instanceFactory:CreateEnemyInstance(entity, role, enemyId, waveNumber)
+		local roleConfig = EnemyConfig.Roles[role]
+		Ensure(roleConfig ~= nil, "InvalidRole", Errors.INVALID_ROLE, {
+			Role = role,
+		})
 
-		ModelPlus.MoveToCFrame(model, spawnCFrame)
-		self._entityFactory:SetModelRef(entity, model)
-		self._replicationService:RegisterEnemyEntity(entity)
-		self._syncService:RegisterEntity(entity, model)
+		enemyId = HttpService:GenerateGUID(false)
+		local createResult = self._entityContext:CreateEntity("Enemy.Actor", {
+			Identity = {
+				EntityId = enemyId,
+				EntityKind = "Enemy",
+				DefinitionId = role,
+			},
+			Health = {
+				Current = roleConfig.MaxHp,
+				Max = roleConfig.MaxHp,
+			},
+			Transform = {
+				CFrame = spawnCFrame,
+			},
+			ModelRef = {
+				Model = nil,
+			},
+			Target = {
+				TargetEntity = nil,
+				TargetKind = nil,
+			},
+			Role = {
+				Role = role,
+				WaveNumber = waveNumber,
+				MoveSpeed = roleConfig.MoveSpeed,
+				Damage = roleConfig.Damage,
+				AttackRange = roleConfig.AttackRange,
+				AttackCooldown = roleConfig.AttackCooldown,
+				TargetPreference = roleConfig.TargetPreference,
+				MovementMode = roleConfig.MovementMode,
+			},
+			PathState = {
+				GoalPosition = nil,
+				IsMoving = false,
+			},
+			CurrentMoveSpeed = {
+				Value = roleConfig.MoveSpeed,
+			},
+			AttackCooldown = {
+				Cooldown = roleConfig.AttackCooldown,
+				LastAttackTime = 0,
+			},
+			AnimationState = "Idle",
+			AnimationLooping = true,
+		})
+		Try(createResult)
+		entity = createResult.value
+
+		Try(self._aiContext:SetupEntityAIFromProfile(entity, ("Enemy%sAI"):format(role)))
+		Try(self._entityContext:EnableRuntimeBinding("Enemy"))
+		Try(self._entityContext:EnableRuntimeSync("Enemy"))
+		Try(self._entityContext:EnableRuntimeReplication("Enemy"))
+		Try(self._entityContext:RegisterRuntimeEntity(entity))
+		Try(self._entityContext:FlushBindQueue())
+
+		local boundInstanceResult = self._entityContext:GetBoundInstance(entity)
+		if boundInstanceResult.success and boundInstanceResult.value ~= nil then
+			Try(self._entityContext:Set(entity, "ModelRef", {
+				Model = boundInstanceResult.value,
+			}, "Entity"))
+		end
+
 		Try(self._teamContext:AssignMemberToEnemyTeam(TeamTypes.BuildMemberHandle("Enemy", enemyId)))
+		teamAssigned = true
 		self:_EmitGameEvent("Wave", "EnemySpawned", entity, role, waveNumber)
 
 		return Ok(entity)
 	end, self:_Label(), function()
 		if entity then
-			self._instanceFactory:DestroyInstance(entity)
+			self._entityContext:DestroyEntity(entity)
 		end
-		if entity then
-			self._entityFactory:DeleteEntity(entity)
+		if teamAssigned and enemyId ~= nil then
+			self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Enemy", enemyId))
 		end
 	end)
 end

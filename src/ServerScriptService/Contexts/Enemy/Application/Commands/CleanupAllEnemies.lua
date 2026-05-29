@@ -25,7 +25,7 @@ end
 
 function CleanupAllEnemies:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
-		_entityFactory = "EnemyEntityFactory",
+		_enemyEntityReadService = "EnemyEntityReadService",
 		_despawnEnemyCommand = "DespawnEnemyCommand",
 	})
 end
@@ -33,12 +33,12 @@ end
 function CleanupAllEnemies:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
 		local seen: { [any]: boolean } = {}
-		for _, entity in ipairs(self._entityFactory:QueryAliveEntities()) do
+		for _, entity in ipairs(self._enemyEntityReadService:QueryAliveEntities()) do
 			seen[entity] = true
 			Try(self._despawnEnemyCommand:Execute(entity))
 		end
 
-		for _, entity in ipairs(self._entityFactory:QueryGoalReachedEntities()) do
+		for _, entity in ipairs(self._enemyEntityReadService:QueryGoalReachedEntities()) do
 			if not seen[entity] then
 				Try(self._despawnEnemyCommand:Execute(entity))
 			end

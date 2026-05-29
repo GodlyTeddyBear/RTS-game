@@ -13,11 +13,11 @@ function GetNearestAliveEnemyQuery.new()
 end
 
 function GetNearestAliveEnemyQuery:Init(registry: any, _name: string)
-	self:_RequireDependency(registry, "_entityFactory", "EnemyEntityFactory")
+	self:_RequireDependency(registry, "_enemyEntityReadService", "EnemyEntityReadService")
 end
 
 function GetNearestAliveEnemyQuery:Execute(position: Vector3, maxRange: number): { Entity: number, CFrame: CFrame }?
-	return self._entityFactory:GetNearestAliveEnemy(position, maxRange)
+	return self._enemyEntityReadService:GetNearestAliveEnemy(position, maxRange)
 end
 
 return GetNearestAliveEnemyQuery

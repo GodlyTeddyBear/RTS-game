@@ -12,6 +12,18 @@ local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 local StatusService = {}
 StatusService.__index = StatusService
 
+local function _ResolvePosition(input: any): Vector3?
+	if typeof(input) == "Vector3" then
+		return input
+	end
+
+	if type(input) == "table" and typeof(input.CFrame) == "CFrame" then
+		return input.CFrame.Position
+	end
+
+	return nil
+end
+
 --[=[
 	@interface AuraSourceData
 	@within StatusService
@@ -122,7 +134,7 @@ function StatusService:EvaluateEnemyMoveSpeedEffects()
 			continue
 		end
 
-		local currentPosition = enemyEntityFactory:GetPosition(entity)
+		local currentPosition = _ResolvePosition(enemyEntityFactory:GetPosition(entity))
 		local strongestMultiplier = 1
 		if currentPosition ~= nil then
 			-- Apply the strongest active stasis slow that currently overlaps the enemy.

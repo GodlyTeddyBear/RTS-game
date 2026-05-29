@@ -28,7 +28,8 @@ end
 
 function HandleGoalReached:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
-		_entityFactory = "EnemyEntityFactory",
+		_entityContext = "EntityContext",
+		_enemyEntityReadService = "EnemyEntityReadService",
 		_despawnEnemyCommand = "DespawnEnemyCommand",
 	})
 end
@@ -42,14 +43,15 @@ function HandleGoalReached:Execute(entity: any): Result.Result<boolean>
 		Ensure(entity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
 		Ensure(self._baseContext ~= nil, "DependencyUnavailable", "BaseContext dependency is unavailable")
 
-		local identity = self._entityFactory:GetIdentity(entity)
+		local identity = self._enemyEntityReadService:GetIdentity(entity)
 		Ensure(identity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
 
 		local roleConfig = EnemyConfig.Roles[identity.Role]
 		Ensure(roleConfig ~= nil, "InvalidRole", Errors.INVALID_ROLE)
 
-		self._entityFactory:MarkGoalReached(entity)
-		local deathCFrame = self._entityFactory:GetDeathCFrame(entity) or CFrame.new()
+		Try(self._entityContext:Remove(entity, "AliveTag", "Enemy"))
+		Try(self._entityContext:Add(entity, "GoalReachedTag", "Enemy"))
+		local deathCFrame = self._enemyEntityReadService:GetEntityCFrame(entity) or CFrame.new()
 		self:_EmitGameEvent("Wave", "EnemyDied", identity.Role, identity.WaveNumber, deathCFrame)
 
 		Try(self._despawnEnemyCommand:Execute(entity))

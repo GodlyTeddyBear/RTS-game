@@ -27,7 +27,8 @@ end
 
 function ApplyDamageEnemy:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
-		_entityFactory = "EnemyEntityFactory",
+		_entityContext = "EntityContext",
+		_enemyEntityReadService = "EnemyEntityReadService",
 		_despawnEnemyCommand = "DespawnEnemyCommand",
 	})
 end
@@ -39,16 +40,22 @@ function ApplyDamageEnemy:Execute(entity: any, amount: number): Result.Result<bo
 			Amount = amount,
 		})
 
-		local identity = self._entityFactory:GetIdentity(entity)
+		local identity = self._enemyEntityReadService:GetIdentity(entity)
 		Ensure(identity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
-		Ensure(self._entityFactory:IsAlive(entity), "InvalidEntity", Errors.INVALID_ENTITY)
+		Ensure(self._enemyEntityReadService:IsAlive(entity), "InvalidEntity", Errors.INVALID_ENTITY)
 
-		local health = self._entityFactory:GetHealth(entity)
+		local health = self._enemyEntityReadService:GetHealth(entity)
 		Ensure(health ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
 
-		local didDie = self._entityFactory:ApplyDamage(entity, amount)
+		local nextHp = math.max(0, health.Current - amount)
+		Try(self._entityContext:Set(entity, "Health", {
+			Current = nextHp,
+			Max = health.Max,
+		}, "Entity"))
+
+		local didDie = nextHp <= 0
 		if didDie then
-			local deathCFrame = self._entityFactory:GetDeathCFrame(entity) or CFrame.new()
+			local deathCFrame = self._enemyEntityReadService:GetEntityCFrame(entity) or CFrame.new()
 			self:_EmitGameEvent("Wave", "EnemyDied", identity.Role, identity.WaveNumber, deathCFrame)
 			Try(self._despawnEnemyCommand:Execute(entity))
 			return Ok(true)

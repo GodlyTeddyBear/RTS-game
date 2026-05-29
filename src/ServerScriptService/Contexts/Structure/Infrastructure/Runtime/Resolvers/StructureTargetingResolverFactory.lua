@@ -9,9 +9,15 @@ local StructureTargetingResolverFactory = {}
 
 function StructureTargetingResolverFactory.Create(dependencies: {
 	EnemyEntityFactory: any,
-	EnemyInstanceFactory: any,
+	EntityContext: any,
 }): any
 	local resolver = {}
+
+	local function getEnemyModel(enemyEntity: number): Model?
+		local boundInstanceResult = dependencies.EntityContext:GetBoundInstance(enemyEntity)
+		local boundInstance = if boundInstanceResult.success then boundInstanceResult.value else nil
+		return if boundInstance ~= nil and boundInstance:IsA("Model") then boundInstance else nil
+	end
 
 	function resolver.IsEnemyTargetInRange(position: Vector3, attackRange: number, enemyEntity: number): boolean
 			if not dependencies.EnemyEntityFactory:IsAlive(enemyEntity) then
@@ -19,7 +25,7 @@ function StructureTargetingResolverFactory.Create(dependencies: {
 			end
 
 			local targetPosition = resolver.ResolveEnemyTargetPosition(enemyEntity)
-			local enemyModel = dependencies.EnemyInstanceFactory:GetInstance(enemyEntity)
+			local enemyModel = getEnemyModel(enemyEntity)
 			if targetPosition == nil or enemyModel == nil or not enemyModel:IsA("Model") or enemyModel.Parent == nil then
 				return false
 			end
@@ -41,7 +47,7 @@ function StructureTargetingResolverFactory.Create(dependencies: {
 				return nil
 			end
 
-			local enemyModel = dependencies.EnemyInstanceFactory:GetInstance(enemyEntity)
+			local enemyModel = getEnemyModel(enemyEntity)
 			if enemyModel == nil or not enemyModel:IsA("Model") or enemyModel.Parent == nil then
 				return nil
 			end

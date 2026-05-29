@@ -26,6 +26,7 @@ local RegisterAIEntitySystemsCommand = require(script.Parent.Application.Command
 local RegisterActionDefinitionCommand = require(script.Parent.Application.Commands.RegisterActionDefinitionCommand)
 local RegisterBehaviorDefinitionCommand = require(script.Parent.Application.Commands.RegisterBehaviorDefinitionCommand)
 local RegisterEvaluationCommand = require(script.Parent.Application.Commands.RegisterEvaluationCommand)
+local RegisterProfileCommand = require(script.Parent.Application.Commands.RegisterProfileCommand)
 local SeedBuiltInAIDefinitionsCommand = require(script.Parent.Application.Commands.SeedBuiltInAIDefinitionsCommand)
 local SetupEntityAICommand = require(script.Parent.Application.Commands.SetupEntityAICommand)
 local SetupEntityAIFromProfileCommand = require(script.Parent.Application.Commands.SetupEntityAIFromProfileCommand)
@@ -62,6 +63,7 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("RegisterBehaviorDefinitionCommand", RegisterBehaviorDefinitionCommand, "_registerBehaviorDefinitionCommand"),
 	moduleSpec("RegisterEvaluationCommand", RegisterEvaluationCommand, "_registerEvaluationCommand"),
 	moduleSpec("RegisterActionDefinitionCommand", RegisterActionDefinitionCommand, "_registerActionDefinitionCommand"),
+	moduleSpec("RegisterProfileCommand", RegisterProfileCommand, "_registerProfileCommand"),
 	moduleSpec("SetupEntityAICommand", SetupEntityAICommand, "_setupEntityAICommand"),
 	moduleSpec("SetupEntityAIFromProfileCommand", SetupEntityAIFromProfileCommand, "_setupEntityAIFromProfileCommand"),
 	moduleSpec("CleanupEntityAICommand", CleanupEntityAICommand, "_cleanupEntityAICommand"),
@@ -198,6 +200,12 @@ function AIContext:RegisterFactProvider(payload: any): Result.Result<boolean>
 	return Catch(function()
 		return self._registerFactProviderCommand:Execute(payload)
 	end, "AIContext:RegisterFactProvider")
+end
+
+function AIContext:RegisterProfile(payload: any): Result.Result<boolean>
+	return Catch(function()
+		return self._registerProfileCommand:Execute(payload)
+	end, "AIContext:RegisterProfile")
 end
 
 function AIContext:SetupEntityAI(entity: number, profile: any): Result.Result<boolean>

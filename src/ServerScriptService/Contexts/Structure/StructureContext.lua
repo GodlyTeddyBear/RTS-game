@@ -164,6 +164,7 @@ local StructureContext = Knit.CreateService({
 	ExternalServices = {
 		{ Name = "WorldContext" },
 		{ Name = "EnemyContext" },
+		{ Name = "EntityContext" },
 		{ Name = "CombatContext" },
 		{ Name = "MiningContext" },
 		{ Name = "TeamContext" },

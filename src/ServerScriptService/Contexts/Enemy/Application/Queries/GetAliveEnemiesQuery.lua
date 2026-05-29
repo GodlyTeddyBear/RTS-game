@@ -18,11 +18,11 @@ function GetAliveEnemiesQuery.new()
 end
 
 function GetAliveEnemiesQuery:Init(registry: any, _name: string)
-	self:_RequireDependency(registry, "_entityFactory", "EnemyEntityFactory")
+	self:_RequireDependency(registry, "_enemyEntityReadService", "EnemyEntityReadService")
 end
 
 function GetAliveEnemiesQuery:Execute(): { number }
-	return self._entityFactory:QueryAliveEntities()
+	return self._enemyEntityReadService:QueryAliveEntities()
 end
 
 return GetAliveEnemiesQuery

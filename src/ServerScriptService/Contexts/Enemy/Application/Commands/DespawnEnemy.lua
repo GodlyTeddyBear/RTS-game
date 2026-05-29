@@ -28,10 +28,8 @@ end
 
 function DespawnEnemy:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
-		_entityFactory = "EnemyEntityFactory",
-		_instanceFactory = "EnemyInstanceFactory",
-		_combatAdapterService = "EnemyCombatAdapterService",
-		_replicationService = "EnemyECSReplicationService",
+		_entityContext = "EntityContext",
+		_enemyEntityReadService = "EnemyEntityReadService",
 	})
 end
 
@@ -43,9 +41,8 @@ function DespawnEnemy:Execute(entity: any): Result.Result<boolean>
 	return Result.Catch(function()
 		Ensure(entity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
 
-		local identity = self._entityFactory:GetIdentity(entity)
-		local modelRef = self._entityFactory:GetModelRef(entity)
-		if not identity and not modelRef then
+		local identity = self._enemyEntityReadService:GetIdentity(entity)
+		if identity == nil then
 			return Ok(false)
 		end
 
@@ -53,10 +50,7 @@ function DespawnEnemy:Execute(entity: any): Result.Result<boolean>
 			Try(self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Enemy", identity.EnemyId)))
 		end
 
-		self._combatAdapterService:UnregisterActor(entity)
-		self._replicationService:UnregisterEnemyEntity(entity)
-		self._instanceFactory:DestroyInstance(entity)
-		self._entityFactory:DeleteEntity(entity)
+		Try(self._entityContext:DestroyEntity(entity))
 		return Ok(true)
 	end, "Enemy:DespawnEnemy")
 end
