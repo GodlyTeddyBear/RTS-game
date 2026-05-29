@@ -17,6 +17,7 @@ local UnitEntityReadService = require(script.Parent.Infrastructure.Entity.UnitEn
 local UnitEntitySchema = require(script.Parent.Infrastructure.Entity.UnitEntitySchema)
 local UnitMovementRuntimeService = require(script.Parent.Infrastructure.Entity.UnitMovementRuntimeService)
 local UnitActionExecutionSystem = require(script.Parent.Infrastructure.Entity.UnitActionExecutionSystem)
+local UnitAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local UnitAIProfiles = require(script.Parent.Config.AIProfiles)
 local UnitSpawnPolicy = require(script.Parent.UnitDomain.Policies.UnitSpawnPolicy)
 
@@ -325,6 +326,14 @@ function UnitContext:_RegisterAIContracts(): Result.Result<boolean>
 				return Ok(true)
 			end
 			return result
+		end
+
+		for _, behaviorPayload in pairs(UnitAIBehaviors) do
+			local behaviorResult =
+				acceptDuplicate(self._aiContext:RegisterBehaviorDefinition(behaviorPayload), "DuplicateBehaviorDefinition")
+			if not behaviorResult.success then
+				return behaviorResult
+			end
 		end
 
 		for _, profilePayload in pairs(UnitAIProfiles) do

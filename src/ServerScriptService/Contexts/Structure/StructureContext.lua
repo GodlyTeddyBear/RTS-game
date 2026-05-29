@@ -18,6 +18,7 @@ local StructureEntityReadService = require(script.Parent.Infrastructure.Entity.S
 local StructureEntitySchema = require(script.Parent.Infrastructure.Entity.StructureEntitySchema)
 local StructureActionExecutionSystem = require(script.Parent.Infrastructure.Entity.StructureActionExecutionSystem)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
+local StructureAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local StructureAIProfiles = require(script.Parent.Config.AIProfiles)
 local RegisterStructureCommand = require(script.Parent.Application.Commands.RegisterStructureCommand)
 local AdvanceConstructionCommand = require(script.Parent.Application.Commands.AdvanceConstructionCommand)
@@ -338,6 +339,13 @@ function StructureContext:_RegisterAIContracts(): Result.Result<boolean>
 				return Ok(true)
 			end
 			return result
+		end
+
+		for _, behaviorPayload in pairs(StructureAIBehaviors) do
+			local result = acceptDuplicate(self._aiContext:RegisterBehaviorDefinition(behaviorPayload), "DuplicateBehaviorDefinition")
+			if not result.success then
+				return result
+			end
 		end
 
 		for _, profilePayload in pairs(StructureAIProfiles) do

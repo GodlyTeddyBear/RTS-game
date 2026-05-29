@@ -3,7 +3,7 @@
 local UnitAIProfiles = {
 	UnitBuilderAI = {
 		ProfileId = "UnitBuilderAI",
-		DefinitionId = "MoveBuildIdle",
+		DefinitionId = "UnitMoveBuildIdle",
 		TickInterval = 0.15,
 		InitialBehaviorId = "Idle",
 		InitialNodePath = { "Idle" },

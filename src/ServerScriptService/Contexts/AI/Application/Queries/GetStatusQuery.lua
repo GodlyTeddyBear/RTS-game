@@ -7,7 +7,6 @@ local BaseQuery = require(ServerStorage.Utilities.ContextUtilities.BaseApplicati
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local BasicActions = require(script.Parent.Parent.Parent.Config.Actions.BasicActions)
-local BasicBehaviors = require(script.Parent.Parent.Parent.Config.Behaviors.BasicBehaviors)
 local BasicEvaluations = require(script.Parent.Parent.Parent.Config.Evaluations.BasicEvaluations)
 local BasicFactProviders = require(script.Parent.Parent.Parent.Config.Facts.BasicFactProviders)
 
@@ -51,7 +50,6 @@ function GetStatusQuery:Execute(
 				EvaluationCount = self:_CountEntries(BasicEvaluations),
 				ActionCount = self:_CountEntries(BasicActions),
 				FactProviderCount = self:_CountEntries(BasicFactProviders),
-				BehaviorDefinitionCount = self:_CountEntries(BasicBehaviors),
 			}),
 		}))
 	end, self:_Label())

@@ -10,6 +10,7 @@ local SummonConfig = require(ReplicatedStorage.Contexts.Summon.Config.SummonConf
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 
 local SummonActionExecutionSystem = require(script.Parent.Infrastructure.Entity.SummonActionExecutionSystem)
+local SummonAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local SummonAIProfiles = require(script.Parent.Config.AIProfiles)
 local SummonEntityReadService = require(script.Parent.Infrastructure.Entity.SummonEntityReadService)
 local SummonEntitySchema = require(script.Parent.Infrastructure.Entity.SummonEntitySchema)
@@ -252,6 +253,14 @@ function SummonContext:_RegisterAIContracts(): Result.Result<boolean>
 				return Ok(true)
 			end
 			return result
+		end
+
+		for _, behaviorPayload in pairs(SummonAIBehaviors) do
+			local behaviorResult =
+				acceptDuplicate(self._aiContext:RegisterBehaviorDefinition(behaviorPayload), "DuplicateBehaviorDefinition")
+			if not behaviorResult.success then
+				return behaviorResult
+			end
 		end
 
 		for _, profilePayload in pairs(SummonAIProfiles) do

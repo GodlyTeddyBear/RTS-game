@@ -15,6 +15,7 @@ local EnemyEntityReadService = require(script.Parent.Infrastructure.Entity.Enemy
 local EnemyEntitySchema = require(script.Parent.Infrastructure.Entity.EnemyEntitySchema)
 local EnemyActionExecutionSystem = require(script.Parent.Infrastructure.Entity.EnemyActionExecutionSystem)
 local EnemySpawnPolicy = require(script.Parent.EnemyDomain.Policies.EnemySpawnPolicy)
+local EnemyAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local EnemyAIProfiles = require(script.Parent.Config.AIProfiles)
 
 local SpawnEnemyCommand = require(script.Parent.Application.Commands.SpawnEnemy)
@@ -330,6 +331,13 @@ end
 
 function EnemyContext:_RegisterAIContracts(): Result.Result<boolean>
 	return Catch(function()
+		for _, behaviorPayload in pairs(EnemyAIBehaviors) do
+			local behaviorResult = self._aiContext:RegisterBehaviorDefinition(behaviorPayload)
+			if not behaviorResult.success and behaviorResult.type ~= "DuplicateBehaviorDefinition" then
+				return behaviorResult
+			end
+		end
+
 		for _, profilePayload in pairs(EnemyAIProfiles) do
 			local profileResult = self._aiContext:RegisterProfile(profilePayload)
 			if not profileResult.success and profileResult.type ~= "DuplicateProfile" then

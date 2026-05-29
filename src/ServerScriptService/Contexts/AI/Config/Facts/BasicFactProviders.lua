@@ -11,13 +11,6 @@ local function getService(serviceName: string): any?
 	return if didGet then service else nil
 end
 
-local function getDefinitionId(context: any): string?
-	local behaviorTree = if type(context) == "table" then context.BehaviorTree else nil
-	return if type(behaviorTree) == "table" and type(behaviorTree.DefinitionId) == "string"
-		then behaviorTree.DefinitionId
-		else nil
-end
-
 local function readEntityValue(context: any, entity: number, key: string, featureName: string): any?
 	local entityContext = if type(context) == "table" then context.EntityContext else nil
 	if entityContext == nil or type(entityContext.Get) ~= "function" then
@@ -43,8 +36,8 @@ local function getEntityCFrame(context: any, entity: number): CFrame?
 	return if type(transform) == "table" and typeof(transform.CFrame) == "CFrame" then transform.CFrame else nil
 end
 
-local function buildAttackOrAdvanceFacts(context: any): any
-	if getDefinitionId(context) ~= "AttackOrAdvance" or type(context.Entity) ~= "number" then
+local function buildAttackTargetFacts(context: any): any
+	if type(context.Entity) ~= "number" then
 		return {}
 	end
 
@@ -123,14 +116,6 @@ local function buildAttackOrAdvanceFacts(context: any): any
 end
 
 local function buildOperationalFacts(context: any): any
-	local definitionId = getDefinitionId(context)
-	if
-		definitionId ~= "OperationalAttackOrIdle"
-		and definitionId ~= "OperationalExtractOrIdle"
-		and definitionId ~= "OperationalStasisOrIdle"
-	then
-		return {}
-	end
 	if type(context.Entity) ~= "number" then
 		return {}
 	end
@@ -140,12 +125,23 @@ local function buildOperationalFacts(context: any): any
 	local sourcePlacement = readEntityValue(context, entity, "SourcePlacement", "Structure")
 	local positionCFrame = getEntityCFrame(context, entity)
 	local isOperational = hasEntityTag(context, entity, "OperationalTag", "Structure")
+	if type(stats) ~= "table" then
+		return {}
+	end
+
 	local facts = {
 		IsOperational = isOperational,
 		StructureStats = stats,
+		ExtractData = {
+			StructureEntity = entity,
+			InstanceId = if type(sourcePlacement) == "table" then sourcePlacement.InstanceId else nil,
+		},
+		StasisData = {
+			StructureEntity = entity,
+		},
 	}
 
-	if definitionId == "OperationalAttackOrIdle" and type(stats) == "table" and positionCFrame ~= nil then
+	if positionCFrame ~= nil then
 		local enemyContext = getService("EnemyContext")
 		local nearestResult = if enemyContext ~= nil and type(enemyContext.GetNearestAliveEnemy) == "function"
 			then enemyContext:GetNearestAliveEnemy(positionCFrame.Position, stats.AttackRange or 0)
@@ -157,15 +153,6 @@ local function buildOperationalFacts(context: any): any
 				TargetPosition = nearest.CFrame.Position,
 			}
 		end
-	elseif definitionId == "OperationalExtractOrIdle" then
-		facts.ExtractData = {
-			StructureEntity = entity,
-			InstanceId = if type(sourcePlacement) == "table" then sourcePlacement.InstanceId else nil,
-		}
-	elseif definitionId == "OperationalStasisOrIdle" then
-		facts.StasisData = {
-			StructureEntity = entity,
-		}
 	end
 
 	return facts
@@ -207,7 +194,7 @@ local function resolveBuildTarget(context: any, entity: number, role: any): numb
 end
 
 local function buildMoveBuildFacts(context: any): any
-	if getDefinitionId(context) ~= "MoveBuildIdle" or type(context.Entity) ~= "number" then
+	if type(context.Entity) ~= "number" then
 		return {}
 	end
 
@@ -236,7 +223,7 @@ local function buildMoveBuildFacts(context: any): any
 end
 
 local function buildEngageEnemyFacts(context: any): any
-	if getDefinitionId(context) ~= "EngageEnemyOrIdle" or type(context.Entity) ~= "number" then
+	if type(context.Entity) ~= "number" then
 		return {}
 	end
 
@@ -276,11 +263,11 @@ local BasicFactProviders = {
 		},
 	},
 
-	AttackOrAdvanceFacts = {
-		ProviderId = "AttackOrAdvanceFacts",
-		BuildFacts = buildAttackOrAdvanceFacts,
+	AttackTargetFacts = {
+		ProviderId = "AttackTargetFacts",
+		BuildFacts = buildAttackTargetFacts,
 		Metadata = {
-			Description = "Builds generic attack-or-advance facts for actors using that behavior.",
+			Description = "Builds generic attack target and advance facts for hostile advancing actors.",
 		},
 	},
 
@@ -292,16 +279,16 @@ local BasicFactProviders = {
 		},
 	},
 
-	MoveBuildFacts = {
-		ProviderId = "MoveBuildFacts",
+	MovementBuildFacts = {
+		ProviderId = "MovementBuildFacts",
 		BuildFacts = buildMoveBuildFacts,
 		Metadata = {
 			Description = "Builds generic movement and builder facts.",
 		},
 	},
 
-	EngageEnemyFacts = {
-		ProviderId = "EngageEnemyFacts",
+	EnemyEngagementFacts = {
+		ProviderId = "EnemyEngagementFacts",
 		BuildFacts = buildEngageEnemyFacts,
 		Metadata = {
 			Description = "Builds generic enemy engagement facts.",

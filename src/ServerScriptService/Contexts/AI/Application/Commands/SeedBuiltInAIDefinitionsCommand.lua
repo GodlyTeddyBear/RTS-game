@@ -7,7 +7,6 @@ local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplica
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local BasicActions = require(script.Parent.Parent.Parent.Config.Actions.BasicActions)
-local BasicBehaviors = require(script.Parent.Parent.Parent.Config.Behaviors.BasicBehaviors)
 local BasicEvaluations = require(script.Parent.Parent.Parent.Config.Evaluations.BasicEvaluations)
 local BasicFactProviders = require(script.Parent.Parent.Parent.Config.Facts.BasicFactProviders)
 local Errors = require(script.Parent.Parent.Parent.Errors)
@@ -26,8 +25,6 @@ function SeedBuiltInAIDefinitionsCommand:Init(registry: any, _name: string)
 		_evaluationRegistry = "AIEvaluationRegistry",
 		_actionRegistry = "AIActionDefinitionRegistry",
 		_factProviderRegistry = "AIFactProviderRegistry",
-		_behaviorRegistry = "AIBehaviorDefinitionRegistry",
-		_profileRegistry = "AIEntityProfileRegistry",
 	})
 end
 
@@ -44,11 +41,6 @@ function SeedBuiltInAIDefinitionsCommand:Execute(): Result.Result<boolean>
 		end
 
 		seedResult = self:_SeedFactProviders()
-		if not seedResult.success then
-			return seedResult
-		end
-
-		seedResult = self:_SeedBehaviors()
 		if not seedResult.success then
 			return seedResult
 		end
@@ -104,24 +96,6 @@ function SeedBuiltInAIDefinitionsCommand:_SeedFactProviders(): Result.Result<boo
 			local result = self._factProviderRegistry:RegisterFactProvider(payload)
 			if not result.success then
 				return self:_BuildSeedFailure("FactProvider", providerId, result)
-			end
-		end
-	end
-
-	return Result.Ok(true)
-end
-
-function SeedBuiltInAIDefinitionsCommand:_SeedBehaviors(): Result.Result<boolean>
-	for definitionId, payload in pairs(BasicBehaviors) do
-		local idResult = self:_RequireCatalogId("BehaviorDefinition", definitionId, payload, "DefinitionId")
-		if not idResult.success then
-			return idResult
-		end
-
-		if self._behaviorRegistry:GetDefinition(payload.DefinitionId) == nil then
-			local result = self._behaviorRegistry:RegisterDefinition(payload)
-			if not result.success then
-				return self:_BuildSeedFailure("BehaviorDefinition", definitionId, result)
 			end
 		end
 	end

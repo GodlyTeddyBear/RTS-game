@@ -3,7 +3,7 @@
 local StructureAIProfiles = {
 	StructureAttackAI = {
 		ProfileId = "StructureAttackAI",
-		DefinitionId = "OperationalAttackOrIdle",
+		DefinitionId = "StructureAttackOrIdle",
 		TickInterval = 0.2,
 		InitialBehaviorId = "Idle",
 		InitialNodePath = { "Idle" },
@@ -11,7 +11,7 @@ local StructureAIProfiles = {
 	},
 	StructureExtractAI = {
 		ProfileId = "StructureExtractAI",
-		DefinitionId = "OperationalExtractOrIdle",
+		DefinitionId = "StructureExtractOrIdle",
 		TickInterval = 0.5,
 		InitialBehaviorId = "Idle",
 		InitialNodePath = { "Idle" },
@@ -19,7 +19,7 @@ local StructureAIProfiles = {
 	},
 	StructureStasisAI = {
 		ProfileId = "StructureStasisAI",
-		DefinitionId = "OperationalStasisOrIdle",
+		DefinitionId = "StructureStasisOrIdle",
 		TickInterval = 0.25,
 		InitialBehaviorId = "Idle",
 		InitialNodePath = { "Idle" },
@@ -27,7 +27,7 @@ local StructureAIProfiles = {
 	},
 	StructurePassiveAI = {
 		ProfileId = "StructurePassiveAI",
-		DefinitionId = "IdleOnly",
+		DefinitionId = "StructurePassiveIdle",
 		TickInterval = 1,
 		InitialBehaviorId = "Idle",
 		InitialNodePath = { "Idle" },
