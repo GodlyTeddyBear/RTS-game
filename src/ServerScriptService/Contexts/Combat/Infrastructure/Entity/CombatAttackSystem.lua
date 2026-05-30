@@ -7,16 +7,20 @@ local PHASE_STARTUP = "Startup"
 local PHASE_ACTIVE = "Active"
 local PHASE_COMPLETED = "Completed"
 local PHASE_FAILED = "Failed"
+local MECHANIC_DIRECT_DAMAGE = "DirectDamage"
+local MECHANIC_HITBOX = "Hitbox"
+local MECHANIC_PROJECTILE = "Projectile"
 
-function CombatAttackSystem.new(entityFactory: any)
+function CombatAttackSystem.new(entityFactory: any, abilityRegistry: any)
 	local self = setmetatable({}, CombatAttackSystem)
 	self._entityFactory = entityFactory
+	self._abilityRegistry = abilityRegistry
 	return self
 end
 
 function CombatAttackSystem:Run()
 	-- READS: Combat.AttackState [AUTHORITATIVE]
-	-- WRITES: Combat.AttackState [AUTHORITATIVE], Combat.DamageRequest [AUTHORITATIVE], Combat.RequestTag
+	-- WRITES: Combat.AttackState [AUTHORITATIVE], Combat.DamageRequest [AUTHORITATIVE], Combat.HitboxRequest [AUTHORITATIVE], Combat.ProjectileRequest [AUTHORITATIVE], Combat.RequestTag
 	local queryResult = self._entityFactory:Query({
 		FeatureName = "Combat",
 		Keys = { "AttackState" },
@@ -41,7 +45,17 @@ function CombatAttackSystem:_RunEntity(entity: number, now: number)
 	end
 
 	local targetEntity = attackState.TargetEntity
-	local damage = attackState.Damage
+	local ability = self:_ResolveAbility(attackState)
+	if ability == nil then
+		self:_SetAttackState(entity, attackState, {
+			Phase = PHASE_FAILED,
+			UpdatedAt = now,
+			ErrorCode = "UnknownCombatAbility",
+		})
+		return
+	end
+
+	local damage = self:_ResolveNumber(attackState.Damage, ability.Damage, 0)
 	if type(targetEntity) ~= "number" or not self._entityFactory:Exists(targetEntity) then
 		self:_SetAttackState(entity, attackState, {
 			Phase = PHASE_FAILED,
@@ -61,14 +75,42 @@ function CombatAttackSystem:_RunEntity(entity: number, now: number)
 
 	local phase = if attackState.Phase == PHASE_STARTUP then PHASE_ACTIVE else attackState.Phase
 	if attackState.HasEmittedRequest ~= true then
-		self:_CreateDamageRequest(entity, attackState, targetEntity, damage, now)
+		self:_CreateMechanicRequest(entity, attackState, ability, targetEntity, damage, now)
 	end
 
 	self:_SetAttackState(entity, attackState, {
 		Phase = if phase == PHASE_ACTIVE then PHASE_COMPLETED else phase,
 		UpdatedAt = now,
 		HasEmittedRequest = true,
+		Mechanic = ability.Mechanic,
+		Cooldown = self:_ResolveNumber(attackState.Cooldown, ability.Cooldown, 0),
 	})
+end
+
+function CombatAttackSystem:_ResolveAbility(attackState: any): any?
+	local abilityId = attackState.AbilityId
+	if type(abilityId) ~= "string" or abilityId == "" then
+		return nil
+	end
+
+	return self._abilityRegistry:GetAbility(abilityId)
+end
+
+function CombatAttackSystem:_CreateMechanicRequest(
+	entity: number,
+	attackState: any,
+	ability: any,
+	targetEntity: number,
+	damage: number,
+	now: number
+)
+	if ability.Mechanic == MECHANIC_PROJECTILE then
+		self:_CreateProjectileRequest(entity, attackState, ability, targetEntity, damage, now)
+	elseif ability.Mechanic == MECHANIC_HITBOX then
+		self:_CreateHitboxRequest(entity, attackState, ability, targetEntity, damage, now)
+	elseif ability.Mechanic == MECHANIC_DIRECT_DAMAGE then
+		self:_CreateDamageRequest(entity, attackState, targetEntity, damage, now)
+	end
 end
 
 function CombatAttackSystem:_CreateDamageRequest(
@@ -81,6 +123,7 @@ function CombatAttackSystem:_CreateDamageRequest(
 	self._entityFactory:CreateFromArchetype("Combat.DamageRequest", {
 		DamageRequest = {
 			ActionId = attackState.ActionId,
+			AbilityId = attackState.AbilityId,
 			AttackerEntity = entity,
 			VictimEntity = targetEntity,
 			Amount = damage,
@@ -88,6 +131,61 @@ function CombatAttackSystem:_CreateDamageRequest(
 			Reason = "AttackState",
 		},
 	})
+end
+
+function CombatAttackSystem:_CreateHitboxRequest(
+	entity: number,
+	attackState: any,
+	ability: any,
+	targetEntity: number,
+	damage: number,
+	now: number
+)
+	self._entityFactory:CreateFromArchetype("Combat.HitboxRequest", {
+		HitboxRequest = {
+			ActionId = attackState.ActionId,
+			AbilityId = attackState.AbilityId,
+			SourceEntity = entity,
+			TargetEntity = targetEntity,
+			Damage = damage,
+			Range = self:_ResolveNumber(attackState.Range, ability.Range, 0),
+			CreatedAt = now,
+			ExpiresAt = nil,
+		},
+	})
+end
+
+function CombatAttackSystem:_CreateProjectileRequest(
+	entity: number,
+	attackState: any,
+	ability: any,
+	targetEntity: number,
+	damage: number,
+	now: number
+)
+	self._entityFactory:CreateFromArchetype("Combat.ProjectileRequest", {
+		ProjectileRequest = {
+			ActionId = attackState.ActionId,
+			AbilityId = attackState.AbilityId,
+			ProjectileId = if type(ability.ProjectileId) == "string" then ability.ProjectileId else "",
+			SourceEntity = entity,
+			TargetEntity = targetEntity,
+			Damage = damage,
+			Range = self:_ResolveNumber(attackState.Range, ability.Range, 0),
+			CreatedAt = now,
+			ExpiresAt = nil,
+		},
+	})
+end
+
+function CombatAttackSystem:_ResolveNumber(primary: any, fallback: any, defaultValue: number): number
+	if type(primary) == "number" and primary > 0 then
+		return primary
+	end
+	if type(fallback) == "number" then
+		return fallback
+	end
+	return defaultValue
 end
 
 function CombatAttackSystem:_SetAttackState(entity: number, current: any, patch: any)

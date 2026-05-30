@@ -60,6 +60,9 @@ function StructureActionExecutionSystem:_RunEntity(entity: number, now: number)
 	self._lastRunAtByEntity[entity] = now
 
 	if actionIntent.ActionId == ACTION_ATTACK then
+		if type(actionIntent.Data) == "table" and actionIntent.Data.UseCombatPipeline == true then
+			return
+		end
 		self:_RunAttack(entity, actionIntent, now)
 	elseif actionIntent.ActionId == ACTION_STASIS then
 		self:_RunStasis(entity)

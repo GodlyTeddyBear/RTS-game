@@ -24,6 +24,7 @@ function CombatRequestCleanupSystem:Run()
 
 	self:_MarkExpiredRequests("HitboxRequest")
 	self:_MarkExpiredRequests("DamageRequest")
+	self:_MarkExpiredRequests("ProjectileRequest")
 end
 
 function CombatRequestCleanupSystem:_MarkExpiredRequests(componentKey: string)

@@ -40,6 +40,7 @@ function CombatHitboxSystem:_ResolveHitboxRequest(requestEntity: number, now: nu
 	self._entityFactory:CreateFromArchetype("Combat.DamageRequest", {
 		DamageRequest = {
 			ActionId = request.ActionId,
+			AbilityId = request.AbilityId,
 			AttackerEntity = request.SourceEntity,
 			VictimEntity = request.TargetEntity,
 			Amount = request.Damage,

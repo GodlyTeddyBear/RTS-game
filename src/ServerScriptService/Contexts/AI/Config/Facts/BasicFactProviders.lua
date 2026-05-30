@@ -87,6 +87,7 @@ local function buildAttackTargetFacts(context: any): any
 				TargetEntity = nearestEntity,
 				AttackTargetKind = "Structure",
 				AttackData = {
+					AbilityId = "EnemyStructureAttack",
 					TargetKind = "Structure",
 					TargetPosition = nearestPosition,
 				},
@@ -103,6 +104,7 @@ local function buildAttackTargetFacts(context: any): any
 		return {
 			AttackTargetKind = "Base",
 			AttackData = {
+				AbilityId = "EnemyBaseAttack",
 				TargetKind = "Base",
 				TargetPosition = baseTargetCFrame.Position,
 			},
@@ -150,7 +152,12 @@ local function buildOperationalFacts(context: any): any
 		if type(nearest) == "table" and typeof(nearest.CFrame) == "CFrame" then
 			facts.TargetEntity = nearest.Entity
 			facts.AttackData = {
+				AbilityId = "StructureBullet",
+				UseCombatPipeline = true,
 				TargetPosition = nearest.CFrame.Position,
+				Range = stats.AttackRange,
+				Damage = stats.AttackDamage,
+				Cooldown = stats.AttackCooldown,
 			}
 		end
 	end

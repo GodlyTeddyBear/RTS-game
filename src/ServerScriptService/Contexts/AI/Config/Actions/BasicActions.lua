@@ -29,6 +29,36 @@ local BasicActions = {
 
 	Attack = {
 		ActionId = "Attack",
+		StartsComponent = {
+			FeatureName = "Combat",
+			Key = "AttackState",
+		},
+		CanStart = function(context: any): boolean
+			local data = if type(context.ActionIntent) == "table" and type(context.ActionIntent.Data) == "table"
+				then context.ActionIntent.Data
+				else nil
+			return type(data) == "table" and data.UseCombatPipeline == true and type(data.AbilityId) == "string"
+		end,
+		BuildInitialState = function(context: any): any
+			local intent = if type(context.ActionIntent) == "table" then context.ActionIntent else {}
+			local data = if type(intent.Data) == "table" then intent.Data else {}
+
+			return {
+				ActionId = "Attack",
+				AbilityId = data.AbilityId,
+				SourceEntity = context.Entity,
+				TargetEntity = intent.TargetEntity,
+				Phase = "Startup",
+				Elapsed = 0,
+				Damage = data.Damage,
+				Cooldown = data.Cooldown,
+				Range = data.Range,
+				RequestedAt = intent.RequestedAt,
+				StartedAt = context.Now,
+				UpdatedAt = context.Now,
+				HasEmittedRequest = false,
+			}
+		end,
 		ProduceIntent = function(context: any): any
 			local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
 

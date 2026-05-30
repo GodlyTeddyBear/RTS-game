@@ -11,7 +11,9 @@ local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local CombatTypes = require(ReplicatedStorage.Contexts.Combat.Types.CombatTypes)
 
+local CombatAbilities = require(script.Parent.Config.CombatAbilities)
 local CombatActorRegistryService = require(script.Parent.Infrastructure.Services.CombatActorRegistryService)
+local CombatAbilityRegistryService = require(script.Parent.Infrastructure.Services.CombatAbilityRegistryService)
 local CombatLoopService = require(script.Parent.Infrastructure.Services.CombatLoopService)
 local CombatBehaviorRuntimeService = require(script.Parent.Infrastructure.Services.CombatBehaviorRuntimeService)
 local CombatHitResolutionService = require(script.Parent.Infrastructure.Services.CombatHitResolutionService)
@@ -24,6 +26,7 @@ local CombatAttackSystem = require(script.Parent.Infrastructure.Entity.CombatAtt
 local CombatDamageSystem = require(script.Parent.Infrastructure.Entity.CombatDamageSystem)
 local CombatEntitySchema = require(script.Parent.Infrastructure.Entity.CombatEntitySchema)
 local CombatHitboxSystem = require(script.Parent.Infrastructure.Entity.CombatHitboxSystem)
+local CombatProjectileSystem = require(script.Parent.Infrastructure.Entity.CombatProjectileSystem)
 local CombatRequestCleanupSystem = require(script.Parent.Infrastructure.Entity.CombatRequestCleanupSystem)
 
 local StartCombat = require(script.Parent.Application.Commands.StartCombat)
@@ -41,6 +44,11 @@ type CombatActorPayload = CombatTypes.CombatActorPayload
 type CombatActionState = CombatTypes.CombatActionState
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
+	{
+		Name = "CombatAbilityRegistryService",
+		Module = CombatAbilityRegistryService,
+		CacheAs = "_combatAbilityRegistryService",
+	},
 	{
 		Name = "CombatActorRegistryService",
 		Module = CombatActorRegistryService,
@@ -258,6 +266,11 @@ end
 
 function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 	return Catch(function()
+		local abilityResult = self._combatAbilityRegistryService:SeedAbilities(CombatAbilities)
+		if not abilityResult.success then
+			return abilityResult
+		end
+
 		local schemaResult = self._entityContext:RegisterFeatureSchema("Combat", CombatEntitySchema)
 		if not schemaResult.success then
 			return schemaResult
@@ -275,7 +288,7 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 				"Combat.RequestTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return CombatAttackSystem.new(entityFactory)
+				return CombatAttackSystem.new(entityFactory, self._combatAbilityRegistryService)
 			end,
 		})
 		if not attackResult.success then
@@ -299,6 +312,24 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 		})
 		if not hitboxResult.success then
 			return hitboxResult
+		end
+
+		local projectileResult = self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "CombatProjectileSystem",
+			Phase = "RequestResolve",
+			Reads = {
+				"Combat.ProjectileRequest",
+				"Combat.RequestTag",
+			},
+			Writes = {
+				"Combat.ProcessedTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return CombatProjectileSystem.new(entityFactory, self._projectileService)
+			end,
+		})
+		if not projectileResult.success then
+			return projectileResult
 		end
 
 		local damageResult = self._entityContext:RegisterSystem("RequestResolve", {
@@ -330,6 +361,7 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 				"Combat.ProcessedTag",
 				"Combat.HitboxRequest",
 				"Combat.DamageRequest",
+				"Combat.ProjectileRequest",
 			},
 			Writes = {
 				"Entity.DestructionQueue",

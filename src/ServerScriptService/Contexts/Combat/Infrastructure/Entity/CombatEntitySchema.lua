@@ -8,12 +8,17 @@ local CombatEntitySchema = {
 			Authority = "AUTHORITATIVE",
 			Default = {
 				ActionId = "",
+				AbilityId = "",
+				Mechanic = "",
 				SourceEntity = 0,
 				TargetEntity = nil,
 				Phase = "Startup",
 				Elapsed = 0,
 				Damage = 0,
+				Cooldown = 0,
 				Range = 0,
+				ProjectileId = nil,
+				Animation = nil,
 				RequestedAt = 0,
 				StartedAt = 0,
 				UpdatedAt = nil,
@@ -25,6 +30,7 @@ local CombatEntitySchema = {
 			Authority = "AUTHORITATIVE",
 			Default = {
 				ActionId = "",
+				AbilityId = "",
 				SourceEntity = 0,
 				TargetEntity = nil,
 				Damage = 0,
@@ -38,11 +44,27 @@ local CombatEntitySchema = {
 			Authority = "AUTHORITATIVE",
 			Default = {
 				ActionId = "",
+				AbilityId = "",
 				AttackerEntity = 0,
 				VictimEntity = 0,
 				Amount = 0,
 				CreatedAt = 0,
 				Reason = "Combat",
+			},
+		},
+		ProjectileRequest = {
+			ECSName = "Combat.ProjectileRequest",
+			Authority = "AUTHORITATIVE",
+			Default = {
+				ActionId = "",
+				AbilityId = "",
+				ProjectileId = "",
+				SourceEntity = 0,
+				TargetEntity = nil,
+				Damage = 0,
+				Range = 0,
+				CreatedAt = 0,
+				ExpiresAt = nil,
 			},
 		},
 	},
@@ -62,6 +84,14 @@ local CombatEntitySchema = {
 		DamageRequest = {
 			Components = {
 				DamageRequest = true,
+			},
+			Tags = {
+				RequestTag = true,
+			},
+		},
+		ProjectileRequest = {
+			Components = {
+				ProjectileRequest = true,
 			},
 			Tags = {
 				RequestTag = true,

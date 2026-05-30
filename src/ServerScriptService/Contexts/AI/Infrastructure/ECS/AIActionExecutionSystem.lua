@@ -67,12 +67,7 @@ function AIActionExecutionSystem:_RunEntity(entity: number, now: number)
 
 	local startComponent = actionDefinition.StartsComponent
 	local existingStateResult = self._entityFactory:Get(entity, startComponent.Key, startComponent.FeatureName)
-	if
-		existingStateResult.success
-		and type(existingStateResult.value) == "table"
-		and existingStateResult.value.ActionId == actionIntent.ActionId
-		and existingStateResult.value.RequestedAt == actionIntent.RequestedAt
-	then
+	if existingStateResult.success and self:_ShouldKeepExistingStartState(existingStateResult.value, actionIntent, now) then
 		return
 	end
 
@@ -88,6 +83,9 @@ function AIActionExecutionSystem:_RunEntity(entity: number, now: number)
 	if not canStartResult.success then
 		self:_FailAction(entity, actionState, actionIntent, now, "ActionStartRejected")
 		self:_MentionFailure("AI action start rejected", canStartResult)
+		return
+	end
+	if canStartResult.value == false then
 		return
 	end
 
@@ -125,20 +123,44 @@ function AIActionExecutionSystem:_CanStart(actionDefinition: any, context: any):
 			return canStart
 		end
 		if canStart.value == false then
-			return Result.Err("ActionStartRejected", "AI:Action start was rejected", {
-				ActionId = context.ActionIntent.ActionId,
-			})
+			return Result.Ok(false)
 		end
 		return Result.Ok(true)
 	end
 
 	if canStart == false then
-		return Result.Err("ActionStartRejected", "AI:Action start was rejected", {
-			ActionId = context.ActionIntent.ActionId,
-		})
+		return Result.Ok(false)
 	end
 
 	return Result.Ok(true)
+end
+
+function AIActionExecutionSystem:_ShouldKeepExistingStartState(existingState: any, actionIntent: any, now: number): boolean
+	if type(existingState) ~= "table" or existingState.ActionId ~= actionIntent.ActionId then
+		return false
+	end
+	if existingState.RequestedAt == actionIntent.RequestedAt then
+		return true
+	end
+
+	local intentData = if type(actionIntent.Data) == "table" then actionIntent.Data else {}
+	if
+		type(existingState.AbilityId) == "string"
+		and existingState.AbilityId ~= ""
+		and existingState.AbilityId ~= intentData.AbilityId
+	then
+		return false
+	end
+	if existingState.TargetEntity ~= actionIntent.TargetEntity then
+		return false
+	end
+	if existingState.Phase ~= "Completed" then
+		return true
+	end
+
+	local cooldown = if type(existingState.Cooldown) == "number" then existingState.Cooldown else 0
+	local updatedAt = if type(existingState.UpdatedAt) == "number" then existingState.UpdatedAt else now
+	return cooldown > 0 and (now - updatedAt) < cooldown
 end
 
 function AIActionExecutionSystem:_BuildInitialState(actionDefinition: any, context: any): Result.Result<any>
