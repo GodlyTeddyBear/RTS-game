@@ -20,6 +20,11 @@ local LockOnService = require(script.Parent.Infrastructure.Services.LockOnServic
 local MovementService = require(script.Parent.Infrastructure.Services.MovementService)
 local ProjectileService = require(script.Parent.Infrastructure.Services.ProjectileService)
 local StatusService = require(script.Parent.Infrastructure.Services.StatusService)
+local CombatAttackSystem = require(script.Parent.Infrastructure.Entity.CombatAttackSystem)
+local CombatDamageSystem = require(script.Parent.Infrastructure.Entity.CombatDamageSystem)
+local CombatEntitySchema = require(script.Parent.Infrastructure.Entity.CombatEntitySchema)
+local CombatHitboxSystem = require(script.Parent.Infrastructure.Entity.CombatHitboxSystem)
+local CombatRequestCleanupSystem = require(script.Parent.Infrastructure.Entity.CombatRequestCleanupSystem)
 
 local StartCombat = require(script.Parent.Application.Commands.StartCombat)
 local ProcessCombatTick = require(script.Parent.Application.Commands.ProcessCombatTick)
@@ -143,6 +148,9 @@ local CombatContext = Knit.CreateService({
 	},
 	Modules = CombatModules,
 	StartOrder = { "Infrastructure", "Application" },
+	ExternalServices = {
+		{ Name = "EntityContext", CacheAs = "_entityContext" },
+	},
 	AIRuntimeContext = {
 		RuntimeServiceField = "_combatBehaviorRuntimeService",
 		ActorRegistryServiceField = "_combatActorRegistryService",
@@ -185,6 +193,14 @@ end
 
 function CombatContext:KnitStart()
 	CombatBaseContext:KnitStart()
+
+	local entityRegistrationResult = self:_RegisterEntityActionPipeline()
+	if not entityRegistrationResult.success then
+		error(("CombatContext failed to register Entity action pipeline: [%s] %s"):format(
+			tostring(entityRegistrationResult.type),
+			tostring(entityRegistrationResult.message)
+		))
+	end
 
 	CombatBaseContext:RegisterSchedulerSystem("CombatTick", function()
 		DebugPlus.profile(combatTickProfileTag, function()
@@ -238,6 +254,91 @@ function CombatContext:KnitStart()
 			self._handleAnimationCallbackCommand:Execute(player, actorHandle, callbackType, actorKind)
 		end
 	)
+end
+
+function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
+	return Catch(function()
+		local schemaResult = self._entityContext:RegisterFeatureSchema("Combat", CombatEntitySchema)
+		if not schemaResult.success then
+			return schemaResult
+		end
+
+		local attackResult = self._entityContext:RegisterSystem("ActionAdvance", {
+			Name = "CombatAttackSystem",
+			Phase = "ActionAdvance",
+			Reads = {
+				"Combat.AttackState",
+			},
+			Writes = {
+				"Combat.AttackState",
+				"Combat.DamageRequest",
+				"Combat.RequestTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return CombatAttackSystem.new(entityFactory)
+			end,
+		})
+		if not attackResult.success then
+			return attackResult
+		end
+
+		local hitboxResult = self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "CombatHitboxSystem",
+			Phase = "RequestResolve",
+			Reads = {
+				"Combat.HitboxRequest",
+				"Combat.RequestTag",
+			},
+			Writes = {
+				"Combat.DamageRequest",
+				"Combat.ProcessedTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return CombatHitboxSystem.new(entityFactory)
+			end,
+		})
+		if not hitboxResult.success then
+			return hitboxResult
+		end
+
+		local damageResult = self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "CombatDamageSystem",
+			Phase = "RequestResolve",
+			Reads = {
+				"Combat.DamageRequest",
+				"Combat.RequestTag",
+				"Entity.Health",
+			},
+			Writes = {
+				"Entity.Health",
+				"Entity.DirtyTag",
+				"Combat.ProcessedTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return CombatDamageSystem.new(entityFactory)
+			end,
+		})
+		if not damageResult.success then
+			return damageResult
+		end
+
+		return self._entityContext:RegisterSystem("Cleanup", {
+			Name = "CombatRequestCleanupSystem",
+			Phase = "Cleanup",
+			Reads = {
+				"Combat.RequestTag",
+				"Combat.ProcessedTag",
+				"Combat.HitboxRequest",
+				"Combat.DamageRequest",
+			},
+			Writes = {
+				"Entity.DestructionQueue",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return CombatRequestCleanupSystem.new(entityFactory)
+			end,
+		})
+	end, "Combat:RegisterEntityActionPipeline")
 end
 
 function CombatContext:_OnRunStarted()

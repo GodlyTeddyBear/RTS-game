@@ -24,6 +24,7 @@ function EntityRuntimeSchedulerService:Init(registry: any, _name: string)
 	self._runtimeParticipation = registry:Get("EntityRuntimeParticipationService")
 	self._runtimeSyncService = registry:Get("EntityRuntimeSyncService")
 	self._replicationService = registry:Get("EntityReplicationService")
+	self._entityFactory = registry:Get("EntityEntityFactory")
 end
 
 function EntityRuntimeSchedulerService:BindSchedulerTick()
@@ -63,6 +64,9 @@ function EntityRuntimeSchedulerService:RunScheduledTick()
 
 	local runResult = self._systemRegistry:RunAllPhases()
 	self:_MentionTickFailure("Entity system tick failed", runResult)
+
+	local flushDestroyResult = self._entityFactory:FlushDestroyQueue()
+	self:_MentionTickFailure("Entity deferred destruction flush failed", flushDestroyResult)
 
 	local syncResult = self._runtimeSyncService:RunRuntimeSync(self._entityContext)
 	self:_MentionTickFailure("Entity runtime sync failed", syncResult)

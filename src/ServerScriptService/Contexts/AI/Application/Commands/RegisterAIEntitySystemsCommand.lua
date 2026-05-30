@@ -7,6 +7,7 @@ local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplica
 local Result = require(ReplicatedStorage.Utilities.Result)
 local AISharedContract = require(ReplicatedStorage.Contexts.AI.AISharedContract)
 
+local AIActionExecutionSystem = require(script.Parent.Parent.Parent.Infrastructure.ECS.AIActionExecutionSystem)
 local AIActionIntentValidationSystem = require(script.Parent.Parent.Parent.Infrastructure.ECS.AIActionIntentValidationSystem)
 local AIActionLifecycleSystem = require(script.Parent.Parent.Parent.Infrastructure.ECS.AIActionLifecycleSystem)
 local AIBehaviorCommitSystem = require(script.Parent.Parent.Parent.Infrastructure.ECS.AIBehaviorCommitSystem)
@@ -25,6 +26,7 @@ end
 function RegisterAIEntitySystemsCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_entityContext = "EntityContext",
+		_actionRegistry = "AIActionDefinitionRegistry",
 		_factProviderRegistry = "AIFactProviderRegistry",
 		_decisionEvaluator = "AIEntityDecisionEvaluator",
 	})
@@ -50,6 +52,11 @@ function RegisterAIEntitySystemsCommand:Execute(): Result.Result<boolean>
 		local lifecycleResult = self:_RegisterActionLifecycleSystem()
 		if not lifecycleResult.success then
 			return lifecycleResult
+		end
+
+		local executionResult = self:_RegisterActionExecutionSystem()
+		if not executionResult.success then
+			return executionResult
 		end
 
 		return Result.Ok(true)
@@ -136,6 +143,26 @@ function RegisterAIEntitySystemsCommand:_RegisterActionLifecycleSystem(): Result
 		},
 		Factory = function(entityFactory: any, _compiledSchemas: any)
 			return AIActionLifecycleSystem.new(entityFactory)
+		end,
+	})
+end
+
+function RegisterAIEntitySystemsCommand:_RegisterActionExecutionSystem(): Result.Result<boolean>
+	return self:_RegisterSystem("ActionStart", {
+		Name = "AIActionExecutionSystem",
+		Phase = "ActionStart",
+		Reads = {
+			AISharedContract.FeatureName .. "." .. AISharedContract.Components.ActionIntent,
+			AISharedContract.FeatureName .. "." .. AISharedContract.Tags.ActionIntentTag,
+			AISharedContract.FeatureName .. "." .. AISharedContract.Components.ActionState,
+		},
+		Writes = {
+			AISharedContract.FeatureName .. "." .. AISharedContract.Components.ActionState,
+			AISharedContract.FeatureName .. "." .. AISharedContract.Tags.ActionDirtyTag,
+			"DynamicDomainStartComponent",
+		},
+		Factory = function(entityFactory: any, _compiledSchemas: any)
+			return AIActionExecutionSystem.new(entityFactory, self._entityContext, self._actionRegistry)
 		end,
 	})
 end

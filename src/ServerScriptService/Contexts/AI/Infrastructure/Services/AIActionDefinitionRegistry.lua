@@ -3,12 +3,16 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
+local AISharedContract = require(ReplicatedStorage.Contexts.AI.AISharedContract)
 
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 export type TActionDefinitionPayload = {
 	ActionId: string,
 	ProduceIntent: (...any) -> any,
+	StartsComponent: AISharedContract.TAIActionStartComponent?,
+	BuildInitialState: ((context: AISharedContract.TAIActionStartContext) -> any)?,
+	CanStart: ((context: AISharedContract.TAIActionStartContext) -> any)?,
 	Metadata: any?,
 }
 
@@ -34,6 +38,9 @@ function AIActionDefinitionRegistry:RegisterActionDefinition(payload: TActionDef
 		self._actionsById[payload.ActionId] = table.freeze({
 			ActionId = payload.ActionId,
 			ProduceIntent = payload.ProduceIntent,
+			StartsComponent = self:_CloneStartComponent(payload.StartsComponent),
+			BuildInitialState = payload.BuildInitialState,
+			CanStart = payload.CanStart,
 			Metadata = payload.Metadata,
 		})
 		return Result.Ok(true)
@@ -62,6 +69,10 @@ function AIActionDefinitionRegistry:_ValidatePayload(payload: TActionDefinitionP
 			Reason = "MissingProduceIntentCallback",
 		})
 	end
+	local orchestrationResult = self:_ValidateOrchestrationPayload(payload)
+	if not orchestrationResult.success then
+		return orchestrationResult
+	end
 	if self._actionsById[payload.ActionId] ~= nil then
 		return Result.Err("DuplicateActionDefinition", Errors.DUPLICATE_ACTION_DEFINITION, {
 			ActionId = payload.ActionId,
@@ -69,6 +80,61 @@ function AIActionDefinitionRegistry:_ValidatePayload(payload: TActionDefinitionP
 	end
 
 	return Result.Ok(true)
+end
+
+function AIActionDefinitionRegistry:_ValidateOrchestrationPayload(payload: TActionDefinitionPayload): Result.Result<boolean>
+	local hasStartComponent = payload.StartsComponent ~= nil
+	local hasBuildInitialState = payload.BuildInitialState ~= nil
+
+	if hasStartComponent ~= hasBuildInitialState then
+		return Result.Err("InvalidActionDefinition", Errors.INVALID_ACTION_DEFINITION, {
+			ActionId = payload.ActionId,
+			Reason = "IncompleteActionOrchestrationContract",
+		})
+	end
+
+	if hasStartComponent then
+		local startsComponent = payload.StartsComponent
+		if
+			type(startsComponent) ~= "table"
+			or type(startsComponent.FeatureName) ~= "string"
+			or startsComponent.FeatureName == ""
+			or type(startsComponent.Key) ~= "string"
+			or startsComponent.Key == ""
+		then
+			return Result.Err("InvalidActionDefinition", Errors.INVALID_ACTION_DEFINITION, {
+				ActionId = payload.ActionId,
+				Reason = "InvalidStartsComponent",
+			})
+		end
+	end
+
+	if hasBuildInitialState and type(payload.BuildInitialState) ~= "function" then
+		return Result.Err("InvalidActionDefinition", Errors.INVALID_ACTION_DEFINITION, {
+			ActionId = payload.ActionId,
+			Reason = "InvalidBuildInitialStateCallback",
+		})
+	end
+
+	if payload.CanStart ~= nil and type(payload.CanStart) ~= "function" then
+		return Result.Err("InvalidActionDefinition", Errors.INVALID_ACTION_DEFINITION, {
+			ActionId = payload.ActionId,
+			Reason = "InvalidCanStartCallback",
+		})
+	end
+
+	return Result.Ok(true)
+end
+
+function AIActionDefinitionRegistry:_CloneStartComponent(startsComponent: AISharedContract.TAIActionStartComponent?): any
+	if startsComponent == nil then
+		return nil
+	end
+
+	return table.freeze({
+		FeatureName = startsComponent.FeatureName,
+		Key = startsComponent.Key,
+	})
 end
 
 function AIActionDefinitionRegistry:_CountActions(): number

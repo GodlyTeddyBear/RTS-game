@@ -40,6 +40,19 @@ export type TAIFactProviderPayload = {
 	Metadata: any?,
 }
 
+export type TAIActionStartComponent = {
+	FeatureName: string,
+	Key: string,
+}
+
+export type TAIActionStartContext = {
+	Entity: number,
+	EntityContext: any,
+	ActionIntent: any,
+	ActionState: any,
+	Now: number,
+}
+
 local AISharedContract = {}
 
 AISharedContract.FeatureName = "AI"
