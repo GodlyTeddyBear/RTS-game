@@ -9,11 +9,12 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 local SummonConfig = require(ReplicatedStorage.Contexts.Summon.Config.SummonConfig)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 
-local SummonActionExecutionSystem = require(script.Parent.Infrastructure.Entity.SummonActionExecutionSystem)
 local SummonAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local SummonAIProfiles = require(script.Parent.Config.AIProfiles)
 local SummonEntityReadService = require(script.Parent.Infrastructure.Entity.SummonEntityReadService)
 local SummonEntitySchema = require(script.Parent.Infrastructure.Entity.SummonEntitySchema)
+local SummonEngagementSystem = require(script.Parent.Infrastructure.Entity.SummonEngagementSystem)
+local SummonLifetimeSystem = require(script.Parent.Infrastructure.Entity.SummonLifetimeSystem)
 local CleanupSummonsCommand = require(script.Parent.Application.Commands.CleanupSummonsCommand)
 local SpawnAllyCommand = require(script.Parent.Application.Commands.SpawnAllyCommand)
 local SpawnSwarmDronesCommand = require(script.Parent.Application.Commands.SpawnSwarmDronesCommand)
@@ -217,16 +218,33 @@ function SummonContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 			return syncResult
 		end
 
-		return self._entityContext:RegisterSystem("Execute", {
-			Name = "SummonActionExecutionSystem",
-			Phase = "Execute",
+		local lifetimeResult = self._entityContext:RegisterSystem("ActionAdvance", {
+			Name = "SummonLifetimeSystem",
+			Phase = "ActionAdvance",
 			Reads = {
+				"Summon.DroneTag",
+				"Entity.Lifetime",
+			},
+			Writes = {
+				"Entity.DestructionQueue",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return SummonLifetimeSystem.new(entityFactory, self._entityContext)
+			end,
+		})
+		if not lifetimeResult.success then
+			return lifetimeResult
+		end
+
+		return self._entityContext:RegisterSystem("ActionAdvance", {
+			Name = "SummonEngagementSystem",
+			Phase = "ActionAdvance",
+			Reads = {
+				"Summon.EngageState",
 				"Summon.CombatProfile",
 				"Summon.AttackCooldown",
 				"Summon.DroneTag",
 				"Entity.Transform",
-				"Entity.Lifetime",
-				"AI.ActionIntent",
 				"AI.ActionState",
 			},
 			Writes = {
@@ -234,13 +252,11 @@ function SummonContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 				"Entity.DirtyTag",
 				"Summon.AttackCooldown",
 				"Summon.TargetEnemyId",
+				"Combat.DamageRequest",
+				"Combat.RequestTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return SummonActionExecutionSystem.new(entityFactory, {
-					EntityContext = self._entityContext,
-					EnemyContext = self._enemyContext,
-					SummonReadService = self._summonReadService,
-				})
+				return SummonEngagementSystem.new(entityFactory, self._entityContext)
 			end,
 		})
 	end, "SummonContext:RegisterEntityInfrastructure")

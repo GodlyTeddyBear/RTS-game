@@ -15,6 +15,9 @@ end
 local BasicActions = {
 	Idle = {
 		ActionId = "Idle",
+		CanStart = function(_context: any): boolean
+			return false
+		end,
 		ProduceIntent = function(_context: any): any
 			return {
 				Data = {
@@ -37,7 +40,7 @@ local BasicActions = {
 			local data = if type(context.ActionIntent) == "table" and type(context.ActionIntent.Data) == "table"
 				then context.ActionIntent.Data
 				else nil
-			return type(data) == "table" and data.UseCombatPipeline == true and type(data.AbilityId) == "string"
+			return type(data) == "table" and type(data.AbilityId) == "string"
 		end,
 		BuildInitialState = function(context: any): any
 			local intent = if type(context.ActionIntent) == "table" then context.ActionIntent else {}
@@ -48,11 +51,13 @@ local BasicActions = {
 				AbilityId = data.AbilityId,
 				SourceEntity = context.Entity,
 				TargetEntity = intent.TargetEntity,
+				TargetKind = data.TargetKind,
 				Phase = "Startup",
 				Elapsed = 0,
 				Damage = data.Damage,
 				Cooldown = data.Cooldown,
 				Range = data.Range,
+				TargetPosition = data.TargetPosition,
 				RequestedAt = intent.RequestedAt,
 				StartedAt = context.Now,
 				UpdatedAt = context.Now,
@@ -74,6 +79,23 @@ local BasicActions = {
 
 	Advance = {
 		ActionId = "Advance",
+		StartsComponent = {
+			FeatureName = "Enemy",
+			Key = "AdvanceState",
+		},
+		BuildInitialState = function(context: any): any
+			local intent = if type(context.ActionIntent) == "table" then context.ActionIntent else {}
+			local data = if type(intent.Data) == "table" then intent.Data else {}
+
+			return {
+				ActionId = "Advance",
+				SourceEntity = context.Entity,
+				GoalPosition = data.GoalPosition,
+				RequestedAt = intent.RequestedAt,
+				StartedAt = context.Now,
+				UpdatedAt = context.Now,
+			}
+		end,
 		ProduceIntent = function(context: any): any
 			local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
 
@@ -88,6 +110,23 @@ local BasicActions = {
 
 	ManualMove = {
 		ActionId = "ManualMove",
+		StartsComponent = {
+			FeatureName = "Unit",
+			Key = "ManualMoveState",
+		},
+		BuildInitialState = function(context: any): any
+			local intent = if type(context.ActionIntent) == "table" then context.ActionIntent else {}
+			local data = if type(intent.Data) == "table" then intent.Data else {}
+
+			return {
+				ActionId = "ManualMove",
+				SourceEntity = context.Entity,
+				GoalPosition = data.GoalPosition,
+				RequestedAt = intent.RequestedAt,
+				StartedAt = context.Now,
+				UpdatedAt = context.Now,
+			}
+		end,
 		ProduceIntent = function(context: any): any
 			local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
 
@@ -102,6 +141,23 @@ local BasicActions = {
 
 	BuildStructure = {
 		ActionId = "BuildStructure",
+		StartsComponent = {
+			FeatureName = "Structure",
+			Key = "BuildContributionState",
+		},
+		BuildInitialState = function(context: any): any
+			local intent = if type(context.ActionIntent) == "table" then context.ActionIntent else {}
+			local data = if type(intent.Data) == "table" then intent.Data else {}
+
+			return {
+				ActionId = "BuildStructure",
+				SourceEntity = context.Entity,
+				TargetStructureEntity = if type(intent.TargetEntity) == "number" then intent.TargetEntity else data.TargetStructureEntity,
+				RequestedAt = intent.RequestedAt,
+				StartedAt = context.Now,
+				UpdatedAt = context.Now,
+			}
+		end,
 		ProduceIntent = function(context: any): any
 			local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
 
@@ -117,6 +173,23 @@ local BasicActions = {
 
 	Extract = {
 		ActionId = "Extract",
+		StartsComponent = {
+			FeatureName = "Structure",
+			Key = "ExtractState",
+		},
+		BuildInitialState = function(context: any): any
+			local intent = if type(context.ActionIntent) == "table" then context.ActionIntent else {}
+			local data = if type(intent.Data) == "table" then intent.Data else {}
+
+			return {
+				ActionId = "Extract",
+				SourceEntity = context.Entity,
+				InstanceId = data.InstanceId,
+				RequestedAt = intent.RequestedAt,
+				StartedAt = context.Now,
+				UpdatedAt = context.Now,
+			}
+		end,
 		ProduceIntent = function(context: any): any
 			local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
 
@@ -131,6 +204,24 @@ local BasicActions = {
 
 	Stasis = {
 		ActionId = "Stasis",
+		StartsComponent = {
+			FeatureName = "Combat",
+			Key = "StatusAuraState",
+		},
+		BuildInitialState = function(context: any): any
+			local intent = if type(context.ActionIntent) == "table" then context.ActionIntent else {}
+			local data = if type(intent.Data) == "table" then intent.Data else {}
+
+			return {
+				ActionId = "Stasis",
+				SourceEntity = context.Entity,
+				AuraType = "StasisField",
+				StructureEntity = data.StructureEntity or context.Entity,
+				RequestedAt = intent.RequestedAt,
+				StartedAt = context.Now,
+				UpdatedAt = context.Now,
+			}
+		end,
 		ProduceIntent = function(context: any): any
 			local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
 
@@ -145,6 +236,24 @@ local BasicActions = {
 
 	EngageEnemy = {
 		ActionId = "EngageEnemy",
+		StartsComponent = {
+			FeatureName = "Summon",
+			Key = "EngageState",
+		},
+		BuildInitialState = function(context: any): any
+			local intent = if type(context.ActionIntent) == "table" then context.ActionIntent else {}
+			local data = if type(intent.Data) == "table" then intent.Data else {}
+
+			return {
+				ActionId = "EngageEnemy",
+				SourceEntity = context.Entity,
+				TargetEntity = intent.TargetEntity,
+				TargetPosition = data.TargetPosition,
+				RequestedAt = intent.RequestedAt,
+				StartedAt = context.Now,
+				UpdatedAt = context.Now,
+			}
+		end,
 		ProduceIntent = function(context: any): any
 			local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
 

@@ -28,6 +28,7 @@ local CombatEntitySchema = require(script.Parent.Infrastructure.Entity.CombatEnt
 local CombatHitboxSystem = require(script.Parent.Infrastructure.Entity.CombatHitboxSystem)
 local CombatProjectileSystem = require(script.Parent.Infrastructure.Entity.CombatProjectileSystem)
 local CombatRequestCleanupSystem = require(script.Parent.Infrastructure.Entity.CombatRequestCleanupSystem)
+local CombatStatusAuraSystem = require(script.Parent.Infrastructure.Entity.CombatStatusAuraSystem)
 
 local StartCombat = require(script.Parent.Application.Commands.StartCombat)
 local ProcessCombatTick = require(script.Parent.Application.Commands.ProcessCombatTick)
@@ -285,6 +286,8 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			Writes = {
 				"Combat.AttackState",
 				"Combat.DamageRequest",
+				"Combat.HitboxRequest",
+				"Combat.ProjectileRequest",
 				"Combat.RequestTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
@@ -325,11 +328,35 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 				"Combat.ProcessedTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return CombatProjectileSystem.new(entityFactory, self._projectileService)
+				return CombatProjectileSystem.new(entityFactory, self._projectileService, self._entityContext)
 			end,
 		})
 		if not projectileResult.success then
 			return projectileResult
+		end
+
+		local statusResult = self._entityContext:RegisterSystem("ActionAdvance", {
+			Name = "CombatStatusAuraSystem",
+			Phase = "ActionAdvance",
+			Reads = {
+				"Combat.StatusAuraState",
+				"Structure.Stats",
+				"Entity.Transform",
+				"Entity.Identity",
+				"AI.ActionState",
+			},
+			Writes = {
+				"Structure.AnimationState",
+				"Structure.AnimationLooping",
+				"Structure.TargetEnemyId",
+				"Entity.DirtyTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return CombatStatusAuraSystem.new(entityFactory, self._statusService)
+			end,
+		})
+		if not statusResult.success then
+			return statusResult
 		end
 
 		local damageResult = self._entityContext:RegisterSystem("RequestResolve", {

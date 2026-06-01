@@ -51,6 +51,32 @@ local StructureEntitySchema = {
 			Authority = "DERIVED",
 			Default = nil,
 		},
+		BuildContributionState = {
+			ECSName = "Structure.BuildContributionState",
+			Authority = "AUTHORITATIVE",
+			Default = {
+				ActionId = "BuildStructure",
+				SourceEntity = 0,
+				TargetStructureEntity = nil,
+				RequestedAt = 0,
+				StartedAt = 0,
+				UpdatedAt = nil,
+				Status = "Started",
+			},
+		},
+		ExtractState = {
+			ECSName = "Structure.ExtractState",
+			Authority = "AUTHORITATIVE",
+			Default = {
+				ActionId = "Extract",
+				SourceEntity = 0,
+				InstanceId = nil,
+				RequestedAt = 0,
+				StartedAt = 0,
+				UpdatedAt = nil,
+				Status = "Started",
+			},
+		},
 	},
 	Tags = {
 		PlacedTag = {},
@@ -68,6 +94,7 @@ local StructureEntitySchema = {
 				AnimationState = true,
 				AnimationLooping = true,
 				TargetEnemyId = true,
+				ExtractState = true,
 			},
 			Tags = {
 				PlacedTag = true,

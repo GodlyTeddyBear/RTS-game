@@ -40,6 +40,19 @@ local EnemyEntitySchema = {
 				LastAttackTime = 0,
 			},
 		},
+		AdvanceState = {
+			ECSName = "Enemy.AdvanceState",
+			Authority = "AUTHORITATIVE",
+			Default = {
+				ActionId = "Advance",
+				SourceEntity = 0,
+				GoalPosition = nil,
+				RequestedAt = 0,
+				StartedAt = 0,
+				UpdatedAt = nil,
+				Status = "Started",
+			},
+		},
 		AnimationState = {
 			ECSName = "Enemy.AnimationState",
 			Authority = "DERIVED",
@@ -63,6 +76,7 @@ local EnemyEntitySchema = {
 				PathState = true,
 				CurrentMoveSpeed = true,
 				AttackCooldown = true,
+				AdvanceState = true,
 				AnimationState = true,
 				AnimationLooping = true,
 			},

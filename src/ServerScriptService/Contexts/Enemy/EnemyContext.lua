@@ -13,7 +13,8 @@ local EntityCollisionService = require(ServerScriptService.Infrastructure.Entity
 
 local EnemyEntityReadService = require(script.Parent.Infrastructure.Entity.EnemyEntityReadService)
 local EnemyEntitySchema = require(script.Parent.Infrastructure.Entity.EnemyEntitySchema)
-local EnemyActionExecutionSystem = require(script.Parent.Infrastructure.Entity.EnemyActionExecutionSystem)
+local EnemyAdvanceSystem = require(script.Parent.Infrastructure.Entity.EnemyAdvanceSystem)
+local EnemyAttackPresentationSystem = require(script.Parent.Infrastructure.Entity.EnemyAttackPresentationSystem)
 local EnemySpawnPolicy = require(script.Parent.EnemyDomain.Policies.EnemySpawnPolicy)
 local EnemyAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local EnemyAIProfiles = require(script.Parent.Config.AIProfiles)
@@ -291,38 +292,56 @@ function EnemyContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 			return replicationResult
 		end
 
-		local systemResult = self._entityContext:RegisterSystem("Cleanup", {
-			Name = "EnemyActionExecutionSystem",
-			Phase = "Cleanup",
+		local advanceSystemResult = self._entityContext:RegisterSystem("ActionAdvance", {
+			Name = "EnemyAdvanceSystem",
+			Phase = "ActionAdvance",
 			Reads = {
 				"Enemy.Role",
 				"Enemy.PathState",
-				"Enemy.AttackCooldown",
+				"Enemy.AdvanceState",
 				"Entity.Transform",
-				"Entity.Target",
 				"AI.ActionState",
-				"AI.ActionIntent",
 			},
 			Writes = {
 				"Entity.Transform",
 				"Enemy.PathState",
-				"Enemy.AttackCooldown",
 				"Enemy.CurrentMoveSpeed",
 				"Enemy.AnimationState",
 				"Enemy.AnimationLooping",
-				"Enemy.AliveTag",
-				"Enemy.GoalReachedTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return EnemyActionExecutionSystem.new(entityFactory, {
+				return EnemyAdvanceSystem.new(entityFactory, {
 					EntityContext = self._entityContext,
 					BaseContext = self._baseContext,
-					StructureContext = self._structureContext,
 				})
 			end,
 		})
-		if not systemResult.success then
-			return systemResult
+		if not advanceSystemResult.success then
+			return advanceSystemResult
+		end
+
+		local attackPresentationResult = self._entityContext:RegisterSystem("ActionAdvance", {
+			Name = "EnemyAttackPresentationSystem",
+			Phase = "ActionAdvance",
+			Reads = {
+				"Enemy.Role",
+				"Enemy.AliveTag",
+				"Combat.AttackState",
+				"AI.ActionState",
+			},
+			Writes = {
+				"Entity.Target",
+				"Enemy.PathState",
+				"Enemy.CurrentMoveSpeed",
+				"Enemy.AnimationState",
+				"Enemy.AnimationLooping",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return EnemyAttackPresentationSystem.new(entityFactory)
+			end,
+		})
+		if not attackPresentationResult.success then
+			return attackPresentationResult
 		end
 
 		return Ok(true)

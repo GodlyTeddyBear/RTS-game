@@ -45,6 +45,7 @@ function CombatAttackSystem:_RunEntity(entity: number, now: number)
 	end
 
 	local targetEntity = attackState.TargetEntity
+	local targetKind = if type(attackState.TargetKind) == "string" then attackState.TargetKind else nil
 	local ability = self:_ResolveAbility(attackState)
 	if ability == nil then
 		self:_SetAttackState(entity, attackState, {
@@ -56,7 +57,7 @@ function CombatAttackSystem:_RunEntity(entity: number, now: number)
 	end
 
 	local damage = self:_ResolveNumber(attackState.Damage, ability.Damage, 0)
-	if type(targetEntity) ~= "number" or not self._entityFactory:Exists(targetEntity) then
+	if targetKind ~= "Base" and (type(targetEntity) ~= "number" or not self._entityFactory:Exists(targetEntity)) then
 		self:_SetAttackState(entity, attackState, {
 			Phase = PHASE_FAILED,
 			UpdatedAt = now,
@@ -75,7 +76,7 @@ function CombatAttackSystem:_RunEntity(entity: number, now: number)
 
 	local phase = if attackState.Phase == PHASE_STARTUP then PHASE_ACTIVE else attackState.Phase
 	if attackState.HasEmittedRequest ~= true then
-		self:_CreateMechanicRequest(entity, attackState, ability, targetEntity, damage, now)
+		self:_CreateMechanicRequest(entity, attackState, ability, targetEntity, targetKind, damage, now)
 	end
 
 	self:_SetAttackState(entity, attackState, {
@@ -100,7 +101,8 @@ function CombatAttackSystem:_CreateMechanicRequest(
 	entity: number,
 	attackState: any,
 	ability: any,
-	targetEntity: number,
+	targetEntity: number?,
+	targetKind: string?,
 	damage: number,
 	now: number
 )
@@ -109,14 +111,15 @@ function CombatAttackSystem:_CreateMechanicRequest(
 	elseif ability.Mechanic == MECHANIC_HITBOX then
 		self:_CreateHitboxRequest(entity, attackState, ability, targetEntity, damage, now)
 	elseif ability.Mechanic == MECHANIC_DIRECT_DAMAGE then
-		self:_CreateDamageRequest(entity, attackState, targetEntity, damage, now)
+		self:_CreateDamageRequest(entity, attackState, targetEntity, targetKind, damage, now)
 	end
 end
 
 function CombatAttackSystem:_CreateDamageRequest(
 	entity: number,
 	attackState: any,
-	targetEntity: number,
+	targetEntity: number?,
+	targetKind: string?,
 	damage: number,
 	now: number
 )
@@ -126,6 +129,7 @@ function CombatAttackSystem:_CreateDamageRequest(
 			AbilityId = attackState.AbilityId,
 			AttackerEntity = entity,
 			VictimEntity = targetEntity,
+			VictimKind = targetKind,
 			Amount = damage,
 			CreatedAt = now,
 			Reason = "AttackState",
@@ -137,10 +141,14 @@ function CombatAttackSystem:_CreateHitboxRequest(
 	entity: number,
 	attackState: any,
 	ability: any,
-	targetEntity: number,
+	targetEntity: number?,
 	damage: number,
 	now: number
 )
+	if type(targetEntity) ~= "number" then
+		return
+	end
+
 	self._entityFactory:CreateFromArchetype("Combat.HitboxRequest", {
 		HitboxRequest = {
 			ActionId = attackState.ActionId,
@@ -159,10 +167,14 @@ function CombatAttackSystem:_CreateProjectileRequest(
 	entity: number,
 	attackState: any,
 	ability: any,
-	targetEntity: number,
+	targetEntity: number?,
 	damage: number,
 	now: number
 )
+	if type(targetEntity) ~= "number" then
+		return
+	end
+
 	self._entityFactory:CreateFromArchetype("Combat.ProjectileRequest", {
 		ProjectileRequest = {
 			ActionId = attackState.ActionId,

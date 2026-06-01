@@ -48,6 +48,19 @@ local UnitEntitySchema = {
 				TargetStructureEntity = nil,
 			},
 		},
+		ManualMoveState = {
+			ECSName = "Unit.ManualMoveState",
+			Authority = "AUTHORITATIVE",
+			Default = {
+				ActionId = "ManualMove",
+				SourceEntity = 0,
+				GoalPosition = nil,
+				RequestedAt = 0,
+				StartedAt = 0,
+				UpdatedAt = nil,
+				Status = "Started",
+			},
+		},
 		AnimationState = {
 			ECSName = "Unit.AnimationState",
 			Authority = "DERIVED",
@@ -82,6 +95,7 @@ local UnitEntitySchema = {
 				CurrentMoveSpeed = true,
 				PathState = true,
 				BuilderAssignment = true,
+				ManualMoveState = true,
 				AnimationState = true,
 				AnimationLooping = true,
 				LockOn = true,

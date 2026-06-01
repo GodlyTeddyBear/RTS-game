@@ -16,7 +16,8 @@ local EntityCollisionService = require(ServerScriptService.Infrastructure.Entity
 local UnitEntityReadService = require(script.Parent.Infrastructure.Entity.UnitEntityReadService)
 local UnitEntitySchema = require(script.Parent.Infrastructure.Entity.UnitEntitySchema)
 local UnitMovementRuntimeService = require(script.Parent.Infrastructure.Entity.UnitMovementRuntimeService)
-local UnitActionExecutionSystem = require(script.Parent.Infrastructure.Entity.UnitActionExecutionSystem)
+local UnitManualMoveSystem = require(script.Parent.Infrastructure.Entity.UnitManualMoveSystem)
+local StructureBuildContributionSystem = require(ServerScriptService.Contexts.Structure.Infrastructure.Entity.StructureBuildContributionSystem)
 local UnitAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local UnitAIProfiles = require(script.Parent.Config.AIProfiles)
 local UnitSpawnPolicy = require(script.Parent.UnitDomain.Policies.UnitSpawnPolicy)
@@ -286,17 +287,13 @@ function UnitContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 			return replicationResult
 		end
 
-		return self._entityContext:RegisterSystem("Execute", {
-			Name = "UnitActionExecutionSystem",
-			Phase = "Execute",
+		local manualMoveResult = self._entityContext:RegisterSystem("ActionAdvance", {
+			Name = "UnitManualMoveSystem",
+			Phase = "ActionAdvance",
 			Reads = {
 				"Unit.Role",
 				"Unit.PathState",
-				"Unit.BuilderAssignment",
-				"Unit.CurrentMoveSpeed",
-				"Entity.Transform",
-				"Entity.Ownership",
-				"AI.ActionIntent",
+				"Unit.ManualMoveState",
 				"AI.ActionState",
 			},
 			Writes = {
@@ -308,8 +305,35 @@ function UnitContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 				"Entity.DirtyTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return UnitActionExecutionSystem.new(entityFactory, {
-					EntityContext = self._entityContext,
+				return UnitManualMoveSystem.new(entityFactory, {
+					UnitReadService = self._unitReadService,
+					MovementRuntimeService = self._movementRuntimeService,
+				})
+			end,
+		})
+		if not manualMoveResult.success then
+			return manualMoveResult
+		end
+
+		return self._entityContext:RegisterSystem("ActionAdvance", {
+			Name = "StructureBuildContributionSystem",
+			Phase = "ActionAdvance",
+			Reads = {
+				"Structure.BuildContributionState",
+				"Unit.BuilderAssignment",
+				"Unit.PathState",
+				"Entity.Ownership",
+				"AI.ActionState",
+			},
+			Writes = {
+				"Unit.BuilderAssignment",
+				"Unit.PathState",
+				"Unit.AnimationState",
+				"Unit.AnimationLooping",
+				"Entity.DirtyTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return StructureBuildContributionSystem.new(entityFactory, {
 					StructureContext = self._structureContext,
 					UnitReadService = self._unitReadService,
 					MovementRuntimeService = self._movementRuntimeService,

@@ -33,6 +33,20 @@ local SummonEntitySchema = {
 			Authority = "DERIVED",
 			Default = nil,
 		},
+		EngageState = {
+			ECSName = "Summon.EngageState",
+			Authority = "AUTHORITATIVE",
+			Default = {
+				ActionId = "EngageEnemy",
+				SourceEntity = 0,
+				TargetEntity = nil,
+				TargetPosition = nil,
+				RequestedAt = 0,
+				StartedAt = 0,
+				UpdatedAt = nil,
+				Status = "Started",
+			},
+		},
 	},
 	Tags = {
 		DroneTag = {},
@@ -46,6 +60,7 @@ local SummonEntitySchema = {
 				CombatProfile = true,
 				AttackCooldown = true,
 				TargetEnemyId = true,
+				EngageState = true,
 			},
 			Tags = {
 				DroneTag = true,

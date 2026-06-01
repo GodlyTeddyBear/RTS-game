@@ -16,7 +16,8 @@ local EntityCollisionService = require(ServerScriptService.Infrastructure.Entity
 
 local StructureEntityReadService = require(script.Parent.Infrastructure.Entity.StructureEntityReadService)
 local StructureEntitySchema = require(script.Parent.Infrastructure.Entity.StructureEntitySchema)
-local StructureActionExecutionSystem = require(script.Parent.Infrastructure.Entity.StructureActionExecutionSystem)
+local StructureAttackPresentationSystem = require(script.Parent.Infrastructure.Entity.StructureAttackPresentationSystem)
+local StructureExtractionSystem = require(script.Parent.Infrastructure.Entity.StructureExtractionSystem)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
 local StructureAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local StructureAIProfiles = require(script.Parent.Config.AIProfiles)
@@ -301,19 +302,15 @@ function StructureContext:_RegisterEntityInfrastructure(): Result.Result<boolean
 			return replicationResult
 		end
 
-		return self._entityContext:RegisterSystem("Execute", {
-			Name = "StructureActionExecutionSystem",
-			Phase = "Execute",
+		local attackPresentationResult = self._entityContext:RegisterSystem("ActionAdvance", {
+			Name = "StructureAttackPresentationSystem",
+			Phase = "ActionAdvance",
 			Reads = {
-				"Structure.Stats",
-				"Structure.Construction",
 				"Structure.OperationalTag",
-				"Entity.Target",
-				"AI.ActionIntent",
+				"Combat.AttackState",
 				"AI.ActionState",
 			},
 			Writes = {
-				"Structure.Stats",
 				"Structure.AnimationState",
 				"Structure.AnimationLooping",
 				"Structure.TargetEnemyId",
@@ -321,10 +318,31 @@ function StructureContext:_RegisterEntityInfrastructure(): Result.Result<boolean
 				"Entity.DirtyTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return StructureActionExecutionSystem.new(entityFactory, {
+				return StructureAttackPresentationSystem.new(entityFactory, {
 					EntityContext = self._entityContext,
-					EnemyContext = self._enemyContext,
-					CombatContext = self._combatContext,
+				})
+			end,
+		})
+		if not attackPresentationResult.success then
+			return attackPresentationResult
+		end
+
+		return self._entityContext:RegisterSystem("ActionAdvance", {
+			Name = "StructureExtractionSystem",
+			Phase = "ActionAdvance",
+			Reads = {
+				"Structure.ExtractState",
+				"Structure.SourcePlacement",
+				"Structure.OperationalTag",
+				"AI.ActionState",
+			},
+			Writes = {
+				"Structure.AnimationState",
+				"Structure.AnimationLooping",
+				"Entity.DirtyTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return StructureExtractionSystem.new(entityFactory, {
 					MiningContext = self._miningContext,
 				})
 			end,

@@ -154,6 +154,9 @@ function AIActionExecutionSystem:_ShouldKeepExistingStartState(existingState: an
 	if existingState.TargetEntity ~= actionIntent.TargetEntity then
 		return false
 	end
+	if existingState.Phase == nil then
+		return false
+	end
 	if existingState.Phase ~= "Completed" then
 		return true
 	end

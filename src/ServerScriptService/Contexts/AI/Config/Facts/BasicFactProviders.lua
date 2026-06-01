@@ -90,6 +90,8 @@ local function buildAttackTargetFacts(context: any): any
 					AbilityId = "EnemyStructureAttack",
 					TargetKind = "Structure",
 					TargetPosition = nearestPosition,
+					Damage = role.Damage,
+					Cooldown = role.AttackCooldown,
 				},
 				AdvanceData = advanceData,
 			}
@@ -107,6 +109,8 @@ local function buildAttackTargetFacts(context: any): any
 				AbilityId = "EnemyBaseAttack",
 				TargetKind = "Base",
 				TargetPosition = baseTargetCFrame.Position,
+				Damage = role.Damage,
+				Cooldown = role.AttackCooldown,
 			},
 			AdvanceData = advanceData,
 		}
@@ -153,7 +157,6 @@ local function buildOperationalFacts(context: any): any
 			facts.TargetEntity = nearest.Entity
 			facts.AttackData = {
 				AbilityId = "StructureBullet",
-				UseCombatPipeline = true,
 				TargetPosition = nearest.CFrame.Position,
 				Range = stats.AttackRange,
 				Damage = stats.AttackDamage,
