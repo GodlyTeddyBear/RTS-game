@@ -13,7 +13,9 @@ function EntityRuntimeSchedulerService.new(baseContext: any, entityContext: any)
 	self._baseContext = baseContext
 	self._entityContext = entityContext
 	self._schedulerTickBound = false
+	self._movementSchedulerTickBound = false
 	self._runtimeTickActive = false
+	self._movementRuntimeTickActive = false
 	return self
 end
 
@@ -33,6 +35,10 @@ function EntityRuntimeSchedulerService:BindSchedulerTick()
 	end
 
 	self._schedulerTickBound = true
+	self._movementSchedulerTickBound = true
+	self._baseContext:RegisterSchedulerSystem(EntityPhases.MovementSchedulerPhase, function()
+		self:RunMovementScheduledTick()
+	end)
 	self._baseContext:RegisterSchedulerSystem(EntityPhases.SchedulerPhase, function()
 		self:RunScheduledTick()
 	end)
@@ -40,6 +46,26 @@ end
 
 function EntityRuntimeSchedulerService:StopRuntimeTick()
 	self._runtimeTickActive = false
+	self._movementRuntimeTickActive = false
+end
+
+function EntityRuntimeSchedulerService:RunMovementScheduledTick()
+	local ensureRuntimeResult = self._entityContext:_EnsureRuntimeStarted()
+	if not ensureRuntimeResult.success then
+		self._movementRuntimeTickActive = false
+		self:_MentionTickFailure("Entity runtime startup finalization failed before movement tick", ensureRuntimeResult)
+		return
+	end
+
+	if self._lifecycle:GetState() ~= "Running" then
+		self._movementRuntimeTickActive = false
+		return
+	end
+
+	self._movementRuntimeTickActive = true
+
+	local runResult = self._systemRegistry:RunPhases(EntityPhases.MovementOrdered)
+	self:_MentionTickFailure("Entity movement phases failed", runResult)
 end
 
 function EntityRuntimeSchedulerService:RunScheduledTick()
@@ -62,7 +88,7 @@ function EntityRuntimeSchedulerService:RunScheduledTick()
 	end)
 	self:_MentionTickFailure("Entity bind queue flush failed", bindResult)
 
-	local runResult = self._systemRegistry:RunAllPhases()
+	local runResult = self._systemRegistry:RunPhases(EntityPhases.RuntimeOrdered)
 	self:_MentionTickFailure("Entity system tick failed", runResult)
 
 	local flushDestroyResult = self._entityFactory:FlushDestroyQueue()
@@ -84,7 +110,9 @@ end
 function EntityRuntimeSchedulerService:GetStatus(): any
 	return table.freeze({
 		SchedulerBound = self._schedulerTickBound,
+		MovementSchedulerBound = self._movementSchedulerTickBound,
 		RuntimeTickActive = self._runtimeTickActive,
+		MovementRuntimeTickActive = self._movementRuntimeTickActive,
 	})
 end
 

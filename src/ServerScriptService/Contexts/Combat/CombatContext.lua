@@ -29,6 +29,11 @@ local CombatHitboxSystem = require(script.Parent.Infrastructure.Entity.CombatHit
 local CombatProjectileSystem = require(script.Parent.Infrastructure.Entity.CombatProjectileSystem)
 local CombatRequestCleanupSystem = require(script.Parent.Infrastructure.Entity.CombatRequestCleanupSystem)
 local CombatStatusAuraSystem = require(script.Parent.Infrastructure.Entity.CombatStatusAuraSystem)
+local MovementApplySystem = require(script.Parent.Infrastructure.Systems.MovementApplySystem)
+local MovementEntitySchema = require(script.Parent.Infrastructure.Systems.MovementEntitySchema)
+local MovementFlowCalculationSystem = require(script.Parent.Infrastructure.Systems.MovementFlowCalculationSystem)
+local MovementGridSystem = require(script.Parent.Infrastructure.Systems.MovementGridSystem)
+local MovementRuntimeSupportService = require(script.Parent.Infrastructure.Systems.MovementRuntimeSupportService)
 
 local StartCombat = require(script.Parent.Application.Commands.StartCombat)
 local ProcessCombatTick = require(script.Parent.Application.Commands.ProcessCombatTick)
@@ -84,6 +89,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "MovementService",
 		Module = MovementService,
 		CacheAs = "_movementService",
+	},
+	{
+		Name = "MovementRuntimeSupportService",
+		Module = MovementRuntimeSupportService,
+		CacheAs = "_movementRuntimeSupportService",
 	},
 	{
 		Name = "ProjectileService",
@@ -159,6 +169,7 @@ local CombatContext = Knit.CreateService({
 	StartOrder = { "Infrastructure", "Application" },
 	ExternalServices = {
 		{ Name = "EntityContext", CacheAs = "_entityContext" },
+		{ Name = "WorldContext", CacheAs = "_worldContext" },
 	},
 	AIRuntimeContext = {
 		RuntimeServiceField = "_combatBehaviorRuntimeService",
@@ -202,6 +213,7 @@ end
 
 function CombatContext:KnitStart()
 	CombatBaseContext:KnitStart()
+	self._movementService:ConfigureLockOnService(self._lockOnService)
 
 	local entityRegistrationResult = self:_RegisterEntityActionPipeline()
 	if not entityRegistrationResult.success then
@@ -275,6 +287,85 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 		local schemaResult = self._entityContext:RegisterFeatureSchema("Combat", CombatEntitySchema)
 		if not schemaResult.success then
 			return schemaResult
+		end
+
+		local movementSchemaResult = self._entityContext:RegisterFeatureSchema("Movement", MovementEntitySchema)
+		if not movementSchemaResult.success then
+			return movementSchemaResult
+		end
+
+		local movementGridResult = self._entityContext:RegisterSystem("MovementGrid", {
+			Name = "MovementGridSystem",
+			Phase = "MovementGrid",
+			Reads = {
+				"Movement.MoveIntent",
+				"Movement.ApplyResult",
+				"Unit.PathState",
+				"Unit.Role",
+				"Entity.Identity",
+				"AI.ActionState",
+			},
+			Writes = {
+				"Movement.MoveIntent",
+				"Movement.FlowGridState",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return MovementGridSystem.new(entityFactory, {
+					MovementRuntimeSupport = self._movementRuntimeSupportService,
+					MovementService = self._movementService,
+					WorldContext = self._worldContext,
+				})
+			end,
+		})
+		if not movementGridResult.success then
+			return movementGridResult
+		end
+
+		local movementCalculationResult = self._entityContext:RegisterSystem("MovementCalculate", {
+			Name = "MovementFlowCalculationSystem",
+			Phase = "MovementCalculate",
+			Reads = {
+				"Movement.MoveIntent",
+				"Movement.FlowGridState",
+			},
+			Writes = {
+				"Movement.PathRuntimeState",
+				"Movement.FlowCalculationState",
+				"Movement.ApplyState",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return MovementFlowCalculationSystem.new(entityFactory)
+			end,
+		})
+		if not movementCalculationResult.success then
+			return movementCalculationResult
+		end
+
+		local movementApplyResult = self._entityContext:RegisterSystem("MovementApply", {
+			Name = "MovementApplySystem",
+			Phase = "MovementApply",
+			Reads = {
+				"Movement.MoveIntent",
+				"Movement.PathRuntimeState",
+				"Movement.ApplyState",
+				"Unit.PathState",
+			},
+			Writes = {
+				"Movement.ApplyResult",
+				"Unit.PathState",
+				"Unit.AnimationState",
+				"Unit.AnimationLooping",
+				"Entity.DirtyTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return MovementApplySystem.new(entityFactory, {
+					EntityContext = self._entityContext,
+					MovementService = self._movementService,
+				})
+			end,
+		})
+		if not movementApplyResult.success then
+			return movementApplyResult
 		end
 
 		local attackResult = self._entityContext:RegisterSystem("ActionAdvance", {

@@ -43,6 +43,7 @@ function EndCombat:Init(registry: any, _name: string)
 		_hitboxService = "HitboxService",
 		_lockOnService = "LockOnService",
 		_movementService = "MovementService",
+		_movementRuntimeSupportService = "MovementRuntimeSupportService",
 		_projectileService = "ProjectileService",
 		_statusService = "StatusService",
 	})
@@ -76,6 +77,7 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 		self._combatHitResolutionService:CleanupAll()
 		self._lockOnService:CleanupAll()
 		self._movementService:CleanupAll()
+		self._movementRuntimeSupportService:Reset()
 		self._projectileService:CleanupAll()
 		-- Clear all status sources before the runtime is fully stopped.
 		self._statusService:ClearAll()

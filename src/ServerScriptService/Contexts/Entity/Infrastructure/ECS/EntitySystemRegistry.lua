@@ -168,4 +168,17 @@ function EntitySystemRegistry:RunAllPhases(): Result.Result<boolean>
 	end, "EntitySystemRegistry:RunAllPhases")
 end
 
+function EntitySystemRegistry:RunPhases(phaseNames: { string }): Result.Result<boolean>
+	return Result.Catch(function()
+		for _, phaseName in ipairs(phaseNames) do
+			local runResult = self:RunPhase(phaseName)
+			if not runResult.success then
+				return runResult
+			end
+		end
+
+		return Result.Ok(true)
+	end, "EntitySystemRegistry:RunPhases")
+end
+
 return EntitySystemRegistry

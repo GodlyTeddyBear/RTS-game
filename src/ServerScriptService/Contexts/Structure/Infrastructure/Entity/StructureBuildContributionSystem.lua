@@ -17,7 +17,6 @@ function StructureBuildContributionSystem.new(entityFactory: any, dependencies: 
 	self._entityFactory = entityFactory
 	self._structureContext = dependencies.StructureContext
 	self._unitReadService = dependencies.UnitReadService
-	self._movementRuntimeService = dependencies.MovementRuntimeService
 	return self
 end
 
@@ -55,8 +54,7 @@ function StructureBuildContributionSystem:_RunBuilder(builderEntity: number, del
 	end
 
 	if self:_IsBuilderWithinBuildRange(builderEntity, targetStructureEntity) then
-		self._movementRuntimeService:StopMovement(builderEntity)
-		self:_SetPathMoving(builderEntity, false)
+		self:_ClearPathGoal(builderEntity)
 		self:_SetPresentation(builderEntity, "Build", true)
 
 		local buildWorkPerSecond = self:_GetBuildWorkPerSecond(builderEntity)
@@ -86,23 +84,8 @@ function StructureBuildContributionSystem:_RunBuilder(builderEntity: number, del
 		return
 	end
 
-	local started = self._movementRuntimeService:StartAdvance(builderEntity, movementMode, targetPosition)
-	if not started then
-		self:_SetBuilderAssignment(builderEntity, nil)
-		self:_RunIdle(builderEntity)
-		return
-	end
-
-	local isDone, stepReason = self._movementRuntimeService:StepAdvance(builderEntity, {
-		DeltaTime = deltaTime,
-	})
-	if stepReason ~= nil then
-		self:_SetBuilderAssignment(builderEntity, nil)
-		self:_RunIdle(builderEntity)
-		return
-	end
-
-	self:_SetPathMoving(builderEntity, not isDone)
+	self:_SetPathGoal(builderEntity, targetPosition)
+	self:_SetPathMoving(builderEntity, true)
 	self:_SetPresentation(builderEntity, "Walk", true)
 end
 
@@ -156,8 +139,7 @@ function StructureBuildContributionSystem:_IsStructureBuildableForBuilder(builde
 end
 
 function StructureBuildContributionSystem:_RunIdle(entity: number)
-	self._movementRuntimeService:StopMovement(entity)
-	self:_SetPathMoving(entity, false)
+	self:_ClearPathGoal(entity)
 	self:_SetPresentation(entity, "Idle", true)
 end
 
@@ -215,6 +197,30 @@ function StructureBuildContributionSystem:_SetPathMoving(entity: number, isMovin
 		GoalRevision = state.GoalRevision or 0,
 		FailedGoalRevision = state.FailedGoalRevision,
 		IsMoving = isMoving,
+	}, "Unit")
+	self:_MarkDirty(entity)
+end
+
+function StructureBuildContributionSystem:_SetPathGoal(entity: number, goalPosition: Vector3)
+	local state = self._unitReadService:GetPathState(entity) or {}
+	self._entityFactory:Set(entity, "PathState", {
+		GoalPosition = goalPosition,
+		RequestedGoalPosition = state.RequestedGoalPosition or goalPosition,
+		GoalRevision = state.GoalRevision or 0,
+		FailedGoalRevision = state.FailedGoalRevision,
+		IsMoving = true,
+	}, "Unit")
+	self:_MarkDirty(entity)
+end
+
+function StructureBuildContributionSystem:_ClearPathGoal(entity: number)
+	local state = self._unitReadService:GetPathState(entity) or {}
+	self._entityFactory:Set(entity, "PathState", {
+		GoalPosition = nil,
+		RequestedGoalPosition = nil,
+		GoalRevision = state.GoalRevision or 0,
+		FailedGoalRevision = state.FailedGoalRevision,
+		IsMoving = false,
 	}, "Unit")
 	self:_MarkDirty(entity)
 end

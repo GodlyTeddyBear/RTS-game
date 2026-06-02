@@ -1,10 +1,8 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
 
 local AISharedContract = require(ReplicatedStorage.Contexts.AI.AISharedContract)
-local ServerScheduler = require(ServerScriptService.Scheduler.ServerScheduler)
 local UnitConfig = require(ReplicatedStorage.Contexts.Unit.Config.UnitConfig)
 
 local UnitManualMoveSystem = {}
@@ -16,7 +14,6 @@ function UnitManualMoveSystem.new(entityFactory: any, dependencies: any)
 	local self = setmetatable({}, UnitManualMoveSystem)
 	self._entityFactory = entityFactory
 	self._unitReadService = dependencies.UnitReadService
-	self._movementRuntimeService = dependencies.MovementRuntimeService
 	return self
 end
 
@@ -31,13 +28,12 @@ function UnitManualMoveSystem:Run()
 		return
 	end
 
-	local deltaTime = ServerScheduler:GetDeltaTime()
 	for _, entity in ipairs(queryResult.value) do
-		self:_RunEntity(entity, deltaTime)
+		self:_RunEntity(entity)
 	end
 end
 
-function UnitManualMoveSystem:_RunEntity(entity: number, deltaTime: number)
+function UnitManualMoveSystem:_RunEntity(entity: number)
 	local actionState = self:_Get(entity, AISharedContract.Components.ActionState, AISharedContract.FeatureName)
 	if type(actionState) ~= "table" or actionState.ActionId ~= ACTION_MANUAL_MOVE then
 		if type(actionState) == "table" and actionState.ActionId == "Idle" then
@@ -61,37 +57,12 @@ function UnitManualMoveSystem:_RunEntity(entity: number, deltaTime: number)
 		return
 	end
 
-	local started = self._movementRuntimeService:StartAdvance(entity, movementMode, goalPosition)
-	if not started then
-		self:_MarkGoalFailedCurrentRevision(entity)
-		self._movementRuntimeService:StopMovement(entity)
-		self:_SetPathMoving(entity, false)
-		self:_SetPresentation(entity, "Idle", true)
-		return
-	end
-
-	local isDone, stepReason = self._movementRuntimeService:StepAdvance(entity, {
-		DeltaTime = deltaTime,
-	})
-	if stepReason ~= nil then
-		self:_MarkGoalFailedCurrentRevision(entity)
-		self._movementRuntimeService:StopMovement(entity)
-		self:_SetPathMoving(entity, false)
-		self:_SetPresentation(entity, "Idle", true)
-		return
-	end
-
+	self:_SetPathGoal(entity, goalPosition)
 	self:_SetPathMoving(entity, true)
 	self:_SetPresentation(entity, "Walk", true)
-	if isDone then
-		self:_ClearGoalPosition(entity)
-		self._movementRuntimeService:StopMovement(entity)
-		self:_SetPresentation(entity, "Idle", true)
-	end
 end
 
 function UnitManualMoveSystem:_RunIdle(entity: number)
-	self._movementRuntimeService:StopMovement(entity)
 	self:_SetPathMoving(entity, false)
 	self:_SetPresentation(entity, "Idle", true)
 end
@@ -118,6 +89,18 @@ function UnitManualMoveSystem:_SetPathMoving(entity: number, isMoving: boolean)
 		GoalRevision = state.GoalRevision or 0,
 		FailedGoalRevision = state.FailedGoalRevision,
 		IsMoving = isMoving,
+	}, "Unit")
+	self:_MarkDirty(entity)
+end
+
+function UnitManualMoveSystem:_SetPathGoal(entity: number, goalPosition: Vector3)
+	local state = self._unitReadService:GetPathState(entity) or {}
+	self._entityFactory:Set(entity, "PathState", {
+		GoalPosition = goalPosition,
+		RequestedGoalPosition = state.RequestedGoalPosition or goalPosition,
+		GoalRevision = state.GoalRevision or 0,
+		FailedGoalRevision = state.FailedGoalRevision,
+		IsMoving = true,
 	}, "Unit")
 	self:_MarkDirty(entity)
 end

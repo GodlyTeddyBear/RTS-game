@@ -307,7 +307,6 @@ function UnitContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 			Factory = function(entityFactory: any, _compiledSchemas: any)
 				return UnitManualMoveSystem.new(entityFactory, {
 					UnitReadService = self._unitReadService,
-					MovementRuntimeService = self._movementRuntimeService,
 				})
 			end,
 		})
@@ -336,7 +335,6 @@ function UnitContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 				return StructureBuildContributionSystem.new(entityFactory, {
 					StructureContext = self._structureContext,
 					UnitReadService = self._unitReadService,
-					MovementRuntimeService = self._movementRuntimeService,
 				})
 			end,
 		})
