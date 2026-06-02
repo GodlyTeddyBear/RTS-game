@@ -11,8 +11,8 @@ local WorldTypes = require(ReplicatedStorage.Contexts.World.Types.WorldTypes)
 type GridSpec = WorldTypes.GridSpec
 type Tile = WorldTypes.Tile
 
-local MovementRuntimeSupportService = {}
-MovementRuntimeSupportService.__index = MovementRuntimeSupportService
+local MovementGridService = {}
+MovementGridService.__index = MovementGridService
 
 local function getGridSubdivisions(): number
 	local gridConfig = CombatMovementConfig.FASTFLOW_GRID
@@ -80,19 +80,21 @@ local function buildWallsFromTiles(spec: GridSpec, tiles: { Tile }): (any, FastF
 	return walls, mapping
 end
 
-function MovementRuntimeSupportService.new()
-	local self = setmetatable({}, MovementRuntimeSupportService)
+function MovementGridService.new()
+	local self = setmetatable({}, MovementGridService)
 	self._gridRevision = 0
 	self._isFastFlowConfigured = false
+	self._pathfinder = nil
+	self._mapping = nil
 	return self
 end
 
-function MovementRuntimeSupportService:EnsureFastFlowConfigured(worldContext: any, movementService: any): (boolean, number)
+function MovementGridService:EnsureConfigured(worldContext: any): (boolean, number)
 	if self._isFastFlowConfigured then
 		return true, self._gridRevision
 	end
 
-	if worldContext == nil or movementService == nil then
+	if worldContext == nil then
 		return false, self._gridRevision
 	end
 
@@ -108,14 +110,51 @@ function MovementRuntimeSupportService:EnsureFastFlowConfigured(worldContext: an
 	end
 
 	local walls, mapping = buildWallsFromTiles(selectedGrid, tilesResult.value)
-	movementService:ConfigureFastFlow(FastFlowHelper.CreatePathfinderFromWalls(walls), mapping)
+	self._pathfinder = FastFlowHelper.CreatePathfinderFromWalls(walls)
+	self._mapping = mapping
 	self._gridRevision += 1
 	self._isFastFlowConfigured = true
+
 	return true, self._gridRevision
 end
 
-function MovementRuntimeSupportService:Reset()
-	self._isFastFlowConfigured = false
+function MovementGridService:GetRuntime(): (any?, FastFlowHelper.TFlowGridMapping?)
+	return self._pathfinder, self._mapping
 end
 
-return MovementRuntimeSupportService
+function MovementGridService:BuildWallGridSnapshot(): ({ boolean }, number, number)
+	local pathfinder = self._pathfinder
+	local mapping = self._mapping
+	local wallGrid = {}
+	if pathfinder == nil or mapping == nil then
+		return wallGrid, 0, 0
+	end
+
+	local walls = pathfinder._Walls
+	local wallGridWidth = if type(walls) == "table" and type(walls._Width) == "number"
+		then walls._Width
+		else mapping.GridHalfSize * 2 + 1
+	local wallGridCellCount = wallGridWidth * wallGridWidth
+	for index = 1, wallGridCellCount do
+		wallGrid[index] = false
+	end
+
+	if walls and type(walls._Grid) == "table" then
+		for index, value in walls._Grid do
+			if value then
+				wallGrid[index + 1] = true
+			end
+		end
+	end
+
+	local wallGridHalfSize = if type(walls) == "table" and type(walls._Size) == "number" then walls._Size else 0
+	return wallGrid, wallGridHalfSize, wallGridWidth
+end
+
+function MovementGridService:Reset()
+	self._isFastFlowConfigured = false
+	self._pathfinder = nil
+	self._mapping = nil
+end
+
+return MovementGridService

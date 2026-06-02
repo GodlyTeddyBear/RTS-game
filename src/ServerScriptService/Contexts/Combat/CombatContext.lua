@@ -19,7 +19,13 @@ local CombatBehaviorRuntimeService = require(script.Parent.Infrastructure.Servic
 local CombatHitResolutionService = require(script.Parent.Infrastructure.Services.CombatHitResolutionService)
 local HitboxService = require(script.Parent.Infrastructure.Services.HitboxService)
 local LockOnService = require(script.Parent.Infrastructure.Services.LockOnService)
-local MovementService = require(script.Parent.Infrastructure.Services.MovementService)
+local MovementActorReadService = require(script.Parent.Infrastructure.Services.Movement.MovementActorReadService)
+local MovementApplyBridgeService = require(script.Parent.Infrastructure.Services.Movement.MovementApplyBridgeService)
+local MovementFlowDispatchService = require(script.Parent.Infrastructure.Services.Movement.MovementFlowDispatchService)
+local MovementFlowSnapshotService = require(script.Parent.Infrastructure.Services.Movement.MovementFlowSnapshotService)
+local MovementFlowfieldService = require(script.Parent.Infrastructure.Services.Movement.MovementFlowfieldService)
+local MovementGridService = require(script.Parent.Infrastructure.Services.Movement.MovementGridService)
+local MovementPathRuntimeService = require(script.Parent.Infrastructure.Services.Movement.MovementPathRuntimeService)
 local ProjectileService = require(script.Parent.Infrastructure.Services.ProjectileService)
 local StatusService = require(script.Parent.Infrastructure.Services.StatusService)
 local CombatAttackSystem = require(script.Parent.Infrastructure.Entity.CombatAttackSystem)
@@ -33,7 +39,6 @@ local MovementApplySystem = require(script.Parent.Infrastructure.Systems.Movemen
 local MovementEntitySchema = require(script.Parent.Infrastructure.Systems.MovementEntitySchema)
 local MovementFlowCalculationSystem = require(script.Parent.Infrastructure.Systems.MovementFlowCalculationSystem)
 local MovementGridSystem = require(script.Parent.Infrastructure.Systems.MovementGridSystem)
-local MovementRuntimeSupportService = require(script.Parent.Infrastructure.Systems.MovementRuntimeSupportService)
 
 local StartCombat = require(script.Parent.Application.Commands.StartCombat)
 local ProcessCombatTick = require(script.Parent.Application.Commands.ProcessCombatTick)
@@ -86,14 +91,39 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		CacheAs = "_lockOnService",
 	},
 	{
-		Name = "MovementService",
-		Module = MovementService,
-		CacheAs = "_movementService",
+		Name = "MovementActorReadService",
+		Module = MovementActorReadService,
+		CacheAs = "_movementActorReadService",
 	},
 	{
-		Name = "MovementRuntimeSupportService",
-		Module = MovementRuntimeSupportService,
-		CacheAs = "_movementRuntimeSupportService",
+		Name = "MovementApplyBridgeService",
+		Module = MovementApplyBridgeService,
+		CacheAs = "_movementApplyBridgeService",
+	},
+	{
+		Name = "MovementFlowDispatchService",
+		Module = MovementFlowDispatchService,
+		CacheAs = "_movementFlowDispatchService",
+	},
+	{
+		Name = "MovementFlowSnapshotService",
+		Module = MovementFlowSnapshotService,
+		CacheAs = "_movementFlowSnapshotService",
+	},
+	{
+		Name = "MovementFlowfieldService",
+		Module = MovementFlowfieldService,
+		CacheAs = "_movementFlowfieldService",
+	},
+	{
+		Name = "MovementGridService",
+		Module = MovementGridService,
+		CacheAs = "_movementGridService",
+	},
+	{
+		Name = "MovementPathRuntimeService",
+		Module = MovementPathRuntimeService,
+		CacheAs = "_movementPathRuntimeService",
 	},
 	{
 		Name = "ProjectileService",
@@ -183,7 +213,10 @@ local CombatContext = Knit.CreateService({
 			{ Field = "_runEndedConnection", Method = "Disconnect" },
 			{ Field = "_playerRemovingConnection", Method = "Disconnect" },
 			{ Field = "_animationCallbackConnection", Method = "Disconnect" },
-			{ Field = "_movementService", Method = "Destroy" },
+			{ Field = "_movementApplyBridgeService", Method = "CleanupAll" },
+			{ Field = "_movementPathRuntimeService", Method = "CleanupAll" },
+			{ Field = "_movementFlowSnapshotService", Method = "Destroy" },
+			{ Field = "_movementFlowDispatchService", Method = "Destroy" },
 			{ Field = "_projectileService", Method = "Destroy" },
 		},
 	},
@@ -213,7 +246,11 @@ end
 
 function CombatContext:KnitStart()
 	CombatBaseContext:KnitStart()
-	self._movementService:ConfigureLockOnService(self._lockOnService)
+	self._movementPathRuntimeService:Configure(self._movementActorReadService, self._entityContext)
+	self._movementFlowfieldService:Configure(self._movementGridService)
+	self._movementFlowSnapshotService:Configure(self._movementGridService)
+	self._movementApplyBridgeService:Configure(self._movementActorReadService, self._entityContext, self._lockOnService)
+	self._movementFlowDispatchService:Prime()
 
 	local entityRegistrationResult = self:_RegisterEntityActionPipeline()
 	if not entityRegistrationResult.success then
@@ -250,7 +287,6 @@ function CombatContext:KnitStart()
 				end, schedulerProfilingEnabled)
 			end
 
-			self._movementService:FinalizeAdvanceFrame()
 		end, schedulerProfilingEnabled)
 	end)
 
@@ -299,20 +335,13 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			Phase = "MovementGrid",
 			Reads = {
 				"Movement.MoveIntent",
-				"Movement.ApplyResult",
-				"Unit.PathState",
-				"Unit.Role",
-				"Entity.Identity",
-				"AI.ActionState",
 			},
 			Writes = {
-				"Movement.MoveIntent",
 				"Movement.FlowGridState",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
 				return MovementGridSystem.new(entityFactory, {
-					MovementRuntimeSupport = self._movementRuntimeSupportService,
-					MovementService = self._movementService,
+					MovementGridService = self._movementGridService,
 					WorldContext = self._worldContext,
 				})
 			end,
@@ -334,7 +363,12 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 				"Movement.ApplyState",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return MovementFlowCalculationSystem.new(entityFactory)
+				return MovementFlowCalculationSystem.new(entityFactory, {
+					ActorReadService = self._movementActorReadService,
+					FlowfieldService = self._movementFlowfieldService,
+					PathRuntimeService = self._movementPathRuntimeService,
+					EntityContext = self._entityContext,
+				})
 			end,
 		})
 		if not movementCalculationResult.success then
@@ -345,22 +379,14 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			Name = "MovementApplySystem",
 			Phase = "MovementApply",
 			Reads = {
-				"Movement.MoveIntent",
-				"Movement.PathRuntimeState",
 				"Movement.ApplyState",
-				"Unit.PathState",
 			},
 			Writes = {
 				"Movement.ApplyResult",
-				"Unit.PathState",
-				"Unit.AnimationState",
-				"Unit.AnimationLooping",
-				"Entity.DirtyTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
 				return MovementApplySystem.new(entityFactory, {
-					EntityContext = self._entityContext,
-					MovementService = self._movementService,
+					ApplyBridgeService = self._movementApplyBridgeService,
 				})
 			end,
 		})
@@ -540,7 +566,6 @@ function CombatContext:GetCombatRuntimeServices(): Result.Result<any>
 	return Ok({
 		HitboxService = self._hitboxService,
 		LockOnService = self._lockOnService,
-		MovementService = self._movementService,
 		CombatHitResolutionService = self._combatHitResolutionService,
 		ProjectileService = self._projectileService,
 		StatusService = self._statusService,
