@@ -27,8 +27,8 @@ local CombatEntitySchema = {
 				HasEmittedRequest = false,
 			},
 		},
-		HitboxRequest = {
-			ECSName = "Combat.HitboxRequest",
+		HitboxSpawnRequest = {
+			ECSName = "Combat.HitboxSpawnRequest",
 			Authority = "AUTHORITATIVE",
 			Default = {
 				ActionId = "",
@@ -37,6 +37,18 @@ local CombatEntitySchema = {
 				TargetEntity = nil,
 				Damage = 0,
 				Range = 0,
+				CreatedAt = 0,
+				ExpiresAt = nil,
+			},
+		},
+		ActiveHitboxState = {
+			ECSName = "Combat.ActiveHitboxState",
+			Authority = "AUTHORITATIVE",
+			Default = {
+				Handle = "",
+				SourceEntity = 0,
+				AbilityId = "",
+				Damage = 0,
 				CreatedAt = 0,
 				ExpiresAt = nil,
 			},
@@ -55,8 +67,8 @@ local CombatEntitySchema = {
 				Reason = "Combat",
 			},
 		},
-		ProjectileRequest = {
-			ECSName = "Combat.ProjectileRequest",
+		ProjectileSpawnRequest = {
+			ECSName = "Combat.ProjectileSpawnRequest",
 			Authority = "AUTHORITATIVE",
 			Default = {
 				ActionId = "",
@@ -68,6 +80,16 @@ local CombatEntitySchema = {
 				Range = 0,
 				CreatedAt = 0,
 				ExpiresAt = nil,
+			},
+		},
+		ActiveProjectileState = {
+			ECSName = "Combat.ActiveProjectileState",
+			Authority = "AUTHORITATIVE",
+			Default = {
+				Handle = "",
+				SourceEntity = 0,
+				AbilityId = "",
+				CreatedAt = 0,
 			},
 		},
 		StatusAuraState = {
@@ -90,9 +112,9 @@ local CombatEntitySchema = {
 		ProcessedTag = {},
 	},
 	Archetypes = {
-		HitboxRequest = {
+		HitboxSpawnRequest = {
 			Components = {
-				HitboxRequest = true,
+				HitboxSpawnRequest = true,
 			},
 			Tags = {
 				RequestTag = true,
@@ -106,12 +128,22 @@ local CombatEntitySchema = {
 				RequestTag = true,
 			},
 		},
-		ProjectileRequest = {
+		ActiveHitbox = {
 			Components = {
-				ProjectileRequest = true,
+				ActiveHitboxState = true,
+			},
+		},
+		ProjectileSpawnRequest = {
+			Components = {
+				ProjectileSpawnRequest = true,
 			},
 			Tags = {
 				RequestTag = true,
+			},
+		},
+		ActiveProjectile = {
+			Components = {
+				ActiveProjectileState = true,
 			},
 		},
 	},

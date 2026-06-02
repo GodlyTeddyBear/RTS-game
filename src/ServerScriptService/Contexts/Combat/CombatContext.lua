@@ -14,6 +14,8 @@ local CombatTypes = require(ReplicatedStorage.Contexts.Combat.Types.CombatTypes)
 local CombatAbilities = require(script.Parent.Config.CombatAbilities)
 local CombatActorRegistryService = require(script.Parent.Infrastructure.Services.CombatActorRegistryService)
 local CombatAbilityRegistryService = require(script.Parent.Infrastructure.Services.CombatAbilityRegistryService)
+local CombatRequestFactoryService = require(script.Parent.Infrastructure.Services.CombatRequestFactoryService)
+local CombatTargetReadService = require(script.Parent.Infrastructure.Services.CombatTargetReadService)
 local CombatLoopService = require(script.Parent.Infrastructure.Services.CombatLoopService)
 local CombatBehaviorRuntimeService = require(script.Parent.Infrastructure.Services.CombatBehaviorRuntimeService)
 local CombatHitResolutionService = require(script.Parent.Infrastructure.Services.CombatHitResolutionService)
@@ -27,14 +29,18 @@ local MovementFlowfieldService = require(script.Parent.Infrastructure.Services.M
 local MovementGridService = require(script.Parent.Infrastructure.Services.Movement.MovementGridService)
 local MovementPathRuntimeService = require(script.Parent.Infrastructure.Services.Movement.MovementPathRuntimeService)
 local ProjectileService = require(script.Parent.Infrastructure.Services.ProjectileService)
+local ProjectileSimulationService = require(script.Parent.Infrastructure.Services.ProjectileSimulationService)
 local StatusService = require(script.Parent.Infrastructure.Services.StatusService)
-local CombatAttackSystem = require(script.Parent.Infrastructure.Entity.CombatAttackSystem)
-local CombatDamageSystem = require(script.Parent.Infrastructure.Entity.CombatDamageSystem)
 local CombatEntitySchema = require(script.Parent.Infrastructure.Entity.CombatEntitySchema)
-local CombatHitboxSystem = require(script.Parent.Infrastructure.Entity.CombatHitboxSystem)
-local CombatProjectileSystem = require(script.Parent.Infrastructure.Entity.CombatProjectileSystem)
-local CombatRequestCleanupSystem = require(script.Parent.Infrastructure.Entity.CombatRequestCleanupSystem)
 local CombatStatusAuraSystem = require(script.Parent.Infrastructure.Entity.CombatStatusAuraSystem)
+local HitboxSimulationService = require(script.Parent.Infrastructure.Services.HitboxSimulationService)
+local AttackAdvanceSystem = require(script.Parent.Infrastructure.Systems.Attack.AttackAdvanceSystem)
+local CombatRequestCleanupSystem = require(script.Parent.Infrastructure.Systems.Attack.CombatRequestCleanupSystem)
+local DamageResolveSystem = require(script.Parent.Infrastructure.Systems.Attack.DamageResolveSystem)
+local HitboxImpactSystem = require(script.Parent.Infrastructure.Systems.Attack.HitboxImpactSystem)
+local HitboxSpawnSystem = require(script.Parent.Infrastructure.Systems.Attack.HitboxSpawnSystem)
+local ProjectileImpactSystem = require(script.Parent.Infrastructure.Systems.Attack.ProjectileImpactSystem)
+local ProjectileSpawnSystem = require(script.Parent.Infrastructure.Systems.Attack.ProjectileSpawnSystem)
 local MovementApplySystem = require(script.Parent.Infrastructure.Systems.MovementApplySystem)
 local MovementEntitySchema = require(script.Parent.Infrastructure.Systems.MovementEntitySchema)
 local MovementFlowCalculationSystem = require(script.Parent.Infrastructure.Systems.MovementFlowCalculationSystem)
@@ -64,6 +70,16 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "CombatActorRegistryService",
 		Module = CombatActorRegistryService,
 		CacheAs = "_combatActorRegistryService",
+	},
+	{
+		Name = "CombatRequestFactoryService",
+		Module = CombatRequestFactoryService,
+		CacheAs = "_combatRequestFactoryService",
+	},
+	{
+		Name = "CombatTargetReadService",
+		Module = CombatTargetReadService,
+		CacheAs = "_combatTargetReadService",
 	},
 	{
 		Name = "CombatLoopService",
@@ -129,6 +145,16 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "ProjectileService",
 		Module = ProjectileService,
 		CacheAs = "_projectileService",
+	},
+	{
+		Name = "ProjectileSimulationService",
+		Module = ProjectileSimulationService,
+		CacheAs = "_projectileSimulationService",
+	},
+	{
+		Name = "HitboxSimulationService",
+		Module = HitboxSimulationService,
+		CacheAs = "_hitboxSimulationService",
 	},
 	{
 		Name = "StatusService",
@@ -218,6 +244,8 @@ local CombatContext = Knit.CreateService({
 			{ Field = "_movementFlowSnapshotService", Method = "Destroy" },
 			{ Field = "_movementFlowDispatchService", Method = "Destroy" },
 			{ Field = "_projectileService", Method = "Destroy" },
+			{ Field = "_projectileSimulationService", Method = "Destroy" },
+			{ Field = "_hitboxSimulationService", Method = "Destroy" },
 		},
 	},
 })
@@ -266,6 +294,7 @@ function CombatContext:KnitStart()
 
 			DebugPlus.profile(combatHitboxTickProfileTag, function()
 				self._hitboxService:Tick(dt)
+				self._hitboxSimulationService:Tick(dt)
 			end, schedulerProfilingEnabled)
 
 			local didRunCombatFrame = false
@@ -394,8 +423,10 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return movementApplyResult
 		end
 
+		self._combatTargetReadService:Configure(self._entityContext)
+
 		local attackResult = self._entityContext:RegisterSystem("ActionAdvance", {
-			Name = "CombatAttackSystem",
+			Name = "AttackAdvanceSystem",
 			Phase = "ActionAdvance",
 			Reads = {
 				"Combat.AttackState",
@@ -403,53 +434,98 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			Writes = {
 				"Combat.AttackState",
 				"Combat.DamageRequest",
-				"Combat.HitboxRequest",
-				"Combat.ProjectileRequest",
+				"Combat.HitboxSpawnRequest",
+				"Combat.ProjectileSpawnRequest",
 				"Combat.RequestTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return CombatAttackSystem.new(entityFactory, self._combatAbilityRegistryService)
+				return AttackAdvanceSystem.new(entityFactory, {
+					AbilityRegistry = self._combatAbilityRegistryService,
+					RequestFactory = self._combatRequestFactoryService,
+				})
 			end,
 		})
 		if not attackResult.success then
 			return attackResult
 		end
 
-		local hitboxResult = self._entityContext:RegisterSystem("RequestResolve", {
-			Name = "CombatHitboxSystem",
-			Phase = "RequestResolve",
+		local hitboxSpawnResult = self._entityContext:RegisterSystem("MechanicSpawn", {
+			Name = "HitboxSpawnSystem",
+			Phase = "MechanicSpawn",
 			Reads = {
-				"Combat.HitboxRequest",
+				"Combat.HitboxSpawnRequest",
 				"Combat.RequestTag",
 			},
 			Writes = {
-				"Combat.DamageRequest",
+				"Combat.ActiveHitboxState",
+				"Combat.ActiveProjectileState",
 				"Combat.ProcessedTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return CombatHitboxSystem.new(entityFactory)
+				return HitboxSpawnSystem.new(entityFactory, {
+					Simulation = self._hitboxSimulationService,
+					TargetRead = self._combatTargetReadService,
+				})
 			end,
 		})
-		if not hitboxResult.success then
-			return hitboxResult
+		if not hitboxSpawnResult.success then
+			return hitboxSpawnResult
 		end
 
-		local projectileResult = self._entityContext:RegisterSystem("RequestResolve", {
-			Name = "CombatProjectileSystem",
-			Phase = "RequestResolve",
+		local projectileSpawnResult = self._entityContext:RegisterSystem("MechanicSpawn", {
+			Name = "ProjectileSpawnSystem",
+			Phase = "MechanicSpawn",
 			Reads = {
-				"Combat.ProjectileRequest",
+				"Combat.ProjectileSpawnRequest",
 				"Combat.RequestTag",
 			},
 			Writes = {
+				"Combat.ActiveProjectileState",
 				"Combat.ProcessedTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return CombatProjectileSystem.new(entityFactory, self._projectileService, self._entityContext)
+				return ProjectileSpawnSystem.new(entityFactory, {
+					Simulation = self._projectileSimulationService,
+					TargetRead = self._combatTargetReadService,
+				})
 			end,
 		})
-		if not projectileResult.success then
-			return projectileResult
+		if not projectileSpawnResult.success then
+			return projectileSpawnResult
+		end
+
+		local hitboxImpactResult = self._entityContext:RegisterSystem("MechanicImpact", {
+			Name = "HitboxImpactSystem",
+			Phase = "MechanicImpact",
+			Writes = {
+				"Combat.DamageRequest",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return HitboxImpactSystem.new(entityFactory, {
+					Simulation = self._hitboxSimulationService,
+					RequestFactory = self._combatRequestFactoryService,
+				})
+			end,
+		})
+		if not hitboxImpactResult.success then
+			return hitboxImpactResult
+		end
+
+		local projectileImpactResult = self._entityContext:RegisterSystem("MechanicImpact", {
+			Name = "ProjectileImpactSystem",
+			Phase = "MechanicImpact",
+			Writes = {
+				"Combat.DamageRequest",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return ProjectileImpactSystem.new(entityFactory, {
+					Simulation = self._projectileSimulationService,
+					RequestFactory = self._combatRequestFactoryService,
+				})
+			end,
+		})
+		if not projectileImpactResult.success then
+			return projectileImpactResult
 		end
 
 		local statusResult = self._entityContext:RegisterSystem("ActionAdvance", {
@@ -476,9 +552,9 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return statusResult
 		end
 
-		local damageResult = self._entityContext:RegisterSystem("RequestResolve", {
-			Name = "CombatDamageSystem",
-			Phase = "RequestResolve",
+		local damageResult = self._entityContext:RegisterSystem("DamageResolve", {
+			Name = "DamageResolveSystem",
+			Phase = "DamageResolve",
 			Reads = {
 				"Combat.DamageRequest",
 				"Combat.RequestTag",
@@ -490,7 +566,7 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 				"Combat.ProcessedTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return CombatDamageSystem.new(entityFactory)
+				return DamageResolveSystem.new(entityFactory)
 			end,
 		})
 		if not damageResult.success then
@@ -503,15 +579,19 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			Reads = {
 				"Combat.RequestTag",
 				"Combat.ProcessedTag",
-				"Combat.HitboxRequest",
+				"Combat.HitboxSpawnRequest",
 				"Combat.DamageRequest",
-				"Combat.ProjectileRequest",
+				"Combat.ProjectileSpawnRequest",
+				"Combat.ActiveHitboxState",
 			},
 			Writes = {
 				"Entity.DestructionQueue",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return CombatRequestCleanupSystem.new(entityFactory)
+				return CombatRequestCleanupSystem.new(entityFactory, {
+					HitboxSimulation = self._hitboxSimulationService,
+					ProjectileSimulation = self._projectileSimulationService,
+				})
 			end,
 		})
 	end, "Combat:RegisterEntityActionPipeline")

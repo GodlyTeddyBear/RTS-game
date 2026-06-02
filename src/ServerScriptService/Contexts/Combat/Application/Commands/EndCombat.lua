@@ -41,6 +41,7 @@ function EndCombat:Init(registry: any, _name: string)
 		_behaviorRuntimeService = "CombatBehaviorRuntimeService",
 		_combatHitResolutionService = "CombatHitResolutionService",
 		_hitboxService = "HitboxService",
+		_hitboxSimulationService = "HitboxSimulationService",
 		_lockOnService = "LockOnService",
 		_movementApplyBridgeService = "MovementApplyBridgeService",
 		_movementFlowDispatchService = "MovementFlowDispatchService",
@@ -49,6 +50,7 @@ function EndCombat:Init(registry: any, _name: string)
 		_movementGridService = "MovementGridService",
 		_movementPathRuntimeService = "MovementPathRuntimeService",
 		_projectileService = "ProjectileService",
+		_projectileSimulationService = "ProjectileSimulationService",
 		_statusService = "StatusService",
 	})
 end
@@ -78,6 +80,7 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 		Try(self._loopService:BeginEndingSession(targetUserId))
 
 		self._hitboxService:CleanupAll()
+		self._hitboxSimulationService:CleanupAll()
 		self._combatHitResolutionService:CleanupAll()
 		self._lockOnService:CleanupAll()
 		self._movementApplyBridgeService:CleanupAll()
@@ -87,6 +90,7 @@ function EndCombat:Execute(userId: number?): Result.Result<boolean>
 		self._movementFlowSnapshotService:Reset()
 		self._movementFlowDispatchService:Reset()
 		self._projectileService:CleanupAll()
+		self._projectileSimulationService:CleanupAll()
 		-- Clear all status sources before the runtime is fully stopped.
 		self._statusService:ClearAll()
 

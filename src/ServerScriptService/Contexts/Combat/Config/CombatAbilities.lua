@@ -27,6 +27,8 @@ local CombatAbilities = {
 		Startup = 0,
 		Active = 0,
 		Recovery = 0,
+		Damage = 1,
+		Range = 100,
 	},
 }
 

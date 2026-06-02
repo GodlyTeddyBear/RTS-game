@@ -8,6 +8,11 @@ local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local CombatAbilityRegistryService = {}
 CombatAbilityRegistryService.__index = CombatAbilityRegistryService
+local SupportedMechanics = table.freeze({
+	DirectDamage = true,
+	Hitbox = true,
+	Projectile = true,
+})
 
 function CombatAbilityRegistryService.new()
 	local self = setmetatable({}, CombatAbilityRegistryService)
@@ -65,6 +70,12 @@ function CombatAbilityRegistryService:_ValidateAbility(payload: any): Result.Res
 			Reason = "MissingMechanic",
 		})
 	end
+	if SupportedMechanics[payload.Mechanic] ~= true then
+		return Result.Err("InvalidCombatAbility", Errors.INVALID_COMBAT_ABILITY, {
+			AbilityId = payload.AbilityId,
+			Reason = "UnsupportedMechanic",
+		})
+	end
 	if payload.Damage ~= nil and type(payload.Damage) ~= "number" then
 		return Result.Err("InvalidCombatAbility", Errors.INVALID_COMBAT_ABILITY, {
 			AbilityId = payload.AbilityId,
@@ -75,6 +86,22 @@ function CombatAbilityRegistryService:_ValidateAbility(payload: any): Result.Res
 		return Result.Err("InvalidCombatAbility", Errors.INVALID_COMBAT_ABILITY, {
 			AbilityId = payload.AbilityId,
 			Reason = "InvalidCooldown",
+		})
+	end
+	for _, timingKey in ipairs({ "Startup", "Active", "Recovery" }) do
+		local value = payload[timingKey]
+		if value ~= nil and (type(value) ~= "number" or value < 0) then
+			return Result.Err("InvalidCombatAbility", Errors.INVALID_COMBAT_ABILITY, {
+				AbilityId = payload.AbilityId,
+				Reason = "InvalidTiming",
+				Key = timingKey,
+			})
+		end
+	end
+	if payload.Mechanic == "Projectile" and (type(payload.ProjectileId) ~= "string" or payload.ProjectileId == "") then
+		return Result.Err("InvalidCombatAbility", Errors.INVALID_COMBAT_ABILITY, {
+			AbilityId = payload.AbilityId,
+			Reason = "MissingProjectileId",
 		})
 	end
 
