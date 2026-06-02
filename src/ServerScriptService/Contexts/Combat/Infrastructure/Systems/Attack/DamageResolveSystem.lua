@@ -1,14 +1,14 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Knit = require(ReplicatedStorage.Packages.Knit)
 
 local DamageResolveSystem = {}
 DamageResolveSystem.__index = DamageResolveSystem
 
-function DamageResolveSystem.new(entityFactory: any)
+function DamageResolveSystem.new(entityFactory: any, requestFactory: any)
 	local self = setmetatable({}, DamageResolveSystem)
 	self._entityFactory = entityFactory
+	self._requestFactory = requestFactory
 	return self
 end
 
@@ -25,19 +25,12 @@ function DamageResolveSystem:_Resolve(requestEntity: number)
 		return
 	end
 	if request.VictimKind == "Base" then
-		local ok, baseContext = pcall(function() return Knit.GetService("BaseContext") end)
-		if ok and baseContext ~= nil then baseContext:ApplyDamage(request.Amount) end
-		self:_Processed(requestEntity)
-		return
-	end
-	-- Transitional adapters preserve feature-owned death orchestration until
-	-- health-depletion request consumers are migrated into Entity systems.
-	if request.VictimKind == "Enemy" or request.VictimKind == "Structure" then
-		local contextName = if request.VictimKind == "Enemy" then "EnemyContext" else "StructureContext"
-		local ok, featureContext = pcall(function() return Knit.GetService(contextName) end)
-		if ok and featureContext ~= nil and type(request.VictimEntity) == "number" then
-			featureContext:ApplyDamage(request.VictimEntity, request.Amount)
-		end
+		local now = os.clock()
+		self._requestFactory:Create(self._entityFactory, "Combat.BaseDamageRequest", "BaseDamageRequest", {
+			Amount = request.Amount,
+			CreatedAt = now,
+			ExpiresAt = now + 1,
+		})
 		self:_Processed(requestEntity)
 		return
 	end
@@ -53,6 +46,15 @@ function DamageResolveSystem:_Resolve(requestEntity: number)
 			Max = if type(health.Max) == "number" then health.Max else health.Current,
 		}, "Entity")
 		self._entityFactory:Add(victim, "DirtyTag", "Entity")
+		if health.Current > 0 and (health.Current - request.Amount) <= 0 then
+			local now = os.clock()
+			self._requestFactory:Create(self._entityFactory, "Combat.HealthDepletedRequest", "HealthDepletedRequest", {
+				VictimEntity = victim,
+				VictimKind = request.VictimKind,
+				CreatedAt = now,
+				ExpiresAt = now + 1,
+			})
+		end
 	end
 	self:_Processed(requestEntity)
 end

@@ -64,10 +64,6 @@ export type TLockOnServiceLike = {
 	SetBoidsFacingFlatForward: (self: TLockOnServiceLike, entity: number, flatForward: Vector3?) -> (),
 }
 
-export type TCombatLoopServiceLike = {
-	ForEachRunnableSession: (self: TCombatLoopServiceLike, callback: (userId: number) -> (boolean?)) -> (),
-}
-
 export type TRegistryLike = {
 	Get: (self: TRegistryLike, name: string) -> any,
 }

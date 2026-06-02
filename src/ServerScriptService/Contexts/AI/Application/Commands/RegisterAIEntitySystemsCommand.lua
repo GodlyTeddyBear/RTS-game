@@ -7,11 +7,11 @@ local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplica
 local Result = require(ReplicatedStorage.Utilities.Result)
 local AISharedContract = require(ReplicatedStorage.Contexts.AI.AISharedContract)
 
-local AIActionExecutionSystem = require(script.Parent.Parent.Parent.Infrastructure.ECS.AIActionExecutionSystem)
-local AIActionIntentValidationSystem = require(script.Parent.Parent.Parent.Infrastructure.ECS.AIActionIntentValidationSystem)
-local AIActionLifecycleSystem = require(script.Parent.Parent.Parent.Infrastructure.ECS.AIActionLifecycleSystem)
-local AIBehaviorCommitSystem = require(script.Parent.Parent.Parent.Infrastructure.ECS.AIBehaviorCommitSystem)
-local AIBehaviorSelectionSystem = require(script.Parent.Parent.Parent.Infrastructure.ECS.AIBehaviorSelectionSystem)
+local AIActionExecutionSystem = require(script.Parent.Parent.Parent.Infrastructure.Systems.AIActionExecutionSystem)
+local AIActionIntentValidationSystem = require(script.Parent.Parent.Parent.Infrastructure.Systems.AIActionIntentValidationSystem)
+local AIActionLifecycleSystem = require(script.Parent.Parent.Parent.Infrastructure.Systems.AIActionLifecycleSystem)
+local AIBehaviorCommitSystem = require(script.Parent.Parent.Parent.Infrastructure.Systems.AIBehaviorCommitSystem)
+local AIBehaviorSelectionSystem = require(script.Parent.Parent.Parent.Infrastructure.Systems.AIBehaviorSelectionSystem)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local RegisterAIEntitySystemsCommand = {}

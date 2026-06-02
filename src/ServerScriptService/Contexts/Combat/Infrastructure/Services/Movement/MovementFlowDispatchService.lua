@@ -35,6 +35,52 @@ function MovementFlowDispatchService:Prime()
 		return
 	end
 	self._runner = runner
+	self._job = runner:CreateManagedJob({
+		JobName = "FlowSeparationSolve",
+		BuildSharedMemory = function(payload: any)
+			return payload.SharedMemory
+		end,
+		BuildManagerPayload = function(payload: any)
+			return payload.ManagerPayload
+		end,
+		BuildRunRequest = function(payload: any)
+			return payload.RunRequest
+		end,
+		MaxInFlightSeconds = self:_GetNumber("ParallelAsyncMaxInFlightSeconds", 2),
+		Policy = ParallelRunner.ManagedJobPolicies.StrictFreshOnly,
+	})
+end
+
+function MovementFlowDispatchService:Dispatch(payload: any): boolean
+	self:Prime()
+	if self._runner == nil or self._job == nil then
+		return false
+	end
+	return self._job:Dispatch(payload) == "Dispatched"
+end
+
+function MovementFlowDispatchService:Poll(): { [number]: Vector2 }?
+	local job = self._job
+	if job == nil then
+		return nil
+	end
+	local result = job:PollCompleted(nil)
+	if result == nil or result.Err ~= nil or type(result.Rows) ~= "table" then
+		return nil
+	end
+	local payload = result.Payload
+	local actorIds = if type(payload) == "table" then payload.ActorIds else nil
+	if type(actorIds) ~= "table" then
+		return nil
+	end
+	local velocityByEntity = {}
+	for _, row in ipairs(result.Rows) do
+		local entity = actorIds[row.EntityIndex]
+		if type(entity) == "number" and type(row.VelocityX) == "number" and type(row.VelocityY) == "number" then
+			velocityByEntity[entity] = Vector2.new(row.VelocityX, row.VelocityY)
+		end
+	end
+	return velocityByEntity
 end
 
 function MovementFlowDispatchService:Reset()

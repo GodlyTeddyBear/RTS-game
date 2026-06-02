@@ -13,8 +13,8 @@ local SummonAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local SummonAIProfiles = require(script.Parent.Config.AIProfiles)
 local SummonEntityReadService = require(script.Parent.Infrastructure.Entity.SummonEntityReadService)
 local SummonEntitySchema = require(script.Parent.Infrastructure.Entity.SummonEntitySchema)
-local SummonEngagementSystem = require(script.Parent.Infrastructure.Entity.SummonEngagementSystem)
-local SummonLifetimeSystem = require(script.Parent.Infrastructure.Entity.SummonLifetimeSystem)
+local SummonMovementPresentationSystem = require(script.Parent.Infrastructure.Systems.SummonMovementPresentationSystem)
+local SummonLifetimeSystem = require(script.Parent.Infrastructure.Systems.SummonLifetimeSystem)
 local CleanupSummonsCommand = require(script.Parent.Application.Commands.CleanupSummonsCommand)
 local SpawnAllyCommand = require(script.Parent.Application.Commands.SpawnAllyCommand)
 local SpawnSwarmDronesCommand = require(script.Parent.Application.Commands.SpawnSwarmDronesCommand)
@@ -77,6 +77,7 @@ local SummonContext = Knit.CreateService({
 	Client = {},
 	Modules = SummonModules,
 	ExternalServices = {
+		{ Name = "CombatContext", CacheAs = "_combatContext" },
 		{ Name = "AIContext", CacheAs = "_aiContext" },
 		{ Name = "EnemyContext", CacheAs = "_enemyContext" },
 		{ Name = "EntityContext", CacheAs = "_entityContext" },
@@ -237,26 +238,18 @@ function SummonContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 		end
 
 		return self._entityContext:RegisterSystem("ActionAdvance", {
-			Name = "SummonEngagementSystem",
-			Phase = "ActionAdvance",
+			Name = "SummonMovementPresentationSystem",
+			Phase = "Execute",
 			Reads = {
-				"Summon.EngageState",
-				"Summon.CombatProfile",
-				"Summon.AttackCooldown",
 				"Summon.DroneTag",
-				"Entity.Transform",
-				"AI.ActionState",
+				"Movement.MoveIntent",
 			},
 			Writes = {
-				"Entity.Transform",
 				"Entity.DirtyTag",
-				"Summon.AttackCooldown",
 				"Summon.TargetEnemyId",
-				"Combat.DamageRequest",
-				"Combat.RequestTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return SummonEngagementSystem.new(entityFactory, self._entityContext)
+				return SummonMovementPresentationSystem.new(entityFactory, self._entityContext)
 			end,
 		})
 	end, "SummonContext:RegisterEntityInfrastructure")

@@ -98,6 +98,10 @@ function MovementPathRuntimeService:_CreatePath(entityFactory: any, entity: numb
 		return nil
 	end
 
+	local profile = actorReadService:GetActorProfile(entityFactory, entity)
+	local agentParams = if type(profile) == "table" and type(profile.AgentParams) == "table"
+		then profile.AgentParams
+		else CombatMovementConfig.DEFAULT_AGENT_PARAMS
 	return PathfindingHelper.CreatePath(entity, {
 		EntityFactory = {
 			GetModelRef = function(_factory: any, requestedEntity: number)
@@ -107,7 +111,7 @@ function MovementPathRuntimeService:_CreatePath(entityFactory: any, entity: numb
 				return actorReadService:GetModelRef(entityFactory, entityContext, entity)
 			end,
 		},
-	}, CombatMovementConfig.DEFAULT_AGENT_PARAMS, CombatMovementConfig.PATHFINDING)
+	}, agentParams, CombatMovementConfig.PATHFINDING)
 end
 
 return MovementPathRuntimeService

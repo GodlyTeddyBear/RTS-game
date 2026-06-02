@@ -80,8 +80,8 @@ local BasicActions = {
 	Advance = {
 		ActionId = "Advance",
 		StartsComponent = {
-			FeatureName = "Enemy",
-			Key = "AdvanceState",
+			FeatureName = "Movement",
+			Key = "MoveIntent",
 		},
 		BuildInitialState = function(context: any): any
 			local intent = if type(context.ActionIntent) == "table" then context.ActionIntent else {}
@@ -91,9 +91,10 @@ local BasicActions = {
 				ActionId = "Advance",
 				SourceEntity = context.Entity,
 				GoalPosition = data.GoalPosition,
+				MovementMode = data.MovementMode or "Any",
+				Reason = "Advance",
 				RequestedAt = intent.RequestedAt,
-				StartedAt = context.Now,
-				UpdatedAt = context.Now,
+				Status = "Requested",
 			}
 		end,
 		ProduceIntent = function(context: any): any
@@ -111,8 +112,8 @@ local BasicActions = {
 	ManualMove = {
 		ActionId = "ManualMove",
 		StartsComponent = {
-			FeatureName = "Unit",
-			Key = "ManualMoveState",
+			FeatureName = "Movement",
+			Key = "MoveIntent",
 		},
 		BuildInitialState = function(context: any): any
 			local intent = if type(context.ActionIntent) == "table" then context.ActionIntent else {}
@@ -122,9 +123,10 @@ local BasicActions = {
 				ActionId = "ManualMove",
 				SourceEntity = context.Entity,
 				GoalPosition = data.GoalPosition,
+				MovementMode = data.MovementMode or "Path",
+				Reason = "ManualMove",
 				RequestedAt = intent.RequestedAt,
-				StartedAt = context.Now,
-				UpdatedAt = context.Now,
+				Status = "Requested",
 			}
 		end,
 		ProduceIntent = function(context: any): any
@@ -237,8 +239,8 @@ local BasicActions = {
 	EngageEnemy = {
 		ActionId = "EngageEnemy",
 		StartsComponent = {
-			FeatureName = "Summon",
-			Key = "EngageState",
+			FeatureName = "Movement",
+			Key = "MoveIntent",
 		},
 		BuildInitialState = function(context: any): any
 			local intent = if type(context.ActionIntent) == "table" then context.ActionIntent else {}
@@ -248,10 +250,11 @@ local BasicActions = {
 				ActionId = "EngageEnemy",
 				SourceEntity = context.Entity,
 				TargetEntity = intent.TargetEntity,
-				TargetPosition = data.TargetPosition,
+				GoalPosition = data.TargetPosition,
+				MovementMode = data.MovementMode or "Direct",
+				Reason = "EngageEnemy",
 				RequestedAt = intent.RequestedAt,
-				StartedAt = context.Now,
-				UpdatedAt = context.Now,
+				Status = "Requested",
 			}
 		end,
 		ProduceIntent = function(context: any): any
@@ -261,6 +264,7 @@ local BasicActions = {
 				TargetEntity = facts.TargetEntity,
 				Data = {
 					TargetPosition = facts.TargetPosition,
+					MovementMode = facts.MovementMode or "Direct",
 				},
 			}
 		end,

@@ -24,7 +24,6 @@ end
 function DespawnUnitCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_unitReadService = "UnitEntityReadService",
-		_movementRuntimeService = "UnitMovementRuntimeService",
 	})
 end
 
@@ -40,7 +39,6 @@ function DespawnUnitCommand:Execute(entity: number): Result.Result<boolean>
 		local identity = self._unitReadService:GetIdentity(entity)
 		Ensure(identity ~= nil and type(identity.UnitGuid) == "string" and identity.UnitGuid ~= "", "InvalidEntity", Errors.INVALID_ENTITY)
 
-		self._movementRuntimeService:StopMovement(entity)
 		local unitHandle = TeamTypes.BuildMemberHandle("Unit", identity.UnitGuid)
 		Try(self._teamContext:UnassignMember(unitHandle))
 		Try(self._entityContext:DestroyEntity(entity))

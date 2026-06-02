@@ -33,6 +33,7 @@ function SpawnEnemy:Init(registry: any, _name: string)
 		_spawnPolicy = "EnemySpawnPolicy",
 		_entityContext = "EntityContext",
 		_aiContext = "AIContext",
+		_combatContext = "CombatContext",
 	})
 end
 
@@ -101,6 +102,13 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 		})
 		Try(createResult)
 		entity = createResult.value
+
+		Try(self._combatContext:SetupMovementActor(entity, {
+			ApplyMode = "Kinematic",
+			DefaultMode = roleConfig.MovementMode,
+			GoalReachedDistance = 4,
+			MoveSpeed = roleConfig.MoveSpeed,
+		}))
 
 		Try(self._aiContext:SetupEntityAIFromProfile(entity, ("Enemy%sAI"):format(role)))
 		Try(self._entityContext:EnableRuntimeBinding("Enemy"))

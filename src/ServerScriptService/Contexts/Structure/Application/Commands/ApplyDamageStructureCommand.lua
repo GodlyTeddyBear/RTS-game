@@ -5,7 +5,6 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ensure = Result.Ensure
@@ -25,12 +24,8 @@ function ApplyDamageStructureCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_entityContext = "EntityContext",
 		_readService = "StructureEntityReadService",
+		_combatContext = "CombatContext",
 	})
-end
-
-function ApplyDamageStructureCommand:Start(registry: any, _name: string)
-	self._placementContext = registry:Get("PlacementContext")
-	self._teamContext = registry:Get("TeamContext")
 end
 
 function ApplyDamageStructureCommand:Execute(entity: any, amount: number): Result.Result<boolean>
@@ -42,30 +37,15 @@ function ApplyDamageStructureCommand:Execute(entity: any, amount: number): Resul
 		})
 		Ensure(self._readService:IsPlaced(entity), "EntityNotFound", Errors.ENTITY_NOT_FOUND, { Entity = entity })
 
-		local health = self._readService:GetHealth(entity)
-		Ensure(type(health) == "table", "EntityNotFound", Errors.ENTITY_NOT_FOUND, { Entity = entity })
-		local identity = self._readService:GetIdentity(entity)
-		Ensure(type(identity) == "table" and type(identity.EntityId) == "string", "EntityNotFound", Errors.ENTITY_NOT_FOUND, {
-			Entity = entity,
-		})
-		local sourcePlacement = self._readService:GetSourcePlacement(entity)
-
-		local nextHp = math.max(0, health.Current - amount)
-		Try(self._entityContext:Set(entity, "Health", {
-			Current = nextHp,
-			Max = health.Max,
-		}, "Entity"))
-		Try(self._entityContext:Add(entity, "DirtyTag", "Entity"))
-
-		if nextHp > 0 then
-			return Ok(false)
-		end
-
-		Try(self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Structure", identity.EntityId)))
-		if type(sourcePlacement) == "table" and type(sourcePlacement.InstanceId) == "number" then
-			Try(self._placementContext:DestroyStructureInstance(sourcePlacement.InstanceId))
-		end
-		Try(self._entityContext:DestroyEntity(entity))
+		Try(self._combatContext:RequestDamage({
+			ActionId = "ExternalDamage",
+			AbilityId = "ExternalDamage",
+			AttackerEntity = 0,
+			VictimEntity = entity,
+			VictimKind = "Structure",
+			Amount = amount,
+			Reason = "StructureContext:ApplyDamage",
+		}))
 		return Ok(true)
 	end, "Structure:ApplyDamageStructureCommand")
 end

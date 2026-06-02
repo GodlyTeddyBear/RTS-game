@@ -45,6 +45,7 @@ end
 function SpawnSwarmDronesCommand:Start(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_aiContext = "AIContext",
+		_combatContext = "CombatContext",
 		_entityContext = "EntityContext",
 	})
 end
@@ -126,6 +127,12 @@ function SpawnSwarmDronesCommand:Execute(
 			}))
 			table.insert(createdEntities, entity)
 
+			Try(self._combatContext:SetupMovementActor(entity, {
+				ApplyMode = "Kinematic",
+				DefaultMode = "Direct",
+				GoalReachedDistance = defaults.AttackRange,
+				MoveSpeed = defaults.MoveSpeed,
+			}))
 			Try(self._aiContext:SetupEntityAIFromProfile(entity, "SummonSwarmDroneAI"))
 			Try(self._entityContext:RegisterRuntimeEntity(entity))
 			Try(self._entityContext:FlushBindQueue())

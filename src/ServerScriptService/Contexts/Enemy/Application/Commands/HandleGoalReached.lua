@@ -35,13 +35,13 @@ function HandleGoalReached:Init(registry: any, _name: string)
 end
 
 function HandleGoalReached:Start(registry: any, _name: string)
-	self._baseContext = registry:Get("BaseContext")
+	self._combatContext = registry:Get("CombatContext")
 end
 
 function HandleGoalReached:Execute(entity: any): Result.Result<boolean>
 	return Result.Catch(function()
 		Ensure(entity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
-		Ensure(self._baseContext ~= nil, "DependencyUnavailable", "BaseContext dependency is unavailable")
+		Ensure(self._combatContext ~= nil, "DependencyUnavailable", "CombatContext dependency is unavailable")
 
 		local identity = self._enemyEntityReadService:GetIdentity(entity)
 		Ensure(identity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
@@ -56,7 +56,14 @@ function HandleGoalReached:Execute(entity: any): Result.Result<boolean>
 
 		Try(self._despawnEnemyCommand:Execute(entity))
 
-		local damageResult = self._baseContext:ApplyDamage(roleConfig.Damage)
+		local damageResult = self._combatContext:RequestDamage({
+			ActionId = "EnemyGoalReached",
+			AbilityId = "EnemyBaseAttack",
+			AttackerEntity = entity,
+			VictimKind = "Base",
+			Amount = roleConfig.Damage,
+			Reason = "EnemyGoalReached",
+		})
 		if not damageResult.success then
 			Result.MentionError("Enemy:HandleGoalReached", "Failed to apply base damage", {
 				EnemyId = identity.EnemyId,

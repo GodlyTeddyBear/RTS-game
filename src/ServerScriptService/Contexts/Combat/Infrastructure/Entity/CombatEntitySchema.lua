@@ -67,6 +67,25 @@ local CombatEntitySchema = {
 				Reason = "Combat",
 			},
 		},
+		HealthDepletedRequest = {
+			ECSName = "Combat.HealthDepletedRequest",
+			Authority = "AUTHORITATIVE",
+			Default = {
+				VictimEntity = 0,
+				VictimKind = "",
+				CreatedAt = 0,
+				ExpiresAt = nil,
+			},
+		},
+		BaseDamageRequest = {
+			ECSName = "Combat.BaseDamageRequest",
+			Authority = "AUTHORITATIVE",
+			Default = {
+				Amount = 0,
+				CreatedAt = 0,
+				ExpiresAt = nil,
+			},
+		},
 		ProjectileSpawnRequest = {
 			ECSName = "Combat.ProjectileSpawnRequest",
 			Authority = "AUTHORITATIVE",
@@ -123,6 +142,22 @@ local CombatEntitySchema = {
 		DamageRequest = {
 			Components = {
 				DamageRequest = true,
+			},
+			Tags = {
+				RequestTag = true,
+			},
+		},
+		HealthDepletedRequest = {
+			Components = {
+				HealthDepletedRequest = true,
+			},
+			Tags = {
+				RequestTag = true,
+			},
+		},
+		BaseDamageRequest = {
+			Components = {
+				BaseDamageRequest = true,
 			},
 			Tags = {
 				RequestTag = true,

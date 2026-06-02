@@ -15,9 +15,8 @@ local EntityCollisionService = require(ServerScriptService.Infrastructure.Entity
 
 local UnitEntityReadService = require(script.Parent.Infrastructure.Entity.UnitEntityReadService)
 local UnitEntitySchema = require(script.Parent.Infrastructure.Entity.UnitEntitySchema)
-local UnitMovementRuntimeService = require(script.Parent.Infrastructure.Entity.UnitMovementRuntimeService)
-local UnitManualMoveSystem = require(script.Parent.Infrastructure.Entity.UnitManualMoveSystem)
-local StructureBuildContributionSystem = require(ServerScriptService.Contexts.Structure.Infrastructure.Entity.StructureBuildContributionSystem)
+local UnitMovementPresentationSystem = require(script.Parent.Infrastructure.Systems.UnitMovementPresentationSystem)
+local StructureBuildContributionSystem = require(ServerScriptService.Contexts.Structure.Infrastructure.Systems.StructureBuildContributionSystem)
 local UnitAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local UnitAIProfiles = require(script.Parent.Config.AIProfiles)
 local UnitSpawnPolicy = require(script.Parent.UnitDomain.Policies.UnitSpawnPolicy)
@@ -71,7 +70,6 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		end,
 		CacheAs = "_unitReadService",
 	},
-	moduleSpec("UnitMovementRuntimeService", UnitMovementRuntimeService, "_movementRuntimeService"),
 }
 
 local DomainModules: { BaseContext.TModuleSpec } = {
@@ -243,12 +241,12 @@ function UnitContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 			end,
 			BuildHumanoidProperties = function(entityContext: any, entity: number)
 				local health = self:_ReadEntityValue(entityContext, entity, "Health", "Entity")
-				local currentMoveSpeed = self:_ReadEntityValue(entityContext, entity, "CurrentMoveSpeed", "Unit")
+				local speedState = self:_ReadEntityValue(entityContext, entity, "SpeedState", "Movement")
 
 				return {
 					MaxHealth = if type(health) == "table" then health.Max else nil,
 					Health = if type(health) == "table" then health.Current else nil,
-					WalkSpeed = if type(currentMoveSpeed) == "table" then currentMoveSpeed.Value else nil,
+					WalkSpeed = if type(speedState) == "table" then speedState.CurrentSpeed else nil,
 				}
 			end,
 			PollEntity = function(entityContext: any, entity: number, model: Model)
@@ -287,27 +285,23 @@ function UnitContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 			return replicationResult
 		end
 
-		local manualMoveResult = self._entityContext:RegisterSystem("ActionAdvance", {
-			Name = "UnitManualMoveSystem",
-			Phase = "ActionAdvance",
+		local manualMoveResult = self._entityContext:RegisterSystem("Execute", {
+			Name = "UnitMovementPresentationSystem",
+			Phase = "Execute",
 			Reads = {
-				"Unit.Role",
 				"Unit.PathState",
-				"Unit.ManualMoveState",
-				"AI.ActionState",
+				"Movement.MoveIntent",
+				"Movement.ApplyResult",
 			},
 			Writes = {
 				"Unit.PathState",
-				"Unit.BuilderAssignment",
 				"Unit.AnimationState",
 				"Unit.AnimationLooping",
 				"Entity.Target",
 				"Entity.DirtyTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return UnitManualMoveSystem.new(entityFactory, {
-					UnitReadService = self._unitReadService,
-				})
+				return UnitMovementPresentationSystem.new(entityFactory)
 			end,
 		})
 		if not manualMoveResult.success then
@@ -506,9 +500,7 @@ function UnitContext:GetOwnerUnitCount(ownerKind: string, ownerId: string): Resu
 end
 
 function UnitContext:WarmFastFlowForRun(): Result.Result<boolean>
-	return Catch(function()
-		return Ok(self._movementRuntimeService:WarmFastFlowForRun())
-	end, "Unit:WarmFastFlowForRun")
+	return self._combatContext:WarmMovementRuntime()
 end
 
 function UnitContext:GetSchedulerBindingStatus(targetField: string): Result.Result<any>

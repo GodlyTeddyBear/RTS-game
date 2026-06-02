@@ -5,7 +5,6 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
@@ -33,10 +32,6 @@ function DespawnEnemy:Init(registry: any, _name: string)
 	})
 end
 
-function DespawnEnemy:Start(registry: any, _name: string)
-	self._teamContext = registry:Get("TeamContext")
-end
-
 function DespawnEnemy:Execute(entity: any): Result.Result<boolean>
 	return Result.Catch(function()
 		Ensure(entity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
@@ -44,10 +39,6 @@ function DespawnEnemy:Execute(entity: any): Result.Result<boolean>
 		local identity = self._enemyEntityReadService:GetIdentity(entity)
 		if identity == nil then
 			return Ok(false)
-		end
-
-		if identity ~= nil and type(identity.EnemyId) == "string" and identity.EnemyId ~= "" then
-			Try(self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Enemy", identity.EnemyId)))
 		end
 
 		Try(self._entityContext:DestroyEntity(entity))

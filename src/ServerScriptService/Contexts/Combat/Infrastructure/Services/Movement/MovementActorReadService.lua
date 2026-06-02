@@ -19,6 +19,11 @@ function MovementActorReadService:GetBoundModel(entityContext: any, entity: numb
 	return if instance ~= nil and instance:IsA("Model") then instance else nil
 end
 
+function MovementActorReadService:GetBoundInstance(entityContext: any, entity: number): Instance?
+	local result = entityContext:GetBoundInstance(entity)
+	return if result.success then result.value else nil
+end
+
 function MovementActorReadService:GetModelRef(entityFactory: any, entityContext: any, entity: number): any?
 	local modelRef = self:_Get(entityFactory, entity, "ModelRef", "Entity")
 	if type(modelRef) == "table" and modelRef.Model ~= nil then
@@ -40,8 +45,13 @@ function MovementActorReadService:GetPosition(entityFactory: any, entityContext:
 	return if model ~= nil and model.PrimaryPart ~= nil then model.PrimaryPart.Position else nil
 end
 
-function MovementActorReadService:GetCurrentMoveSpeed(_entityFactory: any, _entity: number): number
-	return 16
+function MovementActorReadService:GetCurrentMoveSpeed(entityFactory: any, entity: number): number
+	local speedState = self:_Get(entityFactory, entity, "SpeedState", "Movement")
+	return if type(speedState) == "table" and type(speedState.CurrentSpeed) == "number" then speedState.CurrentSpeed else 0
+end
+
+function MovementActorReadService:GetActorProfile(entityFactory: any, entity: number): any?
+	return self:_Get(entityFactory, entity, "ActorProfile", "Movement")
 end
 
 function MovementActorReadService:CountFlowEligiblePeers(entityFactory: any, goalPosition: Vector3): number

@@ -18,6 +18,8 @@ function CombatRequestCleanupSystem:Run()
 	end
 	self:_CleanupExpired("HitboxSpawnRequest")
 	self:_CleanupExpired("DamageRequest")
+	self:_CleanupExpired("HealthDepletedRequest")
+	self:_CleanupExpired("BaseDamageRequest")
 	self:_CleanupExpired("ProjectileSpawnRequest")
 	self:_CleanupHitboxes()
 	self:_CleanupProjectiles()

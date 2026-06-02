@@ -7,6 +7,12 @@ local SummonAIBehaviors = {
 			Priority = {
 				{
 					Sequence = {
+						"HasAttackTarget",
+						"Attack",
+					},
+				},
+				{
+					Sequence = {
 						"HasEnemyTarget",
 						"EngageEnemy",
 					},

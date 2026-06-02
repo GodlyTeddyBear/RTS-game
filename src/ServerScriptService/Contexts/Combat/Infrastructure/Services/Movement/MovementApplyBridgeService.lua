@@ -1,5 +1,11 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local Orient = require(ReplicatedStorage.Utilities.Orient)
+local ServerScheduler = require(ServerScriptService.Scheduler.ServerScheduler)
+
 local MovementApplyBridgeService = {}
 MovementApplyBridgeService.__index = MovementApplyBridgeService
 
@@ -19,6 +25,10 @@ function MovementApplyBridgeService:Configure(actorReadService: any, entityConte
 end
 
 function MovementApplyBridgeService:Apply(entityFactory: any, entity: number, applyState: any): (boolean, string?)
+	local profile = self._actorReadService:GetActorProfile(entityFactory, entity)
+	if type(profile) == "table" and profile.ApplyMode == "Kinematic" then
+		return self:_ApplyKinematic(entityFactory, entity, applyState)
+	end
 	local humanoid = self:_GetHumanoid(entity)
 	if humanoid == nil then
 		return false, "MissingHumanoid"
@@ -46,6 +56,21 @@ function MovementApplyBridgeService:Apply(entityFactory: any, entity: number, ap
 	end
 
 	self:_SetFacing(entity, velocityXZ)
+	return true, nil
+end
+
+function MovementApplyBridgeService:_ApplyKinematic(entityFactory: any, entity: number, applyState: any): (boolean, string?)
+	local transformResult = entityFactory:Get(entity, "Transform", "Entity")
+	local transform = if transformResult.success then transformResult.value else nil
+	local targetPosition = applyState.TargetPosition
+	if type(transform) ~= "table" or typeof(transform.CFrame) ~= "CFrame" or typeof(targetPosition) ~= "Vector3" then
+		return false, "MissingKinematicTransform"
+	end
+	local speed = self._actorReadService:GetCurrentMoveSpeed(entityFactory, entity)
+	local nextPosition = Orient.MoveTowards(transform.CFrame.Position, targetPosition, speed * ServerScheduler:GetDeltaTime())
+	local nextCFrame = Orient.BuildLookAt(nextPosition, targetPosition) or CFrame.new(nextPosition)
+	entityFactory:Set(entity, "Transform", { CFrame = nextCFrame }, "Entity")
+	entityFactory:Add(entity, "DirtyTag", "Entity")
 	return true, nil
 end
 

@@ -29,7 +29,7 @@ function ApplyDamageEnemy:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_entityContext = "EntityContext",
 		_enemyEntityReadService = "EnemyEntityReadService",
-		_despawnEnemyCommand = "DespawnEnemyCommand",
+		_combatContext = "CombatContext",
 	})
 end
 
@@ -44,24 +44,16 @@ function ApplyDamageEnemy:Execute(entity: any, amount: number): Result.Result<bo
 		Ensure(identity ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
 		Ensure(self._enemyEntityReadService:IsAlive(entity), "InvalidEntity", Errors.INVALID_ENTITY)
 
-		local health = self._enemyEntityReadService:GetHealth(entity)
-		Ensure(health ~= nil, "InvalidEntity", Errors.INVALID_ENTITY)
-
-		local nextHp = math.max(0, health.Current - amount)
-		Try(self._entityContext:Set(entity, "Health", {
-			Current = nextHp,
-			Max = health.Max,
-		}, "Entity"))
-
-		local didDie = nextHp <= 0
-		if didDie then
-			local deathCFrame = self._enemyEntityReadService:GetEntityCFrame(entity) or CFrame.new()
-			self:_EmitGameEvent("Wave", "EnemyDied", identity.Role, identity.WaveNumber, deathCFrame)
-			Try(self._despawnEnemyCommand:Execute(entity))
-			return Ok(true)
-		end
-
-		return Ok(false)
+		Try(self._combatContext:RequestDamage({
+			ActionId = "ExternalDamage",
+			AbilityId = "ExternalDamage",
+			AttackerEntity = 0,
+			VictimEntity = entity,
+			VictimKind = "Enemy",
+			Amount = amount,
+			Reason = "EnemyContext:ApplyDamage",
+		}))
+		return Ok(true)
 	end, "Enemy:ApplyDamageEnemy")
 end
 

@@ -38,6 +38,7 @@ end
 
 function SpawnUnitCommand:Start(registry: any, _name: string)
 	self._aiContext = registry:Get("AIContext")
+	self._combatContext = registry:Get("CombatContext")
 	self._entityContext = registry:Get("EntityContext")
 	self._teamContext = registry:Get("TeamContext")
 end
@@ -109,6 +110,12 @@ function SpawnUnitCommand:Execute(request: SpawnUnitRequest): Result.Result<Spaw
 				ExpiresAt = now + request.Lifetime,
 			}, "Entity"))
 		end
+
+		Try(self._combatContext:SetupMovementActor(entity, {
+			ApplyMode = "Humanoid",
+			DefaultMode = definition.MovementMode,
+			MoveSpeed = definition.MoveSpeed,
+		}))
 
 		Try(self._aiContext:SetupEntityAIFromProfile(entity, _ResolveAIProfileId(definition.RuntimeProfileId), {
 			TickInterval = 0.15,

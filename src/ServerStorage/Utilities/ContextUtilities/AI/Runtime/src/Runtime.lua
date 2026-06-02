@@ -188,7 +188,7 @@ local function _BuildDirectCombatHookOutcome(
 				return false
 			end
 
-			registryService = baseServices.CombatActorRegistryService
+			registryService = baseServices.ActorRegistryService
 			if registryService == nil then
 				return false
 			end

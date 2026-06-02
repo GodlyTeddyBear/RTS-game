@@ -56,6 +56,7 @@ local function buildAttackTargetFacts(context: any): any
 	local baseTargetCFrame = if baseTargetResult ~= nil and baseTargetResult.success then baseTargetResult.value else nil
 	local advanceData = {
 		GoalPosition = if baseTargetCFrame ~= nil then baseTargetCFrame.Position else nil,
+		MovementMode = role.MovementMode,
 	}
 
 	if structureContext ~= nil and type(structureContext.GetActiveStructures) == "function" then
@@ -224,6 +225,7 @@ local function buildMoveBuildFacts(context: any): any
 		HasGoalTarget = hasGoalTarget == true,
 		MoveData = {
 			GoalPosition = if type(pathState) == "table" then pathState.GoalPosition else nil,
+			MovementMode = role.MovementMode,
 		},
 		BuildTargetEntity = buildTargetEntity,
 		BuildData = {
@@ -255,11 +257,23 @@ local function buildEngageEnemyFacts(context: any): any
 		}
 	end
 
-	return {
+	local facts = {
 		HasEnemyTarget = true,
 		TargetEntity = target.Entity,
 		TargetPosition = target.CFrame.Position,
+		MovementMode = "Direct",
 	}
+	if (target.CFrame.Position - currentCFrame.Position).Magnitude <= (combatProfile.AttackRange or 0) then
+		facts.AttackTargetKind = "Enemy"
+		facts.AttackData = {
+			AbilityId = "SummonStrike",
+			TargetKind = "Enemy",
+			TargetPosition = target.CFrame.Position,
+			Damage = combatProfile.DamagePerHit,
+			Cooldown = combatProfile.AttackInterval,
+		}
+	end
+	return facts
 end
 
 local BasicFactProviders = {

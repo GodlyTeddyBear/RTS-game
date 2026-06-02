@@ -16,8 +16,9 @@ local EntityCollisionService = require(ServerScriptService.Infrastructure.Entity
 
 local StructureEntityReadService = require(script.Parent.Infrastructure.Entity.StructureEntityReadService)
 local StructureEntitySchema = require(script.Parent.Infrastructure.Entity.StructureEntitySchema)
-local StructureAttackPresentationSystem = require(script.Parent.Infrastructure.Entity.StructureAttackPresentationSystem)
-local StructureExtractionSystem = require(script.Parent.Infrastructure.Entity.StructureExtractionSystem)
+local StructureAttackPresentationSystem = require(script.Parent.Infrastructure.Systems.StructureAttackPresentationSystem)
+local StructureExtractionSystem = require(script.Parent.Infrastructure.Systems.StructureExtractionSystem)
+local StructureHealthDepletedSystem = require(script.Parent.Infrastructure.Systems.StructureHealthDepletedSystem)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
 local StructureAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local StructureAIProfiles = require(script.Parent.Config.AIProfiles)
@@ -301,6 +302,31 @@ function StructureContext:_RegisterEntityInfrastructure(): Result.Result<boolean
 		if not replicationResult.success then
 			return replicationResult
 		end
+
+		local cleanupResult = self._entityContext:RegisterPreDestroyCleanup({
+			ContributorId = "Structure.ExternalCleanup",
+			Cleanup = function(entity: number)
+				local identity = self._structureReadService:GetIdentity(entity)
+				local placement = self._structureReadService:GetSourcePlacement(entity)
+				if type(identity) == "table" and type(identity.EntityId) == "string" then
+					self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Structure", identity.EntityId))
+				end
+				if type(placement) == "table" and type(placement.InstanceId) == "number" then
+					self._placementContext:DestroyStructureInstance(placement.InstanceId)
+				end
+				return true
+			end,
+		})
+		if not cleanupResult.success then return cleanupResult end
+
+		local depletedResult = self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "StructureHealthDepletedSystem",
+			Phase = "RequestResolve",
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return StructureHealthDepletedSystem.new(entityFactory, self._entityContext)
+			end,
+		})
+		if not depletedResult.success then return depletedResult end
 
 		local attackPresentationResult = self._entityContext:RegisterSystem("ActionAdvance", {
 			Name = "StructureAttackPresentationSystem",

@@ -13,8 +13,9 @@ local EntityCollisionService = require(ServerScriptService.Infrastructure.Entity
 
 local EnemyEntityReadService = require(script.Parent.Infrastructure.Entity.EnemyEntityReadService)
 local EnemyEntitySchema = require(script.Parent.Infrastructure.Entity.EnemyEntitySchema)
-local EnemyAdvanceSystem = require(script.Parent.Infrastructure.Entity.EnemyAdvanceSystem)
-local EnemyAttackPresentationSystem = require(script.Parent.Infrastructure.Entity.EnemyAttackPresentationSystem)
+local EnemyGoalReachedSystem = require(script.Parent.Infrastructure.Systems.EnemyGoalReachedSystem)
+local EnemyMovementPresentationSystem = require(script.Parent.Infrastructure.Systems.EnemyMovementPresentationSystem)
+local EnemyHealthDepletedSystem = require(script.Parent.Infrastructure.Systems.EnemyHealthDepletedSystem)
 local EnemySpawnPolicy = require(script.Parent.EnemyDomain.Policies.EnemySpawnPolicy)
 local EnemyAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local EnemyAIProfiles = require(script.Parent.Config.AIProfiles)
@@ -101,6 +102,7 @@ local EnemyContext = Knit.CreateService({
 		{ Name = "EntityContext", CacheAs = "_entityContext" },
 		{ Name = "StructureContext", CacheAs = "_structureContext" },
 		{ Name = "BaseContext", CacheAs = "_baseContext" },
+		{ Name = "CombatContext", CacheAs = "_combatContext" },
 		{ Name = "TeamContext", CacheAs = "_teamContext" },
 		{ Name = "WorldContext", CacheAs = "_worldContext" },
 	},
@@ -230,7 +232,7 @@ function EnemyContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 				local identity = readEntityValue(entityContext, entity, "Identity", "Entity")
 				local health = readEntityValue(entityContext, entity, "Health", "Entity")
 				local role = readEntityValue(entityContext, entity, "Role", "Enemy")
-				local moveSpeed = readEntityValue(entityContext, entity, "CurrentMoveSpeed", "Enemy")
+				local moveSpeed = readEntityValue(entityContext, entity, "SpeedState", "Movement")
 				local animationState = readEntityValue(entityContext, entity, "AnimationState", "Enemy")
 				local animationLooping = readEntityValue(entityContext, entity, "AnimationLooping", "Enemy")
 
@@ -240,19 +242,19 @@ function EnemyContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 					WaveNumber = if type(role) == "table" then role.WaveNumber else nil,
 					Health = if type(health) == "table" then health.Current else nil,
 					MaxHealth = if type(health) == "table" then health.Max else nil,
-					CurrentMoveSpeed = if type(moveSpeed) == "table" then moveSpeed.Value else nil,
+					CurrentMoveSpeed = if type(moveSpeed) == "table" then moveSpeed.CurrentSpeed else nil,
 					AnimationState = if type(animationState) == "string" then animationState else nil,
 					AnimationLooping = if type(animationLooping) == "boolean" then animationLooping else nil,
 				}
 			end,
 			BuildHumanoidProperties = function(entityContext: any, entity: number)
 				local health = readEntityValue(entityContext, entity, "Health", "Entity")
-				local moveSpeed = readEntityValue(entityContext, entity, "CurrentMoveSpeed", "Enemy")
+				local moveSpeed = readEntityValue(entityContext, entity, "SpeedState", "Movement")
 
 				return {
 					MaxHealth = if type(health) == "table" then health.Max else nil,
 					Health = if type(health) == "table" then health.Current else nil,
-					WalkSpeed = if type(moveSpeed) == "table" then moveSpeed.Value else nil,
+					WalkSpeed = if type(moveSpeed) == "table" then moveSpeed.CurrentSpeed else nil,
 				}
 			end,
 			BuildTransformProjection = function(entityContext: any, entity: number)
@@ -292,57 +294,55 @@ function EnemyContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 			return replicationResult
 		end
 
-		local advanceSystemResult = self._entityContext:RegisterSystem("ActionAdvance", {
-			Name = "EnemyAdvanceSystem",
-			Phase = "ActionAdvance",
+		local cleanupResult = self._entityContext:RegisterPreDestroyCleanup({
+			ContributorId = "Enemy.TeamCleanup",
+			Cleanup = function(entity: number)
+				local identity = self._enemyEntityReadService:GetIdentity(entity)
+				if type(identity) == "table" and type(identity.EnemyId) == "string" then
+					self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Enemy", identity.EnemyId))
+				end
+				return true
+			end,
+		})
+		if not cleanupResult.success then return cleanupResult end
+
+		local advanceSystemResult = self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "EnemyGoalReachedSystem",
+			Phase = "RequestResolve",
 			Reads = {
-				"Enemy.Role",
-				"Enemy.PathState",
-				"Enemy.AdvanceState",
-				"Entity.Transform",
-				"AI.ActionState",
+				"Movement.MoveIntent",
+				"Movement.ApplyResult",
 			},
 			Writes = {
-				"Entity.Transform",
-				"Enemy.PathState",
-				"Enemy.CurrentMoveSpeed",
-				"Enemy.AnimationState",
-				"Enemy.AnimationLooping",
+				"Enemy.GoalReachedTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return EnemyAdvanceSystem.new(entityFactory, {
-					EntityContext = self._entityContext,
-					BaseContext = self._baseContext,
-				})
+				return EnemyGoalReachedSystem.new(entityFactory, self)
 			end,
 		})
 		if not advanceSystemResult.success then
 			return advanceSystemResult
 		end
 
-		local attackPresentationResult = self._entityContext:RegisterSystem("ActionAdvance", {
-			Name = "EnemyAttackPresentationSystem",
-			Phase = "ActionAdvance",
-			Reads = {
-				"Enemy.Role",
-				"Enemy.AliveTag",
-				"Combat.AttackState",
-				"AI.ActionState",
-			},
-			Writes = {
-				"Entity.Target",
-				"Enemy.PathState",
-				"Enemy.CurrentMoveSpeed",
-				"Enemy.AnimationState",
-				"Enemy.AnimationLooping",
-			},
+		local movementPresentationResult = self._entityContext:RegisterSystem("Execute", {
+			Name = "EnemyMovementPresentationSystem",
+			Phase = "Execute",
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return EnemyAttackPresentationSystem.new(entityFactory)
+				return EnemyMovementPresentationSystem.new(entityFactory)
 			end,
 		})
-		if not attackPresentationResult.success then
-			return attackPresentationResult
+		if not movementPresentationResult.success then
+			return movementPresentationResult
 		end
+
+		local depletedResult = self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "EnemyHealthDepletedSystem",
+			Phase = "RequestResolve",
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return EnemyHealthDepletedSystem.new(entityFactory, self._entityContext)
+			end,
+		})
+		if not depletedResult.success then return depletedResult end
 
 		return Ok(true)
 	end, "EnemyContext:RegisterEntityInfrastructure")
@@ -515,7 +515,7 @@ function EnemyContext:HandleGoalReached(entity: any): Result.Result<boolean>
 end
 
 function EnemyContext:WarmFastFlowForRun(): Result.Result<boolean>
-	return Ok(false)
+	return self._combatContext:WarmMovementRuntime()
 end
 
 function EnemyContext:GetAliveEnemies(): Result.Result<{ any }>
