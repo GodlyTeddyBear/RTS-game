@@ -11,6 +11,7 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 
 local CombatAbilities = require(script.Parent.Config.CombatAbilities)
 local CombatAbilityRegistryService = require(script.Parent.Infrastructure.Services.CombatAbilityRegistryService)
+local CombatOutcomeRuleRegistryService = require(script.Parent.Infrastructure.Services.CombatOutcomeRuleRegistryService)
 local CombatRequestFactoryService = require(script.Parent.Infrastructure.Services.CombatRequestFactoryService)
 local CombatTargetReadService = require(script.Parent.Infrastructure.Services.CombatTargetReadService)
 local LockOnService = require(script.Parent.Infrastructure.Services.LockOnService)
@@ -32,6 +33,7 @@ local AttackAdvanceSystem = require(script.Parent.Infrastructure.Systems.Attack.
 local CombatRequestCleanupSystem = require(script.Parent.Infrastructure.Systems.Attack.CombatRequestCleanupSystem)
 local DamageResolveSystem = require(script.Parent.Infrastructure.Systems.Attack.DamageResolveSystem)
 local BaseDamageResolveSystem = require(script.Parent.Infrastructure.Systems.Attack.BaseDamageResolveSystem)
+local HealthDepletedOutcomeSystem = require(script.Parent.Infrastructure.Systems.Outcome.HealthDepletedOutcomeSystem)
 local HitboxImpactSystem = require(script.Parent.Infrastructure.Systems.Attack.HitboxImpactSystem)
 local HitboxSpawnSystem = require(script.Parent.Infrastructure.Systems.Attack.HitboxSpawnSystem)
 local ProjectileImpactSystem = require(script.Parent.Infrastructure.Systems.Attack.ProjectileImpactSystem)
@@ -39,7 +41,9 @@ local ProjectileSpawnSystem = require(script.Parent.Infrastructure.Systems.Attac
 local MovementApplySystem = require(script.Parent.Infrastructure.Systems.Movement.MovementApplySystem)
 local MovementEntitySchema = require(script.Parent.Infrastructure.Entity.MovementEntitySchema)
 local MovementFlowCalculationSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementFlowCalculationSystem)
+local MovementGoalReachedSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementGoalReachedSystem)
 local MovementGridSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementGridSystem)
+local MovementPresentationProjectionSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementPresentationProjectionSystem)
 
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
@@ -47,6 +51,11 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Name = "CombatAbilityRegistryService",
 		Module = CombatAbilityRegistryService,
 		CacheAs = "_combatAbilityRegistryService",
+	},
+	{
+		Name = "CombatOutcomeRuleRegistryService",
+		Module = CombatOutcomeRuleRegistryService,
+		CacheAs = "_combatOutcomeRuleRegistryService",
 	},
 	{
 		Name = "CombatRequestFactoryService",
@@ -312,6 +321,45 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return movementApplyResult
 		end
 
+		local movementPresentationResult = self._entityContext:RegisterSystem("Execute", {
+			Name = "MovementPresentationProjectionSystem",
+			Phase = "Execute",
+			Reads = {
+				"Movement.MoveIntent",
+				"Movement.ApplyResult",
+				"Movement.SpeedState",
+				"Combat.AttackState",
+				"AI.ActionState",
+			},
+			Writes = {
+				"Entity.DirtyTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return MovementPresentationProjectionSystem.new(entityFactory, self._combatOutcomeRuleRegistryService)
+			end,
+		})
+		if not movementPresentationResult.success then
+			return movementPresentationResult
+		end
+
+		local movementGoalReachedResult = self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "MovementGoalReachedSystem",
+			Phase = "RequestResolve",
+			Reads = {
+				"Movement.MoveIntent",
+				"Movement.ApplyResult",
+			},
+			Writes = {
+				"Entity.DirtyTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return MovementGoalReachedSystem.new(entityFactory, self._combatOutcomeRuleRegistryService)
+			end,
+		})
+		if not movementGoalReachedResult.success then
+			return movementGoalReachedResult
+		end
+
 		self._combatTargetReadService:Configure(self._entityContext)
 
 		local attackResult = self._entityContext:RegisterSystem("ActionAdvance", {
@@ -482,6 +530,28 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return baseDamageResult
 		end
 
+		local healthDepletedResult = self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "HealthDepletedOutcomeSystem",
+			Phase = "RequestResolve",
+			Reads = {
+				"Combat.HealthDepletedRequest",
+				"Combat.RequestTag",
+			},
+			Writes = {
+				"Combat.ProcessedTag",
+				"Entity.DestructionQueue",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return HealthDepletedOutcomeSystem.new(entityFactory, {
+					EntityContext = self._entityContext,
+					RuleRegistry = self._combatOutcomeRuleRegistryService,
+				})
+			end,
+		})
+		if not healthDepletedResult.success then
+			return healthDepletedResult
+		end
+
 		return self._entityContext:RegisterSystem("Cleanup", {
 			Name = "CombatRequestCleanupSystem",
 			Phase = "Cleanup",
@@ -540,6 +610,24 @@ function CombatContext:RequestDamage(payload: any): Result.Result<boolean>
 		Try(result)
 		return Ok(true)
 	end, "Combat:RequestDamage")
+end
+
+function CombatContext:RegisterMovementPresentationRule(payload: any): Result.Result<boolean>
+	return Catch(function()
+		return Ok(self._combatOutcomeRuleRegistryService:RegisterMovementPresentationRule(payload))
+	end, "Combat:RegisterMovementPresentationRule")
+end
+
+function CombatContext:RegisterHealthDepletedRule(payload: any): Result.Result<boolean>
+	return Catch(function()
+		return Ok(self._combatOutcomeRuleRegistryService:RegisterHealthDepletedRule(payload))
+	end, "Combat:RegisterHealthDepletedRule")
+end
+
+function CombatContext:RegisterMovementGoalReachedRule(payload: any): Result.Result<boolean>
+	return Catch(function()
+		return Ok(self._combatOutcomeRuleRegistryService:RegisterGoalReachedRule(payload))
+	end, "Combat:RegisterMovementGoalReachedRule")
 end
 
 function CombatContext:WarmMovementRuntime(): Result.Result<boolean>

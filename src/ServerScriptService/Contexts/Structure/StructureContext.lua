@@ -12,13 +12,12 @@ local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.Placem
 local Result = require(ReplicatedStorage.Utilities.Result)
 local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.StructureConfig)
 local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.StructureTypes)
+local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
 local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
 
 local StructureEntityReadService = require(script.Parent.Infrastructure.Entity.StructureEntityReadService)
 local StructureEntitySchema = require(script.Parent.Infrastructure.Entity.StructureEntitySchema)
-local StructureAttackPresentationSystem = require(script.Parent.Infrastructure.Systems.StructureAttackPresentationSystem)
 local StructureExtractionSystem = require(script.Parent.Infrastructure.Systems.StructureExtractionSystem)
-local StructureHealthDepletedSystem = require(script.Parent.Infrastructure.Systems.StructureHealthDepletedSystem)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
 local StructureAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local StructureAIProfiles = require(script.Parent.Config.AIProfiles)
@@ -319,38 +318,37 @@ function StructureContext:_RegisterEntityInfrastructure(): Result.Result<boolean
 		})
 		if not cleanupResult.success then return cleanupResult end
 
-		local depletedResult = self._entityContext:RegisterSystem("RequestResolve", {
-			Name = "StructureHealthDepletedSystem",
-			Phase = "RequestResolve",
-			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return StructureHealthDepletedSystem.new(entityFactory, self._entityContext)
-			end,
+		local healthDepletedResult = self._combatContext:RegisterHealthDepletedRule({
+			VictimKind = "Structure",
+			MarkVictimForDestruction = true,
 		})
-		if not depletedResult.success then return depletedResult end
+		if not healthDepletedResult.success then
+			return healthDepletedResult
+		end
 
-		local attackPresentationResult = self._entityContext:RegisterSystem("ActionAdvance", {
-			Name = "StructureAttackPresentationSystem",
-			Phase = "ActionAdvance",
-			Reads = {
-				"Structure.OperationalTag",
-				"Combat.AttackState",
-				"AI.ActionState",
+		local attackProjectionResult = self._combatContext:RegisterMovementPresentationRule({
+			RuleId = "Structure.AttackPresentation",
+			Query = {
+				Keys = {
+					{ Key = "OperationalTag", FeatureName = "Structure" },
+					{ Key = "AttackState", FeatureName = "Combat" },
+					{ Key = "ActionState", FeatureName = "AI" },
+				},
 			},
-			Writes = {
-				"Structure.AnimationState",
-				"Structure.AnimationLooping",
-				"Structure.TargetEnemyId",
-				"Entity.Target",
-				"Entity.DirtyTag",
+			Attack = {
+				Target = { TargetKind = "Enemy" },
+				Animation = {
+					FeatureName = "Structure",
+					StateKey = "AnimationState",
+					LoopingKey = "AnimationLooping",
+					State = "Attack",
+					Looping = false,
+				},
+				TargetEntityId = { FeatureName = "Structure", Key = "TargetEnemyId" },
 			},
-			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return StructureAttackPresentationSystem.new(entityFactory, {
-					EntityContext = self._entityContext,
-				})
-			end,
 		})
-		if not attackPresentationResult.success then
-			return attackPresentationResult
+		if not attackProjectionResult.success then
+			return attackProjectionResult
 		end
 
 		return self._entityContext:RegisterSystem("ActionAdvance", {

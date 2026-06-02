@@ -9,13 +9,12 @@ local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
+local GameEvents = require(ReplicatedStorage.Events.GameEvents)
+local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
 local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
 
 local EnemyEntityReadService = require(script.Parent.Infrastructure.Entity.EnemyEntityReadService)
 local EnemyEntitySchema = require(script.Parent.Infrastructure.Entity.EnemyEntitySchema)
-local EnemyGoalReachedSystem = require(script.Parent.Infrastructure.Systems.EnemyGoalReachedSystem)
-local EnemyMovementPresentationSystem = require(script.Parent.Infrastructure.Systems.EnemyMovementPresentationSystem)
-local EnemyHealthDepletedSystem = require(script.Parent.Infrastructure.Systems.EnemyHealthDepletedSystem)
 local EnemySpawnPolicy = require(script.Parent.EnemyDomain.Policies.EnemySpawnPolicy)
 local EnemyAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local EnemyAIProfiles = require(script.Parent.Config.AIProfiles)
@@ -23,7 +22,6 @@ local EnemyAIProfiles = require(script.Parent.Config.AIProfiles)
 local SpawnEnemyCommand = require(script.Parent.Application.Commands.SpawnEnemy)
 local DespawnEnemyCommand = require(script.Parent.Application.Commands.DespawnEnemy)
 local ApplyDamageEnemyCommand = require(script.Parent.Application.Commands.ApplyDamageEnemy)
-local HandleGoalReachedCommand = require(script.Parent.Application.Commands.HandleGoalReached)
 local CleanupAllEnemiesCommand = require(script.Parent.Application.Commands.CleanupAllEnemies)
 local GetAliveEnemiesQuery = require(script.Parent.Application.Queries.GetAliveEnemiesQuery)
 local GetEnemyCountQuery = require(script.Parent.Application.Queries.GetEnemyCountQuery)
@@ -82,7 +80,6 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("SpawnEnemyCommand", SpawnEnemyCommand, "_spawnEnemyCommand"),
 	moduleSpec("DespawnEnemyCommand", DespawnEnemyCommand, "_despawnEnemyCommand"),
 	moduleSpec("ApplyDamageEnemyCommand", ApplyDamageEnemyCommand, "_applyDamageEnemyCommand"),
-	moduleSpec("HandleGoalReachedCommand", HandleGoalReachedCommand, "_handleGoalReachedCommand"),
 	moduleSpec("CleanupAllEnemiesCommand", CleanupAllEnemiesCommand, "_cleanupAllEnemiesCommand"),
 	moduleSpec("GetAliveEnemiesQuery", GetAliveEnemiesQuery, "_getAliveEnemiesQuery"),
 	moduleSpec("GetEnemyCountQuery", GetEnemyCountQuery, "_getEnemyCountQuery"),
@@ -306,43 +303,58 @@ function EnemyContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 		})
 		if not cleanupResult.success then return cleanupResult end
 
-		local advanceSystemResult = self._entityContext:RegisterSystem("RequestResolve", {
-			Name = "EnemyGoalReachedSystem",
-			Phase = "RequestResolve",
-			Reads = {
-				"Movement.MoveIntent",
-				"Movement.ApplyResult",
+		local projectionResult = self._combatContext:RegisterMovementPresentationRule({
+			RuleId = "Enemy.MovementPresentation",
+			Query = { FeatureName = "Enemy", Keys = { "AliveTag", "PathState" } },
+			PathState = { FeatureName = "Enemy", Key = "PathState" },
+			Speed = { FeatureName = "Enemy", Key = "CurrentMoveSpeed" },
+			Animation = {
+				FeatureName = "Enemy",
+				StateKey = "AnimationState",
+				LoopingKey = "AnimationLooping",
+				MovingState = "Walk",
+				IdleState = "Idle",
 			},
-			Writes = {
-				"Enemy.GoalReachedTag",
+			Attack = {
+				PathState = { FeatureName = "Enemy", Key = "PathState" },
+				Speed = { FeatureName = "Enemy", Key = "CurrentMoveSpeed" },
+				Target = {},
+				Animation = {
+					FeatureName = "Enemy",
+					StateKey = "AnimationState",
+					LoopingKey = "AnimationLooping",
+					State = "Attack",
+					Looping = false,
+				},
 			},
-			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return EnemyGoalReachedSystem.new(entityFactory, self)
-			end,
 		})
-		if not advanceSystemResult.success then
-			return advanceSystemResult
+		if not projectionResult.success then
+			return projectionResult
 		end
 
-		local movementPresentationResult = self._entityContext:RegisterSystem("Execute", {
-			Name = "EnemyMovementPresentationSystem",
-			Phase = "Execute",
-			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return EnemyMovementPresentationSystem.new(entityFactory)
+		local goalReachedResult = self._combatContext:RegisterMovementGoalReachedRule({
+			RuleId = "Enemy.AdvanceGoalReached",
+			Query = { FeatureName = "Enemy", Keys = { "AliveTag" } },
+			ActionId = "Advance",
+			AddTag = { FeatureName = "Enemy", Key = "GoalReachedTag" },
+			OnReached = function(context: any)
+				self:_HandleAdvanceGoalReached(context.Entity)
 			end,
 		})
-		if not movementPresentationResult.success then
-			return movementPresentationResult
+		if not goalReachedResult.success then
+			return goalReachedResult
 		end
 
-		local depletedResult = self._entityContext:RegisterSystem("RequestResolve", {
-			Name = "EnemyHealthDepletedSystem",
-			Phase = "RequestResolve",
-			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return EnemyHealthDepletedSystem.new(entityFactory, self._entityContext)
+		local healthDepletedResult = self._combatContext:RegisterHealthDepletedRule({
+			VictimKind = "Enemy",
+			MarkVictimForDestruction = true,
+			OnDepleted = function(context: any)
+				self:_EmitEnemyDeath(context.Request.VictimEntity)
 			end,
 		})
-		if not depletedResult.success then return depletedResult end
+		if not healthDepletedResult.success then
+			return healthDepletedResult
+		end
 
 		return Ok(true)
 	end, "EnemyContext:RegisterEntityInfrastructure")
@@ -490,6 +502,53 @@ function EnemyContext:_OnWaveEnded()
 	end
 end
 
+function EnemyContext:_HandleAdvanceGoalReached(entity: number)
+	local identity = self._enemyEntityReadService:GetIdentity(entity)
+	if identity == nil then
+		return
+	end
+
+	self._entityContext:Remove(entity, "AliveTag", "Enemy")
+	self._entityContext:Add(entity, "GoalReachedTag", "Enemy")
+	self:_EmitEnemyDeath(entity)
+	self._entityContext:MarkForDestruction(entity)
+
+	local roleConfig = EnemyConfig.Roles[identity.Role]
+	if roleConfig == nil then
+		return
+	end
+
+	local damageResult = self._combatContext:RequestDamage({
+		ActionId = "EnemyGoalReached",
+		AbilityId = "EnemyBaseAttack",
+		AttackerEntity = entity,
+		VictimKind = "Base",
+		Amount = roleConfig.Damage,
+		Reason = "EnemyGoalReached",
+	})
+	if not damageResult.success then
+		Result.MentionError("Enemy:GoalReached", "Failed to request base damage", {
+			EnemyId = identity.EnemyId,
+			Role = identity.Role,
+			WaveNumber = identity.WaveNumber,
+		}, damageResult.type)
+	end
+end
+
+function EnemyContext:_EmitEnemyDeath(entity: number?)
+	if type(entity) ~= "number" then
+		return
+	end
+
+	local identity = self._enemyEntityReadService:GetIdentity(entity)
+	if identity == nil then
+		return
+	end
+
+	local deathCFrame = self._enemyEntityReadService:GetEntityCFrame(entity) or CFrame.new()
+	GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.Role, identity.WaveNumber, deathCFrame)
+end
+
 function EnemyContext:SpawnEnemy(role: string, spawnCFrame: CFrame, waveNumber: number): Result.Result<number>
 	return Catch(function()
 		return self._spawnEnemyCommand:Execute(role, spawnCFrame, waveNumber)
@@ -506,12 +565,6 @@ function EnemyContext:ApplyDamage(entity: any, amount: number): Result.Result<bo
 	return Catch(function()
 		return self._applyDamageEnemyCommand:Execute(entity, amount)
 	end, "Enemy:ApplyDamage")
-end
-
-function EnemyContext:HandleGoalReached(entity: any): Result.Result<boolean>
-	return Catch(function()
-		return self._handleGoalReachedCommand:Execute(entity)
-	end, "Enemy:HandleGoalReached")
 end
 
 function EnemyContext:WarmFastFlowForRun(): Result.Result<boolean>

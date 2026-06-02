@@ -13,7 +13,6 @@ local SummonAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local SummonAIProfiles = require(script.Parent.Config.AIProfiles)
 local SummonEntityReadService = require(script.Parent.Infrastructure.Entity.SummonEntityReadService)
 local SummonEntitySchema = require(script.Parent.Infrastructure.Entity.SummonEntitySchema)
-local SummonMovementPresentationSystem = require(script.Parent.Infrastructure.Systems.SummonMovementPresentationSystem)
 local SummonLifetimeSystem = require(script.Parent.Infrastructure.Systems.SummonLifetimeSystem)
 local CleanupSummonsCommand = require(script.Parent.Application.Commands.CleanupSummonsCommand)
 local SpawnAllyCommand = require(script.Parent.Application.Commands.SpawnAllyCommand)
@@ -237,20 +236,10 @@ function SummonContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 			return lifetimeResult
 		end
 
-		return self._entityContext:RegisterSystem("ActionAdvance", {
-			Name = "SummonMovementPresentationSystem",
-			Phase = "Execute",
-			Reads = {
-				"Summon.DroneTag",
-				"Movement.MoveIntent",
-			},
-			Writes = {
-				"Entity.DirtyTag",
-				"Summon.TargetEnemyId",
-			},
-			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return SummonMovementPresentationSystem.new(entityFactory, self._entityContext)
-			end,
+		return self._combatContext:RegisterMovementPresentationRule({
+			RuleId = "Summon.MovementPresentation",
+			Query = { FeatureName = "Summon", Keys = { "DroneTag" } },
+			TargetEntityId = { FeatureName = "Summon", Key = "TargetEnemyId" },
 		})
 	end, "SummonContext:RegisterEntityInfrastructure")
 end

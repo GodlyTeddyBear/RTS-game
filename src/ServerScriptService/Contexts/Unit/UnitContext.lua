@@ -15,7 +15,6 @@ local EntityCollisionService = require(ServerScriptService.Infrastructure.Entity
 
 local UnitEntityReadService = require(script.Parent.Infrastructure.Entity.UnitEntityReadService)
 local UnitEntitySchema = require(script.Parent.Infrastructure.Entity.UnitEntitySchema)
-local UnitMovementPresentationSystem = require(script.Parent.Infrastructure.Systems.UnitMovementPresentationSystem)
 local StructureBuildContributionSystem = require(ServerScriptService.Contexts.Structure.Infrastructure.Systems.StructureBuildContributionSystem)
 local UnitAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local UnitAIProfiles = require(script.Parent.Config.AIProfiles)
@@ -285,27 +284,28 @@ function UnitContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 			return replicationResult
 		end
 
-		local manualMoveResult = self._entityContext:RegisterSystem("Execute", {
-			Name = "UnitMovementPresentationSystem",
-			Phase = "Execute",
-			Reads = {
-				"Unit.PathState",
-				"Movement.MoveIntent",
-				"Movement.ApplyResult",
+		local movementProjectionResult = self._combatContext:RegisterMovementPresentationRule({
+			RuleId = "Unit.MovementPresentation",
+			Query = { FeatureName = "Unit", Keys = { "PathState" } },
+			PathState = {
+				FeatureName = "Unit",
+				Key = "PathState",
+				PreserveKeys = {
+					"RequestedGoalPosition",
+					"GoalRevision",
+					"FailedGoalRevision",
+				},
 			},
-			Writes = {
-				"Unit.PathState",
-				"Unit.AnimationState",
-				"Unit.AnimationLooping",
-				"Entity.Target",
-				"Entity.DirtyTag",
+			Animation = {
+				FeatureName = "Unit",
+				StateKey = "AnimationState",
+				LoopingKey = "AnimationLooping",
+				MovingState = "Walk",
+				IdleState = "Idle",
 			},
-			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return UnitMovementPresentationSystem.new(entityFactory)
-			end,
 		})
-		if not manualMoveResult.success then
-			return manualMoveResult
+		if not movementProjectionResult.success then
+			return movementProjectionResult
 		end
 
 		return self._entityContext:RegisterSystem("ActionAdvance", {
