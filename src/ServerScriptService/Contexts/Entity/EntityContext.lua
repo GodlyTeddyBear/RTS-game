@@ -25,6 +25,7 @@ local EntityRuntimeParticipationService =
 	require(script.Parent.Infrastructure.Services.EntityRuntimeParticipationService)
 local EntityRuntimeSnapshotBuilder = require(script.Parent.Infrastructure.Services.EntityRuntimeSnapshotBuilder)
 local EntityCleanupOutcomeService = require(script.Parent.Infrastructure.Services.EntityCleanupOutcomeService)
+local EntityLifetimeExpirySystem = require(script.Parent.Infrastructure.Systems.EntityLifetimeExpirySystem)
 
 local EntityValidationService = require(script.Parent.EntityDomain.Services.EntityValidationService)
 local EntityLifecyclePolicy = require(script.Parent.EntityDomain.Policies.EntityLifecyclePolicy)
@@ -280,6 +281,15 @@ end
 
 function EntityContext:KnitStart()
 	EntityBaseContext:KnitStart()
+	local coreSystemsResult = self:_RegisterCoreRuntimeSystems()
+	if not coreSystemsResult.success then
+		error(
+			("EntityContext failed to register core runtime systems: [%s] %s"):format(
+				tostring(coreSystemsResult.type),
+				tostring(coreSystemsResult.message)
+			)
+		)
+	end
 	local startResult = self:Start()
 	if not startResult.success then
 		error(
@@ -297,6 +307,24 @@ function EntityContext:Start()
 	return Catch(function()
 		return self._startCommand:Execute()
 	end, "EntityContext:Start")
+end
+function EntityContext:_RegisterCoreRuntimeSystems()
+	return Catch(function()
+		return self._registerSystemCommand:Execute("RequestResolve", {
+			Name = "EntityLifetimeExpirySystem",
+			Phase = "RequestResolve",
+			Reads = {
+				"Entity.ActiveTag",
+				"Entity.Lifetime",
+			},
+			Writes = {
+				"Entity.DestructionQueue",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return EntityLifetimeExpirySystem.new(entityFactory)
+			end,
+		})
+	end, "EntityContext:RegisterCoreRuntimeSystems")
 end
 function EntityContext:_EnsureRuntimeStarted()
 	return Catch(function()

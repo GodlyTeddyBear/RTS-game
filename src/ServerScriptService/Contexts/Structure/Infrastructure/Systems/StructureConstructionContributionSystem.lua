@@ -7,22 +7,22 @@ local AISharedContract = require(ReplicatedStorage.Contexts.AI.AISharedContract)
 local ServerScheduler = require(ServerScriptService.Scheduler.ServerScheduler)
 local UnitConfig = require(ReplicatedStorage.Contexts.Unit.Config.UnitConfig)
 
-local StructureBuildContributionSystem = {}
-StructureBuildContributionSystem.__index = StructureBuildContributionSystem
+local StructureConstructionContributionSystem = {}
+StructureConstructionContributionSystem.__index = StructureConstructionContributionSystem
 
 local ACTION_BUILD_STRUCTURE = "BuildStructure"
 
-function StructureBuildContributionSystem.new(entityFactory: any, dependencies: any)
-	local self = setmetatable({}, StructureBuildContributionSystem)
+function StructureConstructionContributionSystem.new(entityFactory: any, dependencies: any)
+	local self = setmetatable({}, StructureConstructionContributionSystem)
 	self._entityFactory = entityFactory
 	self._structureContext = dependencies.StructureContext
 	self._unitReadService = dependencies.UnitReadService
 	return self
 end
 
-function StructureBuildContributionSystem:Run()
+function StructureConstructionContributionSystem:Run()
 	-- READS: Structure.BuildContributionState [AUTHORITATIVE], Unit.BuilderAssignment [AUTHORITATIVE], Unit.PathState [AUTHORITATIVE], Entity.Ownership [AUTHORITATIVE], AI.ActionState [AUTHORITATIVE]
-	-- WRITES: Unit.BuilderAssignment [AUTHORITATIVE], Unit.PathState [AUTHORITATIVE], Unit.AnimationState [DERIVED], Unit.AnimationLooping [DERIVED], Entity.DirtyTag
+	-- WRITES: Unit.BuilderAssignment [AUTHORITATIVE], Unit.PathState [AUTHORITATIVE], Movement.MoveIntent [AUTHORITATIVE], Entity.DirtyTag
 	local queryResult = self._entityFactory:Query({
 		FeatureName = "Structure",
 		Keys = { "BuildContributionState" },
@@ -37,7 +37,7 @@ function StructureBuildContributionSystem:Run()
 	end
 end
 
-function StructureBuildContributionSystem:_RunBuilder(builderEntity: number, deltaTime: number)
+function StructureConstructionContributionSystem:_RunBuilder(builderEntity: number, deltaTime: number)
 	local actionState = self:_Get(builderEntity, AISharedContract.Components.ActionState, AISharedContract.FeatureName)
 	if type(actionState) ~= "table" or actionState.ActionId ~= ACTION_BUILD_STRUCTURE then
 		if type(actionState) == "table" and actionState.ActionId == "Idle" then
@@ -55,7 +55,6 @@ function StructureBuildContributionSystem:_RunBuilder(builderEntity: number, del
 
 	if self:_IsBuilderWithinBuildRange(builderEntity, targetStructureEntity) then
 		self:_ClearPathGoal(builderEntity)
-		self:_SetPresentation(builderEntity, "Build", true)
 
 		local buildWorkPerSecond = self:_GetBuildWorkPerSecond(builderEntity)
 		if buildWorkPerSecond == nil or deltaTime <= 0 then
@@ -86,10 +85,9 @@ function StructureBuildContributionSystem:_RunBuilder(builderEntity: number, del
 
 	self:_SetPathGoal(builderEntity, targetPosition)
 	self:_SetPathMoving(builderEntity, true)
-	self:_SetPresentation(builderEntity, "Walk", true)
 end
 
-function StructureBuildContributionSystem:_ResolveBuildTarget(builderEntity: number): number?
+function StructureConstructionContributionSystem:_ResolveBuildTarget(builderEntity: number): number?
 	local buildState = self:_Get(builderEntity, "BuildContributionState", "Structure")
 	local targetStructureEntity = if type(buildState) == "table" then buildState.TargetStructureEntity else nil
 	if type(targetStructureEntity) == "number" and self:_IsStructureBuildableForBuilder(builderEntity, targetStructureEntity) then
@@ -106,7 +104,7 @@ function StructureBuildContributionSystem:_ResolveBuildTarget(builderEntity: num
 	return self:_FindNearestOwnedUnfinishedStructure(builderEntity)
 end
 
-function StructureBuildContributionSystem:_FindNearestOwnedUnfinishedStructure(builderEntity: number): number?
+function StructureConstructionContributionSystem:_FindNearestOwnedUnfinishedStructure(builderEntity: number): number?
 	local ownerUserId = self:_ResolveOwnerUserId(builderEntity)
 	local position = self:_GetUnitPosition(builderEntity)
 	if ownerUserId == nil or position == nil then
@@ -122,11 +120,11 @@ function StructureBuildContributionSystem:_FindNearestOwnedUnfinishedStructure(b
 	return nil
 end
 
-function StructureBuildContributionSystem:_IsBuilderWithinBuildRange(builderEntity: number, structureEntity: number): boolean
+function StructureConstructionContributionSystem:_IsBuilderWithinBuildRange(builderEntity: number, structureEntity: number): boolean
 	return self:_IsStructureBuildableForBuilder(builderEntity, structureEntity)
 end
 
-function StructureBuildContributionSystem:_IsStructureBuildableForBuilder(builderEntity: number, structureEntity: number): boolean
+function StructureConstructionContributionSystem:_IsStructureBuildableForBuilder(builderEntity: number, structureEntity: number): boolean
 	local ownerUserId = self:_ResolveOwnerUserId(builderEntity)
 	local position = self:_GetUnitPosition(builderEntity)
 	local buildRange = self:_GetBuildRange(builderEntity)
@@ -138,33 +136,32 @@ function StructureBuildContributionSystem:_IsStructureBuildableForBuilder(builde
 	return result.success and result.value == true
 end
 
-function StructureBuildContributionSystem:_RunIdle(entity: number)
+function StructureConstructionContributionSystem:_RunIdle(entity: number)
 	self:_ClearPathGoal(entity)
-	self:_SetPresentation(entity, "Idle", true)
 end
 
-function StructureBuildContributionSystem:_ResolveMovementMode(entity: number): string?
+function StructureConstructionContributionSystem:_ResolveMovementMode(entity: number): string?
 	local identity = self._unitReadService:GetIdentity(entity)
 	local definition = if type(identity) == "table" then UnitConfig.Definitions[identity.UnitId] else nil
 	local movementMode = if definition ~= nil then definition.MovementMode else nil
 	return if type(movementMode) == "string" and movementMode ~= "" then movementMode else nil
 end
 
-function StructureBuildContributionSystem:_GetBuildWorkPerSecond(entity: number): number?
+function StructureConstructionContributionSystem:_GetBuildWorkPerSecond(entity: number): number?
 	local identity = self._unitReadService:GetIdentity(entity)
 	local definition = if type(identity) == "table" then UnitConfig.Definitions[identity.UnitId] else nil
 	local value = if definition ~= nil then definition.BuildWorkPerSecond else nil
 	return if type(value) == "number" and value > 0 then value else nil
 end
 
-function StructureBuildContributionSystem:_GetBuildRange(entity: number): number?
+function StructureConstructionContributionSystem:_GetBuildRange(entity: number): number?
 	local identity = self._unitReadService:GetIdentity(entity)
 	local definition = if type(identity) == "table" then UnitConfig.Definitions[identity.UnitId] else nil
 	local value = if definition ~= nil then definition.BuildRange else nil
 	return if type(value) == "number" and value > 0 then value else nil
 end
 
-function StructureBuildContributionSystem:_ResolveOwnerUserId(entity: number): number?
+function StructureConstructionContributionSystem:_ResolveOwnerUserId(entity: number): number?
 	local ownership = self._unitReadService:GetOwnership(entity)
 	if type(ownership) ~= "table" or ownership.OwnerKind ~= "Player" then
 		return nil
@@ -172,24 +169,24 @@ function StructureBuildContributionSystem:_ResolveOwnerUserId(entity: number): n
 	return tonumber(ownership.OwnerId)
 end
 
-function StructureBuildContributionSystem:_GetUnitPosition(entity: number): Vector3?
+function StructureConstructionContributionSystem:_GetUnitPosition(entity: number): Vector3?
 	local cframe = self._unitReadService:GetEntityCFrame(entity)
 	return if cframe ~= nil then cframe.Position else nil
 end
 
-function StructureBuildContributionSystem:_GetStructurePosition(structureEntity: number): Vector3?
+function StructureConstructionContributionSystem:_GetStructurePosition(structureEntity: number): Vector3?
 	local result = self._structureContext:GetStructurePosition(structureEntity)
 	return if result.success then result.value else nil
 end
 
-function StructureBuildContributionSystem:_SetBuilderAssignment(entity: number, targetStructureEntity: number?)
+function StructureConstructionContributionSystem:_SetBuilderAssignment(entity: number, targetStructureEntity: number?)
 	self._entityFactory:Set(entity, "BuilderAssignment", {
 		TargetStructureEntity = targetStructureEntity,
 	}, "Unit")
 	self:_MarkDirty(entity)
 end
 
-function StructureBuildContributionSystem:_SetPathMoving(entity: number, isMoving: boolean)
+function StructureConstructionContributionSystem:_SetPathMoving(entity: number, isMoving: boolean)
 	local state = self._unitReadService:GetPathState(entity) or {}
 	self._entityFactory:Set(entity, "PathState", {
 		GoalPosition = state.GoalPosition,
@@ -201,7 +198,7 @@ function StructureBuildContributionSystem:_SetPathMoving(entity: number, isMovin
 	self:_MarkDirty(entity)
 end
 
-function StructureBuildContributionSystem:_SetPathGoal(entity: number, goalPosition: Vector3)
+function StructureConstructionContributionSystem:_SetPathGoal(entity: number, goalPosition: Vector3)
 	local state = self._unitReadService:GetPathState(entity) or {}
 	self._entityFactory:Set(entity, "PathState", {
 		GoalPosition = goalPosition,
@@ -222,7 +219,7 @@ function StructureBuildContributionSystem:_SetPathGoal(entity: number, goalPosit
 	self:_MarkDirty(entity)
 end
 
-function StructureBuildContributionSystem:_ClearPathGoal(entity: number)
+function StructureConstructionContributionSystem:_ClearPathGoal(entity: number)
 	local state = self._unitReadService:GetPathState(entity) or {}
 	self._entityFactory:Set(entity, "PathState", {
 		GoalPosition = nil,
@@ -235,19 +232,13 @@ function StructureBuildContributionSystem:_ClearPathGoal(entity: number)
 	self:_MarkDirty(entity)
 end
 
-function StructureBuildContributionSystem:_SetPresentation(entity: number, animationState: string, isLooping: boolean)
-	self._entityFactory:Set(entity, "AnimationState", animationState, "Unit")
-	self._entityFactory:Set(entity, "AnimationLooping", isLooping, "Unit")
-	self:_MarkDirty(entity)
-end
-
-function StructureBuildContributionSystem:_Get(entity: number, key: string, featureName: string): any
+function StructureConstructionContributionSystem:_Get(entity: number, key: string, featureName: string): any
 	local result = self._entityFactory:Get(entity, key, featureName)
 	return if result.success then result.value else nil
 end
 
-function StructureBuildContributionSystem:_MarkDirty(entity: number)
+function StructureConstructionContributionSystem:_MarkDirty(entity: number)
 	self._entityFactory:Add(entity, "DirtyTag", "Entity")
 end
 
-return StructureBuildContributionSystem
+return StructureConstructionContributionSystem

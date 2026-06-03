@@ -115,9 +115,10 @@ Read in this order:
 
 Read these when relevant:
 
-- [architecture/backend/ECS_OVERVIEW.md](architecture/backend/ECS_OVERVIEW.md) for the high-level ECS role map
+- [architecture/backend/SHARED_ENTITY_ECS_ARCHITECTURE.md](architecture/backend/SHARED_ENTITY_ECS_ARCHITECTURE.md) for the high-level shared ECS role map
 - [architecture/backend/ENTITY_IMPLEMENTATION_PIPELINE.md](architecture/backend/ENTITY_IMPLEMENTATION_PIPELINE.md) when the task is creating a new entity family or extending an existing one end to end
-- [methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md](methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md) for entity, instance, and sync ownership
+- [methods/ECS/ENTITY_RUNTIME_BOUNDARIES.md](methods/ECS/ENTITY_RUNTIME_BOUNDARIES.md) for shared runtime ownership and teardown boundaries
+- [methods/ECS/REQUEST_AND_OUTCOME_PIPELINE_RULES.md](methods/ECS/REQUEST_AND_OUTCOME_PIPELINE_RULES.md) for actor-state and request-entity design
 
 ---
 

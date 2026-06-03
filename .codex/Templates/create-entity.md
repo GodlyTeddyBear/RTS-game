@@ -10,7 +10,7 @@ Scope constraints:
 Canonical references:
 - [Entity Implementation Pipeline](../documents/architecture/backend/ENTITY_IMPLEMENTATION_PIPELINE.md)
 - [AI Runtime Overview](../../src/ServerScriptService/Readmes/ai.md)
-- [Runtime Hub](../../src/ServerScriptService/Readmes/runtime-hub.md)
+- [Combat Overview](../../src/ServerScriptService/Readmes/combat.md)
 
 ---
 

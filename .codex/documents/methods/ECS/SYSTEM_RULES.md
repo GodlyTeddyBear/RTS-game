@@ -1,105 +1,88 @@
 # System Rules
 
+Method contract for ECS systems in the shared `EntityContext` runtime.
+
+Canonical architecture references:
+- [../../architecture/backend/SHARED_ENTITY_ECS_ARCHITECTURE.md](../../architecture/backend/SHARED_ENTITY_ECS_ARCHITECTURE.md)
+- [REQUEST_AND_OUTCOME_PIPELINE_RULES.md](REQUEST_AND_OUTCOME_PIPELINE_RULES.md)
 
 ---
+
 ## Core Rules
 
-- Systems are stateless — all state lives in components, not in the system object
-- Systems declare their reads and writes explicitly at the top of every `Tick` method
-- Exactly one system owns writes to any given `[AUTHORITATIVE]` component
-- Systems never call other systems directly — communicate through components or events
-- Systems do not hardcode entity IDs — they query via factory methods
-- Systems belong to exactly one phase
-- Deferred operations (spawn, destroy) are queued and flushed at phase boundaries, never mid-tick
-
+- Systems are stateless. Persistent state belongs in components.
+- Systems declare reads and writes explicitly at the top of `Run` or `Tick`.
+- Exactly one system owns writes to any authoritative component.
+- Systems communicate through components, request entities, or explicit context events. They never call other systems directly.
+- Systems own orchestration. Services assist systems but do not replace them.
+- Shared systems are preferred over duplicate feature-specific systems when the mechanic is the same.
 
 ---
-## Statelessness
 
-A system may hold references to its dependencies (factory, event bus, config) but never mutable state. If you find yourself storing frame-to-frame values on the system, those values belong in a component.
+## Services vs Systems
 
-```lua
--- CORRECT: system holds only injected dependencies
-function StructureAttackSystem.new(factory: StructureEntityFactory, eventBus: EventBus)
-    return setmetatable({ _factory = factory, _eventBus = eventBus }, StructureAttackSystem)
-end
-
--- WRONG: system holds mutable state
-self._lastAttackTime = tick() -- this belongs in a component
-```
-
+- A service may:
+  - read across multiple components
+  - cache expensive runtime data
+  - run pathfinding or targeting calculations
+  - bridge to Roblox objects or APIs
+- A service must not:
+  - own multi-step gameplay execution
+  - mutate unrelated authoritative state as a hidden pipeline
+  - replace request-entity or actor-state flows
 
 ---
-## Read/Write Declaration
 
-Every `Tick` method declares its reads and writes in comments at the top. This is the contract between the system and the phase scheduler.
+## Request-Driven Design
 
-```lua
--- READS: AttackStatsComponent [AUTHORITATIVE], CooldownComponent [AUTHORITATIVE], TargetComponent [AUTHORITATIVE]
--- WRITES: CooldownComponent [AUTHORITATIVE]
-function StructureAttackSystem:Tick(dt: number)
-    for _, entity in ipairs(self._factory:QueryActiveEntities()) do
-        local stats = self._factory:GetAttackStats(entity)
-        local cooldown = self._factory:GetCooldown(entity)
-
-        local elapsed = cooldown.Elapsed + dt
-        self._factory:SetCooldownElapsed(entity, elapsed)
-
-        if elapsed >= stats.AttackCooldown then
-            self._eventBus:Fire("AttackReady", { entity = entity })
-        end
-    end
-end
-```
-
-
----
-## Communication
-
-Systems communicate intent through events or by writing components — never by calling another system's methods.
-
-```lua
--- CORRECT: fire an event; another system handles it
-self._eventBus:Fire("AttackReady", { entity = entity })
-
--- WRONG: direct cross-system call
-self._damageSystem:ApplyDamage(entity, damage)
-```
-
-
----
-## Ownership
-
-No two systems write the same `[AUTHORITATIVE]` component. If a second system needs to influence a value, it does so by writing a separate input component that the owning system reads.
-
-```lua
--- CORRECT: DamageInputSystem writes DamageInputComponent [AUTHORITATIVE]
---          HealthSystem reads DamageInputComponent and writes Health [AUTHORITATIVE]
-
--- WRONG: both AttackSystem and PoisonSystem write Health directly
-```
+- If a mechanic spans multiple responsibilities, split it across systems.
+- A system may:
+  - advance actor state
+  - emit request entities
+  - resolve request entities
+  - mark outcomes as processed or failed
+- A system should not perform attack, projectile spawn, damage, cleanup, and destruction as one hidden block.
 
 ---
 
 ## Examples
 
-<!-- Add context-specific correct usage examples here when updating this contract. -->
+```lua
+-- READS: Combat.AttackState [AUTHORITATIVE]
+-- WRITES: Combat.ProjectileSpawnRequest [AUTHORITATIVE]
+function CombatAttackSystem:Run()
+    ...
+end
+```
+
+```lua
+-- Wrong: service owns the whole feature pipeline
+self._combatService:PerformAttack(entity, target)
+```
 
 ---
 
 ## Prohibitions
 
-- Do not violate the required rules defined in this document's Core Rules and contract sections.
+- Do not store mutable frame-to-frame state on system objects.
+- Do not call another system directly.
+- Do not let a service become the real owner of the mechanic while the system becomes a thin wrapper.
+- Do not create duplicate feature systems when one shared system can own the mechanic.
 
 ---
 
 ## Failure Signals
 
-- Implementation behavior contradicts one or more required rules in this contract.
+- A service named `*Service` is effectively the gameplay system.
+- Two or more systems write the same authoritative component.
+- Multiple feature contexts each own their own copy of the same movement, cleanup, or damage mechanic.
 
 ---
 
 ## Checklist
 
-- [ ] All required rules in this contract are satisfied.
-
+- [ ] Systems are stateless.
+- [ ] Reads and writes are declared explicitly.
+- [ ] One system owns each authoritative component.
+- [ ] Systems communicate through components, requests, or events.
+- [ ] Services support systems instead of replacing them.

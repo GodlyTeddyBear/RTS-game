@@ -14,13 +14,12 @@ local ACTION_EXTRACT = "Extract"
 function StructureExtractionSystem.new(entityFactory: any, dependencies: any)
 	local self = setmetatable({}, StructureExtractionSystem)
 	self._entityFactory = entityFactory
-	self._miningContext = dependencies.MiningContext
 	return self
 end
 
 function StructureExtractionSystem:Run()
 	-- READS: Structure.ExtractState [AUTHORITATIVE], Structure.SourcePlacement [AUTHORITATIVE], AI.ActionState [AUTHORITATIVE]
-	-- WRITES: Structure.AnimationState [DERIVED], Structure.AnimationLooping [DERIVED], Entity.DirtyTag
+	-- WRITES: Mining.ExtractWorkRequest [AUTHORITATIVE], Mining.RequestTag
 	local queryResult = self._entityFactory:Query({
 		FeatureName = "Structure",
 		Keys = { "ExtractState", "OperationalTag" },
@@ -38,14 +37,10 @@ end
 function StructureExtractionSystem:_RunEntity(entity: number, deltaTime: number)
 	local actionState = self:_Get(entity, AISharedContract.Components.ActionState, AISharedContract.FeatureName)
 	if type(actionState) ~= "table" or actionState.ActionId ~= ACTION_EXTRACT then
-		if type(actionState) == "table" and actionState.ActionId == "Idle" then
-			self:_SetPresentation(entity, "Idle", true)
-		end
 		return
 	end
 
-	self:_SetPresentation(entity, "Extract", true)
-	if deltaTime <= 0 or self._miningContext == nil then
+	if deltaTime <= 0 then
 		return
 	end
 
@@ -58,22 +53,15 @@ function StructureExtractionSystem:_RunEntity(entity: number, deltaTime: number)
 		return
 	end
 
-	local miningEntityResult = self._miningContext:GetExtractorEntityByInstanceId(instanceId)
-	if not miningEntityResult.success or type(miningEntityResult.value) ~= "number" then
-		return
-	end
-	local miningSystemResult = self._miningContext:GetExtractorMiningSystem()
-	if not miningSystemResult.success or miningSystemResult.value == nil then
-		return
-	end
-
-	miningSystemResult.value:AdvanceExtractor(miningEntityResult.value, deltaTime)
-end
-
-function StructureExtractionSystem:_SetPresentation(entity: number, animationState: string, isLooping: boolean)
-	self._entityFactory:Set(entity, "AnimationState", animationState, "Structure")
-	self._entityFactory:Set(entity, "AnimationLooping", isLooping, "Structure")
-	self._entityFactory:Add(entity, "DirtyTag", "Entity")
+	self._entityFactory:CreateFromArchetype("Mining.ExtractWorkRequest", {
+		ExtractWorkRequest = {
+			SourceEntity = entity,
+			InstanceId = instanceId,
+			DeltaTime = deltaTime,
+			CreatedAt = os.clock(),
+			Status = "Requested",
+		},
+	})
 end
 
 function StructureExtractionSystem:_Get(entity: number, key: string, featureName: string): any

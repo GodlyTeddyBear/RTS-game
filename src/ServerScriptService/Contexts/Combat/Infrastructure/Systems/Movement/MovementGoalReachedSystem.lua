@@ -40,17 +40,15 @@ function MovementGoalReachedSystem:Run()
 end
 
 function MovementGoalReachedSystem:_ApplyRule(rule: any, entity: number, intent: any, applyResult: any)
-	if type(rule.AddTag) == "table" then
-		self._entityFactory:Add(entity, rule.AddTag.Key, rule.AddTag.FeatureName)
-	end
-	if type(rule.OnReached) == "function" then
-		rule.OnReached({
-			Entity = entity,
-			Intent = intent,
-			ApplyResult = applyResult,
-			EntityFactory = self._entityFactory,
-		})
-	end
+	self._entityFactory:CreateFromArchetype("Combat.GoalReachedOutcomeRequest", {
+		GoalReachedOutcomeRequest = {
+			SourceEntity = entity,
+			OutcomeId = rule.OutcomeId,
+			ActionId = intent.ActionId,
+			CreatedAt = os.clock(),
+			ExpiresAt = os.clock() + 1,
+		},
+	})
 end
 
 function MovementGoalReachedSystem:_Get(entity: number, key: string, featureName: string): any

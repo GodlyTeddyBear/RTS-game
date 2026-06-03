@@ -1,267 +1,125 @@
 # Entity Implementation Pipeline
 
-This document defines the full backend pipeline for adding a new entity family or a new entity variant inside an existing owning context.
+This document defines the current backend pipeline for adding or extending an Entity-backed actor family.
 
-Canonical method and architecture references:
+Canonical references:
 - [BACKEND.md](BACKEND.md)
-- [DDD.md](DDD.md)
-- [ECS_OVERVIEW.md](ECS_OVERVIEW.md)
-- [SYSTEMS.md](SYSTEMS.md)
-- [../../methods/backend/CONTEXT_BOUNDARIES.md](../../methods/backend/CONTEXT_BOUNDARIES.md)
-- [../../methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md](../../methods/backend/INFRA_RUNTIME_PERSISTENCE_CONTRACTS.md)
+- [SHARED_ENTITY_ECS_ARCHITECTURE.md](SHARED_ENTITY_ECS_ARCHITECTURE.md)
 - [../../methods/ECS/COMPONENT_RULES.md](../../methods/ECS/COMPONENT_RULES.md)
 - [../../methods/ECS/ENTITY_FACTORY_RULES.md](../../methods/ECS/ENTITY_FACTORY_RULES.md)
 - [../../methods/ECS/SYSTEM_RULES.md](../../methods/ECS/SYSTEM_RULES.md)
-- [../../methods/ECS/ECS_PERSISTENCE_RULES.md](../../methods/ECS/ECS_PERSISTENCE_RULES.md)
-- [../../../Templates/README.md](../../../Templates/README.md)
-- [../../../Templates/ai-runtime-context.md](../../../Templates/ai-runtime-context.md)
-- [../../../Templates/ai-runtime-creator.md](../../../Templates/ai-runtime-creator.md)
+- [../../methods/ECS/ENTITY_RUNTIME_BOUNDARIES.md](../../methods/ECS/ENTITY_RUNTIME_BOUNDARIES.md)
+- [../../methods/ECS/REQUEST_AND_OUTCOME_PIPELINE_RULES.md](../../methods/ECS/REQUEST_AND_OUTCOME_PIPELINE_RULES.md)
 
 ---
 
 ## Overview
 
-- Use this pipeline when adding a new entity family such as `Structure`, `Enemy`, `Unit`, `Summon`, `Resource`, or a new variant inside one of those families.
-- Start from the owning bounded context. The shared runtime never becomes the owner of context-specific configs, profiles, adapters, resolvers, or instance policy.
-- Treat the pipeline as data first, ECS second, runtime bridge third, and projection or persistence last.
-- If the new entity introduces a brand-new bounded context, read the backend-context template path from [../../../Templates/README.md](../../../Templates/README.md) before creating files.
-- If the new entity only adds a new type inside an existing context, prefer extending the context's existing config, runtime profile registry, systems, and factories instead of creating a parallel context.
+- Use this pipeline when adding or migrating `Enemy`, `Structure`, `Unit`, `Summon`, or another actor family that should live in the shared `EntityContext` world.
+- Start from the owning feature context.
+- Keep the order: config and types first, schema second, spawn payload third, systems fourth, persistence or projection last.
+- Prefer extending shared movement, attack, cleanup, and outcome pipelines over creating new feature-specific executor services.
 
 ---
 
 ## Rules
 
-### 1. Choose the owning context before writing files
+### 1. Choose the owning feature context
 
-- Put the new entity in the context that owns its business rules, lifecycle, and persistence shape.
-- Create a new bounded context only when the entity needs separate application flows, separate persistence ownership, or separate ECS world ownership.
-- Do not move context-specific policy into `Combat`, `Mining`, or another shared runtime owner just because the entity uses that runtime.
+- The owning feature context keeps config, public APIs, AI profiles, behavior trees, and feature events.
+- `EntityContext` owns the shared ECS runtime.
+- Shared domain contexts such as `Combat` own shared mechanics, not feature identity.
 
-### 2. Start with canonical data and type shape
+### 2. Start with config and types
 
-- Add or extend the shared config record in `ReplicatedStorage/Contexts/<Context>/Config/`.
-- Add or extend the shared types in `ReplicatedStorage/Contexts/<Context>/Types/`.
-- Put stable identity fields in config or types first, then make factories and adapters consume those fields.
-- Define the canonical variant selector in data, usually a field such as `RuntimeProfileId`, `Class`, `Role`, or `BehaviorType`.
-- Do not hardcode variant selection rules in adapters or sync services when config can own them.
+- Add stable feature data in `ReplicatedStorage/Contexts/<Context>/Config` and `Types`.
+- Put role or variant selectors in config rather than spreading them across systems.
+- Keep AI profiles and behavior trees in the owning feature context.
 
-### 3. Register the entity in the context's error and dependency surface
+### 3. Register or extend feature schema
 
-- Add any context-specific error constants to `Errors.lua` when the new entity adds new failure paths.
-- Register new modules in `<Context>Context.lua` so `BaseContext` owns lifecycle and dependency resolution.
-- Keep module placement aligned with the existing context layout:
-  - `Infrastructure/ECS/` for world, components, entity factory, instance factory, and systems
-  - `Infrastructure/Persistence/` for sync and persistence bridges
-  - `Infrastructure/Services/` for runtime helpers, adapters, and non-persistence services
-  - `Infrastructure/Runtime/` for profiles and resolver factories when the entity uses a shared runtime
+- Add only the feature-specific authoritative or derived components that the actor family needs.
+- Reuse shared `Entity.*`, `Movement.*`, `Combat.*`, and other shared schemas where they already cover the mechanic.
+- Do not recreate shared state under a feature prefix unless the meaning is genuinely different.
 
-### 4. Extend or create the ECS schema
+### 4. Spawn through EntityContext
 
-- Add any required components or tags in the context's `*ComponentRegistry`.
-- Keep components as pure data and tags as binary markers.
-- Create only the components needed for authoritative runtime state, not convenience mirrors of data that already exists elsewhere.
-- Do not let application or domain modules mutate JECS directly; all ECS writes must go through the `*EntityFactory`.
+- Use `EntityContext:CreateEntity(...)` with the correct shared or feature archetype.
+- Write model selection, runtime projection, cleanup outcomes, and other setup through components.
+- Do not introduce a feature-local entity factory or world for actors already owned by `EntityContext`.
 
-### 5. Implement the entity factory as the only ECS mutation surface
+### 5. Route AI through AIContext
 
-- Create or extend `<Context>EntityFactory` methods for:
-  - entity creation
-  - identity reads
-  - runtime state reads and writes
-  - model or instance refs
-  - queries used by systems, sync, and adapters
-  - deferred deletion and cleanup
-- Keep the factory responsible for ECS entity lifecycle and typed access only.
-- Do not let the factory own Workspace parenting, live model creation, behavior profile selection, or ProfileStore writes.
+- Register feature behavior definitions and profiles from the owning context.
+- Keep evaluations, actions, and fact providers in `AIContext` when they are generic and reusable.
+- AI should write intent and actor state only. It should not execute gameplay effects.
 
-### 6. Add systems only for phase-owned runtime logic
+### 6. Use shared systems where the mechanic is shared
 
-- Add ECS systems when the entity needs recurring stateless phase behavior such as targeting, cooldown ticking, reveal stamping, or runtime state derivation.
-- Declare reads and writes clearly through factory APIs.
-- Split behavior across phases when ordering matters instead of relying on implicit sequencing inside one large system.
-- Do not turn adapter services or sync services into hidden systems that own recurring ECS mutation.
+- Movement should use `Movement.*` systems.
+- Attacks and damage should use `Combat.*` state and request systems.
+- Cleanup should use cleanup outcome requests and cleanup resolution systems.
+- Add feature systems only when the logic is genuinely feature-specific and not a duplicate shared mechanic.
 
-### 7. Add instance lifecycle ownership when the entity has a live model
+### 7. Treat services as helpers
 
-- Create or extend an `*InstanceFactory` when the entity owns Roblox instances or models.
-- Keep instance ownership limited to:
-  - asset lookup
-  - clone or build
-  - parenting
-  - reveal metadata
-  - baseline attributes
-  - cleanup
-- Store lookup refs such as `ModelRef` through the entity factory after bind.
-- Do not let the instance factory become the source of truth for authoritative game state.
+- Services may provide registries, calculations, caches, or Roblox integration.
+- Systems must own the gameplay pipeline.
+- If a service is effectively performing the whole movement, attack, or cleanup flow, the design is wrong.
 
-### 8. Add persistence and sync as bridge layers, not ownership layers
+### 8. Keep runtime projection generic
 
-- Add or extend a `*GameObjectSyncService` when ECS state must project to a model or atom-backed runtime view.
-- Add or extend a `*PersistenceService` when ECS state must serialize to `profile.Data`.
-- Keep sync services projection-only and optional polling-only where the context explicitly owns polling.
-- Keep persistence services limited to plain-data bridge logic.
-- Do not let sync or persistence services create entities, destroy entities, or choose behavior definitions.
+- Model binding, transform projection, humanoid projection, and polling belong to `EntityContext`.
+- Feature spawn/setup writes the components that select those behaviors.
+- Reveal metadata may exist temporarily for discovery, but gameplay state should rely on component replication rather than attributes.
 
-### 9. Add runtime profile ownership when the entity participates in a shared runtime
+### 9. Express outcomes as data
 
-- Add `Infrastructure/Runtime/Profiles/<Context>RuntimeProfiles.lua` when the entity needs combat, mining, AI, or another runtime-driven behavior family.
-- Put all variant-specific runtime policy there:
-  - `BehaviorDefinition`
-  - `TickInterval`
-  - animation-state resolution
-  - looping rules
-  - variant fallback logic
-- Resolve variants from canonical config or identity data.
-- Add new variants by extending the profile registry, not by growing `if Variant == ...` branches across adapters and sync services.
-
-### 10. Add adapters and resolvers as the bridge into shared runtimes
-
-- Create one adapter service per runtime owner, such as `StructureCombatAdapterService` and `StructureMiningAdapterService`.
-- Keep each adapter thin:
-  - configure the runtime owner
-  - register actor type once
-  - register and unregister actors
-  - build facts and services callbacks
-  - resolve the runtime profile
-- Extract callback-building and proxy wiring into `Runtime/Resolvers/*Factory.lua`.
-- Do not let the shared runtime own context-specific payload details, facts rules, resolver tables, or profile registries.
-
-### 11. Wire application flows to the full entity lifecycle
-
-- Add or extend application commands and queries so entity creation, lookup, mutation, damage, cleanup, and save or load flows use the factory and service boundaries correctly.
-- Ensure removal flows unregister runtime actors before deleting live entity state when the entity is runtime-owned.
-- Ensure create flows register sync projection and runtime actors after the entity and model exist.
-- Keep business validation in application or domain code, not inside low-level infrastructure helpers.
-
-### 12. Treat multi-runtime entities as one context with multiple bridges
-
-- When one entity family participates in multiple runtimes, keep one owning context and add one adapter per runtime owner.
-- Share config, entity factory, instance ownership, and sync projection inside the owning context.
-- Split only the runtime bridge pieces:
-  - adapter service
-  - runtime profile selection path when needed
-  - resolver factories specific to that runtime
-- Do not duplicate the entity family into multiple contexts just because it talks to multiple shared runtimes.
+- Use components such as cleanup outcomes, goal-reached outcomes, and health-depleted outcomes to select behavior.
+- Systems consume those outcomes and emit requests or perform the bounded effect.
+- Do not register per-feature destruction callbacks when a request-driven outcome system can own the work.
 
 ---
 
-## Full Pipeline
+## Current Pipeline
 
-### New entity family inside a new owning context
-
-1. Choose the owning context and read the matching templates.
-2. Create config, types, and errors.
-3. Create the context service and register modules.
-4. Create the ECS world service, component registry, entity factory, and required systems.
-5. Create the instance factory when the entity owns live models.
-6. Create sync and persistence bridges.
-7. Create runtime profiles, adapters, and resolver factories when the entity participates in a shared runtime.
-8. Add application commands and queries for create, mutate, query, cleanup, and persistence orchestration.
-9. Connect profile load and save flows when the entity is persisted.
-10. Verify create, tick, sync, unregister, delete, and save or load flows end to end.
-
-### New variant inside an existing entity family
-
-1. Extend shared config and types with the new variant record.
-2. Extend the runtime profile registry with the new variant's behavior and animation mapping when runtime-driven.
-3. Extend entity factory creation logic only if the variant needs new authoritative ECS fields.
-4. Extend systems only if the variant introduces new recurring phase logic.
-5. Extend instance factory setup only if the variant changes model creation or reveal policy.
-6. Extend sync projection only when the projected attributes genuinely differ.
-7. Avoid adding variant branches in multiple layers when one profile or config table can own the difference.
+```text
+Feature config/types
+    -> feature schema registration
+    -> feature spawn command builds entity payload
+    -> EntityContext creates entity
+    -> AIContext configures behavior where needed
+    -> shared and feature systems run by phase
+    -> shared runtime projection and replication
+    -> cleanup outcomes resolved before deletion
+```
 
 ---
 
-## Structure Example
+## Example
 
-The `Structure` pipeline is the canonical example of a multi-runtime entity family:
+### Enemy or Structure migration shape
 
-```text
-ReplicatedStorage/Contexts/Structure/
-  Config/StructureConfig.lua
-  Types/StructureTypes.lua
-
-ServerScriptService/Contexts/Structure/
-  StructureContext.lua
-  Application/
-    Commands/RegisterStructureCommand.lua
-    Commands/ApplyDamageStructureCommand.lua
-    Commands/CleanupAllCommand.lua
-    Queries/GetActiveStructuresQuery.lua
-  Infrastructure/
-    ECS/
-      StructureComponentRegistry.lua
-      StructureECSWorldService.lua
-      StructureEntityFactory.lua
-      StructureInstanceFactory.lua
-    Persistence/
-      StructureGameObjectSyncService.lua
-    Runtime/
-      Profiles/
-        StructureRuntimeProfiles.lua
-      Resolvers/
-        StructureFactsResolverFactory.lua
-        StructureTargetingResolverFactory.lua
-        StructureProjectileResolverFactory.lua
-        StructureMiningProxyResolverFactory.lua
-        StructureFactoryProxyResolverFactory.lua
-    Services/
-      StructureCombatAdapterService.lua
-      StructureMiningAdapterService.lua
-      StructureTargetingSystem.lua
-      StructureAttackSystem.lua
-```
-
-Structure-specific rules:
-
-- `StructureConfig` owns the canonical `RuntimeProfileId` for each structure type.
-- `StructureEntityFactory` owns authoritative structure ECS state and lookups.
-- `StructureInstanceFactory` owns the live model lifecycle.
-- `StructureGameObjectSyncService` projects runtime state to the model and resolves animation through `StructureRuntimeProfiles`.
-- `StructureCombatAdapterService` bridges attack-capable structures into `CombatContext`.
-- `StructureMiningAdapterService` bridges extractor structures into `MiningContext`.
-- `StructureRuntimeProfiles` centralizes `Attack` versus `Extract` behavior selection and animation mapping.
-- Resolver factories keep callback and proxy construction out of the adapters.
-
-### Canonical create flow
-
-```text
-RegisterStructureCommand
-  -> StructureEntityFactory creates entity
-  -> StructureInstanceFactory creates or binds model
-  -> StructureGameObjectSyncService registers projection
-  -> StructureCombatAdapterService registers actor when RuntimeProfileId == "Attack"
-  -> StructureMiningAdapterService registers actor when RuntimeProfileId == "Extract"
-```
-
-### Canonical removal flow
-
-```text
-ApplyDamageStructureCommand or CleanupAllCommand
-  -> unregister combat actor when present
-  -> unregister mining actor when present
-  -> destroy or clean live model ownership
-  -> delete entity through StructureEntityFactory
-```
+1. Add or extend feature schema components.
+2. Add or extend feature AI behaviors and profiles.
+3. Spawn with `EntityContext:CreateEntity(...)` and feature setup components.
+4. Use shared `Movement.*` and `Combat.*` systems for generic mechanics.
+5. Add only narrow feature systems for residual feature logic.
+6. Select cleanup and outcome behavior through components, not callback registration.
 
 ---
 
 ## Anti-Patterns
 
-- Do not add a new entity by editing only the adapter service. The pipeline starts earlier at config, types, and ECS ownership.
-- Do not store variant policy in both config and runtime profiles. Config selects the variant; profiles define what that variant means at runtime.
-- Do not place projection logic, instance creation, and ECS mutation in one module.
-- Do not let runtime-owner contexts such as `Combat` or `Mining` accumulate context-specific entity rules.
-- Do not add repeated `if Type == ...` branches across sync services, adapters, and systems when one profile table can own the difference.
-- Do not skip unregister flow when deleting runtime-owned entities.
-- Do not add persistence writes directly in commands when a persistence bridge already owns the serialization boundary.
+- Do not create a new `*ECSWorldService` for an actor family that belongs in the shared Entity runtime.
+- Do not create feature-local movement, attack, or cleanup executor services when the mechanic is already shared.
+- Do not put cleanup, damage, or outcome behavior behind callback registries.
+- Do not replicate gameplay state by attributes when shared ECS replication should own it.
+- Do not split the same mechanic across both a service-owned runtime and ECS systems.
 
 ---
 
 ## Cross-References
 
-- Use [../../../Templates/backend-context.md](../../../Templates/backend-context.md) when the entity requires a new bounded context.
-- Use [../../../Templates/backend-service.md](../../../Templates/backend-service.md) when adding a new service module inside an existing context.
-- Use [../../../Templates/backend-syncservice.md](../../../Templates/backend-syncservice.md) when adding a sync bridge.
-- Use [../../../Templates/ai-runtime-context.md](../../../Templates/ai-runtime-context.md) when the context consumes a shared runtime.
-- Use [../../../Templates/ai-runtime-creator.md](../../../Templates/ai-runtime-creator.md) when the task is creating a new runtime-owner context instead of a runtime consumer.
+- Use [SYSTEMS.md](SYSTEMS.md) for runtime and library context.
+- Use [UTILITY_USE.md](UTILITY_USE.md) when deciding whether logic belongs in a shared helper or in a system.

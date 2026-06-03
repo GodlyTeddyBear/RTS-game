@@ -47,7 +47,37 @@ function MovementPresentationProjectionSystem:_ProjectEntity(rule: any, entity: 
 		return
 	end
 
+	if type(actionState) == "table" and type(rule.ActionPresentation) == "table" then
+		local actionProjection = rule.ActionPresentation[actionState.ActionId]
+		if type(actionProjection) == "table" and self:_CanApplyActionProjection(actionProjection, isMoving) then
+			self:_ApplyActionProjection(rule, entity, actionProjection)
+			return
+		end
+	end
+
 	self:_ApplyMovementProjection(rule, entity, intent, speed, isMoving)
+end
+
+function MovementPresentationProjectionSystem:_CanApplyActionProjection(actionProjection: any, isMoving: boolean): boolean
+	if actionProjection.WhenNotMoving == true and isMoving then
+		return false
+	end
+	return true
+end
+
+function MovementPresentationProjectionSystem:_ApplyActionProjection(rule: any, entity: number, actionProjection: any)
+	if type(actionProjection.Animation) == "table" then
+		self:_SetAnimation(
+			entity,
+			actionProjection.Animation,
+			actionProjection.Animation.State or "Idle",
+			actionProjection.Animation.Looping == true
+		)
+	end
+	if type(actionProjection.TargetEntityId) == "table" then
+		self:_SetTargetEntityId(entity, actionProjection.TargetEntityId, actionProjection.TargetEntity)
+	end
+	self:_MarkDirty(entity, rule)
 end
 
 function MovementPresentationProjectionSystem:_ApplyAttackProjection(rule: any, entity: number, attackState: any)

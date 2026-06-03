@@ -1,101 +1,86 @@
 # World Isolation Rules
 
+Method contract for JECS world ownership in the current shared ECS architecture.
+
+Canonical architecture references:
+- [../../architecture/backend/SHARED_ENTITY_ECS_ARCHITECTURE.md](../../architecture/backend/SHARED_ENTITY_ECS_ARCHITECTURE.md)
+- [ENTITY_FACTORY_RULES.md](ENTITY_FACTORY_RULES.md)
 
 ---
+
 ## Core Rules
 
-- One JECS world per bounded context — worlds are never shared across contexts
-- Worlds never cross-reference each other — no entity ID from one world is used in another
-- Only the Infrastructure layer interacts with JECS directly (world creation, component registration, system ticking)
-- Domain and Application layers are fully decoupled from JECS — they call factory and service APIs only
-- World lifetime is managed by a dedicated `*ECSWorldService` per context
-- Contexts own system construction, phase order, and ticking; world services own world lifetime only
-- Cross-context communication uses domain events or service APIs, never shared world queries
-
+- `EntityContext` owns the shared gameplay JECS world.
+- Feature contexts that run on the shared ECS stack must not create a second JECS world for the same actors.
+- Only Infrastructure code interacts with JECS directly.
+- Domain and Application layers remain decoupled from raw world access.
+- Cross-context logic must go through context APIs, shared components, or request entities. It must not bypass ownership with direct world access.
 
 ---
+
+## Shared World Model
+
+- The canonical model is one shared world for Entity-backed gameplay actors.
+- Feature isolation is expressed through:
+  - feature-prefixed schemas
+  - owner-scoped systems
+  - component and tag ownership
+  - context APIs
+- World isolation now means protecting the shared world boundary from leaking into non-Infrastructure code, not spinning up one world per feature by default.
+
+---
+
 ## Layer Boundary
 
-JECS is an infrastructure concern. It must not leak into the Domain or Application layers.
-
 ```text
-Infrastructure  → creates world, registers components, ticks systems, owns factories
-Application     → calls factory/service APIs; no JECS imports
-Domain          → pure logic; no JECS imports
+Infrastructure -> world ownership, schema, factory, systems
+Application    -> commands and queries over EntityContext or feature context APIs
+Domain         -> pure rules, no JECS imports
 ```
 
 ```lua
--- CORRECT: Application layer calls a service API
-local enemies = self._enemyService:GetAliveEnemyCount()
-
--- WRONG: Application layer touches JECS directly
-local count = 0
-for _ in world:query(components.AliveTag) do count += 1 end
+-- Correct
+local result = self._entityContext:Query({
+    FeatureName = "Enemy",
+    Keys = { "AliveTag" },
+})
 ```
 
-
----
-## World Ownership
-
-Each bounded context that manages entities owns exactly one world through a dedicated world service. The world service is responsible for:
-
-- Creating the JECS world
-- Exposing the initialized world handle
-- Managing world readiness and teardown/reset hooks
-
-The context or a context-owned orchestration layer is responsible for:
-
-- Initializing the component registry
-- Constructing factories and systems
-- Declaring phase order
-- Ticking systems and deferred flush boundaries
-
 ```lua
--- CORRECT: isolated worlds per context
--- EnemyECSWorldService    → owns EnemyWorld, EnemyComponentRegistry, EnemyEntityFactory
--- StructureECSWorldService → owns StructureWorld, StructureComponentRegistry, StructureEntityFactory
-
--- WRONG: shared world across contexts
-local sharedWorld = Jecs.World.new()
-EnemyEntityFactory.new(sharedWorld, ...)
-StructureEntityFactory.new(sharedWorld, ...)
-```
-
-
----
-## Cross-Context Communication
-
-When one context needs information about another context's entities, it goes through a service API or domain event — never through a direct world query.
-
-```lua
--- CORRECT: StructureAttackSystem asks EnemyService for a target
-local target = self._enemyService:GetNearestAliveEnemy(position)
-
--- WRONG: StructureAttackSystem queries the enemy world directly
-for entity in enemyWorld:query(enemyComponents.AliveTag) do ... end
+-- Wrong
+for entity in world:query(enemyAliveTagId) do
+    ...
+end
 ```
 
 ---
 
-## Examples
+## Exceptions
 
-<!-- Add context-specific correct usage examples here when updating this contract. -->
+- A separate JECS world is acceptable only when the repo intentionally introduces a distinct runtime boundary with separate ownership, scheduling, and lifecycle.
+- That exception must be explicit. It is not the default pattern for feature migration.
 
 ---
 
 ## Prohibitions
 
-- Do not violate the required rules defined in this document's Core Rules and contract sections.
+- Do not create feature-local worlds for Entity-backed actors.
+- Do not let Application or Domain code import the raw JECS world.
+- Do not perform cross-context queries by reaching into another context's internals.
 
 ---
 
 ## Failure Signals
 
-- Implementation behavior contradicts one or more required rules in this contract.
+- A migrated feature still owns `*ECSWorldService` or a private world for actors now backed by `EntityContext`.
+- A command or policy imports JECS types or the raw world.
+- A feature context reads another feature's data by bypassing context APIs or shared component contracts.
 
 ---
 
 ## Checklist
 
-- [ ] All required rules in this contract are satisfied.
-
+- [ ] `EntityContext` is the only shared gameplay world owner for migrated actors.
+- [ ] Only Infrastructure code touches JECS directly.
+- [ ] Feature isolation is expressed through schemas, systems, and APIs rather than extra worlds.
+- [ ] Cross-context access respects ownership boundaries.

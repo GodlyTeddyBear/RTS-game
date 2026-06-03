@@ -7,7 +7,7 @@ This is the root document for backend architecture. Read this first, then follow
 ## Overview
 
 - The backend follows **Domain-Driven Design (DDD)** with three layers per bounded context, orchestrated by the **Knit** service framework.
-- Game entities are managed through **JECS** with the ECS ownership split documented in [ECS_OVERVIEW.md](ECS_OVERVIEW.md).
+- Game entities are managed through **JECS** with the shared ECS ownership split documented in [SHARED_ENTITY_ECS_ARCHITECTURE.md](SHARED_ENTITY_ECS_ARCHITECTURE.md).
 - Player data is persisted with **ProfileStore**.
 - State is replicated to clients with **Charm-sync**.
 - Shared technical helpers live in `ServerStorage/Utilities/` and are documented in [UTILITY_USE.md](UTILITY_USE.md).
@@ -45,7 +45,7 @@ Infrastructure       -> Technical implementation details
 Layer                (JECS world, entity storage, data persistence)
 ```
 
-ECS-specific ownership inside Infrastructure is further split in [ECS_OVERVIEW.md](ECS_OVERVIEW.md).
+ECS-specific ownership inside Infrastructure is further split in [SHARED_ENTITY_ECS_ARCHITECTURE.md](SHARED_ENTITY_ECS_ARCHITECTURE.md).
 
 ---
 
@@ -97,7 +97,7 @@ src/
 - [KNIT.md](KNIT.md) - Knit service framework, auto-discovery, lifecycle, client remotes
 - [ERROR_HANDLING.md](ERROR_HANDLING.md) - Success/data pattern, assertions vs validation, logging format, error constants
 - [STATE_SYNC.md](STATE_SYNC.md) - Deep clone rules, nested table sync, centralized mutation pattern
-- [ECS_OVERVIEW.md](ECS_OVERVIEW.md) - ECS roles, boundaries, sync placement, and persistence linkage
+- [SHARED_ENTITY_ECS_ARCHITECTURE.md](SHARED_ENTITY_ECS_ARCHITECTURE.md) - Shared EntityContext ECS roles, boundaries, request-driven flow, and runtime linkage
 - [ENTITY_IMPLEMENTATION_PIPELINE.md](ENTITY_IMPLEMENTATION_PIPELINE.md) - Full pipeline for adding a new entity family or entity variant across config, ECS, runtimes, sync, and persistence
 - [UTILITY_USE.md](UTILITY_USE.md) - Shared utility usage, ECS helper boundaries, and placement guidance
 - [SYSTEMS.md](SYSTEMS.md) - JECS, ProfileStore, debug logging, key libraries
@@ -108,6 +108,6 @@ src/
 
 - [architecture/ARCHITECTURE.md](../ARCHITECTURE.md) - Root architecture index
 - [backend/DDD.md](DDD.md) - DDD layer rules and bounded-context structure
-- [backend/ECS_OVERVIEW.md](ECS_OVERVIEW.md) - ECS ownership and runtime boundaries
+- [backend/SHARED_ENTITY_ECS_ARCHITECTURE.md](SHARED_ENTITY_ECS_ARCHITECTURE.md) - Shared ECS ownership and runtime boundaries
 - [backend/ENTITY_IMPLEMENTATION_PIPELINE.md](ENTITY_IMPLEMENTATION_PIPELINE.md) - End-to-end entity implementation flow
 - [backend/SYSTEMS.md](SYSTEMS.md) - Runtime systems, persistence flow, and library references

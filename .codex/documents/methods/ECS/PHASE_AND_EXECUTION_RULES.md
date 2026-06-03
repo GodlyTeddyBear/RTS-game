@@ -1,106 +1,104 @@
-# Phase and Execution Rules
+# Phase And Execution Rules
 
+Method contract for phase ownership and execution order in the shared `EntityContext` runtime.
+
+Canonical architecture references:
+- [../../architecture/backend/SHARED_ENTITY_ECS_ARCHITECTURE.md](../../architecture/backend/SHARED_ENTITY_ECS_ARCHITECTURE.md)
+- [REQUEST_AND_OUTCOME_PIPELINE_RULES.md](REQUEST_AND_OUTCOME_PIPELINE_RULES.md)
 
 ---
+
 ## Core Rules
 
-- Phase order is declared in one place per context and is the single source of truth
-- Every system belongs to exactly one phase
-- No system depends on ordering relative to another system within the same phase — if order matters, use separate phases
-- Deferred operations (entity creation, destruction) flush at the end of the Logic phase, before Sync
-- `[DERIVED]` components are updated in the Sync phase, after all `[AUTHORITATIVE]` writes are complete
-- Systems in the Render phase are read-only — no component writes
-
+- Phase order is declared once in shared Entity phase config and is the single source of truth.
+- Every system belongs to exactly one phase.
+- If ordering matters, use separate phases. Never rely on registration order inside one phase.
+- Deferred destruction flushes only after runtime phases complete.
+- Cleanup request resolution must happen before entity unbind or deletion when destruction preparation runs synchronously.
+- Derived projection should run only after authoritative writes for that tick are complete.
 
 ---
-## Standard Phase Order
+
+## Shared Phase Model
+
+The current shared runtime uses grouped phases such as:
 
 ```text
-Input  →  Logic  →  Sync  →  Render
+MovementGrid
+-> MovementCalculate
+-> MovementApply
+-> PreSimulation
+-> Simulation
+-> PostSimulation
+-> Sense
+-> Decide
+-> Commit
+-> ActionStart
+-> ActionAdvance
+-> MechanicSpawn
+-> MechanicImpact
+-> DamageResolve
+-> RequestResolve
+-> Execute
+-> CleanupResolve
+-> Cleanup
 ```
 
-| Phase | Purpose | Writes Allowed |
-|-------|---------|----------------|
-| Input | Read player or AI intent into components | `[AUTHORITATIVE]` input components |
-| Logic | Systems mutate authoritative components; deferred ops flush at end | `[AUTHORITATIVE]` components |
-| Sync | Derived components updated to reflect authoritative values; deferred ops have already flushed | `[DERIVED]` components only |
-| Render | Push values to UI or visuals | None |
+Rules:
 
+- `ActionStart` creates actor state from intent.
+- `ActionAdvance` advances actor state.
+- `MechanicSpawn`, `MechanicImpact`, `DamageResolve`, and `RequestResolve` progressively resolve work.
+- `CleanupResolve` handles synchronous cleanup requests such as destruction preparation.
+- `Cleanup` removes processed transient requests or expired transient state.
 
 ---
-## Phase Declaration
 
-Phase order is declared once per context, typically in the world service. Never rely on implicit ordering.
+## Scheduling Rules
 
-```lua
--- Single source of truth for phase order in this context
-local PHASES = {
-    "Input",  -- 1
-    "Logic",  -- 2
-    "Sync",   -- 3
-    "Render", -- 4
-}
-```
-
-
----
-## Deferred Operation Flush
-
-Entity creation and destruction queued during the Logic phase are flushed at the end of Logic, before Sync runs. This ensures the Sync phase sees a stable, fully updated set of entities.
-
-```lua
--- World service tick loop
-function EnemyECSWorldService:Tick(dt: number)
-    self._inputSystem:Tick(dt)       -- Input phase
-
-    self._attackSystem:Tick(dt)      -- Logic phase
-    self._movementSystem:Tick(dt)    -- Logic phase
-    self._factory:FlushDestructionQueue() -- end of Logic: flush deferred ops
-
-    self._healthSyncSystem:Tick()    -- Sync phase
-
-    -- Render phase: UI systems read components, write nothing
-end
-```
-
-
----
-## Sync Phase Example
-
-`[DERIVED]` components are updated in Sync after all `[AUTHORITATIVE]` writes in Logic are complete.
-
-```lua
--- READS: Health [AUTHORITATIVE]
--- WRITES: HealthPercent [DERIVED]
-function HealthSyncSystem:Tick()
-    for _, entity in ipairs(self._factory:QueryAliveEntities()) do
-        local health = self._factory:GetHealth(entity)
-        self._factory:SetHealthPercent(entity, health.current / health.max)
-    end
-end
-```
+- The movement scheduler may run a subset of phases separately from the main combat scheduler when that split is explicit in the runtime.
+- A phase subset must still preserve its declared order.
+- A system must not assume another phase subset already ran unless the scheduler guarantees it.
 
 ---
 
 ## Examples
 
-<!-- Add context-specific correct usage examples here when updating this contract. -->
+```lua
+-- Correct: cleanup resolution has its own phase because it must finish
+-- before entity unbind/delete continues.
+entitySystemRegistry:RunPhases({ "CleanupResolve" })
+```
+
+```lua
+-- Wrong: two same-phase systems depend on registration order
+RegisterSystem("Execute", FirstPart)
+RegisterSystem("Execute", SecondPart) -- assumes FirstPart already wrote data
+```
 
 ---
 
 ## Prohibitions
 
-- Do not violate the required rules defined in this document's Core Rules and contract sections.
+- Do not rely on implicit order within a phase.
+- Do not mix action start and request resolution into one phase when the sequencing matters.
+- Do not delete entities before required cleanup resolution has completed.
+- Do not write derived projection before authoritative state is stable for the tick.
 
 ---
 
 ## Failure Signals
 
-- Implementation behavior contradicts one or more required rules in this contract.
+- A system depends on another same-phase system running first.
+- Cleanup side effects occur after the entity has already been unbound or deleted.
+- A service performs hidden intra-phase sequencing outside the registered phase model.
 
 ---
 
 ## Checklist
 
-- [ ] All required rules in this contract are satisfied.
-
+- [ ] Phase order is declared in one shared source.
+- [ ] Every system belongs to one phase only.
+- [ ] Ordering-sensitive work is split across phases.
+- [ ] Cleanup resolution completes before destructive teardown continues.
+- [ ] Derived projection runs after authoritative writes.

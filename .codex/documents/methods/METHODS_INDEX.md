@@ -46,11 +46,12 @@ Low-level method contracts for implementation work. These documents convert back
 ## ECS Contracts
 
 - [ECS/COMPONENT_RULES.md](ECS/COMPONENT_RULES.md) - ECS component rules: pure data, Authoritative/Derived labels, frozen registries.
-- [ECS/ENTITY_FACTORY_RULES.md](ECS/ENTITY_FACTORY_RULES.md) - Entity factory rules: only JECS mutation surface, typed accessors, deferred destruction.
-- [ECS/RUNTIME_OBJECT_BOUNDARIES.md](ECS/RUNTIME_OBJECT_BOUNDARIES.md) - Runtime ownership split for entity factories, instance factories, and game-object sync services.
-- [ECS/SYSTEM_RULES.md](ECS/SYSTEM_RULES.md) - System rules: stateless, read/write declaration, single owner per authoritative component.
-- [ECS/WORLD_ISOLATION_RULES.md](ECS/WORLD_ISOLATION_RULES.md) - World isolation rules: one world per bounded context, Infrastructure-only JECS access.
-- [ECS/PHASE_AND_EXECUTION_RULES.md](ECS/PHASE_AND_EXECUTION_RULES.md) - Phase rules: Inputâ†’Logicâ†’Syncâ†’Render order, deferred flush, Derived writes in Sync only.
+- [ECS/ENTITY_FACTORY_RULES.md](ECS/ENTITY_FACTORY_RULES.md) - Shared entity factory rules: JECS mutation surface, archetype creation, queries, and destruction boundaries.
+- [ECS/ENTITY_RUNTIME_BOUNDARIES.md](ECS/ENTITY_RUNTIME_BOUNDARIES.md) - Shared runtime ownership rules for EntityContext, feature contexts, and cleanup-driven teardown.
+- [ECS/REQUEST_AND_OUTCOME_PIPELINE_RULES.md](ECS/REQUEST_AND_OUTCOME_PIPELINE_RULES.md) - Request-entity and outcome pipeline rules: actor state, transient work, and system-owned orchestration.
+- [ECS/SYSTEM_RULES.md](ECS/SYSTEM_RULES.md) - System rules: statelessness, explicit ownership, and systems over service-owned gameplay flow.
+- [ECS/WORLD_ISOLATION_RULES.md](ECS/WORLD_ISOLATION_RULES.md) - World isolation rules: shared EntityContext world ownership and Infrastructure-only JECS access.
+- [ECS/PHASE_AND_EXECUTION_RULES.md](ECS/PHASE_AND_EXECUTION_RULES.md) - Shared phase rules for action start, request resolution, cleanup resolution, and deferred destruction.
 - [ECS/TAG_RULES.md](ECS/TAG_RULES.md) - ECS tag rules: binary state markers, world:entity() creation, PascalCaseTag naming.
 - [ECS/INSTANCE_REVEAL_RULES.md](ECS/INSTANCE_REVEAL_RULES.md) - Instance reveal rules: Attributes and CollectionService tags as the serverâ†’client discovery channel.
 - [ECS/ECS_PERSISTENCE_RULES.md](ECS/ECS_PERSISTENCE_RULES.md) - ECS persistence rules: ECSâ†”ProfileStore bridge, Save/Load/Delete shape, serialization and lifecycle.

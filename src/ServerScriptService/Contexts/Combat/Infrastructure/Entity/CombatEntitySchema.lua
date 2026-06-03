@@ -77,6 +77,17 @@ local CombatEntitySchema = {
 				ExpiresAt = nil,
 			},
 		},
+		GoalReachedOutcomeRequest = {
+			ECSName = "Combat.GoalReachedOutcomeRequest",
+			Authority = "AUTHORITATIVE",
+			Default = {
+				SourceEntity = 0,
+				OutcomeId = "",
+				ActionId = "",
+				CreatedAt = 0,
+				ExpiresAt = nil,
+			},
+		},
 		BaseDamageRequest = {
 			ECSName = "Combat.BaseDamageRequest",
 			Authority = "AUTHORITATIVE",
@@ -150,6 +161,14 @@ local CombatEntitySchema = {
 		HealthDepletedRequest = {
 			Components = {
 				HealthDepletedRequest = true,
+			},
+			Tags = {
+				RequestTag = true,
+			},
+		},
+		GoalReachedOutcomeRequest = {
+			Components = {
+				GoalReachedOutcomeRequest = true,
 			},
 			Tags = {
 				RequestTag = true,

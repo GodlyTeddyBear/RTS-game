@@ -12,7 +12,6 @@ local SummonAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local SummonAIProfiles = require(script.Parent.Config.AIProfiles)
 local SummonEntityReadService = require(script.Parent.Infrastructure.Entity.SummonEntityReadService)
 local SummonEntitySchema = require(script.Parent.Infrastructure.Entity.SummonEntitySchema)
-local SummonLifetimeSystem = require(script.Parent.Infrastructure.Systems.SummonLifetimeSystem)
 local CleanupSummonsCommand = require(script.Parent.Application.Commands.CleanupSummonsCommand)
 local SpawnAllyCommand = require(script.Parent.Application.Commands.SpawnAllyCommand)
 local SpawnSwarmDronesCommand = require(script.Parent.Application.Commands.SpawnSwarmDronesCommand)
@@ -119,33 +118,10 @@ end
 
 function SummonContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 	return Catch(function()
-		local featureResult = self._entityContext:RegisterEntityFeature({
+		return self._entityContext:RegisterEntityFeature({
 			FeatureName = "Summon",
 			Schema = SummonEntitySchema,
 		})
-		if not featureResult.success then
-			return featureResult
-		end
-
-		local lifetimeResult = self._entityContext:RegisterSystem("ActionAdvance", {
-			Name = "SummonLifetimeSystem",
-			Phase = "ActionAdvance",
-			Reads = {
-				"Summon.DroneTag",
-				"Entity.Lifetime",
-			},
-			Writes = {
-				"Entity.DestructionQueue",
-			},
-			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return SummonLifetimeSystem.new(entityFactory, self._entityContext)
-			end,
-		})
-		if not lifetimeResult.success then
-			return lifetimeResult
-		end
-
-		return Ok(true)
 	end, "SummonContext:RegisterEntityInfrastructure")
 end
 

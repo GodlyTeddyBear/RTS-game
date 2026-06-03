@@ -18,7 +18,7 @@ end
 
 function CombatStatusAuraSystem:Run()
 	-- READS: Combat.StatusAuraState [AUTHORITATIVE], Structure.Stats [AUTHORITATIVE], Entity.Transform [AUTHORITATIVE], Entity.Identity [AUTHORITATIVE], AI.ActionState [AUTHORITATIVE]
-	-- WRITES: Structure.AnimationState [DERIVED], Structure.AnimationLooping [DERIVED], Structure.TargetEnemyId [DERIVED], Entity.DirtyTag
+	-- WRITES: status runtime source cache
 	local queryResult = self._entityFactory:Query({
 		FeatureName = "Combat",
 		Keys = { "StatusAuraState" },
@@ -44,12 +44,6 @@ function CombatStatusAuraSystem:_RunEntity(entity: number)
 		if self._statusService ~= nil then
 			self._statusService:RemoveAuraSource(handle)
 		end
-		if type(actionState) == "table" and actionState.ActionId == "Idle" then
-			self._entityFactory:Set(entity, "AnimationState", "Idle", "Structure")
-			self._entityFactory:Set(entity, "AnimationLooping", true, "Structure")
-			self._entityFactory:Set(entity, "TargetEnemyId", nil, "Structure")
-			self._entityFactory:Add(entity, "DirtyTag", "Entity")
-		end
 		return
 	end
 
@@ -66,10 +60,6 @@ function CombatStatusAuraSystem:_RunEntity(entity: number)
 		MoveSpeedMultiplier = stats.MoveSpeedMultiplier or 1,
 		IsActive = true,
 	})
-	self._entityFactory:Set(entity, "AnimationState", "Stasis", "Structure")
-	self._entityFactory:Set(entity, "AnimationLooping", true, "Structure")
-	self._entityFactory:Set(entity, "TargetEnemyId", nil, "Structure")
-	self._entityFactory:Add(entity, "DirtyTag", "Entity")
 end
 
 function CombatStatusAuraSystem:_BuildStructureHandle(entity: number): string

@@ -1,5 +1,9 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local GameEvents = require(ReplicatedStorage.Events.GameEvents)
+
 local HealthDepletedOutcomeSystem = {}
 HealthDepletedOutcomeSystem.__index = HealthDepletedOutcomeSystem
 
@@ -43,18 +47,34 @@ function HealthDepletedOutcomeSystem:_Resolve(requestEntity: number)
 		return
 	end
 
-	if type(rule.OnDepleted) == "function" then
-		rule.OnDepleted({
-			Request = request,
-			EntityFactory = self._entityFactory,
-			EntityContext = self._entityContext,
-		})
+	if rule.EmitEnemyDeath == true and request.VictimKind == "Enemy" then
+		self:_EmitEnemyDeath(request.VictimEntity)
 	end
 	if rule.MarkVictimForDestruction == true and type(request.VictimEntity) == "number" then
 		self._entityContext:MarkForDestruction(request.VictimEntity)
 	end
 
 	self:_Processed(requestEntity)
+end
+
+function HealthDepletedOutcomeSystem:_EmitEnemyDeath(entity: number?)
+	if type(entity) ~= "number" then
+		return
+	end
+
+	local identity = self:_Get(entity, "Identity", "Entity")
+	local role = self:_Get(entity, "Role", "Enemy")
+	local transform = self:_Get(entity, "Transform", "Entity")
+	local roleId = if type(role) == "table" then role.Role else nil
+	local waveNumber = if type(role) == "table" then role.WaveNumber else nil
+	if type(identity) ~= "table" or type(roleId) ~= "string" or type(waveNumber) ~= "number" then
+		return
+	end
+
+	local deathCFrame = if type(transform) == "table" and typeof(transform.CFrame) == "CFrame"
+		then transform.CFrame
+		else CFrame.new()
+	GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, roleId, waveNumber, deathCFrame)
 end
 
 function HealthDepletedOutcomeSystem:_Get(entity: number, key: string, featureName: string): any

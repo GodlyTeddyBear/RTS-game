@@ -28,7 +28,7 @@ Use this workflow to migrate one existing bounded context and its application, p
 - `.codex/documents/methods/ECS/PHASE_AND_EXECUTION_RULES.md`
 - `.codex/documents/methods/ECS/TAG_RULES.md`
 - `.codex/documents/methods/ECS/INSTANCE_REVEAL_RULES.md`
-- `.codex/documents/methods/ECS/RUNTIME_OBJECT_BOUNDARIES.md`
+- `.codex/documents/methods/ECS/ENTITY_RUNTIME_BOUNDARIES.md`
 2. Read the target context entry module and every target application command/query, persistence service, ECS world service, component registry, entity factory, system, and persistence bridge that the migration touches.
 3. If the context creates Roblox runtime objects for ECS-backed entities, also read every model factory, object factory, or other runtime instance service that owns Workspace instances, attributes, or CollectionService tags.
 4. Read every existing documentation block and explanatory comment in the touched modules before editing so the migration preserves them unless the underlying code is removed.

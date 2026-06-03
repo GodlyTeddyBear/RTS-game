@@ -1,6 +1,7 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 local ServerStorage = game:GetService("ServerStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
@@ -11,7 +12,9 @@ local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.Struct
 
 local StructureEntityReadService = require(script.Parent.Infrastructure.Entity.StructureEntityReadService)
 local StructureEntitySchema = require(script.Parent.Infrastructure.Entity.StructureEntitySchema)
+local StructureConstructionContributionSystem = require(script.Parent.Infrastructure.Systems.StructureConstructionContributionSystem)
 local StructureExtractionSystem = require(script.Parent.Infrastructure.Systems.StructureExtractionSystem)
+local UnitEntityReadService = require(ServerScriptService.Contexts.Unit.Infrastructure.Entity.UnitEntityReadService)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
 local StructureAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local StructureAIProfiles = require(script.Parent.Config.AIProfiles)
@@ -44,6 +47,13 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		end,
 		CacheAs = "_structureReadService",
 	},
+	{
+		Name = "StructureUnitEntityReadService",
+		Factory = function(service: any, _baseContext: any)
+			return UnitEntityReadService.new(service._entityContext)
+		end,
+		CacheAs = "_unitReadService",
+	},
 }
 
 local DomainModules: { BaseContext.TModuleSpec } = {
@@ -72,7 +82,6 @@ local StructureContext = Knit.CreateService({
 		{ Name = "EntityContext", CacheAs = "_entityContext" },
 		{ Name = "EnemyContext", CacheAs = "_enemyContext" },
 		{ Name = "CombatContext", CacheAs = "_combatContext" },
-		{ Name = "MiningContext", CacheAs = "_miningContext" },
 		{ Name = "TeamContext", CacheAs = "_teamContext" },
 		{ Name = "RunContext", CacheAs = "_runContext" },
 		{ Name = "PlacementContext", CacheAs = "_placementContext" },
@@ -152,6 +161,33 @@ function StructureContext:_RegisterEntityInfrastructure(): Result.Result<boolean
 			return featureResult
 		end
 
+		local constructionResult = self._entityContext:RegisterSystem("ActionAdvance", {
+			Name = "StructureConstructionContributionSystem",
+			Phase = "ActionAdvance",
+			Reads = {
+				"Structure.BuildContributionState",
+				"Unit.BuilderAssignment",
+				"Unit.PathState",
+				"Entity.Ownership",
+				"AI.ActionState",
+			},
+			Writes = {
+				"Unit.BuilderAssignment",
+				"Unit.PathState",
+				"Movement.MoveIntent",
+				"Entity.DirtyTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return StructureConstructionContributionSystem.new(entityFactory, {
+					StructureContext = self,
+					UnitReadService = self._unitReadService,
+				})
+			end,
+		})
+		if not constructionResult.success then
+			return constructionResult
+		end
+
 		return self._entityContext:RegisterSystem("ActionAdvance", {
 			Name = "StructureExtractionSystem",
 			Phase = "ActionAdvance",
@@ -162,14 +198,11 @@ function StructureContext:_RegisterEntityInfrastructure(): Result.Result<boolean
 				"AI.ActionState",
 			},
 			Writes = {
-				"Structure.AnimationState",
-				"Structure.AnimationLooping",
-				"Entity.DirtyTag",
+				"Mining.ExtractWorkRequest",
+				"Mining.RequestTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return StructureExtractionSystem.new(entityFactory, {
-					MiningContext = self._miningContext,
-				})
+				return StructureExtractionSystem.new(entityFactory, {})
 			end,
 		})
 	end, "StructureContext:RegisterEntityInfrastructure")

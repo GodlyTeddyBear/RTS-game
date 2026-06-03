@@ -4,7 +4,7 @@
 
 Game entities (characters, items, NPCs, etc.) are managed by a JECS world. Services that create or manage entities belong in the **Infrastructure layer** and must respect DDD boundaries - Domain and Application layers do not interact with JECS directly.
 
-For the ECS role split and ownership boundaries, see [ECS_OVERVIEW.md](ECS_OVERVIEW.md).
+For the ECS role split and ownership boundaries, see [SHARED_ENTITY_ECS_ARCHITECTURE.md](SHARED_ENTITY_ECS_ARCHITECTURE.md).
 
 ---
 

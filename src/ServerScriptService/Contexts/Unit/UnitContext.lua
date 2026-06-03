@@ -10,7 +10,6 @@ local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 
 local UnitEntityReadService = require(script.Parent.Infrastructure.Entity.UnitEntityReadService)
 local UnitEntitySchema = require(script.Parent.Infrastructure.Entity.UnitEntitySchema)
-local StructureBuildContributionSystem = require(ServerScriptService.Contexts.Structure.Infrastructure.Systems.StructureBuildContributionSystem)
 local UnitAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local UnitAIProfiles = require(script.Parent.Config.AIProfiles)
 local UnitSpawnPolicy = require(script.Parent.UnitDomain.Policies.UnitSpawnPolicy)
@@ -122,37 +121,9 @@ end
 
 function UnitContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 	return Catch(function()
-		local featureResult = self._entityContext:RegisterEntityFeature({
+		return self._entityContext:RegisterEntityFeature({
 			FeatureName = "Unit",
 			Schema = UnitEntitySchema,
-		})
-		if not featureResult.success then
-			return featureResult
-		end
-
-		return self._entityContext:RegisterSystem("ActionAdvance", {
-			Name = "StructureBuildContributionSystem",
-			Phase = "ActionAdvance",
-			Reads = {
-				"Structure.BuildContributionState",
-				"Unit.BuilderAssignment",
-				"Unit.PathState",
-				"Entity.Ownership",
-				"AI.ActionState",
-			},
-			Writes = {
-				"Unit.BuilderAssignment",
-				"Unit.PathState",
-				"Unit.AnimationState",
-				"Unit.AnimationLooping",
-				"Entity.DirtyTag",
-			},
-			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return StructureBuildContributionSystem.new(entityFactory, {
-					StructureContext = self._structureContext,
-					UnitReadService = self._unitReadService,
-				})
-			end,
 		})
 	end, "UnitContext:RegisterEntityInfrastructure")
 end

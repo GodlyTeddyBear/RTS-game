@@ -7,8 +7,6 @@ local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
-local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
-local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local CombatAbilities = require(script.Parent.Config.CombatAbilities)
@@ -35,6 +33,7 @@ local AttackAdvanceSystem = require(script.Parent.Infrastructure.Systems.Attack.
 local CombatRequestCleanupSystem = require(script.Parent.Infrastructure.Systems.Attack.CombatRequestCleanupSystem)
 local DamageResolveSystem = require(script.Parent.Infrastructure.Systems.Attack.DamageResolveSystem)
 local BaseDamageResolveSystem = require(script.Parent.Infrastructure.Systems.Attack.BaseDamageResolveSystem)
+local GoalReachedOutcomeResolveSystem = require(script.Parent.Infrastructure.Systems.Outcome.GoalReachedOutcomeResolveSystem)
 local HealthDepletedOutcomeSystem = require(script.Parent.Infrastructure.Systems.Outcome.HealthDepletedOutcomeSystem)
 local HitboxImpactSystem = require(script.Parent.Infrastructure.Systems.Attack.HitboxImpactSystem)
 local HitboxSpawnSystem = require(script.Parent.Infrastructure.Systems.Attack.HitboxSpawnSystem)
@@ -379,6 +378,27 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return movementGoalReachedResult
 		end
 
+		local goalReachedOutcomeResult = self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "GoalReachedOutcomeResolveSystem",
+			Phase = "RequestResolve",
+			Reads = {
+				"Combat.GoalReachedOutcomeRequest",
+				"Combat.RequestTag",
+			},
+			Writes = {
+				"Enemy.GoalReachedTag",
+				"Combat.BaseDamageRequest",
+				"Combat.ProcessedTag",
+				"Entity.DestructionQueue",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return GoalReachedOutcomeResolveSystem.new(entityFactory)
+			end,
+		})
+		if not goalReachedOutcomeResult.success then
+			return goalReachedOutcomeResult
+		end
+
 		self._combatTargetReadService:Configure(self._entityContext)
 
 		local attackResult = self._entityContext:RegisterSystem("ActionAdvance", {
@@ -494,12 +514,6 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 				"Entity.Identity",
 				"AI.ActionState",
 			},
-			Writes = {
-				"Structure.AnimationState",
-				"Structure.AnimationLooping",
-				"Structure.TargetEnemyId",
-				"Entity.DirtyTag",
-			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
 				return CombatStatusAuraSystem.new(entityFactory, self._statusService)
 			end,
@@ -580,6 +594,7 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 				"Combat.HitboxSpawnRequest",
 				"Combat.DamageRequest",
 				"Combat.HealthDepletedRequest",
+				"Combat.GoalReachedOutcomeRequest",
 				"Combat.BaseDamageRequest",
 				"Combat.ProjectileSpawnRequest",
 				"Combat.ActiveHitboxState",
@@ -644,6 +659,18 @@ function CombatContext:_RegisterDefaultOutcomeRules(): Result.Result<boolean>
 				MovingState = "Walk",
 				IdleState = "Idle",
 			},
+			ActionPresentation = {
+				BuildStructure = {
+					WhenNotMoving = true,
+					Animation = {
+						FeatureName = "Unit",
+						StateKey = "AnimationState",
+						LoopingKey = "AnimationLooping",
+						State = "Build",
+						Looping = true,
+					},
+				},
+			},
 		})
 
 		self._combatOutcomeRuleRegistryService:RegisterMovementPresentationRule({
@@ -674,24 +701,82 @@ function CombatContext:_RegisterDefaultOutcomeRules(): Result.Result<boolean>
 			},
 		})
 
+		self._combatOutcomeRuleRegistryService:RegisterMovementPresentationRule({
+			RuleId = "Structure.ExtractPresentation",
+			Query = {
+				Keys = {
+					{ Key = "OperationalTag", FeatureName = "Structure" },
+					{ Key = "ExtractState", FeatureName = "Structure" },
+					{ Key = "ActionState", FeatureName = "AI" },
+				},
+			},
+			ActionPresentation = {
+				Extract = {
+					Animation = {
+						FeatureName = "Structure",
+						StateKey = "AnimationState",
+						LoopingKey = "AnimationLooping",
+						State = "Extract",
+						Looping = true,
+					},
+				},
+				Idle = {
+					Animation = {
+						FeatureName = "Structure",
+						StateKey = "AnimationState",
+						LoopingKey = "AnimationLooping",
+						State = "Idle",
+						Looping = true,
+					},
+				},
+			},
+		})
+
+		self._combatOutcomeRuleRegistryService:RegisterMovementPresentationRule({
+			RuleId = "Structure.StasisPresentation",
+			Query = {
+				Keys = {
+					{ Key = "OperationalTag", FeatureName = "Structure" },
+					{ Key = "StatusAuraState", FeatureName = "Combat" },
+					{ Key = "ActionState", FeatureName = "AI" },
+				},
+			},
+			ActionPresentation = {
+				Stasis = {
+					Animation = {
+						FeatureName = "Structure",
+						StateKey = "AnimationState",
+						LoopingKey = "AnimationLooping",
+						State = "Stasis",
+						Looping = true,
+					},
+					TargetEntityId = { FeatureName = "Structure", Key = "TargetEnemyId" },
+				},
+				Idle = {
+					Animation = {
+						FeatureName = "Structure",
+						StateKey = "AnimationState",
+						LoopingKey = "AnimationLooping",
+						State = "Idle",
+						Looping = true,
+					},
+					TargetEntityId = { FeatureName = "Structure", Key = "TargetEnemyId" },
+				},
+			},
+		})
+
 		self._combatOutcomeRuleRegistryService:RegisterGoalReachedRule({
 			RuleId = "Enemy.AdvanceGoalReached",
 			OutcomeId = "EnemyGoalReached",
 			Query = { FeatureName = "Enemy", Keys = { "AliveTag" } },
 			ActionId = "Advance",
-			AddTag = { FeatureName = "Enemy", Key = "GoalReachedTag" },
-			OnReached = function(context: any)
-				self:_HandleEnemyGoalReached(context.Entity)
-			end,
 		})
 
 		self._combatOutcomeRuleRegistryService:RegisterHealthDepletedRule({
 			OutcomeId = "EnemyDeath",
 			VictimKind = "Enemy",
 			MarkVictimForDestruction = true,
-			OnDepleted = function(context: any)
-				self:_EmitEnemyDeath(context.Request.VictimEntity)
-			end,
+			EmitEnemyDeath = true,
 		})
 
 		self._combatOutcomeRuleRegistryService:RegisterHealthDepletedRule({
@@ -702,54 +787,6 @@ function CombatContext:_RegisterDefaultOutcomeRules(): Result.Result<boolean>
 
 		return Ok(true)
 	end, "Combat:RegisterDefaultOutcomeRules")
-end
-
-function CombatContext:_HandleEnemyGoalReached(entity: number)
-	self._entityContext:Remove(entity, "AliveTag", "Enemy")
-	self._entityContext:Add(entity, "GoalReachedTag", "Enemy")
-	self:_EmitEnemyDeath(entity)
-	self._entityContext:MarkForDestruction(entity)
-
-	local role = self:_GetEntityValue(entity, "Role", "Enemy")
-	local roleId = if type(role) == "table" then role.Role else nil
-	local roleConfig = if type(roleId) == "string" then EnemyConfig.Roles[roleId] else nil
-	if roleConfig == nil then
-		return
-	end
-
-	self:RequestDamage({
-		ActionId = "EnemyGoalReached",
-		AbilityId = "EnemyBaseAttack",
-		AttackerEntity = entity,
-		VictimKind = "Base",
-		Amount = roleConfig.Damage,
-		Reason = "EnemyGoalReached",
-	})
-end
-
-function CombatContext:_EmitEnemyDeath(entity: number?)
-	if type(entity) ~= "number" then
-		return
-	end
-
-	local identity = self:_GetEntityValue(entity, "Identity", "Entity")
-	local role = self:_GetEntityValue(entity, "Role", "Enemy")
-	local transform = self:_GetEntityValue(entity, "Transform", "Entity")
-	local roleId = if type(role) == "table" then role.Role else nil
-	local waveNumber = if type(role) == "table" then role.WaveNumber else nil
-	if type(identity) ~= "table" or type(roleId) ~= "string" or type(waveNumber) ~= "number" then
-		return
-	end
-
-	local deathCFrame = if type(transform) == "table" and typeof(transform.CFrame) == "CFrame"
-		then transform.CFrame
-		else CFrame.new()
-	GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, roleId, waveNumber, deathCFrame)
-end
-
-function CombatContext:_GetEntityValue(entity: number, key: string, featureName: string): any
-	local result = self._entityContext:Get(entity, key, featureName)
-	return if result.success then result.value else nil
 end
 
 function CombatContext:_OnRunStarted()

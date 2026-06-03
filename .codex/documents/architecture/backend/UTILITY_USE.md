@@ -10,7 +10,7 @@ Use this as the default reference when introducing or reviewing a helper such as
 
 - [BACKEND.md](BACKEND.md) for the backend architecture overview.
 - [SYSTEMS.md](SYSTEMS.md) for JECS, ProfileStore, and shared runtime context.
-- [ECS_OVERVIEW.md](ECS_OVERVIEW.md) for ECS ownership boundaries.
+- [SHARED_ENTITY_ECS_ARCHITECTURE.md](SHARED_ENTITY_ECS_ARCHITECTURE.md) for shared ECS ownership boundaries.
 - [STATE_SYNC.md](STATE_SYNC.md) for sync placement and cloning rules.
 
 ---
@@ -184,8 +184,8 @@ Good utility:
 ```text
 Good ECS helper:
 - `ModelPlus` helps standardize model-related lookups or setup.
-- `InstanceFactory` still owns model lifecycle.
-- `SyncService` still owns projection.
+- `EntityContext` still owns model lifecycle.
+- Systems and runtime projection still own orchestration.
 ```
 
 ```text

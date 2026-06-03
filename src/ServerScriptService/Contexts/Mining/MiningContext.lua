@@ -25,6 +25,8 @@ local MiningComponentRegistry = require(script.Parent.Infrastructure.ECS.MiningC
 local MiningEntityFactory = require(script.Parent.Infrastructure.ECS.MiningEntityFactory)
 local MiningActorRegistryService = require(script.Parent.Infrastructure.Services.MiningActorRegistryService)
 local MiningBehaviorRuntimeService = require(script.Parent.Infrastructure.Services.MiningBehaviorRuntimeService)
+local MiningEntitySchema = require(script.Parent.Infrastructure.Entity.MiningEntitySchema)
+local MiningExtractWorkRequestSystem = require(script.Parent.Infrastructure.Systems.MiningExtractWorkRequestSystem)
 local ExtractorMiningSystem = require(script.Parent.Infrastructure.Systems.ExtractorMiningSystem)
 local MiningInstanceFactory = require(script.Parent.Infrastructure.ECS.MiningInstanceFactory)
 local ResourceNodeRegistryService = require(script.Parent.Infrastructure.Services.ResourceNodeRegistryService)
@@ -123,6 +125,7 @@ local MiningContext = Knit.CreateService({
 		{ Name = "PlacementContext", CacheAs = "_placementContext" },
 		{ Name = "RunContext", CacheAs = "_runContext" },
 		{ Name = "EconomyContext", CacheAs = "_economyContext" },
+		{ Name = "EntityContext", CacheAs = "_sharedEntityContext" },
 		{ Name = "StructureContext", CacheAs = "_structureContext" },
 	},
 	AIRuntimeContext = {
@@ -164,6 +167,14 @@ end
 ]=]
 function MiningContext:KnitStart()
 	MiningBaseContext:KnitStart()
+
+	local entityBridgeResult = self:_RegisterEntityRequestBridge()
+	if not entityBridgeResult.success then
+		error(("MiningContext failed to register Entity request bridge: [%s] %s"):format(
+			tostring(entityBridgeResult.type),
+			tostring(entityBridgeResult.message)
+		))
+	end
 
 	-- Register extractors when placement produces a new structure record.
 	self._structurePlacedConnection = self._placementContext.StructurePlaced:Connect(function(record: StructureRecord)
@@ -282,6 +293,35 @@ function MiningContext:_RegisterExtractor(record: StructureRecord): Result.Resul
 	end, "Mining:RegisterExtractor")
 end
 
+function MiningContext:_RegisterEntityRequestBridge(): Result.Result<boolean>
+	return Catch(function()
+		local schemaResult = self._sharedEntityContext:RegisterFeatureSchema("Mining", MiningEntitySchema)
+		if not schemaResult.success then
+			return schemaResult
+		end
+
+		return self._sharedEntityContext:RegisterSystem("RequestResolve", {
+			Name = "MiningExtractWorkRequestSystem",
+			Phase = "RequestResolve",
+			Reads = {
+				"Mining.ExtractWorkRequest",
+				"Mining.RequestTag",
+			},
+			Writes = {
+				"Mining.ExtractWorkRequest",
+				"Mining.ProcessedTag",
+				"Mining.FailedTag",
+				"Entity.DestructionQueue",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return MiningExtractWorkRequestSystem.new(entityFactory, {
+					MiningContext = self,
+				})
+			end,
+		})
+	end, "Mining:RegisterEntityRequestBridge")
+end
+
 function MiningContext:_CleanupAll(): Result.Result<boolean>
 	return Catch(function()
 		table.clear(self._extractorEntitiesByInstanceId)
@@ -356,12 +396,22 @@ function MiningContext:GetExtractorEntityByInstanceId(instanceId: number): Resul
 	return Result.Ok(self._extractorEntitiesByInstanceId[instanceId])
 end
 
-function MiningContext:GetExtractorMiningSystem(): Result.Result<any>
-	return Result.Ok(self._extractorMiningSystem)
-end
-
 function MiningContext:GetMiningActorActionState(actorHandle: string): Result.Result<TMiningActionState?>
 	return Result.Ok(self._actorRegistryService:GetActionStateByHandle(actorHandle))
+end
+
+function MiningContext:ApplyExtractWorkByInstanceId(instanceId: number, deltaTime: number): Result.Result<boolean>
+	return Catch(function()
+		local miningEntity = self._extractorEntitiesByInstanceId[instanceId]
+		if type(miningEntity) ~= "number" then
+			return Result.Err("UnknownExtractor", "Unknown extractor instance", {
+				InstanceId = instanceId,
+			})
+		end
+
+		self._extractorMiningSystem:ApplyExtractorWork(miningEntity, deltaTime)
+		return Result.Ok(true)
+	end, "Mining:ApplyExtractWorkByInstanceId")
 end
 
 function MiningContext:RegisterActorType(payload: TMiningActorTypePayload): Result.Result<boolean>
