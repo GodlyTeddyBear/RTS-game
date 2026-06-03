@@ -24,7 +24,6 @@ function MarkForDestructionCommand:Init(registry: any, _name: string)
 		_replicationService = "EntityReplicationService",
 		_entityContext = "EntityContextService",
 		_runtimeParticipation = "EntityRuntimeParticipationService",
-		_preDestroyCleanupRegistry = "EntityPreDestroyCleanupRegistry",
 		_prepareRuntimeEntityForRemovalCommand = "PrepareRuntimeEntityForRemovalCommand",
 	})
 end

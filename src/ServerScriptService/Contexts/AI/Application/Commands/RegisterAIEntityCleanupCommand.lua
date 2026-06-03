@@ -7,6 +7,7 @@ local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplica
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local Errors = require(script.Parent.Parent.Parent.Errors)
+local AICleanupOutcomeSystem = require(script.Parent.Parent.Parent.Infrastructure.Systems.AICleanupOutcomeSystem)
 
 local RegisterAIEntityCleanupCommand = {}
 RegisterAIEntityCleanupCommand.__index = RegisterAIEntityCleanupCommand
@@ -26,10 +27,20 @@ end
 
 function RegisterAIEntityCleanupCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
-		local registerResult = self._entityContext:RegisterCleanupOutcomeHandler({
-			OutcomeId = "AICleanup",
-			Handle = function(context: any): Result.Result<boolean>
-				return self._cleanupEntityAICommand:Execute(context.Request.SourceEntity)
+		local registerResult = self._entityContext:RegisterSystem("CleanupResolve", {
+			Name = "AICleanupOutcomeSystem",
+			Phase = "CleanupResolve",
+			Reads = {
+				"Entity.CleanupOutcomeRequest",
+				"Entity.CleanupRequestTag",
+			},
+			Writes = {
+				"Entity.CleanupOutcomeRequest",
+				"Entity.CleanupProcessedTag",
+				"Entity.CleanupFailedTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return AICleanupOutcomeSystem.new(entityFactory, self._cleanupEntityAICommand)
 			end,
 		})
 		if registerResult.success then

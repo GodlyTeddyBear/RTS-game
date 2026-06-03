@@ -9,6 +9,7 @@ local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
 local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 
 local TeamRuntimeService = require(script.Parent.Infrastructure.Services.TeamRuntimeService)
+local TeamCleanupOutcomeSystem = require(script.Parent.Infrastructure.Systems.TeamCleanupOutcomeSystem)
 local RegisterPlayerTeamCommand = require(script.Parent.Application.Commands.RegisterPlayerTeamCommand)
 local AssignMemberToPlayerTeamCommand = require(script.Parent.Application.Commands.AssignMemberToPlayerTeamCommand)
 local AssignMemberToEnemyTeamCommand = require(script.Parent.Application.Commands.AssignMemberToEnemyTeamCommand)
@@ -119,25 +120,21 @@ end
 
 function TeamContext:_RegisterCleanupOutcomes(): Result.Result<boolean>
 	return Catch(function()
-		return self._entityContext:RegisterCleanupOutcomeHandler({
-			OutcomeId = "TeamUnassign",
-			Handle = function(context: any)
-				local entity = context.Request.SourceEntity
-				local identityResult = context.EntityContext:Get(entity, "Identity", "Entity")
-				if not identityResult.success or type(identityResult.value) ~= "table" then
-					return true
-				end
-
-				local identity = identityResult.value
-				if
-					not TeamTypes.IsMemberKind(identity.EntityKind)
-					or type(identity.EntityId) ~= "string"
-					or identity.EntityId == ""
-				then
-					return true
-				end
-
-				return self:UnassignMember(TeamTypes.BuildMemberHandle(identity.EntityKind, identity.EntityId))
+		return self._entityContext:RegisterSystem("CleanupResolve", {
+			Name = "TeamCleanupOutcomeSystem",
+			Phase = "CleanupResolve",
+			Reads = {
+				"Entity.CleanupOutcomeRequest",
+				"Entity.CleanupRequestTag",
+				"Entity.Identity",
+			},
+			Writes = {
+				"Entity.CleanupOutcomeRequest",
+				"Entity.CleanupProcessedTag",
+				"Entity.CleanupFailedTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return TeamCleanupOutcomeSystem.new(entityFactory, self)
 			end,
 		})
 	end, "Team:RegisterCleanupOutcomes")

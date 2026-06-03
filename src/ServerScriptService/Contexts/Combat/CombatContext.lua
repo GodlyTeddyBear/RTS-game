@@ -42,6 +42,7 @@ local ProjectileImpactSystem = require(script.Parent.Infrastructure.Systems.Atta
 local ProjectileSpawnSystem = require(script.Parent.Infrastructure.Systems.Attack.ProjectileSpawnSystem)
 local MovementApplySystem = require(script.Parent.Infrastructure.Systems.Movement.MovementApplySystem)
 local MovementEntitySchema = require(script.Parent.Infrastructure.Entity.MovementEntitySchema)
+local MovementCleanupOutcomeSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementCleanupOutcomeSystem)
 local MovementFlowCalculationSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementFlowCalculationSystem)
 local MovementGoalReachedSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementGoalReachedSystem)
 local MovementGridSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementGridSystem)
@@ -249,14 +250,24 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return outcomeRuleResult
 		end
 
-		local movementCleanupResult = self._entityContext:RegisterCleanupOutcomeHandler({
-			OutcomeId = "MovementCleanup",
-			Handle = function(context: any)
-				local entity = context.Request.SourceEntity
-				self._movementPathRuntimeService:Stop(entity)
-				self._movementFlowfieldService:Detach(entity)
-				self._movementApplyBridgeService:Invalidate(entity)
-				return true
+		local movementCleanupResult = self._entityContext:RegisterSystem("CleanupResolve", {
+			Name = "MovementCleanupOutcomeSystem",
+			Phase = "CleanupResolve",
+			Reads = {
+				"Entity.CleanupOutcomeRequest",
+				"Entity.CleanupRequestTag",
+			},
+			Writes = {
+				"Entity.CleanupOutcomeRequest",
+				"Entity.CleanupProcessedTag",
+				"Entity.CleanupFailedTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return MovementCleanupOutcomeSystem.new(entityFactory, {
+					PathRuntimeService = self._movementPathRuntimeService,
+					FlowfieldService = self._movementFlowfieldService,
+					ApplyBridgeService = self._movementApplyBridgeService,
+				})
 			end,
 		})
 		if not movementCleanupResult.success then

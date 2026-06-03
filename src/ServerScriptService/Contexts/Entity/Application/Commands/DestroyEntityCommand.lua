@@ -25,7 +25,6 @@ function DestroyEntityCommand:Init(registry: any, _name: string)
 		_runtimeParticipation = "EntityRuntimeParticipationService",
 		_replicationService = "EntityReplicationService",
 		_entityContext = "EntityContextService",
-		_preDestroyCleanupRegistry = "EntityPreDestroyCleanupRegistry",
 		_prepareRuntimeEntityForRemovalCommand = "PrepareRuntimeEntityForRemovalCommand",
 	})
 end

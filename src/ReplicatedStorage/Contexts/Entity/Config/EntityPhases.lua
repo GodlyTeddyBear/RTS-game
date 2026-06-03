@@ -28,6 +28,7 @@ local runtimeOrdered = table.freeze({
 	"DamageResolve",
 	"RequestResolve",
 	"Execute",
+	"CleanupResolve",
 	"Cleanup",
 })
 
@@ -53,6 +54,7 @@ local EntityPhases: TEntityPhases = table.freeze({
 		"DamageResolve",
 		"RequestResolve",
 		"Execute",
+		"CleanupResolve",
 		"Cleanup",
 	}),
 })

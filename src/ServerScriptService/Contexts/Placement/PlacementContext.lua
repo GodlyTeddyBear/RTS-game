@@ -24,6 +24,7 @@ local PlacementValidator = require(script.Parent.PlacementDomain.Services.Placem
 local PlaceStructurePolicy = require(script.Parent.PlacementDomain.Policies.PlaceStructurePolicy)
 local PlacementService = require(script.Parent.Infrastructure.Services.PlacementService)
 local PlacementSyncService = require(script.Parent.Infrastructure.Persistence.PlacementSyncService)
+local PlacementCleanupOutcomeSystem = require(script.Parent.Infrastructure.Systems.PlacementCleanupOutcomeSystem)
 local PlaceStructureCommand = require(script.Parent.Application.Commands.PlaceStructureCommand)
 local DestroyStructureInstanceCommand = require(script.Parent.Application.Commands.DestroyStructureInstanceCommand)
 local GetPlacedStructuresQuery = require(script.Parent.Application.Queries.GetPlacedStructuresQuery)
@@ -173,21 +174,21 @@ end
 
 function PlacementContext:_RegisterCleanupOutcomes(): Result.Result<boolean>
 	return Catch(function()
-		return self._entityContext:RegisterCleanupOutcomeHandler({
-			OutcomeId = "PlacementDestroy",
-			Handle = function(context: any)
-				local entity = context.Request.SourceEntity
-				local placementResult = context.EntityContext:Get(entity, "SourcePlacement", "Structure")
-				if not placementResult.success or type(placementResult.value) ~= "table" then
-					return true
-				end
-
-				local instanceId = placementResult.value.InstanceId
-				if type(instanceId) ~= "number" then
-					return true
-				end
-
-				return self:DestroyStructureInstance(instanceId)
+		return self._entityContext:RegisterSystem("CleanupResolve", {
+			Name = "PlacementCleanupOutcomeSystem",
+			Phase = "CleanupResolve",
+			Reads = {
+				"Entity.CleanupOutcomeRequest",
+				"Entity.CleanupRequestTag",
+				"Structure.SourcePlacement",
+			},
+			Writes = {
+				"Entity.CleanupOutcomeRequest",
+				"Entity.CleanupProcessedTag",
+				"Entity.CleanupFailedTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return PlacementCleanupOutcomeSystem.new(entityFactory, self)
 			end,
 		})
 	end, "Placement:RegisterCleanupOutcomes")

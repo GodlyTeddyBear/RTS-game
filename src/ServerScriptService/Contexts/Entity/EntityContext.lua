@@ -24,7 +24,6 @@ local EntitySyncContributorRegistry = require(script.Parent.Infrastructure.Persi
 local EntityRuntimeParticipationService =
 	require(script.Parent.Infrastructure.Services.EntityRuntimeParticipationService)
 local EntityRuntimeSnapshotBuilder = require(script.Parent.Infrastructure.Services.EntityRuntimeSnapshotBuilder)
-local EntityPreDestroyCleanupRegistry = require(script.Parent.Infrastructure.Services.EntityPreDestroyCleanupRegistry)
 local EntityCleanupOutcomeService = require(script.Parent.Infrastructure.Services.EntityCleanupOutcomeService)
 
 local EntityValidationService = require(script.Parent.EntityDomain.Services.EntityValidationService)
@@ -66,9 +65,6 @@ local UnbindEntityInstanceCommand = require(script.Parent.Application.Commands.U
 local QueueEntityBindCommand = require(script.Parent.Application.Commands.QueueEntityBindCommand)
 local FlushBindQueueCommand = require(script.Parent.Application.Commands.FlushBindQueueCommand)
 local RegisterSyncContributorCommand = require(script.Parent.Application.Commands.RegisterSyncContributorCommand)
-local RegisterPreDestroyCleanupCommand = require(script.Parent.Application.Commands.RegisterPreDestroyCleanupCommand)
-local RegisterCleanupOutcomeHandlerCommand =
-	require(script.Parent.Application.Commands.RegisterCleanupOutcomeHandlerCommand)
 local RegisterReplicationSurfaceCommand = require(script.Parent.Application.Commands.RegisterReplicationSurfaceCommand)
 local RunRuntimeSyncCommand = require(script.Parent.Application.Commands.RunRuntimeSyncCommand)
 local RunRuntimePollCommand = require(script.Parent.Application.Commands.RunRuntimePollCommand)
@@ -134,7 +130,6 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("EntityInstanceBindingRegistry", EntityInstanceBindingRegistry, "_instanceBindingRegistry"),
 	moduleSpec("EntityRevealService", EntityRevealService, "_revealService"),
 	moduleSpec("EntityRuntimeSnapshotBuilder", EntityRuntimeSnapshotBuilder, "_runtimeSnapshotBuilder"),
-	moduleSpec("EntityPreDestroyCleanupRegistry", EntityPreDestroyCleanupRegistry, "_preDestroyCleanupRegistry"),
 	moduleSpec("EntityCleanupOutcomeService", EntityCleanupOutcomeService, "_cleanupOutcomeService"),
 	moduleSpec("EntityRuntimeParticipationService", EntityRuntimeParticipationService, "_runtimeParticipation"),
 	moduleSpec("EntityInstanceBindingService", EntityInstanceBindingService, "_instanceBindingService"),
@@ -201,16 +196,6 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("QueueEntityBindCommand", QueueEntityBindCommand, "_queueEntityBindCommand"),
 	moduleSpec("FlushBindQueueCommand", FlushBindQueueCommand, "_flushBindQueueCommand"),
 	moduleSpec("RegisterSyncContributorCommand", RegisterSyncContributorCommand, "_registerSyncContributorCommand"),
-	moduleSpec(
-		"RegisterPreDestroyCleanupCommand",
-		RegisterPreDestroyCleanupCommand,
-		"_registerPreDestroyCleanupCommand"
-	),
-	moduleSpec(
-		"RegisterCleanupOutcomeHandlerCommand",
-		RegisterCleanupOutcomeHandlerCommand,
-		"_registerCleanupOutcomeHandlerCommand"
-	),
 	moduleSpec(
 		"RegisterReplicationSurfaceCommand",
 		RegisterReplicationSurfaceCommand,
@@ -442,16 +427,6 @@ function EntityContext:RegisterSyncContributor(featureName: string, payload: any
 	return Catch(function()
 		return self._registerSyncContributorCommand:Execute(featureName, payload)
 	end, "EntityContext:RegisterSyncContributor")
-end
-function EntityContext:RegisterPreDestroyCleanup(payload: any)
-	return Catch(function()
-		return self._registerPreDestroyCleanupCommand:Execute(payload)
-	end, "EntityContext:RegisterPreDestroyCleanup")
-end
-function EntityContext:RegisterCleanupOutcomeHandler(payload: any)
-	return Catch(function()
-		return self._registerCleanupOutcomeHandlerCommand:Execute(payload)
-	end, "EntityContext:RegisterCleanupOutcomeHandler")
 end
 function EntityContext:RegisterReplicationSurface(featureName: string, payload: any)
 	return Catch(function()
