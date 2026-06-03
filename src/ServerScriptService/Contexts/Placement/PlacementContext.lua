@@ -102,6 +102,7 @@ local PlacementContext = Knit.CreateService({
 		{ Name = "RunContext", CacheAs = "_runContext" },
 		{ Name = "WorldContext", CacheAs = "_worldContext" },
 		{ Name = "EconomyContext", CacheAs = "_economyContext" },
+		{ Name = "EntityContext", CacheAs = "_entityContext" },
 	},
 	Teardown = {
 		Fields = {
@@ -136,6 +137,13 @@ end
 -- Hydrate current and future players, then watch for run-end cleanup.
 function PlacementContext:KnitStart()
 	PlacementBaseContext:KnitStart()
+	local cleanupResult = self:_RegisterCleanupOutcomes()
+	if not cleanupResult.success then
+		error(("PlacementContext failed to register cleanup outcomes: [%s] %s"):format(
+			tostring(cleanupResult.type),
+			tostring(cleanupResult.message)
+		))
+	end
 
 	-- Late joiners need the current placement atom immediately after they connect.
 	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
@@ -161,6 +169,28 @@ function PlacementContext:KnitStart()
 			self._syncService:ClearAll()
 		end
 	)
+end
+
+function PlacementContext:_RegisterCleanupOutcomes(): Result.Result<boolean>
+	return Catch(function()
+		return self._entityContext:RegisterCleanupOutcomeHandler({
+			OutcomeId = "PlacementDestroy",
+			Handle = function(context: any)
+				local entity = context.Request.SourceEntity
+				local placementResult = context.EntityContext:Get(entity, "SourcePlacement", "Structure")
+				if not placementResult.success or type(placementResult.value) ~= "table" then
+					return true
+				end
+
+				local instanceId = placementResult.value.InstanceId
+				if type(instanceId) ~= "number" then
+					return true
+				end
+
+				return self:DestroyStructureInstance(instanceId)
+			end,
+		})
+	end, "Placement:RegisterCleanupOutcomes")
 end
 
 function PlacementContext:_ReleaseOccupiedTilesForCurrentPlacements()

@@ -115,6 +115,17 @@ local EntityCoreSchema = {
 				OutcomeIds = {},
 			},
 		},
+		CleanupOutcomeRequest = {
+			ECSName = "Entity.CleanupOutcomeRequest",
+			Authority = "AUTHORITATIVE",
+			Replication = "ServerOnly",
+			Default = {
+				SourceEntity = nil,
+				OutcomeId = "",
+				CreatedAt = 0,
+				Status = "Requested",
+			},
+		},
 		HealthDepletedOutcome = {
 			ECSName = "Entity.HealthDepletedOutcome",
 			Authority = "AUTHORITATIVE",
@@ -143,6 +154,15 @@ local EntityCoreSchema = {
 	Tags = {
 		ActiveTag = {},
 		DirtyTag = {},
+		CleanupRequestTag = {
+			Replication = "ServerOnly",
+		},
+		CleanupProcessedTag = {
+			Replication = "ServerOnly",
+		},
+		CleanupFailedTag = {
+			Replication = "ServerOnly",
+		},
 	},
 	Archetypes = {
 		Core = {
@@ -186,6 +206,14 @@ local EntityCoreSchema = {
 			Extends = "Core",
 			Components = {
 				Lifetime = true,
+			},
+		},
+		CleanupRequest = {
+			Components = {
+				CleanupOutcomeRequest = true,
+			},
+			Tags = {
+				CleanupRequestTag = true,
 			},
 		},
 	},

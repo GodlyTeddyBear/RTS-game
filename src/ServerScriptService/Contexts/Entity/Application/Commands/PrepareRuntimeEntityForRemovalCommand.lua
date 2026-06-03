@@ -23,6 +23,7 @@ function PrepareRuntimeEntityForRemovalCommand:Init(registry: any, _name: string
 		_replicationService = "EntityReplicationService",
 		_entityContext = "EntityContextService",
 		_preDestroyCleanupRegistry = "EntityPreDestroyCleanupRegistry",
+		_cleanupOutcomeService = "EntityCleanupOutcomeService",
 	})
 end
 
@@ -31,6 +32,11 @@ function PrepareRuntimeEntityForRemovalCommand:Execute(
 	unregisterRuntimeEntity: boolean
 ): Result.Result<boolean>
 	return Result.Catch(function()
+		local cleanupOutcomeResult = self._cleanupOutcomeService:ResolveEntity(self._entityContext, entity)
+		if not cleanupOutcomeResult.success then
+			return cleanupOutcomeResult
+		end
+
 		local cleanupResult = self._preDestroyCleanupRegistry:Run(entity)
 		if not cleanupResult.success then
 			return cleanupResult

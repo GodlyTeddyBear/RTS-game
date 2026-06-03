@@ -26,10 +26,10 @@ end
 
 function RegisterAIEntityCleanupCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
-		local registerResult = self._entityContext:RegisterPreDestroyCleanup({
-			ContributorId = "AI.CleanupEntityAI",
-			Cleanup = function(entity: number): Result.Result<boolean>
-				return self._cleanupEntityAICommand:Execute(entity)
+		local registerResult = self._entityContext:RegisterCleanupOutcomeHandler({
+			OutcomeId = "AICleanup",
+			Handle = function(context: any): Result.Result<boolean>
+				return self._cleanupEntityAICommand:Execute(context.Request.SourceEntity)
 			end,
 		})
 		if registerResult.success then

@@ -8,7 +8,6 @@ local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.StructureTypes)
-local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
 
 local StructureEntityReadService = require(script.Parent.Infrastructure.Entity.StructureEntityReadService)
 local StructureEntitySchema = require(script.Parent.Infrastructure.Entity.StructureEntitySchema)
@@ -152,22 +151,6 @@ function StructureContext:_RegisterEntityInfrastructure(): Result.Result<boolean
 		if not featureResult.success then
 			return featureResult
 		end
-
-		local cleanupResult = self._entityContext:RegisterPreDestroyCleanup({
-			ContributorId = "Structure.ExternalCleanup",
-			Cleanup = function(entity: number)
-				local identity = self._structureReadService:GetIdentity(entity)
-				local placement = self._structureReadService:GetSourcePlacement(entity)
-				if type(identity) == "table" and type(identity.EntityId) == "string" then
-					self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Structure", identity.EntityId))
-				end
-				if type(placement) == "table" and type(placement.InstanceId) == "number" then
-					self._placementContext:DestroyStructureInstance(placement.InstanceId)
-				end
-				return true
-			end,
-		})
-		if not cleanupResult.success then return cleanupResult end
 
 		return self._entityContext:RegisterSystem("ActionAdvance", {
 			Name = "StructureExtractionSystem",

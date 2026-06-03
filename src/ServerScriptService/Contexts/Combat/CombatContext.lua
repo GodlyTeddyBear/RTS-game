@@ -249,9 +249,10 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return outcomeRuleResult
 		end
 
-		local movementCleanupResult = self._entityContext:RegisterPreDestroyCleanup({
-			ContributorId = "Combat.MovementCleanup",
-			Cleanup = function(entity: number)
+		local movementCleanupResult = self._entityContext:RegisterCleanupOutcomeHandler({
+			OutcomeId = "MovementCleanup",
+			Handle = function(context: any)
+				local entity = context.Request.SourceEntity
 				self._movementPathRuntimeService:Stop(entity)
 				self._movementFlowfieldService:Detach(entity)
 				self._movementApplyBridgeService:Invalidate(entity)

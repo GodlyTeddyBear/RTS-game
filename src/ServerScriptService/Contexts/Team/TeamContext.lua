@@ -84,6 +84,9 @@ local TeamContext = Knit.CreateService({
 	Name = "TeamContext",
 	Client = {},
 	Modules = TeamModules,
+	ExternalServices = {
+		{ Name = "EntityContext", CacheAs = "_entityContext" },
+	},
 	Teardown = {
 		Fields = {
 			{ Field = "_playerAddedConnection", Method = "Disconnect" },
@@ -101,9 +104,43 @@ end
 
 function TeamContext:KnitStart()
 	TeamBaseContext:KnitStart()
+	local cleanupResult = self:_RegisterCleanupOutcomes()
+	if not cleanupResult.success then
+		error(("TeamContext failed to register cleanup outcomes: [%s] %s"):format(
+			tostring(cleanupResult.type),
+			tostring(cleanupResult.message)
+		))
+	end
+
 	self._playerAddedConnection = TeamBaseContext:HandleExistingAndAddedPlayers(function(player: Player)
 		self:_HandlePlayerAdded(player)
 	end, "_playerAddedConnection")
+end
+
+function TeamContext:_RegisterCleanupOutcomes(): Result.Result<boolean>
+	return Catch(function()
+		return self._entityContext:RegisterCleanupOutcomeHandler({
+			OutcomeId = "TeamUnassign",
+			Handle = function(context: any)
+				local entity = context.Request.SourceEntity
+				local identityResult = context.EntityContext:Get(entity, "Identity", "Entity")
+				if not identityResult.success or type(identityResult.value) ~= "table" then
+					return true
+				end
+
+				local identity = identityResult.value
+				if
+					not TeamTypes.IsMemberKind(identity.EntityKind)
+					or type(identity.EntityId) ~= "string"
+					or identity.EntityId == ""
+				then
+					return true
+				end
+
+				return self:UnassignMember(TeamTypes.BuildMemberHandle(identity.EntityKind, identity.EntityId))
+			end,
+		})
+	end, "Team:RegisterCleanupOutcomes")
 end
 
 function TeamContext:RegisterPlayerTeam(player: Player): Result.Result<TTeamSummary>

@@ -6,7 +6,6 @@ local ServerStorage = game:GetService("ServerStorage")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
 
 local EnemyEntityReadService = require(script.Parent.Infrastructure.Entity.EnemyEntityReadService)
 local EnemyEntitySchema = require(script.Parent.Infrastructure.Entity.EnemyEntitySchema)
@@ -139,18 +138,6 @@ function EnemyContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 		if not featureResult.success then
 			return featureResult
 		end
-
-		local cleanupResult = self._entityContext:RegisterPreDestroyCleanup({
-			ContributorId = "Enemy.TeamCleanup",
-			Cleanup = function(entity: number)
-				local identity = self._enemyEntityReadService:GetIdentity(entity)
-				if type(identity) == "table" and type(identity.EnemyId) == "string" then
-					self._teamContext:UnassignMember(TeamTypes.BuildMemberHandle("Enemy", identity.EnemyId))
-				end
-				return true
-			end,
-		})
-		if not cleanupResult.success then return cleanupResult end
 
 		return Ok(true)
 	end, "EnemyContext:RegisterEntityInfrastructure")
