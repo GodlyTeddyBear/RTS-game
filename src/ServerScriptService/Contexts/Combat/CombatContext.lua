@@ -33,7 +33,6 @@ local AttackAdvanceSystem = require(script.Parent.Infrastructure.Systems.Attack.
 local CombatRequestCleanupSystem = require(script.Parent.Infrastructure.Systems.Attack.CombatRequestCleanupSystem)
 local DamageResolveSystem = require(script.Parent.Infrastructure.Systems.Attack.DamageResolveSystem)
 local BaseDamageResolveSystem = require(script.Parent.Infrastructure.Systems.Attack.BaseDamageResolveSystem)
-local GoalReachedOutcomeResolveSystem = require(script.Parent.Infrastructure.Systems.Outcome.GoalReachedOutcomeResolveSystem)
 local HealthDepletedOutcomeSystem = require(script.Parent.Infrastructure.Systems.Outcome.HealthDepletedOutcomeSystem)
 local HitboxImpactSystem = require(script.Parent.Infrastructure.Systems.Attack.HitboxImpactSystem)
 local HitboxSpawnSystem = require(script.Parent.Infrastructure.Systems.Attack.HitboxSpawnSystem)
@@ -244,11 +243,6 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return movementSchemaResult
 		end
 
-		local outcomeRuleResult = self:_RegisterDefaultOutcomeRules()
-		if not outcomeRuleResult.success then
-			return outcomeRuleResult
-		end
-
 		local movementCleanupResult = self._entityContext:RegisterSystem("CleanupResolve", {
 			Name = "MovementCleanupOutcomeSystem",
 			Phase = "CleanupResolve",
@@ -376,27 +370,6 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 		})
 		if not movementGoalReachedResult.success then
 			return movementGoalReachedResult
-		end
-
-		local goalReachedOutcomeResult = self._entityContext:RegisterSystem("RequestResolve", {
-			Name = "GoalReachedOutcomeResolveSystem",
-			Phase = "RequestResolve",
-			Reads = {
-				"Combat.GoalReachedOutcomeRequest",
-				"Combat.RequestTag",
-			},
-			Writes = {
-				"Enemy.GoalReachedTag",
-				"Combat.BaseDamageRequest",
-				"Combat.ProcessedTag",
-				"Entity.DestructionQueue",
-			},
-			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return GoalReachedOutcomeResolveSystem.new(entityFactory)
-			end,
-		})
-		if not goalReachedOutcomeResult.success then
-			return goalReachedOutcomeResult
 		end
 
 		self._combatTargetReadService:Configure(self._entityContext)
@@ -610,183 +583,6 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			end,
 		})
 	end, "Combat:RegisterEntityActionPipeline")
-end
-
-function CombatContext:_RegisterDefaultOutcomeRules(): Result.Result<boolean>
-	return Catch(function()
-		self._combatOutcomeRuleRegistryService:RegisterMovementPresentationRule({
-			RuleId = "Enemy.MovementPresentation",
-			Query = { FeatureName = "Enemy", Keys = { "AliveTag", "PathState" } },
-			PathState = { FeatureName = "Enemy", Key = "PathState" },
-			Speed = { FeatureName = "Enemy", Key = "CurrentMoveSpeed" },
-			Animation = {
-				FeatureName = "Enemy",
-				StateKey = "AnimationState",
-				LoopingKey = "AnimationLooping",
-				MovingState = "Walk",
-				IdleState = "Idle",
-			},
-			Attack = {
-				PathState = { FeatureName = "Enemy", Key = "PathState" },
-				Speed = { FeatureName = "Enemy", Key = "CurrentMoveSpeed" },
-				Target = {},
-				Animation = {
-					FeatureName = "Enemy",
-					StateKey = "AnimationState",
-					LoopingKey = "AnimationLooping",
-					State = "Attack",
-					Looping = false,
-				},
-			},
-		})
-
-		self._combatOutcomeRuleRegistryService:RegisterMovementPresentationRule({
-			RuleId = "Unit.MovementPresentation",
-			Query = { FeatureName = "Unit", Keys = { "PathState" } },
-			PathState = {
-				FeatureName = "Unit",
-				Key = "PathState",
-				PreserveKeys = {
-					"RequestedGoalPosition",
-					"GoalRevision",
-					"FailedGoalRevision",
-				},
-			},
-			Animation = {
-				FeatureName = "Unit",
-				StateKey = "AnimationState",
-				LoopingKey = "AnimationLooping",
-				MovingState = "Walk",
-				IdleState = "Idle",
-			},
-			ActionPresentation = {
-				BuildStructure = {
-					WhenNotMoving = true,
-					Animation = {
-						FeatureName = "Unit",
-						StateKey = "AnimationState",
-						LoopingKey = "AnimationLooping",
-						State = "Build",
-						Looping = true,
-					},
-				},
-			},
-		})
-
-		self._combatOutcomeRuleRegistryService:RegisterMovementPresentationRule({
-			RuleId = "Summon.MovementPresentation",
-			Query = { FeatureName = "Summon", Keys = { "DroneTag" } },
-			TargetEntityId = { FeatureName = "Summon", Key = "TargetEnemyId" },
-		})
-
-		self._combatOutcomeRuleRegistryService:RegisterMovementPresentationRule({
-			RuleId = "Structure.AttackPresentation",
-			Query = {
-				Keys = {
-					{ Key = "OperationalTag", FeatureName = "Structure" },
-					{ Key = "AttackState", FeatureName = "Combat" },
-					{ Key = "ActionState", FeatureName = "AI" },
-				},
-			},
-			Attack = {
-				Target = { TargetKind = "Enemy" },
-				Animation = {
-					FeatureName = "Structure",
-					StateKey = "AnimationState",
-					LoopingKey = "AnimationLooping",
-					State = "Attack",
-					Looping = false,
-				},
-				TargetEntityId = { FeatureName = "Structure", Key = "TargetEnemyId" },
-			},
-		})
-
-		self._combatOutcomeRuleRegistryService:RegisterMovementPresentationRule({
-			RuleId = "Structure.ExtractPresentation",
-			Query = {
-				Keys = {
-					{ Key = "OperationalTag", FeatureName = "Structure" },
-					{ Key = "ExtractState", FeatureName = "Structure" },
-					{ Key = "ActionState", FeatureName = "AI" },
-				},
-			},
-			ActionPresentation = {
-				Extract = {
-					Animation = {
-						FeatureName = "Structure",
-						StateKey = "AnimationState",
-						LoopingKey = "AnimationLooping",
-						State = "Extract",
-						Looping = true,
-					},
-				},
-				Idle = {
-					Animation = {
-						FeatureName = "Structure",
-						StateKey = "AnimationState",
-						LoopingKey = "AnimationLooping",
-						State = "Idle",
-						Looping = true,
-					},
-				},
-			},
-		})
-
-		self._combatOutcomeRuleRegistryService:RegisterMovementPresentationRule({
-			RuleId = "Structure.StasisPresentation",
-			Query = {
-				Keys = {
-					{ Key = "OperationalTag", FeatureName = "Structure" },
-					{ Key = "StatusAuraState", FeatureName = "Combat" },
-					{ Key = "ActionState", FeatureName = "AI" },
-				},
-			},
-			ActionPresentation = {
-				Stasis = {
-					Animation = {
-						FeatureName = "Structure",
-						StateKey = "AnimationState",
-						LoopingKey = "AnimationLooping",
-						State = "Stasis",
-						Looping = true,
-					},
-					TargetEntityId = { FeatureName = "Structure", Key = "TargetEnemyId" },
-				},
-				Idle = {
-					Animation = {
-						FeatureName = "Structure",
-						StateKey = "AnimationState",
-						LoopingKey = "AnimationLooping",
-						State = "Idle",
-						Looping = true,
-					},
-					TargetEntityId = { FeatureName = "Structure", Key = "TargetEnemyId" },
-				},
-			},
-		})
-
-		self._combatOutcomeRuleRegistryService:RegisterGoalReachedRule({
-			RuleId = "Enemy.AdvanceGoalReached",
-			OutcomeId = "EnemyGoalReached",
-			Query = { FeatureName = "Enemy", Keys = { "AliveTag" } },
-			ActionId = "Advance",
-		})
-
-		self._combatOutcomeRuleRegistryService:RegisterHealthDepletedRule({
-			OutcomeId = "EnemyDeath",
-			VictimKind = "Enemy",
-			MarkVictimForDestruction = true,
-			EmitEnemyDeath = true,
-		})
-
-		self._combatOutcomeRuleRegistryService:RegisterHealthDepletedRule({
-			OutcomeId = "StructureDeath",
-			VictimKind = "Structure",
-			MarkVictimForDestruction = true,
-		})
-
-		return Ok(true)
-	end, "Combat:RegisterDefaultOutcomeRules")
 end
 
 function CombatContext:_OnRunStarted()

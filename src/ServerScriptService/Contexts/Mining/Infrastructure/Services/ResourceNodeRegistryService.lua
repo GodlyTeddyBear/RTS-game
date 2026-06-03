@@ -72,8 +72,8 @@ end
     @param _name string -- The registered module name.
 ]=]
 function ResourceNodeRegistryService:Start(registry: any, _name: string)
-	self._factory = registry:Get("MiningEntityFactory")
-	self._instanceFactory = registry:Get("MiningInstanceFactory")
+	self._entityContext = registry:Get("EntityContext")
+	self._readService = registry:Get("MiningEntityReadService")
 	self._mapContext = registry:Get("MapContext")
 end
 
@@ -121,7 +121,7 @@ function ResourceNodeRegistryService:_RegisterResourceNode(resourcePart: BasePar
 		PartName = resourcePart.Name,
 	})
 
-	local existingEntity = self._instanceFactory:GetEntity(resourcePart)
+	local existingEntity = self._readService:GetResourceNodeEntityForPart(resourcePart)
 	if existingEntity ~= nil then
 		return Ok(existingEntity)
 	end
@@ -132,8 +132,18 @@ function ResourceNodeRegistryService:_RegisterResourceNode(resourcePart: BasePar
 		ResourceType = resourcePart.Name,
 	}
 
-	local entity = self._factory:CreateResourceNode(nodeRecord)
-	self._instanceFactory:BindResourceNode(entity, resourcePart)
+	local createResult = self._entityContext:CreateEntity("Mining.ResourceNode", {
+		ResourceNode = {
+			NodeId = nodeRecord.NodeId,
+			ResourceType = nodeRecord.ResourceType,
+		},
+	})
+	if not createResult.success then
+		return createResult
+	end
+
+	local entity = createResult.value
+	self._readService:RegisterResourceNodeInstance(entity, resourcePart)
 	return Ok(entity)
 end
 

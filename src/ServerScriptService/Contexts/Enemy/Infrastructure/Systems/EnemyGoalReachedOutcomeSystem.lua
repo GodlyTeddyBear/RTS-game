@@ -5,15 +5,15 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
-local GoalReachedOutcomeResolveSystem = {}
-GoalReachedOutcomeResolveSystem.__index = GoalReachedOutcomeResolveSystem
+local EnemyGoalReachedOutcomeSystem = {}
+EnemyGoalReachedOutcomeSystem.__index = EnemyGoalReachedOutcomeSystem
 
-function GoalReachedOutcomeResolveSystem.new(entityFactory: any)
-	return setmetatable({ _entityFactory = entityFactory }, GoalReachedOutcomeResolveSystem)
+function EnemyGoalReachedOutcomeSystem.new(entityFactory: any)
+	return setmetatable({ _entityFactory = entityFactory }, EnemyGoalReachedOutcomeSystem)
 end
 
-function GoalReachedOutcomeResolveSystem:Run()
-	-- READS: Combat.GoalReachedOutcomeRequest [AUTHORITATIVE], Combat.RequestTag
+function EnemyGoalReachedOutcomeSystem:Run()
+	-- READS: Combat.GoalReachedOutcomeRequest, Combat.RequestTag
 	-- WRITES: Enemy.GoalReachedTag, Combat.BaseDamageRequest, Combat.ProcessedTag, Entity.DestructionQueue
 	local result = self._entityFactory:Query({ FeatureName = "Combat", Keys = { "GoalReachedOutcomeRequest", "RequestTag" } })
 	if not result.success then
@@ -25,10 +25,9 @@ function GoalReachedOutcomeResolveSystem:Run()
 	end
 end
 
-function GoalReachedOutcomeResolveSystem:_Resolve(requestEntity: number)
+function EnemyGoalReachedOutcomeSystem:_Resolve(requestEntity: number)
 	local request = self:_Get(requestEntity, "GoalReachedOutcomeRequest", "Combat")
 	if type(request) ~= "table" or request.OutcomeId ~= "EnemyGoalReached" then
-		self:_Processed(requestEntity)
 		return
 	end
 
@@ -46,7 +45,7 @@ function GoalReachedOutcomeResolveSystem:_Resolve(requestEntity: number)
 	self:_Processed(requestEntity)
 end
 
-function GoalReachedOutcomeResolveSystem:_RequestBaseDamage(entity: number)
+function EnemyGoalReachedOutcomeSystem:_RequestBaseDamage(entity: number)
 	local role = self:_Get(entity, "Role", "Enemy")
 	local roleId = if type(role) == "table" then role.Role else nil
 	local roleConfig = if type(roleId) == "string" then EnemyConfig.Roles[roleId] else nil
@@ -64,7 +63,7 @@ function GoalReachedOutcomeResolveSystem:_RequestBaseDamage(entity: number)
 	})
 end
 
-function GoalReachedOutcomeResolveSystem:_EmitEnemyDeath(entity: number)
+function EnemyGoalReachedOutcomeSystem:_EmitEnemyDeath(entity: number)
 	local identity = self:_Get(entity, "Identity", "Entity")
 	local role = self:_Get(entity, "Role", "Enemy")
 	local transform = self:_Get(entity, "Transform", "Entity")
@@ -80,13 +79,13 @@ function GoalReachedOutcomeResolveSystem:_EmitEnemyDeath(entity: number)
 	GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, roleId, waveNumber, deathCFrame)
 end
 
-function GoalReachedOutcomeResolveSystem:_Processed(entity: number)
+function EnemyGoalReachedOutcomeSystem:_Processed(entity: number)
 	self._entityFactory:Add(entity, "ProcessedTag", "Combat")
 end
 
-function GoalReachedOutcomeResolveSystem:_Get(entity: number, key: string, featureName: string): any
+function EnemyGoalReachedOutcomeSystem:_Get(entity: number, key: string, featureName: string): any
 	local result = self._entityFactory:Get(entity, key, featureName)
 	return if result.success then result.value else nil
 end
 
-return GoalReachedOutcomeResolveSystem
+return EnemyGoalReachedOutcomeSystem

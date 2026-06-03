@@ -1,7 +1,6 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
 local ServerStorage = game:GetService("ServerStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
@@ -12,12 +11,12 @@ local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.Struct
 
 local StructureEntityReadService = require(script.Parent.Infrastructure.Entity.StructureEntityReadService)
 local StructureEntitySchema = require(script.Parent.Infrastructure.Entity.StructureEntitySchema)
-local StructureConstructionContributionSystem = require(script.Parent.Infrastructure.Systems.StructureConstructionContributionSystem)
 local StructureExtractionSystem = require(script.Parent.Infrastructure.Systems.StructureExtractionSystem)
-local UnitEntityReadService = require(ServerScriptService.Contexts.Unit.Infrastructure.Entity.UnitEntityReadService)
+local StructureHealthDepletedOutcomeSystem = require(script.Parent.Infrastructure.Systems.StructureHealthDepletedOutcomeSystem)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
 local StructureAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local StructureAIProfiles = require(script.Parent.Config.AIProfiles)
+local StructureCombatRules = require(script.Parent.Config.CombatRules)
 local RegisterStructureCommand = require(script.Parent.Application.Commands.RegisterStructureCommand)
 local AdvanceConstructionCommand = require(script.Parent.Application.Commands.AdvanceConstructionCommand)
 local ApplyDamageStructureCommand = require(script.Parent.Application.Commands.ApplyDamageStructureCommand)
@@ -46,13 +45,6 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 			return StructureEntityReadService.new(service._entityContext)
 		end,
 		CacheAs = "_structureReadService",
-	},
-	{
-		Name = "StructureUnitEntityReadService",
-		Factory = function(service: any, _baseContext: any)
-			return UnitEntityReadService.new(service._entityContext)
-		end,
-		CacheAs = "_unitReadService",
 	},
 }
 
@@ -122,6 +114,14 @@ function StructureContext:KnitStart()
 		))
 	end
 
+	local combatRuleResult = self:_RegisterCombatRules()
+	if not combatRuleResult.success then
+		error(("StructureContext failed to register Combat rules: [%s] %s"):format(
+			tostring(combatRuleResult.type),
+			tostring(combatRuleResult.message)
+		))
+	end
+
 	self._structurePlacedConnection = self._placementContext.StructurePlaced:Connect(function(record: StructureRecord)
 		local result = self:RegisterStructure(record)
 		if not result.success then
@@ -161,34 +161,7 @@ function StructureContext:_RegisterEntityInfrastructure(): Result.Result<boolean
 			return featureResult
 		end
 
-		local constructionResult = self._entityContext:RegisterSystem("ActionAdvance", {
-			Name = "StructureConstructionContributionSystem",
-			Phase = "ActionAdvance",
-			Reads = {
-				"Structure.BuildContributionState",
-				"Unit.BuilderAssignment",
-				"Unit.PathState",
-				"Entity.Ownership",
-				"AI.ActionState",
-			},
-			Writes = {
-				"Unit.BuilderAssignment",
-				"Unit.PathState",
-				"Movement.MoveIntent",
-				"Entity.DirtyTag",
-			},
-			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return StructureConstructionContributionSystem.new(entityFactory, {
-					StructureContext = self,
-					UnitReadService = self._unitReadService,
-				})
-			end,
-		})
-		if not constructionResult.success then
-			return constructionResult
-		end
-
-		return self._entityContext:RegisterSystem("ActionAdvance", {
+		local extractionResult = self._entityContext:RegisterSystem("ActionAdvance", {
 			Name = "StructureExtractionSystem",
 			Phase = "ActionAdvance",
 			Reads = {
@@ -203,6 +176,25 @@ function StructureContext:_RegisterEntityInfrastructure(): Result.Result<boolean
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
 				return StructureExtractionSystem.new(entityFactory, {})
+			end,
+		})
+		if not extractionResult.success then
+			return extractionResult
+		end
+
+		return self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "StructureHealthDepletedOutcomeSystem",
+			Phase = "RequestResolve",
+			Reads = {
+				"Combat.HealthDepletedOutcomeRequest",
+				"Combat.RequestTag",
+			},
+			Writes = {
+				"Combat.ProcessedTag",
+				"Entity.DestructionQueue",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return StructureHealthDepletedOutcomeSystem.new(entityFactory)
 			end,
 		})
 	end, "StructureContext:RegisterEntityInfrastructure")
@@ -233,6 +225,24 @@ function StructureContext:_RegisterAIContracts(): Result.Result<boolean>
 
 		return Ok(true)
 	end, "StructureContext:RegisterAIContracts")
+end
+
+function StructureContext:_RegisterCombatRules(): Result.Result<boolean>
+	return Catch(function()
+		for _, payload in ipairs(StructureCombatRules.MovementPresentation or {}) do
+			local result = self._combatContext:RegisterMovementPresentationRule(payload)
+			if not result.success then
+				return result
+			end
+		end
+		for _, payload in ipairs(StructureCombatRules.HealthDepleted or {}) do
+			local result = self._combatContext:RegisterHealthDepletedRule(payload)
+			if not result.success then
+				return result
+			end
+		end
+		return Ok(true)
+	end, "StructureContext:RegisterCombatRules")
 end
 
 function StructureContext:RegisterStructure(record: StructureRecord): Result.Result<number>

@@ -45,7 +45,10 @@ end
     @param _name string -- The registered module name.
 ]=]
 function RegisterExtractorCommand:Init(registry: any, _name: string)
-	self:_RequireDependency(registry, "_factory", "MiningEntityFactory")
+	self:_RequireDependencies(registry, {
+		_entityContext = "EntityContext",
+		_readService = "MiningEntityReadService",
+	})
 end
 
 -- Validates a placement record and registers an extractor when the structure matches the mining extractor type.
@@ -86,8 +89,24 @@ function RegisterExtractorCommand:Execute(record: StructureRecord): Result.Resul
 		AmountPerCycle = MiningConfig.BASE_AMOUNT_PER_CYCLE,
 	}
 
-	-- Register the entity and emit a success mention for observability.
-	local entity = self._factory:CreateExtractor(extractorRecord)
+	local createResult = self._entityContext:CreateEntity("Mining.Extractor", {
+		Extractor = {
+			InstanceId = extractorRecord.InstanceId,
+			OwnerUserId = extractorRecord.OwnerUserId,
+			ResourceType = extractorRecord.ResourceType,
+			AmountPerCycle = extractorRecord.AmountPerCycle,
+		},
+		ExtractorTiming = {
+			IntervalSeconds = extractorRecord.IntervalSeconds,
+			ElapsedSeconds = 0,
+		},
+	})
+	if not createResult.success then
+		return createResult
+	end
+
+	local entity = createResult.value
+	self._readService:RegisterExtractorInstance(extractorRecord.InstanceId, entity)
 	Result.MentionSuccess("Mining:RegisterExtractorCommand", "Registered extractor entity", {
 		Entity = entity,
 		InstanceId = record.InstanceId,

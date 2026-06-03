@@ -10,6 +10,7 @@ local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 
 local SummonAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local SummonAIProfiles = require(script.Parent.Config.AIProfiles)
+local SummonCombatRules = require(script.Parent.Config.CombatRules)
 local SummonEntityReadService = require(script.Parent.Infrastructure.Entity.SummonEntityReadService)
 local SummonEntitySchema = require(script.Parent.Infrastructure.Entity.SummonEntitySchema)
 local CleanupSummonsCommand = require(script.Parent.Application.Commands.CleanupSummonsCommand)
@@ -103,6 +104,14 @@ function SummonContext:KnitStart()
 		))
 	end
 
+	local combatRuleResult = self:_RegisterCombatRules()
+	if not combatRuleResult.success then
+		error(("SummonContext failed to register Combat rules: [%s] %s"):format(
+			tostring(combatRuleResult.type),
+			tostring(combatRuleResult.message)
+		))
+	end
+
 	SummonBaseContext:OnContextEvent("Run", "WaveEnded", function(_waveNumber: number)
 		self:_CleanupAllSummons()
 	end, "_runWaveEndedConnection")
@@ -151,6 +160,18 @@ function SummonContext:_RegisterAIContracts(): Result.Result<boolean>
 
 		return Ok(true)
 	end, "SummonContext:RegisterAIContracts")
+end
+
+function SummonContext:_RegisterCombatRules(): Result.Result<boolean>
+	return Catch(function()
+		for _, payload in ipairs(SummonCombatRules.MovementPresentation or {}) do
+			local result = self._combatContext:RegisterMovementPresentationRule(payload)
+			if not result.success then
+				return result
+			end
+		end
+		return Ok(true)
+	end, "SummonContext:RegisterCombatRules")
 end
 
 function SummonContext:SpawnSwarmDrones(

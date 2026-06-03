@@ -88,12 +88,9 @@ local HasEntityKeyQuery = require(script.Parent.Application.Queries.HasEntityKey
 local QueryEntitiesQuery = require(script.Parent.Application.Queries.QueryEntitiesQuery)
 local GetWorldQuery = require(script.Parent.Application.Queries.GetWorldQuery)
 local GetFeatureComponentsQuery = require(script.Parent.Application.Queries.GetFeatureComponentsQuery)
-local GetEntityFactoryQuery = require(script.Parent.Application.Queries.GetEntityFactoryQuery)
 local GetBoundInstanceQuery = require(script.Parent.Application.Queries.GetBoundInstanceQuery)
 local GetBoundEntityQuery = require(script.Parent.Application.Queries.GetBoundEntityQuery)
 local BuildRuntimeSnapshotQuery = require(script.Parent.Application.Queries.BuildRuntimeSnapshotQuery)
-local GetSyncContributorQuery = require(script.Parent.Application.Queries.GetSyncContributorQuery)
-local GetReplicationSurfaceQuery = require(script.Parent.Application.Queries.GetReplicationSurfaceQuery)
 
 local Catch = Result.Catch
 
@@ -234,12 +231,9 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("QueryEntitiesQuery", QueryEntitiesQuery, "_queryEntitiesQuery"),
 	moduleSpec("GetWorldQuery", GetWorldQuery, "_getWorldQuery"),
 	moduleSpec("GetFeatureComponentsQuery", GetFeatureComponentsQuery, "_getFeatureComponentsQuery"),
-	moduleSpec("GetEntityFactoryQuery", GetEntityFactoryQuery, "_getEntityFactoryQuery"),
 	moduleSpec("GetBoundInstanceQuery", GetBoundInstanceQuery, "_getBoundInstanceQuery"),
 	moduleSpec("GetBoundEntityQuery", GetBoundEntityQuery, "_getBoundEntityQuery"),
 	moduleSpec("BuildRuntimeSnapshotQuery", BuildRuntimeSnapshotQuery, "_buildRuntimeSnapshotQuery"),
-	moduleSpec("GetSyncContributorQuery", GetSyncContributorQuery, "_getSyncContributorQuery"),
-	moduleSpec("GetReplicationSurfaceQuery", GetReplicationSurfaceQuery, "_getReplicationSurfaceQuery"),
 }
 
 local EntityContext = Knit.CreateService({
@@ -401,11 +395,6 @@ function EntityContext:TickAll()
 		return self._tickAllCommand:Execute()
 	end, "EntityContext:TickAll")
 end
-function EntityContext:RegisterInstanceBinding(featureName: string, binding: any)
-	return Catch(function()
-		return self._registerInstanceBindingCommand:Execute(featureName, binding)
-	end, "EntityContext:RegisterInstanceBinding")
-end
 function EntityContext:EnableRuntimeBinding(featureName: string)
 	return Catch(function()
 		return self._enableRuntimeBindingCommand:Execute(featureName)
@@ -450,16 +439,6 @@ function EntityContext:FlushBindQueue()
 	return Catch(function()
 		return self._flushBindQueueCommand:Execute()
 	end, "EntityContext:FlushBindQueue")
-end
-function EntityContext:RegisterSyncContributor(featureName: string, payload: any)
-	return Catch(function()
-		return self._registerSyncContributorCommand:Execute(featureName, payload)
-	end, "EntityContext:RegisterSyncContributor")
-end
-function EntityContext:RegisterReplicationSurface(featureName: string, payload: any)
-	return Catch(function()
-		return self._registerReplicationSurfaceCommand:Execute(featureName, payload)
-	end, "EntityContext:RegisterReplicationSurface")
 end
 function EntityContext:RunRuntimeSync()
 	return Catch(function()
@@ -541,11 +520,6 @@ function EntityContext:GetFeatureComponents(featureName: string)
 		return self._getFeatureComponentsQuery:Execute(featureName)
 	end, "EntityContext:GetFeatureComponents")
 end
-function EntityContext:GetEntityFactory()
-	return Catch(function()
-		return self._getEntityFactoryQuery:Execute()
-	end, "EntityContext:GetEntityFactory")
-end
 function EntityContext:GetBoundInstance(entity: number)
 	return Catch(function()
 		return self._getBoundInstanceQuery:Execute(entity)
@@ -561,17 +535,6 @@ function EntityContext:BuildRuntimeSnapshot(entity: number)
 		return self._buildRuntimeSnapshotQuery:Execute(entity)
 	end, "EntityContext:BuildRuntimeSnapshot")
 end
-function EntityContext:GetSyncContributor(featureName: string)
-	return Catch(function()
-		return self._getSyncContributorQuery:Execute(featureName)
-	end, "EntityContext:GetSyncContributor")
-end
-function EntityContext:GetReplicationSurface(featureName: string)
-	return Catch(function()
-		return self._getReplicationSurfaceQuery:Execute(featureName)
-	end, "EntityContext:GetReplicationSurface")
-end
-
 function EntityContext.Client:RequestEntityReplication(player: Player): boolean
 	local result = self.Server:HydrateEntityReplication(player)
 	return result.success and result.value == true

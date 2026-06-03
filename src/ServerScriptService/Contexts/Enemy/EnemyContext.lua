@@ -12,6 +12,9 @@ local EnemyEntitySchema = require(script.Parent.Infrastructure.Entity.EnemyEntit
 local EnemySpawnPolicy = require(script.Parent.EnemyDomain.Policies.EnemySpawnPolicy)
 local EnemyAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local EnemyAIProfiles = require(script.Parent.Config.AIProfiles)
+local EnemyCombatRules = require(script.Parent.Config.CombatRules)
+local EnemyGoalReachedOutcomeSystem = require(script.Parent.Infrastructure.Systems.EnemyGoalReachedOutcomeSystem)
+local EnemyHealthDepletedOutcomeSystem = require(script.Parent.Infrastructure.Systems.EnemyHealthDepletedOutcomeSystem)
 
 local SpawnEnemyCommand = require(script.Parent.Application.Commands.SpawnEnemy)
 local DespawnEnemyCommand = require(script.Parent.Application.Commands.DespawnEnemy)
@@ -111,6 +114,14 @@ function EnemyContext:KnitStart()
 		))
 	end
 
+	local combatRuleResult = self:_RegisterCombatRules()
+	if not combatRuleResult.success then
+		error(("EnemyContext failed to register Combat rules: [%s] %s"):format(
+			tostring(combatRuleResult.type),
+			tostring(combatRuleResult.message)
+		))
+	end
+
 	EnemyBaseContext:OnContextEvent(
 		"Wave",
 		"SpawnEnemy",
@@ -139,7 +150,42 @@ function EnemyContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 			return featureResult
 		end
 
-		return Ok(true)
+		local goalReachedResult = self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "EnemyGoalReachedOutcomeSystem",
+			Phase = "RequestResolve",
+			Reads = {
+				"Combat.GoalReachedOutcomeRequest",
+				"Combat.RequestTag",
+			},
+			Writes = {
+				"Enemy.GoalReachedTag",
+				"Combat.BaseDamageRequest",
+				"Combat.ProcessedTag",
+				"Entity.DestructionQueue",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return EnemyGoalReachedOutcomeSystem.new(entityFactory)
+			end,
+		})
+		if not goalReachedResult.success then
+			return goalReachedResult
+		end
+
+		return self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "EnemyHealthDepletedOutcomeSystem",
+			Phase = "RequestResolve",
+			Reads = {
+				"Combat.HealthDepletedOutcomeRequest",
+				"Combat.RequestTag",
+			},
+			Writes = {
+				"Combat.ProcessedTag",
+				"Entity.DestructionQueue",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return EnemyHealthDepletedOutcomeSystem.new(entityFactory)
+			end,
+		})
 	end, "EnemyContext:RegisterEntityInfrastructure")
 end
 
@@ -161,6 +207,30 @@ function EnemyContext:_RegisterAIContracts(): Result.Result<boolean>
 
 		return Ok(true)
 	end, "EnemyContext:RegisterAIContracts")
+end
+
+function EnemyContext:_RegisterCombatRules(): Result.Result<boolean>
+	return Catch(function()
+		for _, payload in ipairs(EnemyCombatRules.MovementPresentation or {}) do
+			local result = self._combatContext:RegisterMovementPresentationRule(payload)
+			if not result.success then
+				return result
+			end
+		end
+		for _, payload in ipairs(EnemyCombatRules.GoalReached or {}) do
+			local result = self._combatContext:RegisterMovementGoalReachedRule(payload)
+			if not result.success then
+				return result
+			end
+		end
+		for _, payload in ipairs(EnemyCombatRules.HealthDepleted or {}) do
+			local result = self._combatContext:RegisterHealthDepletedRule(payload)
+			if not result.success then
+				return result
+			end
+		end
+		return Ok(true)
+	end, "EnemyContext:RegisterCombatRules")
 end
 
 function EnemyContext:_OnWaveSpawnEnemy(role: string, spawnCFrame: CFrame, waveNumber: number)
@@ -233,10 +303,6 @@ function EnemyContext:GetNearestAliveEnemy(position: Vector3, maxRange: number):
 	return Catch(function()
 		return Ok(self._getNearestAliveEnemyQuery:Execute(position, maxRange))
 	end, "Enemy:GetNearestAliveEnemy")
-end
-
-function EnemyContext:GetEntityFactory(): Result.Result<any>
-	return Ok(self._enemyEntityReadService)
 end
 
 function EnemyContext:CleanupAll(): Result.Result<boolean>

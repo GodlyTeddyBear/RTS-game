@@ -12,7 +12,9 @@ local UnitEntityReadService = require(script.Parent.Infrastructure.Entity.UnitEn
 local UnitEntitySchema = require(script.Parent.Infrastructure.Entity.UnitEntitySchema)
 local UnitAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local UnitAIProfiles = require(script.Parent.Config.AIProfiles)
+local UnitCombatRules = require(script.Parent.Config.CombatRules)
 local UnitSpawnPolicy = require(script.Parent.UnitDomain.Policies.UnitSpawnPolicy)
+local UnitBuilderConstructionSystem = require(script.Parent.Infrastructure.Systems.UnitBuilderConstructionSystem)
 
 local SpawnUnitCommand = require(script.Parent.Application.Commands.SpawnUnitCommand)
 local DespawnUnitCommand = require(script.Parent.Application.Commands.DespawnUnitCommand)
@@ -110,6 +112,14 @@ function UnitContext:KnitStart()
 		))
 	end
 
+	local combatRuleResult = self:_RegisterCombatRules()
+	if not combatRuleResult.success then
+		error(("UnitContext failed to register Combat rules: [%s] %s"):format(
+			tostring(combatRuleResult.type),
+			tostring(combatRuleResult.message)
+		))
+	end
+
 	UnitBaseContext:OnContextEvent("Run", "RunEnded", function()
 		self:_OnRunEnded()
 	end, "_runEndedConnection")
@@ -121,9 +131,34 @@ end
 
 function UnitContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 	return Catch(function()
-		return self._entityContext:RegisterEntityFeature({
+		local featureResult = self._entityContext:RegisterEntityFeature({
 			FeatureName = "Unit",
 			Schema = UnitEntitySchema,
+		})
+		if not featureResult.success then
+			return featureResult
+		end
+
+		return self._entityContext:RegisterSystem("ActionAdvance", {
+			Name = "UnitBuilderConstructionSystem",
+			Phase = "ActionAdvance",
+			Reads = {
+				"Structure.BuildContributionState",
+				"Unit.BuilderAssignment",
+				"Entity.Ownership",
+				"AI.ActionState",
+			},
+			Writes = {
+				"Unit.BuilderAssignment",
+				"Movement.MoveIntent",
+				"Entity.DirtyTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return UnitBuilderConstructionSystem.new(entityFactory, {
+					StructureContext = self._structureContext,
+					UnitReadService = self._unitReadService,
+				})
+			end,
 		})
 	end, "UnitContext:RegisterEntityInfrastructure")
 end
@@ -154,6 +189,18 @@ function UnitContext:_RegisterAIContracts(): Result.Result<boolean>
 
 		return Ok(true)
 	end, "UnitContext:RegisterAIContracts")
+end
+
+function UnitContext:_RegisterCombatRules(): Result.Result<boolean>
+	return Catch(function()
+		for _, payload in ipairs(UnitCombatRules.MovementPresentation or {}) do
+			local result = self._combatContext:RegisterMovementPresentationRule(payload)
+			if not result.success then
+				return result
+			end
+		end
+		return Ok(true)
+	end, "UnitContext:RegisterCombatRules")
 end
 
 function UnitContext:SpawnUnit(request: SpawnUnitRequest): Result.Result<SpawnUnitResult>

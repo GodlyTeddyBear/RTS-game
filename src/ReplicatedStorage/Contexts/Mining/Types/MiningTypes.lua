@@ -8,9 +8,6 @@
 ]=]
 local MiningTypes = {}
 
-local ServerStorage = game:GetService("ServerStorage")
-local AIContractTypes = require(ServerStorage.Utilities.ContextUtilities.AI.ContractTypes)
-
 export type TExtractorRecord = {
 	InstanceId: number,
 	OwnerUserId: number,
@@ -39,16 +36,6 @@ export type TTimingComponent = {
 	ElapsedSeconds: number,
 }
 
-export type TMiningActionState = {
-	CurrentActionId: string?,
-	ActionState: string,
-	ActionData: any?,
-	PendingActionId: string?,
-	PendingActionData: any?,
-	StartedAt: number?,
-	FinishedAt: number?,
-}
-
 export type TInstanceRefComponent = {
 	InstanceId: number,
 }
@@ -60,47 +47,6 @@ export type TResourceNodeComponent = {
 
 export type TNodeInstanceComponent = {
 	Instance: BasePart,
-}
-
-export type TMiningActorTypePayload = {
-	ActorType: string,
-	Conditions: { [string]: (any?) -> any },
-	Commands: { [string]: (any?) -> any },
-	Executors: { [string]: any },
-	Hooks: { any }?,
-	SemanticRequirements: AIContractTypes.TSemanticRequirements?,
-	RuntimeBinding: AIContractTypes.TRuntimeBinding?,
-	RuntimeOwner: any?,
-}
-
-export type TMiningActorAdapter = {
-	IsActive: () -> boolean,
-	GetActorLabel: (() -> string?)?,
-	BuildFacts: (currentTime: number) -> { [string]: any },
-	BuildServices: (currentTime: number) -> { [string]: any },
-	OnCancel: (() -> ())?,
-	OnRemoved: (() -> ())?,
-	OnActionResult: ((any) -> ())?,
-	OnActionStateChanged: ((TMiningActionState) -> ())?,
-}
-
-export type TMiningActorPayload = {
-	ActorType: string,
-	ActorHandle: string,
-	BehaviorDefinition: any,
-	TickInterval: number,
-	Adapter: TMiningActorAdapter,
-}
-
-export type TMiningActorRecord = {
-	RuntimeId: number,
-	ActorType: string,
-	ActorHandle: string,
-	BehaviorTree: any,
-	TickInterval: number,
-	LastTickTime: number,
-	ActionState: TMiningActionState,
-	Adapter: TMiningActorAdapter,
 }
 
 return table.freeze(MiningTypes)

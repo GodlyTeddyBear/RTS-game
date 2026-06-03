@@ -42,8 +42,7 @@ end
     @param _name string -- The registered module name.
 ]=]
 function ResourceGatherInteractionService:Init(registry: any, _name: string)
-	self._factory = registry:Get("MiningEntityFactory")
-	self._instanceFactory = registry:Get("MiningInstanceFactory")
+	self._readService = registry:Get("MiningEntityReadService")
 end
 
 -- Attaches click detectors to every registered resource node.
@@ -55,8 +54,8 @@ end
 function ResourceGatherInteractionService:AttachToRegisteredNodes(): Result.Result<number>
 	-- Visit the registered resource nodes and attach interactions for any live parts.
 	local attachedCount = 0
-	for _, entity in ipairs(self._factory:QueryResourceNodes()) do
-		local resourcePart = self._factory:GetNodeInstance(entity)
+	for _, entity in ipairs(self._readService:QueryResourceNodes()) do
+		local resourcePart = self._readService:GetResourceNodeInstance(entity)
 		if resourcePart ~= nil and resourcePart.Parent ~= nil and self:_AttachToPart(resourcePart) then
 			attachedCount += 1
 		end
@@ -74,12 +73,12 @@ end
     @return any? -- The resource-node record, if present.
 ]=]
 function ResourceGatherInteractionService:GetResourceNodeForPart(resourcePart: BasePart): (number?, any?)
-	local entity = self._instanceFactory:GetEntity(resourcePart)
+	local entity = self._readService:GetResourceNodeEntityForPart(resourcePart)
 	if entity == nil then
 		return nil, nil
 	end
 
-	return entity, self._factory:GetResourceNode(entity)
+	return entity, self._readService:GetResourceNode(entity)
 end
 
 -- Checks whether the player is still inside the manual gather cooldown window.
