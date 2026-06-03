@@ -6,7 +6,6 @@ local ServerStorage = game:GetService("ServerStorage")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local SummonConfig = require(ReplicatedStorage.Contexts.Summon.Config.SummonConfig)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 
 local SummonAIBehaviors = require(script.Parent.Config.AIBehaviors)
@@ -26,28 +25,12 @@ local Catch = Result.Catch
 local Ok = Result.Ok
 local Ensure = Result.Ensure
 
-local DRONE_REVEAL_TAG = "SummonDrone"
-
 local function moduleSpec(name: string, module: any, cacheAs: string?): BaseContext.TModuleSpec
 	return {
 		Name = name,
 		Module = module,
 		CacheAs = cacheAs,
 	}
-end
-
-local function makeDronePart(): BasePart
-	local part = Instance.new("Part")
-	part.Shape = Enum.PartType.Ball
-	part.Size = Vector3.new(1.2, 1.2, 1.2)
-	part.Color = Color3.fromRGB(255, 199, 93)
-	part.Material = Enum.Material.Neon
-	part.Anchored = true
-	part.CanCollide = false
-	part.CanQuery = false
-	part.CanTouch = false
-	part.CastShadow = false
-	return part
 end
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
@@ -136,86 +119,12 @@ end
 
 function SummonContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 	return Catch(function()
-		local schemaResult = self._entityContext:RegisterFeatureSchema("Summon", SummonEntitySchema)
-		if not schemaResult.success then
-			return schemaResult
-		end
-
-		local bindingResult = self._entityContext:RegisterInstanceBinding("Summon", {
+		local featureResult = self._entityContext:RegisterEntityFeature({
 			FeatureName = "Summon",
-			ResolveAsset = function(_entityContext: any, _snapshot: any): Instance
-				return makeDronePart()
-			end,
-			PrepareInstance = function(_entityContext: any, instance: Instance, snapshot: any)
-				if not instance:IsA("BasePart") then
-					return
-				end
-
-				local identity = snapshot.Identity or {}
-				local transform = snapshot.Transform or {}
-				instance.Name = ("SwarmDrone_%s"):format(tostring(identity.EntityId or "Summon"))
-				if typeof(transform.CFrame) == "CFrame" then
-					instance.CFrame = transform.CFrame
-				end
-			end,
-			BuildRevealAttributes = function(_entityContext: any, snapshot: any)
-				local identity = snapshot.Identity or {}
-				local ownership = snapshot.Ownership or {}
-				local kind = snapshot.FeatureData.Kind or {}
-				return {
-					SummonId = identity.EntityId,
-					SummonKind = kind.Kind,
-					OwnerKind = ownership.OwnerKind,
-					OwnerId = ownership.OwnerId,
-				}
-			end,
-			BuildRevealTags = function()
-				return {
-					[DRONE_REVEAL_TAG] = true,
-				}
-			end,
-			BuildName = function(_entityContext: any, snapshot: any)
-				local identity = snapshot.Identity or {}
-				return ("SwarmDrone_%s"):format(tostring(identity.EntityId or "Summon"))
-			end,
+			Schema = SummonEntitySchema,
 		})
-		if not bindingResult.success then
-			return bindingResult
-		end
-
-		local syncResult = self._entityContext:RegisterSyncContributor("Summon", {
-			FeatureName = "Summon",
-			QuerySyncEntities = function(entityContext: any): { number }
-				local queryResult = entityContext:Query({
-					FeatureName = "Summon",
-					Keys = {
-						{ Key = "ActiveTag", FeatureName = "Entity" },
-						{ Key = "DroneTag", FeatureName = "Summon" },
-					},
-				})
-				return if queryResult.success then queryResult.value else {}
-			end,
-			BuildRuntimeAttributes = function(entityContext: any, entity: number)
-				local identity = self:_ReadEntityValue(entityContext, entity, "Identity", "Entity")
-				local ownership = self:_ReadEntityValue(entityContext, entity, "Ownership", "Entity")
-				local kind = self:_ReadEntityValue(entityContext, entity, "Kind", "Summon")
-				local targetEnemyId = self:_ReadEntityValue(entityContext, entity, "TargetEnemyId", "Summon")
-
-				return {
-					SummonId = if type(identity) == "table" then identity.EntityId else nil,
-					SummonKind = if type(kind) == "table" then kind.Kind else nil,
-					OwnerKind = if type(ownership) == "table" then ownership.OwnerKind else nil,
-					OwnerId = if type(ownership) == "table" then ownership.OwnerId else nil,
-					TargetEnemyId = if type(targetEnemyId) == "string" then targetEnemyId else nil,
-				}
-			end,
-			BuildTransformProjection = function(entityContext: any, entity: number)
-				local transform = self:_ReadEntityValue(entityContext, entity, "Transform", "Entity")
-				return if type(transform) == "table" then transform.CFrame else nil
-			end,
-		})
-		if not syncResult.success then
-			return syncResult
+		if not featureResult.success then
+			return featureResult
 		end
 
 		local lifetimeResult = self._entityContext:RegisterSystem("ActionAdvance", {
@@ -236,11 +145,7 @@ function SummonContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 			return lifetimeResult
 		end
 
-		return self._combatContext:RegisterMovementPresentationRule({
-			RuleId = "Summon.MovementPresentation",
-			Query = { FeatureName = "Summon", Keys = { "DroneTag" } },
-			TargetEntityId = { FeatureName = "Summon", Key = "TargetEnemyId" },
-		})
+		return Ok(true)
 	end, "SummonContext:RegisterEntityInfrastructure")
 end
 
@@ -270,11 +175,6 @@ function SummonContext:_RegisterAIContracts(): Result.Result<boolean>
 
 		return Ok(true)
 	end, "SummonContext:RegisterAIContracts")
-end
-
-function SummonContext:_ReadEntityValue(entityContext: any, entity: number, key: string, featureName: string): any
-	local result = entityContext:Get(entity, key, featureName)
-	return if result.success then result.value else nil
 end
 
 function SummonContext:SpawnSwarmDrones(

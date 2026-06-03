@@ -11,9 +11,12 @@ type TComponentSpec = {
 	ECSName: string,
 	Authority: "AUTHORITATIVE" | "DERIVED",
 	Default: any?,
+	Replication: "Client" | "ServerOnly"?,
 }
 
-type TTagSpec = {}
+type TTagSpec = {
+	Replication: "Client" | "ServerOnly"?,
+}
 
 type TArchetypeSpec = {
 	Extends: string?,
@@ -381,6 +384,7 @@ function EntitySchemaRegistry:_RegisterRuntimeMetadataComponents()
 		Kind = "Component",
 		FeatureName = CORE_FEATURE_NAME,
 		Key = METADATA_COMPONENT_SPECS.FeatureName.Key,
+		Replication = "Client",
 	})
 
 	local runtimeArchetypeNameComponent = self._world:component()
@@ -390,6 +394,7 @@ function EntitySchemaRegistry:_RegisterRuntimeMetadataComponents()
 		Kind = "Component",
 		FeatureName = CORE_FEATURE_NAME,
 		Key = METADATA_COMPONENT_SPECS.ArchetypeName.Key,
+		Replication = "Client",
 	})
 
 	self._ecsNames[METADATA_COMPONENT_SPECS.FeatureName.ECSName] = true
@@ -463,17 +468,19 @@ function EntitySchemaRegistry:_RegisterSchema(
 				Authority = componentSpec.Authority,
 				Default = _DeepClone(componentSpec.Default),
 				ECSName = componentSpec.ECSName,
+				Replication = componentSpec.Replication or "Client",
 			})
 			self._componentMetadataById[componentId] = table.freeze({
 				ECSName = componentSpec.ECSName,
 				Kind = "Component",
 				FeatureName = featureName,
 				Key = key,
+				Replication = componentSpec.Replication or "Client",
 			})
 			self._allComponents[featureName .. "." .. key] = componentId
 		end
 
-		for key in pairs(featureTags) do
+		for key, tagSpec in pairs(featureTags) do
 			assert(type(key) == "string" and key ~= "", Errors.INVALID_SCHEMA)
 			local ecsName = featureName .. "." .. key
 			if self._ecsNames[ecsName] == true then
@@ -493,6 +500,7 @@ function EntitySchemaRegistry:_RegisterSchema(
 				Kind = "Tag",
 				FeatureName = featureName,
 				Key = key,
+				Replication = if type(tagSpec) == "table" and tagSpec.Replication == "ServerOnly" then "ServerOnly" else "Client",
 			})
 			self._allComponents[featureName .. "." .. key] = tagId
 		end

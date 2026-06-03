@@ -70,6 +70,31 @@ function SpawnUnitCommand:Execute(request: SpawnUnitRequest): Result.Result<Spaw
 			Transform = {
 				CFrame = request.SpawnCFrame,
 			},
+			ModelAsset = {
+				AssetDomain = "Units",
+				AssetId = request.UnitId,
+				AssetKind = "Model",
+			},
+			ModelBinding = {
+				ParentFolder = "Unit",
+				SetupProfileId = "HumanoidActor",
+				RevealTag = "CombatUnit",
+				NameFormat = "Unit_{DefinitionId}_{EntityId}",
+			},
+			HumanoidProjection = {
+				Enabled = true,
+				Health = true,
+				WalkSpeed = true,
+			},
+			TransformProjection = {
+				Enabled = false,
+			},
+			TransformPoll = {
+				Enabled = true,
+			},
+			CleanupOutcomes = {
+				OutcomeIds = { "AICleanup", "MovementCleanup", "TeamUnassign" },
+			},
 			Role = {
 				Role = definition.Role,
 				DisplayName = definition.DisplayName,
@@ -121,9 +146,6 @@ function SpawnUnitCommand:Execute(request: SpawnUnitRequest): Result.Result<Spaw
 			TickInterval = 0.15,
 		}))
 
-		Try(self._entityContext:EnableRuntimeBinding("Unit"))
-		Try(self._entityContext:EnableRuntimeSync("Unit"))
-		Try(self._entityContext:EnableRuntimeReplication("Unit"))
 		Try(self._entityContext:RegisterRuntimeEntity(entity))
 		Try(self._entityContext:FlushBindQueue())
 

@@ -67,12 +67,15 @@ local function _IsOwnedUnitRoot(localOwnerId: string, root: Instance): boolean
 		return false
 	end
 
-	local unitGuid = root:GetAttribute("UnitGuid")
+	local unitGuid = root:GetAttribute("EntityId")
+	local entityKind = root:GetAttribute("EntityKind")
+	local entityFeature = root:GetAttribute("EntityFeature")
 	local ownerKind = root:GetAttribute("OwnerKind")
 	local ownerId = root:GetAttribute("OwnerId")
 
 	return type(unitGuid) == "string"
 		and unitGuid ~= ""
+		and (entityKind == "Unit" or entityFeature == "Unit")
 		and ownerKind == "Player"
 		and ownerId == localOwnerId
 end
@@ -104,7 +107,7 @@ function ResolveOwnedUnitSelectionQuery:Execute(candidate: any): TSelectableUnit
 		return nil
 	end
 
-	local unitGuid = root:GetAttribute("UnitGuid")
+	local unitGuid = root:GetAttribute("EntityId")
 	if type(unitGuid) ~= "string" or unitGuid == "" then
 		return nil
 	end

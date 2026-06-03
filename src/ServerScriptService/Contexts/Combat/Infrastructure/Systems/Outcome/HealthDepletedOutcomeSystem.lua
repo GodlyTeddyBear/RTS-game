@@ -31,7 +31,13 @@ function HealthDepletedOutcomeSystem:_Resolve(requestEntity: number)
 		return
 	end
 
-	local rule = self._ruleRegistry:GetHealthDepletedRule(request.VictimKind)
+	local outcome = if type(request.VictimEntity) == "number"
+		then self:_Get(request.VictimEntity, "HealthDepletedOutcome", "Entity")
+		else nil
+	local outcomeId = if type(outcome) == "table" and type(outcome.OutcomeId) == "string"
+		then outcome.OutcomeId
+		else request.VictimKind
+	local rule = self._ruleRegistry:GetHealthDepletedRule(outcomeId)
 	if type(rule) ~= "table" then
 		self:_Processed(requestEntity)
 		return

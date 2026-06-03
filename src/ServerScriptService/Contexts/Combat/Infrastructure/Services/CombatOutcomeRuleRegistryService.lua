@@ -24,16 +24,16 @@ function CombatOutcomeRuleRegistryService:RegisterMovementPresentationRule(paylo
 end
 
 function CombatOutcomeRuleRegistryService:RegisterHealthDepletedRule(payload: any)
-	local victimKind = payload.VictimKind
-	if type(victimKind) ~= "string" or victimKind == "" then
+	local outcomeId = payload.OutcomeId or payload.VictimKind
+	if type(outcomeId) ~= "string" or outcomeId == "" then
 		return false
 	end
-	self._healthDepletedRules[victimKind] = table.freeze(table.clone(payload))
+	self._healthDepletedRules[outcomeId] = table.freeze(table.clone(payload))
 	return true
 end
 
 function CombatOutcomeRuleRegistryService:RegisterGoalReachedRule(payload: any)
-	local ruleId = payload.RuleId
+	local ruleId = payload.OutcomeId or payload.RuleId
 	if type(ruleId) ~= "string" or ruleId == "" then
 		return false
 	end
@@ -54,6 +54,10 @@ end
 
 function CombatOutcomeRuleRegistryService:GetHealthDepletedRule(victimKind: string): any?
 	return self._healthDepletedRules[victimKind]
+end
+
+function CombatOutcomeRuleRegistryService:GetGoalReachedRule(outcomeId: string): any?
+	return self._goalReachedRules[outcomeId]
 end
 
 function CombatOutcomeRuleRegistryService:GetGoalReachedRules(): { any }

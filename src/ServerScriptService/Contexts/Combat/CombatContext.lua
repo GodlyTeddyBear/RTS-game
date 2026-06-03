@@ -7,6 +7,8 @@ local DebugConfig = require(ReplicatedStorage.Config.DebugConfig)
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 local DebugPlus = require(ReplicatedStorage.Utilities.DebugPlus)
+local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
+local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local CombatAbilities = require(script.Parent.Config.CombatAbilities)
@@ -240,6 +242,11 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 		local movementSchemaResult = self._entityContext:RegisterFeatureSchema("Movement", MovementEntitySchema)
 		if not movementSchemaResult.success then
 			return movementSchemaResult
+		end
+
+		local outcomeRuleResult = self:_RegisterDefaultOutcomeRules()
+		if not outcomeRuleResult.success then
+			return outcomeRuleResult
 		end
 
 		local movementCleanupResult = self._entityContext:RegisterPreDestroyCleanup({
@@ -576,6 +583,161 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			end,
 		})
 	end, "Combat:RegisterEntityActionPipeline")
+end
+
+function CombatContext:_RegisterDefaultOutcomeRules(): Result.Result<boolean>
+	return Catch(function()
+		self._combatOutcomeRuleRegistryService:RegisterMovementPresentationRule({
+			RuleId = "Enemy.MovementPresentation",
+			Query = { FeatureName = "Enemy", Keys = { "AliveTag", "PathState" } },
+			PathState = { FeatureName = "Enemy", Key = "PathState" },
+			Speed = { FeatureName = "Enemy", Key = "CurrentMoveSpeed" },
+			Animation = {
+				FeatureName = "Enemy",
+				StateKey = "AnimationState",
+				LoopingKey = "AnimationLooping",
+				MovingState = "Walk",
+				IdleState = "Idle",
+			},
+			Attack = {
+				PathState = { FeatureName = "Enemy", Key = "PathState" },
+				Speed = { FeatureName = "Enemy", Key = "CurrentMoveSpeed" },
+				Target = {},
+				Animation = {
+					FeatureName = "Enemy",
+					StateKey = "AnimationState",
+					LoopingKey = "AnimationLooping",
+					State = "Attack",
+					Looping = false,
+				},
+			},
+		})
+
+		self._combatOutcomeRuleRegistryService:RegisterMovementPresentationRule({
+			RuleId = "Unit.MovementPresentation",
+			Query = { FeatureName = "Unit", Keys = { "PathState" } },
+			PathState = {
+				FeatureName = "Unit",
+				Key = "PathState",
+				PreserveKeys = {
+					"RequestedGoalPosition",
+					"GoalRevision",
+					"FailedGoalRevision",
+				},
+			},
+			Animation = {
+				FeatureName = "Unit",
+				StateKey = "AnimationState",
+				LoopingKey = "AnimationLooping",
+				MovingState = "Walk",
+				IdleState = "Idle",
+			},
+		})
+
+		self._combatOutcomeRuleRegistryService:RegisterMovementPresentationRule({
+			RuleId = "Summon.MovementPresentation",
+			Query = { FeatureName = "Summon", Keys = { "DroneTag" } },
+			TargetEntityId = { FeatureName = "Summon", Key = "TargetEnemyId" },
+		})
+
+		self._combatOutcomeRuleRegistryService:RegisterMovementPresentationRule({
+			RuleId = "Structure.AttackPresentation",
+			Query = {
+				Keys = {
+					{ Key = "OperationalTag", FeatureName = "Structure" },
+					{ Key = "AttackState", FeatureName = "Combat" },
+					{ Key = "ActionState", FeatureName = "AI" },
+				},
+			},
+			Attack = {
+				Target = { TargetKind = "Enemy" },
+				Animation = {
+					FeatureName = "Structure",
+					StateKey = "AnimationState",
+					LoopingKey = "AnimationLooping",
+					State = "Attack",
+					Looping = false,
+				},
+				TargetEntityId = { FeatureName = "Structure", Key = "TargetEnemyId" },
+			},
+		})
+
+		self._combatOutcomeRuleRegistryService:RegisterGoalReachedRule({
+			RuleId = "Enemy.AdvanceGoalReached",
+			OutcomeId = "EnemyGoalReached",
+			Query = { FeatureName = "Enemy", Keys = { "AliveTag" } },
+			ActionId = "Advance",
+			AddTag = { FeatureName = "Enemy", Key = "GoalReachedTag" },
+			OnReached = function(context: any)
+				self:_HandleEnemyGoalReached(context.Entity)
+			end,
+		})
+
+		self._combatOutcomeRuleRegistryService:RegisterHealthDepletedRule({
+			OutcomeId = "EnemyDeath",
+			VictimKind = "Enemy",
+			MarkVictimForDestruction = true,
+			OnDepleted = function(context: any)
+				self:_EmitEnemyDeath(context.Request.VictimEntity)
+			end,
+		})
+
+		self._combatOutcomeRuleRegistryService:RegisterHealthDepletedRule({
+			OutcomeId = "StructureDeath",
+			VictimKind = "Structure",
+			MarkVictimForDestruction = true,
+		})
+
+		return Ok(true)
+	end, "Combat:RegisterDefaultOutcomeRules")
+end
+
+function CombatContext:_HandleEnemyGoalReached(entity: number)
+	self._entityContext:Remove(entity, "AliveTag", "Enemy")
+	self._entityContext:Add(entity, "GoalReachedTag", "Enemy")
+	self:_EmitEnemyDeath(entity)
+	self._entityContext:MarkForDestruction(entity)
+
+	local role = self:_GetEntityValue(entity, "Role", "Enemy")
+	local roleId = if type(role) == "table" then role.Role else nil
+	local roleConfig = if type(roleId) == "string" then EnemyConfig.Roles[roleId] else nil
+	if roleConfig == nil then
+		return
+	end
+
+	self:RequestDamage({
+		ActionId = "EnemyGoalReached",
+		AbilityId = "EnemyBaseAttack",
+		AttackerEntity = entity,
+		VictimKind = "Base",
+		Amount = roleConfig.Damage,
+		Reason = "EnemyGoalReached",
+	})
+end
+
+function CombatContext:_EmitEnemyDeath(entity: number?)
+	if type(entity) ~= "number" then
+		return
+	end
+
+	local identity = self:_GetEntityValue(entity, "Identity", "Entity")
+	local role = self:_GetEntityValue(entity, "Role", "Enemy")
+	local transform = self:_GetEntityValue(entity, "Transform", "Entity")
+	local roleId = if type(role) == "table" then role.Role else nil
+	local waveNumber = if type(role) == "table" then role.WaveNumber else nil
+	if type(identity) ~= "table" or type(roleId) ~= "string" or type(waveNumber) ~= "number" then
+		return
+	end
+
+	local deathCFrame = if type(transform) == "table" and typeof(transform.CFrame) == "CFrame"
+		then transform.CFrame
+		else CFrame.new()
+	GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, roleId, waveNumber, deathCFrame)
+end
+
+function CombatContext:_GetEntityValue(entity: number, key: string, featureName: string): any
+	local result = self._entityContext:Get(entity, key, featureName)
+	return if result.success then result.value else nil
 end
 
 function CombatContext:_OnRunStarted()

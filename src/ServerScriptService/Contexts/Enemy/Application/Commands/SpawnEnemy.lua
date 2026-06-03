@@ -72,6 +72,37 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 			ModelRef = {
 				Model = nil,
 			},
+			ModelAsset = {
+				AssetDomain = "Enemies",
+				AssetId = role,
+				AssetKind = "Model",
+			},
+			ModelBinding = {
+				ParentFolder = "Enemy",
+				SetupProfileId = "HumanoidActor",
+				RevealTag = "AnimatedEnemy",
+				NameFormat = "Enemy_{DefinitionId}_{EntityId}",
+			},
+			HumanoidProjection = {
+				Enabled = true,
+				Health = true,
+				WalkSpeed = true,
+			},
+			TransformProjection = {
+				Enabled = true,
+			},
+			TransformPoll = {
+				Enabled = false,
+			},
+			CleanupOutcomes = {
+				OutcomeIds = { "AICleanup", "MovementCleanup", "TeamUnassign" },
+			},
+			HealthDepletedOutcome = {
+				OutcomeId = "EnemyDeath",
+			},
+			GoalReachedOutcome = {
+				OutcomeId = "EnemyGoalReached",
+			},
 			Target = {
 				TargetEntity = nil,
 				TargetKind = nil,
@@ -111,9 +142,6 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 		}))
 
 		Try(self._aiContext:SetupEntityAIFromProfile(entity, ("Enemy%sAI"):format(role)))
-		Try(self._entityContext:EnableRuntimeBinding("Enemy"))
-		Try(self._entityContext:EnableRuntimeSync("Enemy"))
-		Try(self._entityContext:EnableRuntimeReplication("Enemy"))
 		Try(self._entityContext:RegisterRuntimeEntity(entity))
 		Try(self._entityContext:FlushBindQueue())
 

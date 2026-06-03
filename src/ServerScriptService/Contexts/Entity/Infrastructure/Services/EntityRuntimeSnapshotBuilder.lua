@@ -27,6 +27,15 @@ local SHARED_FIELD_KEYS = {
 	Lifetime = "Lifetime",
 	Target = "Target",
 	ModelRef = "ModelRef",
+	ModelAsset = "ModelAsset",
+	ModelBinding = "ModelBinding",
+	HumanoidProjection = "HumanoidProjection",
+	TransformProjection = "TransformProjection",
+	TransformPoll = "TransformPoll",
+	CleanupOutcomes = "CleanupOutcomes",
+	HealthDepletedOutcome = "HealthDepletedOutcome",
+	GoalReachedOutcome = "GoalReachedOutcome",
+	ReplicationPolicy = "ReplicationPolicy",
 }
 
 local EntityRuntimeSnapshotBuilder = {}
@@ -84,6 +93,15 @@ function EntityRuntimeSnapshotBuilder:BuildSnapshot(entity: number): Result.Resu
 			Lifetime = nil,
 			Target = nil,
 			ModelRef = nil,
+			ModelAsset = nil,
+			ModelBinding = nil,
+			HumanoidProjection = nil,
+			TransformProjection = nil,
+			TransformPoll = nil,
+			CleanupOutcomes = nil,
+			HealthDepletedOutcome = nil,
+			GoalReachedOutcome = nil,
+			ReplicationPolicy = nil,
 			FeatureData = featureData,
 		}
 

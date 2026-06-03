@@ -55,8 +55,88 @@ local EntityCoreSchema = {
 		ModelRef = {
 			ECSName = "Entity.ModelRef",
 			Authority = "AUTHORITATIVE",
+			Replication = "ServerOnly",
 			Default = {
 				Model = nil,
+			},
+		},
+		ModelAsset = {
+			ECSName = "Entity.ModelAsset",
+			Authority = "AUTHORITATIVE",
+			Replication = "ServerOnly",
+			Default = {
+				AssetDomain = "",
+				AssetId = "",
+				AssetKind = "Model",
+			},
+		},
+		ModelBinding = {
+			ECSName = "Entity.ModelBinding",
+			Authority = "AUTHORITATIVE",
+			Replication = "ServerOnly",
+			Default = {
+				ParentFolder = "",
+				SetupProfileId = "",
+				RevealTag = "EntityActor",
+				NameFormat = nil,
+			},
+		},
+		HumanoidProjection = {
+			ECSName = "Entity.HumanoidProjection",
+			Authority = "AUTHORITATIVE",
+			Replication = "ServerOnly",
+			Default = {
+				Enabled = false,
+				Health = true,
+				WalkSpeed = true,
+			},
+		},
+		TransformProjection = {
+			ECSName = "Entity.TransformProjection",
+			Authority = "AUTHORITATIVE",
+			Replication = "ServerOnly",
+			Default = {
+				Enabled = true,
+			},
+		},
+		TransformPoll = {
+			ECSName = "Entity.TransformPoll",
+			Authority = "AUTHORITATIVE",
+			Replication = "ServerOnly",
+			Default = {
+				Enabled = false,
+			},
+		},
+		CleanupOutcomes = {
+			ECSName = "Entity.CleanupOutcomes",
+			Authority = "AUTHORITATIVE",
+			Replication = "ServerOnly",
+			Default = {
+				OutcomeIds = {},
+			},
+		},
+		HealthDepletedOutcome = {
+			ECSName = "Entity.HealthDepletedOutcome",
+			Authority = "AUTHORITATIVE",
+			Replication = "ServerOnly",
+			Default = {
+				OutcomeId = nil,
+			},
+		},
+		GoalReachedOutcome = {
+			ECSName = "Entity.GoalReachedOutcome",
+			Authority = "AUTHORITATIVE",
+			Replication = "ServerOnly",
+			Default = {
+				OutcomeId = nil,
+			},
+		},
+		ReplicationPolicy = {
+			ECSName = "Entity.ReplicationPolicy",
+			Authority = "AUTHORITATIVE",
+			Replication = "ServerOnly",
+			Default = {
+				Mode = "Default",
 			},
 		},
 	},
@@ -79,6 +159,15 @@ local EntityCoreSchema = {
 			Components = {
 				Health = true,
 				ModelRef = true,
+				ModelAsset = true,
+				ModelBinding = true,
+				HumanoidProjection = true,
+				TransformProjection = true,
+				TransformPoll = true,
+				CleanupOutcomes = true,
+				HealthDepletedOutcome = true,
+				GoalReachedOutcome = true,
+				ReplicationPolicy = true,
 			},
 		},
 		OwnedActor = {

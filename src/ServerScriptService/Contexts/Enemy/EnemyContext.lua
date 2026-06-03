@@ -2,16 +2,11 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
-local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 local TeamTypes = require(ReplicatedStorage.Contexts.Team.Types.TeamTypes)
-local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
 
 local EnemyEntityReadService = require(script.Parent.Infrastructure.Entity.EnemyEntityReadService)
 local EnemyEntitySchema = require(script.Parent.Infrastructure.Entity.EnemyEntitySchema)
@@ -29,25 +24,6 @@ local GetNearestAliveEnemyQuery = require(script.Parent.Application.Queries.GetN
 
 local Catch = Result.Catch
 local Ok = Result.Ok
-local ANIMATED_ENEMY_TAG = "AnimatedEnemy"
-
-local function _EnsureAnimationsFolderValue(model: Model, animationsFolder: Folder?)
-	local animationsFolderRef = model:FindFirstChild("AnimationsFolder")
-	if animationsFolderRef ~= nil and not animationsFolderRef:IsA("ObjectValue") then
-		animationsFolderRef:Destroy()
-		animationsFolderRef = nil
-	end
-
-	if animationsFolderRef == nil then
-		animationsFolderRef = Instance.new("ObjectValue")
-		animationsFolderRef.Name = "AnimationsFolder"
-		animationsFolderRef.Parent = model
-	end
-
-	if animationsFolder ~= nil then
-		(animationsFolderRef :: ObjectValue).Value = animationsFolder
-	end
-end
 
 local function moduleSpec(name: string, module: any, cacheAs: string?): BaseContext.TModuleSpec
 	return {
@@ -55,11 +31,6 @@ local function moduleSpec(name: string, module: any, cacheAs: string?): BaseCont
 		Module = module,
 		CacheAs = cacheAs,
 	}
-end
-
-local function readEntityValue(entityContext: any, entity: number, key: string, featureName: string): any
-	local result = entityContext:Get(entity, key, featureName)
-	return if result.success then result.value else nil
 end
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
@@ -120,9 +91,6 @@ function EnemyContext:KnitInit()
 	self._spawnConnection = nil :: any
 	self._waveEndedConnection = nil :: any
 	self._runEndedConnection = nil :: any
-	self._enemyAssetRegistry = nil :: any
-	self._animationsFolder = nil :: Folder?
-	self:_InitializeEnemyAssets()
 end
 
 function EnemyContext:KnitStart()
@@ -164,131 +132,12 @@ end
 
 function EnemyContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 	return Catch(function()
-		local schemaResult = self._entityContext:RegisterFeatureSchema("Enemy", EnemyEntitySchema)
-		if not schemaResult.success then
-			return schemaResult
-		end
-
-		local bindingResult = self._entityContext:RegisterInstanceBinding("Enemy", {
+		local featureResult = self._entityContext:RegisterEntityFeature({
 			FeatureName = "Enemy",
-			ResolveAsset = function(_entityContext: any, snapshot: any): Instance
-				local identity = snapshot.Identity or {}
-				local role = snapshot.FeatureData.Role or {}
-				return self:_BuildEnemyModel(role.Role, identity.EntityId)
-			end,
-			PrepareInstance = function(_entityContext: any, instance: Instance, snapshot: any)
-				if not instance:IsA("Model") then
-					return
-				end
-
-				local role = snapshot.FeatureData.Role or {}
-				self:_PrepareEnemyModel(instance :: Model, role.Role, snapshot.Identity and snapshot.Identity.EntityId)
-
-				local transform = snapshot.Transform
-				if type(transform) == "table" and typeof(transform.CFrame) == "CFrame" then
-					instance:PivotTo(transform.CFrame)
-				end
-			end,
-			BuildRevealAttributes = function(_entityContext: any, snapshot: any)
-				local identity = snapshot.Identity or {}
-				local role = snapshot.FeatureData.Role or {}
-				return {
-					EnemyId = identity.EntityId,
-					EnemyRole = role.Role,
-					WaveNumber = role.WaveNumber,
-				}
-			end,
-			BuildRevealTags = function()
-				return {
-					[ANIMATED_ENEMY_TAG] = true,
-				}
-			end,
-			BuildName = function(_entityContext: any, snapshot: any)
-				local identity = snapshot.Identity or {}
-				local role = snapshot.FeatureData.Role or {}
-				return string.format("Enemy_%s_%s", tostring(role.Role), tostring(identity.EntityId))
-			end,
+			Schema = EnemyEntitySchema,
 		})
-		if not bindingResult.success then
-			return bindingResult
-		end
-
-		local syncResult = self._entityContext:RegisterSyncContributor("Enemy", {
-			FeatureName = "Enemy",
-			QuerySyncEntities = function(entityContext: any): { number }
-				local queryResult = entityContext:Query({
-					FeatureName = "Enemy",
-					Keys = { "Role" },
-				})
-				if not queryResult.success then
-					return {}
-				end
-				return queryResult.value
-			end,
-			BuildRuntimeAttributes = function(entityContext: any, entity: number)
-				local identity = readEntityValue(entityContext, entity, "Identity", "Entity")
-				local health = readEntityValue(entityContext, entity, "Health", "Entity")
-				local role = readEntityValue(entityContext, entity, "Role", "Enemy")
-				local moveSpeed = readEntityValue(entityContext, entity, "SpeedState", "Movement")
-				local animationState = readEntityValue(entityContext, entity, "AnimationState", "Enemy")
-				local animationLooping = readEntityValue(entityContext, entity, "AnimationLooping", "Enemy")
-
-				return {
-					EnemyId = if type(identity) == "table" then identity.EntityId else nil,
-					EnemyRole = if type(role) == "table" then role.Role else nil,
-					WaveNumber = if type(role) == "table" then role.WaveNumber else nil,
-					Health = if type(health) == "table" then health.Current else nil,
-					MaxHealth = if type(health) == "table" then health.Max else nil,
-					CurrentMoveSpeed = if type(moveSpeed) == "table" then moveSpeed.CurrentSpeed else nil,
-					AnimationState = if type(animationState) == "string" then animationState else nil,
-					AnimationLooping = if type(animationLooping) == "boolean" then animationLooping else nil,
-				}
-			end,
-			BuildHumanoidProperties = function(entityContext: any, entity: number)
-				local health = readEntityValue(entityContext, entity, "Health", "Entity")
-				local moveSpeed = readEntityValue(entityContext, entity, "SpeedState", "Movement")
-
-				return {
-					MaxHealth = if type(health) == "table" then health.Max else nil,
-					Health = if type(health) == "table" then health.Current else nil,
-					WalkSpeed = if type(moveSpeed) == "table" then moveSpeed.CurrentSpeed else nil,
-				}
-			end,
-			BuildTransformProjection = function(entityContext: any, entity: number)
-				local transform = readEntityValue(entityContext, entity, "Transform", "Entity")
-				return if type(transform) == "table" then transform.CFrame else nil
-			end,
-		})
-		if not syncResult.success then
-			return syncResult
-		end
-
-		local replicationResult = self._entityContext:RegisterReplicationSurface("Enemy", {
-			FeatureName = "Enemy",
-			BuildSchema = function(entityContext: any): any
-				local entityComponentsResult = entityContext:GetFeatureComponents("Entity")
-				local enemyComponentsResult = entityContext:GetFeatureComponents("Enemy")
-				assert(entityComponentsResult.success, "Enemy replication surface missing Entity compiled components")
-				assert(enemyComponentsResult.success, "Enemy replication surface missing Enemy compiled components")
-
-				return {
-					sharedComponents = {
-						entityComponentsResult.value.Identity,
-						entityComponentsResult.value.Health,
-						enemyComponentsResult.value.Role,
-						enemyComponentsResult.value.CurrentMoveSpeed,
-						enemyComponentsResult.value.AnimationState,
-						enemyComponentsResult.value.AnimationLooping,
-					},
-					sharedTags = {
-						enemyComponentsResult.value.AliveTag,
-						enemyComponentsResult.value.GoalReachedTag,
-					},
-				}
-			end,
-		})
-		if not replicationResult.success then
-			return replicationResult
+		if not featureResult.success then
+			return featureResult
 		end
 
 		local cleanupResult = self._entityContext:RegisterPreDestroyCleanup({
@@ -302,59 +151,6 @@ function EnemyContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 			end,
 		})
 		if not cleanupResult.success then return cleanupResult end
-
-		local projectionResult = self._combatContext:RegisterMovementPresentationRule({
-			RuleId = "Enemy.MovementPresentation",
-			Query = { FeatureName = "Enemy", Keys = { "AliveTag", "PathState" } },
-			PathState = { FeatureName = "Enemy", Key = "PathState" },
-			Speed = { FeatureName = "Enemy", Key = "CurrentMoveSpeed" },
-			Animation = {
-				FeatureName = "Enemy",
-				StateKey = "AnimationState",
-				LoopingKey = "AnimationLooping",
-				MovingState = "Walk",
-				IdleState = "Idle",
-			},
-			Attack = {
-				PathState = { FeatureName = "Enemy", Key = "PathState" },
-				Speed = { FeatureName = "Enemy", Key = "CurrentMoveSpeed" },
-				Target = {},
-				Animation = {
-					FeatureName = "Enemy",
-					StateKey = "AnimationState",
-					LoopingKey = "AnimationLooping",
-					State = "Attack",
-					Looping = false,
-				},
-			},
-		})
-		if not projectionResult.success then
-			return projectionResult
-		end
-
-		local goalReachedResult = self._combatContext:RegisterMovementGoalReachedRule({
-			RuleId = "Enemy.AdvanceGoalReached",
-			Query = { FeatureName = "Enemy", Keys = { "AliveTag" } },
-			ActionId = "Advance",
-			AddTag = { FeatureName = "Enemy", Key = "GoalReachedTag" },
-			OnReached = function(context: any)
-				self:_HandleAdvanceGoalReached(context.Entity)
-			end,
-		})
-		if not goalReachedResult.success then
-			return goalReachedResult
-		end
-
-		local healthDepletedResult = self._combatContext:RegisterHealthDepletedRule({
-			VictimKind = "Enemy",
-			MarkVictimForDestruction = true,
-			OnDepleted = function(context: any)
-				self:_EmitEnemyDeath(context.Request.VictimEntity)
-			end,
-		})
-		if not healthDepletedResult.success then
-			return healthDepletedResult
-		end
 
 		return Ok(true)
 	end, "EnemyContext:RegisterEntityInfrastructure")
@@ -378,96 +174,6 @@ function EnemyContext:_RegisterAIContracts(): Result.Result<boolean>
 
 		return Ok(true)
 	end, "EnemyContext:RegisterAIContracts")
-end
-
-function EnemyContext:_InitializeEnemyAssets()
-	local assetsRoot = ReplicatedStorage:FindFirstChild("Assets")
-	if assetsRoot == nil or not assetsRoot:IsA("Folder") then
-		return
-	end
-
-	local enemiesFolder = assetsRoot:FindFirstChild("Enemies")
-	if enemiesFolder ~= nil and enemiesFolder:IsA("Folder") then
-		self._enemyAssetRegistry = AssetFetcher.CreateEnemyRegistry(enemiesFolder)
-	end
-
-	local animationsFolder = assetsRoot:FindFirstChild("Animations")
-	if animationsFolder ~= nil and animationsFolder:IsA("Folder") then
-		self._animationsFolder = animationsFolder
-	end
-end
-
-function EnemyContext:_BuildEnemyModel(role: string?, enemyId: string?): Model
-	local resolvedRole = if type(role) == "string" and role ~= "" then role else "Swarm"
-	local resolvedEnemyId = if type(enemyId) == "string" and enemyId ~= "" then enemyId else tostring(os.clock())
-
-	if self._enemyAssetRegistry ~= nil then
-		local assetModel = self._enemyAssetRegistry:GetEnemyModel(resolvedRole)
-		if assetModel ~= nil then
-			return assetModel
-		end
-	end
-
-	return self:_CreateFallbackEnemyModel(resolvedRole, resolvedEnemyId)
-end
-
-function EnemyContext:_CreateFallbackEnemyModel(role: string, enemyId: string): Model
-	local roleConfig = EnemyConfig.Roles[role]
-	assert(roleConfig ~= nil, "Unknown enemy role: " .. tostring(role))
-
-	local model = Instance.new("Model")
-	model.Name = "Enemy_" .. role .. "_" .. enemyId
-
-	local rootPart = Instance.new("Part")
-	rootPart.Name = "HumanoidRootPart"
-	rootPart.Size = roleConfig.ModelScale
-	rootPart.Color = roleConfig.ModelColor
-	rootPart.Material = Enum.Material.SmoothPlastic
-	rootPart.Anchored = true
-	rootPart.CanCollide = false
-	rootPart.Parent = model
-
-	local humanoid = Instance.new("Humanoid")
-	humanoid.MaxHealth = roleConfig.MaxHp
-	humanoid.Health = roleConfig.MaxHp
-	humanoid.WalkSpeed = roleConfig.MoveSpeed
-	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-	humanoid.Parent = model
-
-	model.PrimaryPart = rootPart
-	return model
-end
-
-function EnemyContext:_PrepareEnemyModel(model: Model, role: string?, enemyId: string?)
-	local resolvedRole = if type(role) == "string" and role ~= "" then role else "Swarm"
-	local resolvedEnemyId = if type(enemyId) == "string" and enemyId ~= "" then enemyId else tostring(os.clock())
-	local roleConfig = EnemyConfig.Roles[resolvedRole]
-	assert(roleConfig ~= nil, "Unknown enemy role: " .. tostring(resolvedRole))
-
-	model.Name = "Enemy_" .. resolvedRole .. "_" .. resolvedEnemyId
-	_EnsureAnimationsFolderValue(model, self._animationsFolder)
-
-	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	if humanoid == nil then
-		humanoid = Instance.new("Humanoid")
-		humanoid.Parent = model
-	end
-
-	humanoid.MaxHealth = roleConfig.MaxHp
-	humanoid.Health = roleConfig.MaxHp
-	humanoid.WalkSpeed = roleConfig.MoveSpeed
-	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-
-	if model.PrimaryPart == nil then
-		local rootPart = model:FindFirstChild("HumanoidRootPart")
-		if rootPart ~= nil and rootPart:IsA("BasePart") then
-			model.PrimaryPart = rootPart
-		end
-	end
-
-	assert(model.PrimaryPart ~= nil, "Enemy model missing PrimaryPart: " .. model.Name)
-	model.PrimaryPart.Anchored = true
-	EntityCollisionService:ApplyModel(model)
 end
 
 function EnemyContext:_OnWaveSpawnEnemy(role: string, spawnCFrame: CFrame, waveNumber: number)
@@ -500,53 +206,6 @@ function EnemyContext:_OnWaveEnded()
 			CauseMessage = result.message,
 		}, result.type)
 	end
-end
-
-function EnemyContext:_HandleAdvanceGoalReached(entity: number)
-	local identity = self._enemyEntityReadService:GetIdentity(entity)
-	if identity == nil then
-		return
-	end
-
-	self._entityContext:Remove(entity, "AliveTag", "Enemy")
-	self._entityContext:Add(entity, "GoalReachedTag", "Enemy")
-	self:_EmitEnemyDeath(entity)
-	self._entityContext:MarkForDestruction(entity)
-
-	local roleConfig = EnemyConfig.Roles[identity.Role]
-	if roleConfig == nil then
-		return
-	end
-
-	local damageResult = self._combatContext:RequestDamage({
-		ActionId = "EnemyGoalReached",
-		AbilityId = "EnemyBaseAttack",
-		AttackerEntity = entity,
-		VictimKind = "Base",
-		Amount = roleConfig.Damage,
-		Reason = "EnemyGoalReached",
-	})
-	if not damageResult.success then
-		Result.MentionError("Enemy:GoalReached", "Failed to request base damage", {
-			EnemyId = identity.EnemyId,
-			Role = identity.Role,
-			WaveNumber = identity.WaveNumber,
-		}, damageResult.type)
-	end
-end
-
-function EnemyContext:_EmitEnemyDeath(entity: number?)
-	if type(entity) ~= "number" then
-		return
-	end
-
-	local identity = self._enemyEntityReadService:GetIdentity(entity)
-	if identity == nil then
-		return
-	end
-
-	local deathCFrame = self._enemyEntityReadService:GetEntityCFrame(entity) or CFrame.new()
-	GameEvents.Bus:Emit(GameEvents.Events.Wave.EnemyDied, identity.Role, identity.WaveNumber, deathCFrame)
 end
 
 function EnemyContext:SpawnEnemy(role: string, spawnCFrame: CFrame, waveNumber: number): Result.Result<number>

@@ -71,9 +71,6 @@ function SpawnSwarmDronesCommand:Execute(
 		Ensure(summonCount > 0, "InvalidSummonCount", Errors.INVALID_SUMMON_COUNT)
 		Ensure(lifetime > 0, "InvalidLifetime", Errors.INVALID_LIFETIME)
 
-		Try(self._entityContext:EnableRuntimeBinding("Summon"))
-		Try(self._entityContext:EnableRuntimeSync("Summon"))
-
 		local spawnedCount = 0
 		local ownerUserId = player.UserId
 		local currentCount = self._summonReadService:GetOwnerDroneCount(ownerUserId)
@@ -105,6 +102,25 @@ function SpawnSwarmDronesCommand:Execute(
 				},
 				Transform = {
 					CFrame = spawnCFrame,
+				},
+				ModelAsset = {
+					AssetKind = "Part",
+					AssetId = "SwarmDrone",
+				},
+				ModelBinding = {
+					ParentFolder = "Summon",
+					SetupProfileId = "KinematicPart",
+					RevealTag = "SummonDrone",
+					NameFormat = "SwarmDrone_{EntityId}",
+				},
+				TransformProjection = {
+					Enabled = true,
+				},
+				TransformPoll = {
+					Enabled = false,
+				},
+				CleanupOutcomes = {
+					OutcomeIds = { "AICleanup", "MovementCleanup" },
 				},
 				Lifetime = {
 					SpawnedAt = now,

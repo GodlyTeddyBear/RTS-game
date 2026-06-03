@@ -43,6 +43,7 @@ local ShutdownRuntimeExecutionCommand = require(script.Parent.Application.Comman
 local DestroyCommand = require(script.Parent.Application.Commands.DestroyCommand)
 local RunOperationalProofCommand = require(script.Parent.Application.Commands.RunOperationalProofCommand)
 local RegisterFeatureSchemaCommand = require(script.Parent.Application.Commands.RegisterFeatureSchemaCommand)
+local RegisterEntityFeatureCommand = require(script.Parent.Application.Commands.RegisterEntityFeatureCommand)
 local RegisterSystemCommand = require(script.Parent.Application.Commands.RegisterSystemCommand)
 local CreateEntityCommand = require(script.Parent.Application.Commands.CreateEntityCommand)
 local DestroyEntityCommand = require(script.Parent.Application.Commands.DestroyEntityCommand)
@@ -174,6 +175,7 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("DestroyCommand", DestroyCommand, "_destroyCommand"),
 	moduleSpec("RunOperationalProofCommand", RunOperationalProofCommand, "_runOperationalProofCommand"),
 	moduleSpec("RegisterFeatureSchemaCommand", RegisterFeatureSchemaCommand, "_registerFeatureSchemaCommand"),
+	moduleSpec("RegisterEntityFeatureCommand", RegisterEntityFeatureCommand, "_registerEntityFeatureCommand"),
 	moduleSpec("RegisterSystemCommand", RegisterSystemCommand, "_registerSystemCommand"),
 	moduleSpec("CreateEntityCommand", CreateEntityCommand, "_createEntityCommand"),
 	moduleSpec("DestroyEntityCommand", DestroyEntityCommand, "_destroyEntityCommand"),
@@ -321,6 +323,11 @@ function EntityContext:RegisterFeatureSchema(featureName: string, schema: any)
 	return Catch(function()
 		return self._registerFeatureSchemaCommand:Execute(featureName, schema)
 	end, "EntityContext:RegisterFeatureSchema")
+end
+function EntityContext:RegisterEntityFeature(definition: any)
+	return Catch(function()
+		return self._registerEntityFeatureCommand:Execute(definition)
+	end, "EntityContext:RegisterEntityFeature")
 end
 function EntityContext:RegisterSystem(phaseName: string, systemSpec: any)
 	return Catch(function()

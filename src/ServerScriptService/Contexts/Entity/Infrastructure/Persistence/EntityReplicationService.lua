@@ -121,7 +121,15 @@ function EntityReplicationService:_AugmentSharedSchemaWithRuntimeMetadata(schema
 		end
 	end
 
+	local function canReplicate(componentId: any): boolean
+		local metadata = self._schemaRegistry:GetComponentMetadataById(componentId)
+		return metadata ~= nil and metadata.Replication ~= "ServerOnly"
+	end
+
 	local function appendUnique(componentId: any)
+		if not canReplicate(componentId) then
+			return
+		end
 		for _, existing in ipairs(sharedComponents) do
 			if existing == componentId then
 				return
@@ -138,6 +146,9 @@ function EntityReplicationService:_AugmentSharedSchemaWithRuntimeMetadata(schema
 	end
 
 	local function appendUniqueTag(tagId: any)
+		if not canReplicate(tagId) then
+			return
+		end
 		for _, existing in ipairs(sharedTags) do
 			if existing == tagId then
 				return

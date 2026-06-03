@@ -1,17 +1,12 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
 local ServerStorage = game:GetService("ServerStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
-local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
-local UnitConfig = require(ReplicatedStorage.Contexts.Unit.Config.UnitConfig)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
-local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
 
 local UnitEntityReadService = require(script.Parent.Infrastructure.Entity.UnitEntityReadService)
 local UnitEntitySchema = require(script.Parent.Infrastructure.Entity.UnitEntitySchema)
@@ -33,32 +28,12 @@ type SpawnUnitResult = UnitTypes.SpawnUnitResult
 local Catch = Result.Catch
 local Ok = Result.Ok
 
-local UNIT_TAG = "CombatUnit"
-
 local function moduleSpec(name: string, module: any, cacheAs: string?): BaseContext.TModuleSpec
 	return {
 		Name = name,
 		Module = module,
 		CacheAs = cacheAs,
 	}
-end
-
-local function ensureAnimationsFolderValue(model: Model, animationsFolder: Folder?)
-	local animationsFolderRef = model:FindFirstChild("AnimationsFolder")
-	if animationsFolderRef ~= nil and not animationsFolderRef:IsA("ObjectValue") then
-		animationsFolderRef:Destroy()
-		animationsFolderRef = nil
-	end
-
-	if animationsFolderRef == nil then
-		animationsFolderRef = Instance.new("ObjectValue")
-		animationsFolderRef.Name = "AnimationsFolder"
-		animationsFolderRef.Parent = model
-	end
-
-	if animationsFolder ~= nil then
-		(animationsFolderRef :: ObjectValue).Value = animationsFolder
-	end
 end
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
@@ -115,9 +90,6 @@ function UnitContext:KnitInit()
 	UnitBaseContext:KnitInit()
 	self._runEndedConnection = nil :: any
 	self._playerRemovingConnection = nil :: any
-	self._unitAssetRegistry = nil :: any
-	self._animationsFolder = nil :: Folder?
-	self:_InitializeUnitAssets()
 end
 
 function UnitContext:KnitStart()
@@ -150,162 +122,12 @@ end
 
 function UnitContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 	return Catch(function()
-		local schemaResult = self._entityContext:RegisterFeatureSchema("Unit", UnitEntitySchema)
-		if not schemaResult.success then
-			return schemaResult
-		end
-
-		local bindingResult = self._entityContext:RegisterInstanceBinding("Unit", {
+		local featureResult = self._entityContext:RegisterEntityFeature({
 			FeatureName = "Unit",
-			ResolveAsset = function(_entityContext: any, snapshot: any): Instance
-				local identity = snapshot.Identity or {}
-				local unitId = if type(identity.DefinitionId) == "string" then identity.DefinitionId else UnitConfig.DEFAULT_UNIT_ID
-				local unitGuid = if type(identity.EntityId) == "string" then identity.EntityId else tostring(os.clock())
-				return self:_BuildUnitModel(unitId, unitGuid)
-			end,
-			PrepareInstance = function(_entityContext: any, instance: Instance, snapshot: any)
-				if not instance:IsA("Model") then
-					return
-				end
-				self:_PrepareUnitModel(instance :: Model, snapshot)
-			end,
-			BuildRevealAttributes = function(_entityContext: any, snapshot: any)
-				local identity = snapshot.Identity or {}
-				local ownership = snapshot.Ownership or {}
-				return {
-					UnitGuid = identity.EntityId,
-					UnitId = identity.DefinitionId,
-					Faction = ownership.Faction,
-					OwnerKind = ownership.OwnerKind,
-					OwnerId = ownership.OwnerId,
-				}
-			end,
-			BuildRevealTags = function()
-				return {
-					[UNIT_TAG] = true,
-				}
-			end,
-			BuildName = function(_entityContext: any, snapshot: any)
-				local identity = snapshot.Identity or {}
-				return ("Unit_%s_%s"):format(tostring(identity.DefinitionId or "Unit"), tostring(identity.EntityId))
-			end,
+			Schema = UnitEntitySchema,
 		})
-		if not bindingResult.success then
-			return bindingResult
-		end
-
-		local syncResult = self._entityContext:RegisterSyncContributor("Unit", {
-			FeatureName = "Unit",
-			QuerySyncEntities = function(entityContext: any): { number }
-				local queryResult = entityContext:Query({
-					FeatureName = "Unit",
-					Keys = {
-						{ Key = "ActiveTag", FeatureName = "Entity" },
-						{ Key = "Role", FeatureName = "Unit" },
-					},
-				})
-				return if queryResult.success then queryResult.value else {}
-			end,
-			QueryPollEntities = function(entityContext: any): { number }
-				local queryResult = entityContext:Query({
-					FeatureName = "Unit",
-					Keys = {
-						{ Key = "ActiveTag", FeatureName = "Entity" },
-						{ Key = "Role", FeatureName = "Unit" },
-					},
-				})
-				return if queryResult.success then queryResult.value else {}
-			end,
-			BuildRuntimeAttributes = function(entityContext: any, entity: number)
-				local identity = self:_ReadEntityValue(entityContext, entity, "Identity", "Entity")
-				local ownership = self:_ReadEntityValue(entityContext, entity, "Ownership", "Entity")
-				local health = self:_ReadEntityValue(entityContext, entity, "Health", "Entity")
-				local role = self:_ReadEntityValue(entityContext, entity, "Role", "Unit")
-				local animationState = self:_ReadEntityValue(entityContext, entity, "AnimationState", "Unit")
-				local animationLooping = self:_ReadEntityValue(entityContext, entity, "AnimationLooping", "Unit")
-
-				return {
-					UnitGuid = if type(identity) == "table" then identity.EntityId else nil,
-					UnitId = if type(identity) == "table" then identity.DefinitionId else nil,
-					Faction = if type(ownership) == "table" then ownership.Faction else nil,
-					OwnerKind = if type(ownership) == "table" then ownership.OwnerKind else nil,
-					OwnerId = if type(ownership) == "table" then ownership.OwnerId else nil,
-					UnitRole = if type(role) == "table" then role.Role else nil,
-					UnitDisplayName = if type(role) == "table" then role.DisplayName else nil,
-					Health = if type(health) == "table" then health.Current else nil,
-					MaxHealth = if type(health) == "table" then health.Max else nil,
-					AnimationState = if type(animationState) == "string" then animationState else nil,
-					AnimationLooping = if type(animationLooping) == "boolean" then animationLooping else nil,
-				}
-			end,
-			BuildHumanoidProperties = function(entityContext: any, entity: number)
-				local health = self:_ReadEntityValue(entityContext, entity, "Health", "Entity")
-				local speedState = self:_ReadEntityValue(entityContext, entity, "SpeedState", "Movement")
-
-				return {
-					MaxHealth = if type(health) == "table" then health.Max else nil,
-					Health = if type(health) == "table" then health.Current else nil,
-					WalkSpeed = if type(speedState) == "table" then speedState.CurrentSpeed else nil,
-				}
-			end,
-			PollEntity = function(entityContext: any, entity: number, model: Model)
-				entityContext:Set(entity, "Transform", {
-					CFrame = ModelPlus.GetPivot(model),
-				}, "Entity")
-			end,
-		})
-		if not syncResult.success then
-			return syncResult
-		end
-
-		local replicationResult = self._entityContext:RegisterReplicationSurface("Unit", {
-			FeatureName = "Unit",
-			BuildSchema = function(entityContext: any): any
-				local entityComponentsResult = entityContext:GetFeatureComponents("Entity")
-				local unitComponentsResult = entityContext:GetFeatureComponents("Unit")
-				assert(entityComponentsResult.success, "Unit replication surface missing Entity compiled components")
-				assert(unitComponentsResult.success, "Unit replication surface missing Unit compiled components")
-
-				return {
-					sharedComponents = {
-						entityComponentsResult.value.Identity,
-						entityComponentsResult.value.Health,
-						unitComponentsResult.value.AnimationState,
-						unitComponentsResult.value.AnimationLooping,
-					},
-					sharedTags = {
-						entityComponentsResult.value.ActiveTag,
-						unitComponentsResult.value.GoalReachedTag,
-					},
-				}
-			end,
-		})
-		if not replicationResult.success then
-			return replicationResult
-		end
-
-		local movementProjectionResult = self._combatContext:RegisterMovementPresentationRule({
-			RuleId = "Unit.MovementPresentation",
-			Query = { FeatureName = "Unit", Keys = { "PathState" } },
-			PathState = {
-				FeatureName = "Unit",
-				Key = "PathState",
-				PreserveKeys = {
-					"RequestedGoalPosition",
-					"GoalRevision",
-					"FailedGoalRevision",
-				},
-			},
-			Animation = {
-				FeatureName = "Unit",
-				StateKey = "AnimationState",
-				LoopingKey = "AnimationLooping",
-				MovingState = "Walk",
-				IdleState = "Idle",
-			},
-		})
-		if not movementProjectionResult.success then
-			return movementProjectionResult
+		if not featureResult.success then
+			return featureResult
 		end
 
 		return self._entityContext:RegisterSystem("ActionAdvance", {
@@ -361,100 +183,6 @@ function UnitContext:_RegisterAIContracts(): Result.Result<boolean>
 
 		return Ok(true)
 	end, "UnitContext:RegisterAIContracts")
-end
-
-function UnitContext:_InitializeUnitAssets()
-	local assetsRoot = ReplicatedStorage:FindFirstChild("Assets")
-	if assetsRoot == nil or not assetsRoot:IsA("Folder") then
-		return
-	end
-
-	local unitsFolder = assetsRoot:FindFirstChild("Units")
-	if unitsFolder ~= nil and unitsFolder:IsA("Folder") then
-		self._unitAssetRegistry = AssetFetcher.CreateUnitRegistry(unitsFolder)
-	end
-
-	local animationsFolder = assetsRoot:FindFirstChild("Animations")
-	if animationsFolder ~= nil and animationsFolder:IsA("Folder") then
-		self._animationsFolder = animationsFolder
-	end
-end
-
-function UnitContext:_BuildUnitModel(unitId: string, unitGuid: string): Model
-	if self._unitAssetRegistry ~= nil then
-		local model = self._unitAssetRegistry:GetUnitModel(unitId)
-		if model ~= nil then
-			return model
-		end
-	end
-
-	local definition = UnitConfig.Definitions[unitId] or UnitConfig.Definitions[UnitConfig.DEFAULT_UNIT_ID]
-	assert(definition ~= nil, "Unknown unit id: " .. tostring(unitId))
-
-	local model = Instance.new("Model")
-	model.Name = "Unit_" .. unitId .. "_" .. unitGuid
-
-	local rootPart = Instance.new("Part")
-	rootPart.Name = "HumanoidRootPart"
-	rootPart.Size = definition.ModelScale
-	rootPart.Color = definition.ModelColor
-	rootPart.Material = Enum.Material.SmoothPlastic
-	rootPart.Anchored = false
-	rootPart.CanCollide = false
-	rootPart.Parent = model
-
-	local humanoid = Instance.new("Humanoid")
-	humanoid.MaxHealth = definition.MaxHp
-	humanoid.Health = definition.MaxHp
-	humanoid.WalkSpeed = definition.MoveSpeed
-	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-	humanoid.Parent = model
-
-	model.PrimaryPart = rootPart
-	return model
-end
-
-function UnitContext:_PrepareUnitModel(model: Model, snapshot: any)
-	local identity = snapshot.Identity or {}
-	local unitId = if type(identity.DefinitionId) == "string" and identity.DefinitionId ~= ""
-		then identity.DefinitionId
-		else UnitConfig.DEFAULT_UNIT_ID
-	local unitGuid = if type(identity.EntityId) == "string" and identity.EntityId ~= "" then identity.EntityId else tostring(os.clock())
-	local definition = UnitConfig.Definitions[unitId] or UnitConfig.Definitions[UnitConfig.DEFAULT_UNIT_ID]
-	assert(definition ~= nil, "Unknown unit id: " .. tostring(unitId))
-
-	model.Name = "Unit_" .. unitId .. "_" .. unitGuid
-	ensureAnimationsFolderValue(model, self._animationsFolder)
-
-	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	if humanoid == nil then
-		humanoid = Instance.new("Humanoid")
-		humanoid.Parent = model
-	end
-	humanoid.MaxHealth = definition.MaxHp
-	humanoid.Health = definition.MaxHp
-	humanoid.WalkSpeed = definition.MoveSpeed
-	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-
-	if model.PrimaryPart == nil then
-		local rootPart = model:FindFirstChild("HumanoidRootPart")
-		if rootPart ~= nil and rootPart:IsA("BasePart") then
-			model.PrimaryPart = rootPart
-		end
-	end
-
-	assert(model.PrimaryPart ~= nil, "Unit model missing PrimaryPart: " .. model.Name)
-	model.PrimaryPart.Anchored = false
-	local transform = snapshot.Transform
-	if type(transform) == "table" and typeof(transform.CFrame) == "CFrame" then
-		ModelPlus.MoveToCFrame(model, transform.CFrame)
-	end
-	EntityCollisionService:ApplyModel(model)
-end
-
-function UnitContext:_ReadEntityValue(entityContext: any, entity: number, key: string, featureName: string): any
-	local result = entityContext:Get(entity, key, featureName)
-	return if result.success then result.value else nil
 end
 
 function UnitContext:SpawnUnit(request: SpawnUnitRequest): Result.Result<SpawnUnitResult>

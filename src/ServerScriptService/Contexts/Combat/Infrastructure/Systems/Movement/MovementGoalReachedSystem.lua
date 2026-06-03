@@ -10,18 +10,13 @@ end
 function MovementGoalReachedSystem:Run()
 	-- READS: Movement.MoveIntent [AUTHORITATIVE], Movement.ApplyResult [AUTHORITATIVE]
 	-- WRITES: configured goal reached tags and request components
-	for _, rule in ipairs(self._ruleRegistry:GetGoalReachedRules()) do
-		self:_RunRule(rule)
-	end
-end
-
-function MovementGoalReachedSystem:_RunRule(rule: any)
-	local query = rule.Query
-	if type(query) ~= "table" then
-		return
-	end
-
-	local result = self._entityFactory:Query(query)
+	local result = self._entityFactory:Query({
+		Keys = {
+			{ Key = "MoveIntent", FeatureName = "Movement" },
+			{ Key = "ApplyResult", FeatureName = "Movement" },
+			{ Key = "GoalReachedOutcome", FeatureName = "Entity" },
+		},
+	})
 	if not result.success then
 		return
 	end
@@ -29,12 +24,17 @@ function MovementGoalReachedSystem:_RunRule(rule: any)
 	for _, entity in ipairs(result.value) do
 		local intent = self:_Get(entity, "MoveIntent", "Movement")
 		local applyResult = self:_Get(entity, "ApplyResult", "Movement")
-		if type(intent) == "table"
-			and intent.ActionId == rule.ActionId
+		local outcome = self:_Get(entity, "GoalReachedOutcome", "Entity")
+		local outcomeId = if type(outcome) == "table" then outcome.OutcomeId else nil
+		if type(outcomeId) == "string"
+			and type(intent) == "table"
 			and type(applyResult) == "table"
 			and applyResult.IsDone == true
 		then
-			self:_ApplyRule(rule, entity, intent, applyResult)
+			local rule = self._ruleRegistry:GetGoalReachedRule(outcomeId)
+			if type(rule) == "table" and (rule.ActionId == nil or intent.ActionId == rule.ActionId) then
+				self:_ApplyRule(rule, entity, intent, applyResult)
+			end
 		end
 	end
 end

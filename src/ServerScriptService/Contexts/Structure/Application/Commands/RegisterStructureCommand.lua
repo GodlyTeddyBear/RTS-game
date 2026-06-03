@@ -71,6 +71,34 @@ function RegisterStructureCommand:Execute(record: any): Result.Result<number>
 			ModelRef = {
 				Model = nil,
 			},
+			ModelAsset = {
+				AssetDomain = "Structures",
+				AssetId = resolved.StructureType,
+				AssetKind = "Model",
+			},
+			ModelBinding = {
+				ParentFolder = "Structure",
+				SetupProfileId = "StructurePlacement",
+				RevealTag = "AnimatedStructure",
+				NameFormat = "{DefinitionId}_{EntityId}",
+			},
+			HumanoidProjection = {
+				Enabled = true,
+				Health = true,
+				WalkSpeed = false,
+			},
+			TransformProjection = {
+				Enabled = true,
+			},
+			TransformPoll = {
+				Enabled = false,
+			},
+			CleanupOutcomes = {
+				OutcomeIds = { "AICleanup", "PlacementDestroy", "TeamUnassign" },
+			},
+			HealthDepletedOutcome = {
+				OutcomeId = "StructureDeath",
+			},
 			Target = {
 				TargetEntity = nil,
 				TargetKind = nil,
@@ -104,9 +132,6 @@ function RegisterStructureCommand:Execute(record: any): Result.Result<number>
 		entity = createResult.value
 
 		Try(self._aiContext:SetupEntityAIFromProfile(entity, profileId))
-		Try(self._entityContext:EnableRuntimeBinding("Structure"))
-		Try(self._entityContext:EnableRuntimeSync("Structure"))
-		Try(self._entityContext:EnableRuntimeReplication("Structure"))
 		Try(self._entityContext:RegisterRuntimeEntity(entity))
 		Try(self._entityContext:FlushBindQueue())
 
