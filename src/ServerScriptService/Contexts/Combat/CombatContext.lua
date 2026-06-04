@@ -31,9 +31,11 @@ local MovementSpeedStatusSystem = require(script.Parent.Infrastructure.Systems.S
 local HitboxSimulationService = require(script.Parent.Infrastructure.Services.HitboxSimulationService)
 local AttackAdvanceSystem = require(script.Parent.Infrastructure.Systems.Attack.AttackAdvanceSystem)
 local CombatRequestCleanupSystem = require(script.Parent.Infrastructure.Systems.Attack.CombatRequestCleanupSystem)
-local DamageResolveSystem = require(script.Parent.Infrastructure.Systems.Attack.DamageResolveSystem)
 local BaseDamageResolveSystem = require(script.Parent.Infrastructure.Systems.Attack.BaseDamageResolveSystem)
-local HealthDepletedOutcomeSystem = require(script.Parent.Infrastructure.Systems.Outcome.HealthDepletedOutcomeSystem)
+local HealthChangeResolveSystem = require(script.Parent.Infrastructure.Systems.Health.HealthChangeResolveSystem)
+local HealthDepletedDispatchSystem = require(script.Parent.Infrastructure.Systems.Health.HealthDepletedDispatchSystem)
+local HealthDepletedOutcomeResolveSystem = require(script.Parent.Infrastructure.Systems.Health.HealthDepletedOutcomeResolveSystem)
+local HealthRequestCleanupSystem = require(script.Parent.Infrastructure.Systems.Health.HealthRequestCleanupSystem)
 local HitboxImpactSystem = require(script.Parent.Infrastructure.Systems.Attack.HitboxImpactSystem)
 local HitboxSpawnSystem = require(script.Parent.Infrastructure.Systems.Attack.HitboxSpawnSystem)
 local ProjectileImpactSystem = require(script.Parent.Infrastructure.Systems.Attack.ProjectileImpactSystem)
@@ -382,9 +384,10 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			},
 			Writes = {
 				"Combat.AttackState",
-				"Combat.DamageRequest",
+				"Combat.HealthChangeRequest",
 				"Combat.HitboxSpawnRequest",
 				"Combat.ProjectileSpawnRequest",
+				"Combat.BaseDamageRequest",
 				"Combat.RequestTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
@@ -447,7 +450,7 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			Name = "HitboxImpactSystem",
 			Phase = "MechanicImpact",
 			Writes = {
-				"Combat.DamageRequest",
+				"Combat.HealthChangeRequest",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
 				return HitboxImpactSystem.new(entityFactory, {
@@ -464,7 +467,7 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			Name = "ProjectileImpactSystem",
 			Phase = "MechanicImpact",
 			Writes = {
-				"Combat.DamageRequest",
+				"Combat.HealthChangeRequest",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
 				return ProjectileImpactSystem.new(entityFactory, {
@@ -504,11 +507,11 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 		})
 		if not speedStatusResult.success then return speedStatusResult end
 
-		local damageResult = self._entityContext:RegisterSystem("DamageResolve", {
-			Name = "DamageResolveSystem",
+		local healthChangeResult = self._entityContext:RegisterSystem("DamageResolve", {
+			Name = "HealthChangeResolveSystem",
 			Phase = "DamageResolve",
 			Reads = {
-				"Combat.DamageRequest",
+				"Combat.HealthChangeRequest",
 				"Combat.RequestTag",
 				"Entity.Health",
 			},
@@ -516,13 +519,14 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 				"Entity.Health",
 				"Entity.DirtyTag",
 				"Combat.ProcessedTag",
+				"Combat.HealthDepletedRequest",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return DamageResolveSystem.new(entityFactory, self._combatRequestFactoryService)
+				return HealthChangeResolveSystem.new(entityFactory, self._combatRequestFactoryService)
 			end,
 		})
-		if not damageResult.success then
-			return damageResult
+		if not healthChangeResult.success then
+			return healthChangeResult
 		end
 
 		local baseDamageResult = self._entityContext:RegisterSystem("RequestResolve", {
@@ -536,20 +540,19 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return baseDamageResult
 		end
 
-		local healthDepletedResult = self._entityContext:RegisterSystem("RequestResolve", {
-			Name = "HealthDepletedOutcomeSystem",
-			Phase = "RequestResolve",
+		local healthDepletedResult = self._entityContext:RegisterSystem("HealthDispatch", {
+			Name = "HealthDepletedDispatchSystem",
+			Phase = "HealthDispatch",
 			Reads = {
 				"Combat.HealthDepletedRequest",
 				"Combat.RequestTag",
 			},
 			Writes = {
 				"Combat.ProcessedTag",
-				"Entity.DestructionQueue",
+				"Combat.HealthDepletedOutcomeRequest",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return HealthDepletedOutcomeSystem.new(entityFactory, {
-					EntityContext = self._entityContext,
+				return HealthDepletedDispatchSystem.new(entityFactory, {
 					RuleRegistry = self._combatOutcomeRuleRegistryService,
 				})
 			end,
@@ -558,7 +561,28 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return healthDepletedResult
 		end
 
-		return self._entityContext:RegisterSystem("Cleanup", {
+		local healthDepletedOutcomeResult = self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "HealthDepletedOutcomeResolveSystem",
+			Phase = "RequestResolve",
+			Reads = {
+				"Combat.HealthDepletedOutcomeRequest",
+				"Combat.RequestTag",
+			},
+			Writes = {
+				"Combat.ProcessedTag",
+				"Entity.DestructionQueue",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return HealthDepletedOutcomeResolveSystem.new(entityFactory, {
+					RuleRegistry = self._combatOutcomeRuleRegistryService,
+				})
+			end,
+		})
+		if not healthDepletedOutcomeResult.success then
+			return healthDepletedOutcomeResult
+		end
+
+		local requestCleanupResult = self._entityContext:RegisterSystem("Cleanup", {
 			Name = "CombatRequestCleanupSystem",
 			Phase = "Cleanup",
 			Reads = {
@@ -566,7 +590,6 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 				"Combat.ProcessedTag",
 				"Combat.HitboxSpawnRequest",
 				"Combat.DamageRequest",
-				"Combat.HealthDepletedRequest",
 				"Combat.GoalReachedOutcomeRequest",
 				"Combat.BaseDamageRequest",
 				"Combat.ProjectileSpawnRequest",
@@ -580,6 +603,27 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 					HitboxSimulation = self._hitboxSimulationService,
 					ProjectileSimulation = self._projectileSimulationService,
 				})
+			end,
+		})
+		if not requestCleanupResult.success then
+			return requestCleanupResult
+		end
+
+		return self._entityContext:RegisterSystem("Cleanup", {
+			Name = "HealthRequestCleanupSystem",
+			Phase = "Cleanup",
+			Reads = {
+				"Combat.RequestTag",
+				"Combat.ProcessedTag",
+				"Combat.HealthChangeRequest",
+				"Combat.HealthDepletedRequest",
+				"Combat.HealthDepletedOutcomeRequest",
+			},
+			Writes = {
+				"Entity.DestructionQueue",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return HealthRequestCleanupSystem.new(entityFactory)
 			end,
 		})
 	end, "Combat:RegisterEntityActionPipeline")
@@ -611,9 +655,31 @@ function CombatContext:RequestDamage(payload: any): Result.Result<boolean>
 	return Catch(function()
 		local request = table.clone(payload)
 		request.CreatedAt = if type(request.CreatedAt) == "number" then request.CreatedAt else os.clock()
-		local result = self._entityContext:CreateEntity("Combat.DamageRequest", {
-			DamageRequest = request,
-		})
+		local result
+		if request.VictimKind == "Base" then
+			result = self._entityContext:CreateEntity("Combat.BaseDamageRequest", {
+				BaseDamageRequest = {
+					Amount = request.Amount,
+					CreatedAt = request.CreatedAt,
+					ExpiresAt = request.ExpiresAt,
+				},
+			})
+		else
+			result = self._entityContext:CreateEntity("Combat.HealthChangeRequest", {
+				HealthChangeRequest = {
+					ActionId = request.ActionId,
+					AbilityId = request.AbilityId,
+					SourceEntity = request.AttackerEntity,
+					TargetEntity = request.VictimEntity,
+					TargetKind = request.VictimKind,
+					Amount = request.Amount,
+					ChangeType = "Damage",
+					CreatedAt = request.CreatedAt,
+					ExpiresAt = request.ExpiresAt,
+					Reason = request.Reason,
+				},
+			})
+		end
 		Try(result)
 		return Ok(true)
 	end, "Combat:RequestDamage")

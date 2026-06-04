@@ -90,6 +90,7 @@ local CombatRules = {
 		{
 			OutcomeId = "StructureDeath",
 			VictimKind = "Structure",
+			DestroyVictim = true,
 		},
 	},
 }

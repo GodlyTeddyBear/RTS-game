@@ -13,11 +13,12 @@ end
 
 function ProjectileImpactSystem:Run()
 	for _, impact in ipairs(self._simulation:DrainImpacts()) do
-		self._requestFactory:Create(self._entityFactory, "Combat.DamageRequest", "DamageRequest", {
+		self._requestFactory:Create(self._entityFactory, "Combat.HealthChangeRequest", "HealthChangeRequest", {
 			AbilityId = impact.AbilityId,
-			AttackerEntity = impact.SourceEntity,
-			VictimEntity = impact.TargetEntity,
+			SourceEntity = impact.SourceEntity,
+			TargetEntity = impact.TargetEntity,
 			Amount = impact.Damage,
+			ChangeType = "Damage",
 			ExpiresAt = os.clock() + 1,
 			Reason = "ProjectileImpact",
 		})

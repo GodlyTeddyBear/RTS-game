@@ -14,17 +14,27 @@ end
 function CombatRequestCleanupSystem:Run()
 	local processed = self._entityFactory:Query({ FeatureName = "Combat", Keys = { "RequestTag", "ProcessedTag" } })
 	if processed.success then
-		for _, entity in ipairs(processed.value) do self._entityFactory:MarkEntityForDestruction(entity) end
+		for _, entity in ipairs(processed.value) do
+			if self:_IsAttackRequest(entity) then
+				self._entityFactory:MarkEntityForDestruction(entity)
+			end
+		end
 	end
 	self:_CleanupExpired("HitboxSpawnRequest")
 	self:_CleanupExpired("DamageRequest")
-	self:_CleanupExpired("HealthDepletedRequest")
-	self:_CleanupExpired("HealthDepletedOutcomeRequest")
 	self:_CleanupExpired("GoalReachedOutcomeRequest")
 	self:_CleanupExpired("BaseDamageRequest")
 	self:_CleanupExpired("ProjectileSpawnRequest")
 	self:_CleanupHitboxes()
 	self:_CleanupProjectiles()
+end
+
+function CombatRequestCleanupSystem:_IsAttackRequest(entity: number): boolean
+	return self:_Get(entity, "HitboxSpawnRequest", "Combat") ~= nil
+		or self:_Get(entity, "DamageRequest", "Combat") ~= nil
+		or self:_Get(entity, "GoalReachedOutcomeRequest", "Combat") ~= nil
+		or self:_Get(entity, "BaseDamageRequest", "Combat") ~= nil
+		or self:_Get(entity, "ProjectileSpawnRequest", "Combat") ~= nil
 end
 
 function CombatRequestCleanupSystem:_CleanupProjectiles()

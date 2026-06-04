@@ -67,6 +67,22 @@ local CombatEntitySchema = {
 				Reason = "Combat",
 			},
 		},
+		HealthChangeRequest = {
+			ECSName = "Combat.HealthChangeRequest",
+			Authority = "AUTHORITATIVE",
+			Default = {
+				ActionId = "",
+				AbilityId = "",
+				SourceEntity = 0,
+				TargetEntity = 0,
+				TargetKind = nil,
+				Amount = 0,
+				ChangeType = "Damage",
+				CreatedAt = 0,
+				ExpiresAt = nil,
+				Reason = "Combat",
+			},
+		},
 		HealthDepletedRequest = {
 			ECSName = "Combat.HealthDepletedRequest",
 			Authority = "AUTHORITATIVE",
@@ -164,6 +180,14 @@ local CombatEntitySchema = {
 		DamageRequest = {
 			Components = {
 				DamageRequest = true,
+			},
+			Tags = {
+				RequestTag = true,
+			},
+		},
+		HealthChangeRequest = {
+			Components = {
+				HealthChangeRequest = true,
 			},
 			Tags = {
 				RequestTag = true,

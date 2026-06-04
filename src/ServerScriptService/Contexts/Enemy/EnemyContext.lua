@@ -13,8 +13,9 @@ local EnemySpawnPolicy = require(script.Parent.EnemyDomain.Policies.EnemySpawnPo
 local EnemyAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local EnemyAIProfiles = require(script.Parent.Config.AIProfiles)
 local EnemyCombatRules = require(script.Parent.Config.CombatRules)
+local EnemyDeathEventSystem = require(script.Parent.Infrastructure.Systems.EnemyDeathEventSystem)
 local EnemyGoalReachedOutcomeSystem = require(script.Parent.Infrastructure.Systems.EnemyGoalReachedOutcomeSystem)
-local EnemyHealthDepletedOutcomeSystem = require(script.Parent.Infrastructure.Systems.EnemyHealthDepletedOutcomeSystem)
+local EnemyRequestCleanupSystem = require(script.Parent.Infrastructure.Systems.EnemyRequestCleanupSystem)
 
 local SpawnEnemyCommand = require(script.Parent.Application.Commands.SpawnEnemy)
 local DespawnEnemyCommand = require(script.Parent.Application.Commands.DespawnEnemy)
@@ -171,19 +172,37 @@ function EnemyContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 			return goalReachedResult
 		end
 
-		return self._entityContext:RegisterSystem("RequestResolve", {
-			Name = "EnemyHealthDepletedOutcomeSystem",
+		local deathEventResult = self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "EnemyDeathEventSystem",
 			Phase = "RequestResolve",
 			Reads = {
-				"Combat.HealthDepletedOutcomeRequest",
-				"Combat.RequestTag",
+				"Enemy.DeathEventRequest",
+				"Enemy.RequestTag",
 			},
 			Writes = {
-				"Combat.ProcessedTag",
+				"Enemy.ProcessedTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return EnemyDeathEventSystem.new(entityFactory)
+			end,
+		})
+		if not deathEventResult.success then
+			return deathEventResult
+		end
+
+		return self._entityContext:RegisterSystem("Cleanup", {
+			Name = "EnemyRequestCleanupSystem",
+			Phase = "Cleanup",
+			Reads = {
+				"Enemy.DeathEventRequest",
+				"Enemy.RequestTag",
+				"Enemy.ProcessedTag",
+			},
+			Writes = {
 				"Entity.DestructionQueue",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return EnemyHealthDepletedOutcomeSystem.new(entityFactory)
+				return EnemyRequestCleanupSystem.new(entityFactory)
 			end,
 		})
 	end, "EnemyContext:RegisterEntityInfrastructure")

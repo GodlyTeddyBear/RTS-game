@@ -40,6 +40,12 @@ local CombatRules = {
 		{
 			OutcomeId = "EnemyDeath",
 			VictimKind = "Enemy",
+			DestroyVictim = true,
+			EmitRequest = {
+				ArchetypeName = "Enemy.DeathEventRequest",
+				ComponentKey = "DeathEventRequest",
+				FeatureName = "Enemy",
+			},
 		},
 	},
 }

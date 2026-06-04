@@ -50,10 +50,27 @@ local EnemyEntitySchema = {
 			Authority = "DERIVED",
 			Default = true,
 		},
+		DeathEventRequest = {
+			ECSName = "Enemy.DeathEventRequest",
+			Authority = "AUTHORITATIVE",
+			Replication = "ServerOnly",
+			Default = {
+				EnemyEntity = 0,
+				OutcomeId = "",
+				CreatedAt = 0,
+				ExpiresAt = nil,
+			},
+		},
 	},
 	Tags = {
 		AliveTag = {},
 		GoalReachedTag = {},
+		RequestTag = {
+			Replication = "ServerOnly",
+		},
+		ProcessedTag = {
+			Replication = "ServerOnly",
+		},
 	},
 	Archetypes = {
 		Actor = {
@@ -68,6 +85,14 @@ local EnemyEntitySchema = {
 			},
 			Tags = {
 				AliveTag = true,
+			},
+		},
+		DeathEventRequest = {
+			Components = {
+				DeathEventRequest = true,
+			},
+			Tags = {
+				RequestTag = true,
 			},
 		},
 	},

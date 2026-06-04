@@ -34,7 +34,7 @@ AI.ActionIntent(Attack)
   -> HitboxSpawnRequest | ProjectileSpawnRequest | DamageRequest
   -> impact systems
   -> Combat.DamageRequest
-  -> DamageResolveSystem
+  -> HealthChangeResolveSystem
   -> Entity.Health
   -> Combat.HealthDepletedRequest
   -> feature lifecycle systems

@@ -28,7 +28,9 @@ function CombatOutcomeRuleRegistryService:RegisterHealthDepletedRule(payload: an
 	if type(outcomeId) ~= "string" or outcomeId == "" then
 		return false
 	end
-	self._healthDepletedRules[outcomeId] = table.freeze(table.clone(payload))
+	local rule = table.clone(payload)
+	rule.OutcomeId = outcomeId
+	self._healthDepletedRules[outcomeId] = table.freeze(rule)
 	return true
 end
 

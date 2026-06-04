@@ -12,7 +12,6 @@ local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.Struct
 local StructureEntityReadService = require(script.Parent.Infrastructure.Entity.StructureEntityReadService)
 local StructureEntitySchema = require(script.Parent.Infrastructure.Entity.StructureEntitySchema)
 local StructureExtractionSystem = require(script.Parent.Infrastructure.Systems.StructureExtractionSystem)
-local StructureHealthDepletedOutcomeSystem = require(script.Parent.Infrastructure.Systems.StructureHealthDepletedOutcomeSystem)
 local RegisterStructurePolicy = require(script.Parent.StructureDomain.Policies.RegisterStructurePolicy)
 local StructureAIBehaviors = require(script.Parent.Config.AIBehaviors)
 local StructureAIProfiles = require(script.Parent.Config.AIProfiles)
@@ -182,21 +181,7 @@ function StructureContext:_RegisterEntityInfrastructure(): Result.Result<boolean
 			return extractionResult
 		end
 
-		return self._entityContext:RegisterSystem("RequestResolve", {
-			Name = "StructureHealthDepletedOutcomeSystem",
-			Phase = "RequestResolve",
-			Reads = {
-				"Combat.HealthDepletedOutcomeRequest",
-				"Combat.RequestTag",
-			},
-			Writes = {
-				"Combat.ProcessedTag",
-				"Entity.DestructionQueue",
-			},
-			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return StructureHealthDepletedOutcomeSystem.new(entityFactory)
-			end,
-		})
+		return Ok(true)
 	end, "StructureContext:RegisterEntityInfrastructure")
 end
 
