@@ -12,9 +12,7 @@ local HStack = require(script.Parent.Parent.Parent.Parent.App.Presentation.Layou
 local VStack = require(script.Parent.Parent.Parent.Parent.App.Presentation.Layouts.VStack)
 local useRunPhaseHud = require(script.Parent.Parent.Parent.Application.Hooks.useRunPhaseHud)
 local useBaseHud = require(script.Parent.Parent.Parent.Application.Hooks.useBaseHud)
-local useCommanderHud = require(script.Parent.Parent.Parent.Application.Hooks.useCommanderHud)
 local useResourceHud = require(script.Parent.Parent.Parent.Application.Hooks.useResourceHud)
-local AbilityBar = require(script.Parent.AbilityBar)
 local PlacementPalette = require(script.Parent.PlacementPalette)
 local PrepTimerBar = require(script.Parent.PrepTimerBar)
 
@@ -68,7 +66,6 @@ end
 
 local function RunHUD(props: TRunHUDProps)
 	local phaseHud = useRunPhaseHud()
-	local commanderHud = useCommanderHud()
 	local baseHud = useBaseHud()
 	local resourceHud = useResourceHud()
 
@@ -82,7 +79,6 @@ local function RunHUD(props: TRunHUDProps)
 			onStructureSelected = props.onStructureSelected,
 		}),
 		PrepTimerBar = e(PrepTimerBar),
-		AbilityBar = e(AbilityBar),
 		InventoryButton = props.onToggleInventory and e(Button, {
 			Size = UDim2.fromScale(0.1, 0.045),
 			Position = UDim2.fromScale(0.93, 0.84),
@@ -115,19 +111,12 @@ local function RunHUD(props: TRunHUDProps)
 					Align = "Start",
 					Justify = "Center",
 				}, {
-					CommanderHealth = _CreateHealthReadout(
-						"Commander HP",
-						commanderHud.Hp,
-						commanderHud.MaxHp,
-						Color3.fromRGB(214, 67, 74),
-						1
-					),
 					BaseHealth = _CreateHealthReadout(
 						"Base HP",
 						baseHud.hp,
 						baseHud.maxHp,
 						Color3.fromRGB(74, 156, 232),
-						2
+						1
 					),
 				}),
 				CenterCluster = e(VStack, {

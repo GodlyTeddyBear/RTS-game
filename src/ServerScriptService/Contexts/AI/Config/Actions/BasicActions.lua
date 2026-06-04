@@ -236,42 +236,6 @@ local BasicActions = {
 		},
 	},
 
-	EngageEnemy = {
-		ActionId = "EngageEnemy",
-		StartsComponent = {
-			FeatureName = "Movement",
-			Key = "MoveIntent",
-		},
-		BuildInitialState = function(context: any): any
-			local intent = if type(context.ActionIntent) == "table" then context.ActionIntent else {}
-			local data = if type(intent.Data) == "table" then intent.Data else {}
-
-			return {
-				ActionId = "EngageEnemy",
-				SourceEntity = context.Entity,
-				TargetEntity = intent.TargetEntity,
-				GoalPosition = data.TargetPosition,
-				MovementMode = data.MovementMode or "Direct",
-				Reason = "EngageEnemy",
-				RequestedAt = intent.RequestedAt,
-				Status = "Requested",
-			}
-		end,
-		ProduceIntent = function(context: any): any
-			local facts = if type(context) == "table" and type(context.Facts) == "table" then context.Facts else {}
-
-			return {
-				TargetEntity = facts.TargetEntity,
-				Data = {
-					TargetPosition = facts.TargetPosition,
-					MovementMode = facts.MovementMode or "Direct",
-				},
-			}
-		end,
-		Metadata = {
-			Description = "Template action that emits enemy engagement intent data.",
-		},
-	},
 }
 
 return table.freeze(BasicActions)

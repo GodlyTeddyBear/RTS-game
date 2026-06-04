@@ -78,13 +78,13 @@ function RunTransitionPolicy:CheckCanNotifyClimaxComplete(state: RunState): Resu
 end
 
 --[=[
-	Validate the run state for `NotifyCommanderDeath`.
+	Validate the run state for `NotifyRunFailed`.
 	@within RunTransitionPolicy
 	@param state RunState -- The current authoritative run state.
 	@return Result.Result<nil> -- `Ok` when the run may end.
 ]=]
-function RunTransitionPolicy:CheckCanNotifyCommanderDeath(state: RunState): Result.Result<nil>
-	Try(RunSpecs.CanNotifyCommanderDeath:IsSatisfiedBy(createStateCandidate(state)))
+function RunTransitionPolicy:CheckCanNotifyRunFailed(state: RunState): Result.Result<nil>
+	Try(RunSpecs.CanNotifyRunFailed:IsSatisfiedBy(createStateCandidate(state)))
 	return Ok(nil)
 end
 

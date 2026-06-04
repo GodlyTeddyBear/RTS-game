@@ -34,7 +34,6 @@ Behavior trees should compose generic leaves such as:
 - `Attack`
 - `Advance`
 - `ManualMove`
-- `EngageEnemy`
 - `Idle`
 
 ## Behavior Tree Role

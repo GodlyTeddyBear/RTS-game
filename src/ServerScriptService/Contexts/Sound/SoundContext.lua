@@ -73,7 +73,6 @@ end
 	played either for the owning player (user-scoped) or all players (broadcast).
 ]]
 local USER_SCOPED_EVENT_SOUND_MAP = {
-	[Events.Commander.AbilityUsed] = "CommanderAbilityUse",
 	[Events.Forge.CraftingCompleted] = "CraftComplete",
 }
 

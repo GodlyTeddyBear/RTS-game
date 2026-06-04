@@ -62,10 +62,10 @@ RunSpecs.CanNotifyWaveCleared = IsWave
 RunSpecs.CanNotifyClimaxComplete = IsClimax
 
 --[=[
-	@prop CanNotifyCommanderDeath any
+	@prop CanNotifyRunFailed any
 	@within RunSpecs
 	Spec that accepts any active run state.
 ]=]
-RunSpecs.CanNotifyCommanderDeath = IsActiveRun
+RunSpecs.CanNotifyRunFailed = IsActiveRun
 
 return table.freeze(RunSpecs)

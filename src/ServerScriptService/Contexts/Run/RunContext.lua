@@ -32,7 +32,7 @@ local RunTransitionPolicy = require(script.Parent.RunDomain.Policies.RunTransiti
 local StartRunCommand = require(script.Parent.Application.Commands.StartRunCommand)
 local NotifyWaveClearedCommand = require(script.Parent.Application.Commands.NotifyWaveClearedCommand)
 local NotifyClimaxCompleteCommand = require(script.Parent.Application.Commands.NotifyClimaxCompleteCommand)
-local NotifyCommanderDeathCommand = require(script.Parent.Application.Commands.NotifyCommanderDeathCommand)
+local NotifyRunFailedCommand = require(script.Parent.Application.Commands.NotifyRunFailedCommand)
 local OnPrepTimeoutCommand = require(script.Parent.Application.Commands.OnPrepTimeoutCommand)
 local OnWaveTimeoutCommand = require(script.Parent.Application.Commands.OnWaveTimeoutCommand)
 local OnResolutionTimeoutCommand = require(script.Parent.Application.Commands.OnResolutionTimeoutCommand)
@@ -104,9 +104,9 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 		CacheAs = "_notifyClimaxCompleteCommand",
 	},
 	{
-		Name = "NotifyCommanderDeathCommand",
-		Module = NotifyCommanderDeathCommand,
-		CacheAs = "_notifyCommanderDeathCommand",
+		Name = "NotifyRunFailedCommand",
+		Module = NotifyRunFailedCommand,
+		CacheAs = "_notifyRunFailedCommand",
 	},
 	{
 		Name = "OnPrepTimeoutCommand",
@@ -161,7 +161,6 @@ local RunContext = Knit.CreateService({
 		Fields = {
 			{ Field = "_playerAddedConnection", Method = "Disconnect" },
 			{ Field = "_playerRemovingConnection", Method = "Disconnect" },
-			{ Field = "_commanderDiedConnection", Method = "Disconnect" },
 			{ Field = "_baseDestroyedConnection", Method = "Disconnect" },
 			{ Field = "_stateChangedConnection", Method = "Disconnect" },
 		},
@@ -345,18 +344,6 @@ function RunContext:KnitStart()
 		self:_TrackPlayerCharacterRouting(player)
 	end
 
-	-- Listen for commander death through the shared event bus so run termination stays decoupled.
-	self._commanderDiedConnection = GameEvents.Bus:On(
-		GameEvents.Events.Commander.CommanderDied,
-		function(_player: Instance)
-			-- Convert the event into the existing run-termination command flow.
-			Catch(function()
-				Try(self:NotifyCommanderDeath())
-				return Ok(nil)
-			end, "Run:OnCommanderDied")
-		end
-	)
-
 	self._baseDestroyedConnection = GameEvents.Bus:On(GameEvents.Events.Base.BaseDestroyed, function()
 		Catch(function()
 			Try(self:NotifyBaseDestroyed())
@@ -427,9 +414,9 @@ end
 function RunContext:RestartRun(): Result.Result<boolean>
 	return Catch(function()
 		local state = self._machine:GetState()
-		-- Route active runs through the commander-death command so shutdown side effects stay centralized.
+		-- Route active runs through the run-failure command so shutdown side effects stay centralized.
 		if state ~= "Idle" and state ~= "RunEnd" then
-			Try(self._notifyCommanderDeathCommand:Execute())
+			Try(self._notifyRunFailedCommand:Execute())
 			state = self._machine:GetState()
 		end
 
@@ -450,9 +437,9 @@ end
 function RunContext:ResetRun(): Result.Result<boolean>
 	return Catch(function()
 		local state = self._machine:GetState()
-		-- Route active runs through the commander-death command so reset preserves termination behavior.
+		-- Route active runs through the run-failure command so reset preserves termination behavior.
 		if state ~= "Idle" and state ~= "RunEnd" then
-			Try(self._notifyCommanderDeathCommand:Execute())
+			Try(self._notifyRunFailedCommand:Execute())
 			state = self._machine:GetState()
 		end
 
@@ -488,19 +475,19 @@ function RunContext:NotifyClimaxComplete(): Result.Result<boolean>
 end
 
 --[=[
-	Ends the run when the commander dies or the server otherwise aborts the run.
+	Ends the run when the base is destroyed or the server otherwise aborts the run.
 	@within RunContext
 	@return Result.Result<boolean> -- Whether the run was transitioned into `RunEnd`.
 ]=]
-function RunContext:NotifyCommanderDeath(): Result.Result<boolean>
+function RunContext:NotifyRunFailed(): Result.Result<boolean>
 	return Catch(function()
-		return self._notifyCommanderDeathCommand:Execute()
-	end, "Run:NotifyCommanderDeath")
+		return self._notifyRunFailedCommand:Execute()
+	end, "Run:NotifyRunFailed")
 end
 
 function RunContext:NotifyBaseDestroyed(): Result.Result<boolean>
 	return Catch(function()
-		return self._notifyCommanderDeathCommand:Execute()
+		return self._notifyRunFailedCommand:Execute()
 	end, "Run:NotifyBaseDestroyed")
 end
 

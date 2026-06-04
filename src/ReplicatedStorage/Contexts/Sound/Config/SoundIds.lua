@@ -28,7 +28,6 @@ return table.freeze({
 		WaveStart = "rbxassetid://137884319678560",
 		WaveClear = "rbxassetid://117806862877011",
 		AbilityUse = "rbxassetid://95235663185086",
-		CommanderAbilityUse = "rbxassetid://95235663185086",
 		ChoppingHit = "rbxassetid://9113226115",
 		MiningHit = "rbxassetid://9116676206",
 		MiningComplete = "rbxassetid://117793859307433",

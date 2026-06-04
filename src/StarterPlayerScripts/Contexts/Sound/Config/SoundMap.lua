@@ -82,12 +82,6 @@ return table.freeze({
 		SoundId = SoundIds.SFX.Equip,
 		Category = "SFX",
 	}),
-	CommanderAbilityUse = table.freeze({
-		SoundId = SoundIds.SFX.CommanderAbilityUse,
-		Category = "SFX",
-		Cooldown = 0.05,
-	}),
-
 	-- Client-triggered sounds (from GameEvents signals)
 	ItemBought = table.freeze({
 		SoundId = SoundIds.SFX.Purchase,

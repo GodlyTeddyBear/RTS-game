@@ -234,48 +234,6 @@ local function buildMoveBuildFacts(context: any): any
 	}
 end
 
-local function buildEngageEnemyFacts(context: any): any
-	if type(context.Entity) ~= "number" then
-		return {}
-	end
-
-	local entity = context.Entity
-	local currentCFrame = getEntityCFrame(context, entity)
-	local combatProfile = readEntityValue(context, entity, "CombatProfile", "Summon")
-	if currentCFrame == nil or type(combatProfile) ~= "table" then
-		return {}
-	end
-
-	local enemyContext = getService("EnemyContext")
-	local targetResult = if enemyContext ~= nil and type(enemyContext.GetNearestAliveEnemy) == "function"
-		then enemyContext:GetNearestAliveEnemy(currentCFrame.Position, combatProfile.AcquireRange or 0)
-		else nil
-	local target = if targetResult ~= nil and targetResult.success then targetResult.value else nil
-	if type(target) ~= "table" or type(target.Entity) ~= "number" or typeof(target.CFrame) ~= "CFrame" then
-		return {
-			HasEnemyTarget = false,
-		}
-	end
-
-	local facts = {
-		HasEnemyTarget = true,
-		TargetEntity = target.Entity,
-		TargetPosition = target.CFrame.Position,
-		MovementMode = "Direct",
-	}
-	if (target.CFrame.Position - currentCFrame.Position).Magnitude <= (combatProfile.AttackRange or 0) then
-		facts.AttackTargetKind = "Enemy"
-		facts.AttackData = {
-			AbilityId = "SummonStrike",
-			TargetKind = "Enemy",
-			TargetPosition = target.CFrame.Position,
-			Damage = combatProfile.DamagePerHit,
-			Cooldown = combatProfile.AttackInterval,
-		}
-	end
-	return facts
-end
-
 local BasicFactProviders = {
 	EmptyFacts = {
 		ProviderId = "EmptyFacts",
@@ -311,13 +269,6 @@ local BasicFactProviders = {
 		},
 	},
 
-	EnemyEngagementFacts = {
-		ProviderId = "EnemyEngagementFacts",
-		BuildFacts = buildEngageEnemyFacts,
-		Metadata = {
-			Description = "Builds generic enemy engagement facts.",
-		},
-	},
 }
 
 return table.freeze(BasicFactProviders)

@@ -14,7 +14,7 @@ Combat is a shared Entity-backed domain pipeline. It does not run behavior trees
 ## Movement Flow
 
 ```text
-AI.ActionIntent(Advance | ManualMove | EngageEnemy)
+AI.ActionIntent(Advance | ManualMove)
   -> Movement.MoveIntent
   -> MovementGridSystem
   -> MovementFlowCalculationSystem
