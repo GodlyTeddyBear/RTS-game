@@ -10,8 +10,8 @@ local Workspace = game:GetService("Workspace")
 local Debris = game:GetService("Debris")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
+local RenderAssetAccess = require(ReplicatedStorage.Contexts.Render.RenderAssetAccess)
 
 local VFXEngine = {}
 VFXEngine.__index = VFXEngine
@@ -120,23 +120,38 @@ local function _CreateAnchorModel(cframe: CFrame, parent: Instance): (Model, Bas
 	return anchorModel, root
 end
 
-local function _GetCategoryAccessors(registry: any, category: string): ((string) -> boolean, (string) -> (Folder | Model))
+local function _GetCategoryAccessors(
+	effectsRoot: Folder?,
+	category: string
+): ((string) -> boolean, (string) -> (Folder | Model?))
 	if category == STATUS_EFFECT_CATEGORY then
 		return function(effectKey: string): boolean
-				return registry:StatusEffectExists(effectKey)
-			end, function(effectKey: string): Folder | Model
-				return registry:GetStatusEffect(effectKey)
+				return RenderAssetAccess.StatusEffectExists(effectKey, {
+					Root = effectsRoot,
+				})
+			end, function(effectKey: string): Folder | Model?
+				return RenderAssetAccess.GetStatusEffect(effectKey, {
+					Root = effectsRoot,
+				})
 			end
 	end
 
 	return function(effectKey: string): boolean
-			return registry:SkillEffectExists(effectKey)
-		end, function(effectKey: string): Folder | Model
-			return registry:GetSkillEffect(effectKey)
+			return RenderAssetAccess.SkillEffectExists(effectKey, {
+				Root = effectsRoot,
+			})
+		end, function(effectKey: string): Folder | Model?
+			return RenderAssetAccess.GetSkillEffect(effectKey, {
+				Root = effectsRoot,
+			})
 		end
 end
 
-local function _TryGetEffect(getEffect: (string) -> (Folder | Model), effectKey: string, category: string): (Folder | Model)?
+local function _TryGetEffect(
+	getEffect: (string) -> (Folder | Model?),
+	effectKey: string,
+	category: string
+): (Folder | Model)?
 	local ok, effectOrError = pcall(function()
 		return getEffect(effectKey)
 	end)
@@ -152,8 +167,8 @@ end
 	Clones an effect from the registry by key and category.
 	Returns the cloned container, or nil if the effect doesn't exist.
 ]]
-local function _CloneEffect(registry: any, effectKey: string, category: string): (Folder | Model)?
-	local effectExists, getEffect = _GetCategoryAccessors(registry, category)
+local function _CloneEffect(effectsRoot: Folder?, effectKey: string, category: string): (Folder | Model)?
+	local effectExists, getEffect = _GetCategoryAccessors(effectsRoot, category)
 	if not effectExists(effectKey) then
 		warn("[VFXEngine] Effect not found:", effectKey, category)
 		return nil
@@ -232,12 +247,7 @@ end
 ]=]
 function VFXEngine.new(effectsFolder: Folder?)
 	local self = setmetatable({}, VFXEngine)
-
-	if effectsFolder then
-		self._Registry = AssetFetcher.CreateEffectRegistry(effectsFolder)
-	else
-		self._Registry = nil
-	end
+	self._EffectsRoot = effectsFolder
 	self._RuntimeFolder = _EnsureEffectsFolder()
 
 	return self
@@ -251,12 +261,12 @@ end
 	@param category string? -- Asset category; `"Skill"` (default) or `"StatusEffect"`
 ]=]
 function VFXEngine:Spawn(effectKey: string, position: Vector3, category: string?)
-	if not self._Registry then
+	if self._EffectsRoot == nil then
 		return
 	end
 	self._RuntimeFolder = _EnsureEffectsFolder()
 
-	local effectContainer = _CloneEffect(self._Registry, effectKey, category or "Skill")
+	local effectContainer = _CloneEffect(self._EffectsRoot, effectKey, category or "Skill")
 	if not effectContainer then
 		return
 	end
@@ -282,7 +292,7 @@ end
 	@return Instance? -- The cloned effect container, or `nil` if the effect was not found or the parent was invalid
 ]=]
 function VFXEngine:Attach(effectKey: string, parent: Instance, offset: CFrame?, category: string?): Instance?
-	if not self._Registry then
+	if self._EffectsRoot == nil then
 		return nil
 	end
 	self._RuntimeFolder = _EnsureEffectsFolder()
@@ -292,7 +302,7 @@ function VFXEngine:Attach(effectKey: string, parent: Instance, offset: CFrame?, 
 		return nil
 	end
 
-	local effectContainer = _CloneEffect(self._Registry, effectKey, category or "Skill")
+	local effectContainer = _CloneEffect(self._EffectsRoot, effectKey, category or "Skill")
 	if not effectContainer then
 		return nil
 	end

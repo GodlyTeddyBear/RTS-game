@@ -13,8 +13,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
-local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
+local RenderAssetAccess = require(ReplicatedStorage.Contexts.Render.RenderAssetAccess)
 local MiningConfig = require(ReplicatedStorage.Contexts.Mining.Config.MiningConfig)
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
 
@@ -39,22 +39,19 @@ local function _ApplyGhostStyle(model: Model)
 	end
 end
 
--- Resolves the structure registry from ReplicatedStorage and returns its source folder.
-local function _CreateStructureRegistry()
-	local assetsFolder = ReplicatedStorage:FindFirstChild("Assets")
-	if assetsFolder == nil then
-		return nil, nil
+local function _GetStructuresFolder(): Folder?
+	local assetsRoot = RenderAssetAccess.GetAssetsRoot()
+	if assetsRoot == nil then
+		return nil
 	end
 
-	local structuresFolder = assetsFolder:FindFirstChild("Structures")
+	local structuresFolder = assetsRoot:FindFirstChild("Structures")
 	if structuresFolder == nil or not structuresFolder:IsA("Folder") then
-		return nil, nil
+		return nil
 	end
 
-	return AssetFetcher.CreateStructureRegistry(structuresFolder), structuresFolder
+	return structuresFolder
 end
-
-local structureRegistry, structuresFolder = _CreateStructureRegistry()
 
 -- Builds a fallback extractor model when the authored asset is missing in development.
 local function _CreateExtractorFallbackModel(): Model
@@ -87,17 +84,16 @@ end
 -- Resolves the template model for the requested structure type and preserves a fallback path for extractor previews.
 local function _FindTemplateModel(structureType: string): Model?
 	if structureType == MiningConfig.EXTRACTOR_STRUCTURE_TYPE then
+		local structuresFolder = _GetStructuresFolder()
 		local typeNode = structuresFolder and structuresFolder:FindFirstChild(structureType) or nil
 		if typeNode == nil then
 			return _CreateExtractorFallbackModel()
 		end
 	end
 
-	if structureRegistry ~= nil then
-		local model = structureRegistry:GetStructureModel(structureType)
-		if model ~= nil then
-			return model
-		end
+	local model = RenderAssetAccess.GetStructureModel(structureType)
+	if model ~= nil then
+		return model
 	end
 
 	if structureType == MiningConfig.EXTRACTOR_STRUCTURE_TYPE then

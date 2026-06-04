@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local RenderAssetAccess = require(ReplicatedStorage.Contexts.Render.RenderAssetAccess)
 local Types = require(ReplicatedStorage.Contexts.Animation.Types.AnimationTypes)
 local AnimationPoseFilter = require(script.Parent.AnimationPoseFilter)
 
@@ -121,14 +122,18 @@ local function _FindVariantAnimation(animationsFolder: Folder, variant: string, 
 	return _FindAnimationInSlot(_FindChildCaseInsensitive(variantFolder, folderName))
 end
 
-local function _GetDefaultClip(registry: any, animationsFolder: Folder, folderName: string): Animation?
+local function _GetDefaultClip(animationsFolder: Folder, folderName: string): Animation?
 	local defaultAnimation = _FindVariantAnimation(animationsFolder, "Default", folderName)
 	if defaultAnimation then
 		return defaultAnimation
 	end
 
-	if registry:Exists(folderName, "Default") then
-		return registry:Get(folderName, "Default")
+	if RenderAssetAccess.AnimationClipExists(folderName, "Default", {
+		Root = animationsFolder,
+	}) then
+		return RenderAssetAccess.GetAnimationClip(folderName, "Default", {
+			Root = animationsFolder,
+		})
 	end
 
 	return nil
@@ -146,7 +151,6 @@ end
 
 function AnimationClipLoader.GetVariantClip(
 	model: Model,
-	registry: any,
 	animationsFolder: Folder,
 	variant: string,
 	folderName: string,
@@ -160,8 +164,12 @@ function AnimationClipLoader.GetVariantClip(
 		if variantAnimation then
 			return variantAnimation
 		end
-		if registry:Exists(folderName, variant) then
-			return registry:Get(folderName, variant)
+		if RenderAssetAccess.AnimationClipExists(folderName, variant, {
+			Root = animationsFolder,
+		}) then
+			return RenderAssetAccess.GetAnimationClip(folderName, variant, {
+				Root = animationsFolder,
+			})
 		end
 	end
 
@@ -169,8 +177,12 @@ function AnimationClipLoader.GetVariantClip(
 	if defaultAnimation then
 		return defaultAnimation
 	end
-	if registry:Exists(folderName, "Default") then
-		return registry:Get(folderName, "Default")
+	if RenderAssetAccess.AnimationClipExists(folderName, "Default", {
+		Root = animationsFolder,
+	}) then
+		return RenderAssetAccess.GetAnimationClip(folderName, "Default", {
+			Root = animationsFolder,
+		})
 	end
 
 	if preset.WarnOnMissingAnimation == true then
@@ -181,7 +193,6 @@ end
 
 function AnimationClipLoader.ReconcileMissingCoreAnimations(
 	model: Model,
-	registry: any,
 	animator: Animator,
 	animationsFolder: Folder,
 	coreAnimations: { [string]: { TAnimInfo } },
@@ -200,7 +211,7 @@ function AnimationClipLoader.ReconcileMissingCoreAnimations(
 			continue
 		end
 
-		local defaultAnimation = _GetDefaultClip(registry, animationsFolder, folderName)
+		local defaultAnimation = _GetDefaultClip(animationsFolder, folderName)
 		if defaultAnimation then
 			coreAnimations[pose] = {
 				_LoadTrack(animator, defaultAnimation, Enum.AnimationPriority.Core, true),
@@ -213,7 +224,6 @@ end
 
 function AnimationClipLoader.BuildCoreAnimations(
 	model: Model,
-	registry: any,
 	variant: string,
 	animator: Animator,
 	animationsFolder: Folder,
@@ -222,7 +232,7 @@ function AnimationClipLoader.BuildCoreAnimations(
 	local coreAnimations: { [string]: { TAnimInfo } } = {}
 
 	for _, entry in preset.CorePoseFolders do
-		local animation = AnimationClipLoader.GetVariantClip(model, registry, animationsFolder, variant, entry.Folder, preset)
+		local animation = AnimationClipLoader.GetVariantClip(model, animationsFolder, variant, entry.Folder, preset)
 		if animation then
 			coreAnimations[entry.Pose] = {
 				_LoadTrack(animator, animation, Enum.AnimationPriority.Core, true),
@@ -262,7 +272,6 @@ end
 
 function AnimationClipLoader.BuildActionsAndEmotes(
 	model: Model,
-	registry: any,
 	variant: string,
 	animator: Animator,
 	animationsFolder: Folder,
@@ -288,7 +297,7 @@ function AnimationClipLoader.BuildActionsAndEmotes(
 			lookupName = slotName:lower()
 		end
 
-		local animation = AnimationClipLoader.GetVariantClip(model, registry, animationsFolder, variant, lookupName, preset)
+		local animation = AnimationClipLoader.GetVariantClip(model, animationsFolder, variant, lookupName, preset)
 		if not animation then
 			continue
 		end
@@ -313,19 +322,17 @@ end
 
 function AnimationClipLoader.Load(
 	model: Model,
-	registry: any,
 	variant: string,
 	animator: Animator,
 	animationsFolder: Folder,
 	preset: TAnimationPreset
 ): TLoadedClips
-	local coreAnimations = AnimationClipLoader.BuildCoreAnimations(model, registry, variant, animator, animationsFolder, preset)
-	AnimationClipLoader.ReconcileMissingCoreAnimations(model, registry, animator, animationsFolder, coreAnimations, preset)
+	local coreAnimations = AnimationClipLoader.BuildCoreAnimations(model, variant, animator, animationsFolder, preset)
+	AnimationClipLoader.ReconcileMissingCoreAnimations(model, animator, animationsFolder, coreAnimations, preset)
 	AnimationClipLoader.EnsurePoseFallbacks(model, coreAnimations, preset)
 
 	local actions, emotes = AnimationClipLoader.BuildActionsAndEmotes(
 		model,
-		registry,
 		variant,
 		animator,
 		animationsFolder,

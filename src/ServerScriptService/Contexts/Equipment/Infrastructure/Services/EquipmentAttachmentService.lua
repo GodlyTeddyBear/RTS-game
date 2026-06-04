@@ -2,7 +2,6 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local EquipmentTypes = require(ReplicatedStorage.Contexts.Equipment.Types.EquipmentTypes)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local Errors = require(script.Parent.Parent.Parent.Errors)
@@ -24,38 +23,13 @@ local RIGHT_ARM_NAMES = table.freeze({
 
 function EquipmentAttachmentService.new()
 	local self = setmetatable({}, EquipmentAttachmentService)
-	self._toolRegistry = nil
-	self._armorRegistry = nil
-	self._accessoryRegistry = nil
+	self._renderContext = nil
 	self._handles = {} :: { [string]: TAttachmentHandle }
 	return self
 end
 
-function EquipmentAttachmentService:Init(_registry: any, _name: string)
-	local assetsRoot = ReplicatedStorage:FindFirstChild("Assets")
-	if assetsRoot == nil or not assetsRoot:IsA("Folder") then
-		return
-	end
-
-	local itemsFolder = assetsRoot:FindFirstChild("Items")
-	if itemsFolder == nil or not itemsFolder:IsA("Folder") then
-		return
-	end
-
-	local toolsFolder = itemsFolder:FindFirstChild("Tools")
-	if toolsFolder ~= nil and toolsFolder:IsA("Folder") then
-		self._toolRegistry = AssetFetcher.CreateToolRegistry(toolsFolder)
-	end
-
-	local armorFolder = itemsFolder:FindFirstChild("Armor")
-	if armorFolder ~= nil and armorFolder:IsA("Folder") then
-		self._armorRegistry = AssetFetcher.CreateArmorRegistry(armorFolder)
-	end
-
-	local accessoriesFolder = itemsFolder:FindFirstChild("Accessories")
-	if accessoriesFolder ~= nil and accessoriesFolder:IsA("Folder") then
-		self._accessoryRegistry = AssetFetcher.CreateAccessoryRegistry(accessoriesFolder)
-	end
+function EquipmentAttachmentService:Init(registry: any, _name: string)
+	self._renderContext = registry:Get("RenderContext")
 end
 
 function EquipmentAttachmentService:Attach(
@@ -114,12 +88,14 @@ function EquipmentAttachmentService:_AttachAccessoryContainer(
 	attachmentId: string,
 	assetFamily: "Armor" | "Accessory"
 ): Result.Result<TAttachmentHandle>
-	local registry = if assetFamily == "Armor" then self._armorRegistry else self._accessoryRegistry
-	if registry == nil then
+	if self._renderContext == nil then
 		return Err("MissingAssetFolder", Errors.MISSING_ASSET_FOLDER, { assetFamily = assetFamily })
 	end
 
-	local wrapper = if assetFamily == "Armor" then registry:GetArmorModel(assetId) else registry:GetAccessoryModel(assetId)
+	local wrapperResult = if assetFamily == "Armor"
+		then self._renderContext:GetArmorModel(assetId)
+		else self._renderContext:GetAccessoryModel(assetId)
+	local wrapper = if wrapperResult.success then wrapperResult.value else nil
 	if wrapper == nil then
 		return Err("MissingEquipmentAsset", Errors.MISSING_EQUIPMENT_ASSET, {
 			assetFamily = assetFamily,
@@ -158,11 +134,12 @@ function EquipmentAttachmentService:_AttachTool(
 	assetId: string,
 	attachmentId: string
 ): Result.Result<TAttachmentHandle>
-	if self._toolRegistry == nil then
+	if self._renderContext == nil then
 		return Err("MissingAssetFolder", Errors.MISSING_ASSET_FOLDER, { assetFamily = "Tool" })
 	end
 
-	local toolModel = self._toolRegistry:GetToolModel(assetId)
+	local toolModelResult = self._renderContext:GetToolModel(assetId)
+	local toolModel = if toolModelResult.success then toolModelResult.value else nil
 	if toolModel == nil then
 		return Err("MissingEquipmentAsset", Errors.MISSING_EQUIPMENT_ASSET, {
 			assetFamily = "Tool",

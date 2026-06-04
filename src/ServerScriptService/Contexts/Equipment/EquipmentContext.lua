@@ -102,6 +102,7 @@ local EquipmentContext = Knit.CreateService({
 		{ Name = "UnitContext" },
 		{ Name = "EnemyContext" },
 		{ Name = "StructureContext" },
+		{ Name = "RenderContext" },
 		{ Name = "RunContext", CacheAs = "_runContext" },
 	},
 	Teardown = {

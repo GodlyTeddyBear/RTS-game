@@ -5,7 +5,6 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Workspace = game:GetService("Workspace")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
-local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 local PlacementFootprintResolver = require(ReplicatedStorage.Contexts.Placement.PlacementFootprintResolver)
@@ -56,12 +55,12 @@ local GROUND_FLAT_DOT = 1
 function PlacementService.new()
 	local self = setmetatable({}, PlacementService)
 	self._folder = nil :: Folder?
-	self._structureRegistry = nil :: any
 	self._structuresFolder = nil :: Folder?
 	self._animationsFolder = nil :: Folder?
 	self._instanceMap = {} :: { [number]: SpawnedStructure }
 	self._nextId = 1
 	self._worldContext = nil :: any
+	self._renderContext = nil :: any
 	self._validatedStructureTypes = {} :: { [string]: boolean }
 	return self
 end
@@ -88,7 +87,6 @@ function PlacementService:Init(_registry: any, _name: string)
 	local structuresFolder = assets and assets:FindFirstChild("Structures")
 	if structuresFolder and structuresFolder:IsA("Folder") then
 		self._structuresFolder = structuresFolder
-		self._structureRegistry = AssetFetcher.CreateStructureRegistry(structuresFolder)
 	end
 
 	local animationsFolder = assets and assets:FindFirstChild("Animations")
@@ -99,6 +97,7 @@ end
 
 function PlacementService:Start(registry: any, _name: string)
 	self._worldContext = registry:Get("WorldContext")
+	self._renderContext = registry:Get("RenderContext")
 end
 
 function PlacementService:_ResolveFirstNonGridHit(
@@ -278,7 +277,7 @@ function PlacementService:_ResolveSpawnModel(structureType: string): SpawnedStru
 		return _CreateExtractorFallbackModel()
 	end
 
-	if self._structureRegistry == nil then
+	if self._renderContext == nil then
 		Ensure(structureType == MiningConfig.EXTRACTOR_STRUCTURE_TYPE, "TemplateNotFound", Errors.TEMPLATE_NOT_FOUND, {
 			structureType = structureType,
 			requiredPath = "ReplicatedStorage.Assets.Structures",
@@ -286,7 +285,8 @@ function PlacementService:_ResolveSpawnModel(structureType: string): SpawnedStru
 		return _CreateExtractorFallbackModel()
 	end
 
-	local model = self._structureRegistry:GetStructureModel(structureType)
+	local structureResult = self._renderContext:GetStructureModel(structureType)
+	local model = if structureResult.success then structureResult.value else nil
 	if model == nil and structureType == MiningConfig.EXTRACTOR_STRUCTURE_TYPE then
 		return _CreateExtractorFallbackModel()
 	end
@@ -352,10 +352,12 @@ function PlacementService:ValidateTemplate(structureType: string): Result.Result
 	local validated = false
 	if structureType == MiningConfig.EXTRACTOR_STRUCTURE_TYPE then
 		validated = true
-	elseif self._structureRegistry ~= nil and self._structureRegistry:StructureModelExists(structureType) then
-		validated = true
-	elseif self._structureRegistry ~= nil and self._structureRegistry:StructureModelExists("Default") then
-		validated = true
+	elseif self._renderContext ~= nil then
+		local existsResult = self._renderContext:StructureModelExists(structureType)
+		local defaultExistsResult = self._renderContext:StructureModelExists("Default")
+		if (existsResult.success and existsResult.value == true) or (defaultExistsResult.success and defaultExistsResult.value == true) then
+			validated = true
+		end
 	end
 
 	if not validated then

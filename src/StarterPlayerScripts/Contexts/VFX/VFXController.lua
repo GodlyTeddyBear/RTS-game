@@ -9,6 +9,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local Knit = require(ReplicatedStorage.Packages.Knit)
+local RenderAssetAccess = require(ReplicatedStorage.Contexts.Render.RenderAssetAccess)
 local Registry = require(ReplicatedStorage.Utilities.Registry)
 
 local VFXEngine = require(script.Parent.Infrastructure.Services.VFXEngine)
@@ -22,8 +23,8 @@ function VFXController:KnitInit()
 	self.Registry = registry
 	self._Janitor = Janitor.new()
 
-	local effectsFolder = ReplicatedStorage:FindFirstChild("Assets")
-		and ReplicatedStorage.Assets:FindFirstChild("Effects")
+	local assetsRoot = RenderAssetAccess.GetAssetsRoot()
+	local effectsFolder = assetsRoot and assetsRoot:FindFirstChild("Effects")
 	self._VFXEngine = VFXEngine.new(effectsFolder :: Folder?)
 	registry:Register("VFXEngine", self._VFXEngine, "Infrastructure")
 

@@ -2,9 +2,9 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local PlacementPlus = require(ReplicatedStorage.Utilities.PlacementPlus)
+local RenderAssetAccess = require(ReplicatedStorage.Contexts.Render.RenderAssetAccess)
 local MiningConfig = require(ReplicatedStorage.Contexts.Mining.Config.MiningConfig)
 local PlacementConfig = require(ReplicatedStorage.Contexts.Placement.Config.PlacementConfig)
 local PlacementTypes = require(ReplicatedStorage.Contexts.Placement.Types.PlacementTypes)
@@ -18,9 +18,6 @@ type SpecialTileRequirementMode = PlacementTypes.SpecialTileRequirementMode
 type ResolvedFootprint = PlacementTypes.ResolvedFootprint
 
 local PlacementFootprintResolver = {}
-
-local structureRegistry = nil :: any
-local structuresFolder = nil :: Folder?
 
 local function _GetCacheKey(structureType: string, rotationQuarterTurns: number): string
 	return (`{structureType}:{rotationQuarterTurns}`)
@@ -64,33 +61,10 @@ local function _CreateExtractorFallbackModel(): Model
 	return model
 end
 
-local function _EnsureStructureRegistry()
-	if structureRegistry ~= nil or structuresFolder ~= nil then
-		return
-	end
-
-	local assetsFolder = ReplicatedStorage:FindFirstChild("Assets")
-	if assetsFolder == nil then
-		return
-	end
-
-	local folder = assetsFolder:FindFirstChild("Structures")
-	if folder == nil or not folder:IsA("Folder") then
-		return
-	end
-
-	structuresFolder = folder
-	structureRegistry = AssetFetcher.CreateStructureRegistry(folder)
-end
-
 local function _ResolveStructureModel(structureType: string): Model?
-	_EnsureStructureRegistry()
-
-	if structureRegistry ~= nil then
-		local model = structureRegistry:GetStructureModel(structureType)
-		if model ~= nil then
-			return model
-		end
+	local model = RenderAssetAccess.GetStructureModel(structureType)
+	if model ~= nil then
+		return model
 	end
 
 	if structureType == MiningConfig.EXTRACTOR_STRUCTURE_TYPE then

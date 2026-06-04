@@ -104,6 +104,7 @@ local PlacementContext = Knit.CreateService({
 		{ Name = "WorldContext", CacheAs = "_worldContext" },
 		{ Name = "EconomyContext", CacheAs = "_economyContext" },
 		{ Name = "EntityContext", CacheAs = "_entityContext" },
+		{ Name = "RenderContext", CacheAs = "_renderContext" },
 	},
 	Teardown = {
 		Fields = {

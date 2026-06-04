@@ -3,7 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
-local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
+local RenderAssetAccess = require(ReplicatedStorage.Contexts.Render.RenderAssetAccess)
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local Enums = require(script.Parent.Enums)
@@ -16,6 +16,31 @@ type TVFXRegistry = Types.TVFXRegistry
 local DEFAULT_RUNTIME_FOLDER_NAME = "Effects"
 
 local Setup = {}
+
+local function _CreateEffectRegistryAdapter(effectsFolder: Folder): TVFXRegistry
+	return {
+		SkillEffectExists = function(_self, effectKey: string): boolean
+			return RenderAssetAccess.SkillEffectExists(effectKey, {
+				Root = effectsFolder,
+			})
+		end,
+		GetSkillEffect = function(_self, effectKey: string): Folder | Model
+			return RenderAssetAccess.GetSkillEffect(effectKey, {
+				Root = effectsFolder,
+			}) :: Folder | Model
+		end,
+		StatusEffectExists = function(_self, effectKey: string): boolean
+			return RenderAssetAccess.StatusEffectExists(effectKey, {
+				Root = effectsFolder,
+			})
+		end,
+		GetStatusEffect = function(_self, effectKey: string): Folder | Model
+			return RenderAssetAccess.GetStatusEffect(effectKey, {
+				Root = effectsFolder,
+			}) :: Folder | Model
+		end,
+	}
+end
 
 local function _BuildRuntimeFolderConflict(name: string): Result.Result<Folder>
 	return Result.Err(
@@ -78,7 +103,7 @@ function Setup.CreateEffectRegistry(effectsFolder: Folder): Result.Result<TVFXRe
 	end
 
 	local ok, registryOrError = pcall(function()
-		return AssetFetcher.CreateEffectRegistry(effectsFolder)
+		return _CreateEffectRegistryAdapter(effectsFolder)
 	end)
 	if not ok then
 		return Result.Err(

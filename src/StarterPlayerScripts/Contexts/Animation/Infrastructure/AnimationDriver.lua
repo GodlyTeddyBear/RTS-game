@@ -4,7 +4,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SimpleAnimateCore = require(ReplicatedStorage.Utilities.SimpleAnimate.Core)
 local SimpleAnimateAction = require(ReplicatedStorage.Utilities.SimpleAnimate.Action)
-local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local Promise = require(ReplicatedStorage.Packages.Promise)
 
@@ -139,7 +138,6 @@ end
 
 local function _LoadVariant(
 	model: Model,
-	registry: any,
 	animator: Animator,
 	animationsFolder: Folder,
 	controllerJanitor: any,
@@ -152,7 +150,7 @@ local function _LoadVariant(
 
 	_CleanupJanitor(controllerJanitor)
 
-	local loaded = AnimationClipLoader.Load(model, registry, variant, animator, animationsFolder, preset)
+	local loaded = AnimationClipLoader.Load(model, variant, animator, animationsFolder, preset)
 	if not next(loaded.CoreAnimations) then
 		warn(preset.Tag, model.Name, "- No core animations found for variant:", variant)
 		return
@@ -219,7 +217,6 @@ function AnimationDriver.setup(model: Model, preset: TAnimationPreset, context: 
 			end)
 		end)
 		:andThen(function(rig, animationsFolder: Folder)
-			local registry = AssetFetcher.CreateAnimationRegistry(animationsFolder)
 			local lifetimeJanitor = Janitor.new()
 			local controllerJanitor = Janitor.new()
 
@@ -240,13 +237,13 @@ function AnimationDriver.setup(model: Model, preset: TAnimationPreset, context: 
 			if preset.ReloadOnVariantChanged == true and preset.VariantAttribute then
 				lifetimeJanitor:Add(
 					model:GetAttributeChangedSignal(preset.VariantAttribute):Connect(function()
-						_LoadVariant(model, registry, rig.Animator, animationsFolder, controllerJanitor, ctx, preset, options)
+						_LoadVariant(model, rig.Animator, animationsFolder, controllerJanitor, ctx, preset, options)
 					end),
 					"Disconnect"
 				)
 			end
 
-			_LoadVariant(model, registry, rig.Animator, animationsFolder, controllerJanitor, ctx, preset, options)
+			_LoadVariant(model, rig.Animator, animationsFolder, controllerJanitor, ctx, preset, options)
 
 			return function()
 				_CleanupJanitor(lifetimeJanitor)

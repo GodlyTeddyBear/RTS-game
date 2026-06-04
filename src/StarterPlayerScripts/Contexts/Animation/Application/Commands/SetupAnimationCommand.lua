@@ -2,7 +2,6 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local AssetFetcher = require(ReplicatedStorage.Utilities.Assets.AssetFetcher)
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local Promise = require(ReplicatedStorage.Packages.Promise)
 
@@ -70,7 +69,6 @@ function SetupAnimationCommand:Execute(
 			end)
 		end)
 		:andThen(function(rig, animationsFolder: Folder)
-			local registry = AssetFetcher.CreateAnimationRegistry(animationsFolder)
 			local lifetimeJanitor = Janitor.new()
 			local controllerJanitor = Janitor.new()
 
@@ -92,7 +90,6 @@ function SetupAnimationCommand:Execute(
 					model:GetAttributeChangedSignal(preset.VariantAttribute):Connect(function()
 						self._loadAnimationVariantCommand:Execute(
 							model,
-							registry,
 							rig.Animator,
 							animationsFolder,
 							controllerJanitor,
@@ -107,7 +104,6 @@ function SetupAnimationCommand:Execute(
 
 			self._loadAnimationVariantCommand:Execute(
 				model,
-				registry,
 				rig.Animator,
 				animationsFolder,
 				controllerJanitor,

@@ -21,6 +21,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Knit = require(ReplicatedStorage.Packages.Knit)
+local RenderAssetAccess = require(ReplicatedStorage.Contexts.Render.RenderAssetAccess)
 local Registry = require(ReplicatedStorage.Utilities.Registry)
 
 local AnimatePlayerModule = require(script.Parent.AnimatePlayerModule)
@@ -85,8 +86,8 @@ function PlayerAnimationController:KnitStart()
 	end
 
 	-- Resolve the animations folder from ReplicatedStorage
-	local animationsFolder = ReplicatedStorage:FindFirstChild("Assets")
-		and ReplicatedStorage.Assets:FindFirstChild("Animations")
+	local assetsRoot = RenderAssetAccess.GetAssetsRoot()
+	local animationsFolder = assetsRoot and assetsRoot:FindFirstChild("Animations")
 	if not animationsFolder then
 		warn(TAG, "Assets/Animations folder not found in ReplicatedStorage")
 		return

@@ -108,7 +108,6 @@ end
 
 function LoadAnimationVariantCommand:Execute(
 	model: Model,
-	registry: any,
 	animator: Animator,
 	animationsFolder: Folder,
 	controllerJanitor: any,
@@ -121,7 +120,7 @@ function LoadAnimationVariantCommand:Execute(
 
 	_CleanupJanitor(controllerJanitor)
 
-	local loaded = AnimationClipLoader.Load(model, registry, variant, animator, animationsFolder, preset)
+	local loaded = AnimationClipLoader.Load(model, variant, animator, animationsFolder, preset)
 	if not next(loaded.CoreAnimations) then
 		warn(preset.Tag, model.Name, "- No core animations found for variant:", variant)
 		return
