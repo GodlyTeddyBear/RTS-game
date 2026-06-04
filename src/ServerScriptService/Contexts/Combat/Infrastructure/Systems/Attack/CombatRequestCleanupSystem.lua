@@ -21,7 +21,6 @@ function CombatRequestCleanupSystem:Run()
 		end
 	end
 	self:_CleanupExpired("HitboxSpawnRequest")
-	self:_CleanupExpired("DamageRequest")
 	self:_CleanupExpired("GoalReachedOutcomeRequest")
 	self:_CleanupExpired("BaseDamageRequest")
 	self:_CleanupExpired("ProjectileSpawnRequest")
@@ -31,7 +30,6 @@ end
 
 function CombatRequestCleanupSystem:_IsAttackRequest(entity: number): boolean
 	return self:_Get(entity, "HitboxSpawnRequest", "Combat") ~= nil
-		or self:_Get(entity, "DamageRequest", "Combat") ~= nil
 		or self:_Get(entity, "GoalReachedOutcomeRequest", "Combat") ~= nil
 		or self:_Get(entity, "BaseDamageRequest", "Combat") ~= nil
 		or self:_Get(entity, "ProjectileSpawnRequest", "Combat") ~= nil

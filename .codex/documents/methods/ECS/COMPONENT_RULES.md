@@ -51,7 +51,7 @@ Examples:
 
 Examples:
 
-- `Combat.DamageRequest`
+- `Combat.HealthChangeRequest`
 - `Entity.CleanupOutcomeRequest`
 - `Combat.HealthDepletedRequest`
 
@@ -78,10 +78,11 @@ Combat.AttackState = {
 
 ```lua
 -- Correct: transient request entity payload
-Combat.DamageRequest = {
-    Attacker = sourceEntity,
-    Victim = targetEntity,
+Combat.HealthChangeRequest = {
+    SourceEntity = sourceEntity,
+    TargetEntity = targetEntity,
     Amount = 20,
+    ChangeType = "Damage",
 }
 ```
 

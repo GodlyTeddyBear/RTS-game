@@ -87,13 +87,12 @@ local entity = entityContext:CreateEntity("Enemy.Actor", {
 ```
 
 ```lua
--- Wrong: feature context owns destruction callback registration
-entityContext:RegisterPreDestroyCleanup({
-    ContributorId = "Enemy.TeamCleanup",
-    Cleanup = function(entity)
+-- Wrong: feature context owns destruction side effects through callbacks.
+local cleanupCallbacks = {
+    EnemyTeamCleanup = function(entity)
         ...
     end,
-})
+}
 ```
 
 ---

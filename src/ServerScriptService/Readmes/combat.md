@@ -7,9 +7,9 @@ Combat is a shared Entity-backed domain pipeline. It does not run behavior trees
 | Layer | Responsibility |
 |------|----------------|
 | `AIContext` | Selects `AI.ActionIntent` and starts actor-state components through the shared action execution system. |
-| `EntityContext` | Owns ECS lifecycle, phase execution, instance binding, cleanup contributors, and deferred request destruction. |
+| `EntityContext` | Owns ECS lifecycle, phase execution, instance binding, cleanup outcome orchestration, and deferred request destruction. |
 | `CombatContext` | Registers `Movement.*` and `Combat.*` schemas, services, and domain systems. |
-| Feature contexts | Own actor setup, profiles, behavior trees, presentation projection, and feature cleanup. |
+| Feature contexts | Own actor setup, profiles, behavior trees, feature rule data, and feature-specific outcome systems. |
 
 ## Movement Flow
 
@@ -31,9 +31,9 @@ Focused movement services provide grid construction, path handles, shared flowfi
 AI.ActionIntent(Attack)
   -> Combat.AttackState
   -> AttackAdvanceSystem
-  -> HitboxSpawnRequest | ProjectileSpawnRequest | DamageRequest
+  -> HitboxSpawnRequest | ProjectileSpawnRequest | HealthChangeRequest
   -> impact systems
-  -> Combat.DamageRequest
+  -> Combat.HealthChangeRequest
   -> HealthChangeResolveSystem
   -> Entity.Health
   -> Combat.HealthDepletedRequest

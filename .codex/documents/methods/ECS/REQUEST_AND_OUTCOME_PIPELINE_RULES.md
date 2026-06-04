@@ -47,7 +47,7 @@ Use transient request entities when the data answers:
 
 Examples:
 
-- `Combat.DamageRequest`
+- `Combat.HealthChangeRequest`
 - `Combat.HitboxRequest`
 - `Entity.CleanupOutcomeRequest`
 - `Combat.HealthDepletedRequest`
@@ -82,8 +82,8 @@ AI.ActionIntent(Attack)
     -> CombatAttackSystem
     -> Combat.ProjectileRequest
     -> ProjectileImpactSystem
-    -> Combat.DamageRequest
-    -> DamageResolveSystem
+    -> Combat.HealthChangeRequest
+    -> HealthChangeResolveSystem
     -> Entity.Health
 ```
 

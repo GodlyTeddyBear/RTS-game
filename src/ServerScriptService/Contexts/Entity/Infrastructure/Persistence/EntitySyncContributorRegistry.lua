@@ -20,7 +20,7 @@ function EntitySyncContributorRegistry:Init(_registry: any, _name: string)
 	return
 end
 
-function EntitySyncContributorRegistry:RegisterSyncContributor(featureName: string, payload: any): Result.Result<any>
+function EntitySyncContributorRegistry:Register(featureName: string, payload: any): Result.Result<any>
 	return Result.Catch(function()
 		if self._isRegistrationClosed then
 			return Result.Err("InvalidSyncContributor", Errors.INVALID_SYNC_CONTRIBUTOR, {
@@ -62,7 +62,7 @@ function EntitySyncContributorRegistry:RegisterSyncContributor(featureName: stri
 
 		self._contributorsByFeature[featureName] = compiledContributor
 		return Result.Ok(compiledContributor)
-	end, "EntitySyncContributorRegistry:RegisterSyncContributor")
+	end, "EntitySyncContributorRegistry:Register")
 end
 
 function EntitySyncContributorRegistry:GetSyncContributor(featureName: string)

@@ -70,7 +70,7 @@ world:set(entity, components.Health, { Current = 100, Max = 100 })
 -- Correct
 local queryResult = entityFactory:Query({
     FeatureName = "Combat",
-    Keys = { "DamageRequest", "RequestTag" },
+    Keys = { "HealthChangeRequest", "RequestTag" },
 })
 ```
 

@@ -31,7 +31,7 @@ local MovementSpeedStatusSystem = require(script.Parent.Infrastructure.Systems.S
 local HitboxSimulationService = require(script.Parent.Infrastructure.Services.HitboxSimulationService)
 local AttackAdvanceSystem = require(script.Parent.Infrastructure.Systems.Attack.AttackAdvanceSystem)
 local CombatRequestCleanupSystem = require(script.Parent.Infrastructure.Systems.Attack.CombatRequestCleanupSystem)
-local BaseDamageResolveSystem = require(script.Parent.Infrastructure.Systems.Attack.BaseDamageResolveSystem)
+local BaseDamageBridgeSystem = require(script.Parent.Infrastructure.Systems.Attack.BaseDamageBridgeSystem)
 local HealthChangeResolveSystem = require(script.Parent.Infrastructure.Systems.Health.HealthChangeResolveSystem)
 local HealthDepletedDispatchSystem = require(script.Parent.Infrastructure.Systems.Health.HealthDepletedDispatchSystem)
 local HealthDepletedOutcomeResolveSystem = require(script.Parent.Infrastructure.Systems.Health.HealthDepletedOutcomeResolveSystem)
@@ -530,10 +530,10 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 		end
 
 		local baseDamageResult = self._entityContext:RegisterSystem("RequestResolve", {
-			Name = "BaseDamageResolveSystem",
+			Name = "BaseDamageBridgeSystem",
 			Phase = "RequestResolve",
 			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return BaseDamageResolveSystem.new(entityFactory, self._baseContext)
+				return BaseDamageBridgeSystem.new(entityFactory, self._baseContext)
 			end,
 		})
 		if not baseDamageResult.success then
@@ -589,7 +589,6 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 				"Combat.RequestTag",
 				"Combat.ProcessedTag",
 				"Combat.HitboxSpawnRequest",
-				"Combat.DamageRequest",
 				"Combat.GoalReachedOutcomeRequest",
 				"Combat.BaseDamageRequest",
 				"Combat.ProjectileSpawnRequest",

@@ -59,6 +59,7 @@ The intended rule is:
 ## Runtime Infrastructure
 
 - Model spawning, binding, polling, projection, cleanup orchestration, and replication belong to `EntityContext`.
+- Feature contexts register runtime setup through `EntityContext:RegisterEntityFeature`; feature-facing binding, sync, and replication callback APIs are not part of the public architecture.
 - Feature contexts provide data through components such as model asset or outcome selectors.
 - Gameplay state should replicate through ECS component replication, not through ad hoc instance attributes.
 - Reveal attributes and tags are transitional discovery metadata only. They are not a gameplay state channel.
@@ -83,8 +84,8 @@ AI.ActionIntent(Attack)
     -> CombatAttackSystem
     -> Combat.HitboxRequest or Combat.ProjectileRequest
     -> CombatImpactSystem
-    -> Combat.DamageRequest
-    -> DamageResolveSystem
+    -> Combat.HealthChangeRequest
+    -> HealthChangeResolveSystem
     -> Entity.Health
 ```
 

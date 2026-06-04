@@ -20,7 +20,7 @@ function EntityReplicationRegistry:Init(_registry: any, _name: string)
 	return
 end
 
-function EntityReplicationRegistry:RegisterReplicationSurface(featureName: string, payload: any): Result.Result<any>
+function EntityReplicationRegistry:Register(featureName: string, payload: any): Result.Result<any>
 	return Result.Catch(function()
 		if self._isRegistrationClosed then
 			return Result.Err("InvalidReplicationSurface", Errors.INVALID_REPLICATION_SURFACE, {
@@ -65,7 +65,7 @@ function EntityReplicationRegistry:RegisterReplicationSurface(featureName: strin
 
 		self._surfacesByFeature[featureName] = compiledSurface
 		return Result.Ok(compiledSurface)
-	end, "EntityReplicationRegistry:RegisterReplicationSurface")
+	end, "EntityReplicationRegistry:Register")
 end
 
 function EntityReplicationRegistry:GetReplicationSurface(featureName: string)

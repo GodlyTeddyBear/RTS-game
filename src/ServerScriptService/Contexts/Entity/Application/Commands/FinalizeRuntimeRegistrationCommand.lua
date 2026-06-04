@@ -117,7 +117,7 @@ function FinalizeRuntimeRegistrationCommand:_EnsureBuiltInOperationalProofRuntim
 			return syncResult
 		end
 
-		local registerSyncResult = self._syncContributorRegistry:RegisterSyncContributor(EntityProofRuntimeConfig.FeatureName, syncResult.value)
+		local registerSyncResult = self._syncContributorRegistry:Register(EntityProofRuntimeConfig.FeatureName, syncResult.value)
 		if not registerSyncResult.success then
 			return registerSyncResult
 		end
@@ -138,7 +138,7 @@ function FinalizeRuntimeRegistrationCommand:_EnsureBuiltInOperationalProofRuntim
 		end
 
 		local registerReplicationResult =
-			self._replicationRegistry:RegisterReplicationSurface(EntityProofRuntimeConfig.FeatureName, replicationResult.value)
+			self._replicationRegistry:Register(EntityProofRuntimeConfig.FeatureName, replicationResult.value)
 		if not registerReplicationResult.success then
 			return registerReplicationResult
 		end

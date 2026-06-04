@@ -59,7 +59,6 @@ local AddCommand = require(script.Parent.Application.Commands.AddCommand)
 local RemoveCommand = require(script.Parent.Application.Commands.RemoveCommand)
 local TickPhaseCommand = require(script.Parent.Application.Commands.TickPhaseCommand)
 local TickAllCommand = require(script.Parent.Application.Commands.TickAllCommand)
-local RegisterInstanceBindingCommand = require(script.Parent.Application.Commands.RegisterInstanceBindingCommand)
 local EnableRuntimeBindingCommand = require(script.Parent.Application.Commands.EnableRuntimeBindingCommand)
 local EnableRuntimeSyncCommand = require(script.Parent.Application.Commands.EnableRuntimeSyncCommand)
 local EnableRuntimeReplicationCommand = require(script.Parent.Application.Commands.EnableRuntimeReplicationCommand)
@@ -69,8 +68,6 @@ local BindEntityInstanceCommand = require(script.Parent.Application.Commands.Bin
 local UnbindEntityInstanceCommand = require(script.Parent.Application.Commands.UnbindEntityInstanceCommand)
 local QueueEntityBindCommand = require(script.Parent.Application.Commands.QueueEntityBindCommand)
 local FlushBindQueueCommand = require(script.Parent.Application.Commands.FlushBindQueueCommand)
-local RegisterSyncContributorCommand = require(script.Parent.Application.Commands.RegisterSyncContributorCommand)
-local RegisterReplicationSurfaceCommand = require(script.Parent.Application.Commands.RegisterReplicationSurfaceCommand)
 local RunRuntimeSyncCommand = require(script.Parent.Application.Commands.RunRuntimeSyncCommand)
 local RunRuntimePollCommand = require(script.Parent.Application.Commands.RunRuntimePollCommand)
 local HydrateEntityReplicationCommand = require(script.Parent.Application.Commands.HydrateEntityReplicationCommand)
@@ -188,7 +185,6 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("RemoveCommand", RemoveCommand, "_removeCommand"),
 	moduleSpec("TickPhaseCommand", TickPhaseCommand, "_tickPhaseCommand"),
 	moduleSpec("TickAllCommand", TickAllCommand, "_tickAllCommand"),
-	moduleSpec("RegisterInstanceBindingCommand", RegisterInstanceBindingCommand, "_registerInstanceBindingCommand"),
 	moduleSpec("EnableRuntimeBindingCommand", EnableRuntimeBindingCommand, "_enableRuntimeBindingCommand"),
 	moduleSpec("EnableRuntimeSyncCommand", EnableRuntimeSyncCommand, "_enableRuntimeSyncCommand"),
 	moduleSpec("EnableRuntimeReplicationCommand", EnableRuntimeReplicationCommand, "_enableRuntimeReplicationCommand"),
@@ -198,12 +194,6 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("UnbindEntityInstanceCommand", UnbindEntityInstanceCommand, "_unbindEntityInstanceCommand"),
 	moduleSpec("QueueEntityBindCommand", QueueEntityBindCommand, "_queueEntityBindCommand"),
 	moduleSpec("FlushBindQueueCommand", FlushBindQueueCommand, "_flushBindQueueCommand"),
-	moduleSpec("RegisterSyncContributorCommand", RegisterSyncContributorCommand, "_registerSyncContributorCommand"),
-	moduleSpec(
-		"RegisterReplicationSurfaceCommand",
-		RegisterReplicationSurfaceCommand,
-		"_registerReplicationSurfaceCommand"
-	),
 	moduleSpec("RunRuntimeSyncCommand", RunRuntimeSyncCommand, "_runRuntimeSyncCommand"),
 	moduleSpec("RunRuntimePollCommand", RunRuntimePollCommand, "_runRuntimePollCommand"),
 	moduleSpec("HydrateEntityReplicationCommand", HydrateEntityReplicationCommand, "_hydrateEntityReplicationCommand"),

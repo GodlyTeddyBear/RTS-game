@@ -53,20 +53,6 @@ local CombatEntitySchema = {
 				ExpiresAt = nil,
 			},
 		},
-		DamageRequest = {
-			ECSName = "Combat.DamageRequest",
-			Authority = "AUTHORITATIVE",
-			Default = {
-				ActionId = "",
-				AbilityId = "",
-				AttackerEntity = 0,
-				VictimEntity = nil,
-				VictimKind = nil,
-				Amount = 0,
-				CreatedAt = 0,
-				Reason = "Combat",
-			},
-		},
 		HealthChangeRequest = {
 			ECSName = "Combat.HealthChangeRequest",
 			Authority = "AUTHORITATIVE",
@@ -173,14 +159,6 @@ local CombatEntitySchema = {
 		HitboxSpawnRequest = {
 			Components = {
 				HitboxSpawnRequest = true,
-			},
-			Tags = {
-				RequestTag = true,
-			},
-		},
-		DamageRequest = {
-			Components = {
-				DamageRequest = true,
 			},
 			Tags = {
 				RequestTag = true,

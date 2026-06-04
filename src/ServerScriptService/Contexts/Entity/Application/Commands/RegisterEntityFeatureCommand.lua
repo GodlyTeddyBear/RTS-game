@@ -8,6 +8,7 @@ local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplica
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
+local EntityOperationSupport = require(script.Parent.Parent.Support.EntityOperationSupport)
 
 local RegisterEntityFeatureCommand = {}
 RegisterEntityFeatureCommand.__index = RegisterEntityFeatureCommand
@@ -125,12 +126,14 @@ end
 function RegisterEntityFeatureCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_registerFeatureSchemaCommand = "RegisterFeatureSchemaCommand",
-		_registerInstanceBindingCommand = "RegisterInstanceBindingCommand",
-		_registerSyncContributorCommand = "RegisterSyncContributorCommand",
-		_registerReplicationSurfaceCommand = "RegisterReplicationSurfaceCommand",
 		_enableRuntimeBindingCommand = "EnableRuntimeBindingCommand",
 		_enableRuntimeSyncCommand = "EnableRuntimeSyncCommand",
 		_enableRuntimeReplicationCommand = "EnableRuntimeReplicationCommand",
+		_lifecycle = "EntityLifecycleStateMachine",
+		_validationService = "EntityValidationService",
+		_instanceBindingRegistry = "EntityInstanceBindingRegistry",
+		_syncContributorRegistry = "EntitySyncContributorRegistry",
+		_replicationRegistry = "EntityReplicationRegistry",
 		_schemaRegistry = "EntitySchemaRegistry",
 		_worldRegistry = "EntityWorldRegistryService",
 	})
@@ -156,18 +159,17 @@ function RegisterEntityFeatureCommand:Execute(definition: any): Result.Result<bo
 			return schemaResult
 		end
 
-		local bindingResult = self._registerInstanceBindingCommand:Execute(featureName, self:_BuildGenericBinding(featureName))
+		local bindingResult = self:_RegisterGenericBinding(featureName)
 		if not bindingResult.success and bindingResult.type ~= "DuplicateInstanceBinding" then
 			return bindingResult
 		end
 
-		local syncResult = self._registerSyncContributorCommand:Execute(featureName, self:_BuildGenericSyncContributor(featureName))
+		local syncResult = self:_RegisterGenericSyncContributor(featureName)
 		if not syncResult.success and syncResult.type ~= "DuplicateSyncContributor" then
 			return syncResult
 		end
 
-		local replicationResult =
-			self._registerReplicationSurfaceCommand:Execute(featureName, self:_BuildGenericReplicationSurface(featureName))
+		local replicationResult = self:_RegisterGenericReplicationSurface(featureName)
 		if not replicationResult.success and replicationResult.type ~= "DuplicateReplicationSurface" then
 			return replicationResult
 		end
@@ -189,6 +191,94 @@ function RegisterEntityFeatureCommand:Execute(definition: any): Result.Result<bo
 
 		return Result.Ok(true)
 	end, self:_Label())
+end
+
+function RegisterEntityFeatureCommand:_RequireRuntimeRegistrationState(methodName: string): Result.Result<boolean>
+	return EntityOperationSupport.RequireLifecycleStates(self._validationService, methodName, self._lifecycle:GetState(), {
+		"ReadyForRuntimeRegistration",
+		"RegisteringRuntime",
+	})
+end
+
+function RegisterEntityFeatureCommand:_EnsureRuntimeRegistrationStarted(): Result.Result<boolean>
+	if self._lifecycle:GetState() ~= "ReadyForRuntimeRegistration" then
+		return Result.Ok(true)
+	end
+	return self._lifecycle:BeginRuntimeRegistration()
+end
+
+function RegisterEntityFeatureCommand:_RegisterGenericBinding(featureName: string): Result.Result<any>
+	local lifecycleResult = self:_RequireRuntimeRegistrationState("RegisterEntityFeature.Binding")
+	if not lifecycleResult.success then
+		return lifecycleResult
+	end
+
+	local validationResult = self._validationService:ValidateInstanceBinding(featureName, self:_BuildGenericBinding(featureName))
+	if not validationResult.success then
+		return validationResult
+	end
+
+	local registerResult = self._instanceBindingRegistry:RegisterBinding(featureName, validationResult.value)
+	if not registerResult.success then
+		return registerResult
+	end
+
+	local transitionResult = self:_EnsureRuntimeRegistrationStarted()
+	if not transitionResult.success then
+		return transitionResult
+	end
+
+	return Result.Ok(true)
+end
+
+function RegisterEntityFeatureCommand:_RegisterGenericSyncContributor(featureName: string): Result.Result<any>
+	local lifecycleResult = self:_RequireRuntimeRegistrationState("RegisterEntityFeature.Sync")
+	if not lifecycleResult.success then
+		return lifecycleResult
+	end
+
+	local validationResult =
+		self._validationService:ValidateSyncContributor(featureName, self:_BuildGenericSyncContributor(featureName))
+	if not validationResult.success then
+		return validationResult
+	end
+
+	local registerResult = self._syncContributorRegistry:Register(featureName, validationResult.value)
+	if not registerResult.success then
+		return registerResult
+	end
+
+	local transitionResult = self:_EnsureRuntimeRegistrationStarted()
+	if not transitionResult.success then
+		return transitionResult
+	end
+
+	return Result.Ok(true)
+end
+
+function RegisterEntityFeatureCommand:_RegisterGenericReplicationSurface(featureName: string): Result.Result<any>
+	local lifecycleResult = self:_RequireRuntimeRegistrationState("RegisterEntityFeature.Replication")
+	if not lifecycleResult.success then
+		return lifecycleResult
+	end
+
+	local validationResult =
+		self._validationService:ValidateReplicationSurface(featureName, self:_BuildGenericReplicationSurface(featureName))
+	if not validationResult.success then
+		return validationResult
+	end
+
+	local registerResult = self._replicationRegistry:Register(featureName, validationResult.value)
+	if not registerResult.success then
+		return registerResult
+	end
+
+	local transitionResult = self:_EnsureRuntimeRegistrationStarted()
+	if not transitionResult.success then
+		return transitionResult
+	end
+
+	return Result.Ok(true)
 end
 
 function RegisterEntityFeatureCommand:_BuildGenericBinding(featureName: string): any

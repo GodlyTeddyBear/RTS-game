@@ -1,13 +1,13 @@
 --!strict
 
-local BaseDamageResolveSystem = {}
-BaseDamageResolveSystem.__index = BaseDamageResolveSystem
+local BaseDamageBridgeSystem = {}
+BaseDamageBridgeSystem.__index = BaseDamageBridgeSystem
 
-function BaseDamageResolveSystem.new(entityFactory: any, baseContext: any)
-	return setmetatable({ _entityFactory = entityFactory, _baseContext = baseContext }, BaseDamageResolveSystem)
+function BaseDamageBridgeSystem.new(entityFactory: any, baseContext: any)
+	return setmetatable({ _entityFactory = entityFactory, _baseContext = baseContext }, BaseDamageBridgeSystem)
 end
 
-function BaseDamageResolveSystem:Run()
+function BaseDamageBridgeSystem:Run()
 	-- READS: Combat.BaseDamageRequest [AUTHORITATIVE]
 	-- WRITES: Combat.HealthChangeRequest, Combat.ProcessedTag
 	local result = self._entityFactory:Query({ FeatureName = "Combat", Keys = { "BaseDamageRequest", "RequestTag" } })
@@ -36,7 +36,7 @@ function BaseDamageResolveSystem:Run()
 	end
 end
 
-function BaseDamageResolveSystem:_GetActiveBaseEntity(): number?
+function BaseDamageBridgeSystem:_GetActiveBaseEntity(): number?
 	local result = self._entityFactory:Query({
 		Keys = {
 			{ Key = "BaseTag", FeatureName = "Base" },
@@ -49,9 +49,9 @@ function BaseDamageResolveSystem:_GetActiveBaseEntity(): number?
 	return result.value[1]
 end
 
-function BaseDamageResolveSystem:_Get(entity: number, key: string, featureName: string): any
+function BaseDamageBridgeSystem:_Get(entity: number, key: string, featureName: string): any
 	local result = self._entityFactory:Get(entity, key, featureName)
 	return if result.success then result.value else nil
 end
 
-return BaseDamageResolveSystem
+return BaseDamageBridgeSystem
