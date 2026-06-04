@@ -31,7 +31,6 @@ local MovementSpeedStatusSystem = require(script.Parent.Infrastructure.Systems.S
 local HitboxSimulationService = require(script.Parent.Infrastructure.Services.HitboxSimulationService)
 local AttackAdvanceSystem = require(script.Parent.Infrastructure.Systems.Attack.AttackAdvanceSystem)
 local CombatRequestCleanupSystem = require(script.Parent.Infrastructure.Systems.Attack.CombatRequestCleanupSystem)
-local BaseDamageBridgeSystem = require(script.Parent.Infrastructure.Systems.Attack.BaseDamageBridgeSystem)
 local HealthChangeResolveSystem = require(script.Parent.Infrastructure.Systems.Health.HealthChangeResolveSystem)
 local HealthDepletedDispatchSystem = require(script.Parent.Infrastructure.Systems.Health.HealthDepletedDispatchSystem)
 local HealthDepletedOutcomeResolveSystem = require(script.Parent.Infrastructure.Systems.Health.HealthDepletedOutcomeResolveSystem)
@@ -143,7 +142,6 @@ local CombatContext = Knit.CreateService({
 	StartOrder = { "Infrastructure", "Application" },
 	ExternalServices = {
 		{ Name = "EntityContext", CacheAs = "_entityContext" },
-		{ Name = "BaseContext", CacheAs = "_baseContext" },
 		{ Name = "WorldContext", CacheAs = "_worldContext" },
 	},
 	Teardown = {
@@ -387,7 +385,6 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 				"Combat.HealthChangeRequest",
 				"Combat.HitboxSpawnRequest",
 				"Combat.ProjectileSpawnRequest",
-				"Combat.BaseDamageRequest",
 				"Combat.RequestTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
@@ -529,17 +526,6 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return healthChangeResult
 		end
 
-		local baseDamageResult = self._entityContext:RegisterSystem("RequestResolve", {
-			Name = "BaseDamageBridgeSystem",
-			Phase = "RequestResolve",
-			Factory = function(entityFactory: any, _compiledSchemas: any)
-				return BaseDamageBridgeSystem.new(entityFactory, self._baseContext)
-			end,
-		})
-		if not baseDamageResult.success then
-			return baseDamageResult
-		end
-
 		local healthDepletedResult = self._entityContext:RegisterSystem("OutcomeDispatch", {
 			Name = "HealthDepletedDispatchSystem",
 			Phase = "OutcomeDispatch",
@@ -590,7 +576,6 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 				"Combat.ProcessedTag",
 				"Combat.HitboxSpawnRequest",
 				"Combat.GoalReachedOutcomeRequest",
-				"Combat.BaseDamageRequest",
 				"Combat.ProjectileSpawnRequest",
 				"Combat.ActiveHitboxState",
 			},
@@ -654,34 +639,48 @@ function CombatContext:RequestDamage(payload: any): Result.Result<boolean>
 	return Catch(function()
 		local request = table.clone(payload)
 		request.CreatedAt = if type(request.CreatedAt) == "number" then request.CreatedAt else os.clock()
-		local result
-		if request.VictimKind == "Base" and type(request.VictimEntity) ~= "number" then
-			result = self._entityContext:CreateEntity("Combat.BaseDamageRequest", {
-				BaseDamageRequest = {
-					Amount = request.Amount,
-					CreatedAt = request.CreatedAt,
-					ExpiresAt = request.ExpiresAt,
-				},
-			})
-		else
-			result = self._entityContext:CreateEntity("Combat.HealthChangeRequest", {
-				HealthChangeRequest = {
-					ActionId = request.ActionId,
-					AbilityId = request.AbilityId,
-					SourceEntity = request.AttackerEntity,
-					TargetEntity = request.VictimEntity,
-					TargetKind = request.VictimKind,
-					Amount = request.Amount,
-					ChangeType = "Damage",
-					CreatedAt = request.CreatedAt,
-					ExpiresAt = request.ExpiresAt,
-					Reason = request.Reason,
-				},
+		local victimEntity = request.VictimEntity
+		if request.VictimKind == "Base" and type(victimEntity) ~= "number" then
+			victimEntity = self:_GetActiveBaseEntity()
+		end
+
+		if type(victimEntity) ~= "number" then
+			return Result.Err("MissingDamageTarget", "Damage request target entity could not be resolved", {
+				VictimKind = request.VictimKind,
 			})
 		end
+
+		local result = self._entityContext:CreateEntity("Combat.HealthChangeRequest", {
+			HealthChangeRequest = {
+				ActionId = request.ActionId,
+				AbilityId = request.AbilityId,
+				SourceEntity = request.AttackerEntity,
+				TargetEntity = victimEntity,
+				TargetKind = request.VictimKind,
+				Amount = request.Amount,
+				ChangeType = "Damage",
+				CreatedAt = request.CreatedAt,
+				ExpiresAt = request.ExpiresAt,
+				Reason = request.Reason,
+			},
+		})
 		Try(result)
 		return Ok(true)
 	end, "Combat:RequestDamage")
+end
+
+function CombatContext:_GetActiveBaseEntity(): number?
+	local result = self._entityContext:Query({
+		Keys = {
+			{ Key = "BaseTag", FeatureName = "Base" },
+			{ Key = "ActiveTag", FeatureName = "Entity" },
+		},
+	})
+	if not result.success or type(result.value) ~= "table" then
+		return nil
+	end
+
+	return result.value[1]
 end
 
 function CombatContext:RegisterMovementPresentationRule(payload: any): Result.Result<boolean>

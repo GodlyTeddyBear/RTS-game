@@ -14,7 +14,7 @@ end
 
 function EnemyGoalReachedOutcomeSystem:Run()
 	-- READS: Combat.GoalReachedOutcomeRequest, Combat.RequestTag
-	-- WRITES: Enemy.GoalReachedTag, Combat.BaseDamageRequest, Combat.ProcessedTag, Entity.DestructionQueue
+	-- WRITES: Enemy.GoalReachedTag, Combat.HealthChangeRequest, Combat.ProcessedTag, Entity.DestructionQueue
 	local result = self._entityFactory:Query({ FeatureName = "Combat", Keys = { "GoalReachedOutcomeRequest", "RequestTag" } })
 	if not result.success then
 		return
@@ -53,14 +53,37 @@ function EnemyGoalReachedOutcomeSystem:_RequestBaseDamage(entity: number)
 		return
 	end
 
+	local baseEntity = self:_GetActiveBaseEntity()
+	if type(baseEntity) ~= "number" then
+		return
+	end
+
 	local now = os.clock()
-	self._entityFactory:CreateFromArchetype("Combat.BaseDamageRequest", {
-		BaseDamageRequest = {
+	self._entityFactory:CreateFromArchetype("Combat.HealthChangeRequest", {
+		HealthChangeRequest = {
+			SourceEntity = entity,
+			TargetEntity = baseEntity,
+			TargetKind = "Base",
 			Amount = roleConfig.Damage,
+			ChangeType = "Damage",
 			CreatedAt = now,
 			ExpiresAt = now + 1,
+			Reason = "EnemyGoalReached",
 		},
 	})
+end
+
+function EnemyGoalReachedOutcomeSystem:_GetActiveBaseEntity(): number?
+	local result = self._entityFactory:Query({
+		Keys = {
+			{ Key = "BaseTag", FeatureName = "Base" },
+			{ Key = "ActiveTag", FeatureName = "Entity" },
+		},
+	})
+	if not result.success then
+		return nil
+	end
+	return result.value[1]
 end
 
 function EnemyGoalReachedOutcomeSystem:_EmitEnemyDeath(entity: number)

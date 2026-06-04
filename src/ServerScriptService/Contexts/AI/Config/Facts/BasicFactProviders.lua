@@ -36,6 +36,25 @@ local function getEntityCFrame(context: any, entity: number): CFrame?
 	return if type(transform) == "table" and typeof(transform.CFrame) == "CFrame" then transform.CFrame else nil
 end
 
+local function getActiveBaseEntity(context: any): number?
+	local entityContext = if type(context) == "table" then context.EntityContext else nil
+	if entityContext == nil or type(entityContext.Query) ~= "function" then
+		return nil
+	end
+
+	local result = entityContext:Query({
+		Keys = {
+			{ Key = "BaseTag", FeatureName = "Base" },
+			{ Key = "ActiveTag", FeatureName = "Entity" },
+		},
+	})
+	if not result.success or type(result.value) ~= "table" then
+		return nil
+	end
+
+	return result.value[1]
+end
+
 local function buildAttackTargetFacts(context: any): any
 	if type(context.Entity) ~= "number" then
 		return {}
@@ -104,7 +123,15 @@ local function buildAttackTargetFacts(context: any): any
 		and type(role.AttackRange) == "number"
 		and (baseTargetCFrame.Position - currentCFrame.Position).Magnitude <= role.AttackRange
 	then
+		local baseEntity = getActiveBaseEntity(context)
+		if type(baseEntity) ~= "number" then
+			return {
+				AdvanceData = advanceData,
+			}
+		end
+
 		return {
+			TargetEntity = baseEntity,
 			AttackTargetKind = "Base",
 			AttackData = {
 				AbilityId = "EnemyBaseAttack",

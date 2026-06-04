@@ -160,7 +160,7 @@ function EnemyContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
 			},
 			Writes = {
 				"Enemy.GoalReachedTag",
-				"Combat.BaseDamageRequest",
+				"Combat.HealthChangeRequest",
 				"Combat.ProcessedTag",
 				"Entity.DestructionQueue",
 			},

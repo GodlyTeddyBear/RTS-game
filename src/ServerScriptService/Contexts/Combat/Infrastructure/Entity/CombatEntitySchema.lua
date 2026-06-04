@@ -102,15 +102,6 @@ local CombatEntitySchema = {
 				ExpiresAt = nil,
 			},
 		},
-		BaseDamageRequest = {
-			ECSName = "Combat.BaseDamageRequest",
-			Authority = "AUTHORITATIVE",
-			Default = {
-				Amount = 0,
-				CreatedAt = 0,
-				ExpiresAt = nil,
-			},
-		},
 		ProjectileSpawnRequest = {
 			ECSName = "Combat.ProjectileSpawnRequest",
 			Authority = "AUTHORITATIVE",
@@ -191,14 +182,6 @@ local CombatEntitySchema = {
 		GoalReachedOutcomeRequest = {
 			Components = {
 				GoalReachedOutcomeRequest = true,
-			},
-			Tags = {
-				RequestTag = true,
-			},
-		},
-		BaseDamageRequest = {
-			Components = {
-				BaseDamageRequest = true,
 			},
 			Tags = {
 				RequestTag = true,

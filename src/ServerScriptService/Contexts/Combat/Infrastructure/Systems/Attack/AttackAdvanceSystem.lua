@@ -75,26 +75,23 @@ function AttackAdvanceSystem:_EmitMechanicRequest(entity: number, state: any, ab
 		common.Hitbox = ability.Hitbox
 		self._requestFactory:Create(self._entityFactory, "Combat.HitboxSpawnRequest", "HitboxSpawnRequest", common)
 	elseif ability.Mechanic == "DirectDamage" then
-		if state.TargetKind == "Base" then
-			self._requestFactory:Create(self._entityFactory, "Combat.BaseDamageRequest", "BaseDamageRequest", {
-				Amount = damage,
-				CreatedAt = now,
-				ExpiresAt = now + 1,
-			})
-		else
-			self._requestFactory:Create(self._entityFactory, "Combat.HealthChangeRequest", "HealthChangeRequest", {
-				ActionId = state.ActionId,
-				AbilityId = state.AbilityId,
-				SourceEntity = entity,
-				TargetEntity = state.TargetEntity,
-				TargetKind = state.TargetKind,
-				Amount = damage,
-				ChangeType = "Damage",
-				CreatedAt = now,
-				ExpiresAt = now + 1,
-				Reason = "AttackState",
-			})
+		if type(state.TargetEntity) ~= "number" then
+			local errorCode = if state.TargetKind == "Base" then "MissingActiveBase" else "MissingAttackTarget"
+			self:_Patch(entity, state, { Phase = "Failed", ErrorCode = errorCode, UpdatedAt = now })
+			return
 		end
+		self._requestFactory:Create(self._entityFactory, "Combat.HealthChangeRequest", "HealthChangeRequest", {
+			ActionId = state.ActionId,
+			AbilityId = state.AbilityId,
+			SourceEntity = entity,
+			TargetEntity = state.TargetEntity,
+			TargetKind = state.TargetKind,
+			Amount = damage,
+			ChangeType = "Damage",
+			CreatedAt = now,
+			ExpiresAt = now + 1,
+			Reason = "AttackState",
+		})
 	else
 		self:_Patch(entity, state, { Phase = "Failed", ErrorCode = "UnsupportedCombatMechanic", UpdatedAt = now })
 	end
