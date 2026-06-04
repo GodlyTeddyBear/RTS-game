@@ -24,14 +24,12 @@ function RegisterStructureCommand.new()
 end
 
 function RegisterStructureCommand:Init(registry: any, _name: string)
-	self:_RequireDependencies(registry, {
-		_policy = "RegisterStructurePolicy",
-		_entityContext = "EntityContext",
-		_aiContext = "AIContext",
-	})
+	self:_RequireDependency(registry, "_policy", "RegisterStructurePolicy")
 end
 
 function RegisterStructureCommand:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
+	self._aiContext = registry:Get("AIContext")
 	self._teamContext = registry:Get("TeamContext")
 end
 

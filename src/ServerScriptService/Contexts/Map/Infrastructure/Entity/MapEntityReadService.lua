@@ -15,10 +15,11 @@ function MapEntityReadService.new(entityContext: any?)
 	return self
 end
 
-function MapEntityReadService:Init(registry: any, _name: string)
-	if self._entityContext == nil then
-		self._entityContext = registry:Get("EntityContext")
-	end
+function MapEntityReadService:Configure(entityContext: any)
+	self._entityContext = entityContext
+end
+
+function MapEntityReadService:Init(_registry: any, _name: string)
 end
 
 function MapEntityReadService:GetActiveMapEntity(): number?

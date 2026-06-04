@@ -21,11 +21,11 @@ function ApplyDamageStructureCommand.new()
 end
 
 function ApplyDamageStructureCommand:Init(registry: any, _name: string)
-	self:_RequireDependencies(registry, {
-		_entityContext = "EntityContext",
-		_readService = "StructureEntityReadService",
-		_combatContext = "CombatContext",
-	})
+	self:_RequireDependency(registry, "_readService", "StructureEntityReadService")
+end
+
+function ApplyDamageStructureCommand:Start(registry: any, _name: string)
+	self._combatContext = registry:Get("CombatContext")
 end
 
 function ApplyDamageStructureCommand:Execute(entity: any, amount: number): Result.Result<boolean>

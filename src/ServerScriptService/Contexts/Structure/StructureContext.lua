@@ -76,6 +76,7 @@ local StructureContext = Knit.CreateService({
 		{ Name = "TeamContext", CacheAs = "_teamContext" },
 		{ Name = "RunContext", CacheAs = "_runContext" },
 		{ Name = "PlacementContext", CacheAs = "_placementContext" },
+		{ Name = "WorldContext", CacheAs = "_worldContext" },
 	},
 	Teardown = {
 		Before = "_BeforeDestroy",

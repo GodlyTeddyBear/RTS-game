@@ -59,11 +59,14 @@ end
 ]=]
 function CleanupBaseCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
-		_entityContext = "EntityContext",
 		_baseEntityReadService = "BaseEntityReadService",
 		_syncService = "BaseSyncService",
 		_applyDamageCommand = "ApplyDamageBaseCommand",
 	})
+end
+
+function CleanupBaseCommand:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
 end
 
 --[=[

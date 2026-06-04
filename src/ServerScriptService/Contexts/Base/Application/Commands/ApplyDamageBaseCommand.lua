@@ -38,10 +38,11 @@ end
     @param _name string -- Module name supplied by the BaseContext framework.
 ]=]
 function ApplyDamageBaseCommand:Init(registry: any, _name: string)
-	self:_RequireDependencies(registry, {
-		_baseEntityReadService = "BaseEntityReadService",
-		_combatContext = "CombatContext",
-	})
+	self:_RequireDependency(registry, "_baseEntityReadService", "BaseEntityReadService")
+end
+
+function ApplyDamageBaseCommand:Start(registry: any, _name: string)
+	self._combatContext = registry:Get("CombatContext")
 end
 
 --[=[

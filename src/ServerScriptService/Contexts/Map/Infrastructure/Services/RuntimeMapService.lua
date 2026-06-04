@@ -200,12 +200,6 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function RuntimeMapService:Init(registry: any, _name: string)
-	if self._entityContext == nil then
-		self._entityContext = registry:Get("EntityContext")
-	end
-	if self._mapEntityReadService == nil then
-		self._mapEntityReadService = registry:Get("MapEntityReadService")
-	end
 end
 
 function RuntimeMapService:Configure(entityContext: any, mapEntityReadService: any)

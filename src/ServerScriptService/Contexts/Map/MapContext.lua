@@ -21,16 +21,14 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
 		Name = "MapEntityReadService",
 		Factory = function(service: any, _baseContext: any)
-			return MapEntityReadService.new(service._entityContext)
+			return MapEntityReadService.new()
 		end,
 		CacheAs = "_mapEntityReadService",
 	},
 	{
 		Name = "RuntimeMapService",
 		Factory = function(service: any, _baseContext: any)
-			local runtimeMapService = RuntimeMapService.new()
-			runtimeMapService:Configure(service._entityContext, service._mapEntityReadService)
-			return runtimeMapService
+			return RuntimeMapService.new()
 		end,
 		CacheAs = "_runtimeMapService",
 	},
@@ -81,6 +79,8 @@ end
 ]=]
 function MapContext:KnitStart()
 	MapBaseContext:KnitStart()
+	self._mapEntityReadService:Configure(self._entityContext)
+	self._runtimeMapService:Configure(self._entityContext, self._mapEntityReadService)
 	local registrationResult = self:_RegisterEntityInfrastructure()
 	if not registrationResult.success then
 		error(("MapContext failed to register Entity infrastructure: [%s] %s"):format(

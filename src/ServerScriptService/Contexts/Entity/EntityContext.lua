@@ -6,6 +6,7 @@ local ServerStorage = game:GetService("ServerStorage")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
 local Result = require(ReplicatedStorage.Utilities.Result)
+local ModuleFactory = require(ServerStorage.Utilities.ContextUtilities.BaseContext.src.Internal.ModuleFactory)
 
 local EntityLifecycleStateMachine = require(script.Parent.Infrastructure.Services.EntityLifecycleStateMachine)
 local EntityStartupStateService = require(script.Parent.Infrastructure.Services.EntityStartupStateService)
@@ -35,6 +36,9 @@ local EntityValidationService = require(script.Parent.EntityDomain.Services.Enti
 local EntityLifecyclePolicy = require(script.Parent.EntityDomain.Policies.EntityLifecyclePolicy)
 local EntityReadinessPolicy = require(script.Parent.EntityDomain.Policies.EntityReadinessPolicy)
 local EntityRuntimeParticipationPolicy = require(script.Parent.EntityDomain.Policies.EntityRuntimeParticipationPolicy)
+local EntityOperationSupport = require(script.Parent.Application.Support.EntityOperationSupport)
+local EntityCoreSchema = require(script.Parent.Infrastructure.ECS.Schemas.EntityCoreSchema)
+local EntityProofSchema = require(script.Parent.Infrastructure.ECS.Schemas.EntityProofSchema)
 
 local InitCommand = require(script.Parent.Application.Commands.InitCommand)
 local StartCommand = require(script.Parent.Application.Commands.StartCommand)
@@ -103,6 +107,47 @@ local function moduleSpec(name: string, module: any, cacheAs: string): BaseConte
 	}
 end
 
+local function forceInitCachedModules(baseContext: any, moduleSpecs: { BaseContext.TModuleSpec })
+	for _, spec in ipairs(moduleSpecs) do
+		local cacheAs = spec.CacheAs
+		if type(cacheAs) ~= "string" or cacheAs == "" then
+			continue
+		end
+
+		local moduleInstance = baseContext._service[cacheAs]
+		if type(moduleInstance) ~= "table" then
+			continue
+		end
+
+		ModuleFactory.InitRegisteredModule(baseContext, spec.Name)
+	end
+end
+
+local function ensurePrimarySchemaRegistryReady(service: any)
+	if service._worldService ~= nil and service._worldService._initialized ~= true then
+		service._worldService:Init(service._registry, "EntityECSWorldService")
+	end
+
+	if service._schemaRegistry == nil or service._schemaRegistry._world ~= nil then
+		return
+	end
+
+	local world = nil
+	if service._worldService ~= nil and service._worldService._initialized == true then
+		world = service._worldService:GetWorld()
+	end
+
+	if world ~= nil then
+		service._schemaRegistry._world = world
+		if service._schemaRegistry._runtimeMetadataComponents == nil then
+			service._schemaRegistry:_RegisterRuntimeMetadataComponents()
+		end
+		return
+	end
+
+	service._schemaRegistry:Init(service._registry, "EntitySchemaRegistry")
+end
+
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
 		Name = "ClientSignals",
@@ -148,10 +193,14 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 }
 
 local DomainModules: { BaseContext.TModuleSpec } = {
-	{ Name = "EntityValidationService", Module = EntityValidationService },
-	{ Name = "EntityLifecyclePolicy", Module = EntityLifecyclePolicy },
-	{ Name = "EntityReadinessPolicy", Module = EntityReadinessPolicy },
-	{ Name = "EntityRuntimeParticipationPolicy", Module = EntityRuntimeParticipationPolicy },
+	{ Name = "EntityValidationService", Module = EntityValidationService, CacheAs = "_validationService" },
+	{ Name = "EntityLifecyclePolicy", Module = EntityLifecyclePolicy, CacheAs = "_lifecyclePolicy" },
+	{ Name = "EntityReadinessPolicy", Module = EntityReadinessPolicy, CacheAs = "_readinessPolicy" },
+	{
+		Name = "EntityRuntimeParticipationPolicy",
+		Module = EntityRuntimeParticipationPolicy,
+		CacheAs = "_runtimeParticipationPolicy",
+	},
 }
 
 local ApplicationModules: { BaseContext.TModuleSpec } = {
@@ -257,6 +306,13 @@ local EntityBaseContext = BaseContext.new(EntityContext)
 
 function EntityContext:KnitInit()
 	EntityBaseContext:KnitInit()
+	forceInitCachedModules(EntityBaseContext, InfrastructureModules)
+	forceInitCachedModules(EntityBaseContext, DomainModules)
+	forceInitCachedModules(EntityBaseContext, ApplicationModules)
+	ensurePrimarySchemaRegistryReady(self)
+	if self._initCommand ~= nil and self._initCommand._lifecycle == nil then
+		self._initCommand:Init(self._registry, "InitCommand")
+	end
 	local initResult = self:Init()
 	if not initResult.success then
 		error(
@@ -289,7 +345,45 @@ end
 
 function EntityContext:Init()
 	return Catch(function()
-		return self._initCommand:Execute()
+		ensurePrimarySchemaRegistryReady(self)
+
+		assert(self._lifecycle ~= nil, "EntityContext missing EntityLifecycleStateMachine during Init")
+		assert(self._schemaRegistry ~= nil, "EntityContext missing EntitySchemaRegistry during Init")
+		assert(self._validationService ~= nil, "EntityContext missing EntityValidationService during Init")
+		assert(self._schemaRegistry._world ~= nil, "EntityContext schema registry world was not initialized")
+
+		local currentState = self._lifecycle:GetState()
+		if currentState == "Uninitialized" then
+			local transitionResult = self._lifecycle:BeginECSRegistration()
+			if not transitionResult.success then
+				return transitionResult
+			end
+
+			if not self._schemaRegistry:HasFeature(EntityCoreSchema.FeatureName) then
+				local coreResult = self._schemaRegistry:RegisterCoreSchema(EntityCoreSchema)
+				if not coreResult.success then
+					return coreResult
+				end
+			end
+
+			if not self._schemaRegistry:HasFeature(EntityProofSchema.FeatureName) then
+				local proofResult =
+					self._schemaRegistry:RegisterFeatureSchema(EntityProofSchema.FeatureName, EntityProofSchema)
+				if not proofResult.success then
+					return proofResult
+				end
+			end
+
+			return Result.Ok(true)
+		end
+
+		return EntityOperationSupport.RequireLifecycleStates(self._validationService, "Init", currentState, {
+			"RegisteringECS",
+			"CompilingECS",
+			"ReadyForRuntimeRegistration",
+			"RegisteringRuntime",
+			"Running",
+		})
 	end, "EntityContext:Init")
 end
 function EntityContext:Start()

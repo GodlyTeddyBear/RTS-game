@@ -19,10 +19,11 @@ function CleanupAllCommand.new()
 end
 
 function CleanupAllCommand:Init(registry: any, _name: string)
-	self:_RequireDependencies(registry, {
-		_entityContext = "EntityContext",
-		_readService = "StructureEntityReadService",
-	})
+	self:_RequireDependency(registry, "_readService", "StructureEntityReadService")
+end
+
+function CleanupAllCommand:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
 end
 
 function CleanupAllCommand:Execute(): Result.Result<boolean>

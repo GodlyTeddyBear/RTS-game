@@ -50,13 +50,6 @@ function EntityRuntimeSchedulerService:StopRuntimeTick()
 end
 
 function EntityRuntimeSchedulerService:RunMovementScheduledTick()
-	local ensureRuntimeResult = self._entityContext:_EnsureRuntimeStarted()
-	if not ensureRuntimeResult.success then
-		self._movementRuntimeTickActive = false
-		self:_MentionTickFailure("Entity runtime startup finalization failed before movement tick", ensureRuntimeResult)
-		return
-	end
-
 	if self._lifecycle:GetState() ~= "Running" then
 		self._movementRuntimeTickActive = false
 		return
@@ -69,13 +62,6 @@ function EntityRuntimeSchedulerService:RunMovementScheduledTick()
 end
 
 function EntityRuntimeSchedulerService:RunScheduledTick()
-	local ensureRuntimeResult = self._entityContext:_EnsureRuntimeStarted()
-	if not ensureRuntimeResult.success then
-		self._runtimeTickActive = false
-		self:_MentionTickFailure("Entity runtime startup finalization failed", ensureRuntimeResult)
-		return
-	end
-
 	if self._lifecycle:GetState() ~= "Running" then
 		self._runtimeTickActive = false
 		return

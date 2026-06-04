@@ -75,6 +75,16 @@ local RenderContext = Knit.CreateService({
 
 local RenderBaseContext = BaseContext.new(RenderContext)
 
+local function getRenderAssetService(service: any)
+	if service._renderAssetService ~= nil then
+		return service._renderAssetService
+	end
+
+	local fallback = RenderAssetService.new()
+	service._renderAssetService = fallback
+	return fallback
+end
+
 function RenderContext:KnitInit()
 	RenderBaseContext:KnitInit()
 end
@@ -104,23 +114,23 @@ function RenderContext:GetRegistrySoA(): Result.Result<any>
 end
 
 function RenderContext:GetAssetsRoot(): Result.Result<Folder?>
-	return Ok(self._renderAssetService:GetAssetsRoot())
+	return Ok(getRenderAssetService(self):GetAssetsRoot())
 end
 
 function RenderContext:ResolveAsset(familyId: any, key: string, options: any): Result.Result<any>
-	return Ok(self._renderAssetService:ResolveAsset(familyId, key, options))
+	return Ok(getRenderAssetService(self):ResolveAsset(familyId, key, options))
 end
 
 function RenderContext:AssetExists(familyId: any, key: string, options: any): Result.Result<boolean>
-	return Ok(self._renderAssetService:AssetExists(familyId, key, options))
+	return Ok(getRenderAssetService(self):AssetExists(familyId, key, options))
 end
 
 function RenderContext:GetStructureModel(structureType: string, options: any): Result.Result<Model?>
-	return Ok(self._renderAssetService:GetStructureModel(structureType, options))
+	return Ok(getRenderAssetService(self):GetStructureModel(structureType, options))
 end
 
 function RenderContext:StructureModelExists(structureType: string, options: any): Result.Result<boolean>
-	return Ok(self._renderAssetService:StructureModelExists(structureType, options))
+	return Ok(getRenderAssetService(self):StructureModelExists(structureType, options))
 end
 
 function RenderContext:GetAnimationClip(
@@ -128,7 +138,7 @@ function RenderContext:GetAnimationClip(
 	variant: string?,
 	options: any
 ): Result.Result<Animation?>
-	return Ok(self._renderAssetService:GetAnimationClip(actionPath, variant, options))
+	return Ok(getRenderAssetService(self):GetAnimationClip(actionPath, variant, options))
 end
 
 function RenderContext:AnimationClipExists(
@@ -136,67 +146,67 @@ function RenderContext:AnimationClipExists(
 	variant: string?,
 	options: any
 ): Result.Result<boolean>
-	return Ok(self._renderAssetService:AnimationClipExists(actionPath, variant, options))
+	return Ok(getRenderAssetService(self):AnimationClipExists(actionPath, variant, options))
 end
 
 function RenderContext:GetAllAnimationClips(actionPath: string, options: any): Result.Result<{ [string]: Animation }>
-	return Ok(self._renderAssetService:GetAllAnimationClips(actionPath, options))
+	return Ok(getRenderAssetService(self):GetAllAnimationClips(actionPath, options))
 end
 
 function RenderContext:GetSkillEffect(effectKey: string, options: any): Result.Result<Folder | Model?>
-	return Ok(self._renderAssetService:GetSkillEffect(effectKey, options))
+	return Ok(getRenderAssetService(self):GetSkillEffect(effectKey, options))
 end
 
 function RenderContext:SkillEffectExists(effectKey: string, options: any): Result.Result<boolean>
-	return Ok(self._renderAssetService:SkillEffectExists(effectKey, options))
+	return Ok(getRenderAssetService(self):SkillEffectExists(effectKey, options))
 end
 
 function RenderContext:GetStatusEffect(effectKey: string, options: any): Result.Result<Folder | Model?>
-	return Ok(self._renderAssetService:GetStatusEffect(effectKey, options))
+	return Ok(getRenderAssetService(self):GetStatusEffect(effectKey, options))
 end
 
 function RenderContext:StatusEffectExists(effectKey: string, options: any): Result.Result<boolean>
-	return Ok(self._renderAssetService:StatusEffectExists(effectKey, options))
+	return Ok(getRenderAssetService(self):StatusEffectExists(effectKey, options))
 end
 
 function RenderContext:GetCombatSound(soundPath: string, options: any): Result.Result<Sound?>
-	return Ok(self._renderAssetService:GetCombatSound(soundPath, options))
+	return Ok(getRenderAssetService(self):GetCombatSound(soundPath, options))
 end
 
 function RenderContext:CombatSoundExists(soundPath: string, options: any): Result.Result<boolean>
-	return Ok(self._renderAssetService:CombatSoundExists(soundPath, options))
+	return Ok(getRenderAssetService(self):CombatSoundExists(soundPath, options))
 end
 
 function RenderContext:GetUISound(soundPath: string, options: any): Result.Result<Sound?>
-	return Ok(self._renderAssetService:GetUISound(soundPath, options))
+	return Ok(getRenderAssetService(self):GetUISound(soundPath, options))
 end
 
 function RenderContext:UISoundExists(soundPath: string, options: any): Result.Result<boolean>
-	return Ok(self._renderAssetService:UISoundExists(soundPath, options))
+	return Ok(getRenderAssetService(self):UISoundExists(soundPath, options))
 end
 
 function RenderContext:GetToolModel(assetId: string, options: any): Result.Result<Model?>
-	return Ok(self._renderAssetService:GetToolModel(assetId, options))
+	return Ok(getRenderAssetService(self):GetToolModel(assetId, options))
 end
 
 function RenderContext:ToolModelExists(assetId: string, options: any): Result.Result<boolean>
-	return Ok(self._renderAssetService:ToolModelExists(assetId, options))
+	return Ok(getRenderAssetService(self):ToolModelExists(assetId, options))
 end
 
 function RenderContext:GetArmorModel(assetId: string, options: any): Result.Result<Model?>
-	return Ok(self._renderAssetService:GetArmorModel(assetId, options))
+	return Ok(getRenderAssetService(self):GetArmorModel(assetId, options))
 end
 
 function RenderContext:ArmorModelExists(assetId: string, options: any): Result.Result<boolean>
-	return Ok(self._renderAssetService:ArmorModelExists(assetId, options))
+	return Ok(getRenderAssetService(self):ArmorModelExists(assetId, options))
 end
 
 function RenderContext:GetAccessoryModel(assetId: string, options: any): Result.Result<Model?>
-	return Ok(self._renderAssetService:GetAccessoryModel(assetId, options))
+	return Ok(getRenderAssetService(self):GetAccessoryModel(assetId, options))
 end
 
 function RenderContext:AccessoryModelExists(assetId: string, options: any): Result.Result<boolean>
-	return Ok(self._renderAssetService:AccessoryModelExists(assetId, options))
+	return Ok(getRenderAssetService(self):AccessoryModelExists(assetId, options))
 end
 
 function RenderContext.Client:RequestRenderRegistryBootstrap(player: Player): boolean

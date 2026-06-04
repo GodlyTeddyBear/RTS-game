@@ -18,8 +18,15 @@ function AIEntityDecisionEvaluator.new()
 end
 
 function AIEntityDecisionEvaluator:Init(registry: any, _name: string)
-	self._entityContext = registry:Get("EntityContext")
+	self._registry = registry
+	if registry ~= nil and type(registry) == "table" and type(registry.Modules) == "table" then
+		self._entityContext = registry.Modules.EntityContext
+	end
 	self._behaviorRegistry = registry:Get("AIBehaviorDefinitionRegistry")
+end
+
+function AIEntityDecisionEvaluator:Configure(entityContext: any)
+	self._entityContext = entityContext
 end
 
 function AIEntityDecisionEvaluator:Evaluate(
@@ -27,6 +34,8 @@ function AIEntityDecisionEvaluator:Evaluate(
 	options: TAIEntityEvaluationOptions?
 ): Result.Result<TAIEntityEvaluationResult>
 	return Result.Catch(function()
+		self:_EnsureEntityContext()
+
 		local now = self:_ResolveNow(options)
 		local entityResult = self:_EnsureEntityExists(entity)
 		if not entityResult.success then
@@ -94,6 +103,14 @@ function AIEntityDecisionEvaluator:Evaluate(
 			BehaviorId = self:_ResolveCurrentBehaviorId(components.CurrentBehavior),
 		})
 	end, "AIEntityDecisionEvaluator:Evaluate")
+end
+
+function AIEntityDecisionEvaluator:_EnsureEntityContext()
+	if self._entityContext ~= nil then
+		return
+	end
+	assert(self._registry ~= nil, "AIEntityDecisionEvaluator missing registry for EntityContext resolution")
+	self._entityContext = self._registry:Get("EntityContext")
 end
 
 function AIEntityDecisionEvaluator:_ResolveNow(options: TAIEntityEvaluationOptions?): number

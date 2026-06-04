@@ -28,7 +28,10 @@ function EquipmentAttachmentService.new()
 	return self
 end
 
-function EquipmentAttachmentService:Init(registry: any, _name: string)
+function EquipmentAttachmentService:Init(_registry: any, _name: string)
+end
+
+function EquipmentAttachmentService:Start(registry: any, _name: string)
 	self._renderContext = registry:Get("RenderContext")
 end
 

@@ -30,6 +30,8 @@ end
 function EnableRuntimeReplicationCommand:Execute(featureName: string): Result.Result<any>
 	return Result.Catch(function()
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(self._validationService, "EnableRuntimeReplication", self._lifecycle:GetState(), {
+			"RegisteringECS",
+			"CompilingECS",
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",
 			"Running",

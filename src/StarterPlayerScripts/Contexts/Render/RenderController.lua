@@ -13,14 +13,27 @@ local RenderController = Knit.CreateController({
 	Name = "RenderController",
 })
 
+function RenderController:_EnsureInitialized()
+	if self._renderAssetClientService == nil then
+		self._renderAssetClientService = RenderAssetClientService.new()
+	end
+	if self._renderRegistryClientService == nil then
+		self._renderRegistryClientService = RenderRegistryClientService.new()
+	end
+	if self._renderProfileService == nil then
+		self._renderProfileService = RenderProfileService.new(self._renderRegistryClientService)
+	end
+	if self._renderVisualReplacementService == nil then
+		self._renderVisualReplacementService = RenderVisualReplacementService.new(self._renderRegistryClientService)
+	end
+end
+
 function RenderController:KnitInit()
-	self._renderAssetClientService = RenderAssetClientService.new()
-	self._renderRegistryClientService = RenderRegistryClientService.new()
-	self._renderProfileService = RenderProfileService.new(self._renderRegistryClientService)
-	self._renderVisualReplacementService = RenderVisualReplacementService.new(self._renderRegistryClientService)
+	self:_EnsureInitialized()
 end
 
 function RenderController:KnitStart()
+	self:_EnsureInitialized()
 	self._renderRegistryClientService:Start()
 	self._renderProfileService:Start()
 	self._renderVisualReplacementService:Start()
@@ -56,90 +69,112 @@ function RenderController:Destroy()
 end
 
 function RenderController:GetAssetsRoot(): Folder?
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:GetAssetsRoot()
 end
 
 function RenderController:ResolveAsset(familyId: any, key: string, options: any)
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:ResolveAsset(familyId, key, options)
 end
 
 function RenderController:AssetExists(familyId: any, key: string, options: any): boolean
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:AssetExists(familyId, key, options)
 end
 
 function RenderController:GetStructureModel(structureType: string, options: any): Model?
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:GetStructureModel(structureType, options)
 end
 
 function RenderController:StructureModelExists(structureType: string, options: any): boolean
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:StructureModelExists(structureType, options)
 end
 
 function RenderController:GetAnimationClip(actionPath: string, variant: string?, options: any): Animation?
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:GetAnimationClip(actionPath, variant, options)
 end
 
 function RenderController:AnimationClipExists(actionPath: string, variant: string?, options: any): boolean
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:AnimationClipExists(actionPath, variant, options)
 end
 
 function RenderController:GetAllAnimationClips(actionPath: string, options: any): { [string]: Animation }
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:GetAllAnimationClips(actionPath, options)
 end
 
 function RenderController:GetSkillEffect(effectKey: string, options: any): Folder | Model?
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:GetSkillEffect(effectKey, options)
 end
 
 function RenderController:SkillEffectExists(effectKey: string, options: any): boolean
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:SkillEffectExists(effectKey, options)
 end
 
 function RenderController:GetStatusEffect(effectKey: string, options: any): Folder | Model?
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:GetStatusEffect(effectKey, options)
 end
 
 function RenderController:StatusEffectExists(effectKey: string, options: any): boolean
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:StatusEffectExists(effectKey, options)
 end
 
 function RenderController:GetCombatSound(soundPath: string, options: any): Sound?
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:GetCombatSound(soundPath, options)
 end
 
 function RenderController:CombatSoundExists(soundPath: string, options: any): boolean
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:CombatSoundExists(soundPath, options)
 end
 
 function RenderController:GetUISound(soundPath: string, options: any): Sound?
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:GetUISound(soundPath, options)
 end
 
 function RenderController:UISoundExists(soundPath: string, options: any): boolean
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:UISoundExists(soundPath, options)
 end
 
 function RenderController:GetToolModel(assetId: string, options: any): Model?
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:GetToolModel(assetId, options)
 end
 
 function RenderController:ToolModelExists(assetId: string, options: any): boolean
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:ToolModelExists(assetId, options)
 end
 
 function RenderController:GetArmorModel(assetId: string, options: any): Model?
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:GetArmorModel(assetId, options)
 end
 
 function RenderController:ArmorModelExists(assetId: string, options: any): boolean
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:ArmorModelExists(assetId, options)
 end
 
 function RenderController:GetAccessoryModel(assetId: string, options: any): Model?
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:GetAccessoryModel(assetId, options)
 end
 
 function RenderController:AccessoryModelExists(assetId: string, options: any): boolean
+	self:_EnsureInitialized()
 	return self._renderAssetClientService:AccessoryModelExists(assetId, options)
 end
 

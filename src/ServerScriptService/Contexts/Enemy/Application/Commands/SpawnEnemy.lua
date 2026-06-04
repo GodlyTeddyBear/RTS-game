@@ -29,15 +29,13 @@ function SpawnEnemy.new()
 end
 
 function SpawnEnemy:Init(registry: any, _name: string)
-	self:_RequireDependencies(registry, {
-		_spawnPolicy = "EnemySpawnPolicy",
-		_entityContext = "EntityContext",
-		_aiContext = "AIContext",
-		_combatContext = "CombatContext",
-	})
+	self:_RequireDependency(registry, "_spawnPolicy", "EnemySpawnPolicy")
 end
 
 function SpawnEnemy:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
+	self._aiContext = registry:Get("AIContext")
+	self._combatContext = registry:Get("CombatContext")
 	self._teamContext = registry:Get("TeamContext")
 end
 

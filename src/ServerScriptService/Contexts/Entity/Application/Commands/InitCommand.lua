@@ -19,15 +19,25 @@ function InitCommand.new()
 end
 
 function InitCommand:Init(registry: any, _name: string)
+	self._registry = registry
 	self:_RequireDependencies(registry, {
 		_lifecycle = "EntityLifecycleStateMachine",
 		_schemaRegistry = "EntitySchemaRegistry",
 		_validationService = "EntityValidationService",
 	})
+	assert(self._lifecycle ~= nil, "Entity.InitCommand missing EntityLifecycleStateMachine")
+	assert(self._schemaRegistry ~= nil, "Entity.InitCommand missing EntitySchemaRegistry")
+	assert(self._validationService ~= nil, "Entity.InitCommand missing EntityValidationService")
 end
 
 function InitCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
+		self:_EnsureDependencies()
+
+		assert(self._lifecycle ~= nil, "Entity.InitCommand executed without EntityLifecycleStateMachine")
+		assert(self._schemaRegistry ~= nil, "Entity.InitCommand executed without EntitySchemaRegistry")
+		assert(self._validationService ~= nil, "Entity.InitCommand executed without EntityValidationService")
+
 		local currentState = self._lifecycle:GetState()
 		if currentState == "Uninitialized" then
 			local transitionResult = self._lifecycle:BeginECSRegistration()
@@ -51,6 +61,15 @@ function InitCommand:Execute(): Result.Result<boolean>
 			"Running",
 		})
 	end, self:_Label())
+end
+
+function InitCommand:_EnsureDependencies()
+	if self._lifecycle ~= nil and self._schemaRegistry ~= nil and self._validationService ~= nil then
+		return
+	end
+
+	assert(self._registry ~= nil, "Entity.InitCommand missing registry for dependency recovery")
+	self:Init(self._registry, "InitCommand")
 end
 
 function InitCommand:_RegisterBuiltInSchemas(): Result.Result<boolean>

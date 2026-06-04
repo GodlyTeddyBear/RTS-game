@@ -26,11 +26,11 @@ function ApplyDamageEnemy.new()
 end
 
 function ApplyDamageEnemy:Init(registry: any, _name: string)
-	self:_RequireDependencies(registry, {
-		_entityContext = "EntityContext",
-		_enemyEntityReadService = "EnemyEntityReadService",
-		_combatContext = "CombatContext",
-	})
+	self:_RequireDependency(registry, "_enemyEntityReadService", "EnemyEntityReadService")
+end
+
+function ApplyDamageEnemy:Start(registry: any, _name: string)
+	self._combatContext = registry:Get("CombatContext")
 end
 
 function ApplyDamageEnemy:Execute(entity: any, amount: number): Result.Result<boolean>

@@ -24,10 +24,11 @@ function AdvanceConstructionCommand.new()
 end
 
 function AdvanceConstructionCommand:Init(registry: any, _name: string)
-	self:_RequireDependencies(registry, {
-		_entityContext = "EntityContext",
-		_readService = "StructureEntityReadService",
-	})
+	self:_RequireDependency(registry, "_readService", "StructureEntityReadService")
+end
+
+function AdvanceConstructionCommand:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
 end
 
 function AdvanceConstructionCommand:Execute(entity: number, workAmount: number): Result.Result<TConstructionContributionResult>

@@ -45,10 +45,11 @@ end
     @param _name string -- The registered module name.
 ]=]
 function RegisterExtractorCommand:Init(registry: any, _name: string)
-	self:_RequireDependencies(registry, {
-		_entityContext = "EntityContext",
-		_readService = "MiningEntityReadService",
-	})
+	self:_RequireDependency(registry, "_readService", "MiningEntityReadService")
+end
+
+function RegisterExtractorCommand:Start(registry: any, _name: string)
+	self:_RequireDependency(registry, "_entityContext", "EntityContext")
 end
 
 -- Validates a placement record and registers an extractor when the structure matches the mining extractor type.

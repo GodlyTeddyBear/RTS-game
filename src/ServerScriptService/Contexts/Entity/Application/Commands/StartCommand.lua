@@ -40,7 +40,9 @@ function StartCommand:Execute(): Result.Result<boolean>
 			return lifecycleResult
 		end
 
-		self._runtimeScheduler:BindSchedulerTick()
+		task.defer(function()
+			self._runtimeScheduler:BindSchedulerTick()
+		end)
 		self._startupState:ClearLastStartupFailure()
 		return Result.Ok(true)
 	end, self:_Label())

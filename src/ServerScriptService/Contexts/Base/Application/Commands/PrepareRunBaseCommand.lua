@@ -62,7 +62,6 @@ end
 ]=]
 function PrepareRunBaseCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
-		_entityContext = "EntityContext",
 		_baseEntityReadService = "BaseEntityReadService",
 		_syncService = "BaseSyncService",
 	})
@@ -75,6 +74,7 @@ end
     @param _name string -- Module name supplied by the BaseContext framework.
 ]=]
 function PrepareRunBaseCommand:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
 	self:_RequireDependency(registry, "_mapContext", "MapContext")
 end
 

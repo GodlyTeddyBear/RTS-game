@@ -195,6 +195,8 @@ end
 
 function RegisterEntityFeatureCommand:_RequireRuntimeRegistrationState(methodName: string): Result.Result<boolean>
 	return EntityOperationSupport.RequireLifecycleStates(self._validationService, methodName, self._lifecycle:GetState(), {
+		"RegisteringECS",
+		"CompilingECS",
 		"ReadyForRuntimeRegistration",
 		"RegisteringRuntime",
 	})

@@ -86,7 +86,7 @@ local AIContext = Knit.CreateService({
 	Modules = AIModules,
 	StartOrder = { "Infrastructure", "Domain", "Application" },
 	ExternalServices = {
-		{ Name = "EntityContext" },
+		{ Name = "EntityContext", CacheAs = "_entityContext" },
 	},
 })
 
@@ -102,6 +102,9 @@ end
 
 function AIContext:KnitStart()
 	AIBaseContext:KnitStart()
+	if self._decisionEvaluator ~= nil and type(self._decisionEvaluator.Configure) == "function" then
+		self._decisionEvaluator:Configure(self._entityContext)
+	end
 
 	local schemaResult = self:_RegisterEntitySchema()
 	if not schemaResult.success then

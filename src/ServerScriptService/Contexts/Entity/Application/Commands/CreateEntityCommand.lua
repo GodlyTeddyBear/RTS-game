@@ -21,11 +21,19 @@ function CreateEntityCommand:Init(registry: any, _name: string)
 		_validationService = "EntityValidationService",
 		_entityFactory = "EntityEntityFactory",
 		_worldRegistry = "EntityWorldRegistryService",
+		_finalizeStartupCommand = "FinalizeStartupCommand",
 	})
 end
 
 function CreateEntityCommand:Execute(archetypeNameOrWorldName: string, payloadOrArchetypeName: any?, maybePayload: any?): Result.Result<any>
 	return Result.Catch(function()
+		if self._lifecycle:GetState() ~= "Running" then
+			local finalizeResult = self._finalizeStartupCommand:Execute()
+			if not finalizeResult.success then
+				return finalizeResult
+			end
+		end
+
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(self._validationService, "CreateEntity", self._lifecycle:GetState(), {
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",

@@ -26,10 +26,11 @@ function DespawnEnemy.new()
 end
 
 function DespawnEnemy:Init(registry: any, _name: string)
-	self:_RequireDependencies(registry, {
-		_entityContext = "EntityContext",
-		_enemyEntityReadService = "EnemyEntityReadService",
-	})
+	self:_RequireDependency(registry, "_enemyEntityReadService", "EnemyEntityReadService")
+end
+
+function DespawnEnemy:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
 end
 
 function DespawnEnemy:Execute(entity: any): Result.Result<boolean>
