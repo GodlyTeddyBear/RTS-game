@@ -20,6 +20,7 @@ function CompileECSKernelCommand:Init(registry: any, _name: string)
 		_lifecycle = "EntityLifecycleStateMachine",
 		_schemaRegistry = "EntitySchemaRegistry",
 		_systemRegistry = "EntitySystemRegistry",
+		_worldRegistry = "EntityWorldRegistryService",
 		_lifecyclePolicy = "EntityLifecyclePolicy",
 	})
 end
@@ -38,6 +39,11 @@ function CompileECSKernelCommand:Execute(): Result.Result<boolean>
 				return beginCompileResult
 			end
 
+			local scopedBeginResult = self._worldRegistry:BeginCompileSecondaryWorlds()
+			if not scopedBeginResult.success then
+				return scopedBeginResult
+			end
+
 			currentState = self._lifecycle:GetState()
 		end
 
@@ -45,6 +51,11 @@ function CompileECSKernelCommand:Execute(): Result.Result<boolean>
 			local compileResult = self._schemaRegistry:ValidateReady()
 			if not compileResult.success then
 				return compileResult
+			end
+
+			local scopedValidateResult = self._worldRegistry:ValidateSecondaryWorldsReady()
+			if not scopedValidateResult.success then
+				return scopedValidateResult
 			end
 
 			local closeSystemResult = self._systemRegistry:CloseRegistration()
@@ -55,6 +66,11 @@ function CompileECSKernelCommand:Execute(): Result.Result<boolean>
 			local finalizeResult = self._schemaRegistry:FinalizeCompile()
 			if not finalizeResult.success then
 				return finalizeResult
+			end
+
+			local scopedFinalizeResult = self._worldRegistry:FinalizeCompileSecondaryWorlds()
+			if not scopedFinalizeResult.success then
+				return scopedFinalizeResult
 			end
 
 			local kernelReadyResult = self._lifecyclePolicy:ValidateKernelReady(self._schemaRegistry, self._systemRegistry)

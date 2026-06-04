@@ -25,6 +25,7 @@ local EntityRuntimeParticipationService =
 	require(script.Parent.Infrastructure.Services.EntityRuntimeParticipationService)
 local EntityRuntimeSnapshotBuilder = require(script.Parent.Infrastructure.Services.EntityRuntimeSnapshotBuilder)
 local EntityCleanupOutcomeService = require(script.Parent.Infrastructure.Services.EntityCleanupOutcomeService)
+local EntityWorldRegistryService = require(script.Parent.Infrastructure.Services.EntityWorldRegistryService)
 local EntityLifetimeExpirySystem = require(script.Parent.Infrastructure.Systems.EntityLifetimeExpirySystem)
 
 local EntityValidationService = require(script.Parent.EntityDomain.Services.EntityValidationService)
@@ -125,6 +126,7 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("EntityStartupStateService", EntityStartupStateService, "_startupState"),
 	moduleSpec("EntitySchemaRegistry", EntitySchemaRegistry, "_schemaRegistry"),
 	moduleSpec("EntityEntityFactory", EntityEntityFactory, "_entityFactory"),
+	moduleSpec("EntityWorldRegistryService", EntityWorldRegistryService, "_worldRegistry"),
 	moduleSpec("EntityInstanceBindingRegistry", EntityInstanceBindingRegistry, "_instanceBindingRegistry"),
 	moduleSpec("EntityRevealService", EntityRevealService, "_revealService"),
 	moduleSpec("EntityRuntimeSnapshotBuilder", EntityRuntimeSnapshotBuilder, "_runtimeSnapshotBuilder"),
@@ -335,9 +337,9 @@ function EntityContext:RunOperationalProof()
 		return self._runOperationalProofCommand:Execute()
 	end, "EntityContext:RunOperationalProof")
 end
-function EntityContext:RegisterFeatureSchema(featureName: string, schema: any)
+function EntityContext:RegisterFeatureSchema(featureNameOrWorldName: string, schemaOrFeatureName: any, maybeSchema: any?)
 	return Catch(function()
-		return self._registerFeatureSchemaCommand:Execute(featureName, schema)
+		return self._registerFeatureSchemaCommand:Execute(featureNameOrWorldName, schemaOrFeatureName, maybeSchema)
 	end, "EntityContext:RegisterFeatureSchema")
 end
 function EntityContext:RegisterEntityFeature(definition: any)
@@ -350,14 +352,14 @@ function EntityContext:RegisterSystem(phaseName: string, systemSpec: any)
 		return self._registerSystemCommand:Execute(phaseName, systemSpec)
 	end, "EntityContext:RegisterSystem")
 end
-function EntityContext:CreateEntity(archetypeName: string, payload: any?)
+function EntityContext:CreateEntity(archetypeNameOrWorldName: string, payloadOrArchetypeName: any?, maybePayload: any?)
 	return Catch(function()
-		return self._createEntityCommand:Execute(archetypeName, payload)
+		return self._createEntityCommand:Execute(archetypeNameOrWorldName, payloadOrArchetypeName, maybePayload)
 	end, "EntityContext:CreateEntity")
 end
-function EntityContext:DestroyEntity(entity: number)
+function EntityContext:DestroyEntity(entityOrWorldName: any, maybeEntity: number?)
 	return Catch(function()
-		return self._destroyEntityCommand:Execute(entity)
+		return self._destroyEntityCommand:Execute(entityOrWorldName, maybeEntity)
 	end, "EntityContext:DestroyEntity")
 end
 function EntityContext:MarkForDestruction(entity: number)
@@ -370,19 +372,19 @@ function EntityContext:FlushDestructionQueue()
 		return self._flushDestructionQueueCommand:Execute()
 	end, "EntityContext:FlushDestructionQueue")
 end
-function EntityContext:Set(entity: number, key: string, value: any, featureName: string?)
+function EntityContext:Set(entityOrWorldName: any, keyOrEntity: any, valueOrKey: any, featureNameOrValue: any?, maybeFeatureName: string?)
 	return Catch(function()
-		return self._setCommand:Execute(entity, key, value, featureName)
+		return self._setCommand:Execute(entityOrWorldName, keyOrEntity, valueOrKey, featureNameOrValue, maybeFeatureName)
 	end, "EntityContext:Set")
 end
-function EntityContext:Add(entity: number, key: string, featureName: string?)
+function EntityContext:Add(entityOrWorldName: any, keyOrEntity: any, featureNameOrKey: any?, maybeFeatureName: string?)
 	return Catch(function()
-		return self._addCommand:Execute(entity, key, featureName)
+		return self._addCommand:Execute(entityOrWorldName, keyOrEntity, featureNameOrKey, maybeFeatureName)
 	end, "EntityContext:Add")
 end
-function EntityContext:Remove(entity: number, key: string, featureName: string?)
+function EntityContext:Remove(entityOrWorldName: any, keyOrEntity: any, featureNameOrKey: any?, maybeFeatureName: string?)
 	return Catch(function()
-		return self._removeCommand:Execute(entity, key, featureName)
+		return self._removeCommand:Execute(entityOrWorldName, keyOrEntity, featureNameOrKey, maybeFeatureName)
 	end, "EntityContext:Remove")
 end
 function EntityContext:TickPhase(phaseName: string)
@@ -495,24 +497,24 @@ function EntityContext:RunAcceptanceCheck()
 		return self._runAcceptanceCheckQuery:Execute()
 	end, "EntityContext:RunAcceptanceCheck")
 end
-function EntityContext:Get(entity: number, key: string, featureName: string?)
+function EntityContext:Get(entityOrWorldName: any, keyOrEntity: any, featureNameOrKey: any?, maybeFeatureName: string?)
 	return Catch(function()
-		return self._getEntityValueQuery:Execute(entity, key, featureName)
+		return self._getEntityValueQuery:Execute(entityOrWorldName, keyOrEntity, featureNameOrKey, maybeFeatureName)
 	end, "EntityContext:Get")
 end
-function EntityContext:Has(entity: number, key: string, featureName: string?)
+function EntityContext:Has(entityOrWorldName: any, keyOrEntity: any, featureNameOrKey: any?, maybeFeatureName: string?)
 	return Catch(function()
-		return self._hasEntityKeyQuery:Execute(entity, key, featureName)
+		return self._hasEntityKeyQuery:Execute(entityOrWorldName, keyOrEntity, featureNameOrKey, maybeFeatureName)
 	end, "EntityContext:Has")
 end
-function EntityContext:Query(querySpec: any)
+function EntityContext:Query(querySpecOrWorldName: any, maybeQuerySpec: any?)
 	return Catch(function()
-		return self._queryEntitiesQuery:Execute(querySpec)
+		return self._queryEntitiesQuery:Execute(querySpecOrWorldName, maybeQuerySpec)
 	end, "EntityContext:Query")
 end
-function EntityContext:GetWorld()
+function EntityContext:GetWorld(worldName: string?)
 	return Catch(function()
-		return self._getWorldQuery:Execute()
+		return self._getWorldQuery:Execute(worldName)
 	end, "EntityContext:GetWorld")
 end
 function EntityContext:GetFeatureComponents(featureName: string)

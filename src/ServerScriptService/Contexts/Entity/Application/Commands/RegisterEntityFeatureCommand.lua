@@ -132,6 +132,7 @@ function RegisterEntityFeatureCommand:Init(registry: any, _name: string)
 		_enableRuntimeSyncCommand = "EnableRuntimeSyncCommand",
 		_enableRuntimeReplicationCommand = "EnableRuntimeReplicationCommand",
 		_schemaRegistry = "EntitySchemaRegistry",
+		_worldRegistry = "EntityWorldRegistryService",
 	})
 end
 
@@ -140,6 +141,15 @@ function RegisterEntityFeatureCommand:Execute(definition: any): Result.Result<bo
 		assert(type(definition) == "table", "Invalid entity feature definition")
 		local featureName = definition.FeatureName
 		assert(type(featureName) == "string" and featureName ~= "", "Invalid entity feature name")
+		local worldName = self._worldRegistry:NormalizeWorldName(definition.World)
+
+		if not self._worldRegistry:IsDefaultWorld(worldName) then
+			local schemaResult = self._registerFeatureSchemaCommand:Execute(worldName, featureName, definition.Schema)
+			if not schemaResult.success and schemaResult.type ~= "DuplicateFeatureSchema" then
+				return schemaResult
+			end
+			return Result.Ok(true)
+		end
 
 		local schemaResult = self._registerFeatureSchemaCommand:Execute(featureName, definition.Schema)
 		if not schemaResult.success and schemaResult.type ~= "DuplicateFeatureSchema" then

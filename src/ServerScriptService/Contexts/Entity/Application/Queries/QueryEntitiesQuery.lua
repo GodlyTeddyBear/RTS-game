@@ -20,10 +20,11 @@ function QueryEntitiesQuery:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_lifecycle = "EntityLifecycleStateMachine",
 		_entityFactory = "EntityEntityFactory",
+		_worldRegistry = "EntityWorldRegistryService",
 	})
 end
 
-function QueryEntitiesQuery:Execute(querySpec: any): Result.Result<any>
+function QueryEntitiesQuery:Execute(querySpecOrWorldName: any, maybeQuerySpec: any?): Result.Result<any>
 	return Result.Catch(function()
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(nil, "Query", self._lifecycle:GetState(), {
 			"RegisteringECS",
@@ -36,13 +37,28 @@ function QueryEntitiesQuery:Execute(querySpec: any): Result.Result<any>
 			return lifecycleResult
 		end
 
+		local worldName = self._worldRegistry:GetDefaultWorldName()
+		local querySpec = querySpecOrWorldName
+		if type(querySpecOrWorldName) == "string" and maybeQuerySpec ~= nil then
+			worldName = querySpecOrWorldName
+			querySpec = maybeQuerySpec
+		end
+
 		if type(querySpec) ~= "string" and type(querySpec) ~= "table" then
 			return Result.Err("InvalidQuery", Errors.INVALID_QUERY, {
 				QuerySpec = querySpec,
 			})
 		end
 
-		return self._entityFactory:Query(querySpec)
+		if self._worldRegistry:IsDefaultWorld(worldName) then
+			return self._entityFactory:Query(querySpec)
+		end
+
+		local factoryResult = self._worldRegistry:GetEntityFactory(worldName)
+		if not factoryResult.success then
+			return factoryResult
+		end
+		return factoryResult.value:Query(querySpec)
 	end, self:_Label())
 end
 

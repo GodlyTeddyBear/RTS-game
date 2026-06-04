@@ -19,10 +19,11 @@ function GetWorldQuery:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_lifecycle = "EntityLifecycleStateMachine",
 		_worldService = "EntityECSWorldService",
+		_worldRegistry = "EntityWorldRegistryService",
 	})
 end
 
-function GetWorldQuery:Execute(): Result.Result<any>
+function GetWorldQuery:Execute(worldName: string?): Result.Result<any>
 	return Result.Catch(function()
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(nil, "GetWorld", self._lifecycle:GetState(), {
 			"Uninitialized",
@@ -37,7 +38,11 @@ function GetWorldQuery:Execute(): Result.Result<any>
 			return lifecycleResult
 		end
 
-		return Result.Ok(self._worldService:GetWorld())
+		if worldName == nil or self._worldRegistry:IsDefaultWorld(worldName) then
+			return Result.Ok(self._worldService:GetWorld())
+		end
+
+		return self._worldRegistry:GetWorld(worldName)
 	end, self:_Label())
 end
 

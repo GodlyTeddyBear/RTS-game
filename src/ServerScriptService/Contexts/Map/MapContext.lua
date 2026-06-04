@@ -8,9 +8,8 @@ local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext
 local Result = require(ReplicatedStorage.Utilities.Result)
 
 local Errors = require(script.Parent.Errors)
-local MapECSWorldService = require(script.Parent.Infrastructure.ECS.MapECSWorldService)
-local MapComponentRegistry = require(script.Parent.Infrastructure.ECS.MapComponentRegistry)
-local MapEntityFactory = require(script.Parent.Infrastructure.ECS.MapEntityFactory)
+local MapEntityReadService = require(script.Parent.Infrastructure.Entity.MapEntityReadService)
+local MapEntitySchema = require(script.Parent.Infrastructure.Entity.MapEntitySchema)
 local AuthoredMapLookupService = require(script.Parent.Infrastructure.Services.AuthoredMapLookupService)
 local RuntimeMapService = require(script.Parent.Infrastructure.Services.RuntimeMapService)
 
@@ -20,17 +19,19 @@ local Ensure = Result.Ensure
 
 local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
-		Name = "MapComponentRegistry",
-		Module = MapComponentRegistry,
-	},
-	{
-		Name = "MapEntityFactory",
-		Module = MapEntityFactory,
-		CacheAs = "_entityFactory",
+		Name = "MapEntityReadService",
+		Factory = function(service: any, _baseContext: any)
+			return MapEntityReadService.new(service._entityContext)
+		end,
+		CacheAs = "_mapEntityReadService",
 	},
 	{
 		Name = "RuntimeMapService",
-		Module = RuntimeMapService,
+		Factory = function(service: any, _baseContext: any)
+			local runtimeMapService = RuntimeMapService.new()
+			runtimeMapService:Configure(service._entityContext, service._mapEntityReadService)
+			return runtimeMapService
+		end,
 		CacheAs = "_runtimeMapService",
 	},
 	{
@@ -56,19 +57,9 @@ local MapModules: BaseContext.TModuleLayers = {
 local MapContext = Knit.CreateService({
 	Name = "MapContext",
 	Client = {},
-	WorldService = {
-		Name = "MapECSWorldService",
-		Module = MapECSWorldService,
-	},
 	Modules = MapModules,
-	Cache = {
-		World = "_world",
-		MapComponents = {
-			Field = "_components",
-			From = "MapComponentRegistry",
-			Method = "GetComponents",
-			Result = false,
-		},
+	ExternalServices = {
+		{ Name = "EntityContext", CacheAs = "_entityContext" },
 	},
 })
 
@@ -90,6 +81,23 @@ end
 ]=]
 function MapContext:KnitStart()
 	MapBaseContext:KnitStart()
+	local registrationResult = self:_RegisterEntityInfrastructure()
+	if not registrationResult.success then
+		error(("MapContext failed to register Entity infrastructure: [%s] %s"):format(
+			tostring(registrationResult.type),
+			tostring(registrationResult.message)
+		))
+	end
+end
+
+function MapContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
+	return Catch(function()
+		return self._entityContext:RegisterEntityFeature({
+			World = "Location",
+			FeatureName = "Map",
+			Schema = MapEntitySchema,
+		})
+	end, "Map:RegisterEntityInfrastructure")
 end
 
 -- ── Public ────────────────────────────────────────────────────────────────────
@@ -125,7 +133,7 @@ end
 function MapContext:GetZoneInstance(zoneName: string): Result.Result<Instance?>
 	return Catch(function()
 		Ensure(type(zoneName) == "string" and #zoneName > 0, "InvalidZoneName", Errors.INVALID_ZONE_NAME)
-		return Ok(self._entityFactory:GetZoneInstance(zoneName))
+		return Ok(self._mapEntityReadService:GetZoneInstance(zoneName))
 	end, "Map:GetZoneInstance")
 end
 
@@ -136,7 +144,7 @@ end
 ]=]
 function MapContext:GetSpawnInstance(): Result.Result<BasePart?>
 	return Catch(function()
-		return Ok(self._entityFactory:GetSpawnInstance())
+		return Ok(self._mapEntityReadService:GetSpawnInstance())
 	end, "Map:GetSpawnInstance")
 end
 
@@ -147,7 +155,7 @@ end
 ]=]
 function MapContext:GetBaseInstance(): Result.Result<Instance?>
 	return Catch(function()
-		return Ok(self._entityFactory:GetBaseInstance())
+		return Ok(self._mapEntityReadService:GetBaseInstance())
 	end, "Map:GetBaseInstance")
 end
 
@@ -158,7 +166,7 @@ end
 ]=]
 function MapContext:GetBaseAnchor(): Result.Result<BasePart?>
 	return Catch(function()
-		return Ok(self._entityFactory:GetBaseAnchor())
+		return Ok(self._mapEntityReadService:GetBaseAnchor())
 	end, "Map:GetBaseAnchor")
 end
 
@@ -169,7 +177,7 @@ end
 ]=]
 function MapContext:GetRuntimeMapInstance(): Result.Result<Model?>
 	return Catch(function()
-		return Ok(self._entityFactory:GetMapInstance())
+		return Ok(self._mapEntityReadService:GetRuntimeMapInstance())
 	end, "Map:GetRuntimeMapInstance")
 end
 

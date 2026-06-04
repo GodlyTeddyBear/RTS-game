@@ -19,10 +19,11 @@ function GetEntityValueQuery:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_lifecycle = "EntityLifecycleStateMachine",
 		_entityFactory = "EntityEntityFactory",
+		_worldRegistry = "EntityWorldRegistryService",
 	})
 end
 
-function GetEntityValueQuery:Execute(entity: number, key: string, featureName: string?): Result.Result<any>
+function GetEntityValueQuery:Execute(entityOrWorldName: any, keyOrEntity: any, featureNameOrKey: any?, maybeFeatureName: string?): Result.Result<any>
 	return Result.Catch(function()
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(nil, "Get", self._lifecycle:GetState(), {
 			"RegisteringECS",
@@ -35,7 +36,26 @@ function GetEntityValueQuery:Execute(entity: number, key: string, featureName: s
 			return lifecycleResult
 		end
 
-		return self._entityFactory:Get(entity, key, featureName)
+		local worldName = self._worldRegistry:GetDefaultWorldName()
+		local entity = entityOrWorldName
+		local key = keyOrEntity
+		local featureName = featureNameOrKey
+		if type(entityOrWorldName) == "string" then
+			worldName = entityOrWorldName
+			entity = keyOrEntity
+			key = featureNameOrKey
+			featureName = maybeFeatureName
+		end
+
+		if self._worldRegistry:IsDefaultWorld(worldName) then
+			return self._entityFactory:Get(entity, key, featureName)
+		end
+
+		local factoryResult = self._worldRegistry:GetEntityFactory(worldName)
+		if not factoryResult.success then
+			return factoryResult
+		end
+		return factoryResult.value:Get(entity, key, featureName)
 	end, self:_Label())
 end
 

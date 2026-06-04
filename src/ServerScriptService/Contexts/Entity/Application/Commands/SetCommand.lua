@@ -20,10 +20,11 @@ function SetCommand:Init(registry: any, _name: string)
 		_lifecycle = "EntityLifecycleStateMachine",
 		_validationService = "EntityValidationService",
 		_entityFactory = "EntityEntityFactory",
+		_worldRegistry = "EntityWorldRegistryService",
 	})
 end
 
-function SetCommand:Execute(entity: number, key: string, value: any, featureName: string?): Result.Result<any>
+function SetCommand:Execute(entityOrWorldName: any, keyOrEntity: any, valueOrKey: any, featureNameOrValue: any?, maybeFeatureName: string?): Result.Result<any>
 	return Result.Catch(function()
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(self._validationService, "Set", self._lifecycle:GetState(), {
 			"ReadyForRuntimeRegistration",
@@ -34,7 +35,28 @@ function SetCommand:Execute(entity: number, key: string, value: any, featureName
 			return lifecycleResult
 		end
 
-		return self._entityFactory:Set(entity, key, value, featureName)
+		local worldName = self._worldRegistry:GetDefaultWorldName()
+		local entity = entityOrWorldName
+		local key = keyOrEntity
+		local value = valueOrKey
+		local featureName = featureNameOrValue
+		if type(entityOrWorldName) == "string" then
+			worldName = entityOrWorldName
+			entity = keyOrEntity
+			key = valueOrKey
+			value = featureNameOrValue
+			featureName = maybeFeatureName
+		end
+
+		if self._worldRegistry:IsDefaultWorld(worldName) then
+			return self._entityFactory:Set(entity, key, value, featureName)
+		end
+
+		local factoryResult = self._worldRegistry:GetEntityFactory(worldName)
+		if not factoryResult.success then
+			return factoryResult
+		end
+		return factoryResult.value:Set(entity, key, value, featureName)
 	end, self:_Label())
 end
 

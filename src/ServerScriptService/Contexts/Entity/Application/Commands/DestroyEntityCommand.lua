@@ -26,10 +26,11 @@ function DestroyEntityCommand:Init(registry: any, _name: string)
 		_replicationService = "EntityReplicationService",
 		_entityContext = "EntityContextService",
 		_prepareRuntimeEntityForRemovalCommand = "PrepareRuntimeEntityForRemovalCommand",
+		_worldRegistry = "EntityWorldRegistryService",
 	})
 end
 
-function DestroyEntityCommand:Execute(entity: number): Result.Result<boolean>
+function DestroyEntityCommand:Execute(entityOrWorldName: any, maybeEntity: number?): Result.Result<boolean>
 	return Result.Catch(function()
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(self._validationService, "DestroyEntity", self._lifecycle:GetState(), {
 			"Running",
@@ -37,6 +38,21 @@ function DestroyEntityCommand:Execute(entity: number): Result.Result<boolean>
 		})
 		if not lifecycleResult.success then
 			return lifecycleResult
+		end
+
+		local worldName = self._worldRegistry:GetDefaultWorldName()
+		local entity = entityOrWorldName
+		if type(entityOrWorldName) == "string" then
+			worldName = entityOrWorldName
+			entity = maybeEntity
+		end
+
+		if not self._worldRegistry:IsDefaultWorld(worldName) then
+			local factoryResult = self._worldRegistry:GetEntityFactory(worldName)
+			if not factoryResult.success then
+				return factoryResult
+			end
+			return factoryResult.value:DeleteEntityNow(entity)
 		end
 
 		local prepareResult = self._prepareRuntimeEntityForRemovalCommand:Execute(entity, true)

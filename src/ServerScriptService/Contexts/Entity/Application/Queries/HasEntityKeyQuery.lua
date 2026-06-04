@@ -20,10 +20,11 @@ function HasEntityKeyQuery:Init(registry: any, _name: string)
 		_schemaRegistry = "EntitySchemaRegistry",
 		_lifecycle = "EntityLifecycleStateMachine",
 		_entityFactory = "EntityEntityFactory",
+		_worldRegistry = "EntityWorldRegistryService",
 	})
 end
 
-function HasEntityKeyQuery:Execute(entity: number, key: string, featureName: string?): Result.Result<any>
+function HasEntityKeyQuery:Execute(entityOrWorldName: any, keyOrEntity: any, featureNameOrKey: any?, maybeFeatureName: string?): Result.Result<any>
 	return Result.Catch(function()
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(nil, "Has", self._lifecycle:GetState(), {
 			"RegisteringECS",
@@ -36,9 +37,33 @@ function HasEntityKeyQuery:Execute(entity: number, key: string, featureName: str
 			return lifecycleResult
 		end
 
-		local getResult = self._entityFactory:Get(entity, key, featureName)
+		local worldName = self._worldRegistry:GetDefaultWorldName()
+		local entity = entityOrWorldName
+		local key = keyOrEntity
+		local featureName = featureNameOrKey
+		local entityFactory = self._entityFactory
+		local schemaRegistry = self._schemaRegistry
+		if type(entityOrWorldName) == "string" then
+			worldName = entityOrWorldName
+			entity = keyOrEntity
+			key = featureNameOrKey
+			featureName = maybeFeatureName
+
+			local factoryResult = self._worldRegistry:GetEntityFactory(worldName)
+			if not factoryResult.success then
+				return factoryResult
+			end
+			local schemaResult = self._worldRegistry:GetSchemaRegistry(worldName)
+			if not schemaResult.success then
+				return schemaResult
+			end
+			entityFactory = factoryResult.value
+			schemaRegistry = schemaResult.value
+		end
+
+		local getResult = entityFactory:Get(entity, key, featureName)
 		if not getResult.success then
-			local resolvedResult = self._schemaRegistry:ResolveAnyId(key, featureName)
+			local resolvedResult = schemaRegistry:ResolveAnyId(key, featureName)
 			if resolvedResult.success and resolvedResult.value.Kind == "Tag" then
 				return Result.Ok(false)
 			end

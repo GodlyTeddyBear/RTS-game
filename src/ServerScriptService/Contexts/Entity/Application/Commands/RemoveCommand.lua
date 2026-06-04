@@ -20,10 +20,11 @@ function RemoveCommand:Init(registry: any, _name: string)
 		_lifecycle = "EntityLifecycleStateMachine",
 		_validationService = "EntityValidationService",
 		_entityFactory = "EntityEntityFactory",
+		_worldRegistry = "EntityWorldRegistryService",
 	})
 end
 
-function RemoveCommand:Execute(entity: number, key: string, featureName: string?): Result.Result<any>
+function RemoveCommand:Execute(entityOrWorldName: any, keyOrEntity: any, featureNameOrKey: any?, maybeFeatureName: string?): Result.Result<any>
 	return Result.Catch(function()
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(self._validationService, "Remove", self._lifecycle:GetState(), {
 			"ReadyForRuntimeRegistration",
@@ -35,7 +36,26 @@ function RemoveCommand:Execute(entity: number, key: string, featureName: string?
 			return lifecycleResult
 		end
 
-		return self._entityFactory:Remove(entity, key, featureName)
+		local worldName = self._worldRegistry:GetDefaultWorldName()
+		local entity = entityOrWorldName
+		local key = keyOrEntity
+		local featureName = featureNameOrKey
+		if type(entityOrWorldName) == "string" then
+			worldName = entityOrWorldName
+			entity = keyOrEntity
+			key = featureNameOrKey
+			featureName = maybeFeatureName
+		end
+
+		if self._worldRegistry:IsDefaultWorld(worldName) then
+			return self._entityFactory:Remove(entity, key, featureName)
+		end
+
+		local factoryResult = self._worldRegistry:GetEntityFactory(worldName)
+		if not factoryResult.success then
+			return factoryResult
+		end
+		return factoryResult.value:Remove(entity, key, featureName)
 	end, self:_Label())
 end
 

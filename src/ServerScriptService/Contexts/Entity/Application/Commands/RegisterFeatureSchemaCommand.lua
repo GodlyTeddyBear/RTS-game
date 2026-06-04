@@ -18,12 +18,13 @@ end
 function RegisterFeatureSchemaCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
 		_schemaRegistry = "EntitySchemaRegistry",
+		_worldRegistry = "EntityWorldRegistryService",
 		_lifecycle = "EntityLifecycleStateMachine",
 		_validationService = "EntityValidationService",
 	})
 end
 
-function RegisterFeatureSchemaCommand:Execute(featureName: string, schema: any): Result.Result<any>
+function RegisterFeatureSchemaCommand:Execute(featureNameOrWorldName: string, schemaOrFeatureName: any, maybeSchema: any?): Result.Result<any>
 	return Result.Catch(function()
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(self._validationService, "RegisterFeatureSchema", self._lifecycle:GetState(), {
 			"RegisteringECS",
@@ -32,7 +33,20 @@ function RegisterFeatureSchemaCommand:Execute(featureName: string, schema: any):
 			return lifecycleResult
 		end
 
-		return self._schemaRegistry:RegisterFeatureSchema(featureName, schema)
+		local worldName = self._worldRegistry:GetDefaultWorldName()
+		local featureName = featureNameOrWorldName
+		local schema = schemaOrFeatureName
+		if maybeSchema ~= nil then
+			worldName = featureNameOrWorldName
+			featureName = schemaOrFeatureName
+			schema = maybeSchema
+		end
+
+		if self._worldRegistry:IsDefaultWorld(worldName) then
+			return self._schemaRegistry:RegisterFeatureSchema(featureName, schema)
+		end
+
+		return self._worldRegistry:RegisterFeatureSchema(worldName, featureName, schema)
 	end, self:_Label())
 end
 

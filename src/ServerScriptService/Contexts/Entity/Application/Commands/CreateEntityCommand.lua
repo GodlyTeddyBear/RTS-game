@@ -20,10 +20,11 @@ function CreateEntityCommand:Init(registry: any, _name: string)
 		_lifecycle = "EntityLifecycleStateMachine",
 		_validationService = "EntityValidationService",
 		_entityFactory = "EntityEntityFactory",
+		_worldRegistry = "EntityWorldRegistryService",
 	})
 end
 
-function CreateEntityCommand:Execute(archetypeName: string, payload: { [string]: any }?): Result.Result<any>
+function CreateEntityCommand:Execute(archetypeNameOrWorldName: string, payloadOrArchetypeName: any?, maybePayload: any?): Result.Result<any>
 	return Result.Catch(function()
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(self._validationService, "CreateEntity", self._lifecycle:GetState(), {
 			"ReadyForRuntimeRegistration",
@@ -34,7 +35,24 @@ function CreateEntityCommand:Execute(archetypeName: string, payload: { [string]:
 			return lifecycleResult
 		end
 
-		return self._entityFactory:CreateFromArchetype(archetypeName, payload)
+		local worldName = self._worldRegistry:GetDefaultWorldName()
+		local archetypeName = archetypeNameOrWorldName
+		local payload = payloadOrArchetypeName
+		if type(payloadOrArchetypeName) == "string" then
+			worldName = archetypeNameOrWorldName
+			archetypeName = payloadOrArchetypeName
+			payload = maybePayload
+		end
+
+		if self._worldRegistry:IsDefaultWorld(worldName) then
+			return self._entityFactory:CreateFromArchetype(archetypeName, payload)
+		end
+
+		local factoryResult = self._worldRegistry:GetEntityFactory(worldName)
+		if not factoryResult.success then
+			return factoryResult
+		end
+		return factoryResult.value:CreateFromArchetype(archetypeName, payload)
 	end, self:_Label())
 end
 

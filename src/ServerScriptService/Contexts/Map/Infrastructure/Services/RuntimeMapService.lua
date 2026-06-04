@@ -17,6 +17,8 @@ local fromPcall = Result.fromPcall
 
 type ZoneMap = { [string]: Instance }
 
+local LOCATION_WORLD = "Location"
+
 --[=[
 	@class RuntimeMapService
 	Owns cloning, placement, and cleanup of the runtime map model.
@@ -138,6 +140,46 @@ local function _ExtractModel(instance: Instance?): Model?
 	return nil
 end
 
+local function _FindNamedDescendant(root: Instance, markerName: string): Instance?
+	if root.Name == markerName then
+		return root
+	end
+
+	for _, descendant in ipairs(root:GetDescendants()) do
+		if descendant.Name == markerName then
+			return descendant
+		end
+	end
+
+	return nil
+end
+
+local function _FindNamedBasePart(root: Instance, markerName: string): BasePart?
+	if root:IsA("BasePart") and root.Name == markerName then
+		return root
+	end
+
+	for _, descendant in ipairs(root:GetDescendants()) do
+		if descendant:IsA("BasePart") and descendant.Name == markerName then
+			return descendant
+		end
+	end
+
+	return nil
+end
+
+local function _ResolveAnchor(instance: Instance): BasePart?
+	if instance:IsA("BasePart") then
+		return instance
+	end
+
+	if instance:IsA("Model") then
+		return instance.PrimaryPart or instance:FindFirstChildWhichIsA("BasePart", true)
+	end
+
+	return instance:FindFirstChildWhichIsA("BasePart", true)
+end
+
 --[=[
 	Creates the runtime map service wrapper.
 	@within RuntimeMapService
@@ -145,19 +187,30 @@ end
 ]=]
 function RuntimeMapService.new()
 	local self = setmetatable({}, RuntimeMapService)
-	self._entityFactory = nil
+	self._entityContext = nil
+	self._mapEntityReadService = nil
 	self._activeRuntimeModel = nil :: Model?
 	return self
 end
 
 --[=[
-	Binds the map entity factory used to register the runtime map model.
+	Binds Entity-backed map services used to register the runtime map model.
 	@within RuntimeMapService
 	@param registry any -- The dependency registry for this context.
 	@param _name string -- The registered module name.
 ]=]
 function RuntimeMapService:Init(registry: any, _name: string)
-	self._entityFactory = registry:Get("MapEntityFactory")
+	if self._entityContext == nil then
+		self._entityContext = registry:Get("EntityContext")
+	end
+	if self._mapEntityReadService == nil then
+		self._mapEntityReadService = registry:Get("MapEntityReadService")
+	end
+end
+
+function RuntimeMapService:Configure(entityContext: any, mapEntityReadService: any)
+	self._entityContext = entityContext
+	self._mapEntityReadService = mapEntityReadService
 end
 
 --[=[
@@ -206,9 +259,14 @@ function RuntimeMapService:CreateOrReplaceRuntimeMap(): Result.Result<boolean>
 	runtimeMapModel.Parent = gameContainer
 	self._activeRuntimeModel = runtimeMapModel
 
-	-- Register the runtime map root so ECS queries can resolve zones and base markers.
+	-- Register the runtime map root so Entity-backed queries can resolve zones and base markers.
 	local mapId = ("RuntimeMap_%d"):format(math.floor(os.clock() * 1000))
-	self._entityFactory:CreateMapRoot(mapId, MapConfig.TEMPLATE_NAME, runtimeMapModel, zonesResult.value)
+	local registrationResult = self:_CreateMapEntities(mapId, MapConfig.TEMPLATE_NAME, runtimeMapModel, zonesResult.value)
+	if not registrationResult.success then
+		runtimeMapModel:Destroy()
+		self._activeRuntimeModel = nil
+		return registrationResult
+	end
 
 	return Ok(true)
 end
@@ -319,8 +377,8 @@ end
 	@return Result.Result<boolean> -- Whether the runtime map cleanup succeeded.
 ]=]
 function RuntimeMapService:CleanupRuntimeMap(): Result.Result<boolean>
-	-- Remove the ECS entity first so downstream queries stop seeing stale runtime map state.
-	self._entityFactory:DeleteActiveMap()
+	-- Remove Entity records first so downstream queries stop seeing stale runtime map state.
+	self:_DeleteActiveMapEntities()
 
 	-- Destroy the in-memory runtime model if this context still owns one.
 	local model = self._activeRuntimeModel
@@ -343,6 +401,109 @@ function RuntimeMapService:CleanupRuntimeMap(): Result.Result<boolean>
 	-- Clear the cached handle last so cleanup remains idempotent.
 	self._activeRuntimeModel = nil
 	return Ok(true)
+end
+
+function RuntimeMapService:_CreateMapEntities(
+	mapId: string,
+	templateName: string,
+	mapModel: Model,
+	zonesByName: ZoneMap
+): Result.Result<boolean>
+	local baseData = self:_ResolveBaseData(mapModel)
+	local rootArchetype = if baseData ~= nil then "Map.BaseZone" else "Map.Root"
+	local payload = {
+		Root = {
+			MapId = mapId,
+			Template = templateName,
+			CreatedAt = os.clock(),
+		},
+		Instance = {
+			Model = mapModel,
+		},
+	}
+	if baseData ~= nil then
+		payload.Base = baseData
+	end
+
+	local rootResult = self._entityContext:CreateEntity(LOCATION_WORLD, rootArchetype, payload)
+	if not rootResult.success then
+		return rootResult
+	end
+
+	local mapEntity = rootResult.value
+	for zoneName, zoneInstance in pairs(zonesByName) do
+		local spawnMarker = self:_ResolveSpawnMarker(zoneName, zoneInstance)
+		local archetypeName = if spawnMarker ~= nil then "Map.SpawnZone" else "Map.Zone"
+		local zonePayload = {
+			Zone = {
+				MapEntity = mapEntity,
+				ZoneName = zoneName,
+				Instance = zoneInstance,
+			},
+		}
+		if spawnMarker ~= nil then
+			zonePayload.Spawn = {
+				Instance = spawnMarker,
+			}
+		end
+
+		local zoneResult = self._entityContext:CreateEntity(LOCATION_WORLD, archetypeName, zonePayload)
+		if not zoneResult.success then
+			return zoneResult
+		end
+	end
+
+	return Ok(true)
+end
+
+function RuntimeMapService:_DeleteActiveMapEntities()
+	local rootQueryResult = self._entityContext:Query(LOCATION_WORLD, {
+		FeatureName = "Map",
+		Keys = { "ActiveMapTag" },
+	})
+	if not rootQueryResult.success then
+		return
+	end
+
+	local zoneQueryResult = self._entityContext:Query(LOCATION_WORLD, {
+		FeatureName = "Map",
+		Keys = { "Zone" },
+	})
+	local zoneEntities = if zoneQueryResult.success then zoneQueryResult.value else {}
+
+	for _, zoneEntity in ipairs(zoneEntities) do
+		self._entityContext:DestroyEntity(LOCATION_WORLD, zoneEntity)
+	end
+	for _, mapEntity in ipairs(rootQueryResult.value) do
+		self._entityContext:DestroyEntity(LOCATION_WORLD, mapEntity)
+	end
+end
+
+function RuntimeMapService:_ResolveBaseData(mapModel: Model): any?
+	local baseInstance = _FindNamedDescendant(mapModel, "Base")
+	if baseInstance == nil then
+		return nil
+	end
+
+	local anchor = _ResolveAnchor(baseInstance)
+	if anchor == nil then
+		return nil
+	end
+
+	return {
+		Instance = baseInstance,
+		Anchor = anchor,
+	}
+end
+
+function RuntimeMapService:_ResolveSpawnMarker(zoneName: string, zoneInstance: Instance): BasePart?
+	if zoneName == "Spawns" then
+		return _FindNamedBasePart(zoneInstance, "Spawn")
+	end
+	if zoneName == "Spawn" and zoneInstance:IsA("BasePart") then
+		return zoneInstance
+	end
+	return nil
 end
 
 -- Clones the configured map template from ReplicatedStorage assets.
