@@ -38,7 +38,7 @@ end
     @param _name string -- Module name supplied by the BaseContext framework.
 ]=]
 function GetBaseStateQuery:Init(registry: any, _name: string)
-	self:_RequireDependency(registry, "_syncService", "BaseSyncService")
+	self:_RequireDependency(registry, "_baseEntityReadService", "BaseEntityReadService")
 end
 
 --[=[
@@ -47,7 +47,7 @@ end
     @return Result.Result<BaseState?> -- Read-only base state snapshot when the base exists.
 ]=]
 function GetBaseStateQuery:Execute(): Result.Result<BaseState?>
-	return Ok(self._syncService:GetStateReadOnly())
+	return Ok(self._baseEntityReadService:GetBaseState())
 end
 
 return GetBaseStateQuery

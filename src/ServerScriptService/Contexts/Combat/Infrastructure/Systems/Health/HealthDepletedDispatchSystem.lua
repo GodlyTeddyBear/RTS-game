@@ -36,15 +36,16 @@ function HealthDepletedDispatchSystem:_Resolve(requestEntity: number)
 	local outcomeId = if type(outcome) == "table" and type(outcome.OutcomeId) == "string"
 		then outcome.OutcomeId
 		else request.VictimKind
+	local outcomeData = if type(outcome) == "table" and type(outcome.Data) == "table" then outcome.Data else nil
 	local rule = self._ruleRegistry:GetHealthDepletedRule(outcomeId)
 	if type(rule) == "table" then
-		self:_CreateOutcomeRequest(rule, request)
+		self:_CreateOutcomeRequest(rule, request, outcomeData)
 	end
 
 	self:_Processed(requestEntity)
 end
 
-function HealthDepletedDispatchSystem:_CreateOutcomeRequest(rule: any, request: any)
+function HealthDepletedDispatchSystem:_CreateOutcomeRequest(rule: any, request: any, outcomeData: any?)
 	if type(request.VictimEntity) ~= "number" then
 		return
 	end
@@ -60,6 +61,7 @@ function HealthDepletedDispatchSystem:_CreateOutcomeRequest(rule: any, request: 
 			VictimEntity = request.VictimEntity,
 			VictimKind = request.VictimKind,
 			OutcomeId = outcomeId,
+			Data = outcomeData,
 			CreatedAt = now,
 			ExpiresAt = now + 1,
 		},

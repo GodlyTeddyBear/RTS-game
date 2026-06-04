@@ -15,6 +15,7 @@ local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
 local Ensure = Result.Ensure
+local Try = Result.Try
 
 local ApplyDamageBaseCommand = {}
 ApplyDamageBaseCommand.__index = ApplyDamageBaseCommand
@@ -38,10 +39,9 @@ end
 ]=]
 function ApplyDamageBaseCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
-		_entityFactory = "BaseEntityFactory",
-		_syncService = "BaseSyncService",
+		_baseEntityReadService = "BaseEntityReadService",
+		_combatContext = "CombatContext",
 	})
-	self._hasEmittedDeath = false
 end
 
 --[=[
@@ -55,29 +55,24 @@ function ApplyDamageBaseCommand:Execute(amount: number): Result.Result<boolean>
 		Ensure(type(amount) == "number" and amount > 0, "InvalidDamageAmount", Errors.INVALID_DAMAGE_AMOUNT, {
 			Amount = amount,
 		})
-		Ensure(self._entityFactory:IsActive(), "BaseNotFound", Errors.BASE_NOT_FOUND)
+		local baseEntity = self._baseEntityReadService:GetActiveBaseEntity()
+		Ensure(baseEntity ~= nil, "BaseNotFound", Errors.BASE_NOT_FOUND)
 
-		local previousHealth = self._entityFactory:GetHealth()
-		Ensure(previousHealth ~= nil, "BaseNotFound", Errors.BASE_NOT_FOUND)
+		local previousState = self._baseEntityReadService:GetBaseState()
+		Ensure(previousState ~= nil, "BaseNotFound", Errors.BASE_NOT_FOUND)
 
-		local didDie = self._entityFactory:ApplyDamage(amount)
-		self._syncService:SyncBaseState()
+		Try(self._combatContext:RequestDamage({
+			VictimEntity = baseEntity,
+			VictimKind = "Base",
+			Amount = amount,
+			Reason = "Base",
+		}))
 
-		if previousHealth.Hp > 0 and didDie and not self._hasEmittedDeath then
-			self._hasEmittedDeath = true
-			self:_EmitContextEvent("BaseDestroyed")
-		end
-
-		return Ok(didDie)
+		return Ok(previousState.Hp - amount <= 0)
 	end, self:_Label())
 end
 
---[=[
-    Clear the one-shot death emission guard after the base is cleaned up.
-    @within ApplyDamageBaseCommand
-]=]
 function ApplyDamageBaseCommand:ResetDeathEmission()
-	self._hasEmittedDeath = false
 end
 
 return ApplyDamageBaseCommand

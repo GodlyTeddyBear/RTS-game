@@ -50,7 +50,7 @@ function ProduceUnitCommand.new()
 end
 
 function ProduceUnitCommand:Init(registry: any, _name: string)
-	self:_RequireDependency(registry, "_entityFactory", "BaseEntityFactory")
+	self:_RequireDependency(registry, "_baseEntityReadService", "BaseEntityReadService")
 end
 
 function ProduceUnitCommand:Start(registry: any, _name: string)
@@ -67,7 +67,7 @@ function ProduceUnitCommand:Execute(player: Player, unitId: string): Result.Resu
 			UnitId = unitId,
 		})
 
-		local baseCFrame = self._entityFactory:GetTargetCFrame()
+		local baseCFrame = self._baseEntityReadService:GetTargetCFrame()
 		Ensure(baseCFrame ~= nil, "BaseNotFound", Errors.BASE_NOT_FOUND)
 
 		local ownerId = tostring(player.UserId)

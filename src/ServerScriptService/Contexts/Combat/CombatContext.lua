@@ -656,7 +656,7 @@ function CombatContext:RequestDamage(payload: any): Result.Result<boolean>
 		local request = table.clone(payload)
 		request.CreatedAt = if type(request.CreatedAt) == "number" then request.CreatedAt else os.clock()
 		local result
-		if request.VictimKind == "Base" then
+		if request.VictimKind == "Base" and type(request.VictimEntity) ~= "number" then
 			result = self._entityContext:CreateEntity("Combat.BaseDamageRequest", {
 				BaseDamageRequest = {
 					Amount = request.Amount,

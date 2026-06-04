@@ -42,7 +42,7 @@ end
 ]=]
 function BaseSyncService:Init(registry: any, _name: string)
 	self._blinkServer = registry:Get("BlinkServer")
-	self._entityFactory = registry:Get("BaseEntityFactory")
+	self._baseEntityReadService = registry:Get("BaseEntityReadService")
 	self._syncer = CharmSync.server({
 		atoms = { base = self._atom },
 		interval = 0.33,
@@ -61,7 +61,7 @@ end
 ]=]
 function BaseSyncService:SyncBaseState()
 	DebugPlus.profile(("%s:SyncBaseState"):format(PROFILE_NAME), function()
-		self._atom(self._entityFactory:GetBaseState() :: BaseState?)
+		self._atom(self._baseEntityReadService:GetBaseState() :: BaseState?)
 	end, SYNC_SERVICE_PROFILING_ENABLED)
 end
 

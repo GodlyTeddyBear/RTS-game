@@ -132,6 +132,7 @@ local EntityCoreSchema = {
 			Replication = "ServerOnly",
 			Default = {
 				OutcomeId = nil,
+				Data = nil,
 			},
 		},
 		GoalReachedOutcome = {

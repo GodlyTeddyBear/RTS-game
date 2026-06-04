@@ -8,15 +8,37 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
+local CollectionService = game:GetService("CollectionService")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
 local BaseConfig = require(ReplicatedStorage.Contexts.Base.Config.BaseConfig)
+local ECS = require(ReplicatedStorage.Utilities.ECS)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
 local Ensure = Result.Ensure
 local Try = Result.Try
+
+local function _ApplyBaseReveal(instance: Instance)
+	local _entityId, revealState = ECS.RevealBuilder.Build({
+		EntityType = BaseConfig.REVEAL_ENTITY_TYPE,
+		SourceId = BaseConfig.BASE_ID,
+		ScopeId = BaseConfig.REVEAL_SCOPE_ID,
+		Namespace = BaseConfig.REVEAL_NAMESPACE,
+	})
+
+	for attributeName, value in pairs(revealState.Attributes or {}) do
+		instance:SetAttribute(attributeName, value)
+	end
+	instance:SetAttribute("BaseId", BaseConfig.BASE_ID)
+
+	for tagName, enabled in pairs(revealState.Tags or {}) do
+		if enabled == true then
+			CollectionService:AddTag(instance, tagName)
+		end
+	end
+end
 
 local PrepareRunBaseCommand = {}
 PrepareRunBaseCommand.__index = PrepareRunBaseCommand
@@ -40,8 +62,8 @@ end
 ]=]
 function PrepareRunBaseCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
-		_entityFactory = "BaseEntityFactory",
-		_instanceFactory = "BaseInstanceFactory",
+		_entityContext = "EntityContext",
+		_baseEntityReadService = "BaseEntityReadService",
 		_syncService = "BaseSyncService",
 	})
 end
@@ -70,9 +92,72 @@ function PrepareRunBaseCommand:Execute(): Result.Result<boolean>
 
 		local baseAnchor = Try(self._mapContext:GetBaseAnchor())
 		Ensure(baseAnchor ~= nil, "BaseAnchorNotFound", Errors.BASE_ANCHOR_NOT_FOUND)
+		_ApplyBaseReveal(baseInstance)
 
-		local entity = self._entityFactory:CreateOrResetBase(BaseConfig.BASE_ID, BaseConfig.MAX_HP, baseInstance, baseAnchor)
-		self._instanceFactory:BindBaseInstance(entity, baseInstance, baseAnchor, BaseConfig.BASE_ID)
+		local existingEntity = self._baseEntityReadService:GetActiveBaseEntity()
+		if existingEntity ~= nil then
+			Try(self._entityContext:DestroyEntity(existingEntity))
+		end
+
+		local createResult = self._entityContext:CreateEntity("Base.Actor", {
+			Identity = {
+				EntityId = BaseConfig.BASE_ID,
+				EntityKind = "Base",
+				DefinitionId = "PrimaryBase",
+			},
+			Health = {
+				Current = BaseConfig.MAX_HP,
+				Max = BaseConfig.MAX_HP,
+			},
+			Transform = {
+				CFrame = baseAnchor.CFrame,
+			},
+			ModelRef = {
+				Model = baseInstance,
+			},
+			ModelAsset = {
+				AssetDomain = "Base",
+				AssetId = BaseConfig.BASE_ID,
+				AssetKind = "Existing",
+			},
+			ModelBinding = {
+				ParentFolder = "Base",
+				SetupProfileId = "ExistingMapInstance",
+				RevealTag = "Base",
+				NameFormat = "Base_{EntityId}",
+			},
+			HumanoidProjection = {
+				Enabled = false,
+				Health = false,
+				WalkSpeed = false,
+			},
+			TransformProjection = {
+				Enabled = false,
+			},
+			TransformPoll = {
+				Enabled = false,
+			},
+			CleanupOutcomes = {
+				OutcomeIds = {},
+			},
+			HealthDepletedOutcome = {
+				OutcomeId = "RunFailure",
+				Data = {
+					Reason = "BaseDestroyed",
+					EmitEvent = "BaseDestroyed",
+				},
+			},
+			State = {
+				BaseId = BaseConfig.BASE_ID,
+			},
+			AnchorRef = {
+				Anchor = baseAnchor,
+			},
+			MapInstanceRef = {
+				Instance = baseInstance,
+			},
+		})
+		Try(createResult)
 		self._syncService:SyncBaseState()
 		self._syncService:HydrateAllPlayers()
 

@@ -100,6 +100,7 @@ local CombatEntitySchema = {
 				VictimEntity = 0,
 				VictimKind = "",
 				OutcomeId = "",
+				Data = nil,
 				CreatedAt = 0,
 				ExpiresAt = nil,
 			},

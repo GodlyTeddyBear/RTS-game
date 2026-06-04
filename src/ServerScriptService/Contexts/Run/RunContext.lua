@@ -28,6 +28,8 @@ local RunStateMachine = require(script.Parent.Infrastructure.Services.RunStateMa
 local RunTimerService = require(script.Parent.Infrastructure.Services.RunTimerService)
 local RunTravelService = require(script.Parent.Infrastructure.Services.RunTravelService)
 local RunSyncService = require(script.Parent.Infrastructure.Persistence.RunSyncService)
+local RunEntitySchema = require(script.Parent.Infrastructure.Entity.RunEntitySchema)
+local RunFailureRequestSystem = require(script.Parent.Infrastructure.Systems.RunFailureRequestSystem)
 local RunTransitionPolicy = require(script.Parent.RunDomain.Policies.RunTransitionPolicy)
 local StartRunCommand = require(script.Parent.Application.Commands.StartRunCommand)
 local NotifyWaveClearedCommand = require(script.Parent.Application.Commands.NotifyWaveClearedCommand)
@@ -156,6 +158,7 @@ local RunContext = Knit.CreateService({
 		{ Name = "WorldContext", CacheAs = "_worldContext" },
 		{ Name = "EnemyContext", CacheAs = "_enemyContext" },
 		{ Name = "BaseContext", CacheAs = "_baseContext" },
+		{ Name = "EntityContext", CacheAs = "_entityContext" },
 	},
 	Teardown = {
 		Fields = {
@@ -327,6 +330,7 @@ end
 ]=]
 function RunContext:KnitStart()
 	RunBaseContext:KnitStart()
+	Try(self:_RegisterEntityInfrastructure())
 
 	-- Hydrate late joiners so they receive the current global run snapshot.
 	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
@@ -350,6 +354,35 @@ function RunContext:KnitStart()
 			return Ok(nil)
 		end, "Run:OnBaseDestroyed")
 	end)
+end
+
+function RunContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
+	return Catch(function()
+		local schemaResult = self._entityContext:RegisterFeatureSchema("Run", RunEntitySchema)
+		if not schemaResult.success and schemaResult.type ~= "DuplicateFeatureSchema" then
+			return schemaResult
+		end
+
+		local systemResult = self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "RunFailureRequestSystem",
+			Reads = {
+				"Run.FailureRequest",
+				"Run.RequestTag",
+			},
+			Writes = {
+				"Run.ProcessedTag",
+				"Entity.DestructionQueue",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return RunFailureRequestSystem.new(entityFactory, self)
+			end,
+		})
+		if not systemResult.success and systemResult.type ~= "DuplicateSystem" then
+			return systemResult
+		end
+
+		return Ok(true)
+	end, "Run:RegisterEntityInfrastructure")
 end
 
 -- [Public API]

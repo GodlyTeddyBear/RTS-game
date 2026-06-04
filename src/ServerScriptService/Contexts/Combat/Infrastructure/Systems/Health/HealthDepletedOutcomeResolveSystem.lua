@@ -57,14 +57,19 @@ function HealthDepletedOutcomeResolveSystem:_EmitConfiguredRequest(emitRequest: 
 	end
 
 	local now = os.clock()
+	local payload = table.clone(emitRequest.Payload or {})
+	payload.SourceEntity = request.VictimEntity
+	payload.OutcomeId = request.OutcomeId
+	payload.CreatedAt = now
+	payload.ExpiresAt = now + 1
+	if type(request.Data) == "table" then
+		for key, value in pairs(request.Data) do
+			payload[key] = value
+		end
+	end
+
 	self._entityFactory:CreateFromArchetype(archetypeName, {
-		[componentKey] = {
-			EnemyEntity = request.VictimEntity,
-			SourceEntity = request.VictimEntity,
-			OutcomeId = request.OutcomeId,
-			CreatedAt = now,
-			ExpiresAt = now + 1,
-		},
+		[componentKey] = payload,
 	})
 end
 

@@ -37,7 +37,7 @@ end
     @param _name string -- Module name supplied by the BaseContext framework.
 ]=]
 function GetBaseTargetCFrameQuery:Init(registry: any, _name: string)
-	self:_RequireDependency(registry, "_entityFactory", "BaseEntityFactory")
+	self:_RequireDependency(registry, "_baseEntityReadService", "BaseEntityReadService")
 end
 
 --[=[
@@ -46,7 +46,7 @@ end
     @return Result.Result<CFrame> -- Target CFrame for the active base.
 ]=]
 function GetBaseTargetCFrameQuery:Execute(): Result.Result<CFrame>
-	local cframe = self._entityFactory:GetTargetCFrame()
+	local cframe = self._baseEntityReadService:GetTargetCFrame()
 	Ensure(cframe ~= nil, "BaseNotFound", Errors.BASE_NOT_FOUND)
 	return Ok(cframe)
 end

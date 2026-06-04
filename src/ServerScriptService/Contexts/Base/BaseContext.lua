@@ -17,11 +17,11 @@ local BaseTypes = require(ReplicatedStorage.Contexts.Base.Types.BaseTypes)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 local BlinkServer = require(ReplicatedStorage.Network.Generated.BaseSyncServer)
 
-local BaseECSWorldService = require(script.Parent.Infrastructure.ECS.BaseECSWorldService)
-local BaseComponentRegistry = require(script.Parent.Infrastructure.ECS.BaseComponentRegistry)
-local BaseEntityFactory = require(script.Parent.Infrastructure.ECS.BaseEntityFactory)
-local BaseInstanceFactory = require(script.Parent.Infrastructure.ECS.BaseInstanceFactory)
+local BaseEntitySchema = require(script.Parent.Infrastructure.Entity.BaseEntitySchema)
+local BaseEntityReadService = require(script.Parent.Infrastructure.Entity.BaseEntityReadService)
 local BaseSyncService = require(script.Parent.Infrastructure.Persistence.BaseSyncService)
+local BaseStateSyncSystem = require(script.Parent.Infrastructure.Systems.BaseStateSyncSystem)
+local BaseCombatRules = require(script.Parent.Config.CombatRules)
 local PrepareRunBaseCommand = require(script.Parent.Application.Commands.PrepareRunBaseCommand)
 local ApplyDamageBaseCommand = require(script.Parent.Application.Commands.ApplyDamageBaseCommand)
 local CleanupBaseCommand = require(script.Parent.Application.Commands.CleanupBaseCommand)
@@ -43,18 +43,9 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		Instance = BlinkServer,
 	},
 	{
-		Name = "BaseComponentRegistry",
-		Module = BaseComponentRegistry,
-	},
-	{
-		Name = "BaseEntityFactory",
-		Module = BaseEntityFactory,
-		CacheAs = "_entityFactory",
-	},
-	{
-		Name = "BaseInstanceFactory",
-		Module = BaseInstanceFactory,
-		CacheAs = "_instanceFactory",
+		Name = "BaseEntityReadService",
+		Module = BaseEntityReadService,
+		CacheAs = "_baseEntityReadService",
 	},
 	{
 		Name = "BaseSyncService",
@@ -104,19 +95,16 @@ local BaseModules: BaseContext.TModuleLayers = {
 local BaseContextService = Knit.CreateService({
 	Name = "BaseContext",
 	Client = {},
-	WorldService = {
-		Name = "BaseECSWorldService",
-		Module = BaseECSWorldService,
-	},
 	Modules = BaseModules,
 	ExternalServices = {
 		{ Name = "MapContext" },
 		{ Name = "UnitContext" },
+		{ Name = "EntityContext", CacheAs = "_entityContext" },
+		{ Name = "CombatContext", CacheAs = "_combatContext" },
 	},
 	Teardown = {
 		Fields = {
 			{ Field = "_playerAddedConnection", Method = "Disconnect" },
-			{ Field = "_instanceFactory", Method = "Destroy" },
 			{ Field = "_syncService", Method = "Destroy" },
 		},
 	},
@@ -141,6 +129,8 @@ end
 ]=]
 function BaseContextService:KnitStart()
 	BaseBaseContext:KnitStart()
+	self:_RegisterEntityInfrastructure()
+	self:_RegisterCombatRules()
 	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
 		self._syncService:HydratePlayer(player)
 	end)
@@ -207,16 +197,48 @@ function BaseContextService.Client:ProduceUnit(player: Player, unitId: string)
 	return self.Server:ProduceUnit(player, unitId)
 end
 
---[=[
-    @within BaseContext
-    @return Result.Result<any> -- Cached base entity factory instance.
-]=]
-function BaseContextService:GetEntityFactory(): Result.Result<any>
-	return Ok(self._entityFactory)
+function BaseContextService:_RegisterEntityInfrastructure(): Result.Result<boolean>
+	return Catch(function()
+		local featureResult = self._entityContext:RegisterEntityFeature({
+			FeatureName = "Base",
+			Schema = BaseEntitySchema,
+		})
+		if not featureResult.success and featureResult.type ~= "DuplicateFeatureSchema" then
+			return featureResult
+		end
+
+		local syncResult = self._entityContext:RegisterSystem("RequestResolve", {
+			Name = "BaseStateSyncSystem",
+			Reads = {
+				"Base.BaseTag",
+				"Entity.DirtyTag",
+				"Entity.Health",
+			},
+			Writes = {
+				"Entity.DirtyTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return BaseStateSyncSystem.new(entityFactory, self._syncService)
+			end,
+		})
+		if not syncResult.success and syncResult.type ~= "DuplicateSystem" then
+			return syncResult
+		end
+
+		return Ok(true)
+	end, "Base:RegisterEntityInfrastructure")
 end
 
-function BaseContextService:GetInstanceFactory(): Result.Result<any>
-	return Ok(self._instanceFactory)
+function BaseContextService:_RegisterCombatRules(): Result.Result<boolean>
+	return Catch(function()
+		for _, payload in ipairs(BaseCombatRules.HealthDepleted or {}) do
+			local result = self._combatContext:RegisterHealthDepletedRule(payload)
+			if not result.success then
+				return result
+			end
+		end
+		return Ok(true)
+	end, "Base:RegisterCombatRules")
 end
 
 --[=[

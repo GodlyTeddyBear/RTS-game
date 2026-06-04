@@ -8,11 +8,34 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
+local CollectionService = game:GetService("CollectionService")
 
 local Result = require(ReplicatedStorage.Utilities.Result)
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
+local BaseConfig = require(ReplicatedStorage.Contexts.Base.Config.BaseConfig)
+local ECS = require(ReplicatedStorage.Utilities.ECS)
 
 local Ok = Result.Ok
+
+local function _ClearBaseReveal(instance: Instance)
+	local _entityId, revealState = ECS.RevealBuilder.Build({
+		EntityType = BaseConfig.REVEAL_ENTITY_TYPE,
+		SourceId = BaseConfig.BASE_ID,
+		ScopeId = BaseConfig.REVEAL_SCOPE_ID,
+		Namespace = BaseConfig.REVEAL_NAMESPACE,
+	})
+
+	for attributeName in pairs(revealState.Attributes or {}) do
+		instance:SetAttribute(attributeName, nil)
+	end
+	instance:SetAttribute("BaseId", nil)
+
+	for tagName in pairs(revealState.Tags or {}) do
+		if CollectionService:HasTag(instance, tagName) then
+			CollectionService:RemoveTag(instance, tagName)
+		end
+	end
+end
 
 local CleanupBaseCommand = {}
 CleanupBaseCommand.__index = CleanupBaseCommand
@@ -36,8 +59,8 @@ end
 ]=]
 function CleanupBaseCommand:Init(registry: any, _name: string)
 	self:_RequireDependencies(registry, {
-		_entityFactory = "BaseEntityFactory",
-		_instanceFactory = "BaseInstanceFactory",
+		_entityContext = "EntityContext",
+		_baseEntityReadService = "BaseEntityReadService",
 		_syncService = "BaseSyncService",
 		_applyDamageCommand = "ApplyDamageBaseCommand",
 	})
@@ -50,12 +73,15 @@ end
 ]=]
 function CleanupBaseCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
-		local baseEntity = self._entityFactory:GetBaseEntity()
+		local baseInstance = self._baseEntityReadService:GetMapInstance()
+		local baseEntity = self._baseEntityReadService:GetActiveBaseEntity()
 		if baseEntity ~= nil then
-			self._instanceFactory:UnbindBaseInstance(baseEntity)
+			Result.Try(self._entityContext:DestroyEntity(baseEntity))
+		end
+		if baseInstance ~= nil then
+			_ClearBaseReveal(baseInstance)
 		end
 
-		self._entityFactory:ClearBase()
 		self._syncService:ClearState()
 		self._applyDamageCommand:ResetDeathEmission()
 		return Ok(true)
