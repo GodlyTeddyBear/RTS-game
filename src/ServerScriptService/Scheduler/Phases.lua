@@ -5,7 +5,8 @@
     Ordered phase definitions for the server Planck scheduler.
 
     All contexts register systems into these phases.
-    The array order defines the pipeline execution order every Heartbeat frame.
+    The array order defines the coarse domain-tick execution order every Heartbeat frame.
+    Detailed ECS ordering remains inside `EntityPhases`.
     @server
 ]=]
 
@@ -25,11 +26,7 @@ local function phase(name: string): PhaseEntry
 end
 
 return table.freeze({
-	phase("EnemyPositionPoll"),
-	phase("EnemySync"),
-	phase("UnitSync"),
 	phase("MovementTick"),
-	phase("CombatTick"),
+	phase("EntityTick"),
 	phase("MiningTick"),
-	phase("StructureSync"),
 }) :: { PhaseEntry }

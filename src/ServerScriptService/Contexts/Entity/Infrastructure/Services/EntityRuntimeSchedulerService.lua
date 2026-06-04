@@ -91,15 +91,6 @@ function EntityRuntimeSchedulerService:RunScheduledTick()
 	local runResult = self._systemRegistry:RunPhases(EntityPhases.RuntimeOrdered)
 	self:_MentionTickFailure("Entity system tick failed", runResult)
 
-	local flushDestroyResult = self._entityFactory:FlushDestroyQueue()
-	self:_MentionTickFailure("Entity deferred destruction flush failed", flushDestroyResult)
-
-	local syncResult = self._runtimeSyncService:RunRuntimeSync(self._entityContext)
-	self:_MentionTickFailure("Entity runtime sync failed", syncResult)
-
-	local pollResult = self._runtimeSyncService:RunRuntimePoll(self._entityContext)
-	self:_MentionTickFailure("Entity runtime poll failed", pollResult)
-
 	local reliableResult = self._replicationService:FlushReliableResult()
 	self:_MentionTickFailure("Entity reliable replication flush failed", reliableResult)
 

@@ -10,13 +10,12 @@
     `RunService.Heartbeat` accumulator.
 
     Phase execution order (per scheduler tick):
-    1. `EnemyPositionPoll`
-    2. `EnemySync`
-    3. `UnitSync`
-    4. `MovementTick`
-    5. `CombatTick`
-    6. `MiningTick`
-    7. `StructureSync`
+    1. `MovementTick`
+    2. `EntityTick`
+    3. `MiningTick`
+
+    Entity-backed AI, action orchestration, combat, cleanup, sync, and replication
+    run inside the shared Entity runtime phases rather than per-feature scheduler phases.
     @server
 ]=]
 

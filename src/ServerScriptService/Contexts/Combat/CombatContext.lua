@@ -170,8 +170,8 @@ local Ok = Result.Ok
 local Try = Result.Try
 
 local schedulerProfilingEnabled = DebugConfig.COMBAT_SCHEDULER_PROFILING
-local combatTickProfileTag = "Combat.Scheduler.CombatTick"
-local combatHitboxTickProfileTag = "Combat.Scheduler.CombatTick.HitboxTick"
+local entityTickProfileTag = "Combat.Scheduler.EntityTick"
+local entityHitboxTickProfileTag = "Combat.Scheduler.EntityTick.HitboxTick"
 
 function CombatContext:KnitInit()
 	CombatBaseContext:KnitInit()
@@ -199,11 +199,11 @@ function CombatContext:KnitStart()
 		))
 	end
 
-	CombatBaseContext:RegisterSchedulerSystem("CombatTick", function()
-		DebugPlus.profile(combatTickProfileTag, function()
+	CombatBaseContext:RegisterSchedulerSystem("EntityTick", function()
+		DebugPlus.profile(entityTickProfileTag, function()
 			local dt = CombatBaseContext:GetSchedulerDeltaTime()
 
-			DebugPlus.profile(combatHitboxTickProfileTag, function()
+			DebugPlus.profile(entityHitboxTickProfileTag, function()
 				self._hitboxSimulationService:Tick(dt)
 			end, schedulerProfilingEnabled)
 
@@ -335,9 +335,9 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return movementApplyResult
 		end
 
-		local movementPresentationResult = self._entityContext:RegisterSystem("Execute", {
+		local movementPresentationResult = self._entityContext:RegisterSystem("Projection", {
 			Name = "MovementPresentationProjectionSystem",
-			Phase = "Execute",
+			Phase = "Projection",
 			Reads = {
 				"Movement.MoveIntent",
 				"Movement.ApplyResult",
@@ -356,9 +356,9 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return movementPresentationResult
 		end
 
-		local movementGoalReachedResult = self._entityContext:RegisterSystem("RequestResolve", {
+		local movementGoalReachedResult = self._entityContext:RegisterSystem("OutcomeDispatch", {
 			Name = "MovementGoalReachedSystem",
-			Phase = "RequestResolve",
+			Phase = "OutcomeDispatch",
 			Reads = {
 				"Movement.MoveIntent",
 				"Movement.ApplyResult",
@@ -507,9 +507,9 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 		})
 		if not speedStatusResult.success then return speedStatusResult end
 
-		local healthChangeResult = self._entityContext:RegisterSystem("DamageResolve", {
+		local healthChangeResult = self._entityContext:RegisterSystem("HealthResolve", {
 			Name = "HealthChangeResolveSystem",
-			Phase = "DamageResolve",
+			Phase = "HealthResolve",
 			Reads = {
 				"Combat.HealthChangeRequest",
 				"Combat.RequestTag",
@@ -540,9 +540,9 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return baseDamageResult
 		end
 
-		local healthDepletedResult = self._entityContext:RegisterSystem("HealthDispatch", {
+		local healthDepletedResult = self._entityContext:RegisterSystem("OutcomeDispatch", {
 			Name = "HealthDepletedDispatchSystem",
-			Phase = "HealthDispatch",
+			Phase = "OutcomeDispatch",
 			Reads = {
 				"Combat.HealthDepletedRequest",
 				"Combat.RequestTag",

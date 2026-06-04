@@ -27,6 +27,9 @@ local EntityRuntimeSnapshotBuilder = require(script.Parent.Infrastructure.Servic
 local EntityCleanupOutcomeService = require(script.Parent.Infrastructure.Services.EntityCleanupOutcomeService)
 local EntityWorldRegistryService = require(script.Parent.Infrastructure.Services.EntityWorldRegistryService)
 local EntityLifetimeExpirySystem = require(script.Parent.Infrastructure.Systems.EntityLifetimeExpirySystem)
+local EntityRuntimeSyncPhaseSystem = require(script.Parent.Infrastructure.Systems.EntityRuntimeSyncPhaseSystem)
+local EntityRuntimePollPhaseSystem = require(script.Parent.Infrastructure.Systems.EntityRuntimePollPhaseSystem)
+local EntityDestroyFlushPhaseSystem = require(script.Parent.Infrastructure.Systems.EntityDestroyFlushPhaseSystem)
 
 local EntityValidationService = require(script.Parent.EntityDomain.Services.EntityValidationService)
 local EntityLifecyclePolicy = require(script.Parent.EntityDomain.Policies.EntityLifecyclePolicy)
@@ -306,7 +309,7 @@ function EntityContext:Start()
 end
 function EntityContext:_RegisterCoreRuntimeSystems()
 	return Catch(function()
-		return self._registerSystemCommand:Execute("RequestResolve", {
+		local lifetimeResult = self._registerSystemCommand:Execute("RequestResolve", {
 			Name = "EntityLifetimeExpirySystem",
 			Phase = "RequestResolve",
 			Reads = {
@@ -318,6 +321,39 @@ function EntityContext:_RegisterCoreRuntimeSystems()
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
 				return EntityLifetimeExpirySystem.new(entityFactory)
+			end,
+		})
+		if not lifetimeResult.success then
+			return lifetimeResult
+		end
+
+		local syncResult = self._registerSystemCommand:Execute("RuntimeSync", {
+			Name = "EntityRuntimeSyncPhaseSystem",
+			Phase = "RuntimeSync",
+			Factory = function(_entityFactory: any, _compiledSchemas: any)
+				return EntityRuntimeSyncPhaseSystem.new(self, self._runtimeSyncService)
+			end,
+		})
+		if not syncResult.success then
+			return syncResult
+		end
+
+		local pollResult = self._registerSystemCommand:Execute("RuntimePoll", {
+			Name = "EntityRuntimePollPhaseSystem",
+			Phase = "RuntimePoll",
+			Factory = function(_entityFactory: any, _compiledSchemas: any)
+				return EntityRuntimePollPhaseSystem.new(self, self._runtimeSyncService)
+			end,
+		})
+		if not pollResult.success then
+			return pollResult
+		end
+
+		return self._registerSystemCommand:Execute("DestroyFlush", {
+			Name = "EntityDestroyFlushPhaseSystem",
+			Phase = "DestroyFlush",
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return EntityDestroyFlushPhaseSystem.new(entityFactory)
 			end,
 		})
 	end, "EntityContext:RegisterCoreRuntimeSystems")

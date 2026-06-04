@@ -128,9 +128,9 @@ function RegisterAIEntitySystemsCommand:_RegisterActionIntentValidationSystem():
 end
 
 function RegisterAIEntitySystemsCommand:_RegisterActionLifecycleSystem(): Result.Result<boolean>
-	return self:_RegisterSystem("Execute", {
+	return self:_RegisterSystem("Projection", {
 		Name = "AIActionLifecycleSystem",
-		Phase = "Execute",
+		Phase = "Projection",
 		Reads = {
 			AISharedContract.FeatureName .. "." .. AISharedContract.Components.ActionIntent,
 			AISharedContract.FeatureName .. "." .. AISharedContract.Tags.ActionIntentTag,
