@@ -97,6 +97,7 @@ end
 
 function StructureContext:KnitStart()
 	StructureBaseContext:KnitStart()
+	self._structureReadService:Configure(self._entityContext)
 
 	local entityResult = self:_RegisterEntityInfrastructure()
 	if not entityResult.success then

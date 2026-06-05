@@ -30,8 +30,8 @@ function RegisterAIEntitySchemaCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
 		self:_EnsureEntityContext()
 
-		local existingFeatureResult = self._entityContext:GetFeatureComponents(AISharedContract.FeatureName)
-		if existingFeatureResult.success then
+		local schemaRegistry = self._entityContext._schemaRegistry
+		if schemaRegistry ~= nil and schemaRegistry:HasFeature(AISharedContract.FeatureName) then
 			return Result.Ok(true)
 		end
 

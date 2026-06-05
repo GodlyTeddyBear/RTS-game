@@ -14,6 +14,10 @@ function EnemyEntityReadService.new(entityContext: any)
 	return self
 end
 
+function EnemyEntityReadService:Configure(entityContext: any)
+	self._entityContext = entityContext
+end
+
 function EnemyEntityReadService:QueryAliveEntities(): { number }
 	local queryResult = self._entityContext:Query({
 		FeatureName = "Enemy",

@@ -13,6 +13,10 @@ function StructureEntityReadService.new(entityContext: any)
 	return self
 end
 
+function StructureEntityReadService:Configure(entityContext: any)
+	self._entityContext = entityContext
+end
+
 function StructureEntityReadService:QueryPlacedEntities(): { number }
 	local queryResult = self._entityContext:Query({
 		FeatureName = "Structure",

@@ -98,6 +98,7 @@ end
 
 function EnemyContext:KnitStart()
 	EnemyBaseContext:KnitStart()
+	self._enemyEntityReadService:Configure(self._entityContext)
 
 	local registrationResult = self:_RegisterEntityInfrastructure()
 	if not registrationResult.success then

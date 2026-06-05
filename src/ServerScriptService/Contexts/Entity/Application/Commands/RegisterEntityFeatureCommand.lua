@@ -170,7 +170,11 @@ function RegisterEntityFeatureCommand:Execute(definition: any): Result.Result<bo
 		end
 
 		local replicationResult = self:_RegisterGenericReplicationSurface(featureName)
-		if not replicationResult.success and replicationResult.type ~= "DuplicateReplicationSurface" then
+		if
+			not replicationResult.success
+			and replicationResult.type ~= "DuplicateReplicationSurface"
+			and replicationResult.type ~= "UnsupportedReplicationFeature"
+		then
 			return replicationResult
 		end
 
@@ -184,9 +188,11 @@ function RegisterEntityFeatureCommand:Execute(definition: any): Result.Result<bo
 			return syncEnableResult
 		end
 
-		local replicationEnableResult = self._enableRuntimeReplicationCommand:Execute(featureName)
-		if not replicationEnableResult.success then
-			return replicationEnableResult
+		if replicationResult.success then
+			local replicationEnableResult = self._enableRuntimeReplicationCommand:Execute(featureName)
+			if not replicationEnableResult.success then
+				return replicationEnableResult
+			end
 		end
 
 		return Result.Ok(true)

@@ -20,11 +20,19 @@ function HydrateEntityReplicationCommand:Init(registry: any, _name: string)
 		_lifecycle = "EntityLifecycleStateMachine",
 		_replicationService = "EntityReplicationService",
 		_validationService = "EntityValidationService",
+		_finalizeStartupCommand = "FinalizeStartupCommand",
 	})
 end
 
 function HydrateEntityReplicationCommand:Execute(player: Player): Result.Result<any>
 	return Result.Catch(function()
+		if self._lifecycle:GetState() ~= "Running" then
+			local finalizeResult = self._finalizeStartupCommand:Execute()
+			if not finalizeResult.success then
+				return finalizeResult
+			end
+		end
+
 		local lifecycleResult = EntityOperationSupport.RequireLifecycleStates(self._validationService, "HydrateEntityReplication", self._lifecycle:GetState(), {
 			"Running",
 		})

@@ -13,6 +13,10 @@ function UnitEntityReadService.new(entityContext: any?)
 	return self
 end
 
+function UnitEntityReadService:Configure(entityContext: any)
+	self._entityContext = entityContext
+end
+
 function UnitEntityReadService:Start(registry: any, _name: string)
 	if self._entityContext == nil then
 		self._entityContext = registry:Get("EntityContext")

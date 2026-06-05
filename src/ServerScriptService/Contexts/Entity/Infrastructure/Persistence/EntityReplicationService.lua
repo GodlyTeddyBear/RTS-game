@@ -178,8 +178,7 @@ function EntityReplicationService:_AugmentSharedSchemaWithRuntimeMetadata(schema
 end
 
 function EntityReplicationService:_BuildClientSchemaMetadata()
-	local appliedSharedSchema = self:GetAppliedSharedSchema()
-	if appliedSharedSchema == nil then
+	if not self:HasAppliedSharedSchema() then
 		return {
 			SharedComponents = {},
 			SharedTags = {},
@@ -191,7 +190,7 @@ function EntityReplicationService:_BuildClientSchemaMetadata()
 		SharedTags = {},
 	}
 
-	for _, componentId in ipairs(appliedSharedSchema.sharedComponents or {}) do
+	for componentId in self._schemaState.SharedComponents do
 		local componentMetadata = self._schemaRegistry:GetComponentMetadataById(componentId)
 		if componentMetadata ~= nil then
 			table.insert(metadata.SharedComponents, {
@@ -202,7 +201,7 @@ function EntityReplicationService:_BuildClientSchemaMetadata()
 		end
 	end
 
-	for _, tagId in ipairs(appliedSharedSchema.sharedTags or {}) do
+	for tagId in self._schemaState.SharedTags do
 		local tagMetadata = self._schemaRegistry:GetComponentMetadataById(tagId)
 		if tagMetadata ~= nil then
 			table.insert(metadata.SharedTags, {
@@ -212,6 +211,13 @@ function EntityReplicationService:_BuildClientSchemaMetadata()
 			})
 		end
 	end
+
+	table.sort(metadata.SharedComponents, function(left, right)
+		return left.ECSName < right.ECSName
+	end)
+	table.sort(metadata.SharedTags, function(left, right)
+		return left.ECSName < right.ECSName
+	end)
 
 	return metadata
 end

@@ -95,6 +95,7 @@ end
 
 function UnitContext:KnitStart()
 	UnitBaseContext:KnitStart()
+	self._unitReadService:Configure(self._entityContext)
 
 	local entityResult = self:_RegisterEntityInfrastructure()
 	if not entityResult.success then
