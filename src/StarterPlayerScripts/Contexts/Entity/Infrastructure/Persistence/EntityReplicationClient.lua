@@ -33,6 +33,8 @@ function EntityReplicationClient.new()
 	self._entityContext = nil
 	self._schemaMetadata = nil
 	self._dynamicSchemaApplied = false
+	self._bootstrapRequestLoopActive = false
+	self._destroyed = false
 	return self
 end
 
@@ -104,7 +106,7 @@ end
 
 function EntityReplicationClient:_OnStart()
 	assert(self._entityContext ~= nil, "EntityReplicationClient: missing EntityContext")
-	self._entityContext:RequestEntityReplication()
+	self:_StartBootstrapRequestLoop()
 end
 
 function EntityReplicationClient:_OnBootstrapCompleted()
@@ -169,7 +171,28 @@ function EntityReplicationClient:_ApplyDynamicSchemaFromMetadata(schemaMetadata:
 	self._dynamicSchemaApplied = true
 end
 
+function EntityReplicationClient:_StartBootstrapRequestLoop()
+	if self._bootstrapRequestLoopActive then
+		return
+	end
+
+	self._bootstrapRequestLoopActive = true
+	task.spawn(function()
+		while self._destroyed ~= true and self:HasCompletedBootstrap() ~= true do
+			assert(self._entityContext ~= nil, "EntityReplicationClient: missing EntityContext")
+			local didRequest = self._entityContext:RequestEntityReplication()
+			if didRequest == true then
+				self._bootstrapRequestLoopActive = false
+				return
+			end
+			task.wait(0.25)
+		end
+		self._bootstrapRequestLoopActive = false
+	end)
+end
+
 function EntityReplicationClient:Destroy()
+	self._destroyed = true
 	if self.StateChanged ~= nil then
 		self.StateChanged:DisconnectAll()
 	end
