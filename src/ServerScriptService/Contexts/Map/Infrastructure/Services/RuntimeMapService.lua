@@ -200,11 +200,13 @@ end
 	@param _name string -- The registered module name.
 ]=]
 function RuntimeMapService:Init(registry: any, _name: string)
+	self._mapEntityReadService = registry:Get("MapEntityReadService")
+	assert(self._mapEntityReadService ~= nil, "RuntimeMapService missing MapEntityReadService in Init")
 end
 
-function RuntimeMapService:Configure(entityContext: any, mapEntityReadService: any)
-	self._entityContext = entityContext
-	self._mapEntityReadService = mapEntityReadService
+function RuntimeMapService:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
+	assert(self._entityContext ~= nil, "RuntimeMapService requires EntityContext in Start")
 end
 
 --[=[

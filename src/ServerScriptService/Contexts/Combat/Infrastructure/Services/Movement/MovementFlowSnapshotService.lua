@@ -16,8 +16,9 @@ function MovementFlowSnapshotService.new()
 	return self
 end
 
-function MovementFlowSnapshotService:Configure(gridService: any)
-	self._gridService = gridService
+function MovementFlowSnapshotService:Init(registry: any, _name: string)
+	self._gridService = registry:Get("MovementGridService")
+	assert(self._gridService ~= nil, "MovementFlowSnapshotService missing MovementGridService in Init")
 end
 
 function MovementFlowSnapshotService:BuildWallGridSnapshot(): ({ boolean }, number, number)

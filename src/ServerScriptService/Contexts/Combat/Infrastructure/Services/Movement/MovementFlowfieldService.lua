@@ -15,8 +15,9 @@ function MovementFlowfieldService.new()
 	return self
 end
 
-function MovementFlowfieldService:Configure(gridService: any)
-	self._gridService = gridService
+function MovementFlowfieldService:Init(registry: any, _name: string)
+	self._gridService = registry:Get("MovementGridService")
+	assert(self._gridService ~= nil, "MovementFlowfieldService missing MovementGridService in Init")
 end
 
 function MovementFlowfieldService:GetRuntime(): (any?, any?)

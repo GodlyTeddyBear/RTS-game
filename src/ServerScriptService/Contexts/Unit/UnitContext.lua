@@ -41,7 +41,7 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
 		Name = "UnitEntityReadService",
 		Factory = function(service: any, _baseContext: any)
-			return UnitEntityReadService.new(service._entityContext)
+			return UnitEntityReadService.new()
 		end,
 		CacheAs = "_unitReadService",
 	},
@@ -95,7 +95,6 @@ end
 
 function UnitContext:KnitStart()
 	UnitBaseContext:KnitStart()
-	self._unitReadService:Configure(self._entityContext)
 
 	local entityResult = self:_RegisterEntityInfrastructure()
 	if not entityResult.success then

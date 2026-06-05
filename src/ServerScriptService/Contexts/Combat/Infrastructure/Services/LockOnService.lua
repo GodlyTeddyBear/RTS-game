@@ -40,20 +40,6 @@ end
 function LockOnService:Start()
 end
 
-function LockOnService:ConfigureFactories(
-	enemyEntityFactory: any,
-	structureEntityFactory: any,
-	structureInstanceFactory: any,
-	baseEntityFactory: any,
-	baseInstanceFactory: any
-)
-	self._enemyEntityFactory = enemyEntityFactory
-	self._structureEntityFactory = structureEntityFactory
-	self._structureInstanceFactory = structureInstanceFactory
-	self._baseEntityFactory = baseEntityFactory
-	self._baseInstanceFactory = baseInstanceFactory
-end
-
 function LockOnService:SetBoidsFacingFlatForward(entity: number, flatForward: Vector3?)
 	if flatForward == nil then
 		self._boidsFacingFlatForward[entity] = nil

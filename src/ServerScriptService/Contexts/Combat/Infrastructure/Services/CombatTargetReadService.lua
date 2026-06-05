@@ -9,8 +9,9 @@ function CombatTargetReadService.new()
 	return self
 end
 
-function CombatTargetReadService:Configure(entityContext: any)
-	self._entityContext = entityContext
+function CombatTargetReadService:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
+	assert(self._entityContext ~= nil, "CombatTargetReadService missing EntityContext in Start")
 end
 
 function CombatTargetReadService:GetBoundModel(entity: number): Model?

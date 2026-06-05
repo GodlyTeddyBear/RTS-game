@@ -79,8 +79,6 @@ end
 ]=]
 function MapContext:KnitStart()
 	MapBaseContext:KnitStart()
-	self._mapEntityReadService:Configure(self._entityContext)
-	self._runtimeMapService:Configure(self._entityContext, self._mapEntityReadService)
 	local registrationResult = self:_RegisterEntityInfrastructure()
 	if not registrationResult.success then
 		error(("MapContext failed to register Entity infrastructure: [%s] %s"):format(

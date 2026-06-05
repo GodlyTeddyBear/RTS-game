@@ -13,11 +13,12 @@ function BaseEntityReadService.new()
 	return setmetatable({}, BaseEntityReadService)
 end
 
-function BaseEntityReadService:Configure(entityContext: any)
-	self._entityContext = entityContext
+function BaseEntityReadService:Init(_registry: any, _name: string)
 end
 
-function BaseEntityReadService:Init(_registry: any, _name: string)
+function BaseEntityReadService:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
+	assert(self._entityContext ~= nil, "BaseEntityReadService missing EntityContext in Start")
 end
 
 function BaseEntityReadService:GetActiveBaseEntity(): number?

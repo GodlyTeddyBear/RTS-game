@@ -20,9 +20,14 @@ function MovementPathRuntimeService.new()
 	return self
 end
 
-function MovementPathRuntimeService:Configure(actorReadService: any, entityContext: any)
-	self._actorReadService = actorReadService
-	self._entityContext = entityContext
+function MovementPathRuntimeService:Init(registry: any, _name: string)
+	self._actorReadService = registry:Get("MovementActorReadService")
+	assert(self._actorReadService ~= nil, "MovementPathRuntimeService missing MovementActorReadService in Init")
+end
+
+function MovementPathRuntimeService:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
+	assert(self._entityContext ~= nil, "MovementPathRuntimeService missing EntityContext in Start")
 end
 
 function MovementPathRuntimeService:StartOrRetarget(entityFactory: any, entity: number, goalPosition: Vector3): (boolean, string?)

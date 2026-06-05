@@ -24,10 +24,6 @@ function RegisterAIEntitySystemsCommand.new()
 end
 
 function RegisterAIEntitySystemsCommand:Init(registry: any, _name: string)
-	self._registry = registry
-	if registry ~= nil and type(registry) == "table" and type(registry.Modules) == "table" then
-		self._entityContext = registry.Modules.EntityContext
-	end
 	self:_RequireDependencies(registry, {
 		_actionRegistry = "AIActionDefinitionRegistry",
 		_factProviderRegistry = "AIFactProviderRegistry",
@@ -35,10 +31,13 @@ function RegisterAIEntitySystemsCommand:Init(registry: any, _name: string)
 	})
 end
 
+function RegisterAIEntitySystemsCommand:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
+	assert(self._entityContext ~= nil, "RegisterAIEntitySystemsCommand missing EntityContext in Start")
+end
+
 function RegisterAIEntitySystemsCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
-		self:_EnsureEntityContext()
-
 		local selectionResult = self:_RegisterBehaviorSelectionSystem()
 		if not selectionResult.success then
 			return selectionResult
@@ -67,15 +66,6 @@ function RegisterAIEntitySystemsCommand:Execute(): Result.Result<boolean>
 		return Result.Ok(true)
 	end, self:_Label())
 end
-
-function RegisterAIEntitySystemsCommand:_EnsureEntityContext()
-	if self._entityContext ~= nil then
-		return
-	end
-	assert(self._registry ~= nil, "RegisterAIEntitySystemsCommand missing registry for EntityContext resolution")
-	self._entityContext = self._registry:Get("EntityContext")
-end
-
 function RegisterAIEntitySystemsCommand:_RegisterBehaviorSelectionSystem(): Result.Result<boolean>
 	return self:_RegisterSystem("Decide", {
 		Name = "AIBehaviorSelectionSystem",

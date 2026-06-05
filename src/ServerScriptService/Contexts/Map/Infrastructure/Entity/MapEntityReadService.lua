@@ -9,17 +9,17 @@ MapEntityReadService.__index = MapEntityReadService
 
 local LOCATION_WORLD = "Location"
 
-function MapEntityReadService.new(entityContext: any?)
+function MapEntityReadService.new()
 	local self = setmetatable({}, MapEntityReadService)
-	self._entityContext = entityContext
 	return self
 end
 
-function MapEntityReadService:Configure(entityContext: any)
-	self._entityContext = entityContext
+function MapEntityReadService:Init(_registry: any, _name: string)
 end
 
-function MapEntityReadService:Init(_registry: any, _name: string)
+function MapEntityReadService:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
+	assert(self._entityContext ~= nil, "MapEntityReadService requires EntityContext in Start")
 end
 
 function MapEntityReadService:GetActiveMapEntity(): number?

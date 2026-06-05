@@ -7,20 +7,14 @@ local SpatialQuery = require(ReplicatedStorage.Utilities.SpatialQuery)
 local UnitEntityReadService = {}
 UnitEntityReadService.__index = UnitEntityReadService
 
-function UnitEntityReadService.new(entityContext: any?)
+function UnitEntityReadService.new()
 	local self = setmetatable({}, UnitEntityReadService)
-	self._entityContext = entityContext
 	return self
 end
 
-function UnitEntityReadService:Configure(entityContext: any)
-	self._entityContext = entityContext
-end
-
 function UnitEntityReadService:Start(registry: any, _name: string)
-	if self._entityContext == nil then
-		self._entityContext = registry:Get("EntityContext")
-	end
+	self._entityContext = registry:Get("EntityContext")
+	assert(self._entityContext ~= nil, "UnitEntityReadService missing EntityContext in Start")
 end
 
 function UnitEntityReadService:QueryActiveEntities(): { number }

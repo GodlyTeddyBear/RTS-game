@@ -21,17 +21,16 @@ function SetupEntityAICommand.new()
 end
 
 function SetupEntityAICommand:Init(registry: any, _name: string)
-	self._registry = registry
-	if registry ~= nil and type(registry) == "table" and type(registry.Modules) == "table" then
-		self._entityContext = registry.Modules.EntityContext
-	end
 	self:_RequireDependency(registry, "_setupPolicy", "AIEntitySetupPolicy")
+end
+
+function SetupEntityAICommand:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
+	assert(self._entityContext ~= nil, "SetupEntityAICommand missing EntityContext in Start")
 end
 
 function SetupEntityAICommand:Execute(entity: number, profile: TAIEntityProfile): Result.Result<boolean>
 	return Result.Catch(function()
-		self:_EnsureEntityContext()
-
 		local existsResult = self:_EntityExists(entity)
 		if not existsResult.success then
 			return existsResult
@@ -45,15 +44,6 @@ function SetupEntityAICommand:Execute(entity: number, profile: TAIEntityProfile)
 		return self:_WriteSetupComponents(entity, setupResult.value.Profile)
 	end, self:_Label())
 end
-
-function SetupEntityAICommand:_EnsureEntityContext()
-	if self._entityContext ~= nil then
-		return
-	end
-	assert(self._registry ~= nil, "SetupEntityAICommand missing registry for EntityContext resolution")
-	self._entityContext = self._registry:Get("EntityContext")
-end
-
 function SetupEntityAICommand:_EntityExists(entity: number): Result.Result<boolean>
 	if type(entity) ~= "number" then
 		return Result.Err("UnknownEntity", Errors.UNKNOWN_ENTITY, {

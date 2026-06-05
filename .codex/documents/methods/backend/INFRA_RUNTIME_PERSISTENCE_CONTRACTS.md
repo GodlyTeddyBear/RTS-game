@@ -23,6 +23,9 @@ Canonical architecture references:
   - nil-as-failure boundaries (`fromNilable(...)`)
   - multi-step operations that can partially fail
 - Use plain Lua returns for safe in-memory reads where `nil` is a valid state.
+- Infrastructure services and read helpers that depend on registry-managed modules must resolve same-context dependencies in `Init(...)`.
+- Infrastructure services and read helpers that depend on external contexts or startup-ordered modules must resolve those dependencies in `Start(...)`.
+- Infrastructure modules must not rely on owning contexts to patch dependencies later through `Configure(...)`, `ConfigureEntityContext(...)`, or similar setter seams.
 
 
 ---
@@ -58,6 +61,8 @@ Canonical architecture references:
 - Do not evaluate domain eligibility/spec rules inside infrastructure modules.
 - Do not mutate atom state from Application, Domain, or Context modules directly.
 - Do not implement profile hydration/save ownership with ad-hoc player event handlers inside contexts.
+- Do not recover missing registry-managed dependencies lazily during normal runtime operations when `Init(...)` or `Start(...)` should own that resolution.
+- Do not introduce context-side manual wiring for infrastructure module dependencies.
 
 
 ---
@@ -68,6 +73,8 @@ Canonical architecture references:
 - Infrastructure module contains policy/spec eligibility branching.
 - Context persistence flow depends on `PlayerAdded/PlayerRemoving` rather than persistence events + lifecycle manager.
 - Persistence module exposes a generic ambiguous sync entrypoint with no explicit load/save boundary semantics.
+- Infrastructure module exposes `Configure(...)` only to accept registry-managed dependencies that should have been resolved by lifecycle hooks.
+- A service or read helper cannot operate after bootstrap unless its context manually mutates its dependency fields.
 
 
 ---
@@ -79,6 +86,7 @@ Canonical architecture references:
 - [ ] Hydration/save wiring uses persistence events + lifecycle manager.
 - [ ] Persistence modules expose explicit `Load...` / `Save...` methods.
 - [ ] Infrastructure contains runtime operations only, not domain eligibility decisions.
+- [ ] Infrastructure dependency wiring is lifecycle-managed through `Init(...)` / `Start(...)`, not post-bootstrap setter patching.
 
 ---
 

@@ -35,6 +35,10 @@ Canonical architecture references:
 - `_RequireDependencies(registry, dependencyMap)` resolves each entry through `_RequireDependency(...)`.
 - Dependency maps are field-to-registry-name mappings and must stay declarative.
 - Dependency resolution in these helpers must not trigger business actions, writes, or side effects.
+- Commands and queries must resolve same-context registry modules in `Init(...)`.
+- Commands and queries must resolve cross-context or startup-ordered dependencies in `Start(...)`.
+- Do not store a registry just to recover missing dependencies later at execution time.
+- Do not patch command/query dependencies through ad hoc `Configure(...)` or setter-style methods after bootstrap.
 
 ---
 
@@ -51,6 +55,8 @@ Canonical architecture references:
 - Do not add domain eligibility or policy/spec branching to `BaseApplication`, `BaseCommand`, or `BaseQuery`.
 - Do not hardcode direct game event string literals in callers when resolver usage is required.
 - Do not bypass registry resolution by writing ad-hoc dependency assignment logic in each command/query.
+- Do not resolve cross-context dependencies in `Init(...)` when they are only guaranteed after service startup.
+- Do not add lazy fallback dependency recovery inside `Execute(...)` for registry-managed modules.
 - Do not mutate persistence, ECS, or runtime state from base helper methods.
 
 ---
@@ -60,6 +66,8 @@ Canonical architecture references:
 - A base helper method contains business-rule branching specific to one context.
 - Commands/queries emit hardcoded event identifiers instead of using `_GetGameEvent(...)`.
 - Dependency fields are assigned manually from mixed sources without registry contract checks.
+- A command/query uses `Configure(...)`, caches `registry`, or calls `registry:Get(...)` later to recover a missing dependency.
+- A dependency that should be in `Start(...)` is instead resolved during `Execute(...)`.
 - Base helper changes require feature-specific conditionals to stay working.
 
 ---
@@ -69,5 +77,6 @@ Canonical architecture references:
 - [ ] Constructors use non-empty `contextName` and `operationName`.
 - [ ] Derived constructors call `BaseApplication.new(...)`.
 - [ ] Registry dependencies are resolved through `_RequireDependency(...)` or `_RequireDependencies(...)`.
+- [ ] Same-context dependencies are resolved in `Init(...)`; cross-context or startup-ordered dependencies are resolved in `Start(...)`.
 - [ ] Event names are resolved through `_GetGameEvent(...)` before emission.
 - [ ] Base helpers contain only technical shared behavior (no domain-rule ownership).

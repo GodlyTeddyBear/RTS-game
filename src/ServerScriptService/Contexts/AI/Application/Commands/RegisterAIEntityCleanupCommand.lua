@@ -19,17 +19,16 @@ function RegisterAIEntityCleanupCommand.new()
 end
 
 function RegisterAIEntityCleanupCommand:Init(registry: any, _name: string)
-	self._registry = registry
-	if registry ~= nil and type(registry) == "table" and type(registry.Modules) == "table" then
-		self._entityContext = registry.Modules.EntityContext
-	end
 	self:_RequireDependency(registry, "_cleanupEntityAICommand", "CleanupEntityAICommand")
+end
+
+function RegisterAIEntityCleanupCommand:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
+	assert(self._entityContext ~= nil, "RegisterAIEntityCleanupCommand missing EntityContext in Start")
 end
 
 function RegisterAIEntityCleanupCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
-		self:_EnsureEntityContext()
-
 		local registerResult = self._entityContext:RegisterSystem("CleanupResolve", {
 			Name = "AICleanupOutcomeSystem",
 			Phase = "CleanupResolve",
@@ -57,13 +56,4 @@ function RegisterAIEntityCleanupCommand:Execute(): Result.Result<boolean>
 		})
 	end, self:_Label())
 end
-
-function RegisterAIEntityCleanupCommand:_EnsureEntityContext()
-	if self._entityContext ~= nil then
-		return
-	end
-	assert(self._registry ~= nil, "RegisterAIEntityCleanupCommand missing registry for EntityContext resolution")
-	self._entityContext = self._registry:Get("EntityContext")
-end
-
 return RegisterAIEntityCleanupCommand

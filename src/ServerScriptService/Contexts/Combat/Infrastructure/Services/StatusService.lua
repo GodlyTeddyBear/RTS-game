@@ -13,8 +13,9 @@ end
 
 function StatusService:Init(_registry: any, _name: string) end
 
-function StatusService:ConfigureEntityContext(entityContext: any)
-	self._entityContext = entityContext
+function StatusService:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
+	assert(self._entityContext ~= nil, "StatusService missing EntityContext in Start")
 end
 
 function StatusService:UpsertAuraSource(sourceHandle: string, sourceData: any)

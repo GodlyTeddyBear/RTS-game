@@ -29,16 +29,15 @@ function CleanupEntityAICommand.new()
 end
 
 function CleanupEntityAICommand:Init(registry: any, _name: string)
-	self._registry = registry
-	if registry ~= nil and type(registry) == "table" and type(registry.Modules) == "table" then
-		self._entityContext = registry.Modules.EntityContext
-	end
+end
+
+function CleanupEntityAICommand:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
+	assert(self._entityContext ~= nil, "CleanupEntityAICommand missing EntityContext in Start")
 end
 
 function CleanupEntityAICommand:Execute(entity: number): Result.Result<boolean>
 	return Result.Catch(function()
-		self:_EnsureEntityContext()
-
 		local existsResult = self:_EntityExists(entity)
 		if not existsResult.success then
 			return existsResult
@@ -57,15 +56,6 @@ function CleanupEntityAICommand:Execute(entity: number): Result.Result<boolean>
 		return Result.Ok(true)
 	end, self:_Label())
 end
-
-function CleanupEntityAICommand:_EnsureEntityContext()
-	if self._entityContext ~= nil then
-		return
-	end
-	assert(self._registry ~= nil, "CleanupEntityAICommand missing registry for EntityContext resolution")
-	self._entityContext = self._registry:Get("EntityContext")
-end
-
 function CleanupEntityAICommand:_EntityExists(entity: number): Result.Result<boolean>
 	if type(entity) ~= "number" then
 		return Result.Ok(false)

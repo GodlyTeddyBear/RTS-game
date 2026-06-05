@@ -182,12 +182,7 @@ end
 
 function CombatContext:KnitStart()
 	CombatBaseContext:KnitStart()
-	self._movementPathRuntimeService:Configure(self._movementActorReadService, self._entityContext)
-	self._movementFlowfieldService:Configure(self._movementGridService)
-	self._movementFlowSnapshotService:Configure(self._movementGridService)
-	self._movementApplyBridgeService:Configure(self._movementActorReadService, self._entityContext, self._lockOnService)
 	self._movementFlowDispatchService:Prime()
-	self._statusService:ConfigureEntityContext(self._entityContext)
 
 	local entityRegistrationResult = self:_RegisterEntityActionPipeline()
 	if not entityRegistrationResult.success then
@@ -371,8 +366,6 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 		if not movementGoalReachedResult.success then
 			return movementGoalReachedResult
 		end
-
-		self._combatTargetReadService:Configure(self._entityContext)
 
 		local attackResult = self._entityContext:RegisterSystem("ActionAdvance", {
 			Name = "AttackAdvanceSystem",

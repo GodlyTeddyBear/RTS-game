@@ -129,7 +129,6 @@ end
 ]=]
 function BaseContextService:KnitStart()
 	BaseBaseContext:KnitStart()
-	self._baseEntityReadService:Configure(self._entityContext)
 	self:_RegisterEntityInfrastructure()
 	self:_RegisterCombatRules()
 	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)

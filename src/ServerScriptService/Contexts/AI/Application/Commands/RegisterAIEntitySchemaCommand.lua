@@ -20,16 +20,15 @@ function RegisterAIEntitySchemaCommand.new()
 end
 
 function RegisterAIEntitySchemaCommand:Init(registry: any, _name: string)
-	self._registry = registry
-	if registry ~= nil and type(registry) == "table" and type(registry.Modules) == "table" then
-		self._entityContext = registry.Modules.EntityContext
-	end
+end
+
+function RegisterAIEntitySchemaCommand:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
+	assert(self._entityContext ~= nil, "RegisterAIEntitySchemaCommand missing EntityContext in Start")
 end
 
 function RegisterAIEntitySchemaCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
-		self:_EnsureEntityContext()
-
 		local schemaRegistry = self._entityContext._schemaRegistry
 		if schemaRegistry ~= nil and schemaRegistry:HasFeature(AISharedContract.FeatureName) then
 			return Result.Ok(true)
@@ -47,13 +46,4 @@ function RegisterAIEntitySchemaCommand:Execute(): Result.Result<boolean>
 		return Result.Ok(true)
 	end, self:_Label())
 end
-
-function RegisterAIEntitySchemaCommand:_EnsureEntityContext()
-	if self._entityContext ~= nil then
-		return
-	end
-	assert(self._registry ~= nil, "RegisterAIEntitySchemaCommand missing registry for EntityContext resolution")
-	self._entityContext = self._registry:Get("EntityContext")
-end
-
 return RegisterAIEntitySchemaCommand

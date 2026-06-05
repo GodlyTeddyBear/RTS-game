@@ -18,10 +18,15 @@ function MovementApplyBridgeService.new()
 	return self
 end
 
-function MovementApplyBridgeService:Configure(actorReadService: any, entityContext: any, lockOnService: any?)
-	self._actorReadService = actorReadService
-	self._entityContext = entityContext
-	self._lockOnService = lockOnService
+function MovementApplyBridgeService:Init(registry: any, _name: string)
+	self._actorReadService = registry:Get("MovementActorReadService")
+	self._lockOnService = registry:Get("LockOnService")
+	assert(self._actorReadService ~= nil, "MovementApplyBridgeService missing MovementActorReadService in Init")
+end
+
+function MovementApplyBridgeService:Start(registry: any, _name: string)
+	self._entityContext = registry:Get("EntityContext")
+	assert(self._entityContext ~= nil, "MovementApplyBridgeService missing EntityContext in Start")
 end
 
 function MovementApplyBridgeService:Apply(entityFactory: any, entity: number, applyState: any): (boolean, string?)

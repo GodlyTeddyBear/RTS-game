@@ -40,7 +40,7 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	{
 		Name = "EnemyEntityReadService",
 		Factory = function(service: any, _baseContext: any)
-			return EnemyEntityReadService.new(service._entityContext)
+			return EnemyEntityReadService.new()
 		end,
 		CacheAs = "_enemyEntityReadService",
 	},
@@ -98,7 +98,6 @@ end
 
 function EnemyContext:KnitStart()
 	EnemyBaseContext:KnitStart()
-	self._enemyEntityReadService:Configure(self._entityContext)
 
 	local registrationResult = self:_RegisterEntityInfrastructure()
 	if not registrationResult.success then
