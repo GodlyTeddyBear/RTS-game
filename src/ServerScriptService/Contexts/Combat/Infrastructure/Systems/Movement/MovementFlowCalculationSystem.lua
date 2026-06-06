@@ -181,7 +181,15 @@ function MovementFlowCalculationSystem:_DispatchFlowSeparation(entities: { numbe
 	for _, entity in ipairs(entities) do
 		local intent = self:_Get(entity, "MoveIntent", "Movement")
 		local runtime = self:_Get(entity, "PathRuntimeState", "Movement")
-		if type(intent) ~= "table" or type(runtime) ~= "table" or runtime.Mode ~= "Boids" then continue end
+		local applyState = self:_Get(entity, "ApplyState", "Movement")
+		if
+			type(intent) ~= "table"
+			or type(runtime) ~= "table"
+			or runtime.Mode ~= "Boids"
+			or (type(applyState) == "table" and applyState.Status == "Done")
+		then
+			continue
+		end
 		local goalPosition = runtime.ResolvedGoalPosition or runtime.GoalPosition
 		local position = self._actorReadService:GetPosition(self._entityFactory, self._entityContext, entity)
 		if typeof(goalPosition) ~= "Vector3" or position == nil then continue end

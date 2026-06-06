@@ -7,6 +7,9 @@
 	@client
 ]=]
 local StructureConfig = {}
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local FreezeDeep = require(ReplicatedStorage.Utilities.FreezeDeep)
 local StructureTypes = require(script.Parent.Parent.Types.StructureTypes)
 
 type TStructureConfig = StructureTypes.TStructureConfig
@@ -91,24 +94,7 @@ local Definitions: { [string]: TStructureConfig } = {
 	},
 }
 
-for _, definition in Definitions do
-	table.freeze(definition.Health)
-	table.freeze(definition.AI)
-	if definition.Capabilities.Attack ~= nil then
-		table.freeze(definition.Capabilities.Attack)
-	end
-	table.freeze(definition.Capabilities.Construction)
-	if definition.Capabilities.StatusAura ~= nil then
-		table.freeze(definition.Capabilities.StatusAura)
-	end
-	if type(definition.Capabilities.Aim) == "table" then
-		table.freeze(definition.Capabilities.Aim)
-	end
-	table.freeze(definition.Capabilities)
-	table.freeze(definition)
-end
-
-StructureConfig.Definitions = table.freeze(Definitions)
+StructureConfig.Definitions = FreezeDeep(Definitions)
 
 --[=[
 	@prop TYPE_ALIASES { [string]: string }
@@ -128,4 +114,4 @@ StructureConfig.TYPE_ALIASES = table.freeze({
 	["Relay Beacon"] = "RelayBeacon",
 })
 
-return table.freeze(StructureConfig)
+return FreezeDeep(StructureConfig)

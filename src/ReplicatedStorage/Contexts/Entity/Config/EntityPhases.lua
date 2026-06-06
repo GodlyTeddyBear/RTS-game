@@ -12,6 +12,8 @@ local movementOrdered = table.freeze({
 	"MovementGrid",
 	"MovementCalculate",
 	"MovementApply",
+	"MovementFinalize",
+	"MovementActionComplete",
 })
 
 local runtimeOrdered = table.freeze({
@@ -19,9 +21,11 @@ local runtimeOrdered = table.freeze({
 	"Simulation",
 	"PostSimulation",
 	"Sense",
+	"RuntimePoll",
 	"Decide",
 	"Commit",
 	"ActionStart",
+	"ActionReconcile",
 	"ActionAdvance",
 	"MechanicSpawn",
 	"MechanicImpact",
@@ -32,7 +36,6 @@ local runtimeOrdered = table.freeze({
 	"CleanupResolve",
 	"Cleanup",
 	"RuntimeSync",
-	"RuntimePoll",
 	"DestroyFlush",
 })
 
@@ -45,13 +48,17 @@ local EntityPhases: TEntityPhases = table.freeze({
 		"MovementGrid",
 		"MovementCalculate",
 		"MovementApply",
+		"MovementFinalize",
+		"MovementActionComplete",
 		"PreSimulation",
 		"Simulation",
 		"PostSimulation",
 		"Sense",
+		"RuntimePoll",
 		"Decide",
 		"Commit",
 		"ActionStart",
+		"ActionReconcile",
 		"ActionAdvance",
 		"MechanicSpawn",
 		"MechanicImpact",
@@ -62,7 +69,6 @@ local EntityPhases: TEntityPhases = table.freeze({
 		"CleanupResolve",
 		"Cleanup",
 		"RuntimeSync",
-		"RuntimePoll",
 		"DestroyFlush",
 	}),
 })

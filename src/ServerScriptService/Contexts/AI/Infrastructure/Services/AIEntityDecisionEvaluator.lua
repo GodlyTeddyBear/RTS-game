@@ -10,6 +10,11 @@ local Errors = require(script.Parent.Parent.Parent.Errors)
 type TAIEntityEvaluationOptions = AISharedContract.TAIEntityEvaluationOptions
 type TAIEntityEvaluationResult = AISharedContract.TAIEntityEvaluationResult
 
+local RUNNING_ACTION_STATUSES = {
+	[AISharedContract.ActionStatus.Requested] = true,
+	[AISharedContract.ActionStatus.Running] = true,
+}
+
 local AIEntityDecisionEvaluator = {}
 AIEntityDecisionEvaluator.__index = AIEntityDecisionEvaluator
 
@@ -19,6 +24,7 @@ end
 
 function AIEntityDecisionEvaluator:Init(registry: any, _name: string)
 	self._behaviorRegistry = registry:Get("AIBehaviorDefinitionRegistry")
+	self._actionRegistry = registry:Get("AIActionDefinitionRegistry")
 end
 
 function AIEntityDecisionEvaluator:Start(registry: any, _name: string)
@@ -73,16 +79,18 @@ function AIEntityDecisionEvaluator:Evaluate(
 
 		local actionIntent = actionIntentResult.value
 		if actionIntent ~= nil then
-			local writeResult = self:_WriteActionDecision(entity, actionIntent, now)
+			local writeResult = self:_WriteActionDecision(entity, actionIntent, now, components.ActionState)
 			if not writeResult.success then
 				return writeResult
 			end
+			local didWriteAction = writeResult.value == true
 
 			return Result.Ok({
 				Evaluated = true,
+				SkippedReason = if didWriteAction then nil else "ActionReplacementRejected",
 				DefinitionId = definitionId,
-				ActionIntent = actionIntent,
-				BehaviorId = actionIntent.ActionId,
+				ActionIntent = if didWriteAction then actionIntent else nil,
+				BehaviorId = if didWriteAction then actionIntent.ActionId else self:_ResolveCurrentActionId(components.ActionState),
 			})
 		end
 
@@ -353,7 +361,16 @@ function AIEntityDecisionEvaluator:_NormalizeActionIntent(entity: number, contex
 	})
 end
 
-function AIEntityDecisionEvaluator:_WriteActionDecision(entity: number, actionIntent: any, now: number): Result.Result<boolean>
+function AIEntityDecisionEvaluator:_WriteActionDecision(
+	entity: number,
+	actionIntent: any,
+	now: number,
+	currentActionState: any
+): Result.Result<boolean>
+	if not self:_CanReplaceCurrentAction(entity, currentActionState, actionIntent) then
+		return Result.Ok(false)
+	end
+
 	local intentResult =
 		self._entityContext:Set(entity, AISharedContract.Components.ActionIntent, actionIntent, AISharedContract.FeatureName)
 	if not intentResult.success then
@@ -381,6 +398,54 @@ function AIEntityDecisionEvaluator:_WriteActionDecision(entity: number, actionIn
 	end
 
 	return self._entityContext:Add(entity, AISharedContract.Tags.BehaviorDirtyTag, AISharedContract.FeatureName)
+end
+
+function AIEntityDecisionEvaluator:_CanReplaceCurrentAction(
+	entity: number,
+	currentActionState: any,
+	nextActionIntent: any
+): boolean
+	if type(currentActionState) ~= "table" then
+		return true
+	end
+
+	local currentActionId = currentActionState.ActionId
+	local nextActionId = if type(nextActionIntent) == "table" then nextActionIntent.ActionId else nil
+	if type(currentActionId) ~= "string" or currentActionId == "" then
+		return true
+	end
+	if type(nextActionId) ~= "string" or nextActionId == "" then
+		return true
+	end
+	if currentActionId == nextActionId then
+		return true
+	end
+	if RUNNING_ACTION_STATUSES[currentActionState.Status] ~= true then
+		return true
+	end
+	if not self:_IsCurrentActionActive(entity, currentActionId) then
+		return true
+	end
+
+	local nextActionDefinition = self._actionRegistry:GetActionDefinition(nextActionId)
+	local metadata = if type(nextActionDefinition) == "table" then nextActionDefinition.Metadata else nil
+	local interrupts = if type(metadata) == "table" then metadata.Interrupts else nil
+
+	return type(interrupts) == "table" and interrupts[currentActionId] == true
+end
+
+function AIEntityDecisionEvaluator:_IsCurrentActionActive(entity: number, actionId: string): boolean
+	if actionId == "Attack" then
+		local attackResult = self._entityContext:Get(entity, "AttackState", "Combat")
+		local attackState = if attackResult.success then attackResult.value else nil
+		if type(attackState) ~= "table" then
+			return true
+		end
+
+		return attackState.Phase ~= "Completed" and attackState.Phase ~= "Failed"
+	end
+
+	return true
 end
 
 function AIEntityDecisionEvaluator:_ClearActionDecision(
@@ -433,6 +498,17 @@ function AIEntityDecisionEvaluator:_ResolveCurrentBehaviorId(currentBehavior: an
 	end
 
 	return currentBehavior.BehaviorId
+end
+
+function AIEntityDecisionEvaluator:_ResolveCurrentActionId(currentActionState: any): string?
+	if type(currentActionState) ~= "table" then
+		return nil
+	end
+	if type(currentActionState.ActionId) ~= "string" or currentActionState.ActionId == "" then
+		return nil
+	end
+
+	return currentActionState.ActionId
 end
 
 function AIEntityDecisionEvaluator:_CloneNodePath(nodePath: any): { string }

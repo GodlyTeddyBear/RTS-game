@@ -3,6 +3,11 @@
 local MovementPresentationProjectionSystem = {}
 MovementPresentationProjectionSystem.__index = MovementPresentationProjectionSystem
 
+local ACTIVE_ACTION_STATUSES = table.freeze({
+	Requested = true,
+	Running = true,
+})
+
 function MovementPresentationProjectionSystem.new(entityFactory: any, ruleRegistry: any)
 	return setmetatable({ _entityFactory = entityFactory, _ruleRegistry = ruleRegistry }, MovementPresentationProjectionSystem)
 end
@@ -38,7 +43,8 @@ function MovementPresentationProjectionSystem:_ProjectEntity(rule: any, entity: 
 	local actionState = self:_Get(entity, "ActionState", "AI")
 	local attackState = self:_Get(entity, "AttackState", "Combat")
 	local isMoving = type(applyResult) == "table" and applyResult.IsMoving == true
-	local isAttacking = type(actionState) == "table" and actionState.ActionId == "Attack"
+	local hasActiveAction = type(actionState) == "table" and ACTIVE_ACTION_STATUSES[actionState.Status] == true
+	local isAttacking = hasActiveAction and actionState.ActionId == "Attack"
 		and type(attackState) == "table"
 		and attackState.ActionId == "Attack"
 
@@ -47,7 +53,7 @@ function MovementPresentationProjectionSystem:_ProjectEntity(rule: any, entity: 
 		return
 	end
 
-	if type(actionState) == "table" and type(rule.ActionPresentation) == "table" then
+	if hasActiveAction and type(rule.ActionPresentation) == "table" then
 		local actionProjection = rule.ActionPresentation[actionState.ActionId]
 		if type(actionProjection) == "table" and self:_CanApplyActionProjection(actionProjection, isMoving) then
 			self:_ApplyActionProjection(rule, entity, actionProjection)
@@ -110,7 +116,7 @@ function MovementPresentationProjectionSystem:_ApplyMovementProjection(rule: any
 	if type(rule.PathState) == "table" then
 		local previous = self:_Get(entity, rule.PathState.Key, rule.PathState.FeatureName)
 		local nextState = {
-			GoalPosition = if type(intent) == "table" then intent.GoalPosition else if type(previous) == "table" then previous.GoalPosition else nil,
+			GoalPosition = if type(intent) == "table" then intent.GoalPosition else nil,
 			IsMoving = isMoving,
 		}
 		if type(rule.PathState.PreserveKeys) == "table" and type(previous) == "table" then

@@ -27,6 +27,7 @@ local BasicActions = {
 		end,
 		Metadata = {
 			Description = "Template action that emits an idle intent.",
+			AllowsMovement = false,
 		},
 	},
 
@@ -74,6 +75,10 @@ local BasicActions = {
 		end,
 		Metadata = {
 			Description = "Template action that emits an attack intent from target facts.",
+			AllowsMovement = false,
+			Interrupts = {
+				Advance = true,
+			},
 		},
 	},
 
@@ -106,6 +111,8 @@ local BasicActions = {
 		end,
 		Metadata = {
 			Description = "Template action that emits movement or advance intent data.",
+			MovementAction = true,
+			AllowsMovement = true,
 		},
 	},
 
@@ -138,6 +145,8 @@ local BasicActions = {
 		end,
 		Metadata = {
 			Description = "Template action that emits manual movement intent data.",
+			MovementAction = true,
+			AllowsMovement = true,
 		},
 	},
 
@@ -170,6 +179,7 @@ local BasicActions = {
 		end,
 		Metadata = {
 			Description = "Template action that emits builder construction intent data.",
+			AllowsMovement = true,
 		},
 	},
 
@@ -201,6 +211,7 @@ local BasicActions = {
 		end,
 		Metadata = {
 			Description = "Template action that emits extraction intent data.",
+			AllowsMovement = false,
 		},
 	},
 
@@ -233,6 +244,7 @@ local BasicActions = {
 		end,
 		Metadata = {
 			Description = "Template action that emits stasis intent data.",
+			AllowsMovement = false,
 		},
 	},
 

@@ -7,46 +7,48 @@
 	@client
 ]=]
 local EnemyTypes = require(script.Parent.Parent.Types.EnemyTypes)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local FreezeDeep = require(ReplicatedStorage.Utilities.FreezeDeep)
 type TEnemyRole = EnemyTypes.EnemyRole
 type TEnemyRoleConfig = EnemyTypes.EnemyRoleConfig
 type TEnemyConfig = EnemyTypes.EnemyConfig
 
-local Definitions: { [TEnemyRole]: TEnemyRoleConfig } = table.freeze({
-	Swarm = table.freeze({
+local Definitions: { [TEnemyRole]: TEnemyRoleConfig } = {
+	Swarm = {
 		DefinitionId = "Swarm",
 		DisplayName = "Swarm",
-		Health = table.freeze({ Max = 30 }),
-		AI = table.freeze({ ProfileId = "EnemySwarmAI" }),
-		Movement = table.freeze({ Mode = "Any", Speed = 16 }),
-		Capabilities = table.freeze({
-			Attack = table.freeze({
+		Health = { Max = 30 },
+		AI = { ProfileId = "EnemySwarmAI" },
+		Movement = { Mode = "Boids", Speed = 16 },
+		Capabilities = {
+			Attack = {
 				Damage = 5,
 				Range = 6,
 				Cooldown = 1.25,
 				TargetPreference = "Goal",
-			}),
-		}),
-	}),
-	Tank = table.freeze({
+			},
+		},
+	},
+	Tank = {
 		DefinitionId = "Tank",
 		DisplayName = "Tank",
-		Health = table.freeze({ Max = 120 }),
-		AI = table.freeze({ ProfileId = "EnemyTankAI" }),
-		Movement = table.freeze({ Mode = "Path", Speed = 8 }),
-		Capabilities = table.freeze({
-			Attack = table.freeze({
+		Health = { Max = 120 },
+		AI = { ProfileId = "EnemyTankAI" },
+		Movement = { Mode = "Path", Speed = 8 },
+		Capabilities = {
+			Attack = {
 				Damage = 15,
 				Range = 6,
 				Cooldown = 1.25,
 				TargetPreference = "Goal",
-			}),
-		}),
-	}),
-})
+			},
+		},
+	},
+}
 
-local EnemyConfig: TEnemyConfig = table.freeze({
-	Definitions = Definitions,
-})
+local EnemyConfig: TEnemyConfig = {
+	Definitions = FreezeDeep(Definitions),
+}
 
-return EnemyConfig
+return FreezeDeep(EnemyConfig)

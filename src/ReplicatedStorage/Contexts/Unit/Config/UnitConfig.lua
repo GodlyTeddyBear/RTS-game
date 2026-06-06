@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local FreezeDeep = require(ReplicatedStorage.Utilities.FreezeDeep)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
 
 type UnitDefinition = UnitTypes.UnitDefinition
@@ -38,18 +39,6 @@ local Definitions: { [string]: UnitDefinition } = {
 	},
 }
 
-for _, definition in Definitions do
-	table.freeze(definition.Health)
-	table.freeze(definition.AI)
-	table.freeze(definition.Movement)
-	if definition.Capabilities.Build ~= nil then
-		table.freeze(definition.Capabilities.Build)
-	end
-	table.freeze(definition.Capabilities)
-	table.freeze(definition.Limits)
-	table.freeze(definition)
-end
+UnitConfig.Definitions = FreezeDeep(Definitions)
 
-UnitConfig.Definitions = table.freeze(Definitions)
-
-return table.freeze(UnitConfig)
+return FreezeDeep(UnitConfig)

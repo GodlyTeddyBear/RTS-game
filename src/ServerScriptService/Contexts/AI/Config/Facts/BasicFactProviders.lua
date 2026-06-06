@@ -4,6 +4,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
+local ATTACK_RANGE_EXIT_BUFFER = 2
+
 local function getService(serviceName: string): any?
 	local didGet, service = pcall(function()
 		return Knit.GetService(serviceName)
@@ -55,6 +57,50 @@ local function getActiveBaseEntity(context: any): number?
 	return result.value[1]
 end
 
+local function resolveTargetGeometry(
+	combatContext: any?,
+	sourcePosition: Vector3,
+	targetEntity: number?,
+	fallbackTargetPosition: Vector3?
+): any?
+	if
+		combatContext == nil
+		or type(targetEntity) ~= "number"
+		or type(combatContext.ResolveTargetGeometry) ~= "function"
+	then
+		return nil
+	end
+
+	local geometryResult = combatContext:ResolveTargetGeometry(sourcePosition, targetEntity, fallbackTargetPosition)
+	return if geometryResult ~= nil and geometryResult.success then geometryResult.value else nil
+end
+
+local function getGeometryHorizontalDistance(
+	geometry: any?,
+	sourcePosition: Vector3,
+	fallbackTargetPosition: Vector3?
+): number?
+	if type(geometry) == "table" and type(geometry.HorizontalDistance) == "number" then
+		return geometry.HorizontalDistance
+	end
+	if fallbackTargetPosition ~= nil then
+		return (Vector2.new(fallbackTargetPosition.X, fallbackTargetPosition.Z) - Vector2.new(sourcePosition.X, sourcePosition.Z)).Magnitude
+	end
+	return nil
+end
+
+local function getGeometryTargetPosition(geometry: any?, fallbackTargetPosition: Vector3?): Vector3?
+	if type(geometry) == "table" then
+		if typeof(geometry.SurfacePosition) == "Vector3" then
+			return geometry.SurfacePosition
+		end
+		if typeof(geometry.AimPosition) == "Vector3" then
+			return geometry.AimPosition
+		end
+	end
+	return fallbackTargetPosition
+end
+
 local function buildAttackTargetFacts(context: any): any
 	if type(context.Entity) ~= "number" then
 		return {}
@@ -67,23 +113,35 @@ local function buildAttackTargetFacts(context: any): any
 		return {}
 	end
 
+	local sourcePosition = currentCFrame.Position
 	local baseContext = getService("BaseContext")
+	local combatContext = getService("CombatContext")
 	local structureContext = getService("StructureContext")
+	local baseEntity = getActiveBaseEntity(context)
+	local actionState = if type(context.ActionState) == "table" then context.ActionState else nil
+	local attackRange = if type(role.AttackRange) == "number" then role.AttackRange else 0
+	local attackThreshold = attackRange
+	if type(actionState) == "table" and actionState.ActionId == "Attack" then
+		attackThreshold += ATTACK_RANGE_EXIT_BUFFER
+	end
 	local baseTargetResult = if baseContext ~= nil and type(baseContext.GetBaseTargetCFrame) == "function"
 		then baseContext:GetBaseTargetCFrame()
 		else nil
 	local baseTargetCFrame = if baseTargetResult ~= nil and baseTargetResult.success then baseTargetResult.value else nil
+	local baseTargetPosition = if baseTargetCFrame ~= nil then baseTargetCFrame.Position else nil
+	local baseGeometry = resolveTargetGeometry(combatContext, sourcePosition, baseEntity, baseTargetPosition)
 	local advanceData = {
-		GoalPosition = if baseTargetCFrame ~= nil then baseTargetCFrame.Position else nil,
+		GoalPosition = getGeometryTargetPosition(baseGeometry, baseTargetPosition),
 		MovementMode = role.MovementMode,
 	}
+	local baseDistance = getGeometryHorizontalDistance(baseGeometry, sourcePosition, baseTargetPosition)
 
 	if structureContext ~= nil and type(structureContext.GetActiveStructures) == "function" then
 		local structuresResult = structureContext:GetActiveStructures()
 		local structures = if structuresResult.success and type(structuresResult.value) == "table" then structuresResult.value else {}
 		local nearestEntity = nil :: number?
 		local nearestPosition = nil :: Vector3?
-		local nearestDistance = if type(role.AttackRange) == "number" then role.AttackRange else 0
+		local nearestDistance = attackThreshold
 
 		for _, structureEntity in ipairs(structures) do
 			if type(structureEntity) ~= "number" then
@@ -93,10 +151,12 @@ local function buildAttackTargetFacts(context: any): any
 			local positionResult = structureContext:GetStructurePosition(structureEntity)
 			local structurePosition = if positionResult.success then positionResult.value else nil
 			if structurePosition ~= nil then
-				local distance = (structurePosition - currentCFrame.Position).Magnitude
-				if distance <= nearestDistance then
+				local structureGeometry =
+					resolveTargetGeometry(combatContext, sourcePosition, structureEntity, structurePosition)
+				local distance = getGeometryHorizontalDistance(structureGeometry, sourcePosition, structurePosition)
+				if distance ~= nil and distance <= nearestDistance then
 					nearestEntity = structureEntity
-					nearestPosition = structurePosition
+					nearestPosition = getGeometryTargetPosition(structureGeometry, structurePosition)
 					nearestDistance = distance
 				end
 			end
@@ -118,12 +178,7 @@ local function buildAttackTargetFacts(context: any): any
 		end
 	end
 
-	if
-		baseTargetCFrame ~= nil
-		and type(role.AttackRange) == "number"
-		and (baseTargetCFrame.Position - currentCFrame.Position).Magnitude <= role.AttackRange
-	then
-		local baseEntity = getActiveBaseEntity(context)
+	if attackRange > 0 and baseDistance ~= nil and baseDistance <= attackThreshold then
 		if type(baseEntity) ~= "number" then
 			return {
 				AdvanceData = advanceData,
@@ -136,7 +191,7 @@ local function buildAttackTargetFacts(context: any): any
 			AttackData = {
 				AbilityId = "EnemyBaseAttack",
 				TargetKind = "Base",
-				TargetPosition = baseTargetCFrame.Position,
+				TargetPosition = getGeometryTargetPosition(baseGeometry, baseTargetPosition),
 				Damage = role.Damage,
 				Cooldown = role.AttackCooldown,
 			},

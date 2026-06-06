@@ -39,9 +39,12 @@ local HitboxImpactSystem = require(script.Parent.Infrastructure.Systems.Attack.H
 local HitboxSpawnSystem = require(script.Parent.Infrastructure.Systems.Attack.HitboxSpawnSystem)
 local ProjectileImpactSystem = require(script.Parent.Infrastructure.Systems.Attack.ProjectileImpactSystem)
 local ProjectileSpawnSystem = require(script.Parent.Infrastructure.Systems.Attack.ProjectileSpawnSystem)
+local MovementActionCompletionSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementActionCompletionSystem)
+local MovementActionReconciliationSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementActionReconciliationSystem)
 local MovementApplySystem = require(script.Parent.Infrastructure.Systems.Movement.MovementApplySystem)
 local MovementEntitySchema = require(script.Parent.Infrastructure.Entity.MovementEntitySchema)
 local MovementCleanupOutcomeSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementCleanupOutcomeSystem)
+local MovementFinalizeSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementFinalizeSystem)
 local MovementFlowCalculationSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementFlowCalculationSystem)
 local MovementGoalReachedSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementGoalReachedSystem)
 local MovementGridSystem = require(script.Parent.Infrastructure.Systems.Movement.MovementGridSystem)
@@ -336,6 +339,56 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			return movementApplyResult
 		end
 
+		local movementFinalizeResult = self._entityContext:RegisterSystem("MovementFinalize", {
+			Name = "MovementFinalizeSystem",
+			Phase = "MovementFinalize",
+			Reads = {
+				"Movement.MoveIntent",
+				"Movement.ApplyResult",
+				"Movement.PathRuntimeState",
+			},
+			Writes = {
+				"Movement.CompletedIntent",
+				"Movement.MoveIntent",
+				"Movement.ApplyState",
+				"Movement.ApplyResult",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return MovementFinalizeSystem.new(entityFactory, {
+					PathRuntimeService = self._movementPathRuntimeService,
+					FlowfieldService = self._movementFlowfieldService,
+					ApplyBridgeService = self._movementApplyBridgeService,
+				})
+			end,
+		})
+		if not movementFinalizeResult.success then
+			return movementFinalizeResult
+		end
+
+		local movementActionCompletionResult = self._entityContext:RegisterSystem("MovementActionComplete", {
+			Name = "MovementActionCompletionSystem",
+			Phase = "MovementActionComplete",
+			Reads = {
+				"Movement.CompletedIntent",
+				"AI.ActionState",
+				"Unit.PathState",
+			},
+			Writes = {
+				"AI.ActionState",
+				"AI.ActionIntent",
+				"AI.ActionIntentTag",
+				"AI.ActionDirtyTag",
+				"Unit.PathState",
+				"Entity.DirtyTag",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return MovementActionCompletionSystem.new(entityFactory)
+			end,
+		})
+		if not movementActionCompletionResult.success then
+			return movementActionCompletionResult
+		end
+
 		local movementPresentationResult = self._entityContext:RegisterSystem("Projection", {
 			Name = "MovementPresentationProjectionSystem",
 			Phase = "Projection",
@@ -361,11 +414,12 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			Name = "MovementGoalReachedSystem",
 			Phase = "OutcomeDispatch",
 			Reads = {
-				"Movement.MoveIntent",
-				"Movement.ApplyResult",
+				"Movement.CompletedIntent",
+				"Entity.GoalReachedOutcome",
 			},
 			Writes = {
-				"Entity.DirtyTag",
+				"Combat.GoalReachedOutcomeRequest",
+				"Movement.CompletedIntent",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
 				return MovementGoalReachedSystem.new(entityFactory, self._combatOutcomeRuleRegistryService)
@@ -373,6 +427,32 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 		})
 		if not movementGoalReachedResult.success then
 			return movementGoalReachedResult
+		end
+
+		local movementActionReconciliationResult = self._entityContext:RegisterSystem("ActionReconcile", {
+			Name = "MovementActionReconciliationSystem",
+			Phase = "ActionReconcile",
+			Reads = {
+				"AI.ActionState",
+				"AI.ActionIntent",
+				"Movement.MoveIntent",
+				"Combat.AttackState",
+			},
+			Writes = {
+				"Movement.MoveIntent",
+				"Movement.ApplyState",
+				"Movement.ApplyResult",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return MovementActionReconciliationSystem.new(entityFactory, {
+					PathRuntimeService = self._movementPathRuntimeService,
+					FlowfieldService = self._movementFlowfieldService,
+					ApplyBridgeService = self._movementApplyBridgeService,
+				})
+			end,
+		})
+		if not movementActionReconciliationResult.success then
+			return movementActionReconciliationResult
 		end
 
 		local attackResult = self._entityContext:RegisterSystem("ActionAdvance", {
@@ -634,6 +714,42 @@ end
 
 function CombatContext:SetupMovementActor(entity: number, profile: any): Result.Result<boolean>
 	return self._movementActorSetupService:Setup(self._entityContext, entity, profile)
+end
+
+function CombatContext:ResolveTargetGeometry(
+	sourcePosition: Vector3,
+	targetEntity: number,
+	fallbackTargetPosition: Vector3?
+): Result.Result<any?>
+	return Catch(function()
+		return Ok(self._combatTargetReadService:ResolveTargetGeometry(sourcePosition, targetEntity, fallbackTargetPosition))
+	end, "Combat:ResolveTargetGeometry")
+end
+
+function CombatContext:IsTargetInRange(
+	sourcePosition: Vector3,
+	targetEntity: number,
+	range: number,
+	fallbackTargetPosition: Vector3?
+): Result.Result<any>
+	return Catch(function()
+		local isInRange, geometry =
+			self._combatTargetReadService:IsTargetInRange(sourcePosition, targetEntity, range, fallbackTargetPosition)
+		return Ok({
+			IsInRange = isInRange,
+			Geometry = geometry,
+		})
+	end, "Combat:IsTargetInRange")
+end
+
+function CombatContext:ResolveApproachGoal(
+	sourcePosition: Vector3,
+	targetEntity: number,
+	fallbackTargetPosition: Vector3?
+): Result.Result<Vector3?>
+	return Catch(function()
+		return Ok(self._combatTargetReadService:ResolveApproachGoal(sourcePosition, targetEntity, fallbackTargetPosition))
+	end, "Combat:ResolveApproachGoal")
 end
 
 function CombatContext:RequestDamage(payload: any): Result.Result<boolean>

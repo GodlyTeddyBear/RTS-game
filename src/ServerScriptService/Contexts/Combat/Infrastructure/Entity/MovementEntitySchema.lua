@@ -99,6 +99,17 @@ local MovementEntitySchema = {
 				FailureReason = nil,
 			},
 		},
+		CompletedIntent = {
+			ECSName = "Movement.CompletedIntent",
+			Authority = "DERIVED",
+			Default = {
+				ActionId = nil,
+				RequestedAt = 0,
+				GoalPosition = nil,
+				CompletedAt = nil,
+				Mode = nil,
+			},
+		},
 	},
 	Tags = {},
 	Archetypes = {},
