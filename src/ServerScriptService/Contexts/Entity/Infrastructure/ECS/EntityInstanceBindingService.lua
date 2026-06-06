@@ -367,15 +367,15 @@ function EntityInstanceBindingService:_ResolveAsset(compiledBinding: any, entity
 		})
 	end
 
+	if assetOrPath.Parent == nil then
+		return Result.Ok(assetOrPath)
+	end
+
 	local didClone, cloned = pcall(function()
 		return assetOrPath:Clone()
 	end)
 	if didClone and typeof(cloned) == "Instance" then
 		return Result.Ok(cloned)
-	end
-
-	if assetOrPath.Parent == nil then
-		return Result.Ok(assetOrPath)
 	end
 
 	return Result.Err("UnsupportedBindingAsset", Errors.UNSUPPORTED_BINDING_ASSET, {

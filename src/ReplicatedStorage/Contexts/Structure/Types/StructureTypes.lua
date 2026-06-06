@@ -1,5 +1,7 @@
 --!strict
 
+local EntityDefinitionTypes = require(script.Parent.Parent.Parent.Entity.Types.EntityDefinitionTypes)
+
 --[=[
 	@class StructureTypes
 	Defines shared structure entity, component, and attack payload shapes.
@@ -111,28 +113,19 @@ export type TIdentityComponent = {
 --[=[
 	@interface TStructureConfig
 	@within StructureTypes
-	.DisplayName string -- Player-facing structure name used by placement and combat UI.
-	.MaxHealth number -- Maximum hit points for the structure.
-	.BuildWorkRequired number -- Total construction work required before the structure becomes operational.
-	.RuntimeProfileId "Attack" | "Extract" | "Passive" | "Stasis" -- Runtime profile that determines the behavior tree.
-	.AttackRange number? -- Optional attack range in studs.
-	.AttackDamage number? -- Optional attack damage.
-	.AttackCooldown number? -- Optional seconds between attacks.
-	.StasisRadius number? -- Optional aura radius used by stasis structures.
-	.MoveSpeedMultiplier number? -- Optional enemy move-speed multiplier applied by stasis structures.
-	.AimRig any? -- Optional aim-rig configuration for combat structures.
+	Standardized structure entity definition with Structure-owned capability data.
 ]=]
 export type TStructureConfig = {
+	DefinitionId: StructureType,
 	DisplayName: string,
-	MaxHealth: number,
-	BuildWorkRequired: number,
-	RuntimeProfileId: "Attack" | "Extract" | "Passive" | "Stasis",
-	AttackRange: number?,
-	AttackDamage: number?,
-	AttackCooldown: number?,
-	StasisRadius: number?,
-	MoveSpeedMultiplier: number?,
-	AimRig: any?,
+	Health: EntityDefinitionTypes.HealthDefinition,
+	AI: EntityDefinitionTypes.AIDefinition,
+	Capabilities: {
+		Attack: EntityDefinitionTypes.AttackCapability?,
+		Construction: EntityDefinitionTypes.ConstructionCapability,
+		StatusAura: EntityDefinitionTypes.StatusAuraCapability?,
+		Aim: any?,
+	},
 }
 
 --[=[

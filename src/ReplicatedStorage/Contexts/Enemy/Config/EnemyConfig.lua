@@ -12,37 +12,41 @@ type TEnemyRole = EnemyTypes.EnemyRole
 type TEnemyRoleConfig = EnemyTypes.EnemyRoleConfig
 type TEnemyConfig = EnemyTypes.EnemyConfig
 
-local Roles: { [TEnemyRole]: TEnemyRoleConfig } = table.freeze({
+local Definitions: { [TEnemyRole]: TEnemyRoleConfig } = table.freeze({
 	Swarm = table.freeze({
+		DefinitionId = "Swarm",
 		DisplayName = "Swarm",
-		RuntimeProfileId = "Swarm",
-		MaxHp = 30,
-		Damage = 5,
-		AttackRange = 6,
-		AttackCooldown = 1.25,
-		MoveSpeed = 16,
-		TargetPreference = "Goal",
-		ModelScale = Vector3.new(2.5, 3, 2.5),
-		ModelColor = Color3.fromRGB(240, 196, 78),
-		MovementMode = "Any",
+		Health = table.freeze({ Max = 30 }),
+		AI = table.freeze({ ProfileId = "EnemySwarmAI" }),
+		Movement = table.freeze({ Mode = "Any", Speed = 16 }),
+		Capabilities = table.freeze({
+			Attack = table.freeze({
+				Damage = 5,
+				Range = 6,
+				Cooldown = 1.25,
+				TargetPreference = "Goal",
+			}),
+		}),
 	}),
 	Tank = table.freeze({
+		DefinitionId = "Tank",
 		DisplayName = "Tank",
-		RuntimeProfileId = "Tank",
-		MaxHp = 120,
-		Damage = 15,
-		AttackRange = 6,
-		AttackCooldown = 1.25,
-		MoveSpeed = 8,
-		TargetPreference = "Goal",
-		ModelScale = Vector3.new(4, 4.5, 4),
-		ModelColor = Color3.fromRGB(150, 92, 74),
-		MovementMode = "Path",
+		Health = table.freeze({ Max = 120 }),
+		AI = table.freeze({ ProfileId = "EnemyTankAI" }),
+		Movement = table.freeze({ Mode = "Path", Speed = 8 }),
+		Capabilities = table.freeze({
+			Attack = table.freeze({
+				Damage = 15,
+				Range = 6,
+				Cooldown = 1.25,
+				TargetPreference = "Goal",
+			}),
+		}),
 	}),
 })
 
 local EnemyConfig: TEnemyConfig = table.freeze({
-	Roles = Roles,
+	Definitions = Definitions,
 })
 
 return EnemyConfig

@@ -29,38 +29,79 @@ local function _FindOrCreateFolder(parent: Instance, name: string): Folder
 	return folder
 end
 
-local function _ResolveAsset(asset: any): Instance
-	local assetKind = if type(asset) == "table" then asset.AssetKind else nil
-	if assetKind == "Part" then
-		local part = Instance.new("Part")
-		part.Shape = Enum.PartType.Ball
-		part.Size = Vector3.new(1.2, 1.2, 1.2)
-		part.Color = Color3.fromRGB(255, 199, 93)
-		part.Material = Enum.Material.Neon
-		part.Anchored = true
-		part.CanCollide = false
-		part.CanQuery = false
-		part.CanTouch = false
-		part.CastShadow = false
-		return part
+local function _CreateDebugPartAsset(): BasePart
+	local part = Instance.new("Part")
+	part.Shape = Enum.PartType.Ball
+	part.Size = Vector3.new(1.2, 1.2, 1.2)
+	part.Color = Color3.fromRGB(255, 199, 93)
+	part.Material = Enum.Material.Neon
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	return part
+end
+
+local function _ResolveHumanoidRoot(model: Model): BasePart?
+	if model.PrimaryPart ~= nil then
+		return model.PrimaryPart
 	end
 
-	local assetDomain = if type(asset) == "table" then asset.AssetDomain else nil
-	local assetId = if type(asset) == "table" then asset.AssetId else nil
-	assert(type(assetDomain) == "string" and assetDomain ~= "", "Entity generic model asset missing AssetDomain")
-	assert(type(assetId) == "string" and assetId ~= "", "Entity generic model asset missing AssetId")
+	local humanoidRoot = model:FindFirstChild("HumanoidRootPart")
+	if humanoidRoot ~= nil and humanoidRoot:IsA("BasePart") then
+		return humanoidRoot
+	end
 
-	local domainFolder = ASSETS_ROOT:FindFirstChild(assetDomain)
-	assert(domainFolder ~= nil, ("Entity generic model asset missing domain: %s"):format(assetDomain))
-	local source = domainFolder:FindFirstChild(assetId)
-	assert(source ~= nil, ("Entity generic model asset missing id: %s/%s"):format(assetDomain, assetId))
-	return source:Clone()
+	return model:FindFirstChildWhichIsA("BasePart", true)
+end
+
+local function _ResolveExistingRuntimeInstance(snapshot: any): Instance
+	local modelAsset = snapshot.ModelAsset
+	local assetKind = if type(modelAsset) == "table" then modelAsset.AssetKind else nil
+	local modelRef = snapshot.ModelRef
+	local instance = if type(modelRef) == "table" then modelRef.Model else nil
+	assert(assetKind == "Existing", "Entity existing runtime instance requires Existing asset kind")
+	assert(typeof(instance) == "Instance", "Entity existing runtime instance missing ModelRef.Model")
+	return instance
 end
 
 local function _PrepareInstance(instance: Instance, binding: any, snapshot: any)
 	local setupProfileId = if type(binding) == "table" then binding.SetupProfileId else nil
 	local transform = snapshot.Transform
-	if (setupProfileId == "HumanoidActor" or setupProfileId == "StructurePlacement") and instance:IsA("Model") then
+	if setupProfileId == "HumanoidActor" then
+		assert(instance:IsA("Model"), "Entity HumanoidActor binding requires a Model instance")
+		local rootPart = _ResolveHumanoidRoot(instance)
+		assert(rootPart ~= nil, "Entity HumanoidActor binding requires a root part")
+		instance.PrimaryPart = rootPart
+		for _, descendant in ipairs(instance:GetDescendants()) do
+			if descendant:IsA("BasePart") then
+				descendant.Anchored = false
+			end
+		end
+
+		local humanoid = instance:FindFirstChildOfClass("Humanoid")
+		if humanoid == nil then
+			humanoid = Instance.new("Humanoid")
+			humanoid.Parent = instance
+		end
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+
+		local animationsFolderRef = instance:FindFirstChild("AnimationsFolder")
+		if animationsFolderRef ~= nil and not animationsFolderRef:IsA("ObjectValue") then
+			animationsFolderRef:Destroy()
+			animationsFolderRef = nil
+		end
+		if animationsFolderRef == nil then
+			animationsFolderRef = Instance.new("ObjectValue")
+			animationsFolderRef.Name = "AnimationsFolder"
+			animationsFolderRef.Parent = instance
+		end
+		if ANIMATIONS_FOLDER ~= nil then
+			(animationsFolderRef :: ObjectValue).Value = ANIMATIONS_FOLDER
+		end
+	elseif setupProfileId == "StructurePlacement" then
+		assert(instance:IsA("Model"), "Entity StructurePlacement binding requires a Model instance")
 		local humanoid = instance:FindFirstChildOfClass("Humanoid")
 		if humanoid == nil then
 			humanoid = Instance.new("Humanoid")
@@ -136,6 +177,7 @@ function RegisterEntityFeatureCommand:Init(registry: any, _name: string)
 		_replicationRegistry = "EntityReplicationRegistry",
 		_schemaRegistry = "EntitySchemaRegistry",
 		_worldRegistry = "EntityWorldRegistryService",
+		_runtimeAssetResolverService = "EntityRuntimeAssetResolverService",
 	})
 end
 
@@ -293,7 +335,18 @@ function RegisterEntityFeatureCommand:_BuildGenericBinding(featureName: string):
 	return {
 		FeatureName = featureName,
 		ResolveAsset = function(_entityContext: any, snapshot: any): Instance
-			return _ResolveAsset(snapshot.ModelAsset)
+			local modelAsset = snapshot.ModelAsset
+			local assetKind = if type(modelAsset) == "table" then modelAsset.AssetKind else nil
+			if assetKind == "Part" then
+				return _CreateDebugPartAsset()
+			end
+			if assetKind == "Existing" then
+				return _ResolveExistingRuntimeInstance(snapshot)
+			end
+
+			local resolveResult = self._runtimeAssetResolverService:ResolveAsset(modelAsset)
+			assert(resolveResult.success, resolveResult.message)
+			return resolveResult.value
 		end,
 		ResolveParentFolder = function(_entityContext: any, snapshot: any): Instance
 			local binding = snapshot.ModelBinding or {}

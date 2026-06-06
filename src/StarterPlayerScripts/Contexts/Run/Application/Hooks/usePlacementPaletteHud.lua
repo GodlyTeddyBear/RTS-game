@@ -91,7 +91,7 @@ end
 
 -- Formats a placement key into a readable label for the palette cards.
 local function _FormatStructureName(structureType: string): string
-	local structureDefinition = StructureConfig.STRUCTURES[structureType]
+	local structureDefinition = StructureConfig.Definitions[structureType]
 	if structureDefinition ~= nil and type(structureDefinition.DisplayName) == "string" and structureDefinition.DisplayName ~= "" then
 		return structureDefinition.DisplayName
 	end

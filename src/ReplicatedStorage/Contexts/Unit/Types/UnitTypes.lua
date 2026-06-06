@@ -1,5 +1,7 @@
 --!strict
 
+local EntityDefinitionTypes = require(script.Parent.Parent.Parent.Entity.Types.EntityDefinitionTypes)
+
 --[=[
 	@class UnitTypes
 	Shared unit type contracts used by server unit systems.
@@ -12,21 +14,21 @@ export type UnitDefinitionId = string
 export type UnitFaction = "Player" | "Enemy"
 export type UnitOwnerKind = "Player" | "PlayerBase" | "EnemyBase"
 export type UnitRole = "Combat" | "Builder"
-export type UnitMovementMode = "Any" | "Boids" | "Path"
+export type UnitMovementMode = "Any" | "Boids" | "Path" | "Direct"
 
 export type UnitDefinition = {
-	UnitId: UnitDefinitionId,
-	RuntimeProfileId: string,
+	DefinitionId: UnitDefinitionId,
 	Role: UnitRole,
 	DisplayName: string,
-	MaxHp: number,
-	MoveSpeed: number,
-	BuildWorkPerSecond: number?,
-	BuildRange: number?,
-	ModelScale: Vector3,
-	ModelColor: Color3,
-	MaxConcurrentUnitsPerOwner: number,
-	MovementMode: UnitMovementMode,
+	Health: EntityDefinitionTypes.HealthDefinition,
+	AI: EntityDefinitionTypes.AIDefinition,
+	Movement: EntityDefinitionTypes.MovementDefinition,
+	Capabilities: {
+		Build: EntityDefinitionTypes.BuildCapability?,
+	},
+	Limits: {
+		MaxConcurrentPerOwner: number,
+	},
 }
 
 export type SpawnUnitRequest = {
@@ -83,7 +85,6 @@ export type LockOnComponent = {
 export type RoleComponent = {
 	Role: UnitRole,
 	DisplayName: string,
-	MaxHp: number,
 	UnitId: UnitDefinitionId,
 	MovementMode: UnitMovementMode,
 	BuildWorkPerSecond: number?,

@@ -12,6 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Result = require(ReplicatedStorage.Utilities.Result)
 local UnitConfig = require(ReplicatedStorage.Contexts.Unit.Config.UnitConfig)
 local UnitTypes = require(ReplicatedStorage.Contexts.Unit.Types.UnitTypes)
+local EntityDefinitionSpecs = require(ReplicatedStorage.Contexts.Entity.Specs.EntityDefinitionSpecs)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 type SpawnUnitRequest = UnitTypes.SpawnUnitRequest
@@ -51,9 +52,32 @@ function UnitSpawnPolicy:Check(request: SpawnUnitRequest): Result.Result<UnitDef
 		Ensure(definition ~= nil, "InvalidUnitId", Errors.INVALID_UNIT_ID, {
 			UnitId = request.UnitId,
 		})
+		Ensure(EntityDefinitionSpecs.IsValid(definition), "InvalidUnitId", Errors.INVALID_UNIT_ID, {
+			UnitId = request.UnitId,
+		})
+		Ensure(definition.DefinitionId == request.UnitId, "InvalidUnitId", Errors.INVALID_UNIT_ID, {
+			UnitId = request.UnitId,
+		})
+		Ensure(
+			type(definition.Limits) == "table"
+				and type(definition.Limits.MaxConcurrentPerOwner) == "number"
+				and definition.Limits.MaxConcurrentPerOwner > 0,
+			"InvalidUnitId",
+			Errors.INVALID_UNIT_ID,
+			{ UnitId = request.UnitId }
+		)
+		if definition.Role == "Builder" then
+			local build = if type(definition.Capabilities) == "table" then definition.Capabilities.Build else nil
+			Ensure(
+				build ~= nil and type(build.WorkPerSecond) == "number" and build.WorkPerSecond > 0 and type(build.Range) == "number" and build.Range > 0,
+				"InvalidUnitId",
+				Errors.INVALID_UNIT_ID,
+				{ UnitId = request.UnitId }
+			)
+		end
 
 		local currentCount = self._unitReadService:GetOwnerUnitCount(request.OwnerKind, request.OwnerId)
-		Ensure(currentCount < definition.MaxConcurrentUnitsPerOwner, "MaxConcurrentReached", Errors.MAX_CONCURRENT_REACHED, {
+		Ensure(currentCount < definition.Limits.MaxConcurrentPerOwner, "MaxConcurrentReached", Errors.MAX_CONCURRENT_REACHED, {
 			OwnerKind = request.OwnerKind,
 			OwnerId = request.OwnerId,
 			UnitId = request.UnitId,

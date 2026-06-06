@@ -1,17 +1,36 @@
 --!strict
 
 local BaseConfig = {}
+local EntityDefinitionTypes = require(script.Parent.Parent.Parent.Entity.Types.EntityDefinitionTypes)
 
-BaseConfig.BASE_ID = "PrimaryBase"
-BaseConfig.MAX_HP = 30000
-BaseConfig.BASE_MARKER_NAME = "Base"
+type BaseDefinition = {
+	DefinitionId: string,
+	DisplayName: string,
+	Health: EntityDefinitionTypes.HealthDefinition,
+	Capabilities: EntityDefinitionTypes.EntityCapabilities,
+}
+
+local Definitions: { [string]: BaseDefinition } = table.freeze({
+	PrimaryBase = table.freeze({
+		DefinitionId = "PrimaryBase",
+		DisplayName = "Primary Base",
+		Health = table.freeze({
+			Max = 30000,
+		}),
+		Capabilities = table.freeze({}),
+	}),
+})
+BaseConfig.Definitions = Definitions
+
 BaseConfig.REVEAL_NAMESPACE = "Base"
-BaseConfig.REVEAL_ENTITY_TYPE = "PrimaryBase"
+BaseConfig.REVEAL_ENTITY_TYPE = Definitions.PrimaryBase.DefinitionId
 BaseConfig.REVEAL_SCOPE_ID = "Global"
-BaseConfig.UNIT_PRODUCTION_SIDE_OFFSET = 10
-BaseConfig.UNIT_PRODUCTION_FORWARD_START = -6
-BaseConfig.UNIT_PRODUCTION_FORWARD_SPACING = 4
-BaseConfig.UNIT_PRODUCTION_SLOTS_PER_ROW = 4
-BaseConfig.UNIT_PRODUCTION_ROW_STEP = 4
+BaseConfig.ProductionLayout = table.freeze({
+	SideOffset = 10,
+	ForwardStart = -6,
+	ForwardSpacing = 4,
+	SlotsPerRow = 4,
+	RowStep = 4,
+})
 
 return table.freeze(BaseConfig)

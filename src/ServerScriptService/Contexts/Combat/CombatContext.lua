@@ -288,6 +288,9 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			Reads = {
 				"Movement.MoveIntent",
 				"Movement.FlowGridState",
+				"Movement.ActorProfile",
+				"Movement.PathRuntimeState",
+				"Entity.Transform",
 			},
 			Writes = {
 				"Movement.PathRuntimeState",
@@ -314,9 +317,14 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			Phase = "MovementApply",
 			Reads = {
 				"Movement.ApplyState",
+				"Movement.ActorProfile",
+				"Movement.SpeedState",
+				"Entity.Transform",
 			},
 			Writes = {
 				"Movement.ApplyResult",
+				"Entity.Transform",
+				"Entity.DirtyTag",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)
 				return MovementApplySystem.new(entityFactory, {

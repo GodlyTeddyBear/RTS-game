@@ -45,8 +45,8 @@ function BaseProductionViewModel.fromUnitConfig(selectedUnitId: string?): TBaseP
 		units[#units + 1] = table.freeze({
 			unitId = unitId,
 			displayName = definition.DisplayName,
-			hpText = ("%d HP"):format(definition.MaxHp),
-			capText = ("Cap %d"):format(definition.MaxConcurrentUnitsPerOwner),
+			hpText = ("%d HP"):format(definition.Health.Max),
+			capText = ("Cap %d"):format(definition.Limits.MaxConcurrentPerOwner),
 			isSelected = selectedUnitId == unitId,
 			isProduceEnabled = true,
 			layoutOrder = index,

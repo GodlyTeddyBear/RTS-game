@@ -434,7 +434,6 @@ export type TFlowBuildFrameStatePayload = {
 
 export type TFlowSoftSeparationConfig = {
 	VelAlpha: number?,
-	ClumpIdleRadiusStuds: number?,
 	ClumpTouchDistancePaddingStuds: number?,
 }
 

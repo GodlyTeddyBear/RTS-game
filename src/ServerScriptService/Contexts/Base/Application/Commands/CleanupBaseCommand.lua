@@ -13,6 +13,7 @@ local CollectionService = game:GetService("CollectionService")
 local Result = require(ReplicatedStorage.Utilities.Result)
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
 local BaseConfig = require(ReplicatedStorage.Contexts.Base.Config.BaseConfig)
+local BASE_DEFINITION = BaseConfig.Definitions.PrimaryBase
 local ECS = require(ReplicatedStorage.Utilities.ECS)
 
 local Ok = Result.Ok
@@ -20,7 +21,7 @@ local Ok = Result.Ok
 local function _ClearBaseReveal(instance: Instance)
 	local _entityId, revealState = ECS.RevealBuilder.Build({
 		EntityType = BaseConfig.REVEAL_ENTITY_TYPE,
-		SourceId = BaseConfig.BASE_ID,
+		SourceId = BASE_DEFINITION.DefinitionId,
 		ScopeId = BaseConfig.REVEAL_SCOPE_ID,
 		Namespace = BaseConfig.REVEAL_NAMESPACE,
 	})

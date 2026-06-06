@@ -13,17 +13,19 @@ local CollectionService = game:GetService("CollectionService")
 local Result = require(ReplicatedStorage.Utilities.Result)
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
 local BaseConfig = require(ReplicatedStorage.Contexts.Base.Config.BaseConfig)
+local EntityDefinitionSpecs = require(ReplicatedStorage.Contexts.Entity.Specs.EntityDefinitionSpecs)
 local ECS = require(ReplicatedStorage.Utilities.ECS)
 local Errors = require(script.Parent.Parent.Parent.Errors)
 
 local Ok = Result.Ok
 local Ensure = Result.Ensure
 local Try = Result.Try
+local BASE_DEFINITION = BaseConfig.Definitions.PrimaryBase
 
 local function _ApplyBaseReveal(instance: Instance)
 	local _entityId, revealState = ECS.RevealBuilder.Build({
 		EntityType = BaseConfig.REVEAL_ENTITY_TYPE,
-		SourceId = BaseConfig.BASE_ID,
+		SourceId = BASE_DEFINITION.DefinitionId,
 		ScopeId = BaseConfig.REVEAL_SCOPE_ID,
 		Namespace = BaseConfig.REVEAL_NAMESPACE,
 	})
@@ -31,7 +33,7 @@ local function _ApplyBaseReveal(instance: Instance)
 	for attributeName, value in pairs(revealState.Attributes or {}) do
 		instance:SetAttribute(attributeName, value)
 	end
-	instance:SetAttribute("BaseId", BaseConfig.BASE_ID)
+	instance:SetAttribute("BaseId", BASE_DEFINITION.DefinitionId)
 
 	for tagName, enabled in pairs(revealState.Tags or {}) do
 		if enabled == true then
@@ -86,6 +88,8 @@ end
 function PrepareRunBaseCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
 		Ensure(self._mapContext ~= nil, "MissingDependency", Errors.MISSING_MAP_CONTEXT)
+		Ensure(EntityDefinitionSpecs.IsValid(BASE_DEFINITION), "InvalidBaseDefinition", Errors.BASE_INSTANCE_NOT_FOUND)
+		Ensure(BASE_DEFINITION.Health ~= nil, "InvalidBaseDefinition", Errors.BASE_INSTANCE_NOT_FOUND)
 
 		local baseInstance = Try(self._mapContext:GetBaseInstance())
 		Ensure(baseInstance ~= nil, "BaseInstanceNotFound", Errors.BASE_INSTANCE_NOT_FOUND)
@@ -101,13 +105,13 @@ function PrepareRunBaseCommand:Execute(): Result.Result<boolean>
 
 		local createResult = self._entityContext:CreateEntity("Base.Actor", {
 			Identity = {
-				EntityId = BaseConfig.BASE_ID,
+				EntityId = BASE_DEFINITION.DefinitionId,
 				EntityKind = "Base",
-				DefinitionId = "PrimaryBase",
+				DefinitionId = BASE_DEFINITION.DefinitionId,
 			},
 			Health = {
-				Current = BaseConfig.MAX_HP,
-				Max = BaseConfig.MAX_HP,
+				Current = BASE_DEFINITION.Health.Max,
+				Max = BASE_DEFINITION.Health.Max,
 			},
 			Transform = {
 				CFrame = baseAnchor.CFrame,
@@ -117,7 +121,7 @@ function PrepareRunBaseCommand:Execute(): Result.Result<boolean>
 			},
 			ModelAsset = {
 				AssetDomain = "Base",
-				AssetId = BaseConfig.BASE_ID,
+				AssetId = BASE_DEFINITION.DefinitionId,
 				AssetKind = "Existing",
 			},
 			ModelBinding = {
@@ -148,7 +152,7 @@ function PrepareRunBaseCommand:Execute(): Result.Result<boolean>
 				},
 			},
 			State = {
-				BaseId = BaseConfig.BASE_ID,
+				BaseId = BASE_DEFINITION.DefinitionId,
 			},
 			AnchorRef = {
 				Anchor = baseAnchor,

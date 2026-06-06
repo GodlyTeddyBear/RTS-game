@@ -8,8 +8,9 @@ local MovementEntitySchema = {
 			Authority = "AUTHORITATIVE",
 			Default = {
 				ApplyMode = "Humanoid",
-				DefaultMode = "Path",
 				GoalReachedDistance = 4,
+				GoalDistanceMode = "Horizontal",
+				GroundGoals = true,
 				AgentParams = nil,
 			},
 		},
@@ -40,6 +41,9 @@ local MovementEntitySchema = {
 			Default = {
 				Mode = nil,
 				GoalPosition = nil,
+				OriginalGoalPosition = nil,
+				ResolvedGoalPosition = nil,
+				GoalResolutionReason = nil,
 				RequestedAt = 0,
 				StartedAt = nil,
 				UpdatedAt = nil,

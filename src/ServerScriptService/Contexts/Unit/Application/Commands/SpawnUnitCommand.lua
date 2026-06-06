@@ -21,10 +21,6 @@ local SpawnUnitCommand = {}
 SpawnUnitCommand.__index = SpawnUnitCommand
 setmetatable(SpawnUnitCommand, BaseCommand)
 
-local function _ResolveAIProfileId(runtimeProfileId: string): string
-	return "Unit" .. runtimeProfileId .. "AI"
-end
-
 function SpawnUnitCommand.new()
 	local self = BaseCommand.new("Unit", "SpawnUnit")
 	return setmetatable(self, SpawnUnitCommand)
@@ -64,8 +60,8 @@ function SpawnUnitCommand:Execute(request: SpawnUnitRequest): Result.Result<Spaw
 				OwnerId = request.OwnerId,
 			},
 			Health = {
-				Current = definition.MaxHp,
-				Max = definition.MaxHp,
+				Current = definition.Health.Max,
+				Max = definition.Health.Max,
 			},
 			Transform = {
 				CFrame = request.SpawnCFrame,
@@ -86,29 +82,22 @@ function SpawnUnitCommand:Execute(request: SpawnUnitRequest): Result.Result<Spaw
 				Health = true,
 				WalkSpeed = true,
 			},
-			TransformProjection = {
-				Enabled = false,
-			},
-			TransformPoll = {
-				Enabled = true,
-			},
 			CleanupOutcomes = {
 				OutcomeIds = { "AICleanup", "MovementCleanup", "TeamUnassign" },
 			},
 			Role = {
 				Role = definition.Role,
 				DisplayName = definition.DisplayName,
-				MaxHp = definition.MaxHp,
-				UnitId = definition.UnitId,
-				MovementMode = definition.MovementMode,
-				BuildWorkPerSecond = definition.BuildWorkPerSecond,
-				BuildRange = definition.BuildRange,
+				UnitId = definition.DefinitionId,
+				MovementMode = definition.Movement.Mode,
+				BuildWorkPerSecond = if definition.Capabilities.Build then definition.Capabilities.Build.WorkPerSecond else nil,
+				BuildRange = if definition.Capabilities.Build then definition.Capabilities.Build.Range else nil,
 			},
 			BaseMoveSpeed = {
-				Value = definition.MoveSpeed,
+				Value = definition.Movement.Speed,
 			},
 			CurrentMoveSpeed = {
-				Value = definition.MoveSpeed,
+				Value = definition.Movement.Speed,
 			},
 			PathState = {
 				GoalPosition = nil,
@@ -138,12 +127,11 @@ function SpawnUnitCommand:Execute(request: SpawnUnitRequest): Result.Result<Spaw
 
 		Try(self._combatContext:SetupMovementActor(entity, {
 			ApplyMode = "Humanoid",
-			DefaultMode = definition.MovementMode,
-			MoveSpeed = definition.MoveSpeed,
+			MoveSpeed = definition.Movement.Speed,
 		}))
 
-		Try(self._aiContext:SetupEntityAIFromProfile(entity, _ResolveAIProfileId(definition.RuntimeProfileId), {
-			TickInterval = 0.15,
+		Try(self._aiContext:SetupEntityAIFromProfile(entity, definition.AI.ProfileId, {
+			TickInterval = definition.AI.TickInterval,
 		}))
 
 		Try(self._entityContext:RegisterRuntimeEntity(entity))

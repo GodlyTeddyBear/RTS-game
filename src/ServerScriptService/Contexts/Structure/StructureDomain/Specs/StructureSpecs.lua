@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.StructureConfig)
 local StructureTypes = require(ReplicatedStorage.Contexts.Structure.Types.StructureTypes)
+local EntityDefinitionSpecs = require(ReplicatedStorage.Contexts.Entity.Specs.EntityDefinitionSpecs)
 
 type StructureType = StructureTypes.StructureType
 
@@ -13,6 +14,33 @@ type StructureType = StructureTypes.StructureType
 	@server
 ]=]
 local StructureSpecs = {}
+
+local function _IsPositiveFiniteNumber(value: any): boolean
+	return type(value) == "number" and value > 0 and value == value and value < math.huge
+end
+
+local function _IsValidDefinition(definition: any): boolean
+	if not EntityDefinitionSpecs.IsValid(definition) or type(definition.Capabilities) ~= "table" then
+		return false
+	end
+	local construction = definition.Capabilities.Construction
+	if type(construction) ~= "table" or not _IsPositiveFiniteNumber(construction.RequiredWork) then
+		return false
+	end
+	local attack = definition.Capabilities.Attack
+	if attack ~= nil then
+		if not _IsPositiveFiniteNumber(attack.Damage) or not _IsPositiveFiniteNumber(attack.Range) or not _IsPositiveFiniteNumber(attack.Cooldown) then
+			return false
+		end
+	end
+	local statusAura = definition.Capabilities.StatusAura
+	if statusAura ~= nil then
+		if not _IsPositiveFiniteNumber(statusAura.Radius) or not _IsPositiveFiniteNumber(statusAura.MoveSpeedMultiplier) then
+			return false
+		end
+	end
+	return true
+end
 
 --[=[
 	Resolves a raw structure key to its canonical type.
@@ -36,7 +64,9 @@ end
 	@return boolean -- Whether the type is known.
 ]=]
 function StructureSpecs.IsValidStructureType(rawStructureType: string): boolean
-	return StructureSpecs.ResolveStructureType(rawStructureType) ~= nil
+	local resolvedType = StructureSpecs.ResolveStructureType(rawStructureType)
+	local definition = if resolvedType ~= nil then StructureConfig.Definitions[resolvedType] else nil
+	return resolvedType ~= nil and definition ~= nil and definition.DefinitionId == resolvedType and _IsValidDefinition(definition)
 end
 
 --[=[

@@ -5,7 +5,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StructureConfig = require(ReplicatedStorage.Contexts.Structure.Config.StructureConfig)
 
 export type TRenderAssetFamilyId =
-	"StructureModel"
+	"EnemyModel"
+	| "UnitModel"
+	| "StructureModel"
 	| "AnimationClip"
 	| "SkillEffect"
 	| "StatusEffect"
@@ -60,6 +62,23 @@ local function _BuildDefaultFallbackPaths(normalizedKey: string, _options: TRend
 	}
 end
 
+local function _BuildCaseAwareDefaultFallbackPaths(
+	normalizedKey: string,
+	_options: TRenderAssetResolveOptions?
+): { { string } }
+	local candidatePaths = {
+		{ normalizedKey },
+	}
+
+	local lowerKey = string.lower(normalizedKey)
+	if lowerKey ~= normalizedKey then
+		table.insert(candidatePaths, { lowerKey })
+	end
+
+	table.insert(candidatePaths, { "Default" })
+	return candidatePaths
+end
+
 local function _BuildAnimationCandidatePaths(
 	normalizedKey: string,
 	options: TRenderAssetResolveOptions?
@@ -92,7 +111,7 @@ local function _ExtractModel(instance: Instance): Model?
 		return instance
 	end
 	if instance:IsA("Folder") then
-		return instance:FindFirstChildWhichIsA("Model")
+		return instance:FindFirstChildWhichIsA("Model", true)
 	end
 	return nil
 end
@@ -136,6 +155,18 @@ local function _CloneSound(instance: Instance, _options: TRenderAssetResolveOpti
 end
 
 local FAMILY_CONFIGS: { [TRenderAssetFamilyId]: TRenderAssetFamilyConfig } = {
+	EnemyModel = {
+		FamilyId = "EnemyModel",
+		RootPath = { "Enemies" },
+		BuildCandidatePaths = _BuildCaseAwareDefaultFallbackPaths,
+		Materialize = _CloneModel,
+	},
+	UnitModel = {
+		FamilyId = "UnitModel",
+		RootPath = { "Units" },
+		BuildCandidatePaths = _BuildCaseAwareDefaultFallbackPaths,
+		Materialize = _CloneModel,
+	},
 	StructureModel = {
 		FamilyId = "StructureModel",
 		RootPath = { "Structures" },

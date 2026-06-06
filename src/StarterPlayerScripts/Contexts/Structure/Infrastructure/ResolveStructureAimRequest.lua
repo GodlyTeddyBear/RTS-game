@@ -12,8 +12,9 @@ function ResolveStructureAimRequest.Execute(model: Model, context: any): any?
 		return nil
 	end
 
-	local structureConfig = StructureConfig.STRUCTURES[structureType]
-	if structureConfig == nil or structureConfig.AimRig == nil then
+	local structureConfig = StructureConfig.Definitions[structureType]
+	local aim = if structureConfig ~= nil then structureConfig.Capabilities.Aim else nil
+	if aim == nil then
 		return nil
 	end
 
@@ -24,9 +25,9 @@ function ResolveStructureAimRequest.Execute(model: Model, context: any): any?
 
 	return {
 		Model = model,
-		Strategy = structureConfig.AimRig.Strategy,
+		Strategy = aim.Strategy,
 		GetTargetWorldPosition = getTargetWorldPosition,
-		RigConfig = structureConfig.AimRig,
+		RigConfig = aim,
 		Context = context,
 	}
 end

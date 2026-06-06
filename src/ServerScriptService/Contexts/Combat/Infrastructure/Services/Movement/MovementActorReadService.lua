@@ -5,6 +5,19 @@ MovementActorReadService.__index = MovementActorReadService
 
 local GOAL_POSITION_EPSILON = 0.01
 
+local function getPreferredRootPart(model: Model): BasePart?
+	if model.PrimaryPart ~= nil then
+		return model.PrimaryPart
+	end
+
+	local humanoidRoot = model:FindFirstChild("HumanoidRootPart")
+	if humanoidRoot ~= nil and humanoidRoot:IsA("BasePart") then
+		return humanoidRoot
+	end
+
+	return model:FindFirstChildWhichIsA("BasePart", true)
+end
+
 function MovementActorReadService.new()
 	return setmetatable({}, MovementActorReadService)
 end
@@ -35,6 +48,15 @@ function MovementActorReadService:GetModelRef(entityFactory: any, entityContext:
 end
 
 function MovementActorReadService:GetPosition(entityFactory: any, entityContext: any, entity: number): Vector3?
+	local profile = self:GetActorProfile(entityFactory, entity)
+	if type(profile) == "table" and profile.ApplyMode == "Humanoid" then
+		local model = self:GetBoundModel(entityContext, entity)
+		local rootPart = if model ~= nil then getPreferredRootPart(model) else nil
+		if rootPart ~= nil then
+			return rootPart.Position
+		end
+	end
+
 	local transform = self:_Get(entityFactory, entity, "Transform", "Entity")
 	local cframe = if type(transform) == "table" then transform.CFrame else nil
 	if typeof(cframe) == "CFrame" then
@@ -42,7 +64,8 @@ function MovementActorReadService:GetPosition(entityFactory: any, entityContext:
 	end
 
 	local model = self:GetBoundModel(entityContext, entity)
-	return if model ~= nil and model.PrimaryPart ~= nil then model.PrimaryPart.Position else nil
+	local rootPart = if model ~= nil then getPreferredRootPart(model) else nil
+	return if rootPart ~= nil then rootPart.Position else nil
 end
 
 function MovementActorReadService:GetCurrentMoveSpeed(entityFactory: any, entity: number): number

@@ -138,21 +138,23 @@ end
 function UnitBuilderConstructionSystem:_ResolveMovementMode(entity: number): string?
 	local identity = self._unitReadService:GetIdentity(entity)
 	local definition = if type(identity) == "table" then UnitConfig.Definitions[identity.UnitId] else nil
-	local movementMode = if definition ~= nil then definition.MovementMode else nil
+	local movementMode = if definition ~= nil then definition.Movement.Mode else nil
 	return if type(movementMode) == "string" and movementMode ~= "" then movementMode else nil
 end
 
 function UnitBuilderConstructionSystem:_GetBuildWorkPerSecond(entity: number): number?
 	local identity = self._unitReadService:GetIdentity(entity)
 	local definition = if type(identity) == "table" then UnitConfig.Definitions[identity.UnitId] else nil
-	local value = if definition ~= nil then definition.BuildWorkPerSecond else nil
+	local build = if definition ~= nil then definition.Capabilities.Build else nil
+	local value = if build ~= nil then build.WorkPerSecond else nil
 	return if type(value) == "number" and value > 0 then value else nil
 end
 
 function UnitBuilderConstructionSystem:_GetBuildRange(entity: number): number?
 	local identity = self._unitReadService:GetIdentity(entity)
 	local definition = if type(identity) == "table" then UnitConfig.Definitions[identity.UnitId] else nil
-	local value = if definition ~= nil then definition.BuildRange else nil
+	local build = if definition ~= nil then definition.Capabilities.Build else nil
+	local value = if build ~= nil then build.Range else nil
 	return if type(value) == "number" and value > 0 then value else nil
 end
 

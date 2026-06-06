@@ -6,6 +6,7 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 local ReactCharm = require(ReplicatedStorage.Packages["React-charm"])
 local BaseTypes = require(ReplicatedStorage.Contexts.Base.Types.BaseTypes)
 local BaseConfig = require(ReplicatedStorage.Contexts.Base.Config.BaseConfig)
+local BASE_DEFINITION = BaseConfig.Definitions.PrimaryBase
 
 type BaseState = BaseTypes.BaseState
 
@@ -16,7 +17,7 @@ export type TBaseHudData = {
 
 local DEFAULT_BASE_HUD: TBaseHudData = table.freeze({
 	hp = 0,
-	maxHp = BaseConfig.MAX_HP,
+	maxHp = BASE_DEFINITION.Health.Max,
 })
 
 local baseAtom: (() -> BaseState?)? = nil

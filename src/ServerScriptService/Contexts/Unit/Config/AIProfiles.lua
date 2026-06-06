@@ -10,7 +10,6 @@ local UnitAIProfiles = {
 		Blackboard = {},
 		Metadata = {
 			Description = "Unit AI profile for manual movement, builder construction, and idle fallback.",
-			RuntimeProfileId = "Builder",
 		},
 	},
 }

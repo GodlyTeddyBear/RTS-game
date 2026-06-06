@@ -2,7 +2,6 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local EnemyConfig = require(ReplicatedStorage.Contexts.Enemy.Config.EnemyConfig)
 local GameEvents = require(ReplicatedStorage.Events.GameEvents)
 
 local EnemyGoalReachedOutcomeSystem = {}
@@ -47,9 +46,8 @@ end
 
 function EnemyGoalReachedOutcomeSystem:_RequestBaseDamage(entity: number)
 	local role = self:_Get(entity, "Role", "Enemy")
-	local roleId = if type(role) == "table" then role.Role else nil
-	local roleConfig = if type(roleId) == "string" then EnemyConfig.Roles[roleId] else nil
-	if roleConfig == nil or type(roleConfig.Damage) ~= "number" then
+	local damage = if type(role) == "table" then role.Damage else nil
+	if type(damage) ~= "number" then
 		return
 	end
 
@@ -64,7 +62,7 @@ function EnemyGoalReachedOutcomeSystem:_RequestBaseDamage(entity: number)
 			SourceEntity = entity,
 			TargetEntity = baseEntity,
 			TargetKind = "Base",
-			Amount = roleConfig.Damage,
+			Amount = damage,
 			ChangeType = "Damage",
 			CreatedAt = now,
 			ExpiresAt = now + 1,

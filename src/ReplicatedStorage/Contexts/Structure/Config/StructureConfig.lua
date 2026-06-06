@@ -7,67 +7,108 @@
 	@client
 ]=]
 local StructureConfig = {}
+local StructureTypes = require(script.Parent.Parent.Types.StructureTypes)
+
+type TStructureConfig = StructureTypes.TStructureConfig
 
 --[=[
-	@prop STRUCTURES { [string]: { DisplayName: string, MaxHealth: number, RuntimeProfileId: string, AttackRange: number?, AttackDamage: number?, AttackCooldown: number?, AimRig: any? } }
+	@prop Definitions { [string]: TStructureConfig }
 	@within StructureConfig
 	Frozen structure definitions keyed by canonical structure type.
 ]=]
-StructureConfig.STRUCTURES = table.freeze({
-	SentryTurret = table.freeze({
+local Definitions: { [string]: TStructureConfig } = {
+	SentryTurret = {
+		DefinitionId = "SentryTurret",
 		DisplayName = "Sentry Turret",
-		MaxHealth = 100,
-		BuildWorkRequired = 100,
-		RuntimeProfileId = "Attack",
-		AttackRange = 90,
-		AttackDamage = 15,
-		AttackCooldown = 1.2,
-		AimRig = table.freeze({
-			Strategy = "IKControl",
-			ChainRootPath = "Neck",
-			EndEffectorPath = "Body",
-			SmoothTime = 0.15,
-			Weight = 1,
-			Priority = 1,
-			-- Keep last tracked orientation until a new target is acquired.
-			ReturnToNeutralWhenNoTarget = false,
-		}),
-	}),
-	Extractor = table.freeze({
+		Health = { Max = 100 },
+		AI = { ProfileId = "StructureAttackAI" },
+		Capabilities = {
+			Attack = {
+				Damage = 15,
+				Range = 90,
+				Cooldown = 1.2,
+			},
+			Construction = { RequiredWork = 100 },
+			Aim = {
+				Strategy = "IKControl",
+				ChainRootPath = "Neck",
+				EndEffectorPath = "Body",
+				SmoothTime = 0.15,
+				Weight = 1,
+				Priority = 1,
+				ReturnToNeutralWhenNoTarget = false,
+			},
+		},
+	},
+	Extractor = {
+		DefinitionId = "Extractor",
 		DisplayName = "Extractor",
-		MaxHealth = 140,
-		BuildWorkRequired = 100,
-		RuntimeProfileId = "Extract",
-	}),
-	StasisField = table.freeze({
+		Health = { Max = 140 },
+		AI = { ProfileId = "StructureExtractAI" },
+		Capabilities = {
+			Construction = { RequiredWork = 100 },
+		},
+	},
+	StasisField = {
+		DefinitionId = "StasisField",
 		DisplayName = "Stasis Field",
-		MaxHealth = 140,
-		BuildWorkRequired = 100,
-		RuntimeProfileId = "Stasis",
-		-- Aura radius in studs used to detect enemies inside the field.
-		StasisRadius = 18,
-		-- Multiplier applied to enemy base move speed while they remain inside the field.
-		MoveSpeedMultiplier = 0.5,
-	}),
-	ArcPylon = table.freeze({
+		Health = { Max = 140 },
+		AI = { ProfileId = "StructureStasisAI" },
+		Capabilities = {
+			Construction = { RequiredWork = 100 },
+			StatusAura = {
+				Radius = 18,
+				MoveSpeedMultiplier = 0.5,
+			},
+		},
+	},
+	ArcPylon = {
+		DefinitionId = "ArcPylon",
 		DisplayName = "Arc Pylon",
-		MaxHealth = 140,
-		BuildWorkRequired = 100,
-		RuntimeProfileId = "Passive",
-	}),
-	BulwarkProjector = table.freeze({
+		Health = { Max = 140 },
+		AI = { ProfileId = "StructurePassiveAI" },
+		Capabilities = {
+			Construction = { RequiredWork = 100 },
+		},
+	},
+	BulwarkProjector = {
+		DefinitionId = "BulwarkProjector",
 		DisplayName = "Bulwark Projector",
-		MaxHealth = 140,
-		BuildWorkRequired = 100,
-		RuntimeProfileId = "Passive",
-	}),
-	RelayBeacon = table.freeze({
+		Health = { Max = 140 },
+		AI = { ProfileId = "StructurePassiveAI" },
+		Capabilities = {
+			Construction = { RequiredWork = 100 },
+		},
+	},
+	RelayBeacon = {
+		DefinitionId = "RelayBeacon",
 		DisplayName = "Relay Beacon",
-		MaxHealth = 140,
-		BuildWorkRequired = 100,
-		RuntimeProfileId = "Passive",
-	}),
-})
+		Health = { Max = 140 },
+		AI = { ProfileId = "StructurePassiveAI" },
+		Capabilities = {
+			Construction = { RequiredWork = 100 },
+		},
+	},
+}
+
+for _, definition in Definitions do
+	table.freeze(definition.Health)
+	table.freeze(definition.AI)
+	if definition.Capabilities.Attack ~= nil then
+		table.freeze(definition.Capabilities.Attack)
+	end
+	table.freeze(definition.Capabilities.Construction)
+	if definition.Capabilities.StatusAura ~= nil then
+		table.freeze(definition.Capabilities.StatusAura)
+	end
+	if type(definition.Capabilities.Aim) == "table" then
+		table.freeze(definition.Capabilities.Aim)
+	end
+	table.freeze(definition.Capabilities)
+	table.freeze(definition)
+end
+
+StructureConfig.Definitions = table.freeze(Definitions)
 
 --[=[
 	@prop TYPE_ALIASES { [string]: string }

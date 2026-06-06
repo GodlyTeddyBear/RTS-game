@@ -45,14 +45,15 @@ function RegisterStructureCommand:Execute(record: any): Result.Result<number>
 		end
 
 		local resolved = Try(self._policy:Check(record))
-		local structureConfig = StructureConfig.STRUCTURES[resolved.StructureType]
+		local structureConfig = StructureConfig.Definitions[resolved.StructureType]
 		Ensure(structureConfig ~= nil, "UnknownStructureType", Errors.UNKNOWN_STRUCTURE_TYPE, {
 			StructureType = resolved.StructureType,
 		})
+		local attack = structureConfig.Capabilities.Attack
+		local construction = structureConfig.Capabilities.Construction
+		local statusAura = structureConfig.Capabilities.StatusAura
 
 		structureId = tostring(resolved.InstanceId)
-		local runtimeProfileId = structureConfig.RuntimeProfileId or "Passive"
-		local profileId = ("Structure%sAI"):format(runtimeProfileId)
 		local createResult = self._entityContext:CreateEntity("Structure.Actor", {
 			Identity = {
 				EntityId = structureId,
@@ -60,8 +61,8 @@ function RegisterStructureCommand:Execute(record: any): Result.Result<number>
 				DefinitionId = resolved.StructureType,
 			},
 			Health = {
-				Current = structureConfig.MaxHealth,
-				Max = structureConfig.MaxHealth,
+				Current = structureConfig.Health.Max,
+				Max = structureConfig.Health.Max,
 			},
 			Transform = {
 				CFrame = CFrame.new(resolved.WorldPos),
@@ -103,17 +104,17 @@ function RegisterStructureCommand:Execute(record: any): Result.Result<number>
 			},
 			Stats = {
 				StructureType = resolved.StructureType,
-				RuntimeProfileId = runtimeProfileId,
-				AttackRange = structureConfig.AttackRange or 0,
-				AttackDamage = structureConfig.AttackDamage or 0,
-				AttackCooldown = structureConfig.AttackCooldown or 0,
+				AIProfileId = structureConfig.AI.ProfileId,
+				AttackRange = if attack then attack.Range else 0,
+				AttackDamage = if attack then attack.Damage else 0,
+				AttackCooldown = if attack then attack.Cooldown else 0,
 				LastAttackAt = 0,
-				StasisRadius = structureConfig.StasisRadius or 0,
-				MoveSpeedMultiplier = structureConfig.MoveSpeedMultiplier or 1,
+				StasisRadius = if statusAura then statusAura.Radius else 0,
+				MoveSpeedMultiplier = if statusAura then statusAura.MoveSpeedMultiplier else 1,
 			},
 			Construction = {
 				CurrentWork = 0,
-				RequiredWork = structureConfig.BuildWorkRequired,
+				RequiredWork = construction.RequiredWork,
 			},
 			SourcePlacement = {
 				InstanceId = resolved.InstanceId,
@@ -129,7 +130,9 @@ function RegisterStructureCommand:Execute(record: any): Result.Result<number>
 		Try(createResult)
 		entity = createResult.value
 
-		Try(self._aiContext:SetupEntityAIFromProfile(entity, profileId))
+		Try(self._aiContext:SetupEntityAIFromProfile(entity, structureConfig.AI.ProfileId, {
+			TickInterval = structureConfig.AI.TickInterval,
+		}))
 		Try(self._entityContext:RegisterRuntimeEntity(entity))
 		Try(self._entityContext:FlushBindQueue())
 

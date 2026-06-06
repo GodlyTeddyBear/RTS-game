@@ -26,6 +26,8 @@ local EntityRuntimeParticipationService =
 	require(script.Parent.Infrastructure.Services.EntityRuntimeParticipationService)
 local EntityRuntimeSnapshotBuilder = require(script.Parent.Infrastructure.Services.EntityRuntimeSnapshotBuilder)
 local EntityCleanupOutcomeService = require(script.Parent.Infrastructure.Services.EntityCleanupOutcomeService)
+local EntityRuntimeAssetResolverService =
+	require(script.Parent.Infrastructure.Services.EntityRuntimeAssetResolverService)
 local EntityWorldRegistryService = require(script.Parent.Infrastructure.Services.EntityWorldRegistryService)
 local EntityLifetimeExpirySystem = require(script.Parent.Infrastructure.Systems.EntityLifetimeExpirySystem)
 local EntityRuntimeSyncPhaseSystem = require(script.Parent.Infrastructure.Systems.EntityRuntimeSyncPhaseSystem)
@@ -176,6 +178,7 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("EntityRevealService", EntityRevealService, "_revealService"),
 	moduleSpec("EntityRuntimeSnapshotBuilder", EntityRuntimeSnapshotBuilder, "_runtimeSnapshotBuilder"),
 	moduleSpec("EntityCleanupOutcomeService", EntityCleanupOutcomeService, "_cleanupOutcomeService"),
+	moduleSpec("EntityRuntimeAssetResolverService", EntityRuntimeAssetResolverService, "_runtimeAssetResolverService"),
 	moduleSpec("EntityRuntimeParticipationService", EntityRuntimeParticipationService, "_runtimeParticipation"),
 	moduleSpec("EntityInstanceBindingService", EntityInstanceBindingService, "_instanceBindingService"),
 	moduleSpec("EntityRuntimeSyncService", EntityRuntimeSyncService, "_runtimeSyncService"),
@@ -297,6 +300,9 @@ local EntityContext = Knit.CreateService({
 		Infrastructure = InfrastructureModules,
 		Domain = DomainModules,
 		Application = ApplicationModules,
+	},
+	ExternalServices = {
+		{ Name = "RenderContext", CacheAs = "_renderContext" },
 	},
 	StartOrder = { "Infrastructure", "Domain", "Application" },
 	Teardown = {},

@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BaseConfig = require(ReplicatedStorage.Contexts.Base.Config.BaseConfig)
+local BASE_DEFINITION = BaseConfig.Definitions.PrimaryBase
 local ECS = require(ReplicatedStorage.Utilities.ECS)
 
 local BaseDiscoveryService = {}
@@ -17,7 +18,7 @@ function BaseDiscoveryService.new()
 	self._baseEntityId = ECS.IdentitySchema.MakeScopedEntityId(
 		BaseConfig.REVEAL_SCOPE_ID,
 		BaseConfig.REVEAL_ENTITY_TYPE,
-		BaseConfig.BASE_ID
+		BASE_DEFINITION.DefinitionId
 	)
 	return self
 end

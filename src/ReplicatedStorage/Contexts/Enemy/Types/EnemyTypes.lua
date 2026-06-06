@@ -1,5 +1,7 @@
 --!strict
 
+local EntityDefinitionTypes = require(script.Parent.Parent.Parent.Entity.Types.EntityDefinitionTypes)
+
 --[=[
 	@class EnemyTypes
 	Defines shared enemy entity and component shapes.
@@ -9,7 +11,7 @@
 local EnemyTypes = {}
 
 export type EnemyRole = "Swarm" | "Tank"
-export type EnemyMovementMode = "Path" | "Boids" | "Any"
+export type EnemyMovementMode = "Path" | "Boids" | "Any" | "Direct"
 export type EnemyTargetPreference = "Goal"
 
 export type EnemyIdentity = {
@@ -29,11 +31,13 @@ export type TransformComponent = {
 
 export type RoleComponent = {
 	Role: EnemyRole,
+	WaveNumber: number,
 	MoveSpeed: number,
 	Damage: number,
 	AttackRange: number,
 	AttackCooldown: number,
 	TargetPreference: EnemyTargetPreference,
+	MovementMode: EnemyMovementMode,
 }
 
 export type MoveSpeedComponent = {
@@ -50,21 +54,26 @@ export type ModelRefComponent = {
 }
 
 export type EnemyRoleConfig = {
+	DefinitionId: EnemyRole,
 	DisplayName: string,
-	RuntimeProfileId: string,
-	MaxHp: number,
-	Damage: number,
-	AttackRange: number,
-	AttackCooldown: number,
-	MoveSpeed: number,
-	TargetPreference: EnemyTargetPreference,
-	ModelScale: Vector3,
-	ModelColor: Color3,
-	MovementMode: EnemyMovementMode,
+	Health: EntityDefinitionTypes.HealthDefinition,
+	AI: EntityDefinitionTypes.AIDefinition,
+	Movement: {
+		Mode: EnemyMovementMode,
+		Speed: number,
+	},
+	Capabilities: {
+		Attack: {
+			Damage: number,
+			Range: number,
+			Cooldown: number,
+			TargetPreference: EnemyTargetPreference,
+		},
+	},
 }
 
 export type EnemyConfig = {
-	Roles: { [EnemyRole]: EnemyRoleConfig },
+	Definitions: { [EnemyRole]: EnemyRoleConfig },
 }
 
 export type PositionComponent = TransformComponent

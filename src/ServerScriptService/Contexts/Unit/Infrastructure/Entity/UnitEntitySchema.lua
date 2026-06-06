@@ -9,7 +9,6 @@ local UnitEntitySchema = {
 			Default = {
 				Role = "",
 				DisplayName = "",
-				MaxHp = 0,
 				UnitId = "",
 				MovementMode = "Path",
 				BuildWorkPerSecond = nil,

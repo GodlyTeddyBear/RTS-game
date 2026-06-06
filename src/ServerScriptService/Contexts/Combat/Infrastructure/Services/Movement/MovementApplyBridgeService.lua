@@ -1,13 +1,20 @@
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
-
-local Orient = require(ReplicatedStorage.Utilities.Orient)
-local ServerScheduler = require(ServerScriptService.Scheduler.ServerScheduler)
-
 local MovementApplyBridgeService = {}
 MovementApplyBridgeService.__index = MovementApplyBridgeService
+
+local function getPreferredRootPart(model: Model): BasePart?
+	if model.PrimaryPart ~= nil then
+		return model.PrimaryPart
+	end
+
+	local humanoidRoot = model:FindFirstChild("HumanoidRootPart")
+	if humanoidRoot ~= nil and humanoidRoot:IsA("BasePart") then
+		return humanoidRoot
+	end
+
+	return model:FindFirstChildWhichIsA("BasePart", true)
+end
 
 function MovementApplyBridgeService.new()
 	local self = setmetatable({}, MovementApplyBridgeService)
@@ -31,8 +38,8 @@ end
 
 function MovementApplyBridgeService:Apply(entityFactory: any, entity: number, applyState: any): (boolean, string?)
 	local profile = self._actorReadService:GetActorProfile(entityFactory, entity)
-	if type(profile) == "table" and profile.ApplyMode == "Kinematic" then
-		return self:_ApplyKinematic(entityFactory, entity, applyState)
+	if type(profile) ~= "table" or profile.ApplyMode ~= "Humanoid" then
+		return false, "InvalidHumanoidApplyMode"
 	end
 	local humanoid = self:_GetHumanoid(entity)
 	if humanoid == nil then
@@ -53,29 +60,14 @@ function MovementApplyBridgeService:Apply(entityFactory: any, entity: number, ap
 		humanoid:MoveTo(targetPosition)
 	else
 		local rootPart = self:_GetRootPart(entity)
-		if rootPart ~= nil then
-			humanoid:MoveTo(rootPart.Position)
-		else
+		if rootPart == nil then
 			humanoid:Move(Vector3.zero)
+			return false, "MissingRootPart"
 		end
+		humanoid:MoveTo(rootPart.Position)
 	end
 
 	self:_SetFacing(entity, velocityXZ)
-	return true, nil
-end
-
-function MovementApplyBridgeService:_ApplyKinematic(entityFactory: any, entity: number, applyState: any): (boolean, string?)
-	local transformResult = entityFactory:Get(entity, "Transform", "Entity")
-	local transform = if transformResult.success then transformResult.value else nil
-	local targetPosition = applyState.TargetPosition
-	if type(transform) ~= "table" or typeof(transform.CFrame) ~= "CFrame" or typeof(targetPosition) ~= "Vector3" then
-		return false, "MissingKinematicTransform"
-	end
-	local speed = self._actorReadService:GetCurrentMoveSpeed(entityFactory, entity)
-	local nextPosition = Orient.MoveTowards(transform.CFrame.Position, targetPosition, speed * ServerScheduler:GetDeltaTime())
-	local nextCFrame = Orient.BuildLookAt(nextPosition, targetPosition) or CFrame.new(nextPosition)
-	entityFactory:Set(entity, "Transform", { CFrame = nextCFrame }, "Entity")
-	entityFactory:Add(entity, "DirtyTag", "Entity")
 	return true, nil
 end
 
@@ -124,7 +116,7 @@ function MovementApplyBridgeService:_GetRootPart(entity: number): BasePart?
 	if rootPart ~= nil and rootPart.Parent ~= nil then
 		return rootPart
 	end
-	rootPart = if refs.Model ~= nil then refs.Model.PrimaryPart else nil
+	rootPart = if refs.Model ~= nil then getPreferredRootPart(refs.Model) else nil
 	refs.RootPart = rootPart
 	return rootPart
 end

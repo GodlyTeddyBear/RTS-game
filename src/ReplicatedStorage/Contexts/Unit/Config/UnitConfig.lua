@@ -10,35 +10,46 @@ local UnitConfig = {}
 
 UnitConfig.DEFAULT_UNIT_ID = "AllyGrunt"
 
-UnitConfig.Definitions = {
-	AllyGrunt = table.freeze({
-		UnitId = "AllyGrunt",
-		RuntimeProfileId = "Builder",
+local Definitions: { [string]: UnitDefinition } = {
+	AllyGrunt = {
+		DefinitionId = "AllyGrunt",
 		Role = "Combat",
 		DisplayName = "Ally Grunt",
-		MaxHp = 100,
-		MoveSpeed = 16,
-		BuildWorkPerSecond = nil,
-		BuildRange = nil,
-		ModelScale = Vector3.new(2.5, 5, 1.5),
-		ModelColor = Color3.fromRGB(88, 166, 255),
-		MaxConcurrentUnitsPerOwner = 5,
-		MovementMode = "Path",
-	} :: UnitDefinition),
-	Builder = table.freeze({
-		UnitId = "Builder",
-		RuntimeProfileId = "Builder",
+		Health = { Max = 100 },
+		AI = { ProfileId = "UnitBuilderAI", TickInterval = 0.15 },
+		Movement = { Mode = "Path", Speed = 16 },
+		Capabilities = {},
+		Limits = { MaxConcurrentPerOwner = 5 },
+	},
+	Builder = {
+		DefinitionId = "Builder",
 		Role = "Builder",
 		DisplayName = "Builder",
-		MaxHp = 140,
-		MoveSpeed = 14,
-		BuildWorkPerSecond = 10,
-		BuildRange = 12,
-		ModelScale = Vector3.new(3, 5, 2),
-		ModelColor = Color3.fromRGB(255, 196, 92),
-		MaxConcurrentUnitsPerOwner = 3,
-		MovementMode = "Path",
-	} :: UnitDefinition),
+		Health = { Max = 140 },
+		AI = { ProfileId = "UnitBuilderAI", TickInterval = 0.15 },
+		Movement = { Mode = "Path", Speed = 14 },
+		Capabilities = {
+			Build = {
+				WorkPerSecond = 10,
+				Range = 12,
+			},
+		},
+		Limits = { MaxConcurrentPerOwner = 3 },
+	},
 }
+
+for _, definition in Definitions do
+	table.freeze(definition.Health)
+	table.freeze(definition.AI)
+	table.freeze(definition.Movement)
+	if definition.Capabilities.Build ~= nil then
+		table.freeze(definition.Capabilities.Build)
+	end
+	table.freeze(definition.Capabilities)
+	table.freeze(definition.Limits)
+	table.freeze(definition)
+end
+
+UnitConfig.Definitions = table.freeze(Definitions)
 
 return table.freeze(UnitConfig)

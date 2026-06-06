@@ -1,11 +1,22 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local CombatMovementConfig = require(ReplicatedStorage.Contexts.Combat.Config.CombatMovementConfig)
+local PathfindingHelper = require(ServerStorage.Utilities.PathfindingHelper)
 
 local MovementFlowCalculationSystem = {}
 MovementFlowCalculationSystem.__index = MovementFlowCalculationSystem
+
+local function isFiniteVector3(value: Vector3): boolean
+	return value.X == value.X
+		and value.Y == value.Y
+		and value.Z == value.Z
+		and math.abs(value.X) < math.huge
+		and math.abs(value.Y) < math.huge
+		and math.abs(value.Z) < math.huge
+end
 
 function MovementFlowCalculationSystem.new(entityFactory: any, dependencies: any)
 	local self = setmetatable({}, MovementFlowCalculationSystem)
@@ -58,24 +69,37 @@ function MovementFlowCalculationSystem:_RunEntity(entity: number, now: number)
 		self:_WriteApplyState(entity, requestedAt, now, "Failed", nil, nil, false, "InvalidMoveIntent")
 		return
 	end
+	if not isFiniteVector3(goalPosition) then
+		self:_WriteApplyState(entity, requestedAt, now, "Failed", nil, nil, false, "InvalidGoalPosition")
+		return
+	end
 
-	local mode = self:_ResolveMode(requestedMode, goalPosition)
+	local resolvedGoalPosition, goalResolutionReason = self:_ResolveGoalPosition(entity, goalPosition, requestedAt)
+
+	local mode = self:_ResolveMode(requestedMode, resolvedGoalPosition)
 	if mode == "Path" then
-		self:_CalculatePath(entity, goalPosition, requestedAt, now)
+		self:_CalculatePath(entity, goalPosition, resolvedGoalPosition, requestedAt, now, goalResolutionReason)
 		return
 	end
 	if mode == "Boids" then
-		self:_CalculateFlow(entity, goalPosition, requestedAt, now)
+		self:_CalculateFlow(entity, goalPosition, resolvedGoalPosition, requestedAt, now, goalResolutionReason)
 		return
 	end
 	if mode == "Direct" then
-		self:_CalculateDirect(entity, goalPosition, requestedAt, now)
+		self:_CalculateDirect(entity, goalPosition, resolvedGoalPosition, requestedAt, now, goalResolutionReason)
 		return
 	end
 	self:_WriteApplyState(entity, requestedAt, now, "Failed", nil, nil, false, "InvalidMovementMode")
 end
 
-function MovementFlowCalculationSystem:_CalculateDirect(entity: number, goalPosition: Vector3, requestedAt: number, now: number)
+function MovementFlowCalculationSystem:_CalculateDirect(
+	entity: number,
+	originalGoalPosition: Vector3,
+	goalPosition: Vector3,
+	requestedAt: number,
+	now: number,
+	goalResolutionReason: string?
+)
 	local position = self._actorReadService:GetPosition(self._entityFactory, self._entityContext, entity)
 	local profile = self._actorReadService:GetActorProfile(self._entityFactory, entity)
 	if position == nil then
@@ -83,23 +107,37 @@ function MovementFlowCalculationSystem:_CalculateDirect(entity: number, goalPosi
 		return
 	end
 	local reachedDistance = if type(profile) == "table" and type(profile.GoalReachedDistance) == "number" then profile.GoalReachedDistance else 4
-	local isDone = (goalPosition - position).Magnitude <= reachedDistance
-	self:_WriteRuntimeState(entity, "Direct", goalPosition, requestedAt, now, if isDone then "Done" else "Running", nil)
+	local isDone = self:_GetGoalDistance(profile, position, goalPosition) <= reachedDistance
+	self:_WriteRuntimeState(entity, "Direct", originalGoalPosition, goalPosition, goalResolutionReason, requestedAt, now, if isDone then "Done" else "Running", nil)
 	self:_WriteApplyState(entity, requestedAt, now, if isDone then "Done" else "Running", goalPosition, nil, not isDone, nil)
 end
 
-function MovementFlowCalculationSystem:_CalculatePath(entity: number, goalPosition: Vector3, requestedAt: number, now: number)
+function MovementFlowCalculationSystem:_CalculatePath(
+	entity: number,
+	originalGoalPosition: Vector3,
+	goalPosition: Vector3,
+	requestedAt: number,
+	now: number,
+	goalResolutionReason: string?
+)
 	local started, reason = self._pathRuntimeService:StartOrRetarget(self._entityFactory, entity, goalPosition)
 	if not started then
 		self:_WriteApplyState(entity, requestedAt, now, "Failed", nil, nil, false, reason or "PathStartFailed")
 		return
 	end
 	local status, pollReason = self._pathRuntimeService:Poll(entity)
-	self:_WriteRuntimeState(entity, "Path", goalPosition, requestedAt, now, status, pollReason)
+	self:_WriteRuntimeState(entity, "Path", originalGoalPosition, goalPosition, goalResolutionReason, requestedAt, now, status, pollReason)
 	self:_WriteApplyState(entity, requestedAt, now, status, nil, nil, status == "Running", pollReason)
 end
 
-function MovementFlowCalculationSystem:_CalculateFlow(entity: number, goalPosition: Vector3, requestedAt: number, now: number)
+function MovementFlowCalculationSystem:_CalculateFlow(
+	entity: number,
+	originalGoalPosition: Vector3,
+	goalPosition: Vector3,
+	requestedAt: number,
+	now: number,
+	goalResolutionReason: string?
+)
 	local position = self._actorReadService:GetPosition(self._entityFactory, self._entityContext, entity)
 	if position == nil then
 		self:_WriteApplyState(entity, requestedAt, now, "Failed", nil, nil, false, "MissingActorPosition")
@@ -118,15 +156,15 @@ function MovementFlowCalculationSystem:_CalculateFlow(entity: number, goalPositi
 	end
 	local profile = self._actorReadService:GetActorProfile(self._entityFactory, entity)
 	local reachedDistance = if type(profile) == "table" and type(profile.GoalReachedDistance) == "number" then profile.GoalReachedDistance else 4
-	if (goalPosition - position).Magnitude <= reachedDistance then
-		self:_WriteRuntimeState(entity, "Boids", goalPosition, requestedAt, now, "Done", nil)
+	if self:_GetGoalDistance(profile, position, goalPosition) <= reachedDistance then
+		self:_WriteRuntimeState(entity, "Boids", originalGoalPosition, goalPosition, goalResolutionReason, requestedAt, now, "Done", nil)
 		self:_WriteApplyState(entity, requestedAt, now, "Done", nil, nil, false, nil)
 		return
 	end
 	local targetPosition = if velocityXZ ~= nil and velocityXZ.Magnitude > 0
 		then self._flowfieldService:SanitizeTarget(position + Vector3.new(velocityXZ.X, 0, velocityXZ.Y) * 4)
 		else nil
-	self:_WriteRuntimeState(entity, "Boids", goalPosition, requestedAt, now, "Running", nil)
+	self:_WriteRuntimeState(entity, "Boids", originalGoalPosition, goalPosition, goalResolutionReason, requestedAt, now, "Running", nil)
 	self:_WriteApplyState(entity, requestedAt, now, "Running", targetPosition, velocityXZ, targetPosition ~= nil, nil)
 end
 
@@ -144,7 +182,7 @@ function MovementFlowCalculationSystem:_DispatchFlowSeparation(entities: { numbe
 		local intent = self:_Get(entity, "MoveIntent", "Movement")
 		local runtime = self:_Get(entity, "PathRuntimeState", "Movement")
 		if type(intent) ~= "table" or type(runtime) ~= "table" or runtime.Mode ~= "Boids" then continue end
-		local goalPosition = intent.GoalPosition
+		local goalPosition = runtime.ResolvedGoalPosition or runtime.GoalPosition
 		local position = self._actorReadService:GetPosition(self._entityFactory, self._entityContext, entity)
 		if typeof(goalPosition) ~= "Vector3" or position == nil then continue end
 		local attachment = self._flowfieldService:Attach(entity, goalPosition)
@@ -212,6 +250,44 @@ function MovementFlowCalculationSystem:_DispatchFlowSeparation(entities: { numbe
 	})
 end
 
+function MovementFlowCalculationSystem:_ResolveGoalPosition(
+	entity: number,
+	goalPosition: Vector3,
+	requestedAt: number
+): (Vector3, string?)
+	local profile = self._actorReadService:GetActorProfile(self._entityFactory, entity)
+	if type(profile) ~= "table" or profile.GroundGoals ~= true then
+		return goalPosition, nil
+	end
+
+	local runtime = self:_Get(entity, "PathRuntimeState", "Movement")
+	if type(runtime) == "table"
+		and runtime.RequestedAt == requestedAt
+		and runtime.OriginalGoalPosition == goalPosition
+		and typeof(runtime.ResolvedGoalPosition) == "Vector3"
+	then
+		return runtime.ResolvedGoalPosition, runtime.GoalResolutionReason
+	end
+
+	local options = table.clone(CombatMovementConfig.GOAL_NORMALIZATION)
+	local entityRuntime = workspace:FindFirstChild("EntityRuntime")
+	if entityRuntime ~= nil then
+		options.ExcludeInstances = { entityRuntime }
+	end
+	local resolved = PathfindingHelper.NormalizeGroundTarget(goalPosition, options)
+	if typeof(resolved) == "Vector3" and isFiniteVector3(resolved) then
+		return resolved, nil
+	end
+	return goalPosition, "GroundNormalizationFallback"
+end
+
+function MovementFlowCalculationSystem:_GetGoalDistance(profile: any, position: Vector3, goalPosition: Vector3): number
+	if type(profile) == "table" and profile.GoalDistanceMode == "Horizontal" then
+		return (Vector2.new(goalPosition.X, goalPosition.Z) - Vector2.new(position.X, position.Z)).Magnitude
+	end
+	return (goalPosition - position).Magnitude
+end
+
 function MovementFlowCalculationSystem:_ResolveMode(requestedMode: string, goalPosition: Vector3): string?
 	if requestedMode == "Path" or requestedMode == "Boids" or requestedMode == "Direct" then
 		return requestedMode
@@ -225,7 +301,9 @@ end
 function MovementFlowCalculationSystem:_WriteRuntimeState(
 	entity: number,
 	mode: string,
+	originalGoalPosition: Vector3,
 	goalPosition: Vector3,
+	goalResolutionReason: string?,
 	requestedAt: number,
 	now: number,
 	status: string,
@@ -234,6 +312,9 @@ function MovementFlowCalculationSystem:_WriteRuntimeState(
 	self._entityFactory:Set(entity, "PathRuntimeState", {
 		Mode = mode,
 		GoalPosition = goalPosition,
+		OriginalGoalPosition = originalGoalPosition,
+		ResolvedGoalPosition = goalPosition,
+		GoalResolutionReason = goalResolutionReason,
 		RequestedAt = requestedAt,
 		StartedAt = now,
 		UpdatedAt = now,

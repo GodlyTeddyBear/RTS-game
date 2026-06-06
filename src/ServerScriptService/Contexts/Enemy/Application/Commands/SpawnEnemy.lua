@@ -48,10 +48,11 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 		Try(self._spawnPolicy:Check(role, spawnCFrame))
 		Ensure(waveNumber > 0, "InvalidWaveNumber", Errors.INVALID_WAVE_NUMBER)
 
-		local roleConfig = EnemyConfig.Roles[role]
+		local roleConfig = EnemyConfig.Definitions[role]
 		Ensure(roleConfig ~= nil, "InvalidRole", Errors.INVALID_ROLE, {
 			Role = role,
 		})
+		local attack = roleConfig.Capabilities.Attack
 
 		enemyId = HttpService:GenerateGUID(false)
 		local createResult = self._entityContext:CreateEntity("Enemy.Actor", {
@@ -61,8 +62,8 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 				DefinitionId = role,
 			},
 			Health = {
-				Current = roleConfig.MaxHp,
-				Max = roleConfig.MaxHp,
+				Current = roleConfig.Health.Max,
+				Max = roleConfig.Health.Max,
 			},
 			Transform = {
 				CFrame = spawnCFrame,
@@ -86,12 +87,6 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 				Health = true,
 				WalkSpeed = true,
 			},
-			TransformProjection = {
-				Enabled = true,
-			},
-			TransformPoll = {
-				Enabled = false,
-			},
 			CleanupOutcomes = {
 				OutcomeIds = { "AICleanup", "MovementCleanup", "TeamUnassign" },
 			},
@@ -108,22 +103,22 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 			Role = {
 				Role = role,
 				WaveNumber = waveNumber,
-				MoveSpeed = roleConfig.MoveSpeed,
-				Damage = roleConfig.Damage,
-				AttackRange = roleConfig.AttackRange,
-				AttackCooldown = roleConfig.AttackCooldown,
-				TargetPreference = roleConfig.TargetPreference,
-				MovementMode = roleConfig.MovementMode,
+				MoveSpeed = roleConfig.Movement.Speed,
+				Damage = attack.Damage,
+				AttackRange = attack.Range,
+				AttackCooldown = attack.Cooldown,
+				TargetPreference = attack.TargetPreference,
+				MovementMode = roleConfig.Movement.Mode,
 			},
 			PathState = {
 				GoalPosition = nil,
 				IsMoving = false,
 			},
 			CurrentMoveSpeed = {
-				Value = roleConfig.MoveSpeed,
+				Value = roleConfig.Movement.Speed,
 			},
 			AttackCooldown = {
-				Cooldown = roleConfig.AttackCooldown,
+				Cooldown = attack.Cooldown,
 				LastAttackTime = 0,
 			},
 			AnimationState = "Idle",
@@ -133,13 +128,14 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 		entity = createResult.value
 
 		Try(self._combatContext:SetupMovementActor(entity, {
-			ApplyMode = "Kinematic",
-			DefaultMode = roleConfig.MovementMode,
+			ApplyMode = "Humanoid",
 			GoalReachedDistance = 4,
-			MoveSpeed = roleConfig.MoveSpeed,
+			MoveSpeed = roleConfig.Movement.Speed,
 		}))
 
-		Try(self._aiContext:SetupEntityAIFromProfile(entity, ("Enemy%sAI"):format(role)))
+		Try(self._aiContext:SetupEntityAIFromProfile(entity, roleConfig.AI.ProfileId, {
+			TickInterval = roleConfig.AI.TickInterval,
+		}))
 		Try(self._entityContext:RegisterRuntimeEntity(entity))
 		Try(self._entityContext:FlushBindQueue())
 

@@ -31,12 +31,13 @@ local function _ResolveFacingDirection(baseCFrame: CFrame): Vector3
 end
 
 local function _BuildSpawnCFrame(baseCFrame: CFrame, slotIndex: number): CFrame
-	local column = slotIndex % BaseConfig.UNIT_PRODUCTION_SLOTS_PER_ROW
-	local row = math.floor(slotIndex / BaseConfig.UNIT_PRODUCTION_SLOTS_PER_ROW)
+	local layout = BaseConfig.ProductionLayout
+	local column = slotIndex % layout.SlotsPerRow
+	local row = math.floor(slotIndex / layout.SlotsPerRow)
 	local localOffset = Vector3.new(
-		BaseConfig.UNIT_PRODUCTION_SIDE_OFFSET + (row * BaseConfig.UNIT_PRODUCTION_ROW_STEP),
+		layout.SideOffset + (row * layout.RowStep),
 		0,
-		BaseConfig.UNIT_PRODUCTION_FORWARD_START + (column * BaseConfig.UNIT_PRODUCTION_FORWARD_SPACING)
+		layout.ForwardStart + (column * layout.ForwardSpacing)
 	)
 	local spawnPosition = baseCFrame:PointToWorldSpace(localOffset)
 	local facingDirection = _ResolveFacingDirection(baseCFrame)
@@ -76,7 +77,7 @@ function ProduceUnitCommand:Execute(player: Player, unitId: string): Result.Resu
 		local spawnCFrame = _BuildSpawnCFrame(baseCFrame, currentCount)
 
 		return self._unitContext:SpawnUnit({
-			UnitId = definition.UnitId,
+			UnitId = definition.DefinitionId,
 			Faction = "Player",
 			OwnerKind = ownerKind,
 			OwnerId = ownerId,
