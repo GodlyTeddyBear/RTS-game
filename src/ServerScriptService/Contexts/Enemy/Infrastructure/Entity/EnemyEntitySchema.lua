@@ -40,16 +40,6 @@ local EnemyEntitySchema = {
 				LastAttackTime = 0,
 			},
 		},
-		AnimationState = {
-			ECSName = "Enemy.AnimationState",
-			Authority = "DERIVED",
-			Default = "Idle",
-		},
-		AnimationLooping = {
-			ECSName = "Enemy.AnimationLooping",
-			Authority = "DERIVED",
-			Default = true,
-		},
 		DeathEventRequest = {
 			ECSName = "Enemy.DeathEventRequest",
 			Authority = "AUTHORITATIVE",
@@ -80,8 +70,6 @@ local EnemyEntitySchema = {
 				PathState = true,
 				CurrentMoveSpeed = true,
 				AttackCooldown = true,
-				AnimationState = true,
-				AnimationLooping = true,
 			},
 			Tags = {
 				AliveTag = true,

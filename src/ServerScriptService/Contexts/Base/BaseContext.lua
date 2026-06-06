@@ -129,7 +129,14 @@ end
 ]=]
 function BaseContextService:KnitStart()
 	BaseBaseContext:KnitStart()
-	self:_RegisterEntityInfrastructure()
+	local registrationResult = self:_RegisterEntityInfrastructure()
+	local completionResult = self._entityContext:CompleteRegistration(self.Name, registrationResult)
+	if not completionResult.success then
+		error(("BaseContext failed to complete Entity registration: [%s] %s"):format(
+			tostring(completionResult.type),
+			tostring(completionResult.message)
+		))
+	end
 	self:_RegisterCombatRules()
 	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)
 		self._syncService:HydratePlayer(player)

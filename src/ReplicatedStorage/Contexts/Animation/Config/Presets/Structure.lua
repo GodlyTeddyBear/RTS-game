@@ -4,6 +4,8 @@ local Helpers = require(script.Parent.Parent.AnimationPresetHelpers)
 local Constants = require(script.Parent.Parent.AnimationPresetConstants)
 
 local ACTION_STATE_FALLBACKS = table.freeze({
+	Attack = "StructureAttack",
+	Extract = "StructureExtract",
 	StructureAttack = "Attack",
 	StructureExtract = "Extract",
 })
@@ -11,7 +13,8 @@ local ACTION_STATE_FALLBACKS = table.freeze({
 return table.freeze({
 	Id = "Structure",
 	Tag = "[AnimateStructure]",
-	VariantAttribute = "StructureType",
+	ReplicatedStateMode = "FullState",
+	VariantAttribute = "EntityDefinitionId",
 	DefaultVariant = "Default",
 	ReloadOnVariantChanged = true,
 	CorePoseFolders = Constants.STRUCTURE_CORE_POSE_FOLDERS,

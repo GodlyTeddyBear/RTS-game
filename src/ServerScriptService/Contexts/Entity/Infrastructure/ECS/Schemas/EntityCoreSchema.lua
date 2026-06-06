@@ -79,6 +79,7 @@ local EntityCoreSchema = {
 				SetupProfileId = "",
 				RevealTag = "EntityActor",
 				NameFormat = nil,
+				PreserveInstance = false,
 			},
 		},
 		HumanoidProjection = {

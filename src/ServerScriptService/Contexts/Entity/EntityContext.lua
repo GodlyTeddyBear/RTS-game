@@ -9,6 +9,7 @@ local Result = require(ReplicatedStorage.Utilities.Result)
 local ModuleFactory = require(ServerStorage.Utilities.ContextUtilities.BaseContext.src.Internal.ModuleFactory)
 
 local EntityLifecycleStateMachine = require(script.Parent.Infrastructure.Services.EntityLifecycleStateMachine)
+local EntityRegistrationBarrierService = require(script.Parent.Infrastructure.Services.EntityRegistrationBarrierService)
 local EntityStartupStateService = require(script.Parent.Infrastructure.Services.EntityStartupStateService)
 local EntityRuntimeSchedulerService = require(script.Parent.Infrastructure.Services.EntityRuntimeSchedulerService)
 local EntityRevealService = require(script.Parent.Infrastructure.Services.EntityRevealService)
@@ -56,6 +57,7 @@ local RunOperationalProofCommand = require(script.Parent.Application.Commands.Ru
 local RegisterFeatureSchemaCommand = require(script.Parent.Application.Commands.RegisterFeatureSchemaCommand)
 local RegisterEntityFeatureCommand = require(script.Parent.Application.Commands.RegisterEntityFeatureCommand)
 local RegisterSystemCommand = require(script.Parent.Application.Commands.RegisterSystemCommand)
+local CompleteEntityRegistrationCommand = require(script.Parent.Application.Commands.CompleteEntityRegistrationCommand)
 local CreateEntityCommand = require(script.Parent.Application.Commands.CreateEntityCommand)
 local DestroyEntityCommand = require(script.Parent.Application.Commands.DestroyEntityCommand)
 local MarkForDestructionCommand = require(script.Parent.Application.Commands.MarkForDestructionCommand)
@@ -170,6 +172,7 @@ local InfrastructureModules: { BaseContext.TModuleSpec } = {
 		end,
 	},
 	moduleSpec("EntityLifecycleStateMachine", EntityLifecycleStateMachine, "_lifecycle"),
+	moduleSpec("EntityRegistrationBarrierService", EntityRegistrationBarrierService, "_registrationBarrier"),
 	moduleSpec("EntityStartupStateService", EntityStartupStateService, "_startupState"),
 	moduleSpec("EntitySchemaRegistry", EntitySchemaRegistry, "_schemaRegistry"),
 	moduleSpec("EntityEntityFactory", EntityEntityFactory, "_entityFactory"),
@@ -228,6 +231,11 @@ local ApplicationModules: { BaseContext.TModuleSpec } = {
 	moduleSpec("RegisterFeatureSchemaCommand", RegisterFeatureSchemaCommand, "_registerFeatureSchemaCommand"),
 	moduleSpec("RegisterEntityFeatureCommand", RegisterEntityFeatureCommand, "_registerEntityFeatureCommand"),
 	moduleSpec("RegisterSystemCommand", RegisterSystemCommand, "_registerSystemCommand"),
+	moduleSpec(
+		"CompleteEntityRegistrationCommand",
+		CompleteEntityRegistrationCommand,
+		"_completeEntityRegistrationCommand"
+	),
 	moduleSpec("CreateEntityCommand", CreateEntityCommand, "_createEntityCommand"),
 	moduleSpec("DestroyEntityCommand", DestroyEntityCommand, "_destroyEntityCommand"),
 	moduleSpec("MarkForDestructionCommand", MarkForDestructionCommand, "_markForDestructionCommand"),
@@ -312,6 +320,7 @@ local EntityBaseContext = BaseContext.new(EntityContext)
 
 function EntityContext:KnitInit()
 	EntityBaseContext:KnitInit()
+	self._runtimeReadyCallbacks = {}
 	forceInitCachedModules(EntityBaseContext, InfrastructureModules)
 	forceInitCachedModules(EntityBaseContext, DomainModules)
 	forceInitCachedModules(EntityBaseContext, ApplicationModules)
@@ -346,6 +355,20 @@ function EntityContext:KnitStart()
 		error(
 			("EntityContext failed to start: [%s] %s"):format(tostring(startResult.type), tostring(startResult.message))
 		)
+	end
+	local ownerReadyResult = self._registrationBarrier:MarkOwnerReady()
+	if not ownerReadyResult.success then
+		error(("EntityContext failed to mark registration owner ready: [%s] %s"):format(
+			tostring(ownerReadyResult.type),
+			tostring(ownerReadyResult.message)
+		))
+	end
+	local finalizeResult = self:_FinalizeRegistrationIfReady()
+	if not finalizeResult.success then
+		error(("EntityContext failed to finalize registration: [%s] %s"):format(
+			tostring(finalizeResult.type),
+			tostring(finalizeResult.message)
+		))
 	end
 end
 
@@ -385,6 +408,7 @@ function EntityContext:Init()
 
 		return EntityOperationSupport.RequireLifecycleStates(self._validationService, "Init", currentState, {
 			"RegisteringECS",
+			"FinalizingECSRegistration",
 			"CompilingECS",
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",
@@ -450,8 +474,53 @@ function EntityContext:_RegisterCoreRuntimeSystems()
 end
 function EntityContext:_EnsureRuntimeStarted()
 	return Catch(function()
-		return self._finalizeStartupCommand:Execute()
+		local result = self._finalizeStartupCommand:Execute()
+		if not result.success then
+			return result
+		end
+
+		local callbacks = self._runtimeReadyCallbacks
+		self._runtimeReadyCallbacks = {}
+		for _, callback in ipairs(callbacks) do
+			task.spawn(callback)
+		end
+		return result
 	end, "EntityContext:_EnsureRuntimeStarted")
+end
+function EntityContext:_FinalizeRegistrationIfReady()
+	return Catch(function()
+		if not self._registrationBarrier:ClaimFinalization() then
+			return Result.Ok(false)
+		end
+		local transitionResult = self._lifecycle:BeginECSFinalization()
+		if not transitionResult.success then
+			return transitionResult
+		end
+		return self:_EnsureRuntimeStarted()
+	end, "EntityContext:_FinalizeRegistrationIfReady")
+end
+function EntityContext:OnRuntimeReady(callback: () -> ())
+	return Catch(function()
+		if self._lifecycle:GetState() == "Running" then
+			task.spawn(callback)
+			return Result.Ok(true)
+		end
+
+		table.insert(self._runtimeReadyCallbacks, callback)
+		return Result.Ok(true)
+	end, "EntityContext:OnRuntimeReady")
+end
+function EntityContext:CompleteRegistration(participantName: string, registrationResult: any)
+	return Catch(function()
+		local completionResult = self._completeEntityRegistrationCommand:Execute(participantName, registrationResult)
+		if not completionResult.success then
+			return completionResult
+		end
+		if completionResult.value == true then
+			return self:_FinalizeRegistrationIfReady()
+		end
+		return Result.Ok(true)
+	end, "EntityContext:CompleteRegistration")
 end
 function EntityContext:Destroy()
 	return Catch(function()

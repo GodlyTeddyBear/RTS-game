@@ -26,6 +26,7 @@ local MovementPathRuntimeService = require(script.Parent.Infrastructure.Services
 local ProjectileSimulationService = require(script.Parent.Infrastructure.Services.ProjectileSimulationService)
 local StatusService = require(script.Parent.Infrastructure.Services.StatusService)
 local CombatEntitySchema = require(script.Parent.Infrastructure.Entity.CombatEntitySchema)
+local AnimationPresentationProjectionSystem = require(script.Parent.Infrastructure.Systems.Presentation.AnimationPresentationProjectionSystem)
 local CombatStatusAuraSystem = require(script.Parent.Infrastructure.Systems.Status.CombatStatusAuraSystem)
 local MovementSpeedStatusSystem = require(script.Parent.Infrastructure.Systems.Status.MovementSpeedStatusSystem)
 local HitboxSimulationService = require(script.Parent.Infrastructure.Services.HitboxSimulationService)
@@ -188,10 +189,11 @@ function CombatContext:KnitStart()
 	self._movementFlowDispatchService:Prime()
 
 	local entityRegistrationResult = self:_RegisterEntityActionPipeline()
-	if not entityRegistrationResult.success then
-		error(("CombatContext failed to register Entity action pipeline: [%s] %s"):format(
-			tostring(entityRegistrationResult.type),
-			tostring(entityRegistrationResult.message)
+	local completionResult = self._entityContext:CompleteRegistration(self.Name, entityRegistrationResult)
+	if not completionResult.success then
+		error(("CombatContext failed to complete Entity registration: [%s] %s"):format(
+			tostring(completionResult.type),
+			tostring(completionResult.message)
 		))
 	end
 
@@ -396,8 +398,6 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 				"Movement.MoveIntent",
 				"Movement.ApplyResult",
 				"Movement.SpeedState",
-				"Combat.AttackState",
-				"AI.ActionState",
 			},
 			Writes = {
 				"Entity.DirtyTag",
@@ -408,6 +408,32 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 		})
 		if not movementPresentationResult.success then
 			return movementPresentationResult
+		end
+
+		local animationPresentationResult = self._entityContext:RegisterSystem("Projection", {
+			Name = "AnimationPresentationProjectionSystem",
+			Phase = "Projection",
+			Reads = {
+				"AI.ActionIntent",
+				"AI.ActionState",
+				"Combat.AttackState",
+				"Combat.StatusAuraState",
+				"Movement.ApplyResult",
+				"Structure.BuildContributionState",
+				"Structure.ExtractState",
+			},
+			Writes = {
+				"Entity.DirtyTag",
+				"Entity.Target",
+				"Animation.ActionState",
+				"Structure.TargetEnemyId",
+			},
+			Factory = function(entityFactory: any, _compiledSchemas: any)
+				return AnimationPresentationProjectionSystem.new(entityFactory, self._combatOutcomeRuleRegistryService)
+			end,
+		})
+		if not animationPresentationResult.success then
+			return animationPresentationResult
 		end
 
 		local movementGoalReachedResult = self._entityContext:RegisterSystem("OutcomeDispatch", {

@@ -35,6 +35,7 @@ end
 function SpawnUnitCommand:Start(registry: any, _name: string)
 	self._aiContext = registry:Get("AIContext")
 	self._combatContext = registry:Get("CombatContext")
+	self._animationContext = registry:Get("AnimationContext")
 	self._entityContext = registry:Get("EntityContext")
 	self._teamContext = registry:Get("TeamContext")
 end
@@ -109,13 +110,17 @@ function SpawnUnitCommand:Execute(request: SpawnUnitRequest): Result.Result<Spaw
 			BuilderAssignment = {
 				TargetStructureEntity = nil,
 			},
-			AnimationState = "Idle",
-			AnimationLooping = true,
 			LockOn = {
 				Attachment0 = nil,
 				Attachment1 = nil,
 				Constraint = nil,
 			},
+		}))
+
+		Try(self._animationContext:SetupEntity(entity, {
+			PresetId = "CombatNPC",
+			AssetSource = "ModelAnimations",
+			StateMode = "ActionOnly",
 		}))
 
 		if request.Lifetime ~= nil then

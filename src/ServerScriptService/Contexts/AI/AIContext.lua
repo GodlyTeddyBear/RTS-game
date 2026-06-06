@@ -103,27 +103,12 @@ end
 function AIContext:KnitStart()
 	AIBaseContext:KnitStart()
 
-	local schemaResult = self:_RegisterEntitySchema()
-	if not schemaResult.success then
-		error(("AIContext failed to register Entity schema: [%s] %s"):format(
-			tostring(schemaResult.type),
-			tostring(schemaResult.message)
-		))
-	end
-
-	local systemsResult = self:_RegisterEntitySystems()
-	if not systemsResult.success then
-		error(("AIContext failed to register Entity systems: [%s] %s"):format(
-			tostring(systemsResult.type),
-			tostring(systemsResult.message)
-		))
-	end
-
-	local cleanupResult = self:_RegisterEntityCleanup()
-	if not cleanupResult.success then
-		error(("AIContext failed to register Entity cleanup: [%s] %s"):format(
-			tostring(cleanupResult.type),
-			tostring(cleanupResult.message)
+	local registrationResult = self:_RegisterEntityInfrastructure()
+	local completionResult = self._entityContext:CompleteRegistration(self.Name, registrationResult)
+	if not completionResult.success then
+		error(("AIContext failed to complete Entity registration: [%s] %s"):format(
+			tostring(completionResult.type),
+			tostring(completionResult.message)
 		))
 	end
 
@@ -136,6 +121,20 @@ function AIContext:KnitStart()
 			)
 		)
 	end
+end
+
+function AIContext:_RegisterEntityInfrastructure(): Result.Result<boolean>
+	return Catch(function()
+		local schemaResult = self:_RegisterEntitySchema()
+		if not schemaResult.success then
+			return schemaResult
+		end
+		local systemsResult = self:_RegisterEntitySystems()
+		if not systemsResult.success then
+			return systemsResult
+		end
+		return self:_RegisterEntityCleanup()
+	end, "AIContext:RegisterEntityInfrastructure")
 end
 
 function AIContext:_RegisterEntitySchema(): Result.Result<boolean>

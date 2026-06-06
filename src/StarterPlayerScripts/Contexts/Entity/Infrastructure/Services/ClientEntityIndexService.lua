@@ -320,10 +320,6 @@ function ClientEntityIndexService:_BuildRecord(
 		if componentId == nil or metadata == nil then
 			continue
 		end
-		if metadata.FeatureName ~= featureName and metadata.FeatureName ~= "Entity" then
-			continue
-		end
-
 		local value = world:get(clientEntity, componentId)
 		if value == nil then
 			continue
@@ -331,7 +327,10 @@ function ClientEntityIndexService:_BuildRecord(
 
 		local clonedValue = _DeepClone(value)
 		local componentKey = if type(metadata.Key) == "string" and metadata.Key ~= "" then metadata.Key else metadata.ECSName
-		record.Components[componentKey] = clonedValue
+		record.Components[metadata.ECSName] = clonedValue
+		if record.Components[componentKey] == nil then
+			record.Components[componentKey] = clonedValue
+		end
 
 		local sharedFieldKey = SHARED_FIELD_KEYS[componentKey]
 		if sharedFieldKey ~= nil then
@@ -343,9 +342,6 @@ function ClientEntityIndexService:_BuildRecord(
 		local tagId = components.ByECSName[ecsName]
 		local metadata = components.MetadataByECSName[ecsName]
 		if tagId == nil or metadata == nil then
-			continue
-		end
-		if metadata.FeatureName ~= featureName then
 			continue
 		end
 		if not world:has(clientEntity, tagId) then

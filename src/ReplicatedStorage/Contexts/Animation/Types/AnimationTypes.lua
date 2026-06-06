@@ -24,12 +24,23 @@ export type TLoadedClips = {
 export type TPoseFilterMode = "Whitelist" | "Blacklist"
 export type TPresetId = "Player" | "Worker" | "CombatNPC" | "EnemyLocomotion" | "Structure"
 export type TAimStrategy = "IKControl"
+export type TReplicatedStateMode = "ActionOnly" | "FullState"
+
+export type TAnimationActionSnapshot = {
+	State: string,
+	Looping: boolean,
+	Revision: number,
+}
 
 export type TAnimationStateSource = {
 	GetState: (self: TAnimationStateSource) -> string?,
 	GetLooping: (self: TAnimationStateSource) -> boolean?,
+	GetRevision: ((self: TAnimationStateSource) -> number?)?,
+	GetActionAnimation: ((self: TAnimationStateSource) -> TAnimationActionSnapshot?)?,
 	ObserveStateChanged: (self: TAnimationStateSource, callback: () -> ()) -> (() -> ()),
 	ObserveLoopingChanged: (self: TAnimationStateSource, callback: () -> ()) -> (() -> ()),
+	ObserveRevisionChanged: ((self: TAnimationStateSource, callback: () -> ()) -> (() -> ()))?,
+	ObserveActionAnimationChanged: ((self: TAnimationStateSource, callback: () -> ()) -> (() -> ()))?,
 }
 
 export type TAnimationPresetOptions = {
@@ -58,6 +69,7 @@ export type TAnimationPreset = {
 	Id: TPresetId,
 	Tag: string,
 	Debug: boolean?,
+	ReplicatedStateMode: TReplicatedStateMode?,
 	AnimationsFolder: Folder?,
 	VariantAttribute: string?,
 	DefaultVariant: string?,

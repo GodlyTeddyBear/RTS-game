@@ -71,6 +71,7 @@ local UnitContext = Knit.CreateService({
 	ExternalServices = {
 		{ Name = "AIContext", CacheAs = "_aiContext" },
 		{ Name = "CombatContext", CacheAs = "_combatContext" },
+		{ Name = "AnimationContext", CacheAs = "_animationContext" },
 		{ Name = "EntityContext", CacheAs = "_entityContext" },
 		{ Name = "StructureContext", CacheAs = "_structureContext" },
 		{ Name = "TeamContext", CacheAs = "_teamContext" },
@@ -97,10 +98,11 @@ function UnitContext:KnitStart()
 	UnitBaseContext:KnitStart()
 
 	local entityResult = self:_RegisterEntityInfrastructure()
-	if not entityResult.success then
-		error(("UnitContext failed to register Entity infrastructure: [%s] %s"):format(
-			tostring(entityResult.type),
-			tostring(entityResult.message)
+	local completionResult = self._entityContext:CompleteRegistration(self.Name, entityResult)
+	if not completionResult.success then
+		error(("UnitContext failed to complete Entity registration: [%s] %s"):format(
+			tostring(completionResult.type),
+			tostring(completionResult.message)
 		))
 	end
 

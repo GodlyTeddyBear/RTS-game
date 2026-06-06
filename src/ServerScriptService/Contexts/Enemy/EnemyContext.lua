@@ -74,6 +74,7 @@ local EnemyContext = Knit.CreateService({
 		{ Name = "StructureContext", CacheAs = "_structureContext" },
 		{ Name = "BaseContext", CacheAs = "_baseContext" },
 		{ Name = "CombatContext", CacheAs = "_combatContext" },
+		{ Name = "AnimationContext", CacheAs = "_animationContext" },
 		{ Name = "TeamContext", CacheAs = "_teamContext" },
 		{ Name = "WorldContext", CacheAs = "_worldContext" },
 	},
@@ -100,10 +101,11 @@ function EnemyContext:KnitStart()
 	EnemyBaseContext:KnitStart()
 
 	local registrationResult = self:_RegisterEntityInfrastructure()
-	if not registrationResult.success then
-		error(("EnemyContext failed to register Entity infrastructure: [%s] %s"):format(
-			tostring(registrationResult.type),
-			tostring(registrationResult.message)
+	local completionResult = self._entityContext:CompleteRegistration(self.Name, registrationResult)
+	if not completionResult.success then
+		error(("EnemyContext failed to complete Entity registration: [%s] %s"):format(
+			tostring(completionResult.type),
+			tostring(completionResult.message)
 		))
 	end
 

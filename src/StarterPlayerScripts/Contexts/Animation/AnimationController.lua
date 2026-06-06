@@ -8,6 +8,8 @@ local Types = require(ReplicatedStorage.Contexts.Animation.Types.AnimationTypes)
 local GetAnimationPresetCommand = require(script.Parent.Application.Commands.GetAnimationPresetCommand)
 local SetupAnimationCommand = require(script.Parent.Application.Commands.SetupAnimationCommand)
 local SetupAimCommand = require(script.Parent.Application.Commands.SetupAimCommand)
+local AnimationEntityRuntimeService = require(script.Parent.Infrastructure.Services.AnimationEntityRuntimeService)
+local AnimationBindingSystem = require(script.Parent.Infrastructure.Systems.AnimationBindingSystem)
 
 type TPresetId = Types.TPresetId
 type TAnimationPreset = Types.TAnimationPreset
@@ -22,6 +24,15 @@ function AnimationController:KnitInit()
 	self._getAnimationPresetCommand = GetAnimationPresetCommand.new()
 	self._setupAnimationCommand = SetupAnimationCommand.new()
 	self._setupAimCommand = SetupAimCommand.new()
+	self._runtimeService = nil
+	self._bindingSystem = nil
+end
+
+function AnimationController:KnitStart()
+	local entityController = Knit.GetController("EntityController")
+	self._runtimeService = AnimationEntityRuntimeService.new(self, entityController)
+	self._bindingSystem = AnimationBindingSystem.new(entityController, self._runtimeService)
+	entityController:RegisterSystem("AnimationBindingSystem", self._bindingSystem)
 end
 
 function AnimationController:GetPreset(presetId: TPresetId, options: TAnimationPresetOptions?): TAnimationPreset
@@ -58,6 +69,13 @@ end
 
 function AnimationController:SetupAim(request: TSetupAimRequest): (() -> ())?
 	return self._setupAimCommand:Execute(request)
+end
+
+function AnimationController:Destroy()
+	if self._runtimeService ~= nil then
+		self._runtimeService:Destroy()
+		self._runtimeService = nil
+	end
 end
 
 return AnimationController

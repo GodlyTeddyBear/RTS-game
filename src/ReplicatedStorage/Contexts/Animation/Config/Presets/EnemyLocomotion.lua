@@ -4,6 +4,7 @@ local Helpers = require(script.Parent.Parent.AnimationPresetHelpers)
 local Constants = require(script.Parent.Parent.AnimationPresetConstants)
 
 local ACTION_STATE_CANDIDATES = table.freeze({
+	Attack = table.freeze({ "AttackStructure", "attackstructure", "AttackBase", "attackbase" }),
 	AttackBase = table.freeze({ "AttackStructure", "attackstructure", "Attack", "attack" }),
 	AttackStructure = table.freeze({ "Attack", "attack" }),
 })
@@ -11,7 +12,8 @@ local ACTION_STATE_CANDIDATES = table.freeze({
 return table.freeze({
 	Id = "EnemyLocomotion",
 	Tag = "[AnimateEnemy]",
-	VariantAttribute = "EnemyRole",
+	ReplicatedStateMode = "ActionOnly",
+	VariantAttribute = "EntityDefinitionId",
 	DefaultVariant = "Default",
 	ReloadOnVariantChanged = true,
 	CorePoseFolders = Constants.ENEMY_LOCOMOTION_CORE_POSE_FOLDERS,

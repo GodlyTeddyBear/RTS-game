@@ -330,7 +330,14 @@ end
 ]=]
 function RunContext:KnitStart()
 	RunBaseContext:KnitStart()
-	Try(self:_RegisterEntityInfrastructure())
+	local registrationResult = self:_RegisterEntityInfrastructure()
+	local completionResult = self._entityContext:CompleteRegistration(self.Name, registrationResult)
+	if not completionResult.success then
+		error(("RunContext failed to complete Entity registration: [%s] %s"):format(
+			tostring(completionResult.type),
+			tostring(completionResult.message)
+		))
+	end
 
 	-- Hydrate late joiners so they receive the current global run snapshot.
 	self._playerAddedConnection = Players.PlayerAdded:Connect(function(player: Player)

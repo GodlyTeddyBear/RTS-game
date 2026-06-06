@@ -55,6 +55,7 @@ function InitCommand:Execute(): Result.Result<boolean>
 
 		return EntityOperationSupport.RequireLifecycleStates(self._validationService, "Init", currentState, {
 			"RegisteringECS",
+			"FinalizingECSRegistration",
 			"CompilingECS",
 			"ReadyForRuntimeRegistration",
 			"RegisteringRuntime",

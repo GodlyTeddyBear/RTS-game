@@ -36,6 +36,7 @@ function SpawnEnemy:Start(registry: any, _name: string)
 	self._entityContext = registry:Get("EntityContext")
 	self._aiContext = registry:Get("AIContext")
 	self._combatContext = registry:Get("CombatContext")
+	self._animationContext = registry:Get("AnimationContext")
 	self._teamContext = registry:Get("TeamContext")
 end
 
@@ -121,11 +122,15 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 				Cooldown = attack.Cooldown,
 				LastAttackTime = 0,
 			},
-			AnimationState = "Idle",
-			AnimationLooping = true,
 		})
 		Try(createResult)
 		entity = createResult.value
+
+		Try(self._animationContext:SetupEntity(entity, {
+			PresetId = "EnemyLocomotion",
+			AssetSource = "ModelAnimations",
+			StateMode = "ActionOnly",
+		}))
 
 		Try(self._combatContext:SetupMovementActor(entity, {
 			ApplyMode = "Humanoid",

@@ -106,10 +106,11 @@ end
 function TeamContext:KnitStart()
 	TeamBaseContext:KnitStart()
 	local cleanupResult = self:_RegisterCleanupOutcomes()
-	if not cleanupResult.success then
-		error(("TeamContext failed to register cleanup outcomes: [%s] %s"):format(
-			tostring(cleanupResult.type),
-			tostring(cleanupResult.message)
+	local completionResult = self._entityContext:CompleteRegistration(self.Name, cleanupResult)
+	if not completionResult.success then
+		error(("TeamContext failed to complete Entity registration: [%s] %s"):format(
+			tostring(completionResult.type),
+			tostring(completionResult.message)
 		))
 	end
 

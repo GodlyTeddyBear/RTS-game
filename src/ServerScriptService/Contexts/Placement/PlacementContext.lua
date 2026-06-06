@@ -140,10 +140,11 @@ end
 function PlacementContext:KnitStart()
 	PlacementBaseContext:KnitStart()
 	local cleanupResult = self:_RegisterCleanupOutcomes()
-	if not cleanupResult.success then
-		error(("PlacementContext failed to register cleanup outcomes: [%s] %s"):format(
-			tostring(cleanupResult.type),
-			tostring(cleanupResult.message)
+	local completionResult = self._entityContext:CompleteRegistration(self.Name, cleanupResult)
+	if not completionResult.success then
+		error(("PlacementContext failed to complete Entity registration: [%s] %s"):format(
+			tostring(completionResult.type),
+			tostring(completionResult.message)
 		))
 	end
 

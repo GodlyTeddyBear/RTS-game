@@ -80,10 +80,11 @@ end
 function MapContext:KnitStart()
 	MapBaseContext:KnitStart()
 	local registrationResult = self:_RegisterEntityInfrastructure()
-	if not registrationResult.success then
-		error(("MapContext failed to register Entity infrastructure: [%s] %s"):format(
-			tostring(registrationResult.type),
-			tostring(registrationResult.message)
+	local completionResult = self._entityContext:CompleteRegistration(self.Name, registrationResult)
+	if not completionResult.success then
+		error(("MapContext failed to complete Entity registration: [%s] %s"):format(
+			tostring(completionResult.type),
+			tostring(completionResult.message)
 		))
 	end
 end

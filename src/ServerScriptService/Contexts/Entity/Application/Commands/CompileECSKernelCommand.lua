@@ -28,7 +28,7 @@ end
 function CompileECSKernelCommand:Execute(): Result.Result<boolean>
 	return Result.Catch(function()
 		local currentState = self._lifecycle:GetState()
-		if currentState == "RegisteringECS" then
+		if currentState == "FinalizingECSRegistration" then
 			local transitionResult = self._lifecycle:BeginECSCompile()
 			if not transitionResult.success then
 				return transitionResult

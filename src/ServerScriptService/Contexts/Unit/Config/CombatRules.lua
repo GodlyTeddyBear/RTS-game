@@ -18,8 +18,9 @@ local CombatRules = {
 				FeatureName = "Unit",
 				StateKey = "AnimationState",
 				LoopingKey = "AnimationLooping",
-				MovingState = "Walk",
-				IdleState = "Idle",
+				RevisionKey = "AnimationRevision",
+				ActionKey = "AnimationAction",
+				ActionOnly = true,
 			},
 			ActionPresentation = {
 				BuildStructure = {
@@ -28,6 +29,8 @@ local CombatRules = {
 						FeatureName = "Unit",
 						StateKey = "AnimationState",
 						LoopingKey = "AnimationLooping",
+						RevisionKey = "AnimationRevision",
+						ActionKey = "AnimationAction",
 						State = "Build",
 						Looping = true,
 					},

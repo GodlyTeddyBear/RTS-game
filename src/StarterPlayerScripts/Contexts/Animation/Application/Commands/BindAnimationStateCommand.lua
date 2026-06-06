@@ -29,6 +29,23 @@ local function _CreateAttributeStateSource(model: Model): TAnimationStateSource
 
 			return true
 		end,
+		GetRevision = function(_self)
+			local revision = model:GetAttribute("AnimationRevision")
+			return if type(revision) == "number" then revision else nil
+		end,
+		GetActionAnimation = function(_self)
+			local state = model:GetAttribute("AnimationState")
+			if type(state) ~= "string" or state == "" then
+				return nil
+			end
+			local isLooping = model:GetAttribute("AnimationLooping")
+			local revision = model:GetAttribute("AnimationRevision")
+			return {
+				State = state,
+				Looping = if type(isLooping) == "boolean" then isLooping else true,
+				Revision = if type(revision) == "number" then revision else 0,
+			}
+		end,
 		ObserveStateChanged = function(_, callback: () -> ())
 			local connection = model:GetAttributeChangedSignal("AnimationState"):Connect(callback)
 			return function()
@@ -39,6 +56,24 @@ local function _CreateAttributeStateSource(model: Model): TAnimationStateSource
 			local connection = model:GetAttributeChangedSignal("AnimationLooping"):Connect(callback)
 			return function()
 				connection:Disconnect()
+			end
+		end,
+		ObserveRevisionChanged = function(_, callback: () -> ())
+			local connection = model:GetAttributeChangedSignal("AnimationRevision"):Connect(callback)
+			return function()
+				connection:Disconnect()
+			end
+		end,
+		ObserveActionAnimationChanged = function(_, callback: () -> ())
+			local connections = {
+				model:GetAttributeChangedSignal("AnimationState"):Connect(callback),
+				model:GetAttributeChangedSignal("AnimationLooping"):Connect(callback),
+				model:GetAttributeChangedSignal("AnimationRevision"):Connect(callback),
+			}
+			return function()
+				for _, connection in connections do
+					connection:Disconnect()
+				end
 			end
 		end,
 	})

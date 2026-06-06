@@ -34,7 +34,7 @@ function FinalizeStartupCommand:Execute(): Result.Result<boolean>
 			"FinalizeStartup",
 			self._lifecycle:GetState(),
 			{
-				"RegisteringECS",
+				"FinalizingECSRegistration",
 				"CompilingECS",
 				"ReadyForRuntimeRegistration",
 				"RegisteringRuntime",

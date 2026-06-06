@@ -36,16 +36,6 @@ local StructureEntitySchema = {
 				ResourceType = nil,
 			},
 		},
-		AnimationState = {
-			ECSName = "Structure.AnimationState",
-			Authority = "DERIVED",
-			Default = "Idle",
-		},
-		AnimationLooping = {
-			ECSName = "Structure.AnimationLooping",
-			Authority = "DERIVED",
-			Default = true,
-		},
 		TargetEnemyId = {
 			ECSName = "Structure.TargetEnemyId",
 			Authority = "DERIVED",
@@ -91,8 +81,6 @@ local StructureEntitySchema = {
 				Stats = true,
 				Construction = true,
 				SourcePlacement = true,
-				AnimationState = true,
-				AnimationLooping = true,
 				TargetEnemyId = true,
 				ExtractState = true,
 			},

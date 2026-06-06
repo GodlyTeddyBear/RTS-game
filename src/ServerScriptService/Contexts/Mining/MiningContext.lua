@@ -125,10 +125,11 @@ function MiningContext:KnitStart()
 	MiningBaseContext:KnitStart()
 
 	local entityBridgeResult = self:_RegisterEntityRequestBridge()
-	if not entityBridgeResult.success then
-		error(("MiningContext failed to register Entity request bridge: [%s] %s"):format(
-			tostring(entityBridgeResult.type),
-			tostring(entityBridgeResult.message)
+	local completionResult = self._sharedEntityContext:CompleteRegistration(self.Name, entityBridgeResult)
+	if not completionResult.success then
+		error(("MiningContext failed to complete Entity registration: [%s] %s"):format(
+			tostring(completionResult.type),
+			tostring(completionResult.message)
 		))
 	end
 

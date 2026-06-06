@@ -30,6 +30,7 @@ function RunAcceptanceCheckQuery:Init(registry: any, _name: string)
 		_replicationService = "EntityReplicationService",
 		_instanceBindingService = "EntityInstanceBindingService",
 		_runtimeParticipation = "EntityRuntimeParticipationService",
+		_registrationBarrier = "EntityRegistrationBarrierService",
 	})
 end
 

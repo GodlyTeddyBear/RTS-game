@@ -31,6 +31,7 @@ function RegisterStructureCommand:Start(registry: any, _name: string)
 	self._entityContext = registry:Get("EntityContext")
 	self._aiContext = registry:Get("AIContext")
 	self._teamContext = registry:Get("TeamContext")
+	self._animationContext = registry:Get("AnimationContext")
 end
 
 function RegisterStructureCommand:Execute(record: any): Result.Result<number>
@@ -123,12 +124,20 @@ function RegisterStructureCommand:Execute(record: any): Result.Result<number>
 				RotationQuarterTurns = resolved.RotationQuarterTurns,
 				ResourceType = record.ResourceType,
 			},
-			AnimationState = "Idle",
-			AnimationLooping = true,
 			TargetEnemyId = nil,
 		})
 		Try(createResult)
 		entity = createResult.value
+
+		local aim = structureConfig.Capabilities.Aim
+		Try(self._animationContext:SetupEntity(entity, {
+			PresetId = "Structure",
+			AssetSource = "ModelAnimations",
+			StateMode = "FullState",
+		}, if aim ~= nil then {
+			ProfileId = resolved.StructureType,
+			RigConfig = aim,
+		} else nil))
 
 		Try(self._aiContext:SetupEntityAIFromProfile(entity, structureConfig.AI.ProfileId, {
 			TickInterval = structureConfig.AI.TickInterval,

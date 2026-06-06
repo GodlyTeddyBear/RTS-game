@@ -21,6 +21,7 @@ function RegisterFeatureSchemaCommand:Init(registry: any, _name: string)
 		_worldRegistry = "EntityWorldRegistryService",
 		_lifecycle = "EntityLifecycleStateMachine",
 		_validationService = "EntityValidationService",
+		_replicationService = "EntityReplicationService",
 	})
 end
 
@@ -43,7 +44,30 @@ function RegisterFeatureSchemaCommand:Execute(featureNameOrWorldName: string, sc
 		end
 
 		if self._worldRegistry:IsDefaultWorld(worldName) then
-			return self._schemaRegistry:RegisterFeatureSchema(featureName, schema)
+			local registrationResult = self._schemaRegistry:RegisterFeatureSchema(featureName, schema)
+			if not registrationResult.success then
+				return registrationResult
+			end
+			local compiledSchema = registrationResult.value
+			local sharedComponents = {}
+			local sharedTags = {}
+			for _, componentId in pairs(compiledSchema.Components or {}) do
+				local metadata = self._schemaRegistry:GetComponentMetadataById(componentId)
+				if metadata ~= nil and metadata.Replication ~= "ServerOnly" then
+					table.insert(sharedComponents, componentId)
+				end
+			end
+			for _, tagId in pairs(compiledSchema.Tags or {}) do
+				local metadata = self._schemaRegistry:GetComponentMetadataById(tagId)
+				if metadata ~= nil and metadata.Replication ~= "ServerOnly" then
+					table.insert(sharedTags, tagId)
+				end
+			end
+			self._replicationService:ApplySharedSchema({
+				sharedComponents = sharedComponents,
+				sharedTags = sharedTags,
+			})
+			return registrationResult
 		end
 
 		return self._worldRegistry:RegisterFeatureSchema(worldName, featureName, schema)

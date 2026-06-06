@@ -34,6 +34,7 @@ function RunOperationalProofCommand:Init(registry: any, _name: string)
 		_replicationService = "EntityReplicationService",
 		_instanceBindingService = "EntityInstanceBindingService",
 		_runtimeParticipation = "EntityRuntimeParticipationService",
+		_registrationBarrier = "EntityRegistrationBarrierService",
 		_createEntityCommand = "CreateEntityCommand",
 		_destroyEntityCommand = "DestroyEntityCommand",
 		_registerRuntimeEntityCommand = "RegisterRuntimeEntityCommand",

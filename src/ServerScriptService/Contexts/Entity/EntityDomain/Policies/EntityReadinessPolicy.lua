@@ -14,6 +14,7 @@ end
 function EntityReadinessPolicy:BuildStatus(input: any): any
 	local status = {
 		LifecycleState = input.LifecycleState,
+		Registration = input.RegistrationBarrierStatus,
 		ECS = {
 			RegistrationClosed = input.SchemaStatus.RegistrationClosed,
 			CompileStarted = input.SchemaStatus.CompileStarted,
@@ -70,6 +71,16 @@ function EntityReadinessPolicy:BuildAcceptance(status: any): any
 	if status.LifecycleState ~= "Running" then
 		addBlockingGap("LifecycleNotRunning", "EntityContext is not in the Running lifecycle state", {
 			LifecycleState = status.LifecycleState,
+		})
+	end
+	if #status.Registration.Pending > 0 then
+		addBlockingGap("RegistrationParticipantsPending", "Entity registration participants are still pending", {
+			Participants = status.Registration.Pending,
+		})
+	end
+	if next(status.Registration.Failed) ~= nil then
+		addBlockingGap("RegistrationParticipantFailed", "An Entity registration participant failed", {
+			Participants = status.Registration.Failed,
 		})
 	end
 

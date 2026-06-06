@@ -21,9 +21,8 @@ end
 
 return function()
 	describe("Entity startup readiness", function()
-		it("finalizes startup before binding the scheduler", function()
+		it("binds the scheduler without finalizing registration", function()
 			local schedulerBound = false
-			local finalized = false
 			local lifecycle = {
 				GetState = function()
 					return "RegisteringECS"
@@ -35,17 +34,7 @@ return function()
 			}
 			local runtimeScheduler = {
 				BindSchedulerTick = function()
-					expect(finalized).to.equal(true)
 					schedulerBound = true
-				end,
-			}
-			local finalizeStartupCommand = {
-				Execute = function()
-					finalized = true
-					return {
-						success = true,
-						value = true,
-					}
 				end,
 			}
 
@@ -55,13 +44,12 @@ return function()
 				EntityValidationService = {},
 				EntityStartupStateService = startupState,
 				EntityRuntimeSchedulerService = runtimeScheduler,
-				FinalizeStartupCommand = finalizeStartupCommand,
 			}), "StartCommand")
 
 			local result = command:Execute()
 
 			expect(result.success).to.equal(true)
-			expect(finalized).to.equal(true)
+			task.wait()
 			expect(schedulerBound).to.equal(true)
 		end)
 

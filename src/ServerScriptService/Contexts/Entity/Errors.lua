@@ -36,6 +36,9 @@ local Errors = table.freeze({
 	UNKNOWN_REPLICATION_SURFACE = "Entity replication surface is not registered",
 	UNSUPPORTED_REPLICATION_FEATURE = "Entity replication surface is not supported for this feature",
 	OPERATIONAL_PROOF_FAILED = "EntityContext operational proof failed",
+	UNKNOWN_REGISTRATION_PARTICIPANT = "Entity registration participant is not configured",
+	DUPLICATE_REGISTRATION_COMPLETION = "Entity registration participant already completed",
+	INVALID_REGISTRATION_RESULT = "Entity registration participant returned an invalid Result",
 })
 
 return Errors

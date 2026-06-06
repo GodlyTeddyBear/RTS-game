@@ -24,28 +24,70 @@ function AnimationStatePlayer.Bind(
 )
 	local activeAction: string? = nil
 	local activeCallbackState: string? = nil
+	local activeActionLooping: boolean? = nil
 	local stoppedConnection: RBXScriptConnection? = nil
 	local routerCleanup: (() -> ())? = nil
 	local stateCleanup: (() -> ())? = nil
 	local loopingCleanup: (() -> ())? = nil
+	local revisionCleanup: (() -> ())? = nil
+	local actionAnimationCleanup: (() -> ())? = nil
 	local poseController = if core ~= nil then core.PoseController else nil
-	local useStateDrivenCorePoses = preset.UseStateDrivenCorePoses == true
+	local isActionOnly = preset.ReplicatedStateMode == "ActionOnly"
+	local useStateDrivenCorePoses = not isActionOnly
+		and preset.UseStateDrivenCorePoses == true
 		and poseController ~= nil
 		and next(validCoreStates) ~= nil
 	local latestLooping = true
+	local latestRevision: number? = nil
+	local warnedMissingActionStates = {}
 
-	local function readState(): string
+	local function readState(): string?
 		local state = stateSource:GetState()
 		if type(state) == "string" and state ~= "" then
 			return state
 		end
 
-		return "Idle"
+		return if isActionOnly then nil else "Idle"
 	end
 
 	local function syncLooping()
 		local isLooping = stateSource:GetLooping()
 		latestLooping = if type(isLooping) == "boolean" then isLooping else true
+	end
+
+	local function readRevision(): number?
+		local getRevision = stateSource.GetRevision
+		if typeof(getRevision) ~= "function" then
+			return nil
+		end
+
+		local revision = getRevision(stateSource)
+		return if type(revision) == "number" then revision else nil
+	end
+
+	local function readActionAnimation(): any?
+		local getActionAnimation = stateSource.GetActionAnimation
+		if typeof(getActionAnimation) == "function" then
+			local snapshot = getActionAnimation(stateSource)
+			if type(snapshot) == "table" then
+				return {
+					State = if type(snapshot.State) == "string" then snapshot.State else "",
+					Looping = if type(snapshot.Looping) == "boolean" then snapshot.Looping else true,
+					Revision = if type(snapshot.Revision) == "number" then snapshot.Revision else 0,
+				}
+			end
+		end
+
+		local state = readState()
+		if state == nil or state == "" then
+			return nil
+		end
+
+		return {
+			State = state,
+			Looping = stateSource:GetLooping() ~= false,
+			Revision = readRevision() or 0,
+		}
 	end
 
 	local function setCoreActive(enabled: boolean)
@@ -91,6 +133,49 @@ function AnimationStatePlayer.Bind(
 		end
 	end
 
+	local function buildAvailableActionList(): string
+		local names = {}
+		for actionName in validActions do
+			table.insert(names, actionName)
+		end
+		table.sort(names)
+		return table.concat(names, ", ")
+	end
+
+	local function warnMissingActionState(requestedState: string, fallbackState: string?)
+		local warningKey = requestedState .. "->" .. tostring(fallbackState)
+		if warnedMissingActionStates[warningKey] == true then
+			return
+		end
+		warnedMissingActionStates[warningKey] = true
+
+		warn(
+			preset.Tag,
+			model.Name,
+			"- missing animation action for state:",
+			requestedState,
+			"fallback:",
+			fallbackState or "none",
+			"available actions:",
+			buildAvailableActionList()
+		)
+	end
+
+	local function resolveActionState(state: string): string?
+		if validActions[state] then
+			return state
+		end
+
+		if preset.ActionStateFallback then
+			local fallback = preset.ActionStateFallback(state, validActions)
+			if type(fallback) == "string" and validActions[fallback] then
+				return fallback
+			end
+		end
+
+		return nil
+	end
+
 	local function stopActive()
 		if stoppedConnection then
 			stoppedConnection:Disconnect()
@@ -114,7 +199,15 @@ function AnimationStatePlayer.Bind(
 			end
 			activeAction = nil
 			activeCallbackState = nil
+			activeActionLooping = nil
 		end
+	end
+
+	local function stopActiveForStateClear()
+		if activeActionLooping == false then
+			return
+		end
+		stopActive()
 	end
 
 	if useStateDrivenCorePoses then
@@ -123,15 +216,11 @@ function AnimationStatePlayer.Bind(
 	end
 
 	local function playState(state: string)
-		local animState = state
-		if not validActions[animState] and preset.ActionStateFallback then
-			local fallback = if ActionRegistry.Get(state) then preset.ActionStateFallback(state, validActions) else nil
-			if fallback then
-				animState = fallback
+		local animState = resolveActionState(state)
+		if animState == nil then
+			if not validCoreStates[state] then
+				warnMissingActionState(state, nil)
 			end
-		end
-
-		if not validActions[animState] then
 			return
 		end
 
@@ -143,6 +232,7 @@ function AnimationStatePlayer.Bind(
 
 		activeAction = animState
 		activeCallbackState = state
+		activeActionLooping = latestLooping
 
 		local actionDef = ActionRegistry.Get(state) or ActionRegistry.Get(animState)
 		if actionDef then
@@ -164,13 +254,46 @@ function AnimationStatePlayer.Bind(
 					actionDef:OnStart(newTrack, context)
 					routerCleanup = ActionEventRouter.Wire(newTrack, actionDef, context)
 				end
+			elseif activeAction == animState then
+				if actionDef then
+					actionDef:OnStop(context)
+				end
+				activeAction = nil
+				activeCallbackState = nil
+				activeActionLooping = nil
+				stoppedConnection = nil
 			end
 		end)
 	end
 
-	local function applyState(state: string)
+	local function applyState(state: string?, forceReplay: boolean?)
+		if state == nil or state == "" then
+			stopActiveForStateClear()
+			if useStateDrivenCorePoses then
+				setCoreCanPlayAnims(true)
+				applyCorePose("Idle")
+			end
+			return
+		end
+
+		if isActionOnly then
+			local resolvedActionState = resolveActionState(state)
+			if forceReplay == true or activeAction ~= resolvedActionState then
+				stopActive()
+			end
+			if resolvedActionState ~= nil then
+				if forceReplay == true or activeAction ~= resolvedActionState then
+					playState(state)
+				end
+			elseif not validCoreStates[state] then
+				warnMissingActionState(state, nil)
+			end
+			return
+		end
+
 		if useStateDrivenCorePoses then
-			if validActions[state] or (preset.ActionStateFallback and ActionRegistry.Get(state) and preset.ActionStateFallback(state, validActions) ~= nil) then
+			local resolvedActionState = resolveActionState(state)
+			if resolvedActionState ~= nil then
 				stopActive()
 				playState(state)
 				return
@@ -178,6 +301,7 @@ function AnimationStatePlayer.Bind(
 
 			local nextState = state
 			if not validCoreStates[nextState] then
+				warnMissingActionState(state, "Idle")
 				nextState = "Idle"
 			end
 
@@ -191,15 +315,51 @@ function AnimationStatePlayer.Bind(
 		playState(state)
 	end
 
-	stateCleanup = stateSource:ObserveStateChanged(function()
-		syncLooping()
-		applyState(readState())
-	end)
-	loopingCleanup = stateSource:ObserveLoopingChanged(function()
-		syncLooping()
-	end)
+	local function applyCurrentActionAnimation()
+		local snapshot = readActionAnimation()
+		if snapshot == nil then
+			applyState(nil, false)
+			return
+		end
+
+		latestLooping = snapshot.Looping
+		local revision = snapshot.Revision
+		local forceReplay = revision ~= latestRevision
+		latestRevision = revision
+		applyState(snapshot.State, forceReplay)
+	end
+
+	if typeof(stateSource.GetActionAnimation) == "function" and typeof(stateSource.ObserveActionAnimationChanged) == "function" then
+		actionAnimationCleanup = stateSource:ObserveActionAnimationChanged(function()
+			applyCurrentActionAnimation()
+		end)
+	else
+		stateCleanup = stateSource:ObserveStateChanged(function()
+			syncLooping()
+			local revision = readRevision()
+			local forceReplay = revision ~= nil and revision ~= latestRevision
+			latestRevision = revision
+			applyState(readState(), forceReplay)
+		end)
+		loopingCleanup = stateSource:ObserveLoopingChanged(function()
+			syncLooping()
+		end)
+		if typeof(stateSource.ObserveRevisionChanged) == "function" then
+			revisionCleanup = stateSource:ObserveRevisionChanged(function()
+				syncLooping()
+				local revision = readRevision()
+				local forceReplay = revision ~= nil and revision ~= latestRevision
+				latestRevision = revision
+				applyState(readState(), forceReplay)
+			end)
+		end
+	end
 
 	janitor:Add(function()
+		if actionAnimationCleanup then
+			actionAnimationCleanup()
+			actionAnimationCleanup = nil
+		end
 		if stateCleanup then
 			stateCleanup()
 			stateCleanup = nil
@@ -208,6 +368,10 @@ function AnimationStatePlayer.Bind(
 			loopingCleanup()
 			loopingCleanup = nil
 		end
+		if revisionCleanup then
+			revisionCleanup()
+			revisionCleanup = nil
+		end
 		stopActive()
 		if useStateDrivenCorePoses then
 			setCoreActive(true)
@@ -215,7 +379,9 @@ function AnimationStatePlayer.Bind(
 	end, true)
 
 	syncLooping()
-	applyState(readState())
+	local initialSnapshot = readActionAnimation()
+	latestRevision = if initialSnapshot ~= nil then initialSnapshot.Revision else readRevision()
+	applyCurrentActionAnimation()
 end
 
 return AnimationStatePlayer

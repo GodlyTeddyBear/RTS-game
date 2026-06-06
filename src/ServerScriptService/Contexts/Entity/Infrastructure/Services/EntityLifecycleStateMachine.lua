@@ -7,6 +7,7 @@ local StateMachine = require(ReplicatedStorage.Utilities.StateMachine)
 type EntityLifecycleState =
 	"Uninitialized"
 	| "RegisteringECS"
+	| "FinalizingECSRegistration"
 	| "CompilingECS"
 	| "ReadyForRuntimeRegistration"
 	| "RegisteringRuntime"
@@ -19,6 +20,10 @@ local LEGAL_TRANSITIONS: StateMachine.TStateMachineTransitionMap<EntityLifecycle
 		RegisteringECS = true,
 	},
 	RegisteringECS = {
+		FinalizingECSRegistration = true,
+		ShuttingDown = true,
+	},
+	FinalizingECSRegistration = {
 		CompilingECS = true,
 		ShuttingDown = true,
 	},
@@ -87,6 +92,10 @@ end
 
 function EntityLifecycleStateMachine:BeginECSCompile()
 	return self._machine:Transition("CompilingECS")
+end
+
+function EntityLifecycleStateMachine:BeginECSFinalization()
+	return self._machine:Transition("FinalizingECSRegistration")
 end
 
 function EntityLifecycleStateMachine:BeginRuntimeRegistration()

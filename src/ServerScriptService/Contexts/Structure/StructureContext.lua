@@ -73,6 +73,7 @@ local StructureContext = Knit.CreateService({
 		{ Name = "EntityContext", CacheAs = "_entityContext" },
 		{ Name = "EnemyContext", CacheAs = "_enemyContext" },
 		{ Name = "CombatContext", CacheAs = "_combatContext" },
+		{ Name = "AnimationContext", CacheAs = "_animationContext" },
 		{ Name = "TeamContext", CacheAs = "_teamContext" },
 		{ Name = "RunContext", CacheAs = "_runContext" },
 		{ Name = "PlacementContext", CacheAs = "_placementContext" },
@@ -99,10 +100,11 @@ function StructureContext:KnitStart()
 	StructureBaseContext:KnitStart()
 
 	local entityResult = self:_RegisterEntityInfrastructure()
-	if not entityResult.success then
-		error(("StructureContext failed to register Entity infrastructure: [%s] %s"):format(
-			tostring(entityResult.type),
-			tostring(entityResult.message)
+	local completionResult = self._entityContext:CompleteRegistration(self.Name, entityResult)
+	if not completionResult.success then
+		error(("StructureContext failed to complete Entity registration: [%s] %s"):format(
+			tostring(completionResult.type),
+			tostring(completionResult.message)
 		))
 	end
 

@@ -46,6 +46,7 @@ function EntityOperationSupport.BuildReadinessStatus(input: any): any
 		SchedulerBound = input._runtimeScheduler:GetStatus().SchedulerBound,
 		RuntimeTickActive = input._runtimeScheduler:GetStatus().RuntimeTickActive,
 		LastStartupFailure = input._startupState:GetLastStartupFailure(),
+		RegistrationBarrierStatus = input._registrationBarrier:GetStatus(),
 	})
 end
 

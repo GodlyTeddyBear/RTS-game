@@ -69,7 +69,7 @@ end
 local function _PrepareInstance(instance: Instance, binding: any, snapshot: any)
 	local setupProfileId = if type(binding) == "table" then binding.SetupProfileId else nil
 	local transform = snapshot.Transform
-	if setupProfileId == "HumanoidActor" then
+	if setupProfileId == "HumanoidActor" or setupProfileId == "ExistingHumanoidActor" then
 		assert(instance:IsA("Model"), "Entity HumanoidActor binding requires a Model instance")
 		local rootPart = _ResolveHumanoidRoot(instance)
 		assert(rootPart ~= nil, "Entity HumanoidActor binding requires a root part")
@@ -135,7 +135,11 @@ local function _PrepareInstance(instance: Instance, binding: any, snapshot: any)
 			instance:PivotTo(transform.CFrame)
 		end
 		EntityCollisionService:ApplyStructureModel(instance)
-	elseif instance:IsA("Model") and typeof(transform and transform.CFrame) == "CFrame" then
+	elseif
+		setupProfileId ~= "ExistingHumanoidActor"
+		and instance:IsA("Model")
+		and typeof(transform and transform.CFrame) == "CFrame"
+	then
 		instance:PivotTo(transform.CFrame)
 		if setupProfileId == "HumanoidActor" then
 			EntityCollisionService:ApplyModel(instance)
@@ -365,6 +369,7 @@ function RegisterEntityFeatureCommand:_BuildGenericBinding(featureName: string):
 				EntityId = identity.EntityId,
 				EntityKind = identity.EntityKind,
 				EntityFeature = snapshot.FeatureName,
+				EntityDefinitionId = identity.DefinitionId,
 				Faction = ownership.Faction,
 				OwnerKind = ownership.OwnerKind,
 				OwnerId = ownership.OwnerId,
@@ -435,6 +440,8 @@ end
 function RegisterEntityFeatureCommand:_BuildReplicatedSchema(featureName: string): any
 	local sharedComponents = {}
 	local sharedTags = {}
+	local includedComponents = {}
+	local includedTags = {}
 
 	local function appendFromSchema(schema: any)
 		if schema == nil then
@@ -442,20 +449,23 @@ function RegisterEntityFeatureCommand:_BuildReplicatedSchema(featureName: string
 		end
 		for _, componentId in pairs(schema.Components or {}) do
 			local metadata = self._schemaRegistry:GetComponentMetadataById(componentId)
-			if metadata ~= nil and metadata.Replication ~= "ServerOnly" then
+			if metadata ~= nil and metadata.Replication ~= "ServerOnly" and includedComponents[componentId] ~= true then
+				includedComponents[componentId] = true
 				table.insert(sharedComponents, componentId)
 			end
 		end
 		for _, tagId in pairs(schema.Tags or {}) do
 			local metadata = self._schemaRegistry:GetComponentMetadataById(tagId)
-			if metadata ~= nil and metadata.Replication ~= "ServerOnly" then
+			if metadata ~= nil and metadata.Replication ~= "ServerOnly" and includedTags[tagId] ~= true then
+				includedTags[tagId] = true
 				table.insert(sharedTags, tagId)
 			end
 		end
 	end
 
-	appendFromSchema(self._schemaRegistry:GetCoreCompiledSchema())
-	appendFromSchema(self._schemaRegistry:GetCompiledSchema(featureName))
+	for _, schema in pairs(self._schemaRegistry:GetCompiledSchemas()) do
+		appendFromSchema(schema)
+	end
 	return {
 		sharedComponents = sharedComponents,
 		sharedTags = sharedTags,

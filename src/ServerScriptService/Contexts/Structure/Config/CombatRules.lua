@@ -3,34 +3,25 @@
 local CombatRules = {
 	MovementPresentation = {
 		{
-			RuleId = "Structure.AttackPresentation",
+			RuleId = "Structure.Presentation",
 			Query = {
 				Keys = {
 					{ Key = "OperationalTag", FeatureName = "Structure" },
-					{ Key = "AttackState", FeatureName = "Combat" },
-					{ Key = "ActionState", FeatureName = "AI" },
 				},
 			},
+			TargetEntityId = { FeatureName = "Structure", Key = "TargetEnemyId" },
 			Attack = {
 				Target = { TargetKind = "Enemy" },
 				Animation = {
 					FeatureName = "Structure",
 					StateKey = "AnimationState",
 					LoopingKey = "AnimationLooping",
+					RevisionKey = "AnimationRevision",
+					ActionKey = "AnimationAction",
 					State = "Attack",
 					Looping = false,
 				},
 				TargetEntityId = { FeatureName = "Structure", Key = "TargetEnemyId" },
-			},
-		},
-		{
-			RuleId = "Structure.ExtractPresentation",
-			Query = {
-				Keys = {
-					{ Key = "OperationalTag", FeatureName = "Structure" },
-					{ Key = "ExtractState", FeatureName = "Structure" },
-					{ Key = "ActionState", FeatureName = "AI" },
-				},
 			},
 			ActionPresentation = {
 				Extract = {
@@ -38,36 +29,19 @@ local CombatRules = {
 						FeatureName = "Structure",
 						StateKey = "AnimationState",
 						LoopingKey = "AnimationLooping",
+						RevisionKey = "AnimationRevision",
+						ActionKey = "AnimationAction",
 						State = "Extract",
 						Looping = true,
 					},
 				},
-				Idle = {
-					Animation = {
-						FeatureName = "Structure",
-						StateKey = "AnimationState",
-						LoopingKey = "AnimationLooping",
-						State = "Idle",
-						Looping = true,
-					},
-				},
-			},
-		},
-		{
-			RuleId = "Structure.StasisPresentation",
-			Query = {
-				Keys = {
-					{ Key = "OperationalTag", FeatureName = "Structure" },
-					{ Key = "StatusAuraState", FeatureName = "Combat" },
-					{ Key = "ActionState", FeatureName = "AI" },
-				},
-			},
-			ActionPresentation = {
 				Stasis = {
 					Animation = {
 						FeatureName = "Structure",
 						StateKey = "AnimationState",
 						LoopingKey = "AnimationLooping",
+						RevisionKey = "AnimationRevision",
+						ActionKey = "AnimationAction",
 						State = "Stasis",
 						Looping = true,
 					},
@@ -78,6 +52,8 @@ local CombatRules = {
 						FeatureName = "Structure",
 						StateKey = "AnimationState",
 						LoopingKey = "AnimationLooping",
+						RevisionKey = "AnimationRevision",
+						ActionKey = "AnimationAction",
 						State = "Idle",
 						Looping = true,
 					},

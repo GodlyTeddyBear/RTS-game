@@ -47,16 +47,6 @@ local UnitEntitySchema = {
 				TargetStructureEntity = nil,
 			},
 		},
-		AnimationState = {
-			ECSName = "Unit.AnimationState",
-			Authority = "DERIVED",
-			Default = "Idle",
-		},
-		AnimationLooping = {
-			ECSName = "Unit.AnimationLooping",
-			Authority = "DERIVED",
-			Default = true,
-		},
 		LockOn = {
 			ECSName = "Unit.LockOn",
 			Authority = "AUTHORITATIVE",
@@ -81,8 +71,6 @@ local UnitEntitySchema = {
 				CurrentMoveSpeed = true,
 				PathState = true,
 				BuilderAssignment = true,
-				AnimationState = true,
-				AnimationLooping = true,
 				LockOn = true,
 			},
 			Tags = {

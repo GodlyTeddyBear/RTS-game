@@ -163,6 +163,7 @@ function EntityInstanceBindingService:BindEntityInstance(entityContext: any, ent
 		end
 
 		local instance = assetResult.value
+		local preserveInstance = type(snapshot.ModelBinding) == "table" and snapshot.ModelBinding.PreserveInstance == true
 		local parentFolder = self:_ResolveParentFolder(compiledBinding, entityContext, snapshot)
 		if not parentFolder.success then
 			instance:Destroy()
@@ -176,14 +177,16 @@ function EntityInstanceBindingService:BindEntityInstance(entityContext: any, ent
 		end
 
 		local buildName = compiledBinding.BuildName
-		if type(buildName) == "function" then
+		if not preserveInstance and type(buildName) == "function" then
 			local didBuildName, nextName = pcall(buildName, entityContext, snapshot)
 			if didBuildName and type(nextName) == "string" and nextName ~= "" then
 				instance.Name = nextName
 			end
 		end
 
-		instance.Parent = parentFolder.value
+		if not preserveInstance then
+			instance.Parent = parentFolder.value
+		end
 
 		local revealState = _BuildRevealState(compiledBinding, entityContext, snapshot)
 		if revealState ~= nil then
@@ -205,6 +208,7 @@ function EntityInstanceBindingService:BindEntityInstance(entityContext: any, ent
 			LastRevealState = revealState and _DeepClone(revealState) or nil,
 			Snapshot = snapshot,
 			ActorKind = actorKind,
+			PreserveInstance = preserveInstance,
 		}
 
 		self._entityToBinding[entity] = bindingRecord
@@ -228,7 +232,9 @@ function EntityInstanceBindingService:UnbindEntityInstance(entity: number): Resu
 
 		self._entityToBinding[entity] = nil
 		self._instanceToEntity[instance] = nil
-		instance:Destroy()
+		if bindingRecord.PreserveInstance ~= true then
+			instance:Destroy()
+		end
 		return Result.Ok(true)
 	end, "EntityInstanceBindingService:UnbindEntityInstance")
 end
@@ -367,7 +373,8 @@ function EntityInstanceBindingService:_ResolveAsset(compiledBinding: any, entity
 		})
 	end
 
-	if assetOrPath.Parent == nil then
+	local preserveInstance = type(snapshot.ModelBinding) == "table" and snapshot.ModelBinding.PreserveInstance == true
+	if preserveInstance or assetOrPath.Parent == nil then
 		return Result.Ok(assetOrPath)
 	end
 

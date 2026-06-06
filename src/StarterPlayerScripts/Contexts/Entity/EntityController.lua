@@ -1,11 +1,13 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
 local EntityReplicationClient = require(script.Parent.Infrastructure.Persistence.EntityReplicationClient)
 local ClientEntityIndexService = require(script.Parent.Infrastructure.Services.ClientEntityIndexService)
+local ClientEntitySystemRegistry = require(script.Parent.Infrastructure.Services.ClientEntitySystemRegistry)
 
 local EntityController = Knit.CreateController({
 	Name = "EntityController",
@@ -14,12 +16,17 @@ local EntityController = Knit.CreateController({
 function EntityController:KnitInit()
 	self._replicationClient = EntityReplicationClient.new()
 	self._entityIndexService = ClientEntityIndexService.new(self._replicationClient)
+	self._systemRegistry = ClientEntitySystemRegistry.new()
+	self._heartbeatConnection = nil
 end
 
 function EntityController:KnitStart()
 	self._replicationClient:Init()
 	self._replicationClient:Start()
 	self._entityIndexService:Start()
+	self._heartbeatConnection = RunService.Heartbeat:Connect(function()
+		self._systemRegistry:Run()
+	end)
 end
 
 function EntityController:GetByFeature(featureName: string)
@@ -66,7 +73,23 @@ function EntityController:GetComponents()
 	return self._replicationClient:GetComponentsOrThrow()
 end
 
+function EntityController:ObserveStateChanged(callback: () -> ())
+	return self._replicationClient:ObserveStateChanged(callback)
+end
+
+function EntityController:RegisterSystem(systemName: string, system: any)
+	self._systemRegistry:Register(systemName, system)
+end
+
 function EntityController:Destroy()
+	if self._heartbeatConnection ~= nil then
+		self._heartbeatConnection:Disconnect()
+		self._heartbeatConnection = nil
+	end
+	if self._systemRegistry ~= nil then
+		self._systemRegistry:Destroy()
+		self._systemRegistry = nil
+	end
 	if self._entityIndexService ~= nil then
 		self._entityIndexService:Destroy()
 		self._entityIndexService = nil
