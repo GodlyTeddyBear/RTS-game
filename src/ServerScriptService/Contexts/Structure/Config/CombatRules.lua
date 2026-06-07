@@ -13,49 +13,29 @@ local CombatRules = {
 			Attack = {
 				Target = { TargetKind = "Enemy" },
 				Animation = {
-					FeatureName = "Structure",
-					StateKey = "AnimationState",
-					LoopingKey = "AnimationLooping",
-					RevisionKey = "AnimationRevision",
-					ActionKey = "AnimationAction",
+					ChannelId = "FullBody",
 					State = "Attack",
-					Looping = false,
 				},
 				TargetEntityId = { FeatureName = "Structure", Key = "TargetEnemyId" },
 			},
 			ActionPresentation = {
 				Extract = {
 					Animation = {
-						FeatureName = "Structure",
-						StateKey = "AnimationState",
-						LoopingKey = "AnimationLooping",
-						RevisionKey = "AnimationRevision",
-						ActionKey = "AnimationAction",
+						ChannelId = "LoopingAction",
 						State = "Extract",
-						Looping = true,
 					},
 				},
 				Stasis = {
 					Animation = {
-						FeatureName = "Structure",
-						StateKey = "AnimationState",
-						LoopingKey = "AnimationLooping",
-						RevisionKey = "AnimationRevision",
-						ActionKey = "AnimationAction",
+						ChannelId = "LoopingAction",
 						State = "Stasis",
-						Looping = true,
 					},
 					TargetEntityId = { FeatureName = "Structure", Key = "TargetEnemyId" },
 				},
 				Idle = {
 					Animation = {
-						FeatureName = "Structure",
-						StateKey = "AnimationState",
-						LoopingKey = "AnimationLooping",
-						RevisionKey = "AnimationRevision",
-						ActionKey = "AnimationAction",
+						ChannelId = "LoopingAction",
 						State = "Idle",
-						Looping = true,
 					},
 					TargetEntityId = { FeatureName = "Structure", Key = "TargetEnemyId" },
 				},

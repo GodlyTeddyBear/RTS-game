@@ -89,10 +89,26 @@ export type TRenderAssetResolver = {
 local RenderAssetResolver = {}
 RenderAssetResolver.__index = RenderAssetResolver
 
+local function _FindFirstChildCaseInsensitive(parent: Instance, childName: string): Instance?
+	local exactMatch = parent:FindFirstChild(childName)
+	if exactMatch ~= nil then
+		return exactMatch
+	end
+
+	local normalizedChildName = string.lower(childName)
+	for _, child in ipairs(parent:GetChildren()) do
+		if string.lower(child.Name) == normalizedChildName then
+			return child
+		end
+	end
+
+	return nil
+end
+
 local function _NavigateToInstance(root: Instance, pathSegments: { string }): Instance?
 	local current: Instance = root
 	for _, segment in ipairs(pathSegments) do
-		local nextInstance = current:FindFirstChild(segment)
+		local nextInstance = _FindFirstChildCaseInsensitive(current, segment)
 		if nextInstance == nil then
 			return nil
 		end

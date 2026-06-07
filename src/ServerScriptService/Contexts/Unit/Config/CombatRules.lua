@@ -15,24 +15,14 @@ local CombatRules = {
 				},
 			},
 			Animation = {
-				FeatureName = "Unit",
-				StateKey = "AnimationState",
-				LoopingKey = "AnimationLooping",
-				RevisionKey = "AnimationRevision",
-				ActionKey = "AnimationAction",
 				ActionOnly = true,
 			},
 			ActionPresentation = {
 				BuildStructure = {
 					WhenNotMoving = true,
 					Animation = {
-						FeatureName = "Unit",
-						StateKey = "AnimationState",
-						LoopingKey = "AnimationLooping",
-						RevisionKey = "AnimationRevision",
-						ActionKey = "AnimationAction",
+						ChannelId = "FullBody",
 						State = "Build",
-						Looping = true,
 					},
 				},
 			},

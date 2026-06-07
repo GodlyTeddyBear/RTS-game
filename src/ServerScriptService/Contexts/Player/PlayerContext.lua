@@ -148,10 +148,9 @@ function PlayerContext:_BindCharacter(player: Player, character: Model)
 		entity = createResult.value
 		self._entityByPlayer[player] = entity
 		local animationResult = self._animationContext:SetupEntity(entity, {
-			PresetId = "Player",
-			AssetSource = "SharedAnimations",
-			StateMode = "ActionOnly",
-			DisableDefaultAnimate = true,
+			ProfileId = "PlayerHumanoid",
+			AnimationSetId = "Player",
+			VariantId = "Default",
 		})
 		if not animationResult.success then
 			warn("[PlayerContext] failed to setup player animation:", animationResult.message)

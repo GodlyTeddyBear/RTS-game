@@ -14,9 +14,6 @@ local RegisterEntityFeatureCommand = {}
 RegisterEntityFeatureCommand.__index = RegisterEntityFeatureCommand
 setmetatable(RegisterEntityFeatureCommand, BaseCommand)
 
-local ASSETS_ROOT = ReplicatedStorage:WaitForChild("Assets")
-local ANIMATIONS_FOLDER = ASSETS_ROOT:FindFirstChild("Animations")
-
 local function _FindOrCreateFolder(parent: Instance, name: string): Folder
 	local existing = parent:FindFirstChild(name)
 	if existing ~= nil and existing:IsA("Folder") then
@@ -66,6 +63,15 @@ local function _ResolveExistingRuntimeInstance(snapshot: any): Instance
 	return instance
 end
 
+local function _EnsureAnimator(humanoid: Humanoid)
+	if humanoid:FindFirstChildOfClass("Animator") ~= nil then
+		return
+	end
+
+	local animator = Instance.new("Animator")
+	animator.Parent = humanoid
+end
+
 local function _PrepareInstance(instance: Instance, binding: any, snapshot: any)
 	local setupProfileId = if type(binding) == "table" then binding.SetupProfileId else nil
 	local transform = snapshot.Transform
@@ -86,20 +92,7 @@ local function _PrepareInstance(instance: Instance, binding: any, snapshot: any)
 			humanoid.Parent = instance
 		end
 		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-
-		local animationsFolderRef = instance:FindFirstChild("AnimationsFolder")
-		if animationsFolderRef ~= nil and not animationsFolderRef:IsA("ObjectValue") then
-			animationsFolderRef:Destroy()
-			animationsFolderRef = nil
-		end
-		if animationsFolderRef == nil then
-			animationsFolderRef = Instance.new("ObjectValue")
-			animationsFolderRef.Name = "AnimationsFolder"
-			animationsFolderRef.Parent = instance
-		end
-		if ANIMATIONS_FOLDER ~= nil then
-			(animationsFolderRef :: ObjectValue).Value = ANIMATIONS_FOLDER
-		end
+		_EnsureAnimator(humanoid)
 	elseif setupProfileId == "StructurePlacement" then
 		assert(instance:IsA("Model"), "Entity StructurePlacement binding requires a Model instance")
 		local humanoid = instance:FindFirstChildOfClass("Humanoid")
@@ -108,20 +101,7 @@ local function _PrepareInstance(instance: Instance, binding: any, snapshot: any)
 			humanoid.Parent = instance
 		end
 		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-
-		local animationsFolderRef = instance:FindFirstChild("AnimationsFolder")
-		if animationsFolderRef ~= nil and not animationsFolderRef:IsA("ObjectValue") then
-			animationsFolderRef:Destroy()
-			animationsFolderRef = nil
-		end
-		if animationsFolderRef == nil then
-			animationsFolderRef = Instance.new("ObjectValue")
-			animationsFolderRef.Name = "AnimationsFolder"
-			animationsFolderRef.Parent = instance
-		end
-		if ANIMATIONS_FOLDER ~= nil then
-			(animationsFolderRef :: ObjectValue).Value = ANIMATIONS_FOLDER
-		end
+		_EnsureAnimator(humanoid)
 	end
 
 	if setupProfileId == "StructurePlacement" and instance:IsA("Model") then

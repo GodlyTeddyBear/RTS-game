@@ -127,9 +127,9 @@ function SpawnEnemy:Execute(role: string, spawnCFrame: CFrame, waveNumber: numbe
 		entity = createResult.value
 
 		Try(self._animationContext:SetupEntity(entity, {
-			PresetId = "EnemyLocomotion",
-			AssetSource = "ModelAnimations",
-			StateMode = "ActionOnly",
+			ProfileId = "HumanoidCombat",
+			AnimationSetId = "EnemyLocomotion",
+			VariantId = role,
 		}))
 
 		Try(self._combatContext:SetupMovementActor(entity, {

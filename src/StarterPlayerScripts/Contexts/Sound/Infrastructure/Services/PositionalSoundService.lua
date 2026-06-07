@@ -3,9 +3,9 @@
 --[[
 	PositionalSoundService - Manages 3D spatial audio for worker models.
 
-	Listens for worker models tagged with "AnimatedWorker" via CollectionService.
-	When a worker's AnimationState attribute changes to "Mining", attaches a looping
-	mining sound to the model. Roblox handles distance attenuation automatically.
+	Listens for worker models tagged with "AnimatedWorker" and animation marker events.
+	Animation state lives in EntityContext; this service only reacts to marker payloads
+	emitted by AnimationController.
 
 	Pattern: Infrastructure layer service (client-only)
 ]]
@@ -13,6 +13,7 @@
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Knit = require(ReplicatedStorage.Packages.Knit)
 local SoundIds = require(ReplicatedStorage.Contexts.Sound.Config.SoundIds)
 
 local PositionalSoundService = {}
@@ -28,6 +29,7 @@ function PositionalSoundService.new(ambientSoundGroup: SoundGroup?)
 	self._TrackedModels = {} :: { [Model]: { Sound: Sound?, Connection: RBXScriptConnection? } }
 	self._TagAddedConnection = nil :: RBXScriptConnection?
 	self._TagRemovedConnection = nil :: RBXScriptConnection?
+	self._MarkerCleanup = nil :: (() -> ())?
 	return self
 end
 
@@ -45,6 +47,15 @@ function PositionalSoundService:Start()
 	self._TagRemovedConnection = CollectionService:GetInstanceRemovedSignal(TAG_NAME):Connect(function(instance)
 		self:_OnModelRemoved(instance)
 	end)
+
+	local ok, animationController = pcall(function()
+		return Knit.GetController("AnimationController")
+	end)
+	if ok and animationController ~= nil and type(animationController.ObserveMarker) == "function" then
+		self._MarkerCleanup = animationController:ObserveMarker(function(payload)
+			self:_HandleAnimationMarker(payload)
+		end)
+	end
 end
 
 function PositionalSoundService:_OnModelAdded(instance: Instance)
@@ -55,18 +66,6 @@ function PositionalSoundService:_OnModelAdded(instance: Instance)
 		Sound = nil :: Sound?,
 		Connection = nil :: RBXScriptConnection?,
 	}
-
-	-- Listen for AnimationState attribute changes
-	entry.Connection = model:GetAttributeChangedSignal("AnimationState"):Connect(function()
-		local state = model:GetAttribute("AnimationState")
-		self:_HandleAnimationStateChange(model, state, entry)
-	end)
-
-	-- Check current state
-	local currentState = model:GetAttribute("AnimationState")
-	if currentState then
-		self:_HandleAnimationStateChange(model, currentState, entry)
-	end
 
 	self._TrackedModels[model] = entry
 end
@@ -89,12 +88,29 @@ function PositionalSoundService:_OnModelRemoved(instance: Instance)
 	self._TrackedModels[model] = nil
 end
 
-function PositionalSoundService:_HandleAnimationStateChange(
+function PositionalSoundService:_HandleAnimationMarker(payload: any)
+	if type(payload) ~= "table" or typeof(payload.Model) ~= "Instance" or not payload.Model:IsA("Model") then
+		return
+	end
+
+	local entry = self._TrackedModels[payload.Model]
+	if entry == nil then
+		return
+	end
+
+	if payload.MarkerName == "MiningLoopStart" or (payload.MarkerName == "ActionStarted" and payload.ActionId == "Extract") then
+		self:_SetMiningLoop(payload.Model, true, entry)
+	elseif payload.MarkerName == "MiningLoopStop" or (payload.MarkerName == "ActionStopped" and payload.ActionId == "Extract") then
+		self:_SetMiningLoop(payload.Model, false, entry)
+	end
+end
+
+function PositionalSoundService:_SetMiningLoop(
 	model: Model,
-	state: string?,
+	enabled: boolean,
 	entry: { Sound: Sound?, Connection: RBXScriptConnection? }
 )
-	if state == "Mining" then
+	if enabled then
 		-- Start mining loop sound if not already playing
 		if not entry.Sound or not entry.Sound.Parent then
 			local soundId = SoundIds.Ambient.MiningLoop
@@ -130,6 +146,10 @@ function PositionalSoundService:_HandleAnimationStateChange(
 end
 
 function PositionalSoundService:Cleanup()
+	if self._MarkerCleanup ~= nil then
+		self._MarkerCleanup()
+		self._MarkerCleanup = nil
+	end
 	if self._TagAddedConnection then
 		self._TagAddedConnection:Disconnect()
 		self._TagAddedConnection = nil

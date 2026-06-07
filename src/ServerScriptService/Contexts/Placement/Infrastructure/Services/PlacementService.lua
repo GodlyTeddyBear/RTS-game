@@ -56,7 +56,6 @@ function PlacementService.new()
 	local self = setmetatable({}, PlacementService)
 	self._folder = nil :: Folder?
 	self._structuresFolder = nil :: Folder?
-	self._animationsFolder = nil :: Folder?
 	self._instanceMap = {} :: { [number]: SpawnedStructure }
 	self._nextId = 1
 	self._worldContext = nil :: any
@@ -89,10 +88,6 @@ function PlacementService:Init(_registry: any, _name: string)
 		self._structuresFolder = structuresFolder
 	end
 
-	local animationsFolder = assets and assets:FindFirstChild("Animations")
-	if animationsFolder and animationsFolder:IsA("Folder") then
-		self._animationsFolder = animationsFolder
-	end
 end
 
 function PlacementService:Start(registry: any, _name: string)
@@ -183,46 +178,26 @@ function PlacementService:ResolveGroundPointFromFootprint(
 	return Ok(hit.Position)
 end
 
-local function _EnsureAnimationsFolderValue(model: Model, animationsFolder: Folder?)
-	local animationsFolderRef = model:FindFirstChild("AnimationsFolder")
-	if animationsFolderRef ~= nil and not animationsFolderRef:IsA("ObjectValue") then
-		animationsFolderRef:Destroy()
-		animationsFolderRef = nil
-	end
-
-	if animationsFolderRef == nil then
-		animationsFolderRef = Instance.new("ObjectValue")
-		animationsFolderRef.Name = "AnimationsFolder"
-		animationsFolderRef.Parent = model
-	end
-
-	if animationsFolder ~= nil then
-		(animationsFolderRef :: ObjectValue).Value = animationsFolder
-	end
-end
-
 local function _EnsureHumanoid(model: Model)
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	if humanoid ~= nil then
 		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		if humanoid:FindFirstChildOfClass("Animator") == nil then
+			local animator = Instance.new("Animator")
+			animator.Parent = humanoid
+		end
 		return
 	end
 
 	humanoid = Instance.new("Humanoid")
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	humanoid.Parent = model
+	local animator = Instance.new("Animator")
+	animator.Parent = humanoid
 end
 
-local function _PrepareStructureAnimationRuntime(model: Model, animationsFolder: Folder?)
+local function _PrepareStructureAnimationRuntime(model: Model)
 	_EnsureHumanoid(model)
-	_EnsureAnimationsFolderValue(model, animationsFolder)
-
-	if model:GetAttribute("AnimationState") == nil then
-		model:SetAttribute("AnimationState", "Idle")
-	end
-	if model:GetAttribute("AnimationLooping") == nil then
-		model:SetAttribute("AnimationLooping", true)
-	end
 end
 
 local function _CreateExtractorFallbackModel(): Model
@@ -321,7 +296,7 @@ function PlacementService:SpawnStructure(
 
 	-- Models and parts both support :PivotTo, which keeps the spawn path generic.
 	local spawnModel = self:_ResolveSpawnModel(structureType)
-	_PrepareStructureAnimationRuntime(spawnModel, self._animationsFolder)
+	_PrepareStructureAnimationRuntime(spawnModel)
 	local normalizedTurns = PlacementFootprintResolver.NormalizeRotationQuarterTurns(rotationQuarterTurns)
 	if normalizedTurns ~= 0 then
 		ModelPlus.RotateYaw(spawnModel, math.rad(normalizedTurns * 90))

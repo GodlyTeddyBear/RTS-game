@@ -131,13 +131,13 @@ function RegisterStructureCommand:Execute(record: any): Result.Result<number>
 
 		local aim = structureConfig.Capabilities.Aim
 		Try(self._animationContext:SetupEntity(entity, {
-			PresetId = "Structure",
-			AssetSource = "ModelAnimations",
-			StateMode = "FullState",
-		}, if aim ~= nil then {
-			ProfileId = resolved.StructureType,
-			RigConfig = aim,
-		} else nil))
+			ProfileId = "StructureActor",
+			AnimationSetId = "Structure",
+			VariantId = resolved.StructureType,
+			FeatureOverrides = if aim ~= nil then {
+				Aim = aim,
+			} else nil,
+		}))
 
 		Try(self._aiContext:SetupEntityAIFromProfile(entity, structureConfig.AI.ProfileId, {
 			TickInterval = structureConfig.AI.TickInterval,

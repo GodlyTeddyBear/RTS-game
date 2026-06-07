@@ -18,6 +18,8 @@ function EntityController:KnitInit()
 	self._entityIndexService = ClientEntityIndexService.new(self._replicationClient)
 	self._systemRegistry = ClientEntitySystemRegistry.new()
 	self._heartbeatConnection = nil
+	self._preSimulationConnection = nil
+	self._renderConnection = nil
 end
 
 function EntityController:KnitStart()
@@ -25,7 +27,13 @@ function EntityController:KnitStart()
 	self._replicationClient:Start()
 	self._entityIndexService:Start()
 	self._heartbeatConnection = RunService.Heartbeat:Connect(function()
-		self._systemRegistry:Run()
+		self._systemRegistry:RunGroup("Heartbeat")
+	end)
+	self._preSimulationConnection = RunService.PreSimulation:Connect(function()
+		self._systemRegistry:RunGroup("PreSimulation")
+	end)
+	self._renderConnection = RunService.RenderStepped:Connect(function()
+		self._systemRegistry:RunGroup("Render")
 	end)
 end
 
@@ -77,14 +85,22 @@ function EntityController:ObserveStateChanged(callback: () -> ())
 	return self._replicationClient:ObserveStateChanged(callback)
 end
 
-function EntityController:RegisterSystem(systemName: string, system: any)
-	self._systemRegistry:Register(systemName, system)
+function EntityController:RegisterSystem(systemName: string, system: any, phaseName: string?)
+	self._systemRegistry:Register(systemName, system, phaseName)
 end
 
 function EntityController:Destroy()
 	if self._heartbeatConnection ~= nil then
 		self._heartbeatConnection:Disconnect()
 		self._heartbeatConnection = nil
+	end
+	if self._preSimulationConnection ~= nil then
+		self._preSimulationConnection:Disconnect()
+		self._preSimulationConnection = nil
+	end
+	if self._renderConnection ~= nil then
+		self._renderConnection:Disconnect()
+		self._renderConnection = nil
 	end
 	if self._systemRegistry ~= nil then
 		self._systemRegistry:Destroy()

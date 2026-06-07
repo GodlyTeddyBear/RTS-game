@@ -118,9 +118,9 @@ function SpawnUnitCommand:Execute(request: SpawnUnitRequest): Result.Result<Spaw
 		}))
 
 		Try(self._animationContext:SetupEntity(entity, {
-			PresetId = "CombatNPC",
-			AssetSource = "ModelAnimations",
-			StateMode = "ActionOnly",
+			ProfileId = "HumanoidCombat",
+			AnimationSetId = "CombatNPC",
+			VariantId = request.UnitId,
 		}))
 
 		if request.Lifetime ~= nil then

@@ -1,92 +1,119 @@
 --!strict
 
-export type TPoseFolder = {
-	Folder: string,
-	Pose: string,
+export type TAnimationRigAdapterId = "Humanoid" | "AnimationController"
+export type TAnimationLocomotionProviderId = "HumanoidState" | "EntityMovement" | "None"
+export type TAnimationAimStrategy = "IKControl" | "Motor6D"
+export type TAnimationRuntimeState = "PendingModel" | "Loading" | "Ready" | "Suspended" | "Failed" | "Removed"
+
+export type TAnimationProfileComponent = {
+	ProfileId: string,
+	AnimationSetId: string,
+	VariantId: string?,
+	FeatureOverrides: TAnimationFeaturePolicy?,
 }
 
-export type TAnimInfo = {
-	anim: AnimationTrack,
-	weight: number,
-}
-
-export type TActionEntry = {
-	Action: string,
-	AnimInfos: { TAnimInfo },
-}
-
-export type TLoadedClips = {
-	CoreAnimations: { [string]: { TAnimInfo } },
-	Actions: { TActionEntry },
-	Emotes: { TActionEntry },
-}
-
-export type TPoseFilterMode = "Whitelist" | "Blacklist"
-export type TPresetId = "Player" | "Worker" | "CombatNPC" | "EnemyLocomotion" | "Structure"
-export type TAimStrategy = "IKControl"
-export type TReplicatedStateMode = "ActionOnly" | "FullState"
-
-export type TAnimationActionSnapshot = {
-	State: string,
-	Looping: boolean,
+export type TAnimationChannelState = {
+	ActionId: string,
 	Revision: number,
+	StartedAt: number?,
+	PlaybackSpeed: number?,
 }
 
-export type TAnimationStateSource = {
-	GetState: (self: TAnimationStateSource) -> string?,
-	GetLooping: (self: TAnimationStateSource) -> boolean?,
-	GetRevision: ((self: TAnimationStateSource) -> number?)?,
-	GetActionAnimation: ((self: TAnimationStateSource) -> TAnimationActionSnapshot?)?,
-	ObserveStateChanged: (self: TAnimationStateSource, callback: () -> ()) -> (() -> ()),
-	ObserveLoopingChanged: (self: TAnimationStateSource, callback: () -> ()) -> (() -> ()),
-	ObserveRevisionChanged: ((self: TAnimationStateSource, callback: () -> ()) -> (() -> ()))?,
-	ObserveActionAnimationChanged: ((self: TAnimationStateSource, callback: () -> ()) -> (() -> ()))?,
+export type TAnimationActionChannels = {
+	[string]: TAnimationChannelState,
 }
 
-export type TAnimationPresetOptions = {
-	AnimationsFolder: Folder?,
-	StateSource: TAnimationStateSource?,
+export type TAnimationSlotId = string
+export type TAnimationClipKey = string
+
+export type TAnimationSet = {
+	Id: string,
+	Extends: { string }?,
+	Slots: { [TAnimationSlotId]: TAnimationClipKey },
+	Variants: { [string]: { [TAnimationSlotId]: TAnimationClipKey } }?,
+}
+
+export type TAnimationChannelPolicy = {
+	ChannelId: string,
+	SlotId: TAnimationSlotId,
+	Priority: Enum.AnimationPriority,
+	InterruptPriority: number,
+	FadeIn: number,
+	FadeOut: number,
+	Looped: boolean,
+	SuppressLocomotion: boolean?,
+	AllowLocalRequests: boolean?,
+}
+
+export type TAnimationFeaturePolicy = {
+	Lean: any?,
+	Aim: any?,
+}
+
+export type TAnimationProfile = {
+	Id: string,
+	RigAdapter: TAnimationRigAdapterId,
+	LocomotionProvider: TAnimationLocomotionProviderId,
+	DefaultSetId: string,
+	RequiredSlots: { TAnimationSlotId },
+	OptionalSlots: { TAnimationSlotId }?,
+	CorePoseSlots: { [string]: TAnimationSlotId }?,
+	Channels: { [string]: TAnimationChannelPolicy },
+	Features: TAnimationFeaturePolicy?,
+	DisableDefaultAnimate: boolean?,
+	RootMotionEnabled: boolean?,
+}
+
+export type TCompiledAnimationSet = {
+	SetId: string,
+	VariantId: string,
+	Slots: { [TAnimationSlotId]: TAnimationClipKey },
+}
+
+export type TLoadedTrackInfo = {
+	Track: AnimationTrack,
+	SlotId: TAnimationSlotId,
+	ChannelId: string?,
+}
+
+export type TAnimationMarkerPayload = {
+	Entity: number,
+	ActionId: string,
+	ChannelId: string,
+	MarkerName: string,
+	MarkerValue: string?,
 }
 
 export type TIKAimRigConfig = {
+	Strategy: TAnimationAimStrategy?,
 	ChainRootPath: string?,
 	EndEffectorPath: string?,
 	SmoothTime: number?,
 	Weight: number?,
 	Priority: number?,
 	ReturnToNeutralWhenNoTarget: boolean?,
+	MotorPath: string?,
+	PartPath: string?,
+	YawLimit: number?,
+	PitchLimit: number?,
 }
 
 export type TSetupAimRequest = {
 	Model: Model,
-	Strategy: TAimStrategy,
+	Strategy: TAnimationAimStrategy?,
 	GetTargetWorldPosition: () -> Vector3?,
 	RigConfig: TIKAimRigConfig,
 	Context: any?,
 }
 
-export type TAnimationPreset = {
-	Id: TPresetId,
-	Tag: string,
-	Debug: boolean?,
-	ReplicatedStateMode: TReplicatedStateMode?,
-	AnimationsFolder: Folder?,
-	VariantAttribute: string?,
-	DefaultVariant: string?,
-	ReloadOnVariantChanged: boolean?,
-	CorePoseFolders: { TPoseFolder },
-	AllPoses: { string },
-	PoseFallbacks: { [string]: string },
-	PoseFilterMode: TPoseFilterMode?,
-	PoseFilter: { [string]: boolean }?,
-	EnableEmotes: boolean?,
-	EmoteFolders: { [string]: boolean }?,
-	WarnOnMissingPose: boolean?,
-	WarnOnMissingAnimation: boolean?,
-	UseDirectAnimationsFolder: boolean?,
-	UseStateDrivenCorePoses: boolean?,
-	ActionNameTransform: ((string) -> string)?,
-	ActionStateFallback: ((string, { [string]: boolean }) -> string?)?,
+export type TLocalActionRequest = {
+	RequestId: string,
+	Entity: number,
+	ActionId: string,
+	ChannelId: string,
+	Revision: number,
+	StartedAt: number,
+	PlaybackSpeed: number,
 }
 
 return nil

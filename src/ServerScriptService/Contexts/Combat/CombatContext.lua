@@ -425,7 +425,7 @@ function CombatContext:_RegisterEntityActionPipeline(): Result.Result<boolean>
 			Writes = {
 				"Entity.DirtyTag",
 				"Entity.Target",
-				"Animation.ActionState",
+				"Animation.ActionChannels",
 				"Structure.TargetEnemyId",
 			},
 			Factory = function(entityFactory: any, _compiledSchemas: any)

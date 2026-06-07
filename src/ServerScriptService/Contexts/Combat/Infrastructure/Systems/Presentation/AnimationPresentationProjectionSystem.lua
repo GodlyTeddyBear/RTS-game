@@ -1,6 +1,7 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local AISharedContract = require(ReplicatedStorage.Contexts.AI.AISharedContract)
 
@@ -28,7 +29,7 @@ end
 
 function AnimationPresentationProjectionSystem:Run()
 	-- READS: Combat.AttackState, Combat.StatusAuraState, Structure.ExtractState, Structure.BuildContributionState, Movement.ApplyResult, AI.ActionIntent, AI.ActionState
-	-- WRITES: Animation.ActionState, configured target presentation, Entity.Target, Entity.DirtyTag
+	-- WRITES: Animation.ActionChannels, configured target presentation, Entity.Target, Entity.DirtyTag
 	for _, rule in ipairs(self._ruleRegistry:GetMovementPresentationRules()) do
 		self:_RunRule(rule)
 	end
@@ -154,12 +155,12 @@ function AnimationPresentationProjectionSystem:_ShouldProjectAttack(rule: any, e
 		return false
 	end
 
-	local revision = self:_ResolveAnimationRevision(attackState)
+	local revision = self:_ResolveChannelRevision(attackState)
 	if revision == nil then
 		return false
 	end
 
-	local currentRevision = self:_GetCurrentAnimationRevision(entity, animation)
+	local currentRevision = self:_GetCurrentChannelRevision(entity, animation)
 	return currentRevision ~= revision
 end
 
@@ -187,8 +188,7 @@ function AnimationPresentationProjectionSystem:_ApplyAttackProjection(rule: any,
 			entity,
 			attack.Animation,
 			attack.Animation.State or "Attack",
-			attack.Animation.Looping == true,
-			self:_ResolveAnimationRevision(attackState)
+			self:_ResolveChannelRevision(attackState)
 		)
 	end
 	if type(attack.TargetEntityId) == "table" then
@@ -210,8 +210,7 @@ function AnimationPresentationProjectionSystem:_ApplyActionProjection(
 			entity,
 			actionProjection.Animation,
 			actionProjection.Animation.State or "Idle",
-			actionProjection.Animation.Looping == true,
-			self:_ResolveAnimationRevision(domainState)
+			self:_ResolveChannelRevision(domainState)
 		)
 	end
 	if type(actionProjection.TargetEntityId) == "table" then
@@ -225,13 +224,12 @@ end
 function AnimationPresentationProjectionSystem:_ApplyFallbackProjection(rule: any, entity: number, isMoving: boolean)
 	if type(rule.Animation) == "table" then
 		if rule.Animation.ActionOnly == true then
-			self:_SetAnimation(entity, rule.Animation, "", true, nil)
+			self:_SetAnimation(entity, rule.Animation, "", nil)
 		else
 			self:_SetAnimation(
 				entity,
 				rule.Animation,
 				if isMoving then rule.Animation.MovingState or "Walk" else rule.Animation.IdleState or "Idle",
-				true,
 				nil
 			)
 		end
@@ -250,26 +248,38 @@ function AnimationPresentationProjectionSystem:_SetAnimation(
 	entity: number,
 	animation: any,
 	state: string,
-	looping: boolean,
 	revision: number?
 )
-	local resolvedRevision = revision or self:_GetCurrentAnimationRevision(entity, animation) or 0
-	self._entityFactory:Set(entity, "ActionState", {
-		State = state,
-		Looping = looping,
-		Revision = resolvedRevision,
-	}, "Animation")
+	local channelId = if type(animation.ChannelId) == "string" and animation.ChannelId ~= "" then animation.ChannelId else "FullBody"
+	local currentChannels = self:_Get(entity, "ActionChannels", "Animation")
+	local nextChannels = if type(currentChannels) == "table" then table.clone(currentChannels) else {}
+
+	if type(state) ~= "string" or state == "" or state == "Idle" or state == "Walk" then
+		nextChannels[channelId] = nil
+	else
+		local resolvedRevision = revision or self:_GetCurrentChannelRevision(entity, animation) or 0
+		nextChannels[channelId] = {
+			ActionId = state,
+			Revision = resolvedRevision,
+			StartedAt = Workspace:GetServerTimeNow(),
+			PlaybackSpeed = if type(animation.PlaybackSpeed) == "number" then animation.PlaybackSpeed else 1,
+		}
+	end
+
+	self._entityFactory:Set(entity, "ActionChannels", nextChannels, "Animation")
 end
 
-function AnimationPresentationProjectionSystem:_GetCurrentAnimationRevision(entity: number, animation: any): number?
-	local action = self:_Get(entity, "ActionState", "Animation")
-	if type(action) == "table" and type(action.Revision) == "number" then
-		return action.Revision
+function AnimationPresentationProjectionSystem:_GetCurrentChannelRevision(entity: number, animation: any): number?
+	local channelId = if type(animation.ChannelId) == "string" and animation.ChannelId ~= "" then animation.ChannelId else "FullBody"
+	local channels = self:_Get(entity, "ActionChannels", "Animation")
+	local channel = if type(channels) == "table" then channels[channelId] else nil
+	if type(channel) == "table" and type(channel.Revision) == "number" then
+		return channel.Revision
 	end
 	return nil
 end
 
-function AnimationPresentationProjectionSystem:_ResolveAnimationRevision(state: any): number?
+function AnimationPresentationProjectionSystem:_ResolveChannelRevision(state: any): number?
 	if type(state) ~= "table" then
 		return nil
 	end

@@ -3,72 +3,84 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
-local Types = require(ReplicatedStorage.Contexts.Animation.Types.AnimationTypes)
 
-local GetAnimationPresetCommand = require(script.Parent.Application.Commands.GetAnimationPresetCommand)
-local SetupAnimationCommand = require(script.Parent.Application.Commands.SetupAnimationCommand)
-local SetupAimCommand = require(script.Parent.Application.Commands.SetupAimCommand)
 local AnimationEntityRuntimeService = require(script.Parent.Infrastructure.Services.AnimationEntityRuntimeService)
-local AnimationBindingSystem = require(script.Parent.Infrastructure.Systems.AnimationBindingSystem)
-
-type TPresetId = Types.TPresetId
-type TAnimationPreset = Types.TAnimationPreset
-type TAnimationPresetOptions = Types.TAnimationPresetOptions
-type TSetupAimRequest = Types.TSetupAimRequest
+local AnimationActionPlaybackSystem = require(script.Parent.Infrastructure.Systems.AnimationActionPlaybackSystem)
+local AnimationAimSystem = require(script.Parent.Infrastructure.Systems.AnimationAimSystem)
+local AnimationCleanupSystem = require(script.Parent.Infrastructure.Systems.AnimationCleanupSystem)
+local AnimationClipLoadingSystem = require(script.Parent.Infrastructure.Systems.AnimationClipLoadingSystem)
+local AnimationLeanSystem = require(script.Parent.Infrastructure.Systems.AnimationLeanSystem)
+local AnimationLocomotionSystem = require(script.Parent.Infrastructure.Systems.AnimationLocomotionSystem)
+local AnimationRigSetupSystem = require(script.Parent.Infrastructure.Systems.AnimationRigSetupSystem)
+local AnimationRuntimeReconciliationSystem = require(script.Parent.Infrastructure.Systems.AnimationRuntimeReconciliationSystem)
 
 local AnimationController = Knit.CreateController({
 	Name = "AnimationController",
 })
 
+local DEBUG_PREFIX = "[AnimationPipeline]"
+
 function AnimationController:KnitInit()
-	self._getAnimationPresetCommand = GetAnimationPresetCommand.new()
-	self._setupAnimationCommand = SetupAnimationCommand.new()
-	self._setupAimCommand = SetupAimCommand.new()
 	self._runtimeService = nil
-	self._bindingSystem = nil
+	self._markerObservers = {}
 end
 
 function AnimationController:KnitStart()
 	local entityController = Knit.GetController("EntityController")
 	self._runtimeService = AnimationEntityRuntimeService.new(self, entityController)
-	self._bindingSystem = AnimationBindingSystem.new(entityController, self._runtimeService)
-	entityController:RegisterSystem("AnimationBindingSystem", self._bindingSystem)
+
+	entityController:RegisterSystem(
+		"AnimationRuntimeReconciliationSystem",
+		AnimationRuntimeReconciliationSystem.new(self._runtimeService),
+		"Reconcile"
+	)
+	entityController:RegisterSystem("AnimationRigSetupSystem", AnimationRigSetupSystem.new(self._runtimeService), "Setup")
+	entityController:RegisterSystem("AnimationClipLoadingSystem", AnimationClipLoadingSystem.new(self._runtimeService), "Setup")
+	entityController:RegisterSystem("AnimationLocomotionSystem", AnimationLocomotionSystem.new(self._runtimeService), "Playback")
+	entityController:RegisterSystem(
+		"AnimationActionPlaybackSystem",
+		AnimationActionPlaybackSystem.new(self._runtimeService),
+		"Playback"
+	)
+	entityController:RegisterSystem("AnimationAimSystem", AnimationAimSystem.new(self._runtimeService), "Procedural")
+	entityController:RegisterSystem("AnimationLeanSystem", AnimationLeanSystem.new(self._runtimeService), "Render")
+	entityController:RegisterSystem("AnimationCleanupSystem", AnimationCleanupSystem.new(self._runtimeService), "Cleanup")
+	warn(DEBUG_PREFIX, "AnimationController registered animation systems")
 end
 
-function AnimationController:GetPreset(presetId: TPresetId, options: TAnimationPresetOptions?): TAnimationPreset
-	return self._getAnimationPresetCommand:Execute(presetId, options)
+function AnimationController:RequestLocalAction(entity: number, actionId: string, channelId: string?): boolean
+	if self._runtimeService == nil then
+		return false
+	end
+	return self._runtimeService:RequestLocalAction(entity, actionId, channelId)
 end
 
-function AnimationController:Setup(
-	model: Model,
-	presetId: TPresetId,
-	context: any?,
-	options: TAnimationPresetOptions?
-)
-	local preset = self:GetPreset(presetId, options)
-	return self._setupAnimationCommand:Execute(model, preset, context, options)
+function AnimationController:CancelLocalAction(entity: number, channelId: string?): boolean
+	if self._runtimeService == nil then
+		return false
+	end
+	return self._runtimeService:CancelLocalAction(entity, channelId)
 end
 
-function AnimationController:SetupWithFolder(
-	model: Model,
-	presetId: TPresetId,
-	animationsFolder: Folder,
-	context: any?,
-	options: TAnimationPresetOptions?
-)
-	local resolvedOptions = {}
-	if options ~= nil then
-		for key, value in options do
-			resolvedOptions[key] = value
+function AnimationController:ObserveMarker(callback: (any) -> ()): () -> ()
+	table.insert(self._markerObservers, callback)
+	local disconnected = false
+	return function()
+		if disconnected then
+			return
+		end
+		disconnected = true
+		local index = table.find(self._markerObservers, callback)
+		if index ~= nil then
+			table.remove(self._markerObservers, index)
 		end
 	end
-	resolvedOptions.AnimationsFolder = animationsFolder
-
-	return self:Setup(model, presetId, context, resolvedOptions :: TAnimationPresetOptions)
 end
 
-function AnimationController:SetupAim(request: TSetupAimRequest): (() -> ())?
-	return self._setupAimCommand:Execute(request)
+function AnimationController:_EmitMarker(payload: any)
+	for _, callback in ipairs(self._markerObservers) do
+		callback(payload)
+	end
 end
 
 function AnimationController:Destroy()
@@ -76,6 +88,7 @@ function AnimationController:Destroy()
 		self._runtimeService:Destroy()
 		self._runtimeService = nil
 	end
+	table.clear(self._markerObservers)
 end
 
 return AnimationController

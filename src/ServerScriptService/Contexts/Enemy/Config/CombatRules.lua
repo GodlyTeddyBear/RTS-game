@@ -8,11 +8,6 @@ local CombatRules = {
 			PathState = { FeatureName = "Enemy", Key = "PathState" },
 			Speed = { FeatureName = "Enemy", Key = "CurrentMoveSpeed" },
 			Animation = {
-				FeatureName = "Enemy",
-				StateKey = "AnimationState",
-				LoopingKey = "AnimationLooping",
-				RevisionKey = "AnimationRevision",
-				ActionKey = "AnimationAction",
 				ActionOnly = true,
 			},
 			Attack = {
@@ -20,13 +15,8 @@ local CombatRules = {
 				Speed = { FeatureName = "Enemy", Key = "CurrentMoveSpeed" },
 				Target = {},
 				Animation = {
-					FeatureName = "Enemy",
-					StateKey = "AnimationState",
-					LoopingKey = "AnimationLooping",
-					RevisionKey = "AnimationRevision",
-					ActionKey = "AnimationAction",
+					ChannelId = "FullBody",
 					State = "Attack",
-					Looping = false,
 				},
 			},
 		},

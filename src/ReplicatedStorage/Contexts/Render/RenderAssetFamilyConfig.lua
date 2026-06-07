@@ -86,14 +86,30 @@ local function _BuildAnimationCandidatePaths(
 	local resolvedVariant = if options ~= nil and type(options.Variant) == "string" and options.Variant ~= ""
 		then options.Variant
 		else "Default"
-	local actionSegments = _SplitPath(normalizedKey)
+	local clipSegments = _SplitPath(normalizedKey)
 	local candidatePaths = {}
 
-	table.insert(candidatePaths, table.clone(actionSegments))
+	local clipsPath = { "Clips" }
+	for _, segment in ipairs(clipSegments) do
+		table.insert(clipsPath, segment)
+	end
+	table.insert(candidatePaths, clipsPath)
+
+	local variantPath = table.clone(clipSegments)
+	table.insert(variantPath, resolvedVariant)
+	table.insert(candidatePaths, variantPath)
+
+	if resolvedVariant ~= "Default" then
+		local defaultPath = table.clone(clipSegments)
+		table.insert(defaultPath, "Default")
+		table.insert(candidatePaths, defaultPath)
+	end
+
+	table.insert(candidatePaths, table.clone(clipSegments))
 	table.insert(candidatePaths[#candidatePaths], resolvedVariant)
 
 	if resolvedVariant ~= "Default" then
-		table.insert(candidatePaths, table.clone(actionSegments))
+		table.insert(candidatePaths, table.clone(clipSegments))
 		table.insert(candidatePaths[#candidatePaths], "Default")
 	end
 
@@ -128,10 +144,7 @@ local function _ReturnAnimation(instance: Instance, _options: TRenderAssetResolv
 	if instance:IsA("Animation") then
 		return instance
 	end
-	if instance:IsA("Folder") then
-		return instance:FindFirstChildWhichIsA("Animation")
-	end
-	return nil
+	return instance:FindFirstChildWhichIsA("Animation", true)
 end
 
 local function _CloneEffect(instance: Instance, _options: TRenderAssetResolveOptions?): Folder | Model?
