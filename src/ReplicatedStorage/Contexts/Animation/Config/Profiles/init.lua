@@ -35,6 +35,15 @@ local HUMANOID_CORE_POSE_SLOTS = table.freeze({
 	Seated = "Sit",
 })
 
+local HUMANOID_CORE_POSE_FALLBACKS = table.freeze({
+	GettingUp = "Idle",
+	FallingDown = "Freefall",
+	FellOff = "Freefall",
+	Landed = "Idle",
+	Swimming = "Walk",
+	SwimIdle = "Idle",
+})
+
 local COMMON_HUMANOID_CHANNELS = table.freeze({
 	FullBody = _Channel("FullBody", "FullBodyAction", Enum.AnimationPriority.Action, false, {
 		InterruptPriority = 100,
@@ -53,12 +62,13 @@ local COMMON_HUMANOID_CHANNELS = table.freeze({
 local Profiles: { [string]: TAnimationProfile } = {
 	PlayerHumanoid = table.freeze({
 		Id = "PlayerHumanoid",
-		RigAdapter = "Humanoid",
+		RigAdapter = "Auto",
 		LocomotionProvider = "HumanoidState",
 		DefaultSetId = "Player",
 		RequiredSlots = table.freeze({ "Idle", "Walk" }),
 		OptionalSlots = table.freeze({ "Run", "Jump", "Fall", "Climb", "Sit", "Emote" }),
 		CorePoseSlots = HUMANOID_CORE_POSE_SLOTS,
+		CorePoseFallbacks = HUMANOID_CORE_POSE_FALLBACKS,
 		Channels = COMMON_HUMANOID_CHANNELS,
 		Features = table.freeze({
 			Lean = table.freeze({
@@ -70,12 +80,13 @@ local Profiles: { [string]: TAnimationProfile } = {
 	}),
 	HumanoidCombat = table.freeze({
 		Id = "HumanoidCombat",
-		RigAdapter = "Humanoid",
+		RigAdapter = "Auto",
 		LocomotionProvider = "HumanoidState",
 		DefaultSetId = "CombatNPC",
 		RequiredSlots = table.freeze({ "Idle", "Walk" }),
 		OptionalSlots = table.freeze({ "Run", "Attack", "Build", "Extract", "Stasis" }),
 		CorePoseSlots = HUMANOID_CORE_POSE_SLOTS,
+		CorePoseFallbacks = HUMANOID_CORE_POSE_FALLBACKS,
 		Channels = COMMON_HUMANOID_CHANNELS,
 		Features = table.freeze({
 			Lean = table.freeze({
@@ -87,7 +98,7 @@ local Profiles: { [string]: TAnimationProfile } = {
 	}),
 	StructureActor = table.freeze({
 		Id = "StructureActor",
-		RigAdapter = "Humanoid",
+		RigAdapter = "Auto",
 		LocomotionProvider = "None",
 		DefaultSetId = "Structure",
 		RequiredSlots = table.freeze({ "Idle" }),

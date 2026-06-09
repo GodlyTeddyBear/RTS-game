@@ -20,6 +20,7 @@ function EntityReplicationService.new()
 	self._schemaRegistry = nil
 	self._enabledFeatures = {}
 	self._registeredEntities = {}
+	self._schemasByFeature = {}
 	return self
 end
 
@@ -235,6 +236,7 @@ function EntityReplicationService:EnableFeature(entityContext: any, featureName:
 
 		if schemaResult.value ~= nil then
 			self:ApplySharedSchema(schemaResult.value)
+			self._schemasByFeature[featureName] = schemaResult.value
 		end
 
 		self._enabledFeatures[featureName] = true
@@ -245,7 +247,11 @@ end
 function EntityReplicationService:RegisterRuntimeEntity(entityContext: any, entity: number): Result.Result<boolean>
 	return Result.Catch(function()
 		local featureName = self._runtimeParticipation:GetFeatureName(entity)
-		if featureName == nil or self._enabledFeatures[featureName] ~= true then
+		if featureName == nil then
+			return Result.Ok(false)
+		end
+
+		if self._enabledFeatures[featureName] ~= true then
 			return Result.Ok(false)
 		end
 
@@ -273,9 +279,11 @@ function EntityReplicationService:RegisterRuntimeEntity(entityContext: any, enti
 			end
 		else
 			self:RegisterNetworkedEntity(entity)
+			self:_RegisterFeatureReliableState(featureName, entity)
 		end
 
 		self._registeredEntities[entity] = true
+		self:FlushEntityResult(entity)
 		return Result.Ok(true)
 	end, "EntityReplicationService:RegisterRuntimeEntity")
 end
@@ -305,7 +313,16 @@ end
 
 function EntityReplicationService:HydratePlayerResult(player: Player): Result.Result<boolean>
 	return Result.Catch(function()
-		return Result.Ok(self:HydratePlayer(player))
+		if not self:IsPlayerReady(player) then
+			self:MarkPlayerReady(player)
+		end
+		local didHydrate = self:HydratePlayer(player)
+		if didHydrate then
+			for entity in pairs(self._registeredEntities) do
+				self:FlushEntityResult(entity)
+			end
+		end
+		return Result.Ok(didHydrate)
 	end, "EntityReplicationService:HydratePlayerResult")
 end
 
@@ -335,6 +352,20 @@ function EntityReplicationService:FlushEntityResult(entity: number): Result.Resu
 	end, "EntityReplicationService:FlushEntityResult")
 end
 
+function EntityReplicationService:_RegisterFeatureReliableState(_featureName: string, entity: number)
+	if not self:HasAppliedSharedSchema() then
+		return
+	end
+
+	for componentId in self._schemaState.SharedComponents do
+		self:RegisterReliableComponent(entity, componentId)
+	end
+
+	for tagId in self._schemaState.SharedTags do
+		self:RegisterReliableComponent(entity, tagId)
+	end
+end
+
 function EntityReplicationService:GetStatus(): any
 	local enabledFeatureCount = 0
 	for _ in pairs(self._enabledFeatures) do
@@ -361,6 +392,7 @@ function EntityReplicationService:Destroy()
 	BaseECSReplicationService.Destroy(self)
 	self._enabledFeatures = {}
 	self._registeredEntities = {}
+	self._schemasByFeature = {}
 end
 
 return EntityReplicationService

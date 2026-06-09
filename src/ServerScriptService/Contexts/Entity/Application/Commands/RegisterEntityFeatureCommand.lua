@@ -5,6 +5,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local ServerStorage = game:GetService("ServerStorage")
 
 local BaseCommand = require(ServerStorage.Utilities.ContextUtilities.BaseApplication.BaseCommand)
+local ECS = require(ReplicatedStorage.Utilities.ECS)
 local ModelPlus = require(ReplicatedStorage.Utilities.ModelPlus)
 local Result = require(ReplicatedStorage.Utilities.Result)
 local EntityCollisionService = require(ServerScriptService.Infrastructure.EntityCollisionService)
@@ -61,6 +62,21 @@ local function _ResolveExistingRuntimeInstance(snapshot: any): Instance
 	assert(assetKind == "Existing", "Entity existing runtime instance requires Existing asset kind")
 	assert(typeof(instance) == "Instance", "Entity existing runtime instance missing ModelRef.Model")
 	return instance
+end
+
+local function _BuildDiscoveryRevealState(snapshot: any): any
+	local identity = snapshot.Identity or {}
+	local sourceId = tostring(identity.EntityId or snapshot.Entity)
+	local entityType = if type(identity.EntityKind) == "string" and identity.EntityKind ~= ""
+		then identity.EntityKind
+		else tostring(snapshot.FeatureName)
+	local _, revealState = ECS.RevealBuilder.Build({
+		EntityType = entityType,
+		SourceId = sourceId,
+		ScopeId = tostring(snapshot.FeatureName),
+		EntityId = sourceId,
+	})
+	return revealState
 end
 
 local function _EnsureAnimator(humanoid: Humanoid)
@@ -345,24 +361,26 @@ function RegisterEntityFeatureCommand:_BuildGenericBinding(featureName: string):
 		BuildRevealAttributes = function(_entityContext: any, snapshot: any)
 			local identity = snapshot.Identity or {}
 			local ownership = snapshot.Ownership or {}
-			return {
-				EntityId = identity.EntityId,
-				EntityKind = identity.EntityKind,
-				EntityFeature = snapshot.FeatureName,
-				EntityDefinitionId = identity.DefinitionId,
-				Faction = ownership.Faction,
-				OwnerKind = ownership.OwnerKind,
-				OwnerId = ownership.OwnerId,
-			}
+			local revealState = _BuildDiscoveryRevealState(snapshot)
+			local attributes = table.clone(revealState.Attributes or {})
+			attributes.EntityId = identity.EntityId
+			attributes.EntityKind = identity.EntityKind
+			attributes.EntityFeature = snapshot.FeatureName
+			attributes.EntityDefinitionId = identity.DefinitionId
+			attributes.Faction = ownership.Faction
+			attributes.OwnerKind = ownership.OwnerKind
+			attributes.OwnerId = ownership.OwnerId
+			return attributes
 		end,
 		BuildRevealTags = function(_entityContext: any, snapshot: any)
+			local revealState = _BuildDiscoveryRevealState(snapshot)
+			local tags = table.clone(revealState.Tags or {})
 			local binding = snapshot.ModelBinding or {}
 			local revealTag = if type(binding.RevealTag) == "string" and binding.RevealTag ~= ""
 				then binding.RevealTag
 				else "EntityActor"
-			return {
-				[revealTag] = true,
-			}
+			tags[revealTag] = true
+			return tags
 		end,
 		BuildName = function(_entityContext: any, snapshot: any)
 			local binding = snapshot.ModelBinding or {}

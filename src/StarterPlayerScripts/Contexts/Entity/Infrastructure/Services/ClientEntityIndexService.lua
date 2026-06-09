@@ -20,8 +20,6 @@ type TClientEntityRecord = {
 	Components: { [string]: any },
 }
 
-local DEBUG_PREFIX = "[AnimationPipeline]"
-
 local SHARED_FIELD_KEYS = table.freeze({
 	Identity = "Identity",
 	Ownership = "Ownership",
@@ -53,38 +51,6 @@ local function _BuildIndexKey(left: string, right: string): string
 	return left .. "\0" .. right
 end
 
-local function _CountMap(source: { [any]: any }): number
-	local count = 0
-	for _ in pairs(source) do
-		count += 1
-	end
-	return count
-end
-
-local function _HasAnimationTag(record: TClientEntityRecord): boolean
-	return record.Tags["Animation.EnabledTag"] == true or record.Tags.EnabledTag == true
-end
-
-local function _HasAnimationProfile(record: TClientEntityRecord): boolean
-	return type(record.Components["Animation.Profile"]) == "table" or type(record.Components.Profile) == "table"
-end
-
-local function _FormatScalarFields(source: any): string
-	if type(source) ~= "table" then
-		return "{}"
-	end
-
-	local fields = {}
-	for key, value in pairs(source) do
-		local valueType = type(value)
-		if valueType == "string" or valueType == "number" or valueType == "boolean" then
-			table.insert(fields, ("%s=%s"):format(tostring(key), tostring(value)))
-		end
-	end
-	table.sort(fields)
-	return "{" .. table.concat(fields, ", ") .. "}"
-end
-
 local ClientEntityIndexService = {}
 ClientEntityIndexService.__index = ClientEntityIndexService
 
@@ -105,8 +71,6 @@ function ClientEntityIndexService.new(replicationClient: any)
 	self._archetypeSignals = {}
 	self._instanceByEntity = {}
 	self._entityByInstance = {}
-	self._debugLastIndexSummary = nil
-	self._debugInstanceLookupStates = {}
 	return self
 end
 
@@ -166,9 +130,6 @@ function ClientEntityIndexService:FindInstanceByEntity(entityId: number): Instan
 	if resolvedInstance ~= nil then
 		self._instanceByEntity[entityId] = resolvedInstance
 		self._entityByInstance[resolvedInstance] = entityId
-		self:_LogInstanceLookup(entityId, "resolved", record, resolvedInstance)
-	else
-		self:_LogInstanceLookup(entityId, "missing", record, nil)
 	end
 
 	return resolvedInstance
@@ -221,7 +182,6 @@ function ClientEntityIndexService:Destroy()
 	table.clear(self._recordsByIdentityField)
 	table.clear(self._instanceByEntity)
 	table.clear(self._entityByInstance)
-	table.clear(self._debugInstanceLookupStates)
 end
 
 function ClientEntityIndexService:_GetFeatureSignal(featureName: string)
@@ -327,63 +287,8 @@ function ClientEntityIndexService:_RebuildIndexes()
 	self._recordsByTag = nextRecordsByTag
 	self._identityByFeatureAndKey = nextIdentityByFeatureAndKey
 	self._recordsByIdentityField = nextRecordsByIdentityField
-	self:_LogIndexSummary()
 
 	self:_NotifyObservers(previousRecordsByFeature, nextRecordsByFeature, previousRecordsByArchetype, nextRecordsByArchetype, previousRecordsByEntity)
-end
-
-function ClientEntityIndexService:_LogIndexSummary()
-	local totalRecords = _CountMap(self._recordsByEntity)
-	local animationTagged = 0
-	local animationProfiled = 0
-	for _, record in pairs(self._recordsByEntity) do
-		if _HasAnimationTag(record) then
-			animationTagged += 1
-		end
-		if _HasAnimationProfile(record) then
-			animationProfiled += 1
-		end
-	end
-
-	local summary = ("%d/%d/%d"):format(totalRecords, animationTagged, animationProfiled)
-	if self._debugLastIndexSummary == summary then
-		return
-	end
-	self._debugLastIndexSummary = summary
-	warn(
-		DEBUG_PREFIX,
-		"entity index rebuilt",
-		"records",
-		totalRecords,
-		"animationTagged",
-		animationTagged,
-		"animationProfiled",
-		animationProfiled
-	)
-end
-
-function ClientEntityIndexService:_LogInstanceLookup(entityId: number, state: string, record: TClientEntityRecord, instance: Instance?)
-	local key = tostring(entityId) .. ":" .. state
-	if self._debugInstanceLookupStates[key] == true then
-		return
-	end
-	self._debugInstanceLookupStates[key] = true
-
-	if state == "resolved" and instance ~= nil then
-		warn(DEBUG_PREFIX, "instance resolved", "entity", entityId, "instance", instance:GetFullName())
-		return
-	end
-
-	warn(
-		DEBUG_PREFIX,
-		"instance missing",
-		"entity",
-		entityId,
-		"identity",
-		_FormatScalarFields(record.Identity),
-		"modelRef",
-		_FormatScalarFields(record.ModelRef)
-	)
 end
 
 function ClientEntityIndexService:_BuildRecord(

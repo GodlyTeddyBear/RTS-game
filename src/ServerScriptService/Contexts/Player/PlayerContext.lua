@@ -6,7 +6,6 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local BaseContext = require(ServerStorage.Utilities.ContextUtilities.BaseContext)
-local Result = require(ReplicatedStorage.Utilities.Result)
 
 local PlayerEntitySchema = require(script.Parent.Infrastructure.Entity.PlayerEntitySchema)
 
@@ -142,22 +141,17 @@ function PlayerContext:_BindCharacter(player: Player, character: Model)
 			},
 		})
 		if not createResult.success then
-			warn("[PlayerContext] failed to create player entity:", createResult.message)
 			return
 		end
 		entity = createResult.value
 		self._entityByPlayer[player] = entity
-		local animationResult = self._animationContext:SetupEntity(entity, {
+		self._animationContext:SetupEntity(entity, {
 			ProfileId = "PlayerHumanoid",
 			AnimationSetId = "Player",
 			VariantId = "Default",
 		})
-		if not animationResult.success then
-			warn("[PlayerContext] failed to setup player animation:", animationResult.message)
-		end
 		local runtimeResult = self._entityContext:RegisterRuntimeEntity(entity)
 		if not runtimeResult.success then
-			warn("[PlayerContext] failed to register player runtime:", runtimeResult.message)
 			return
 		end
 		self._entityContext:FlushBindQueue()

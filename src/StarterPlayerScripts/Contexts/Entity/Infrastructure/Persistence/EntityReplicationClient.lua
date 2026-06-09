@@ -57,23 +57,23 @@ function EntityReplicationClient:HandleBootstrap(payload: TBootstrapPayload): bo
 	end
 
 	local handled = BaseECSReplicationClient.HandleBootstrap(self, payload)
-	self.StateChanged:Fire()
+	self:_FireStateChanged()
 	return handled
 end
 
 function EntityReplicationClient:HandleReliable(payload: TReplicationPacketPayload)
 	BaseECSReplicationClient.HandleReliable(self, payload)
-	self.StateChanged:Fire()
+	self:_FireStateChanged()
 end
 
 function EntityReplicationClient:HandleUnreliable(payload: TReplicationPacketPayload)
 	BaseECSReplicationClient.HandleUnreliable(self, payload)
-	self.StateChanged:Fire()
+	self:_FireStateChanged()
 end
 
 function EntityReplicationClient:HandleEntity(payload: TReplicationPacketPayload)
 	BaseECSReplicationClient.HandleEntity(self, payload)
-	self.StateChanged:Fire()
+	self:_FireStateChanged()
 end
 
 function EntityReplicationClient:ObserveStateChanged(callback: () -> ())
@@ -82,6 +82,10 @@ end
 
 function EntityReplicationClient:GetSchemaMetadata()
 	return self._schemaMetadata
+end
+
+function EntityReplicationClient:_FireStateChanged()
+	self.StateChanged:Fire()
 end
 
 function EntityReplicationClient:_ConnectTransport()

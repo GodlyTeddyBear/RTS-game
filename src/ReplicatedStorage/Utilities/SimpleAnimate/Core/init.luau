@@ -23,13 +23,13 @@ export type Core = typeof(Core) & {
 	Connections		: Connections.Connections
 }
 
-local function new(rig: Model, coreAnimations: Types.AnimationsList, stateMachine: any?) : Core
-	local animator = rig:FindFirstChildWhichIsA("Animator", true)
+local function new(rig: Model, coreAnimations: Types.AnimationsList, stateMachine: any?, resolvedAnimator: Animator?) : Core
+	local animator = resolvedAnimator or rig:FindFirstChildWhichIsA("Animator", true)
 	if not animator then
 		error(`Animator not found for rig {rig}`)
 	end
 	
-	local controller = PoseController.new(rig, coreAnimations)
+	local controller = PoseController.new(rig, coreAnimations, animator)
 	local connections = Connections.new(controller, rig, stateMachine)
 	
 	return setmetatable({

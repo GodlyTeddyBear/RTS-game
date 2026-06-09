@@ -67,12 +67,20 @@ export type AnimationController = typeof(AnimationController) & {
     @param coreAnimations Optional custom core animations list (defaults to DefaultAnims.R15)
     @param emoteAnimations Optional custom emote animations list (defaults to DefaultAnims.EmoteAnims)
     @param stateMachine Optional state machine (defaults to Humanoid)
+    @param resolvedAnimator Optional animator to use instead of resolving the first animator under the rig
     @return A new AnimationController instance
 ]]
-local function new(rig: Model, doPreload: boolean?, coreAnimations: AnimationsList?, emoteAnimations: AnimationsList?, stateMachine: Types.StateMachine?): AnimationController
+local function new(
+	rig: Model,
+	doPreload: boolean?,
+	coreAnimations: AnimationsList?,
+	emoteAnimations: AnimationsList?,
+	stateMachine: Types.StateMachine?,
+	resolvedAnimator: Animator?
+): AnimationController
 	doPreload = if doPreload == nil then true else doPreload
 	
-	local animator = rig:FindFirstChildWhichIsA("Animator", true)
+	local animator = resolvedAnimator or rig:FindFirstChildWhichIsA("Animator", true)
 	if not animator then
 		error(`Animator not found for rig {rig}`)
 	end
@@ -106,8 +114,8 @@ local function new(rig: Model, doPreload: boolean?, coreAnimations: AnimationsLi
 	humanoidAnims = doPreload and Preload.preloadAnimList(animator, humanoidAnims, "core", Enum.AnimationPriority.Core, true) or humanoidAnims
 	humanoidEmotes = doPreload and Preload.preloadAnimList(animator, humanoidEmotes, "emote", Enum.AnimationPriority.Action, false) or humanoidEmotes
 	
-	local core = Core.new(rig, humanoidAnims, stateMachine)
-	local action = Action.new(core.PoseController, rig, humanoidEmotes, stateMachine)
+	local core = Core.new(rig, humanoidAnims, stateMachine, animator)
+	local action = Action.new(core.PoseController, rig, humanoidEmotes, stateMachine, animator)
 	
 	local controller = setmetatable({
 		Core = core,

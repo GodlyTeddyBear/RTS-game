@@ -79,6 +79,14 @@ function PoseController:SetPoseEnabled(pose: PoseType, enabled: boolean): ()
 end
 
 --[[
+    Sets fallback poses used when a requested pose has no loaded animation.
+    @param fallbacks { [string]: string } - Requested pose to fallback pose map
+]]
+function PoseController:SetPoseFallbacks(fallbacks: { [string]: string }): ()
+	self._fallbacks = table.clone(fallbacks)
+end
+
+--[[
     Gets the animation information for a specific pose.
     @param pose PoseType - The pose to get animations for
     @return {Types.AnimInfo} - Array of animation info for the pose
@@ -147,7 +155,6 @@ end
 function PoseController:GetRandomCoreAnim(pose: PoseType): (AnimationTrack?, number?, Types.AnimInfo?)
 	local animInfos = self._anims[pose]
 	if type(animInfos) ~= "table" or #animInfos == 0 then
-		warn("[SimpleAnimate] Missing core animations for pose:", pose, "on rig:", self._rig:GetFullName())
 		return nil, nil, nil
 	end
 
@@ -188,7 +195,8 @@ function PoseController:PlayCoreAnimation(pose: PoseType, looped: boolean?, spee
 	end
 	self:StopCoreAnimations(self._lastInfo.stopFadeTime or 0.1)
 
-	newTrack:Play(info.fadeTime or 0.1, 1, info.speed or speed)
+	newTrack.Looped = looped
+	newTrack:Play(info.fadeTime or fadeTime or 0.1, 1, info.speed or speed)
 
 	self._track = newTrack
 
@@ -196,7 +204,7 @@ function PoseController:PlayCoreAnimation(pose: PoseType, looped: boolean?, spee
 	if numInfo > 1 and looped then
 		newTrack.DidLoop:Once(function()
 			if self._active and self._lastPose == pose then
-				self:PlayCoreAnimation(pose, speed)
+				self:PlayCoreAnimation(pose, true, speed)
 			end
 		end)
 	end
@@ -227,7 +235,30 @@ function PoseController:ChangePose(pose: PoseType, speed: number?, isCore: boole
 	if self._disabled[pose] then return end
 	if isCore and not self._active then return end
 
-	self._switch:Switch(pose, speed or 1)
+	local resolvedPose = self:_ResolvePose(pose)
+	if resolvedPose == nil then
+		return
+	end
+
+	self._switch:Switch(resolvedPose, speed or 1)
+end
+
+function PoseController:_ResolvePose(pose: PoseType): PoseType?
+	local visited = {}
+	local currentPose: string? = pose
+
+	while currentPose ~= nil and visited[currentPose] ~= true do
+		visited[currentPose] = true
+
+		local animations = self._anims[currentPose]
+		if self._disabled[currentPose] ~= true and type(animations) == "table" and #animations > 0 then
+			return currentPose :: PoseType
+		end
+
+		currentPose = self._fallbacks[currentPose]
+	end
+
+	return nil
 end
 
 export type PoseController = typeof(PoseController) & {
@@ -243,8 +274,8 @@ export type PoseController = typeof(PoseController) & {
     
     @error If no Animator is found in the rig
 ]]
-local function new(rig: Model, coreAnimations: Types.AnimationsList) : PoseController
-	local animator = rig:FindFirstChildWhichIsA("Animator", true)
+local function new(rig: Model, coreAnimations: Types.AnimationsList, resolvedAnimator: Animator?) : PoseController
+	local animator = resolvedAnimator or rig:FindFirstChildWhichIsA("Animator", true)
 	if not animator then
 		error(`Animator not found for rig {rig}`)
 	end
@@ -261,6 +292,7 @@ local function new(rig: Model, coreAnimations: Types.AnimationsList) : PoseContr
 		_track = false,
 
 		_disabled = {},
+		_fallbacks = {},
 
 		PoseChanged = Signal.new()
 	}, PoseController)
@@ -269,7 +301,7 @@ local function new(rig: Model, coreAnimations: Types.AnimationsList) : PoseContr
 		local lastPose = controller._lastPose
 		local info
 		if controller._playAnims then
-			info = controller:PlayCoreAnimation(pose, speed)
+			info = controller:PlayCoreAnimation(pose, true, speed)
 		end
 		
 		controller.PoseChanged:Fire(lastPose, pose, controller._track)

@@ -18,8 +18,6 @@ local AnimationController = Knit.CreateController({
 	Name = "AnimationController",
 })
 
-local DEBUG_PREFIX = "[AnimationPipeline]"
-
 function AnimationController:KnitInit()
 	self._runtimeService = nil
 	self._markerObservers = {}
@@ -45,7 +43,6 @@ function AnimationController:KnitStart()
 	entityController:RegisterSystem("AnimationAimSystem", AnimationAimSystem.new(self._runtimeService), "Procedural")
 	entityController:RegisterSystem("AnimationLeanSystem", AnimationLeanSystem.new(self._runtimeService), "Render")
 	entityController:RegisterSystem("AnimationCleanupSystem", AnimationCleanupSystem.new(self._runtimeService), "Cleanup")
-	warn(DEBUG_PREFIX, "AnimationController registered animation systems")
 end
 
 function AnimationController:RequestLocalAction(entity: number, actionId: string, channelId: string?): boolean

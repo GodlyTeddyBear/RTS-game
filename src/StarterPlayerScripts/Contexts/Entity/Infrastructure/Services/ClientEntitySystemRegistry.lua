@@ -3,7 +3,6 @@
 local ClientEntitySystemRegistry = {}
 ClientEntitySystemRegistry.__index = ClientEntitySystemRegistry
 
-local DEBUG_PREFIX = "[AnimationPipeline]"
 local DEFAULT_PHASE = "Playback"
 local GROUPS = table.freeze({
 	Heartbeat = table.freeze({ "Reconcile", "Setup", "Playback", "Cleanup" }),
@@ -27,9 +26,6 @@ function ClientEntitySystemRegistry:Register(systemName: string, system: any, ph
 	self._systemsByPhase[resolvedPhase] = self._systemsByPhase[resolvedPhase] or {}
 	self._systemsByName[systemName] = system
 	table.insert(self._systemsByPhase[resolvedPhase], system)
-	if string.find(systemName, "Animation", 1, true) ~= nil then
-		warn(DEBUG_PREFIX, "registered system", systemName, "phase", resolvedPhase)
-	end
 end
 
 function ClientEntitySystemRegistry:RunPhase(phaseName: string)

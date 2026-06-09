@@ -1,6 +1,6 @@
 --!strict
 
-export type TAnimationRigAdapterId = "Humanoid" | "AnimationController"
+export type TAnimationRigAdapterId = "Auto" | "Humanoid" | "AnimationController"
 export type TAnimationLocomotionProviderId = "HumanoidState" | "EntityMovement" | "None"
 export type TAnimationAimStrategy = "IKControl" | "Motor6D"
 export type TAnimationRuntimeState = "PendingModel" | "Loading" | "Ready" | "Suspended" | "Failed" | "Removed"
@@ -58,6 +58,7 @@ export type TAnimationProfile = {
 	RequiredSlots: { TAnimationSlotId },
 	OptionalSlots: { TAnimationSlotId }?,
 	CorePoseSlots: { [string]: TAnimationSlotId }?,
+	CorePoseFallbacks: { [string]: string }?,
 	Channels: { [string]: TAnimationChannelPolicy },
 	Features: TAnimationFeaturePolicy?,
 	DisableDefaultAnimate: boolean?,

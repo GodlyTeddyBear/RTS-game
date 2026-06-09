@@ -6,8 +6,11 @@ local Workspace = game:GetService("Workspace")
 local AnimationProfileRegistry = require(ReplicatedStorage.Contexts.Animation.Config.AnimationProfileRegistry)
 local AnimationSetCompiler = require(ReplicatedStorage.Contexts.Animation.Config.AnimationSetCompiler)
 local RenderAssetAccess = require(ReplicatedStorage.Contexts.Render.RenderAssetAccess)
-local PoseController = require(ReplicatedStorage.Utilities.SimpleAnimate.Core.PoseController)
+local SimpleAnimate = require(ReplicatedStorage.Utilities.SimpleAnimate)
 
+local AnimationProfileComponentIdentity = require(script.Parent.Parent.AnimationProfileComponentIdentity)
+local AnimationRigResolver = require(script.Parent.Parent.AnimationRigResolver)
+local EntityAnimationStateAdapter = require(script.Parent.Parent.EntityAnimationStateAdapter)
 local IKControlAimRuntime = require(script.Parent.Parent.IKControlAimRuntime)
 local LeanSystem = require(script.Parent.Parent.LeanSystem)
 local Motor6DAimRuntime = require(script.Parent.Parent.Motor6DAimRuntime)
@@ -15,17 +18,9 @@ local Motor6DAimRuntime = require(script.Parent.Parent.Motor6DAimRuntime)
 local AnimationEntityRuntimeService = {}
 AnimationEntityRuntimeService.__index = AnimationEntityRuntimeService
 
-local DEBUG_PREFIX = "[AnimationPipeline]"
 local CORE_PRIORITY = Enum.AnimationPriority.Core
 local DEFAULT_CHANNEL = "FullBody"
-
-local function _FindAnimator(model: Model): Animator?
-	return model:FindFirstChildWhichIsA("Animator", true)
-end
-
-local function _FindHumanoid(model: Model): Humanoid?
-	return model:FindFirstChildOfClass("Humanoid")
-end
+local LOCOMOTION_SPEED_DIVISOR = 12
 
 local function _GetMoveSpeed(model: Model): number
 	local root = model.PrimaryPart or model:FindFirstChild("HumanoidRootPart")
@@ -66,18 +61,11 @@ function AnimationEntityRuntimeService.new(animationController: any, entityContr
 		_entityController = entityController,
 		_runtimeByEntity = {},
 		_localRevision = 0,
-		_debugOnce = {},
-		_lastReconcileCount = nil,
 	}, AnimationEntityRuntimeService)
 end
 
 function AnimationEntityRuntimeService:Reconcile()
 	local records = self._entityController:GetByTag("Animation.EnabledTag")
-	local recordCount = #records
-	if self._lastReconcileCount ~= recordCount then
-		self._lastReconcileCount = recordCount
-		warn(DEBUG_PREFIX, "reconcile animation records", recordCount)
-	end
 
 	local activeEntities = {}
 	for _, record in ipairs(records) do
@@ -110,8 +98,8 @@ end
 
 function AnimationEntityRuntimeService:UpdateLocomotion()
 	for _, runtime in pairs(self._runtimeByEntity) do
-		if runtime.State == "Ready" and runtime.PoseController ~= nil then
-			self:_UpdatePose(runtime)
+		if runtime.State == "Ready" and runtime.EntityStateAdapter ~= nil then
+			self:_UpdateEntityStateAdapter(runtime)
 		end
 	end
 end
@@ -193,8 +181,11 @@ function AnimationEntityRuntimeService:Remove(entity: number)
 			channelState.Track:Stop(0)
 		end
 	end
-	if runtime.PoseController ~= nil then
-		runtime.PoseController:Destroy()
+	if runtime.SimpleAnimateController ~= nil and type(runtime.SimpleAnimateController.Destroy) == "function" then
+		runtime.SimpleAnimateController:Destroy()
+	end
+	if runtime.EntityStateAdapter ~= nil then
+		runtime.EntityStateAdapter:Destroy()
 	end
 	self._runtimeByEntity[entity] = nil
 end
@@ -205,79 +196,39 @@ function AnimationEntityRuntimeService:Destroy()
 	end
 end
 
-function AnimationEntityRuntimeService:_DebugOnce(key: string, ...: any)
-	if self._debugOnce[key] == true then
-		return
-	end
-	self._debugOnce[key] = true
-	warn(DEBUG_PREFIX, ...)
-end
-
-function AnimationEntityRuntimeService:_WarnOnce(key: string, ...: any)
-	if self._debugOnce[key] == true then
-		return
-	end
-	self._debugOnce[key] = true
-	warn(DEBUG_PREFIX, ...)
-end
-
 function AnimationEntityRuntimeService:_EnsureRuntime(record: any)
 	local profileComponent = record.Components["Animation.Profile"]
 	if type(profileComponent) ~= "table" then
-		self:_WarnOnce(("missing-profile:%s"):format(tostring(record.Entity)), "missing Animation.Profile", "entity", record.Entity)
 		return
 	end
 
 	local model = self._entityController:FindInstanceByEntity(record.Entity)
 	if model == nil or not model:IsA("Model") then
-		self:_WarnOnce(
-			("missing-model:%s"):format(tostring(record.Entity)),
-			"missing model",
-			"entity",
-			record.Entity,
-			"profile",
-			profileComponent.ProfileId,
-			"set",
-			profileComponent.AnimationSetId,
-			"variant",
-			profileComponent.VariantId
-		)
 		return
 	end
 
 	local existing = self._runtimeByEntity[record.Entity]
 	if existing ~= nil then
-		if existing.Model == model and existing.ProfileComponent == profileComponent then
+		if existing.Model == model and AnimationProfileComponentIdentity.Matches(existing.ProfileComponentSnapshot, profileComponent) then
 			existing.Record = record
+			existing.ProfileComponent = profileComponent
 			return
 		end
 		self:Remove(record.Entity)
 	end
 
-	self:_DebugOnce(
-		("runtime-created:%s"):format(tostring(record.Entity)),
-		"runtime created",
-		"entity",
-		record.Entity,
-		"profile",
-		profileComponent.ProfileId,
-		"set",
-		profileComponent.AnimationSetId,
-		"variant",
-		profileComponent.VariantId,
-		"model",
-		model:GetFullName()
-	)
 	self._runtimeByEntity[record.Entity] = {
 		Entity = record.Entity,
 		Record = record,
 		Model = model,
 		ProfileComponent = profileComponent,
+		ProfileComponentSnapshot = AnimationProfileComponentIdentity.Snapshot(profileComponent),
 		Profile = nil,
 		CompiledSet = nil,
 		Animator = nil,
 		Humanoid = nil,
-		PoseController = nil,
+		SimpleAnimateController = nil,
+		EntityStateAdapter = nil,
 		TracksBySlot = {},
 		ActiveChannels = {},
 		LocalChannels = {},
@@ -288,101 +239,44 @@ function AnimationEntityRuntimeService:_EnsureRuntime(record: any)
 end
 
 function AnimationEntityRuntimeService:_SetupRuntime(runtime: any)
-	self:_DebugOnce(
-		("setup-start:%s"):format(tostring(runtime.Entity)),
-		"setup start",
-		"entity",
-		runtime.Entity,
-		"profile",
-		runtime.ProfileComponent.ProfileId,
-		"set",
-		runtime.ProfileComponent.AnimationSetId,
-		"variant",
-		runtime.ProfileComponent.VariantId
-	)
-
 	local ok, profile = pcall(AnimationProfileRegistry.Get, runtime.ProfileComponent.ProfileId)
 	if not ok then
 		runtime.State = "Failed"
 		runtime.FailedReason = tostring(profile)
-		self:_WarnOnce(
-			("profile-failed:%s"):format(tostring(runtime.Entity)),
-			"profile resolve failed",
-			"entity",
-			runtime.Entity,
-			"reason",
-			runtime.FailedReason
-		)
 		warn("[AnimationEntityRuntime]", runtime.Entity, runtime.FailedReason)
 		return
 	end
-	self:_DebugOnce(("profile-ok:%s"):format(tostring(runtime.Entity)), "profile resolved", "entity", runtime.Entity, "profile", profile.Id)
 
 	local setId = runtime.ProfileComponent.AnimationSetId or profile.DefaultSetId
 	local compileOk, compiledSet = pcall(AnimationSetCompiler.Compile, setId, runtime.ProfileComponent.VariantId)
 	if not compileOk then
 		runtime.State = "Failed"
 		runtime.FailedReason = tostring(compiledSet)
-		self:_WarnOnce(
-			("set-failed:%s"):format(tostring(runtime.Entity)),
-			"set compile failed",
-			"entity",
-			runtime.Entity,
-			"set",
-			setId,
-			"variant",
-			runtime.ProfileComponent.VariantId,
-			"reason",
-			runtime.FailedReason
-		)
 		warn("[AnimationEntityRuntime]", runtime.Entity, runtime.FailedReason)
 		return
 	end
-	self:_DebugOnce(
-		("set-ok:%s"):format(tostring(runtime.Entity)),
-		"set compiled",
-		"entity",
-		runtime.Entity,
-		"set",
-		compiledSet.SetId,
-		"variant",
-		compiledSet.VariantId
-	)
 
 	if profile.DisableDefaultAnimate == true then
 		local defaultAnimate = runtime.Model:FindFirstChild("Animate")
 		if defaultAnimate ~= nil then
 			defaultAnimate:Destroy()
-			self:_DebugOnce(("animate-removed:%s"):format(tostring(runtime.Entity)), "default Animate removed", "entity", runtime.Entity)
-		else
-			self:_DebugOnce(("animate-missing:%s"):format(tostring(runtime.Entity)), "default Animate already missing", "entity", runtime.Entity)
 		end
 	end
 
-	local animator = _FindAnimator(runtime.Model)
-	if animator == nil then
+	local rig = AnimationRigResolver.Resolve(runtime.Model, profile.RigAdapter)
+	if rig == nil then
 		runtime.State = "Failed"
-		runtime.FailedReason = "Animator not found"
-		self:_WarnOnce(
-			("animator-missing:%s"):format(tostring(runtime.Entity)),
-			"animator missing",
-			"entity",
-			runtime.Entity,
-			"model",
-			runtime.Model:GetFullName()
-		)
-		warn("[AnimationEntityRuntime] Animator not found for", runtime.Model:GetFullName())
+		runtime.FailedReason = ("Animation rig '%s' not found"):format(profile.RigAdapter)
+		warn("[AnimationEntityRuntime]", runtime.FailedReason, "for", runtime.Model:GetFullName())
 		return
 	end
-	self:_DebugOnce(("animator-ok:%s"):format(tostring(runtime.Entity)), "animator found", "entity", runtime.Entity, "animator", animator:GetFullName())
 
 	runtime.Profile = profile
 	runtime.CompiledSet = compiledSet
-	runtime.Animator = animator
-	runtime.Humanoid = _FindHumanoid(runtime.Model)
+	runtime.Animator = rig.Animator
+	runtime.Humanoid = rig.Humanoid or runtime.Model:FindFirstChildWhichIsA("Humanoid", true)
 	runtime.Features = _MergeFeaturePolicy(profile.Features, runtime.ProfileComponent.FeatureOverrides)
 	runtime.State = "Ready"
-	self:_DebugOnce(("ready:%s"):format(tostring(runtime.Entity)), "runtime ready", "entity", runtime.Entity)
 end
 
 function AnimationEntityRuntimeService:_LoadRequiredClips(runtime: any)
@@ -397,12 +291,12 @@ function AnimationEntityRuntimeService:_LoadRequiredClips(runtime: any)
 		end
 	end
 
-	self:_EnsurePoseController(runtime)
+	self:_EnsureSimpleAnimateController(runtime)
 	runtime.HasLoadedRequiredClips = true
 end
 
-function AnimationEntityRuntimeService:_EnsurePoseController(runtime: any)
-	if runtime.PoseController ~= nil or runtime.Profile.LocomotionProvider == "None" then
+function AnimationEntityRuntimeService:_EnsureSimpleAnimateController(runtime: any)
+	if runtime.SimpleAnimateController ~= nil then
 		return
 	end
 
@@ -410,6 +304,7 @@ function AnimationEntityRuntimeService:_EnsurePoseController(runtime: any)
 	for poseName, slotId in pairs(runtime.Profile.CorePoseSlots or {}) do
 		local track = self:_GetTrack(runtime, slotId, CORE_PRIORITY)
 		if track ~= nil then
+			track.Looped = true
 			coreAnimations[poseName] = {
 				{
 					id = slotId,
@@ -420,25 +315,39 @@ function AnimationEntityRuntimeService:_EnsurePoseController(runtime: any)
 		end
 	end
 
-	local ok, controller = pcall(PoseController.new, runtime.Model, coreAnimations)
+	local stateMachine = self:_ResolveStateMachine(runtime)
+	local ok, controller = pcall(SimpleAnimate.new, runtime.Model, false, coreAnimations, {}, stateMachine, runtime.Animator)
 	if ok then
-		runtime.PoseController = controller
-		local poseCount = 0
-		for _ in pairs(coreAnimations) do
-			poseCount += 1
-		end
-		self:_DebugOnce(("pose-controller:%s"):format(tostring(runtime.Entity)), "pose controller created", "entity", runtime.Entity, "poses", poseCount)
+		runtime.SimpleAnimateController = controller
+		self:_ConfigureSimpleAnimateController(controller, runtime.Profile)
 	else
-		self:_WarnOnce(
-			("pose-controller-failed:%s"):format(tostring(runtime.Entity)),
-			"pose controller failed",
-			"entity",
-			runtime.Entity,
-			"reason",
-			tostring(controller)
-		)
-		warn("[AnimationEntityRuntime] PoseController failed:", tostring(controller))
+		if runtime.EntityStateAdapter ~= nil then
+			runtime.EntityStateAdapter:Destroy()
+			runtime.EntityStateAdapter = nil
+		end
+		warn("[AnimationEntityRuntime] SimpleAnimate controller failed:", tostring(controller))
 	end
+end
+
+function AnimationEntityRuntimeService:_ResolveStateMachine(runtime: any): any
+	if runtime.Profile.LocomotionProvider == "HumanoidState" and runtime.Humanoid ~= nil then
+		return runtime.Humanoid
+	end
+
+	local stateAdapter = EntityAnimationStateAdapter.new()
+	runtime.EntityStateAdapter = stateAdapter
+	return stateAdapter
+end
+
+function AnimationEntityRuntimeService:_ConfigureSimpleAnimateController(controller: any, profile: any)
+	controller.Core.PoseController:SetPoseFallbacks(profile.CorePoseFallbacks or {})
+
+	local connections = controller.Core.Connections
+	connections.AutoAdjustSpeedMultipliers = false
+	connections.UseWalkSpeedForAnimSpeed = false
+	connections.MoveAnimationSpeedMultiplier = 1 / LOCOMOTION_SPEED_DIVISOR
+	connections.ClimbAnimationSpeedMultiplier = 1 / LOCOMOTION_SPEED_DIVISOR
+	connections.SwimAnimationSpeedMultiplier = 1 / LOCOMOTION_SPEED_DIVISOR
 end
 
 function AnimationEntityRuntimeService:_GetTrack(runtime: any, slotId: string, priority: Enum.AnimationPriority): AnimationTrack?
@@ -449,129 +358,38 @@ function AnimationEntityRuntimeService:_GetTrack(runtime: any, slotId: string, p
 
 	local clipKey = runtime.CompiledSet.Slots[slotId]
 	if type(clipKey) ~= "string" or clipKey == "" then
-		self:_WarnOnce(
-			("slot-empty:%s:%s"):format(tostring(runtime.Entity), slotId),
-			"slot has no clip key",
-			"entity",
-			runtime.Entity,
-			"slot",
-			slotId
-		)
 		return nil
 	end
-	self:_DebugOnce(
-		("slot-key:%s:%s"):format(tostring(runtime.Entity), slotId),
-		"slot resolving",
-		"entity",
-		runtime.Entity,
-		"slot",
-		slotId,
-		"clipKey",
-		clipKey,
-		"variant",
-		runtime.CompiledSet.VariantId
-	)
 
 	local animation = RenderAssetAccess.GetAnimationClip(clipKey, runtime.CompiledSet.VariantId, nil)
 	if animation == nil then
 		animation = RenderAssetAccess.GetAnimationClip(clipKey, "Default", nil)
 	end
 	if animation == nil then
-		self:_WarnOnce(
-			("clip-missing:%s:%s"):format(tostring(runtime.Entity), slotId),
-			"clip missing",
-			"entity",
-			runtime.Entity,
-			"slot",
-			slotId,
-			"clipKey",
-			clipKey,
-			"variant",
-			runtime.CompiledSet.VariantId
-		)
 		return nil
 	end
-	self:_DebugOnce(
-		("clip-ok:%s:%s"):format(tostring(runtime.Entity), slotId),
-		"clip resolved",
-		"entity",
-		runtime.Entity,
-		"slot",
-		slotId,
-		"clipKey",
-		clipKey,
-		"animation",
-		animation:GetFullName()
-	)
 
 	local ok, track = pcall(function()
 		return runtime.Animator:LoadAnimation(animation)
 	end)
 	if not ok then
-		self:_WarnOnce(
-			("track-failed:%s:%s"):format(tostring(runtime.Entity), slotId),
-			"track load failed",
-			"entity",
-			runtime.Entity,
-			"slot",
-			slotId,
-			"clipKey",
-			clipKey,
-			"reason",
-			tostring(track)
-		)
 		warn("[AnimationEntityRuntime] failed to load clip", clipKey, tostring(track))
 		return nil
 	end
 
 	track.Priority = priority
 	runtime.TracksBySlot[slotId] = track
-	self:_DebugOnce(
-		("track-ok:%s:%s"):format(tostring(runtime.Entity), slotId),
-		"track loaded",
-		"entity",
-		runtime.Entity,
-		"slot",
-		slotId,
-		"priority",
-		tostring(priority)
-	)
 	return track
 end
 
-function AnimationEntityRuntimeService:_UpdatePose(runtime: any)
-	local pose = "Idle"
-	local speed = 1
-	local humanoid = runtime.Humanoid
-
-	if runtime.Profile.LocomotionProvider == "HumanoidState" and humanoid ~= nil then
-		local state = humanoid:GetState()
-		if state == Enum.HumanoidStateType.Jumping then
-			pose = "Jumping"
-		elseif state == Enum.HumanoidStateType.Freefall then
-			pose = "Freefall"
-		elseif state == Enum.HumanoidStateType.Climbing then
-			pose = "Climbing"
-		elseif state == Enum.HumanoidStateType.Seated then
-			pose = "Seated"
-		elseif humanoid.MoveDirection.Magnitude > 0.05 then
-			local moveSpeed = _GetMoveSpeed(runtime.Model)
-			pose = if moveSpeed > 17 then "Run" else "Walk"
-			speed = math.max(moveSpeed / 12, 0.1)
-		end
-	elseif runtime.Profile.LocomotionProvider == "EntityMovement" then
-		local applyResult = runtime.Record.Components["Movement.ApplyResult"]
-		if type(applyResult) == "table" and applyResult.IsMoving == true then
-			pose = "Walk"
-			speed = math.max(_GetMoveSpeed(runtime.Model) / 12, 0.1)
-		end
+function AnimationEntityRuntimeService:_UpdateEntityStateAdapter(runtime: any)
+	if runtime.Profile.LocomotionProvider == "None" then
+		return
 	end
 
-	runtime.PoseController:ChangePose(pose, speed, true)
-	if runtime.LastDebugPose ~= pose then
-		runtime.LastDebugPose = pose
-		self:_DebugOnce(("pose:%s:%s"):format(tostring(runtime.Entity), pose), "pose changed", "entity", runtime.Entity, "pose", pose, "speed", speed)
-	end
+	local applyResult = runtime.Record.Components["Movement.ApplyResult"]
+	local isMoving = type(applyResult) == "table" and applyResult.IsMoving == true
+	runtime.EntityStateAdapter:UpdateRunning(isMoving, _GetMoveSpeed(runtime.Model))
 end
 
 function AnimationEntityRuntimeService:_UpdateActionChannels(runtime: any)

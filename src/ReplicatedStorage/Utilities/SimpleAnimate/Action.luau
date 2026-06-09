@@ -249,8 +249,14 @@ export type Action = typeof(Action)
     @param stateMachine Optional state machine (defaults to Humanoid)
     @return A new Action instance
 ]]
-local function new(PoseController, rig: Model, emoteAnimations: Types.AnimationsList, stateMachine: Types.StateMachine?) : Action
-	local animator = rig:FindFirstChildWhichIsA("Animator", true)
+local function new(
+	PoseController,
+	rig: Model,
+	emoteAnimations: Types.AnimationsList,
+	stateMachine: Types.StateMachine?,
+	resolvedAnimator: Animator?
+) : Action
+	local animator = resolvedAnimator or rig:FindFirstChildWhichIsA("Animator", true)
 	if not animator then
 		error(`Animator not found for rig {rig}`)
 	end
